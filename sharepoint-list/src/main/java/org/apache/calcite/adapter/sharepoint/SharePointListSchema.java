@@ -33,16 +33,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * Schema implementation for SharePoint Lists with CREATE/DROP support.
  */
 public class SharePointListSchema extends AbstractSchema {
-  private final String siteUrl;
   private final Map<String, Table> tableMap;
   private final SharePointAuth authenticator;
   private final MicrosoftGraphListClient client;
   private final SharePointRestListClient restClient;
-  private final SharePointMetadataSchema metadataSchema;
   private final boolean useRestApi;
 
   public SharePointListSchema(String siteUrl, Map<String, Object> authConfig) {
-    this.siteUrl = siteUrl;
     this.authenticator = SharePointAuthFactory.createAuth(authConfig);
 
     // Check if REST API should be used (default to Graph API)
@@ -52,7 +49,6 @@ public class SharePointListSchema extends AbstractSchema {
         parseCacheTtlMillis(authConfig.get("metadataCacheTtl")));
     this.restClient = new SharePointRestListClient(siteUrl, authenticator);
     this.tableMap = new ConcurrentHashMap<>(createTableMap());
-    this.metadataSchema = new SharePointMetadataSchema(this, "sharepoint", "public");
   }
 
   /**

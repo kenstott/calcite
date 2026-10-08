@@ -20,8 +20,8 @@
  * <h2>Package Structure</h2>
  * <p>The adapter is organized into specialized sub-packages:</p>
  * <ul>
- *   <li>{@link org.apache.calcite.adapter.file.csv} - CSV file processing and tables</li>
- *   <li>{@link org.apache.calcite.adapter.file.json} - JSON file processing with multi-table support</li>
+ *   <li>{@code org.apache.calcite.adapter.file.csv} - CSV file processing and tables</li>
+ *   <li>{@code org.apache.calcite.adapter.file.json} - JSON file processing with multi-table support</li>
  *   <li>{@link org.apache.calcite.adapter.file.execution} - Execution engines (row-based, columnar, vectorized)</li>
  *   <li>{@link org.apache.calcite.adapter.file.storage} - Storage providers for various file systems</li>
  * </ul>
@@ -44,7 +44,7 @@
  * <ul>
  *   <li>{@link org.apache.calcite.adapter.file.FileSchema} - Schema that discovers and manages file tables</li>
  *   <li>{@link org.apache.calcite.adapter.file.FileSchemaFactory} - Factory for creating file schemas</li>
- *   <li>{@link org.apache.calcite.adapter.file.FileTable} - Base class for file-based tables</li>
+ *   <li>{@code org.apache.calcite.adapter.file.FileTable} - Base class for file-based tables</li>
  *   <li>{@link org.apache.calcite.adapter.file.FileRules} - Query optimization rules</li>
  * </ul>
  *
@@ -52,7 +52,7 @@
  *
  * <h3>Multi-Table JSON Support</h3>
  * <p>Extract multiple tables from a single JSON file using JSONPath expressions
- * or automatic discovery. See {@link org.apache.calcite.adapter.file.json}.</p>
+ * or automatic discovery. See {@code org.apache.calcite.adapter.file.json}.</p>
  *
  * <h3>Storage Abstraction</h3>
  * <p>Access files from various sources (S3, HTTP, FTP, SharePoint) transparently
@@ -66,15 +66,15 @@
  * <h3>Materialized Views</h3>
  * <p>Support for materialized views with automatic refresh:</p>
  * <ul>
- *   <li>{@link org.apache.calcite.adapter.file.MaterializedViewTable}</li>
- *   <li>{@link org.apache.calcite.adapter.file.RefreshableTable}</li>
+ *   <li>{@code org.apache.calcite.adapter.file.MaterializedViewTable}</li>
+ *   <li>{@code org.apache.calcite.adapter.file.RefreshableTable}</li>
  * </ul>
  *
  * <h3>Partitioned Tables</h3>
  * <p>Support for partitioned Parquet tables with partition pruning:</p>
  * <ul>
- *   <li>{@link org.apache.calcite.adapter.file.PartitionedParquetTable}</li>
- *   <li>{@link org.apache.calcite.adapter.file.PartitionDetector}</li>
+ *   <li>{@code org.apache.calcite.adapter.file.PartitionedParquetTable}</li>
+ *   <li>{@code org.apache.calcite.adapter.file.PartitionDetector}</li>
  * </ul>
  *
  * <h2>Configuration Example</h2>

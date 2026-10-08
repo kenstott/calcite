@@ -110,7 +110,12 @@ public class S3FileIOTableOperationsStaleCommitTest {
 
     RuntimeException e =
         assertThrows(RuntimeException.class, () -> ops.commit(live, metadata()));
-    assertTrue(!e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("stale table metadata"),
-        "a commit on current metadata must clear the stale-base guard, got: " + e.getMessage());
+    // Past the guard the commit fails on the S3 client this test never configures, with an
+    // exception that carries no message before JDK 14
+    String message = e.getMessage();
+    assertTrue(
+        message == null
+            || !message.toLowerCase(java.util.Locale.ROOT).contains("stale table metadata"),
+        "a commit on current metadata must clear the stale-base guard, got: " + e);
   }
 }

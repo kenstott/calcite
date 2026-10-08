@@ -61,6 +61,7 @@ import software.amazon.awssdk.awscore.exception.AwsServiceException;
 
 import java.io.File;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -313,13 +314,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   private static final Map<String, Schema> schemaCache =
       Collections.synchronizedMap(new HashMap<>());
 
-  private String getEnvOrProp(String name) {
-    String v = System.getProperty(name);
-    if (v != null && !v.isEmpty()) {
-      return v;
-    }
-    return System.getenv(name);
-  }
 
   /**
    * Get the sub-schema factory for the given data source.
@@ -829,7 +823,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     // Calendar context is a single universal value derived from today's date — identical for
     // every schema and every worker. The factory computes it here so no model/worker has to
     // thread it through; an explicit operand still wins (lets tests pin a specific quarter).
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.now(ZoneId.systemDefault());
     Object currentMonthObj = operand.get("currentMonth");
     String currentMonth = currentMonthObj != null
         ? String.valueOf(currentMonthObj) : String.format("%02d", today.getMonthValue());

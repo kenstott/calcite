@@ -26,7 +26,6 @@ import com.azure.resourcemanager.resourcegraph.models.QueryRequest;
 import com.azure.resourcemanager.resourcegraph.models.QueryRequestOptions;
 import com.azure.resourcemanager.resourcegraph.models.QueryResponse;
 import com.azure.resourcemanager.resourcegraph.models.ResultFormat;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -42,15 +41,10 @@ import java.util.Map;
 public class AzureProvider implements CloudProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(AzureProvider.class);
 
-  private final CloudOpsConfig.AzureConfig config;
   private final ResourceGraphManager resourceGraphManager;
-  private final ObjectMapper objectMapper;
   private final CloudOpsCacheManager cacheManager;
 
   public AzureProvider(CloudOpsConfig.AzureConfig config) {
-    this.config = config;
-    this.objectMapper = new ObjectMapper();
-
     TokenCredential credential = new ClientSecretCredentialBuilder()
         .tenantId(config.tenantId)
         .clientId(config.clientId)
@@ -67,8 +61,6 @@ public class AzureProvider implements CloudProvider {
   }
 
   public AzureProvider(CloudOpsConfig.AzureConfig config, CloudOpsCacheManager cacheManager) {
-    this.config = config;
-    this.objectMapper = new ObjectMapper();
     this.cacheManager = cacheManager;
 
     TokenCredential credential = new ClientSecretCredentialBuilder()
@@ -154,7 +146,6 @@ public class AzureProvider implements CloudProvider {
                                                           @Nullable CloudOpsSortHandler sortHandler,
                                                           @Nullable CloudOpsPaginationHandler paginationHandler,
                                                           @Nullable CloudOpsFilterHandler filterHandler) {
-
     // Build comprehensive cache key including all optimization parameters
     String cacheKey =
         CloudOpsCacheManager.buildComprehensiveCacheKey("azure", "kubernetes_clusters", projectionHandler, sortHandler, paginationHandler, filterHandler, subscriptionIds);
@@ -224,15 +215,6 @@ public class AzureProvider implements CloudProvider {
     if (LOGGER.isInfoEnabled()) {
       LOGGER.info("Invalidated all Azure cache entries");
     }
-  }
-
-  /**
-   * Build KQL query for Kubernetes clusters with optional projection, sort, pagination, and filtering.
-   */
-  private String buildKubernetesClusterKql(@Nullable CloudOpsProjectionHandler projectionHandler,
-                                          @Nullable CloudOpsSortHandler sortHandler,
-                                          @Nullable CloudOpsPaginationHandler paginationHandler) {
-    return buildKubernetesClusterKql(projectionHandler, sortHandler, paginationHandler, null);
   }
 
   private String buildKubernetesClusterKql(@Nullable CloudOpsProjectionHandler projectionHandler,
@@ -635,8 +617,8 @@ public class AzureProvider implements CloudProvider {
   /**
    * Emits one row per (VM, Network Security Group) association, resolved through the VM's network
    * interface. Feeds the compute_security_groups junction. {@code ComputeResourceId} is the VM ARM id
-   * (-> compute_resources.resource_id); {@code SecurityGroupId} is the NSG ARM id
-   * (-> network_resources.native_id).
+   * (-&gt; compute_resources.resource_id); {@code SecurityGroupId} is the NSG ARM id
+   * (-&gt; network_resources.native_id).
    */
   public List<Map<String, Object>> queryComputeSecurityGroups(List<String> subscriptionIds) {
     String kql = "Resources\n"

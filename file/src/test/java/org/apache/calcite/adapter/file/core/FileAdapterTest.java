@@ -384,7 +384,7 @@ public class FileAdapterTest {
             // Use numeric value for date comparison - timezone naive days since epoch
             Date date1 = resultSet.getDate("joinedat");
             assertNotNull(date1);
-            long daysSinceEpoch1 = date1.getTime() / (1000L * 60 * 60 * 24);
+            long daysSinceEpoch1 = date1.toLocalDate().toEpochDay();
             // 1996-08-03 is exactly 9711 days since epoch (or 9710 due to timezone)
             assertTrue(daysSinceEpoch1 == 9711 || daysSinceEpoch1 == 9710);
 
@@ -394,7 +394,7 @@ public class FileAdapterTest {
             assertEquals("Eric", resultSet.getString("name"));
             Date date2 = resultSet.getDate("joinedat");
             assertNotNull(date2);
-            long daysSinceEpoch2 = date2.getTime() / (1000L * 60 * 60 * 24);
+            long daysSinceEpoch2 = date2.toLocalDate().toEpochDay();
             // 2001-01-01 is exactly 11323 days since epoch (or 11322 due to timezone)
             assertTrue(daysSinceEpoch2 == 11323 || daysSinceEpoch2 == 11322);
 
@@ -404,7 +404,7 @@ public class FileAdapterTest {
             assertEquals("Eric", resultSet.getString("name"));
             Date date3 = resultSet.getDate("joinedat");
             assertNotNull(date3);
-            long daysSinceEpoch3 = date3.getTime() / (1000L * 60 * 60 * 24);
+            long daysSinceEpoch3 = date3.toLocalDate().toEpochDay();
             // 2002-05-03 is exactly 11810 days since epoch (or 11809 due to timezone)
             assertTrue(daysSinceEpoch3 == 11810 || daysSinceEpoch3 == 11809);
 
@@ -982,7 +982,7 @@ public class FileAdapterTest {
       assertThat("Result for JOINEDAT should be java.sql.Date", resultSet.getDate(1).getClass(), is(Date.class));
       Date dateVal = resultSet.getDate(1);
       // "1996-08-02" is epoch day 9710 (days since 1970-01-01)
-      long epochDays = dateVal.getTime() / (24L * 60 * 60 * 1000);
+      long epochDays = dateVal.toLocalDate().toEpochDay();
       assertThat("Date '1996-08-02' should be epoch day 9710", epochDays, is(9710L));
 
       // time
@@ -1071,7 +1071,7 @@ public class FileAdapterTest {
         }
         // "2015-12-30" is epoch day 16799 (days since 1970-01-01)
         // BUG: Date parsing adds one day, returns 16800
-        long epochDays = dateVal.getTime() / (24L * 60 * 60 * 1000);
+        long epochDays = dateVal.toLocalDate().toEpochDay();
         assertThat(epochDays, is(16799L));
         switch (empId) {
         case 140:
@@ -1296,7 +1296,7 @@ public class FileAdapterTest {
       // Get the date value and calculate days from epoch
       Date actualDate = joinedAt.getDate(1);
       // "1996-08-02" is epoch day 9710 (days since 1970-01-01)
-      long epochDays = actualDate.getTime() / (24L * 60 * 60 * 1000);
+      long epochDays = actualDate.toLocalDate().toEpochDay();
       assertThat(epochDays, is(9710L));
 
       // time
@@ -1308,10 +1308,9 @@ public class FileAdapterTest {
       // TIME stored as milliseconds since midnight
       // 00:01:02 = 1*60*1000 + 2*1000 = 62000ms
       // Use modulo to get time-of-day part regardless of date component
-      long timeMs = joinTime.getTime(1).getTime() % TimeUnit.DAYS.toMillis(1);
-      // Account for potential timezone offset in time representation
-      // Allow for various timezone offsets (timeMs could vary based on timezone)
-      assertThat(timeMs >= 0 && timeMs < TimeUnit.DAYS.toMillis(1), is(true));
+      // A java.sql.Time holds the local time of day, whatever the JVM's zone
+      long timeMs = joinTime.getTime(1).toLocalTime().toNanoOfDay() / 1_000_000L;
+      assertThat(timeMs, is(62000L));
 
       // timestamp
       final String sql3 = "select \"jointimes\" from \"date\"\n"
@@ -1320,17 +1319,11 @@ public class FileAdapterTest {
       assertThat(joinTimes.next(), is(true));
       assertThat(joinTimes.getTimestamp(1).getClass(),
           equalTo(Timestamp.class));
-      // TIMESTAMP stored as milliseconds - account for timezone differences
+      // The CSV has "1996-08-02 00:01:02", a time without a zone: the Timestamp holds that
+      // wall-clock time, whatever the JVM's zone
       Timestamp ts = joinTimes.getTimestamp(1);
-      long timestampMs = ts.getTime();
-      // The CSV contains "1996-08-02 00:01:02"
-      // Actual value from test: 838987262000 (1996-08-02 08:01:02.0)
-      // This appears to be parsed in a different timezone than expected
-      // The timestamp can vary significantly based on timezone
-      // Just verify it's in a reasonable range for the date 1996-08-02
-      long minTime = 838857600000L; // 1996-08-02 00:00:00 UTC
-      long maxTime = 838944000000L + TimeUnit.DAYS.toMillis(1); // 1996-08-03 00:00:00 UTC
-      assertThat(timestampMs >= minTime && timestampMs <= maxTime, is(true));
+      assertThat(ts.toLocalDateTime(),
+          is(java.time.LocalDateTime.of(1996, 8, 2, 0, 1, 2)));
     }
   }
 
@@ -1355,7 +1348,7 @@ public class FileAdapterTest {
       // Get the date value and calculate days from epoch
       Date actualDate = joinedAt.getDate(1);
       // "1996-08-02" is epoch day 9710 (days since 1970-01-01)
-      long epochDays = actualDate.getTime() / (24L * 60 * 60 * 1000);
+      long epochDays = actualDate.toLocalDate().toEpochDay();
       assertThat(epochDays, is(9710L));
 
       // time
@@ -1367,10 +1360,9 @@ public class FileAdapterTest {
       // TIME stored as milliseconds since midnight
       // 00:01:02 = 1*60*1000 + 2*1000 = 62000ms
       // Use modulo to get time-of-day part regardless of date component
-      long timeMs = joinTime.getTime(1).getTime() % TimeUnit.DAYS.toMillis(1);
-      // Account for potential timezone offset in time representation
-      // Allow for various timezone offsets (timeMs could vary based on timezone)
-      assertThat(timeMs >= 0 && timeMs < TimeUnit.DAYS.toMillis(1), is(true));
+      // A java.sql.Time holds the local time of day, whatever the JVM's zone
+      long timeMs = joinTime.getTime(1).toLocalTime().toNanoOfDay() / 1_000_000L;
+      assertThat(timeMs, is(62000L));
 
       // timestamp
       final String sql3 = "select \"jointimes\" from \"date\"\n"
@@ -1379,17 +1371,11 @@ public class FileAdapterTest {
       assertThat(joinTimes.next(), is(true));
       assertThat(joinTimes.getTimestamp(1).getClass(),
           equalTo(Timestamp.class));
-      // TIMESTAMP stored as milliseconds - account for timezone differences
+      // The CSV has "1996-08-02 00:01:02", a time without a zone: the Timestamp holds that
+      // wall-clock time, whatever the JVM's zone
       Timestamp ts = joinTimes.getTimestamp(1);
-      long timestampMs = ts.getTime();
-      // The CSV contains "1996-08-02 00:01:02"
-      // Actual value from test: 838987262000 (1996-08-02 08:01:02.0)
-      // This appears to be parsed in a different timezone than expected
-      // The timestamp can vary significantly based on timezone
-      // Just verify it's in a reasonable range for the date 1996-08-02
-      long minTime = 838857600000L; // 1996-08-02 00:00:00 UTC
-      long maxTime = 838944000000L + TimeUnit.DAYS.toMillis(1); // 1996-08-03 00:00:00 UTC
-      assertThat(timestampMs >= minTime && timestampMs <= maxTime, is(true));
+      assertThat(ts.toLocalDateTime(),
+          is(java.time.LocalDateTime.of(1996, 8, 2, 0, 1, 2)));
     }
   }
 

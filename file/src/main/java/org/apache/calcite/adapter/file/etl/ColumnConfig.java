@@ -21,21 +21,21 @@ import java.util.Set;
  *
  * <p>Columns can be direct mappings from source data or computed via SQL expressions:
  *
- * <h3>Direct Column Mapping</h3>
+ * <h2>Direct Column Mapping</h2>
  * <pre>{@code
  * - name: region_code
  *   type: VARCHAR
  *   source: regionCode      # Maps from source field "regionCode"
  * }</pre>
  *
- * <h3>Computed Column</h3>
+ * <h2>Computed Column</h2>
  * <pre>{@code
  * - name: quarter
  *   type: VARCHAR
  *   expression: "SUBSTR(period, 1, 2)"
  * }</pre>
  *
- * <h3>Value Normalization</h3>
+ * <h2>Value Normalization</h2>
  * <pre>{@code
  * - name: value
  *   type: DECIMAL(15,2)

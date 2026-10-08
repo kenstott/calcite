@@ -587,7 +587,7 @@ public interface StorageProvider {
       try (org.apache.parquet.hadoop.ParquetWriter<org.apache.avro.generic.GenericRecord> writer =
            org.apache.parquet.avro.AvroParquetWriter
                .<org.apache.avro.generic.GenericRecord>builder(
-                   new org.apache.hadoop.fs.Path(tempFile.toURI()))
+                   new org.apache.parquet.io.LocalOutputFile(tempFile.toPath()))
                .withSchema(schema)
                .withCompressionCodec(org.apache.parquet.hadoop.metadata.CompressionCodecName.SNAPPY)
                .build()) {

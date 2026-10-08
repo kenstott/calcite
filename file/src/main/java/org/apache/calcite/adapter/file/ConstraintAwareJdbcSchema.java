@@ -117,11 +117,11 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
         String ttable = qn.get(qn.size() - 1);
         Table tt;
         if (tschema.equals(fs.getName())) {
-          tt = fs.getTable(ttable);
+          tt = fs.tables().get(ttable);
         } else {
           SchemaPlus parent = fs.getParentSchema();
-          SchemaPlus sub = parent != null ? parent.getSubSchema(tschema) : null;
-          tt = sub != null ? sub.getTable(ttable) : null;
+          SchemaPlus sub = parent != null ? parent.subSchemas().get(tschema) : null;
+          tt = sub != null ? sub.tables().get(ttable) : null;
         }
         if (tt == null) {
           return null;

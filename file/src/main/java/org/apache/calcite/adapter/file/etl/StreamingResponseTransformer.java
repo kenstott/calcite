@@ -25,7 +25,7 @@ import java.util.Map;
  * <p>The returned iterator is consumed by the ETL writer in fixed-size chunks (typically
  * 10k rows per Iceberg write), so memory usage is O(chunk_size) regardless of total row count.
  *
- * <h3>Contract</h3>
+ * <h2>Contract</h2>
  * <ul>
  *   <li>The iterator must be lazy: rows are produced one at a time, not buffered.</li>
  *   <li>Any per-table setup (file downloads, auxiliary lookups) happens before the iterator

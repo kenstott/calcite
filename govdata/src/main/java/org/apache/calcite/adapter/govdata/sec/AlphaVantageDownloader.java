@@ -81,10 +81,10 @@ public class AlphaVantageDownloader {
   }
 
   /**
-   * Tops up {@code stagingDir} with new rows for the given filers, writing year-partitioned
+   * Tops up {@code topupDir} with new rows for the given filers, writing year-partitioned
    * Parquet that matches the bulk schema.
    *
-   * @param stagingDir object-storage staging directory the bulk pass wrote to (no trailing slash)
+   * @param topupDir  object-storage staging directory the bulk pass wrote to (no trailing slash)
    * @param filers     SEC filers to top up (ticker + cik); one Alpha Vantage call each
    * @param afterDate  bulk snapshot's max date (YYYY-MM-DD); floor for tickers with no prior
    *                   top-up of their own, and the disjointness cutoff against the bulk pass

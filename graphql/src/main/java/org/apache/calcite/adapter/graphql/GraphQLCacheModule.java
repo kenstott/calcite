@@ -44,7 +44,9 @@ public class GraphQLCacheModule {
       if (cache instanceof RedisGraphQLCache) {
         ((RedisGraphQLCache) cache).close();
       }
-    } catch(Exception ignored) {}
+    } catch (Exception e) {
+      LOGGER.debug("Closing the GraphQL cache failed", e);
+    }
   }
 
   public static class Builder {

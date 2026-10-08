@@ -296,6 +296,8 @@ public class ChunkOrganizer {
    *  &lt; &gt; &quot; &apos;} and numeric {@code &#NNN;}) are decoded. An entity outside that
    *  set is left in the text as written rather than guessed at. {@code &amp;} is decoded last so
    *  an escaped entity ({@code &amp;lt;}) is not decoded twice. */
+  // The Javadoc names HTML entities on purpose, inside {@code}, where they render as written.
+  @SuppressWarnings("EscapedEntity")
   static String stripHtml(String html) {
     String s = HTML_BLOCK_TAG.matcher(html).replaceAll("\n");
     s = HTML_TAG.matcher(s).replaceAll("");
@@ -513,7 +515,6 @@ public class ChunkOrganizer {
     LOGGER.info("ChunkOrganizer sweep complete: {} source(s) swept, {} unchanged (skipped)",
         swept, skipped);
   }
-
 
   /** True if {@code sourceTable}'s own {@code pipeline_tracker.table_completion.completed_at}
    *  has advanced since the last sweep that actually rescanned it (or it has never been swept).
@@ -830,7 +831,7 @@ public class ChunkOrganizer {
     }
   }
 
-  /** DuckDB connection for the standalone job: same setup as the old {@link #openDuckDb}, but
+  /** DuckDB connection for the standalone job: same setup as the old {@code openDuckDb}, but
    *  S3 credentials come from {@code AWS_*} env vars (exempt, infra-layer config) instead of a
    *  {@code TableContext}'s {@code StorageProvider} -- there is no TableContext outside an
    *  actual schema ETL run. */
@@ -857,7 +858,6 @@ public class ChunkOrganizer {
     String secretKey = System.getenv("AWS_SECRET_ACCESS_KEY");
     if (accessKey != null && secretKey != null) {
       try (Statement stmt = conn.createStatement()) {
-        String s3ConfigMap = accessKey + "|" + secretKey;
         configureS3FromEnv(stmt, accessKey, secretKey,
             System.getenv("AWS_ENDPOINT_OVERRIDE"),
             System.getenv("AWS_REGION") != null ? System.getenv("AWS_REGION") : "auto");
@@ -896,26 +896,18 @@ public class ChunkOrganizer {
    *  {@code patents.patent_claims} (tens of millions); the original one-shot query loaded the
    *  entire table into a Java List, an unbounded-memory pattern that OOM'd in practice once a
    *  table that size was registered, 2026-08-30), writing each batch to PG staging as it goes
-   *  so peak memory stays O(batch size) regardless of table size. */
-  private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
-      RowConcatSource src, int maxRowsPerSource) throws SQLException {
-    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, null, false, 0L);
-  }
-
-  /** As above, but when {@code changedYears} is non-null, scopes the scan to just those years'
+   *  so peak memory stays O(batch size) regardless of table size.
+   *
+   *  <p>When {@code changedYears} is non-null, scopes the scan to just those years'
    *  rows (a {@code year IN (...)} filter added to the underlying query) instead of the whole
    *  table -- see {@link #selectChangedYears}. {@code null} means no per-year data exists for
    *  this source (most reference tables) or the caller didn't compute it; behavior is then
    *  identical to before this parameter existed: an unfiltered full-table scan. An empty
    *  (non-null) set means per-year data exists but nothing changed since the last sweep for any
    *  tracked year -- also scans nothing, correct given the coarse watermark that triggered this
-   *  call in the first place could itself be stale by the time this runs. */
-  private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
-      RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears) throws SQLException {
-    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, changedYears, false, 0L);
-  }
-
-  /** As above, with {@code skipHashCompare} forwarded to {@link #writeToPgStaging} -- see its
+   *  call in the first place could itself be stale by the time this runs.
+   *
+   *  <p>{@code skipHashCompare} forwarded to {@link #writeToPgStaging} -- see its
    *  javadoc and {@link #sweep}'s matching parameter. {@code cursorAsOf} is this call's scope's
    *  own {@code completed_at} (the per-year one when {@code changedYears} is a single year, the
    *  source-level one from {@link #selectTableCompletedAt} otherwise) -- see {@link
@@ -1087,23 +1079,14 @@ public class ChunkOrganizer {
 
   /** Streams the source table in batches -- see {@link #chunkRowConcatSource}'s javadoc for
    *  why. Uses a smaller batch size than row-concat mode: {@link SemanticTextChunker} (or a
-   *  future custom {@link ChunkFunction}) does real per-row work, not just a string split. */
-  private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
-      DocumentBlobSource src, int maxRowsPerSource) throws SQLException {
-    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, null, false, 0L);
-  }
-
-  /** As above, but scoped to {@code changedYears} when non-null -- see {@link
+   *  future custom {@link ChunkFunction}) does real per-row work, not just a string split.
+   *
+   *  <p>Scoped to {@code changedYears} when non-null -- see {@link
    *  #chunkRowConcatSource}'s matching overload and {@link #selectChangedYears}; identical
    *  contract, just for the document-blob path (patents/health/cyber_threat/transport document
-   *  text) rather than row-concat. */
-  private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
-      DocumentBlobSource src, int maxRowsPerSource, Set<Integer> changedYears)
-      throws SQLException {
-    chunkDocumentBlobSource(conn, pg, base, src, maxRowsPerSource, changedYears, false, 0L);
-  }
-
-  /** As above, with {@code skipHashCompare}/{@code cursorAsOf} forwarded exactly as in {@link
+   *  text) rather than row-concat.
+   *
+   *  <p>{@code skipHashCompare}/{@code cursorAsOf} forwarded exactly as in {@link
    *  #chunkRowConcatSource}'s matching overload -- see its javadoc for the cursor-tracking
    *  contract, identical here for the document-blob path. */
   private static void chunkDocumentBlobSource(Connection conn, Connection pg, String base,
@@ -1639,36 +1622,20 @@ public class ChunkOrganizer {
    *  <p>Bounds peak memory to one batch regardless of table size -- required once a
    *  multi-million-row entity-grain table (e.g. {@code transport.fmcsa_carriers}) is a
    *  registered source; the original one-shot {@link #queryRows} call loaded the entire table
-   *  into a Java List, which OOM'd in practice the moment such a table was added, 2026-08-30. */
-  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
-      List<String> pkColumns, int batchSize, BatchConsumer batchConsumer) throws SQLException {
-    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, 0, null, batchConsumer);
-  }
-
-  /** As above, but stops once {@code maxTotalRows} rows have been fetched across all pages
+   *  into a Java List, which OOM'd in practice the moment such a table was added, 2026-08-30.
+   *
+   *  <p>Stops once {@code maxTotalRows} rows have been fetched across all pages
    *  ({@code <= 0} means unlimited, the production default). Test-only knob (see {@link #main}'s
    *  {@code CHUNK_ORGANIZER_MAX_ROWS_PER_SOURCE}) for a fast, bounded sweep across every
-   *  contributor regardless of a source's real size -- never set in normal production runs. */
-  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
-      List<String> pkColumns, int batchSize, int maxTotalRows, BatchConsumer batchConsumer)
-      throws SQLException {
-    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, maxTotalRows, null,
-        batchConsumer);
-  }
-
-  /** As above, but when {@code yearFilter} is non-null, scopes every page to {@code year IN
+   *  contributor regardless of a source's real size -- never set in normal production runs.
+   *
+   *  <p>When {@code yearFilter} is non-null, scopes every page to {@code year IN
    *  (...)} instead of the whole table -- see {@link #selectChangedYears}. {@code null} means no
    *  filter (identical to the pre-existing behavior); a non-null but empty set means nothing
    *  changed for any tracked year, so this returns immediately without issuing any query at all
-   *  (an empty SQL IN-list is invalid and there is nothing to scan regardless). */
-  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
-      List<String> pkColumns, int batchSize, int maxTotalRows, Set<Integer> yearFilter,
-      BatchConsumer batchConsumer) throws SQLException {
-    queryRowsBatched(conn, loc, selectCols, pkColumns, batchSize, maxTotalRows, yearFilter,
-        null, null, batchConsumer);
-  }
-
-  /** As above, but resumable: when {@code initialCursorLiteral} is non-null, the FIRST page
+   *  (an empty SQL IN-list is invalid and there is nothing to scan regardless).
+   *
+   *  <p>Resumable: when {@code initialCursorLiteral} is non-null, the FIRST page
    *  starts from it instead of the beginning of the scan -- see {@link #selectValidCursor}; a
    *  caller only ever passes a cursor it already confirmed is still valid for this exact scope.
    *  When {@code cursorConsumer} is non-null, it is invoked with the newly-reached cursor (as a

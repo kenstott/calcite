@@ -19,7 +19,7 @@ import java.util.Map;
  * writing to Parquet. This allows for data quality checks and enforcing
  * business rules.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * public class DataValidator implements Validator {
  *     public ValidationResult validate(Map<String, Object> row) {
@@ -36,7 +36,7 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <h3>Schema Configuration</h3>
+ * <h2>Schema Configuration</h2>
  * <pre>{@code
  * hooks:
  *   validators:
@@ -47,7 +47,7 @@ import java.util.Map;
  *       action: "drop"
  * }</pre>
  *
- * <h3>Validation Actions</h3>
+ * <h2>Validation Actions</h2>
  * <ul>
  *   <li>{@link ValidationResult.Action#VALID} - Include row in output</li>
  *   <li>{@link ValidationResult.Action#DROP} - Silently exclude row</li>

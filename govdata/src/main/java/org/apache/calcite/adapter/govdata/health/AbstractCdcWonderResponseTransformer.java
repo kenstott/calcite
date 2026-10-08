@@ -27,10 +27,10 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 /**
- * Parses a CDC WONDER (wonder.cdc.gov) {@code &lt;data-table&gt;} response into flat rows.
+ * Parses a CDC WONDER (wonder.cdc.gov) {@code <data-table>} response into flat rows.
  *
  * <p>WONDER's grouped cross-tab XML may omit repeated label cells: only the first row of
- * each outer group carries a {@code &lt;c l="..." r="N"/&gt;} cell (the {@code r} is the
+ * each outer group carries a {@code <c l="..." r="N"/>} cell (the {@code r} is the
  * HTML rowspan of the original results table); subsequent rows in the same group start
  * directly with the next-level label cell. For example, grouping by Year then Race:
  * <pre>{@code

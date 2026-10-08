@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Every schema's fully-derived operand (the parsed schema YAML, env already
  * resolved at load, with model-JSON overrides applied) is captured here by
- * {@link FileSchemaFactory} keyed by schema name. Any class then reads a
+ * {@code FileSchemaFactory} keyed by schema name. Any class then reads a
  * configuration value by its natural path in the model — for example
  * {@code ModelOperand.getString("cyber_vuln.partitionedTables.vuln_cross_refs.source.headers.Authorization")}
  * or {@code ModelOperand.getInt("test.thing.valueInt")} — instead of

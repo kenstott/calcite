@@ -229,12 +229,15 @@ public class CsvEnumerator<E> implements Enumerator<E> {
 
   public static RowConverter<@Nullable Object[]> arrayConverter(
       List<RelDataType> fieldTypes, List<Integer> fields, boolean stream) {
-    return new ArrayRowConverter(fieldTypes, fields, stream, true); // default: blank strings as null
+    return arrayConverter(fieldTypes, fields, stream, true); // default: blank strings as null
   }
 
   public static RowConverter<@Nullable Object[]> arrayConverter(
       List<RelDataType> fieldTypes, List<Integer> fields, boolean stream, boolean blankStringsAsNull) {
-    return new ArrayRowConverter(fieldTypes, fields, stream, blankStringsAsNull);
+    // A converter without a CsvTypeConverter returns every cell as text whatever the column's
+    // type, which the example CSV adapter's typed columns then fail to read
+    return new ArrayRowConverter(fieldTypes, fields, stream, blankStringsAsNull,
+        new CsvTypeConverter(NullEquivalents.DEFAULT_NULL_EQUIVALENTS, blankStringsAsNull));
   }
 
   public static RowConverter<@Nullable Object[]> arrayConverter(
@@ -255,7 +258,7 @@ public class CsvEnumerator<E> implements Enumerator<E> {
    * of a CSV file. */
   public static RelDataType deduceRowType(JavaTypeFactory typeFactory,
       Source source, @Nullable List<RelDataType> fieldTypes, Boolean stream) {
-    return deduceRowType(typeFactory, source, fieldTypes, stream, "UNCHANGED");
+    return deduceRowType(typeFactory, source, fieldTypes, stream, AS_WRITTEN);
   }
 
   /** Deduces the names and types of a table's columns by reading the first line
@@ -571,8 +574,20 @@ public class CsvEnumerator<E> implements Enumerator<E> {
     return typeFactory.createTypeWithNullability(typeFactory.createSqlType(sqlTypeName), true);
   }
 
+  /**
+   * Column names exactly as the header writes them, spaces and leading digits included.
+   *
+   * <p>The four-argument {@code deduceRowType} is the example CSV adapter's entry point, whose
+   * columns keep the header's own names. Every casing the file adapter's own tables choose,
+   * {@code UNCHANGED} among them, first makes the name a plain SQL identifier.
+   */
+  private static final String AS_WRITTEN = "AS_WRITTEN";
+
   /** Applies the configured casing transformation to a column name. */
   private static String applyCasing(String name, String casing) {
+    if (AS_WRITTEN.equals(casing)) {
+      return name;
+    }
     return org.apache.calcite.adapter.file.util.SmartCasing.applyCasing(name, casing);
   }
 

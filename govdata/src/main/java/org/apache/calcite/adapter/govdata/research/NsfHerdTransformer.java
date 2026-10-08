@@ -68,7 +68,7 @@ import java.util.zip.ZipInputStream;
  *       fice} instead of {@code inst_id} (see {@link #isPreRestructure}). Three separate
  *       questions stand in for the two 2010+ families:
  *       <ul>
- *         <li>{@code "Federal expenditures by S&amp;E field and agency"} maps like 2010+'s
+ *         <li>{@code "Federal expenditures by S&E field and agency"} maps like 2010+'s
  *             federal-by-agency question, but this vintage has no {@code "Total"} agency
  *             column — the agencies do not necessarily sum to the field's true federal
  *             total (confirmed against Johns Hopkins FY2008: the 7 named agencies sum to
@@ -76,7 +76,7 @@ import java.util.zip.ZipInputStream;
  *             total legitimately includes federal money not attributed to one of the 7
  *             listed agencies, the same reason 2010+ carries an explicit Total column
  *             instead of relying on a sum).</li>
- *         <li>{@code "Expenditures by S&amp;E field"} carries {@code column="Federal"} and
+ *         <li>{@code "Expenditures by S&E field"} carries {@code column="Federal"} and
  *             {@code column="Total"} (federal+nonfederal) per field. {@code column="Federal"}
  *             supplies the missing {@code federal_agency="Total"} row. {@code column="Total"}
  *             minus the field's {@code Federal} value (buffered per field within one
@@ -89,7 +89,7 @@ import java.util.zip.ZipInputStream;
  *             "Industry"→"Business"}, {@code "Institution funds, total"→"Institution funds"})
  *             and emitted at {@code rd_field="All"} only. Its own {@code Federal} and {@code
  *             Total} rows are skipped (redundant with, and validated against, the
- *             {@code "Expenditures by S&amp;E field"} derivation above — for Johns Hopkins
+ *             {@code "Expenditures by S&E field"} derivation above — for Johns Hopkins
  *             FY2008 the four nonfederal sources here sum to exactly the same $226.5M as
  *             {@code Total(1,680,927) - Federal(1,454,426)}).</li>
  *       </ul>

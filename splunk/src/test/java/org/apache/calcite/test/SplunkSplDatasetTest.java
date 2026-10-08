@@ -34,9 +34,9 @@ import java.util.Map;
  */
 @Tag("integration")
 class SplunkSplDatasetTest {
-  public static final String SPLUNK_URL = "https://kentest.xyz:8089";
+  public static final String SPLUNK_URL = SplunkTestSettings.url();
   public static final String SPLUNK_USER = "admin";
-  public static final String SPLUNK_PASSWORD = "admin123";
+  public static final String SPLUNK_PASSWORD = SplunkTestSettings.password();
 
   @Test void testSplDatasetNames() throws Exception {
     // Create connection

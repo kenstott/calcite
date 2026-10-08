@@ -71,7 +71,7 @@ import java.util.stream.Stream;
  *   <li>Iceberg commits the staged files atomically</li>
  * </ol>
  *
- * <h3>Key Features</h3>
+ * <h2>Key Features</h2>
  * <ul>
  *   <li>Atomic commits via Iceberg transactions</li>
  *   <li>Schema evolution support</li>
@@ -2476,7 +2476,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   @SuppressWarnings({"UnusedMethod", "JavaUtilDate"})
   private String createStagingJsonFile(List<Map<String, Object>> rows, String stagingPath)
       throws IOException {
-    String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+    String timestamp = utcFormat("yyyyMMdd_HHmmss").format(new Date());
     String jsonFileName = "batch_" + timestamp + "_" + UUID.randomUUID().toString().substring(0, 8) + ".json";
     String jsonPath = stagingPath + "/" + jsonFileName;
 
@@ -2556,7 +2556,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   @SuppressWarnings({"UnusedMethod", "JavaUtilDate"})
   private String createStagingPath() throws IOException {
-    String timestamp = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
+    String timestamp = utcFormat("yyyyMMdd'T'HHmmss'Z'").format(new Date());
     String random = UUID.randomUUID().toString().substring(0, 8);
     String stagingSubpath = ".staging/" + timestamp + "_" + random;
 
@@ -3183,5 +3183,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         }
       }
     }
+  }
+
+  /** A formatter for names that carry a time: UTC, whatever zone the machine is set to. */
+  private static SimpleDateFormat utcFormat(String pattern) {
+    SimpleDateFormat format = new SimpleDateFormat(pattern, java.util.Locale.ROOT);
+    format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+    return format;
   }
 }

@@ -17,9 +17,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.Map;
 
@@ -30,8 +27,6 @@ import java.util.Map;
  */
 @SuppressWarnings("UnusedDeclaration")
 public class OpenAPISchemaFactory implements SchemaFactory {
-
-  private static final Logger LOGGER = LoggerFactory.getLogger(OpenAPISchemaFactory.class);
 
   public OpenAPISchemaFactory() {
   }

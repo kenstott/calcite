@@ -157,7 +157,6 @@ public class IlostatTransformer implements StreamingResponseTransformer {
     private final Map<String, Integer> idx;
     private final String indicator;
     private final String indicatorName;
-    private final String url;
     private Map<String, Object> mapped;
     private boolean done;
 
@@ -168,7 +167,6 @@ public class IlostatTransformer implements StreamingResponseTransformer {
       this.idx = idx;
       this.indicator = indicator;
       this.indicatorName = indicatorName;
-      this.url = url;
       advance();
     }
 

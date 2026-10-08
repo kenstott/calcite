@@ -31,6 +31,7 @@ import java.util.Properties;
  * Run with: -Dcalcite.test.splunk=true
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SimpleSplunkNamespaceTest {
 
   @BeforeAll
@@ -46,9 +47,9 @@ class SimpleSplunkNamespaceTest {
 
   @Test void testDataModelAccessibility() throws Exception {
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
 
     // Test 1: Connect with dynamic discovery (all models)
@@ -118,9 +119,9 @@ class SimpleSplunkNamespaceTest {
     System.out.println("\n=== Testing Namespace Visibility ===");
 
     Properties props = new Properties();
-    props.setProperty("url", "https://kentest.xyz:8089");
+    props.setProperty("url", SplunkTestSettings.url());
     props.setProperty("user", "admin");
-    props.setProperty("password", "admin123");
+    props.setProperty("password", SplunkTestSettings.password());
     props.setProperty("disableSslValidation", "true");
 
     // Connect with multiple models via filter

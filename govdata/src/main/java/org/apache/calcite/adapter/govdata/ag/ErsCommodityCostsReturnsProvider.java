@@ -58,7 +58,6 @@ public class ErsCommodityCostsReturnsProvider implements CachingDataProvider {
 
   private static final String HOST = "https://www.ers.usda.gov";
   private static final String DEFAULT_UA = "Mozilla/5.0 (compatible; govdata-etl/1.0)";
-  private static final Pattern HREF = Pattern.compile("href=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
 
   /** Source CSV header -> output column. Numeric coercion handled per-column below. */
   private static final String[][] COLUMNS = {

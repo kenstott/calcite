@@ -125,12 +125,12 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       // Need to check all schemas recursively
-      scanSchemaRecursively(null, rows);
+      scanSchemaRecursively(rows);
 
       return Linq4j.asEnumerable(rows);
     }
 
-    private void scanSchemaRecursively(SchemaPlus schema, List<Object[]> rows) {
+    private void scanSchemaRecursively(List<Object[]> rows) {
       // Navigate to root schema to see all schemas
       SchemaPlus rootSchema = parentSchema;
       while (rootSchema.getParentSchema() != null) {
@@ -205,12 +205,12 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       int oid = 16385; // Start from a high OID for user tables
-      scanSchemaRecursively(null, rows, oid);
+      scanSchemaRecursively(rows, oid);
 
       return Linq4j.asEnumerable(rows);
     }
 
-    private void scanSchemaRecursively(SchemaPlus schema, List<Object[]> rows, int startOid) {
+    private void scanSchemaRecursively(List<Object[]> rows, int startOid) {
       // Navigate to root schema to see all schemas
       SchemaPlus rootSchema = parentSchema;
       while (rootSchema.getParentSchema() != null) {
@@ -304,12 +304,12 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
       List<Object[]> rows = new ArrayList<>();
 
       int relationOid = 16385; // Match OIDs from pg_class
-      scanSchemaRecursively(null, rows, relationOid);
+      scanSchemaRecursively(rows, relationOid);
 
       return Linq4j.asEnumerable(rows);
     }
 
-    private void scanSchemaRecursively(SchemaPlus schema, List<Object[]> rows, int startOid) {
+    private void scanSchemaRecursively(List<Object[]> rows, int startOid) {
       // Navigate to root schema to see all schemas
       SchemaPlus rootSchema = parentSchema;
       while (rootSchema.getParentSchema() != null) {
@@ -427,12 +427,12 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
               : new org.apache.calcite.sql.type.SqlTypeFactoryImpl(
               org.apache.calcite.rel.type.RelDataTypeSystem.DEFAULT);
 
-      scanSchemaRecursively(null, rows, typeFactory);
+      scanSchemaRecursively(rows, typeFactory);
 
       return Linq4j.asEnumerable(rows);
     }
 
-    private void scanSchemaRecursively(SchemaPlus schema, List<Object[]> rows, RelDataTypeFactory typeFactory) {
+    private void scanSchemaRecursively(List<Object[]> rows, RelDataTypeFactory typeFactory) {
       // Navigate to root schema to see all schemas
       SchemaPlus rootSchema = parentSchema;
       while (rootSchema.getParentSchema() != null) {
@@ -458,7 +458,7 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
                   inferResourceType(tableName),                 // resource_type
                   "multi-cloud",                                // cloud_provider
                   getResourceDescription(tableName),            // description
-                  getSupportedProviders(tableName),             // supported_providers
+                  getSupportedProviders(),             // supported_providers
                   rowType.getFieldCount(),                      // column_count
                   hasSecurityFields,                            // has_security_fields
                   hasEncryptionFields,                          // has_encryption_fields
@@ -503,7 +503,7 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
       }
     }
 
-    private String getSupportedProviders(String tableName) {
+    private String getSupportedProviders() {
       return "Azure, AWS, GCP"; // All tables support all providers
     }
   }
@@ -511,7 +511,7 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
   /**
    * Cloud Governance-specific metadata table for cloud providers.
    */
-  private class CloudProvidersTable extends AbstractTable implements ScannableTable {
+  private static class CloudProvidersTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("provider_name", SqlTypeName.VARCHAR)
@@ -560,7 +560,7 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
   /**
    * Cloud Governance-specific metadata table for ops policies.
    */
-  private class GovernancePoliciesTable extends AbstractTable implements ScannableTable {
+  private static class GovernancePoliciesTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("policy_name", SqlTypeName.VARCHAR)
@@ -616,7 +616,7 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
   }
 
   // Empty tables for PostgreSQL compatibility
-  private class PgTypeTable extends AbstractTable implements ScannableTable {
+  private static class PgTypeTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("oid", SqlTypeName.INTEGER)
@@ -648,7 +648,7 @@ public class CloudOpsPostgresMetadataSchema extends AbstractSchema {
     }
   }
 
-  private class PgViewsTable extends AbstractTable implements ScannableTable {
+  private static class PgViewsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("schemaname", SqlTypeName.VARCHAR)

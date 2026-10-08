@@ -60,6 +60,11 @@ tasks.withType<JavaCompile>().configureEach {
     options.release.set(25)
 }
 
+// Javadoc inherits the root's source level too, and then rejects the Java 16+ syntax used here.
+tasks.withType<Javadoc>().configureEach {
+    (options as CoreJavadocOptions).source = "25"
+}
+
 // ─── Maven publishing (GitHub Packages + Maven Central) ──────────────────────
 // Published as io.simpleishard:trino-calcite-base so the connector modules — and
 // any downstream JVM consumer — can depend on this shared library via Maven.
