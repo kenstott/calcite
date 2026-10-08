@@ -250,14 +250,12 @@ def test_describe_infers_param_oids_from_inline_casts(echo_server):
         c.close()
 
 
-def test_describe_defaults_untypable_params_to_text(echo_server):
+def test_describe_defaults_uncast_params_to_int8(echo_server):
     host, port, _ = echo_server
     c = ExtPgClient(host, port)
     try:
-        # $2 carries no cast and this backend cannot infer a type -> text (25), never
-        # OID 0 (unspecified). It used to be int8, which made a client that asks for
-        # parameter types refuse a string and the server plan `col = 42`.
-        assert c.describe_params("SELECT $1::text, $2") == [25, 25]
+        # $2 carries no cast -> int8 (20), never OID 0 (unspecified).
+        assert c.describe_params("SELECT $1::text, $2") == [25, 20]
     finally:
         c.close()
 
@@ -518,8 +516,8 @@ def test_json_build_object_rewrite_recurses_into_arguments():
 def test_question_marks_keeps_literals_and_orders_parameters():
     from pgwire_calcite.calcite_backend import _question_marks
 
-    sql, numbers = _question_marks("""SELECT '@1', "a@2" FROM t WHERE a = @2 AND b = @1 AND c = @2""")
-    assert sql == """SELECT '@1', "a@2" FROM t WHERE a = ? AND b = ? AND c = ?"""
+    sql, numbers = _question_marks("""SELECT '$1', "a$2" FROM t WHERE a = $2 AND b = $1 AND c = $2""")
+    assert sql == """SELECT '$1', "a$2" FROM t WHERE a = ? AND b = ? AND c = ?"""
     assert numbers == [2, 1, 2]
 
 
@@ -527,9 +525,10 @@ def test_parameter_types_come_from_the_columns_they_are_compared_with(calcite_ba
     types = calcite_backend.parameter_types(
         "SELECT ENAME FROM EMPS WHERE ENAME = $1 AND DEPTNO = $2 AND SAL > $3"
     )
-    assert types[1].startswith("VARCHAR") or types[1].startswith("CHAR")
-    assert types[2] == "INTEGER"
-    assert types[3] in ("DOUBLE", "FLOAT")
+    assert len(types) == 3
+    assert types[0].startswith("VARCHAR") or types[0].startswith("CHAR")
+    assert types[1] == "INTEGER"
+    assert types[2] in ("DOUBLE", "FLOAT")
 
 
 def test_asyncpg_untyped_text_parameter(calcite_backend):

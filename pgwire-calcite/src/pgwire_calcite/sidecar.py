@@ -91,8 +91,8 @@ UPDATE_REQUEST = "\x00__PGWIRE_UPDATE__"
 #: Reserved prefix asking which column identifies a row of a table (for RETURNING).
 KEY_COLUMN_REQUEST = "\x00__PGWIRE_KEY_COLUMN__"
 
-#: Reserved prefix asking which type Calcite infers for each parameter of a statement.
-PARAM_TYPES_REQUEST = "\x00__PGWIRE_PARAM_TYPES__"
+#: Reserved prefix asking the type the engine gives each parameter of a statement.
+PARAMETER_TYPES_REQUEST = "\x00__PGWIRE_PARAMETER_TYPES__"
 
 #: Extra seconds allowed on the socket read deadline beyond the session's
 #: statement_timeout: the child enforces the timeout itself and then still has to
@@ -172,15 +172,6 @@ class _ChildHandler(socketserver.StreamRequestHandler):
                 elif request.startswith(UPDATE_REQUEST):
                     body = json.loads(request[len(UPDATE_REQUEST):])
                     self._send_control(self._update_payload(backend, body))
-                elif request.startswith(PARAM_TYPES_REQUEST):
-                    body = json.loads(request[len(PARAM_TYPES_REQUEST):])
-                    types = backend.parameter_types(
-                        body["sql"],
-                        session_key=body["session_key"],
-                        timeout_ms=body["timeout_ms"],
-                        lane=body["lane"],
-                    )
-                    self._send_control(json.dumps(types).encode("utf-8"))
                 elif request.startswith(KEY_COLUMN_REQUEST):
                     body = json.loads(request[len(KEY_COLUMN_REQUEST):])
                     column = backend.key_column(
@@ -190,11 +181,20 @@ class _ChildHandler(socketserver.StreamRequestHandler):
                         lane=body["lane"],
                     )
                     self._send_control(json.dumps({"column": column}).encode("utf-8"))
+                elif request.startswith(PARAMETER_TYPES_REQUEST):
+                    body = json.loads(request[len(PARAMETER_TYPES_REQUEST):])
+                    types = backend.parameter_types(
+                        body["sql"],
+                        session_key=body["session_key"],
+                        timeout_ms=body["timeout_ms"],
+                        lane=body["lane"],
+                    )
+                    self._send_control(json.dumps({"types": types}).encode("utf-8"))
                 else:
                     raise ValueError(
                         "unknown bridge request: the pgwire side must send a ping, "
                         f"{CATALOG_REQUEST!r}, {CANCEL_REQUEST!r}, {EXEC_REQUEST!r}, "
-                        f"{UPDATE_REQUEST!r}, {KEY_COLUMN_REQUEST!r} or {PARAM_TYPES_REQUEST!r}"
+                        f"{UPDATE_REQUEST!r} or {KEY_COLUMN_REQUEST!r}"
                     )
             except Exception as exc:  # pre-stream failure -> loud, framed, with SQLSTATE
                 log.warning("[CALCITE-CHILD] error: %s", exc)
@@ -461,15 +461,14 @@ class BridgeBackend:
         timeout_ms: int = 0,
         lane: str = LANE_USER,
         client_gone: Optional[Callable[[], bool]] = None,
-    ) -> dict:
-        """The SQL type Calcite infers for each ``$N`` of ``sql``, asked of the child (which
-        transpiles it: the placeholders must reach its ``parameter_types`` untouched)."""
+    ) -> list:
+        """The SQL type the engine gives each ``$N`` of ``sql``, asked of the child."""
         del client_gone
-        request = PARAM_TYPES_REQUEST + json.dumps(
+        request = PARAMETER_TYPES_REQUEST + json.dumps(
             {"sql": sql, "session_key": session_key, "timeout_ms": int(timeout_ms), "lane": lane}
         )
         answer = self._control_request(request, read_timeout_s=self._deadline(timeout_ms))
-        return {int(k): v for k, v in json.loads(answer.decode("utf-8")).items()}
+        return list(json.loads(answer.decode("utf-8"))["types"])
 
     @staticmethod
     def _deadline(timeout_ms: int) -> Optional[float]:

@@ -447,7 +447,7 @@ partitionedTables:
       distinctYears: 93
       contiguous: true
       rowCount: 571532
-      checkedAt: "2026-10-07T05:33:11Z"
+      checkedAt: "2026-10-08T05:45:23Z"
     partitions: *standard_partitions
     comment: >
       Branch-network change events (opening / closing / acquired-in-merger, etc.) — the
@@ -588,7 +588,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2019, 2020, 2023, 2025, 2026]
       rowCount: 382
-      checkedAt: "2026-10-07T05:33:12Z"
+      checkedAt: "2026-10-08T05:45:26Z"
     partitions: *standard_partitions
     comment: >
       Bank failure resolutions — resolution type, deposits/assets at failure, and the
@@ -823,7 +823,7 @@ partitionedTables:
       distinctYears: 33
       contiguous: true
       rowCount: 2898836
-      checkedAt: "2026-10-07T05:33:13Z"
+      checkedAt: "2026-10-08T05:45:31Z"
     partitions: *standard_partitions
     comment: >
       Annual branch-level deposit totals from FDIC's Summary of Deposits survey —
@@ -938,7 +938,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 386056
-      checkedAt: "2026-10-07T05:33:15Z"
+      checkedAt: "2026-10-08T05:45:35Z"
     partitions: *standard_partitions
     # DQ sample cap (GOVDATA_DQ mode): call-report financials are millions of rows
     # nationwide across all history. Cap each year's sample so DQ stops paginating
@@ -1104,7 +1104,7 @@ partitionedTables:
       distinctYears: 92
       contiguous: true
       rowCount: 8107
-      checkedAt: "2026-10-07T05:33:16Z"
+      checkedAt: "2026-10-08T05:45:40Z"
     partitions: *standard_partitions
     comment: >
       Annual FDIC industry summary — bank count, net income, interest income,
@@ -1209,8 +1209,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 16
       contiguous: true
-      rowCount: 2600611
-      checkedAt: "2026-10-07T05:33:17Z"
+      rowCount: 2600727
+      checkedAt: "2026-10-08T05:45:43Z"
     partitions: *complaints_partitions
     # DQ sample cap (GOVDATA_DQ mode): the full complaint database is millions of rows
     # nationwide across all history. Cap each (year, state, product) fetch unit so DQ
@@ -1488,7 +1488,7 @@ partitionedTables:
       contiguous: false
       years: [2009, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020]
       rowCount: 879084
-      checkedAt: "2026-10-07T05:33:17Z"
+      checkedAt: "2026-10-08T05:45:47Z"
     partitions: *standard_partitions
     comment: >
       Community Reinvestment Act aggregate small-business lending, from FFIEC's

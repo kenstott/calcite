@@ -698,6 +698,20 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Using current directory as default: {}", directoryPath);
     }
 
+    // A declared crawl runs before any file is looked for: the HTML tables of the pages it
+    // reaches and the data files they link to land in the directory as ordinary files, which
+    // every engine branch below then discovers like any other.
+    @SuppressWarnings("unchecked") Map<String, Object> crawl =
+        (Map<String, Object>) operand.get("crawl");
+    if (crawl != null) {
+      try {
+        org.apache.calcite.adapter.file.converters.HtmlCrawlStage.run(name, crawl, directoryPath,
+            storageType, columnNameCasing);
+      } catch (java.io.IOException e) {
+        throw new IllegalStateException("The crawl of schema '" + name + "' failed", e);
+      }
+    }
+
     // If DuckDB engine is selected, first create FileSchema with PARQUET engine for conversions
     LOGGER.debug("FileSchemaFactory: Checking DuckDB conditions for schema '{}': engineConfig.getEngineType()={}, directoryPath={}, storageType={}",
                 name, engineConfig.getEngineType(), directoryPath, storageType);

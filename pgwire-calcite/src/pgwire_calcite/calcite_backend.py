@@ -26,6 +26,7 @@ from __future__ import annotations
 import datetime
 import decimal
 import logging
+import re
 import os
 import threading
 import time
@@ -50,6 +51,42 @@ log = logging.getLogger(__name__)
 
 _CALCITE_DRIVER = "org.apache.calcite.jdbc.Driver"
 
+
+#: A statement parameter as a client writes it: ``$1``, ``$2``...
+_PLACEHOLDER_RE = re.compile(r"\$(\d+)")
+
+
+def _question_marks(sql: str) -> Tuple[str, List[int]]:
+    """``sql`` with each parameter (``$N``) replaced by a JDBC ``?``, and the parameter
+    numbers in the order of the question marks. Text inside string literals and quoted
+    identifiers is left alone: ``'$1'`` is a string, not a parameter."""
+    out: List[str] = []
+    numbers: List[int] = []
+    i, n = 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        if ch in ("'", '"'):
+            # copy the quoted run; a doubled quote inside it is an escaped quote
+            j = i + 1
+            while j < n:
+                if sql[j] == ch:
+                    if j + 1 < n and sql[j + 1] == ch:
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(sql[i:j + 1])
+            i = j + 1
+            continue
+        match = _PLACEHOLDER_RE.match(sql, i) if ch == "$" else None
+        if match:
+            numbers.append(int(match.group(1)))
+            out.append("?")
+            i = match.end()
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out), numbers
 
 def _attach_current_thread_to_jvm() -> None:
     """Make the calling thread able to call Java.
@@ -123,40 +160,6 @@ def exit_wedged(reason: str, grace_ms: int) -> None:
         )
     logging.shutdown()
     os._exit(EXIT_STUCK_STATEMENT)
-
-
-def _question_marks(calcite_sql: str) -> Tuple[str, List[int]]:
-    """``calcite_sql`` with each parameter (``@N``, as the transpiler writes ``$N``) replaced
-    by a JDBC ``?``, and the parameter numbers in the order of the question marks. Text
-    inside string literals and quoted identifiers is left alone."""
-    out: List[str] = []
-    numbers: List[int] = []
-    i, n = 0, len(calcite_sql)
-    while i < n:
-        ch = calcite_sql[i]
-        if ch in ("'", '"'):
-            # copy the quoted run; a doubled quote inside it is an escaped quote
-            j = i + 1
-            while j < n:
-                if calcite_sql[j] == ch:
-                    if j + 1 < n and calcite_sql[j + 1] == ch:
-                        j += 2
-                        continue
-                    break
-                j += 1
-            out.append(calcite_sql[i:j + 1])
-            i = j + 1
-        elif ch == "@" and i + 1 < n and calcite_sql[i + 1].isdigit():
-            j = i + 1
-            while j < n and calcite_sql[j].isdigit():
-                j += 1
-            numbers.append(int(calcite_sql[i + 1:j]))
-            out.append("?")
-            i = j
-        else:
-            out.append(ch)
-            i += 1
-    return "".join(out), numbers
 
 
 def _match_name(name: str, candidates: List[str]) -> Optional[str]:
@@ -840,36 +843,42 @@ class CalciteBackend:
         timeout_ms: int = 0,
         lane: str = LANE_USER,
         client_gone: Optional[Callable[[], bool]] = None,
-    ) -> dict:
-        """The SQL type name Calcite infers for each ``$N`` of ``sql``, keyed by N.
+    ) -> List[Optional[str]]:
+        """The SQL type the engine gives each ``$N`` of ``sql``, by position (``$1`` first);
+        None for a number the statement does not use.
 
-        Calcite types a parameter from where it is used (``col = $1`` takes the column's
-        type). The statement is prepared, not run.
+        The statement is prepared, never run: Calcite types a parameter from what it is
+        compared with or assigned to. A statement Calcite cannot prepare raises.
         """
+        question, numbers = _question_marks(sql)
+        if not numbers:
+            return []
         calcite_sql = transpile_pg_to_calcite(
-            sql,
+            question,
             json_enabled=("json" in self._extensions),
             vector_enabled=("vector" in self._extensions),
         )
-        prepared_sql, numbers = _question_marks(calcite_sql)
-        if not numbers:
-            return {}
+        if calcite_sql.count("?") != len(numbers):
+            raise RuntimeError(
+                "the statement's parameters were not carried through to the engine's SQL: "
+                f"{len(numbers)} in {sql!r}, {calcite_sql.count('?')} in {calcite_sql!r}"
+            )
         conn, lock = self.lane(lane)
         if conn is None:
             raise RuntimeError("Calcite connection is not open")
         scope = CancelScope(session_key, timeout_ms, client_gone)
         scope.acquire(lock)
         try:
-            statement = conn.prepareStatement(prepared_sql)
+            prepared = conn.prepareStatement(calcite_sql)
             try:
-                metadata = statement.getParameterMetaData()
-                types: dict = {}
+                described = prepared.getParameterMetaData()
+                types: List[Optional[str]] = [None] * max(numbers)
                 for position, number in enumerate(numbers, start=1):
-                    # A parameter used twice is typed by its first use
-                    types.setdefault(number, str(metadata.getParameterTypeName(position)))
+                    if types[number - 1] is None:
+                        types[number - 1] = str(described.getParameterTypeName(position))
                 return types
             finally:
-                statement.close()
+                prepared.close()
         finally:
             lock.release()
 

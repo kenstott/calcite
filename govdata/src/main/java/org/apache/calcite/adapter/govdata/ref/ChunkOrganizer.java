@@ -454,6 +454,10 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
+      // Captured BEFORE any scan starts and reused as the watermark markSwept persists: reading
+      // completed_at again after the scan would record a value the scan never saw whenever the
+      // source's own ETL finishes mid-sweep, and the next sweep would skip those changes.
+      long sourceAsOf = requireTableCompletedAt(pg, src.sourceTable);
       // Narrow the rescan to just the years that actually changed, when the source's own ETL
       // pipeline tracks completion per year -- see selectChangedYears' javadoc. null means no
       // per-year data exists for this source (most reference tables), so chunkRowConcatSource
@@ -473,14 +477,10 @@ public class ChunkOrganizer {
           markYearSwept(pg, src.sourceSchema, src.sourceTable, year, yearCompletedAt.get(year));
         }
       } else {
-        // sourceNeedsSweep already confirmed this is non-null -- a null here would mean
-        // table_completion's row for this source was deleted in the gap between that check and
-        // this one, the same narrow race markSwept already tolerates (see its own fallback).
-        Long sourceAsOf = selectTableCompletedAt(pg, src.sourceTable);
         chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare,
-            sourceAsOf != null ? sourceAsOf : System.currentTimeMillis());
+            sourceAsOf);
       }
-      markSwept(pg, src.sourceSchema, src.sourceTable);
+      markSwept(pg, src.sourceSchema, src.sourceTable, sourceAsOf);
       swept++;
     }
     for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
@@ -492,6 +492,7 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
+      long sourceAsOfBlob = requireTableCompletedAt(pg, src.sourceTable);
       Map<Integer, Long> yearCompletedAtBlob = selectYearCompletedAt(pg, src.sourceTable);
       Set<Integer> changedYearsBlob = selectChangedYears(pg, src.sourceTable, yearCompletedAtBlob);
       if (changedYearsBlob != null) {
@@ -505,11 +506,10 @@ public class ChunkOrganizer {
               yearCompletedAtBlob.get(year));
         }
       } else {
-        Long sourceAsOfBlob = selectTableCompletedAt(pg, src.sourceTable);
         chunkDocumentBlobSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare,
-            sourceAsOfBlob != null ? sourceAsOfBlob : System.currentTimeMillis());
+            sourceAsOfBlob);
       }
-      markSwept(pg, src.sourceSchema, src.sourceTable);
+      markSwept(pg, src.sourceSchema, src.sourceTable, sourceAsOfBlob);
       swept++;
     }
     LOGGER.info("ChunkOrganizer sweep complete: {} source(s) swept, {} unchanged (skipped)",
@@ -553,10 +553,22 @@ public class ChunkOrganizer {
     }
   }
 
-  static void markSwept(Connection pg, String sourceSchema, String sourceTable)
-      throws SQLException {
+  /** {@link #selectTableCompletedAt} for a source {@link #sourceNeedsSweep} just confirmed has a
+   *  table_completion row; its absence now means the row was deleted mid-sweep, which is an
+   *  error, not a value to substitute. */
+  static long requireTableCompletedAt(Connection pg, String sourceTable) throws SQLException {
     Long completedAt = selectTableCompletedAt(pg, sourceTable);
-    long watermark = completedAt != null ? completedAt : System.currentTimeMillis();
+    if (completedAt == null) {
+      throw new IllegalStateException("table_completion row for " + sourceTable
+          + " disappeared after sourceNeedsSweep confirmed it");
+    }
+    return completedAt;
+  }
+
+  /** Persists {@code watermark} as the source's last-swept {@code completed_at}. The caller must
+   *  pass the value it read BEFORE scanning (see {@link #sweep}), never one re-read afterwards. */
+  static void markSwept(Connection pg, String sourceSchema, String sourceTable, long watermark)
+      throws SQLException {
     try (PreparedStatement ps = pg.prepareStatement(
         "INSERT INTO vc_sync_state (source_schema, source_table, last_swept_completed_at) "
         + "VALUES (?, ?, ?) "
