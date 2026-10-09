@@ -95,13 +95,16 @@
     kept even when it differs; (e) ?rebuildCatalog=true and -Dgovdata.rebuild.catalog delete
     the catalog so that it is rebuilt by discovery (GovDataDriver); (f) a seeded catalog copy
     that cannot be opened is replaced by an empty catalog whose views are rebuilt
-    (DuckDBJdbcSchemaFactory, lock-fallback loop); (g) a view the catalog lacks is created on
-    demand from the warehouse (DuckDBPendingViews.createOnDemand, as cited in
-    GovDataSchemaFactory); (h) the pickle cache is named by a SHA-256 of model.json's bytes
-    and rebuilt by a live walk when absent or unreadable (catalog_populate.py
-    populate_state_cached); (i) DuckDBCatalogMaintenance.rebuildPendingViews rebuilds views
-    at run time and has no caller. Already as designed: a process that meets the catalog's
-    lock takes a numbered copy seeded from the jar's seed (see ASKAM-004). That a read-only
+    (DuckDBJdbcSchemaFactory, lock-fallback loop), which is left as it is; (g) the pickle
+    cache is named by a SHA-256 of model.json's bytes and rebuilt by a live walk when absent
+    or unreadable (catalog_populate.py populate_state_cached); (h)
+    DuckDBCatalogMaintenance.rebuildPendingViews rebuilds views at run time and has no
+    caller. Not a defect, and part of the design: a single view the seed lacks is created on
+    demand, the first time it is asked for (DuckDBPendingViews.createOnDemand); with an
+    up-to-date seed that is a no-op, it is how an install whose seed lags still answers, and
+    it is the only way the adapters without a seed get their views. Already as designed: a
+    process that meets the catalog's lock takes a numbered copy seeded from the jar's seed
+    (see ASKAM-004). That a read-only
     open is locked too is the owner's statement; no comment in the code says so.
   tests: []
 
