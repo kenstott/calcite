@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.similarity;
 
 import org.apache.calcite.DataContext;
 import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.rel.type.RelDataType;
@@ -245,7 +246,7 @@ public final class SemanticSearch {
     List<String> flat = new ArrayList<String>();
     List<String> part = new ArrayList<String>();
     for (String path : paths) {
-      if (path.contains("/ivf/")) {
+      if (LocalPaths.toSlashes(path).contains("/ivf/")) {
         part.add(path);
       } else {
         flat.add(path);

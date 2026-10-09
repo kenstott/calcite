@@ -1358,7 +1358,9 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
           java.util.regex.Pattern.compile(columnName + "=([^/]+)");
 
       for (org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry entry : entries) {
-        java.util.regex.Matcher matcher = valuePattern.matcher(entry.getPath());
+        // Read by "/": a local path on Windows is separated by "\\"
+        java.util.regex.Matcher matcher =
+            valuePattern.matcher(LocalPaths.toSlashes(entry.getPath()));
         if (matcher.find()) {
           values.add(matcher.group(1));
         }

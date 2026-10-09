@@ -16,6 +16,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -286,6 +288,9 @@ public class BasicRefreshTest {
     LOGGER.debug(".conversions.json file: {}", metadataFile.getAbsolutePath());
   }
 
+  @DisabledOnOs(value = OS.WINDOWS,
+      disabledReason = "wraps an https URL in java.io.File, and a colon after the scheme is "
+          + "not a file name on Windows: getCanonicalPath throws for it")
   @Test @Tag("temp")
   public void verifyHttpUrlConversionsJsonFormat() throws Exception {
     LOGGER.debug("VERIFY .conversions.json FORMAT FOR HTTP URLs");
