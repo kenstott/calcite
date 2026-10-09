@@ -114,7 +114,10 @@ public final class GovDataSeedInstaller {
     byte[] zipBytes = readResourceBytes(SEED_ZIP_RESOURCE);
     if (zipBytes == null) {
       throw new SeedException("This jar carries no govdata catalog seed (" + SEED_ZIP_RESOURCE
-          + "). The catalog is never built at run time; use a jar built with its seed.");
+          + "). The catalog is never built at run time; use a jar built with its seed. (The "
+          + "release path that makes the seed, govdata/scripts/build-seed.sh, is the only "
+          + "caller that builds one, under -D" + GovDataDriver.SEED_BUILD_PROPERTY + "; it is "
+          + "not a way to start a server.)");
     }
     String seedListingText = readResourceText(GovDataSeedSchema.RESOURCE);
     if (seedListingText == null) {
