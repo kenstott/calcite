@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1197,7 +1198,7 @@ public class DocumentETLProcessor {
       return;
     }
     for (String year : years) {
-      String yearPrefix = outputDirectory + "/year=" + year;
+      String yearPrefix = LocalPaths.join(outputDirectory, "year=" + year);
       try {
         List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearPrefix, true);
         int count = 0;

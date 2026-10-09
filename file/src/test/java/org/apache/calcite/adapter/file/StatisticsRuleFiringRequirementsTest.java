@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -70,6 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * statistics directly from the extractor and needs no JDBC stack, but is left in
  * the same integration class for cohesion.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("integration")
 public class StatisticsRuleFiringRequirementsTest {
 

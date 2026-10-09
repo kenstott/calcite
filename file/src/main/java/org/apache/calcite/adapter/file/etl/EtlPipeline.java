@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -878,11 +879,7 @@ public class EtlPipeline {
       String tableDirectory = baseDirectory;
       if (format != MaterializeConfig.Format.ICEBERG
           && tableName != null && !tableName.isEmpty()) {
-        if (!baseDirectory.endsWith("/")) {
-          tableDirectory = baseDirectory + "/" + tableName;
-        } else {
-          tableDirectory = baseDirectory + tableName;
-        }
+        tableDirectory = LocalPaths.join(baseDirectory, tableName);
       }
 
       // materialize.enabled: false means "run the pipeline, write nothing" — a supported
@@ -3838,13 +3835,13 @@ public class EtlPipeline {
             && !materializeConfig.getIceberg().getWarehousePath().isEmpty()) {
           icebergBase = materializeConfig.getIceberg().getWarehousePath();
         }
-        String dataPath = icebergBase + "/" + pipelineName + "/data";
+        String dataPath = LocalPaths.join(icebergBase, pipelineName + "/data");
         if (storageProvider.isDirectory(dataPath)) {
           LOGGER.debug("Verified Iceberg data exists at {}", dataPath);
           return true;
         }
         if (!icebergBase.equals(baseDirectory)) {
-          String fallbackPath = baseDirectory + "/" + pipelineName + "/data";
+          String fallbackPath = LocalPaths.join(baseDirectory, pipelineName + "/data");
           if (storageProvider.isDirectory(fallbackPath)) {
             LOGGER.debug("Verified Iceberg data exists at fallback {}", fallbackPath);
             return true;
@@ -3852,7 +3849,7 @@ public class EtlPipeline {
         }
       } else {
         // For Parquet format, check if data directory has files
-        String dataPath = baseDirectory + "/" + pipelineName;
+        String dataPath = LocalPaths.join(baseDirectory, pipelineName);
         if (storageProvider.isDirectory(dataPath)) {
           LOGGER.debug("Verified data exists at {}", dataPath);
           return true;
@@ -3929,7 +3926,7 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
@@ -4053,7 +4050,7 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
@@ -4155,7 +4152,7 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }

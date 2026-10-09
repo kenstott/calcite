@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -93,6 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 @SuppressWarnings("deprecation")
+@ResourceLock("calcite.file.statistics")
 public class ExecutionRefinementRequirementsTest {
 
   // Flat multi-file Parquet table (FILE-076 / FILE-077 / FILE-078 operators).

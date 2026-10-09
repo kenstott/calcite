@@ -112,4 +112,19 @@ class ExclusionProbeTest {
     }
     assertEquals("Delaware", w.get("excluded_units").get(0).asText());
   }
+
+  @Test void pagedResultIsComparedAgainstTheFullOriginalNotThePage() {
+    final String sql = "SELECT state_name, v FROM t b WHERE b.min14 IS NOT NULL ORDER BY 1";
+    ObjectNode env = QuestionDiagnostics.forQuery(null, sql, rows("Iowa"), 1, 2,
+        s -> s.equals(sql)
+            ? rows("Delaware", "Iowa", "Ohio") : rows("Delaware", "Iowa", "Ohio", "Utah"));
+    ObjectNode w = null;
+    for (com.fasterxml.jackson.databind.JsonNode x : env.get("diagnostics").get("warnings")) {
+      if ("explicit_exclusion".equals(x.get("type").asText())) {
+        w = (ObjectNode) x;
+      }
+    }
+    assertEquals(1, w.get("excluded_unit_count").asInt());
+    assertEquals("Utah", w.get("excluded_units").get(0).asText());
+  }
 }

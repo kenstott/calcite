@@ -15,6 +15,7 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.etl.cache.BundleArchiver;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -363,11 +364,7 @@ public class SchemaLifecycleProcessor {
     String schemaName = context.getSchemaContext().getConfig().getName();
     String schemaMaterializeDir = baseMaterializeDir;
     if (baseMaterializeDir != null && schemaName != null && !schemaName.isEmpty()) {
-      if (!baseMaterializeDir.endsWith("/")) {
-        schemaMaterializeDir = baseMaterializeDir + "/" + schemaName;
-      } else {
-        schemaMaterializeDir = baseMaterializeDir + schemaName;
-      }
+      schemaMaterializeDir = LocalPaths.join(baseMaterializeDir, schemaName);
     }
 
     // Create and execute the ETL pipeline
@@ -455,7 +452,7 @@ public class SchemaLifecycleProcessor {
     if (opDir == null) {
       return false;
     }
-    java.io.File cacheDir = new java.io.File(opDir + "/cache/raw");
+    java.io.File cacheDir = new java.io.File(LocalPaths.join(opDir, "cache/raw"));
     if (!cacheDir.exists() || !cacheDir.isDirectory()) {
       return false;
     }
@@ -471,7 +468,7 @@ public class SchemaLifecycleProcessor {
     if (opDir == null) {
       return;
     }
-    String localCacheDir = opDir + "/cache/raw";
+    String localCacheDir = LocalPaths.join(opDir, "cache/raw");
     java.io.File cacheDir = new java.io.File(localCacheDir);
     if (!cacheDir.exists() || !cacheDir.isDirectory()) {
       return;
@@ -791,7 +788,7 @@ public class SchemaLifecycleProcessor {
     // Full path in source directory (fall back to materialize directory if source not set)
     String baseDir = sourceDirectory != null ? sourceDirectory : materializeDirectory;
     String fullCachePath = baseDir != null
-        ? baseDir + "/" + cachePath
+        ? LocalPaths.join(baseDir, cachePath)
         : cachePath;
 
     // Create variable key for storing in context

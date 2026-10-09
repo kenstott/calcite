@@ -1684,7 +1684,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 44881
-      checkedAt: "2026-10-08T06:16:36Z"
+      checkedAt: "2026-10-09T06:51:46Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1886,14 +1886,6 @@ partitionedTables:
       # tables with a source: block. This table has none — EntityBridgeListener writes it
       # directly via MaterializationWriterFactory, so the fallback path never executes.
       targetTableId: entity_org_bridge
-      # Never enabled before (confirmed live 2026-09-27: this table's full snapshot history
-      # since 2026-09-09 was still listed, none ever expired), which is how an old snapshot's
-      # manifest-list file going missing (2026-09-25 mass file-loss incident) went undetected
-      # until a later drop-and-recreate walked the full history and hit the gap — see
-      # kenstott/govdata-ops for the incident writeup.
-      iceberg:
-        runMaintenance: true
-        snapshotRetentionDays: 7
       # Declared here (distinct from this table's own columns: above, which is Calcite's row
       # type) so IcebergMaterializationWriter creates the table from these types directly
       # instead of inferring from the first written batch's actual data. Confirmed live: with
@@ -1938,6 +1930,11 @@ partitionedTables:
         # uniformly across all four entity-resolution tables written by this run.
         batchSize: 5000
         stagingMode: local
+      # Never enabled before (confirmed live 2026-09-27: this table's full snapshot history
+      # since 2026-09-09 was still listed, none ever expired), which is how an old snapshot's
+      # manifest-list file going missing (2026-09-25 mass file-loss incident) went undetected
+      # until a later drop-and-recreate walked the full history and hit the gap — see
+      # kenstott/govdata-ops for the incident writeup.
       iceberg:
         <<: *compaction_defaults
         catalogType: hadoop
@@ -2028,10 +2025,6 @@ partitionedTables:
       enabled: true
       format: iceberg
       targetTableId: entity_person_bridge
-      # See entity_org_bridge's materialize.iceberg comment for why runMaintenance is set here.
-      iceberg:
-        runMaintenance: true
-        snapshotRetentionDays: 7
       # See entity_org_bridge's materialize.columns comment for why this is declared here.
       # Keep in sync with the columns: above.
       columns:
@@ -2069,6 +2062,7 @@ partitionedTables:
         # uniformly across all four entity-resolution tables written by this run.
         batchSize: 5000
         stagingMode: local
+      # See entity_org_bridge's materialize.iceberg comment for why runMaintenance is set here.
       iceberg:
         <<: *compaction_defaults
         catalogType: hadoop
@@ -2378,10 +2372,6 @@ partitionedTables:
       enabled: true
       format: iceberg
       targetTableId: canonical_org_entity
-      # See entity_org_bridge's materialize.iceberg comment for why runMaintenance is set here.
-      iceberg:
-        runMaintenance: true
-        snapshotRetentionDays: 7
       # See entity_org_bridge's materialize.columns comment for why this is declared here
       # (distinct from the columns: above, which is Calcite's row type) -- this table's
       # per-source FK/confidence columns are each non-null only for that one source's rows,
@@ -2529,6 +2519,7 @@ partitionedTables:
         # fragmentation this write leaves behind for the rest of the same long-lived process.
         batchSize: 5000
         stagingMode: local
+      # See entity_org_bridge's materialize.iceberg comment for why runMaintenance is set here.
       iceberg:
         <<: *compaction_defaults
         catalogType: hadoop
@@ -2650,10 +2641,6 @@ partitionedTables:
       enabled: true
       format: iceberg
       targetTableId: canonical_person_entity
-      # See entity_org_bridge's materialize.iceberg comment for why runMaintenance is set here.
-      iceberg:
-        runMaintenance: true
-        snapshotRetentionDays: 7
       # See entity_org_bridge's materialize.columns comment for why this is declared here.
       # Keep in sync with the columns: above.
       columns:
@@ -2713,6 +2700,7 @@ partitionedTables:
         # see canonical_org_entity's own comment for the full rationale; same fix applies here.
         batchSize: 5000
         stagingMode: local
+      # See entity_org_bridge's materialize.iceberg comment for why runMaintenance is set here.
       iceberg:
         <<: *compaction_defaults
         catalogType: hadoop

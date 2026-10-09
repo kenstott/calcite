@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -268,7 +269,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 1000);
 
     when(mockTracker.getCachedCompletion("cached_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/cached_pipeline/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/cached_pipeline/data"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -294,7 +295,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 0, System.currentTimeMillis());
 
     when(mockTracker.getCachedCompletion("zero_rows_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/zero_rows_pipeline/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/zero_rows_pipeline/data"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -335,7 +336,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 0, tenDaysAgo);
 
     when(mockTracker.getCachedCompletion("ttl_expired_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/ttl_expired_pipeline/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/ttl_expired_pipeline/data"))).thenReturn(true);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
 
     // Set up for full pipeline execution after TTL expiry
@@ -381,7 +382,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion("different_hash", "old_sig", 500);
 
     when(mockTracker.getCachedCompletion("mismatch_pipeline")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/mismatch_pipeline/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/mismatch_pipeline/data"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -498,7 +499,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("cold_recovery")).thenReturn(null);
     // Data exists for cold-start recovery
-    when(mockStorage.isDirectory("/base/cold_recovery/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/cold_recovery/data"))).thenReturn(true);
     // But readRowCountFromIceberg will fail (no actual Iceberg table),
     // so it returns 0 and falls through to normal processing
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
@@ -585,7 +586,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("iceberg_complete")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("iceberg_complete"), anyString())).thenReturn(true);
-    when(mockStorage.isDirectory("/base/iceberg_complete/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/iceberg_complete/data"))).thenReturn(true);
 
     // After invalidation, must set up for processing
     Set<Integer> unprocessed = new HashSet<Integer>();
@@ -1471,7 +1472,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("parquet_verify")).thenReturn(cached);
     // For Parquet, verify checks baseDir/pipelineName not metadata subdir
-    when(mockStorage.isDirectory("/base/parquet_verify")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/parquet_verify"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -1589,7 +1590,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("warehouse_pipeline")).thenReturn(cached);
     // Check warehousePath first, then fallback
-    when(mockStorage.isDirectory("/warehouse/warehouse_pipeline/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/warehouse/warehouse_pipeline/data"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -1632,7 +1633,7 @@ public class EtlPipelineCoverageTest {
     // warehousePath directory does not exist
     when(mockStorage.isDirectory("/warehouse/fallback_verify/metadata")).thenReturn(false);
     // Fallback to baseDirectory
-    when(mockStorage.isDirectory("/base/fallback_verify/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/fallback_verify/data"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -1866,7 +1867,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("zero_ttl_pipeline")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("zero_ttl_pipeline"), anyString())).thenReturn(true);
-    when(mockStorage.isDirectory("/base/zero_ttl_pipeline/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/zero_ttl_pipeline/data"))).thenReturn(true);
 
     // After dimension-based check, read row count returns 0
     // The pipeline should invalidate and continue
@@ -1919,7 +1920,7 @@ public class EtlPipelineCoverageTest {
 
     when(mockTracker.getCachedCompletion("zero_no_ttl")).thenReturn(null);
     when(mockTracker.isTableComplete(eq("zero_no_ttl"), anyString())).thenReturn(true);
-    when(mockStorage.isDirectory("/base/zero_no_ttl/data")).thenReturn(true);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/zero_no_ttl/data"))).thenReturn(true);
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, "/base", null, mockTracker, null, null);
@@ -2009,7 +2010,7 @@ public class EtlPipelineCoverageTest {
         new IncrementalTracker.CachedCompletion(configHash, "sig", 100);
 
     when(mockTracker.getCachedCompletion("parquet_missing")).thenReturn(cached);
-    when(mockStorage.isDirectory("/base/parquet_missing")).thenReturn(false);
+    when(mockStorage.isDirectory(LocalPaths.normalize("/base/parquet_missing"))).thenReturn(false);
     when(mockTracker.isTableComplete(anyString(), anyString())).thenReturn(false);
 
     Set<Integer> unprocessed = new HashSet<Integer>();

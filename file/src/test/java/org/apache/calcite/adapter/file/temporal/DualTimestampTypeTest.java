@@ -195,7 +195,7 @@ public class DualTimestampTypeTest {
         + "      operand: {\n"
         + "        directory: '" + parentDir.replace("\\", "\\\\") + "',\n"
         + "        executionEngine: '" + engine + "',\n"
-        + "        parquetCacheDirectory: '" + parentDir + "/test_cache_dual_ts_" + engine.toLowerCase() + "',\n"
+        + "        parquetCacheDirectory: '" + parentDir.replace("\\", "\\\\") + "/test_cache_dual_ts_" + engine.toLowerCase() + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"

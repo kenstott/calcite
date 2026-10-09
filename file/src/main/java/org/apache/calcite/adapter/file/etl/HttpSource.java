@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -3917,7 +3918,7 @@ public class HttpSource implements DataSource {
       List<String> keyVars, int rowCap, boolean gzip) {
     String basePath = rawCachePath;
     StringBuilder path = new StringBuilder(basePath);
-    if (!basePath.endsWith("/")) {
+    if (!LocalPaths.endsWithSeparator(basePath)) {
       path.append("/");
     }
 

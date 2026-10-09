@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.storage;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.util.Source;
 
 import org.slf4j.Logger;
@@ -105,23 +106,27 @@ public class StorageProviderSource implements Source {
     String basePath = fileEntry.getPath();
     String childPath = child.path();
 
-    // Remove leading slash from child if present
-    if (childPath.startsWith("/")) {
-      childPath = childPath.substring(1);
+    String combinedPath;
+    String childName;
+    if ("local".equals(storageProvider.getStorageType())) {
+      // A local path on Windows may be written with either separator
+      if (LocalPaths.startsWithSeparator(childPath)) {
+        childPath = childPath.substring(1);
+      }
+      combinedPath = LocalPaths.join(basePath, childPath);
+      childName = LocalPaths.fileName(child.path());
+    } else {
+      // A remote path is separated by "/" on every platform
+      if (childPath.startsWith("/")) {
+        childPath = childPath.substring(1);
+      }
+      combinedPath = basePath.endsWith("/") ? basePath + childPath : basePath + "/" + childPath;
+      childName = child.path().substring(child.path().lastIndexOf('/') + 1);
     }
-
-    // Ensure base path ends with /
-    if (!basePath.endsWith("/")) {
-      basePath = basePath + "/";
-    }
-
-    String combinedPath = basePath + childPath;
 
     // Create a new FileEntry for the combined path
     StorageProvider.FileEntry newEntry =
-        new StorageProvider.FileEntry(combinedPath,
-        child.path().substring(child.path().lastIndexOf('/') + 1),
-        false, 0, 0);
+        new StorageProvider.FileEntry(combinedPath, childName, false, 0, 0);
 
     return new StorageProviderSource(newEntry, storageProvider);
   }
@@ -130,6 +135,11 @@ public class StorageProviderSource implements Source {
     // Calculate relative path for display only
     String basePath = source.path();
     String thisPath = displayPath;
+    if (File.separatorChar == '\\' && "local".equals(storageProvider.getStorageType())) {
+      // A local path on Windows may be written with either separator
+      basePath = basePath.replace('\\', '/');
+      thisPath = thisPath.replace('\\', '/');
+    }
 
     // Normalize paths for comparison
     if (basePath.startsWith("/") && !thisPath.startsWith("/")) {

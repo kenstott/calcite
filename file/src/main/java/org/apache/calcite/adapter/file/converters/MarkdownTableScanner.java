@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.converters;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.cache.SourceFileLockManager;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.util.trace.CalciteLogger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -94,9 +95,9 @@ public final class MarkdownTableScanner {
       String baseName = toPascalCase(inputFile.getName().replaceFirst("\\.[^.]+$", ""));
 
       // Include directory structure in the basename if relativePath is provided
-      if (relativePath != null && relativePath.contains(File.separator)) {
-        String dirPrefix = relativePath.substring(0, relativePath.lastIndexOf(File.separator))
-            .replace(File.separator, "_");
+      String dirPrefix =
+          relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
+      if (dirPrefix != null) {
         baseName = dirPrefix + "_" + baseName;
       }
 

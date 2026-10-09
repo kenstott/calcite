@@ -3666,6 +3666,95 @@ def _handle_current_setting(sql: str):
     return QueryResult(rows=[(value,)], column_names=["current_setting"])
 
 
+_PARAMETER_MARK_RE = re.compile(r"^__pgwire_parameter_(\d+)__$")
+
+#: The SQL type a catalog parameter is reported as, by the type of what it is compared with in
+#: the catalog database. A type absent here leaves the parameter as it was reported before.
+_CATALOG_PARAMETER_TYPE = {
+    "VARCHAR": "VARCHAR",
+    "BOOLEAN": "BOOLEAN",
+    "TINYINT": "SMALLINT",
+    "SMALLINT": "SMALLINT",
+    "UTINYINT": "SMALLINT",
+    "INTEGER": "INTEGER",
+    "USMALLINT": "INTEGER",
+    "BIGINT": "BIGINT",
+    "UINTEGER": "BIGINT",
+    "UBIGINT": "BIGINT",
+    "FLOAT": "REAL",
+    "DOUBLE": "DOUBLE",
+}
+
+
+def parameter_types(sql: str, role_id: str, state) -> "list | None":
+    """The SQL type of each ``$N`` of a catalog statement, by what the statement compares it
+    with (kenstott/calcite#463); None in the place of a parameter compared with nothing.
+
+    The catalog database does not say what it types a parameter as, so each is typed as the
+    other side of its comparison is: ``relname = $1`` is a VARCHAR, ``oid = $1`` a number.
+    None for a statement the catalog database is not asked (it is not a query)."""
+    import sqlglot
+    import sqlglot.expressions as exp
+
+    stripped = sql.strip().rstrip(";")
+    indices = [int(n) for n in re.findall(r"\$(\d+)", stripped)]
+    if not indices or not re.match(r"^\s*(SELECT|WITH)\b", stripped, re.IGNORECASE):
+        return None
+    marked = re.sub(
+        r"\$(\d+)(?:::[^\s,)]+)?", lambda m: f"'__pgwire_parameter_{m.group(1)}__'", stripped
+    )
+    tree = sqlglot.parse_one(_rewrite_for_duckdb(marked, role_id), read="duckdb")
+    types: list = [None] * max(indices)
+    cur = _get_catalog_db(role_id, state).cursor()
+    try:
+        for literal in list(tree.find_all(exp.Literal)):
+            mark = _PARAMETER_MARK_RE.match(literal.name) if literal.is_string else None
+            if mark is None:
+                continue
+            other = _compared_with(literal)
+            select = literal.find_ancestor(exp.Select)
+            if other is None or select is None:
+                continue
+            probe = select.copy()
+            probe.set("expressions", [exp.alias_(other.copy(), "compared")])
+            for clause in ("where", "group", "having", "qualify", "order", "limit", "offset", "distinct"):
+                probe.set(clause, None)
+            with_ = tree.args.get("with_")
+            if with_ is not None and probe.args.get("with_") is None:
+                probe.set("with_", with_.copy())
+            for leftover in list(probe.find_all(exp.Literal)):
+                if leftover.is_string and _PARAMETER_MARK_RE.match(leftover.name):
+                    leftover.replace(exp.Null())
+            try:
+                described = cur.execute("DESCRIBE " + probe.sql(dialect="duckdb")).fetchall()
+            except Exception as exc:
+                # What the parameter is compared with cannot be read on its own (it names a
+                # row of an outer query). Running the statement says so if it is wrong.
+                log.info("[CATALOG] parameter $%s of %r is not typed: %s", mark.group(1), stripped[:200], exc)
+                continue
+            duck_type = str(described[0][1]).split("(")[0]
+            types[int(mark.group(1)) - 1] = _CATALOG_PARAMETER_TYPE.get(duck_type)
+    finally:
+        cur.close()
+    return types
+
+
+def _compared_with(literal):
+    """The expression a parameter's place is compared with, or None when it is in no
+    comparison."""
+    import sqlglot.expressions as exp
+
+    parent = literal.parent
+    if isinstance(
+        parent,
+        (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE, exp.Like, exp.ILike, exp.NullSafeEQ, exp.NullSafeNEQ),
+    ):
+        return parent.expression if parent.this is literal else parent.this
+    if isinstance(parent, (exp.In, exp.Between)) and parent.this is not literal:
+        return parent.this
+    return None
+
+
 def answer(sql: str, role_id: str, state):  # REQ-532
     """Return a synthetic QueryResult for intercepted catalog/SET/SHOW queries."""
     from pgwire_calcite.types import QueryResult

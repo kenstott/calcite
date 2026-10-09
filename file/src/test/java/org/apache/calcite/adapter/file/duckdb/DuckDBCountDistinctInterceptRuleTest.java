@@ -27,6 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -52,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>These tests use the DuckDB execution engine to exercise the rule
  * in the DuckDB query path.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("integration")
 public class DuckDBCountDistinctInterceptRuleTest {
 

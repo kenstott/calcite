@@ -123,3 +123,53 @@ def test_a_statement_after_a_row_limited_one_reads_its_own_rows(server):
             await conn.close()
 
     assert asyncio.run(run()) == [20, 10, "RESEARCH", (10, "ACCOUNTING"), 4]
+
+
+def test_a_text_parameter_of_an_information_schema_statement_selects_by_it(server):
+    """The engine answers information_schema, so it types that statement's parameters too.
+    Reported as int8, a schema name could not be sent (kenstott/calcite#463)."""
+    asyncpg = pytest.importorskip("asyncpg")
+    import asyncio
+
+    async def run():
+        conn = await asyncpg.connect(host="127.0.0.1", port=server, user="tester", database="postgres")
+        try:
+            by_schema = await conn.fetch(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", "SALES"
+            )
+            by_both = await conn.fetch(
+                "SELECT column_name FROM information_schema.columns"
+                " WHERE table_schema = $1 AND table_name = $2 AND ordinal_position = $3",
+                "SALES", "depts", 1,
+            )
+            return sorted(r[0] for r in by_schema), [r[0] for r in by_both]
+        finally:
+            await conn.close()
+
+    tables, columns = asyncio.run(run())
+    assert "depts" in tables
+    assert columns == ["deptno"]
+
+
+def test_a_parameter_of_a_pg_catalog_statement_is_typed_by_what_it_is_compared_with(server):
+    """The catalog database answers pg_catalog and does not say what it types a parameter
+    as, so each is typed as the other side of its comparison (kenstott/calcite#463)."""
+    asyncpg = pytest.importorskip("asyncpg")
+    import asyncio
+
+    async def run():
+        conn = await asyncpg.connect(host="127.0.0.1", port=server, user="tester", database="postgres")
+        try:
+            rows = await conn.fetch("SELECT relname FROM pg_catalog.pg_class WHERE relname = $1", "depts")
+            oid = await conn.fetchval("SELECT oid FROM pg_catalog.pg_class WHERE relname = $1", "depts")
+            by_oid = await conn.fetch(
+                "SELECT c.relname FROM pg_catalog.pg_class c"
+                " JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace"
+                " WHERE c.oid = $1 AND n.nspname IN ($2, $3)",
+                oid, "SALES", "sales",
+            )
+            return [r[0] for r in rows], [r[0] for r in by_oid]
+        finally:
+            await conn.close()
+
+    assert asyncio.run(run()) == (["depts"], ["depts"])

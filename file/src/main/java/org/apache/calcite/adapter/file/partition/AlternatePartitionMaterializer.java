@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.partition;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -261,7 +262,8 @@ public class AlternatePartitionMaterializer {
           LOGGER.info("Reading from Iceberg table: {}", icebergTablePath);
         } else {
           // Read from hive-partitioned Parquet files
-          String fullSourcePattern = java.nio.file.Paths.get(baseDirectory, sourceGlob).toString();
+          // By string: a glob is not a path Windows accepts
+          String fullSourcePattern = LocalPaths.join(baseDirectory, sourceGlob);
           sourceClause = String.format("read_parquet('%s', hive_partitioning=true)", fullSourcePattern);
           LOGGER.info("Reading from Parquet files: {}", fullSourcePattern);
         }

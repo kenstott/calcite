@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.avatica.DriverVersion;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.Driver;
@@ -201,12 +202,12 @@ public class FileJdbcDriver extends Driver {
 
     // Set defaults if not specified
     if (storagePath == null) {
-      storagePath = System.getProperty("java.io.tmpdir") + "/calcite_file_storage";
+      storagePath = LocalPaths.join(System.getProperty("java.io.tmpdir"), "calcite_file_storage");
       LOGGER.info("Using default storage path: " + storagePath);
     }
 
     if (dataPath == null) {
-      dataPath = System.getProperty("user.dir") + "/data";
+      dataPath = LocalPaths.join(System.getProperty("user.dir"), "data");
       LOGGER.info("Using default data path: " + dataPath);
     }
 
