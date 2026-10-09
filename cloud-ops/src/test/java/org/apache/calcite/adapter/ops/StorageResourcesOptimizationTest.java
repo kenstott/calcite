@@ -148,7 +148,7 @@ public class StorageResourcesOptimizationTest {
     assertNotNull(schema.getField("public_access_enabled", false, false));
 
     // Verify correct column count
-    assertEquals(28, schema.getFieldCount(), "Should have 28 columns");
+    assertEquals(27, schema.getFieldCount(), "Should have 27 columns");
   }
 
   @Test @DisplayName("Projection row should correctly subset columns")
@@ -158,7 +158,7 @@ public class StorageResourcesOptimizationTest {
     CloudOpsProjectionHandler projectionHandler = new CloudOpsProjectionHandler(rowType, projections);
 
     // Create a full row with all columns
-    Object[] fullRow = new Object[28];
+    Object[] fullRow = new Object[27];
     fullRow[0] = "aws";
     fullRow[1] = "123456789012";
     fullRow[2] = "test-bucket";
@@ -182,7 +182,7 @@ public class StorageResourcesOptimizationTest {
     CloudOpsProjectionHandler projectionHandler = new CloudOpsProjectionHandler(rowType, projections);
 
     // Create a row with some null values
-    Object[] fullRow = new Object[28];
+    Object[] fullRow = new Object[27];
     fullRow[0] = "aws";
     fullRow[1] = "123456789012";
     fullRow[11] = null; // encryption_enabled is null

@@ -493,6 +493,8 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         #: commit each write as it runs, so a ROLLBACK after one cannot be honoured.
         self._in_transaction = False
         self._wrote_in_transaction = False
+        #: SQL text -> resolved parameter type OIDs (see CalciteHandler._parameter_oids).
+        self.param_oid_cache: dict[str, list] = {}
         self.statement_timeout_ms: int = self._default_statement_timeout_ms()
         self.settings["statement_timeout"] = _format_statement_timeout(self.statement_timeout_ms)
 
@@ -1454,6 +1456,61 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
             tag = prefix + tag[len("SELECT"):]
         super().send_command_complete(tag)
 
+    def _parameter_oids(self, ctx: BVContext, stmt: str) -> list:
+        """The type OID of each ``$N`` of a prepared statement: declared at Parse, named by
+        an inline cast, or given by the engine. Remembered per session by SQL text, because
+        a client may Parse the same statement again before it binds (asyncpg does, with its
+        statement cache off), and Parse forgets what Describe worked out."""
+        sql, declared = ctx.stmts[stmt]
+        cache = ctx.session.param_oid_cache
+        if not declared and sql in cache:
+            return cache[sql]
+        indices = {int(m) for m in re.findall(r"\$(\d+)", sql)}
+        if "typeinfo_tree" in sql.lower() and indices:
+            # OID 1028 = _oid (oid[]) — asyncpg has a built-in binary codec for this,
+            # so it can encode list(typeoids) and we can decode the binary response.
+            param_oids = [1028]
+        elif "set_config" in sql.lower() and indices:
+            # set_config takes TEXT params; OID 25 prevents asyncpg from looping on OID 0
+            param_oids = [25] * len(indices)
+        elif declared:
+            param_oids = declared
+        elif indices:
+            # No Parse-declared OIDs: each $N's type is its inline cast (`$1::text`),
+            # else the type the engine gives it from the statement. OID 0
+            # (unspecified) makes psycopg/asyncpg re-describe forever.
+            cast_map = {
+                int(m): _CAST_OID.get(t.lower(), 25)
+                for m, t in re.findall(r"\$(\d+)::(\w+)", sql)
+            }
+            param_oids = ctx.session.parameter_oids(sql, cast_map, max(indices))
+        else:
+            param_oids = []
+        if not declared:
+            cache[sql] = param_oids
+        return param_oids
+
+    def handle_bind(self, ctx: BVContext, payload: bytes) -> None:
+        # A parameter sent in binary can only be decoded with its type. If this statement's
+        # types are not known here (never described, or parsed again since), work them out.
+        ba = bytearray(payload)
+        portal_end = ba.index(0)
+        stmt_end = ba.index(0, portal_end + 1)
+        stmt = ba[portal_end + 1 : stmt_end].decode("utf-8")
+        if stmt in ctx.stmts and not ctx.stmts[stmt][1]:
+            (num_formats,) = struct.unpack("!h", ba[stmt_end + 1 : stmt_end + 3])
+            formats = struct.unpack(
+                f"!{num_formats}h", ba[stmt_end + 3 : stmt_end + 3 + 2 * num_formats]
+            )
+            sql = ctx.stmts[stmt][0]
+            if any(f == 1 for f in formats) and sql.strip() and not _COPY_RE.match(sql):
+                try:
+                    ctx.stmts[stmt] = (sql, self._parameter_oids(ctx, stmt))
+                except Exception as e:
+                    self.send_error(e, ctx)
+                    return
+        super().handle_bind(ctx, payload)
+
     def handle_describe(self, ctx: BVContext, payload: bytes) -> None:
         ba = bytearray(payload)
         if ba[0] == ord("P"):
@@ -1489,33 +1546,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self.send_paramter_description([])
                 self.send_no_data()
                 return
-            indices = {int(m) for m in re.findall(r"\$(\d+)", sql)}
-            if "typeinfo_tree" in sql.lower() and indices:
-                # OID 1028 = _oid (oid[]) — asyncpg has a built-in binary codec for this,
-                # so it can encode list(typeoids) and we can decode the binary response.
-                param_oids = [1028]
-            elif "set_config" in sql.lower() and indices:
-                # set_config takes TEXT params; OID 25 prevents asyncpg from looping on OID 0
-                param_oids = [25] * len(indices)
-            else:
-                stored_oids = ctx.stmts[stmt][1]
-                if stored_oids:
-                    param_oids = stored_oids
-                elif indices:
-                    # No Parse-declared OIDs: each $N's type is its inline cast (`$1::text`),
-                    # else the type the engine gives it from the statement. OID 0
-                    # (unspecified) makes psycopg/asyncpg re-describe forever.
-                    cast_map = {
-                        int(m): _CAST_OID.get(t.lower(), 25)
-                        for m, t in re.findall(r"\$(\d+)::(\w+)", sql)
-                    }
-                    try:
-                        param_oids = ctx.session.parameter_oids(sql, cast_map, max(indices))
-                    except Exception as e:
-                        self.send_error(e, ctx)
-                        return
-                else:
-                    param_oids = []
+            try:
+                param_oids = self._parameter_oids(ctx, stmt)
+            except Exception as e:
+                self.send_error(e, ctx)
+                return
             # Store the resolved OIDs so describe_statement substitutes typed example
             # values instead of executing the SQL with unresolved $N placeholders.
             ctx.stmts[stmt] = (sql, param_oids)

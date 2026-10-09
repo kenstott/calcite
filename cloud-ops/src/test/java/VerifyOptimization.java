@@ -54,14 +54,13 @@ public class VerifyOptimization {
             .add("versioning_enabled", SqlTypeName.BOOLEAN)    // 18
             .add("soft_delete_enabled", SqlTypeName.BOOLEAN)   // 19
             .add("soft_delete_retention_days", SqlTypeName.INTEGER) // 20
-            // More fields (21-26)
+            // More fields (21-25)
             .add("backup_enabled", SqlTypeName.BOOLEAN)        // 21
             .add("lifecycle_rules_count", SqlTypeName.INTEGER) // 22
             .add("access_tier", SqlTypeName.VARCHAR)           // 23
-            .add("last_access_time", SqlTypeName.TIMESTAMP)    // 24
-            .add("created_date", SqlTypeName.TIMESTAMP)        // 25
-            .add("modified_date", SqlTypeName.TIMESTAMP)       // 26
-            .add("tags", SqlTypeName.VARCHAR)                  // 27
+            .add("created_date", SqlTypeName.TIMESTAMP)        // 24
+            .add("modified_date", SqlTypeName.TIMESTAMP)       // 25
+            .add("tags", SqlTypeName.VARCHAR)                  // 26
             .build();
 
         // Test 1: Minimal Projection

@@ -12,9 +12,6 @@ package org.apache.calcite.adapter.ops;
 
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -44,8 +41,6 @@ import java.util.Locale;
  * automatically convert.</p>
  */
 public class CloudOpsDataConverter {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CloudOpsDataConverter.class);
-
   /**
    * Determines if a value represents null/missing/blank data from cloud provider APIs
    * for non-string data types. For VARCHAR/CHAR, we preserve all string representations.
@@ -133,10 +128,11 @@ public class CloudOpsDataConverter {
         default:
           return value;
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error converting value {} to type {}: {}",
-          value, targetType, e.getMessage());
-      return value;
+    } catch (RuntimeException e) {
+      // Passing the value through would put the wrong Java type in the column, which fails
+      // later, in the JDBC layer, with no hint of which value it was
+      throw new IllegalArgumentException("Cannot convert " + value.getClass().getSimpleName()
+          + " value '" + value + "' to " + targetType + ": " + e.getMessage(), e);
     }
   }
 
@@ -368,7 +364,10 @@ public class CloudOpsDataConverter {
       return null;
     }
 
-    return value.toString();
+    // Azure Resource Graph sends '' for a property a resource does not have, and '{}' for no
+    // tags; neither is a value
+    final String text = value.toString();
+    return text.isEmpty() || "{}".equals(text) ? null : text;
   }
 
   /**
@@ -421,8 +420,22 @@ public class CloudOpsDataConverter {
       return ((Number) value).longValue();
     }
 
-    // If already the correct type, return as-is
-    return value instanceof Long ? (Long) value : null;
+    // ISO-8601 text, which is how the cloud REST APIs send timestamps: with an offset
+    // ("2026-10-07T14:46:40.123-07:00"), in UTC ("...Z"), or with neither (taken as UTC)
+    if (value instanceof CharSequence) {
+      final String text = value.toString().trim();
+      if (text.isEmpty()) {
+        return null;
+      }
+      try {
+        return OffsetDateTime.parse(text).toInstant().toEpochMilli();
+      } catch (java.time.format.DateTimeParseException e) {
+        return LocalDateTime.parse(text).toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+      }
+    }
+
+    throw new IllegalArgumentException(
+        "Not a timestamp: " + value.getClass().getName() + " " + value);
   }
 
   /**
@@ -453,6 +466,22 @@ public class CloudOpsDataConverter {
     }
     // Get milliseconds since midnight
     return (int) (millis % (24 * 60 * 60 * 1000L));
+  }
+
+  /**
+   * Renders a resource's tags or labels as a JSON object with sorted keys, the form of every
+   * {@code tags} column; null when there are none.
+   */
+  public static String tagsToJson(java.util.Map<String, String> tags) {
+    if (tags == null || tags.isEmpty()) {
+      return null;
+    }
+    try {
+      return new com.fasterxml.jackson.databind.ObjectMapper()
+          .writeValueAsString(new java.util.TreeMap<String, String>(tags));
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw new IllegalArgumentException("Tags cannot be rendered as JSON: " + tags, e);
+    }
   }
 
   /**

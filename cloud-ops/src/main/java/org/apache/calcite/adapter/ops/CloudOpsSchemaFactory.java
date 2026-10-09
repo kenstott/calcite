@@ -14,6 +14,7 @@ import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -34,10 +35,19 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
         String azureClientSecret = getConfigValue(operand, "azure.clientSecret", "AZURE_CLIENT_SECRET");
         String azureSubscriptionIds = getConfigValue(operand, "azure.subscriptionIds", "AZURE_SUBSCRIPTION_IDS");
 
-        if (azureClientId != null && azureClientSecret != null && azureSubscriptionIds != null) {
-          azure =
-              new CloudOpsConfig.AzureConfig(azureTenantId, azureClientId, azureClientSecret, parseList(azureSubscriptionIds));
-        }
+        // A provider that is half configured is a mistake, not a provider to leave out
+        requireAll("Azure", "azure.clientId", azureClientId, "azure.clientSecret",
+            azureClientSecret, "azure.subscriptionIds", azureSubscriptionIds);
+        azure =
+            new CloudOpsConfig.AzureConfig(azureTenantId, azureClientId, azureClientSecret,
+                parseList(azureSubscriptionIds));
+      } else {
+        requireNone("Azure", "azure.tenantId",
+            "azure.clientId", getConfigValue(operand, "azure.clientId", "AZURE_CLIENT_ID"),
+            "azure.clientSecret",
+            getConfigValue(operand, "azure.clientSecret", "AZURE_CLIENT_SECRET"),
+            "azure.subscriptionIds",
+            getConfigValue(operand, "azure.subscriptionIds", "AZURE_SUBSCRIPTION_IDS"));
       }
 
       // Extract GCP configuration
@@ -45,9 +55,11 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
       String gcpCredentialsPath = getConfigValue(operand, "gcp.credentialsPath", "GCP_CREDENTIALS_PATH");
       if (gcpCredentialsPath != null) {
         String gcpProjectIds = getConfigValue(operand, "gcp.projectIds", "GCP_PROJECT_IDS");
-        if (gcpProjectIds != null) {
-          gcp = new CloudOpsConfig.GCPConfig(parseList(gcpProjectIds), gcpCredentialsPath);
-        }
+        requireAll("GCP", "gcp.projectIds", gcpProjectIds);
+        gcp = new CloudOpsConfig.GCPConfig(parseList(gcpProjectIds), gcpCredentialsPath);
+      } else {
+        requireNone("GCP", "gcp.credentialsPath",
+            "gcp.projectIds", getConfigValue(operand, "gcp.projectIds", "GCP_PROJECT_IDS"));
       }
 
       // Extract AWS configuration
@@ -59,10 +71,17 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
         String awsSecretAccessKey = getConfigValue(operand, "aws.secretAccessKey", "AWS_SECRET_ACCESS_KEY");
         String awsRoleArn = getConfigValue(operand, "aws.roleArn", "AWS_ROLE_ARN");
 
-        if (awsAccountIds != null && awsRegion != null && awsSecretAccessKey != null) {
-          aws =
-              new CloudOpsConfig.AWSConfig(parseList(awsAccountIds), awsRegion, awsAccessKeyId, awsSecretAccessKey, awsRoleArn);
-        }
+        // aws.region is optional: without it every region enabled for an account is queried
+        requireAll("AWS", "aws.accountIds", awsAccountIds, "aws.secretAccessKey",
+            awsSecretAccessKey);
+        aws =
+            new CloudOpsConfig.AWSConfig(parseList(awsAccountIds), awsRegion, awsAccessKeyId,
+                awsSecretAccessKey, awsRoleArn);
+      } else {
+        requireNone("AWS", "aws.accessKeyId",
+            "aws.secretAccessKey",
+            getConfigValue(operand, "aws.secretAccessKey", "AWS_SECRET_ACCESS_KEY"),
+            "aws.accountIds", getConfigValue(operand, "aws.accountIds", "AWS_ACCOUNT_IDS"));
       }
 
       // Extract cache configuration
@@ -158,11 +177,40 @@ public class CloudOpsSchemaFactory implements SchemaFactory {
       try {
         return Integer.parseInt(value);
       } catch (NumberFormatException e) {
-        // Log warning and use default
-        System.err.println("Warning: Invalid integer value '" + value + "' for " + paramKey + ", using default: " + defaultValue);
+        throw new IllegalArgumentException(
+            "Invalid integer value '" + value + "' for " + paramKey, e);
       }
     }
     return defaultValue;
+  }
+
+  /** Fails when a provider's settings are given without the one that switches it on. */
+  private static void requireNone(String provider, String switchedOnBy,
+      String... namesAndValues) {
+    List<String> present = new ArrayList<>();
+    for (int i = 0; i < namesAndValues.length; i += 2) {
+      if (namesAndValues[i + 1] != null) {
+        present.add(namesAndValues[i]);
+      }
+    }
+    if (!present.isEmpty()) {
+      throw new IllegalArgumentException(provider + " has " + String.join(", ", present)
+          + " but not " + switchedOnBy);
+    }
+  }
+
+  /** Fails when any of the named settings of a provider is missing. */
+  private static void requireAll(String provider, String... namesAndValues) {
+    List<String> missing = new ArrayList<>();
+    for (int i = 0; i < namesAndValues.length; i += 2) {
+      if (namesAndValues[i + 1] == null) {
+        missing.add(namesAndValues[i]);
+      }
+    }
+    if (!missing.isEmpty()) {
+      throw new IllegalArgumentException(
+          provider + " is configured without " + String.join(", ", missing));
+    }
   }
 
   private List<String> parseList(String value) {

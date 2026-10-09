@@ -15,7 +15,12 @@ Calcite model targeting `CloudOpsSchemaFactory`. Tables are exposed under the `c
 
 Configure only the providers you use; at least one is required. Each provider is enabled by its
 gating property (`azure.tenant-id`, `aws.access-key-id`, `gcp.credentials-path`). A partially
-configured provider **fails fast at startup** with a list of the missing properties.
+configured provider **fails fast at startup** with a list of the missing properties. The adapter
+underneath makes the same check when it creates the schema, so a provider switched on by an
+environment variable (see the note below) and left incomplete fails as well.
+
+Once running, a cloud call that fails (expired credentials, a missing permission) fails the query
+with that cloud's error. It is not reported as zero rows.
 
 ```properties
 connector.name=cloudops
@@ -25,7 +30,9 @@ case-insensitive-name-matching=true
 aws.access-key-id=AKIA...
 aws.secret-access-key=...
 aws.account-ids=111111111111,222222222222
-aws.region=us-east-1
+# aws.region is optional: one region, a comma-separated list, or all.
+# Left out, every region enabled for each account is queried.
+# aws.region=us-east-1,eu-west-1
 
 # Azure
 azure.tenant-id=...
@@ -53,11 +60,11 @@ azure.subscription-ids=sub-1,sub-2
 | `aws.access-key-id` | enables AWS | AWS access key ID |
 | `aws.secret-access-key` | with AWS | AWS secret access key (sensitive) |
 | `aws.account-ids` | with AWS | Comma-separated account IDs |
-| `aws.region` | with AWS | e.g. `us-east-1` |
+| `aws.region` | no | One region (`us-east-1`), a comma-separated list, or `all`. Absent or `all` queries every region enabled for the account, found with EC2 DescribeRegions. S3 and IAM are global and unaffected |
 | `aws.role-arn` | no | IAM role ARN to assume for cross-account access |
-| `cache.enabled` | no | Enable the adapter result cache (adapter default: `true`) |
-| `cache.ttl-minutes` | no | Result-cache TTL in minutes (adapter default: `5`) |
-| `cache.debug-mode` | no | Adapter cache debug logging (adapter default: `false`) |
+| `cache.enabled` | no | Passed to the adapter, which parses it and does not use it |
+| `cache.ttl-minutes` | no | Passed to the adapter, which parses it and does not use it |
+| `cache.debug-mode` | no | Passed to the adapter, which parses it and does not use it |
 | `schema` | no | Schema name the tables are registered under (default: `cloud`) |
 
 The connector resolves credentials at the connector layer and passes them **explicitly** into the
@@ -80,3 +87,9 @@ The Trino connectors target **JDK 25** (Trino 481). Provide a JDK 25 toolchain:
 The unit tests (`TestCloudOpsClientModule`) cover URL construction (encoding round-trips, list
 values, omitted defaults) and the fail-fast validation. There is no in-process end-to-end test: it
 would require live Azure/AWS/GCP credentials.
+
+## Further reading
+
+- [Tables and columns](../cloud-ops/docs/SCHEMA.md)
+- [Permissions each cloud needs](../cloud-ops/aws-permissions-needed.md)
+- [What is and is not pushed down, and why the cache settings do nothing](../cloud-ops/OPTIMIZATION.md)

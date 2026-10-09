@@ -54,6 +54,39 @@ _CALCITE_DRIVER = "org.apache.calcite.jdbc.Driver"
 #: A statement parameter as a client writes it: ``$1``, ``$2``...
 _PLACEHOLDER_RE = re.compile(r"\$(\d+)")
 
+
+def _question_marks(sql: str) -> Tuple[str, List[int]]:
+    """``sql`` with each parameter (``$N``) replaced by a JDBC ``?``, and the parameter
+    numbers in the order of the question marks. Text inside string literals and quoted
+    identifiers is left alone: ``'$1'`` is a string, not a parameter."""
+    out: List[str] = []
+    numbers: List[int] = []
+    i, n = 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        if ch in ("'", '"'):
+            # copy the quoted run; a doubled quote inside it is an escaped quote
+            j = i + 1
+            while j < n:
+                if sql[j] == ch:
+                    if j + 1 < n and sql[j + 1] == ch:
+                        j += 2
+                        continue
+                    break
+                j += 1
+            out.append(sql[i:j + 1])
+            i = j + 1
+            continue
+        match = _PLACEHOLDER_RE.match(sql, i) if ch == "$" else None
+        if match:
+            numbers.append(int(match.group(1)))
+            out.append("?")
+            i = match.end()
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out), numbers
+
 def _attach_current_thread_to_jvm() -> None:
     """Make the calling thread able to call Java.
 
@@ -644,11 +677,11 @@ class CalciteBackend:
         The statement is prepared, never run: Calcite types a parameter from what it is
         compared with or assigned to. A statement Calcite cannot prepare raises.
         """
-        numbers = [int(n) for n in _PLACEHOLDER_RE.findall(sql)]
+        question, numbers = _question_marks(sql)
         if not numbers:
             return []
         calcite_sql = transpile_pg_to_calcite(
-            _PLACEHOLDER_RE.sub("?", sql),
+            question,
             json_enabled=("json" in self._extensions),
             vector_enabled=("vector" in self._extensions),
         )

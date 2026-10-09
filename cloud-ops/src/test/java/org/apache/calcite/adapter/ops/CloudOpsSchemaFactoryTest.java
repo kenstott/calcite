@@ -26,11 +26,13 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for {@link CloudOpsSchemaFactory}.
@@ -126,5 +128,42 @@ public class CloudOpsSchemaFactoryTest {
     CloudOpsSchema governanceSchema = (CloudOpsSchema) schema;
     // 7 resource tables + the compute_security_groups junction table
     assertThat(governanceSchema.getTableMap(), aMapWithSize(8));
+  }
+
+  @Test public void testHalfConfiguredProviderIsRejected() {
+    Map<String, Object> operands = new HashMap<>();
+    operands.put("aws.accessKeyId", "test-key");
+    operands.put("aws.accountIds", "account1");
+
+    RuntimeException e =
+        assertThrows(RuntimeException.class,
+            () -> new CloudOpsSchemaFactory().create(Frameworks.createRootSchema(false),
+                "cloud_ops", operands));
+    assertThat(e.getCause().getMessage(), containsString("aws.secretAccessKey"));
+  }
+
+  @Test public void testProviderSettingsWithoutItsSwitchAreRejected() {
+    Map<String, Object> operands = new HashMap<>();
+    operands.put("gcp.credentialsPath", "/path/to/credentials.json");
+    operands.put("gcp.projectIds", "project1");
+    operands.put("azure.clientSecret", "test-secret");
+
+    RuntimeException e =
+        assertThrows(RuntimeException.class,
+            () -> new CloudOpsSchemaFactory().create(Frameworks.createRootSchema(false),
+                "cloud_ops", operands));
+    assertThat(e.getCause().getMessage(), containsString("azure.tenantId"));
+  }
+
+  @Test public void testAwsRegionIsOptional() {
+    Map<String, Object> operands = new HashMap<>();
+    operands.put("aws.accessKeyId", "test-key");
+    operands.put("aws.secretAccessKey", "test-secret");
+    operands.put("aws.accountIds", "account1");
+
+    Schema schema =
+        new CloudOpsSchemaFactory().create(Frameworks.createRootSchema(false), "cloud_ops",
+            operands);
+    assertThat(schema, instanceOf(CloudOpsSchema.class));
   }
 }

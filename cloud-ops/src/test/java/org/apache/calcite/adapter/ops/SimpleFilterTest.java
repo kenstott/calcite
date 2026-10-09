@@ -311,4 +311,39 @@ public class SimpleFilterTest {
     logger.info("   Filter info: {}", clusterFilterInfo);
     logger.info("   Non-existent field filters: {}", emptyFilters.size());
   }
+
+  @Test public void testOrAcrossColumnsRestrictsNothing() {
+    // cloud_provider = 'aws' OR region = 'eastus' must still ask Azure for its eastus rows
+    RexNode provider =
+        rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+            rexBuilder.makeInputRef(testSchema.getFieldList().get(0).getType(), 0),
+            rexBuilder.makeLiteral("aws"));
+    RexNode region =
+        rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+            rexBuilder.makeInputRef(testSchema.getFieldList().get(4).getType(), 4),
+            rexBuilder.makeLiteral("eastus"));
+    CloudOpsFilterHandler handler =
+        new CloudOpsFilterHandler(testSchema,
+            Arrays.asList(rexBuilder.makeCall(SqlStdOperatorTable.OR, provider, region)));
+
+    assertTrue(handler.extractProviderConstraints().isEmpty());
+    assertTrue(handler.getFiltersForField("region").isEmpty());
+  }
+
+  @Test public void testOrOnOneColumnIsAnInList() {
+    RexNode aws =
+        rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+            rexBuilder.makeInputRef(testSchema.getFieldList().get(0).getType(), 0),
+            rexBuilder.makeLiteral("aws"));
+    RexNode gcp =
+        rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
+            rexBuilder.makeInputRef(testSchema.getFieldList().get(0).getType(), 0),
+            rexBuilder.makeLiteral("gcp"));
+    CloudOpsFilterHandler handler =
+        new CloudOpsFilterHandler(testSchema,
+            Arrays.asList(rexBuilder.makeCall(SqlStdOperatorTable.OR, aws, gcp)));
+
+    assertEquals(new java.util.HashSet<>(Arrays.asList("aws", "gcp")),
+        handler.extractProviderConstraints());
+  }
 }

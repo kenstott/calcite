@@ -37,7 +37,6 @@ import java.util.Map;
 /**
  * Table containing Kubernetes cluster information across cloud providers.
  * Returns raw facts without subjective assessments.
- * Supports query optimization through projection, filtering, sorting, and pagination pushdown.
  */
 public class KubernetesClustersTable extends AbstractCloudOpsTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(KubernetesClustersTable.class);
@@ -102,38 +101,37 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("cluster_name", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("cluster_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("kubernetes_version", SqlTypeName.VARCHAR)
-        .add("node_count", SqlTypeName.INTEGER)
-        .add("node_pools", SqlTypeName.INTEGER)
+        .add("kubernetes_version", SqlTypeName.VARCHAR).nullable(true)
+        .add("node_count", SqlTypeName.INTEGER).nullable(true)
+        .add("node_pools", SqlTypeName.INTEGER).nullable(true)
 
         // Security facts (raw boolean/string values)
-        .add("rbac_enabled", SqlTypeName.BOOLEAN)
-        .add("private_cluster", SqlTypeName.BOOLEAN)
-        .add("public_endpoint", SqlTypeName.BOOLEAN)
-        .add("authorized_ip_ranges", SqlTypeName.INTEGER)
-        .add("network_policy_provider", SqlTypeName.VARCHAR)
-        .add("pod_security_policy_enabled", SqlTypeName.BOOLEAN)
+        .add("rbac_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("private_cluster", SqlTypeName.BOOLEAN).nullable(true)
+        .add("public_endpoint", SqlTypeName.BOOLEAN).nullable(true)
+        .add("authorized_ip_ranges", SqlTypeName.INTEGER).nullable(true)
+        .add("network_policy_provider", SqlTypeName.VARCHAR).nullable(true)
 
         // Encryption facts
-        .add("encryption_at_rest_enabled", SqlTypeName.BOOLEAN)
-        .add("encryption_key_type", SqlTypeName.VARCHAR)
+        .add("encryption_at_rest_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encryption_key_type", SqlTypeName.VARCHAR).nullable(true)
 
         // Monitoring facts
-        .add("logging_enabled", SqlTypeName.BOOLEAN)
-        .add("monitoring_enabled", SqlTypeName.BOOLEAN)
+        .add("logging_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("monitoring_enabled", SqlTypeName.BOOLEAN).nullable(true)
 
         // Metadata
-        .add("created_date", SqlTypeName.TIMESTAMP)
-        .add("modified_date", SqlTypeName.TIMESTAMP)
-        .add("tags", SqlTypeName.VARCHAR) // JSON string
+        .add("created_date", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("modified_date", SqlTypeName.TIMESTAMP).nullable(true)
+        .add("tags", SqlTypeName.VARCHAR).nullable(true) // JSON string
 
         .build();
   }
@@ -147,7 +145,7 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
 
     try {
       // Use Azure provider with projection, sort, pagination, and filter support
-      AzureProvider azureProvider = new AzureProvider(config.azure);
+      AzureProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> aksResults =
           azureProvider.queryKubernetesClusters(subscriptionIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
@@ -162,26 +160,24 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             cluster.get("ResourceGroup"),
             cluster.get("ResourceId"),
             cluster.get("ClusterVersion"),
+            cluster.get("NodeCount"),
             cluster.get("NodePoolCount"),
-            cluster.get("NodePoolCount"), // Same as node_pools for Azure
             cluster.get("RBACEnabled"),
             cluster.get("PrivateCluster"),
-            !((Boolean) cluster.getOrDefault("PrivateCluster", false)), // Inverse for public
+            cluster.get("PublicEndpoint"),
             cluster.get("AuthorizedIPRanges"),
             cluster.get("NetworkPolicy"),
-            false, // Azure doesn't have pod security policy
-            cluster.get("DiskEncryption") != null && !cluster.get("DiskEncryption").equals("Platform Managed Key"),
+            true, // Azure encrypts every managed disk at rest
             cluster.get("DiskEncryption"),
-            true, // AKS has logging by default
-            true, // AKS has monitoring by default
-            null, // created_date - not in current query
-            null, // modified_date - not in current query
-            null  // tags - would need to be added to query
+            cluster.get("LoggingEnabled"),
+            cluster.get("MonitoringEnabled"),
+            CloudOpsDataConverter.convertValue(cluster.get("CreatedDate"), SqlTypeName.TIMESTAMP),
+            CloudOpsDataConverter.convertValue(cluster.get("ModifiedDate"), SqlTypeName.TIMESTAMP),
+            cluster.get("Tags")
         });
       }
-    } catch (Exception e) {
-      // Log error but don't fail the entire query
-      LOGGER.debug("Error querying Azure AKS clusters: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure AKS clusters failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -196,39 +192,38 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
 
     try {
       // Use GCP provider with projection, sort, pagination, and filter support
-      GCPProvider gcpProvider = new GCPProvider(config.gcp);
+      GCPProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> clusterResults =
           gcpProvider.queryKubernetesClusters(projectIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
       for (Map<String, Object> cluster : clusterResults) {
         results.add(new Object[]{
             "gcp",
-            cluster.get("ProjectId"),
+            cluster.get("AccountId"),
             cluster.get("ClusterName"),
             cluster.get("Application"),
             cluster.get("Location"),
             null, // resource_group - GCP doesn't have this concept
             cluster.get("ResourceId"),
-            cluster.get("ClusterVersion"),
+            cluster.get("KubernetesVersion"),
             cluster.get("NodeCount"),
-            cluster.get("NodePoolCount"),
+            cluster.get("NodePools"),
             cluster.get("RBACEnabled"),
             cluster.get("PrivateCluster"),
-            !((Boolean) cluster.getOrDefault("PrivateEndpoint", false)),
-            cluster.get("AuthorizedNetworksCount"),
-            cluster.get("NetworkPolicy"),
-            false, // GKE doesn't have pod security policy
-            cluster.get("DatabaseEncryption") != null,
-            cluster.get("DatabaseEncryption"),
+            cluster.get("PublicEndpoint"),
+            cluster.get("AuthorizedIPRanges"),
+            cluster.get("NetworkPolicyProvider"),
+            cluster.get("EncryptionAtRestEnabled"),
+            cluster.get("EncryptionKeyType"),
             cluster.get("LoggingEnabled"),
             cluster.get("MonitoringEnabled"),
-            null, // created_date - not available in current implementation
-            null, // modified_date - not available in current implementation
-            null  // tags - would need to convert labels to JSON
+            CloudOpsDataConverter.convertValue(cluster.get("CreatedDate"), SqlTypeName.TIMESTAMP),
+            null, // modified_date - GKE does not report one
+            cluster.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP Kubernetes clusters: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP Kubernetes clusters failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -243,13 +238,11 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
 
     try {
       // Use AWS provider with projection, sort, pagination, and filter support
-      AWSProvider awsProvider = new AWSProvider(config.aws);
+      AWSProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> clusterResults =
           awsProvider.queryKubernetesClusters(accountIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
 
       for (Map<String, Object> cluster : clusterResults) {
-        Integer publicAccessCidrs = (Integer) cluster.get("PublicAccessCidrs");
-
         results.add(new Object[]{
             "aws",
             cluster.get("AccountId"),
@@ -259,25 +252,24 @@ public class KubernetesClustersTable extends AbstractCloudOpsTable {
             null, // resource_group - AWS doesn't have this concept for EKS
             cluster.get("ResourceId"),
             cluster.get("ClusterVersion"),
-            null, // node_count - would need to query node groups separately
-            null, // node_pools - would need to query node groups separately
+            cluster.get("NodeCount"),
+            cluster.get("NodeGroupCount"),
             cluster.get("RBACEnabled"),
-            !((Boolean) cluster.getOrDefault("EndpointPublicAccess", true)),
+            cluster.get("PrivateCluster"),
             cluster.get("EndpointPublicAccess"),
-            publicAccessCidrs,
-            null, // network_policy - EKS doesn't have built-in network policy
-            false, // EKS doesn't have pod security policy
+            cluster.get("PublicAccessCidrs"),
+            null, // network_policy_provider - not a setting of an EKS cluster
             cluster.get("EncryptionEnabled"),
-            cluster.get("EncryptionProvider"),
+            cluster.get("EncryptionKeyType"),
             cluster.get("LoggingEnabled"),
-            true, // EKS has CloudWatch monitoring by default
+            cluster.get("MonitoringEnabled"),
             CloudOpsDataConverter.convertValue(cluster.get("CreatedAt"), SqlTypeName.TIMESTAMP),
-            null, // modified_date - not available
-            null  // tags - would need to convert tag map to JSON
+            null, // modified_date - EKS does not report one
+            cluster.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS Kubernetes clusters: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS Kubernetes clusters failed: " + e.getMessage(), e);
     }
 
     return results;
