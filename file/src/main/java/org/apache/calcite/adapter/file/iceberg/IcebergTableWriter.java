@@ -759,6 +759,10 @@ public class IcebergTableWriter {
       for (FileScanTask task : tasks) {
         DataFile oldFile = task.file();
         long matchedInFile = 0;
+        // Which rows matched, by position. The predicate is asked once per row: one that counts
+        // what it has kept (dedupeCopies) answers differently the second time.
+        java.util.BitSet matched = new java.util.BitSet();
+        long position = 0;
 
         InputFile in = table.io().newInputFile(oldFile.path().toString());
         try (CloseableIterable<Record> records = Parquet.read(in)
@@ -769,8 +773,10 @@ public class IcebergTableWriter {
             .build()) {
           for (Record record : records) {
             if (rowMatches.test(record)) {
+              matched.set(Math.toIntExact(position));
               matchedInFile++;
             }
+            position++;
           }
         }
 
@@ -790,7 +796,7 @@ public class IcebergTableWriter {
               partitionValues.put(spec.fields().get(i).name(), String.valueOf(value));
             }
           }
-          DataFile replacement = copyRowsNotMatching(oldFile, rowMatches, partitionValues);
+          DataFile replacement = copyRowsNotMatching(oldFile, matched, partitionValues);
           if (replacement != null) {
             replacementFiles.add(replacement);
           }
@@ -1106,11 +1112,12 @@ public class IcebergTableWriter {
   }
 
   /**
-   * Streams the rows of {@code oldFile} that do not satisfy {@code rowMatches} into a new data
-   * file, holding one row at a time. Rows already conform to the table schema, so no coercion is
+   * Streams the rows of {@code oldFile} whose position is not set in {@code matched} into a new
+   * data file, holding one row at a time. Rows are read in the order they were read when
+   * {@code matched} was filled. They already conform to the table schema, so no coercion is
    * applied.
    */
-  private DataFile copyRowsNotMatching(DataFile oldFile, java.util.function.Predicate<Record> rowMatches,
+  private DataFile copyRowsNotMatching(DataFile oldFile, java.util.BitSet matched,
       Map<String, String> partitionValues) throws IOException {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
@@ -1127,16 +1134,18 @@ public class IcebergTableWriter {
         .overwrite()
         .build();
     long kept = 0;
+    int position = 0;
     try (CloseableIterable<Record> records = Parquet.read(in)
         .project(schema)
         .createReaderFunc(fileSchema ->
             org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(schema, fileSchema))
         .build()) {
       for (Record record : records) {
-        if (!rowMatches.test(record)) {
+        if (!matched.get(position)) {
           writer.write(record);
           kept++;
         }
+        position++;
       }
     } finally {
       writer.close();
