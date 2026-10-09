@@ -172,7 +172,9 @@ SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
 # a staging-scoped dir so generation gets real disk too, without touching the live workers' own.
 TMPDIR_STAGING="$STAGING/tmp"
 mkdir -p "$TMPDIR_STAGING"
-export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING"
+# -Dgovdata.seed.build=true: this is the one place a govdata catalog is built by discovery.
+# Without it GovDataDriver refuses to connect from a jar that carries no seed.
+export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING -Dgovdata.seed.build=true"
 
 # GENERATE must build every view fresh from the CURRENT schema YAML. GovDataSeedInstaller
 # (invoked by GovDataDriver on first connect) extracts the classpath jar's OWN bundled seed

@@ -460,6 +460,21 @@ tasks.register("bundleGovdataSeed") {
     }
 }
 
+// Writes the schema the bundled seed declares (schema.table.column:type, sorted) beside the
+// seed zip. GovDataSeedInstaller compares an installed catalog with the seed by this listing
+// and by nothing else, so it is produced by the same class that reads an installed catalog.
+tasks.register<JavaExec>("writeGovdataSeedSchema") {
+    group = "build"
+    description = "Write the schema listing of the bundled govdata seed"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.apache.calcite.adapter.govdata.GovDataSeedSchema")
+    args(
+        file("src/main/resources/duckdb/seed/govdata-seed.zip").absolutePath,
+        file("src/main/resources/duckdb/seed/govdata-seed.schema").absolutePath
+    )
+}
+tasks.named("bundleGovdataSeed") { finalizedBy("writeGovdataSeedSchema") }
+
 // Task to run ETL runner directly from Gradle
 tasks.register<JavaExec>("etlRunner") {
     group = "application"

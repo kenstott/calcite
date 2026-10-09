@@ -21,56 +21,57 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.sql.SQLException;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Seeds the shared DuckDB catalog and its {@code .conversions.json} trackers from a pre-built
- * artifact bundled in the shadow JAR, accelerating time-to-first-query on a cold operating
- * directory.
+ * Puts the official govdata catalog in place: the seed packaged in this jar.
  *
- * <p>The govdata build produces {@code /duckdb/seed/govdata-seed.zip} (via the
- * {@code bundleGovdataSeed} Gradle task) containing, relative to the operating-directory base
- * ({@code ~/.govdata} by default):
+ * <p>The govdata build produces {@code /duckdb/seed/govdata-seed.zip} (the
+ * {@code bundleGovdataSeed} Gradle task) containing, relative to the operating-directory base:
  * <ul>
- *   <li>{@code .duckdb/govdata.duckdb} — the single shared catalog (view DDL only, no data),
- *       built against {@code s3://} URIs so every {@code iceberg_scan}/{@code parquet_scan} view
- *       is machine-independent;</li>
- *   <li>{@code .aperio/<schema>/.conversions.json} — the per-schema conversion trackers,
- *       whose Iceberg records are namespaced by the S3 warehouse root and carry {@code s3://}
- *       paths only.</li>
+ *   <li>{@code .duckdb/govdata.duckdb} — the catalog (view DDL only, no data), built against
+ *       {@code s3://} URIs so every view is machine-independent;</li>
+ *   <li>{@code .aperio/<schema>/.conversions.json} — the per-schema conversion trackers.</li>
  * </ul>
+ * and, beside it, {@code /duckdb/seed/govdata-seed.schema}: the schema the seed declares (see
+ * {@link GovDataSeedSchema}).
  *
- * <p>On the first connection per JVM, {@link #ensureSeeded(String)} compares a SHA-256 fingerprint
- * of the bundled {@code govdata-seed.zip} against the on-disk marker
- * ({@code <base>/.duckdb/govdata.duckdb.version}) AND confirms the catalog file itself
- * ({@code <base>/.duckdb/govdata.duckdb}) still exists. Both must hold for extraction to be
- * skipped (fast path); either the fingerprint changing (a JAR upgrade with new/changed data) or the
- * catalog file being absent despite a matching marker (deleted, corrupted, or replaced out from
- * under the marker) forces re-extraction. A content fingerprint is used rather than the project
- * version because the project version stays constant across many SNAPSHOT rebuilds while the
- * bundled catalog's actual content changes — a version-only gate would then treat a rebuilt seed as
- * already installed and never extract it. Re-seeding is always safe: the runtime creates any
- * missing view from {@code s3://} on demand and heals column-count drift, so a replaced catalog
- * reconciles itself against live data.
+ * <p>The seed in the jar is the official catalog. At run time a catalog is never built by
+ * discovery — not on a first start, not when the installed catalog is missing, not when it
+ * differs. On the first use per JVM, {@link #ensureSeeded(String)} compares the schema the
+ * installed catalog declares with the schema the jar's seed declares:
+ * <ul>
+ *   <li>the same schema: nothing is done (row counts, statistics, timestamps and file bytes
+ *       may differ; they do not make a catalog different);</li>
+ *   <li>no installed catalog, an unreadable one, or a different schema: the installed catalog
+ *       is replaced by the jar's seed. It is never repaired or rebuilt;</li>
+ *   <li>the installed catalog is held open by another process: it is left alone. DuckDB locks
+ *       a catalog file against other processes, so this process opens a copy of its own, which
+ *       {@code DuckDBJdbcSchemaFactory} takes from this jar's seed.</li>
+ * </ul>
+ * A jar that carries no seed, a seed without its schema listing, or a seed that cannot be
+ * extracted stops the start with {@link SeedException}, which names what is missing. There is
+ * no fallback to building a catalog. Building one belongs to the release path
+ * ({@code govdata/scripts/build-seed.sh}).
  *
- * <p>Seeding is a pure accelerator: it must run <em>before</em> the DuckDB catalog is opened (so
- * the file is not overwritten while DuckDB holds its single-writer lock), and a missing or
- * unreadable seed must never fail the connection — the cold path (live Iceberg discovery) still
- * produces a correct catalog. This mirrors {@link DuckDbExtensionInstaller}, which likewise treats
- * an absent bundled resource as a no-op.
+ * <p>Must run before any DuckDB connection to the catalog is opened by this process.
  */
 public final class GovDataSeedInstaller {
   private static final Logger LOGGER = LoggerFactory.getLogger(GovDataSeedInstaller.class);
 
   private static final String SEED_ZIP_RESOURCE = "/duckdb/seed/govdata-seed.zip";
   private static final String SEED_VERSION_RESOURCE = "/duckdb/seed/govdata-seed.version";
-  private static final String MARKER_RELATIVE = ".duckdb/govdata.duckdb.version";
   private static final String CATALOG_RELATIVE = ".duckdb/govdata.duckdb";
   private static final String SCHEMA_CACHE_RESOURCE = "/duckdb/seed/iceberg-schema-cache.json";
 
   /** Seed check is a once-per-JVM operation; connect() is called for every connection. */
   private static volatile boolean checkedThisJvm;
+
+  /** Schemas the jar's seed declares; set by {@link #ensureSeeded(String)}. */
+  private static java.util.Set<String> seedSchemas;
 
   private GovDataSeedInstaller() {
   }
@@ -78,97 +79,132 @@ public final class GovDataSeedInstaller {
   /** Test-only: clears the once-per-JVM gate so {@link #ensureSeeded(String)} runs again. */
   static void resetForTesting() {
     checkedThisJvm = false;
+    seedSchemas = null;
+  }
+
+  /** The start cannot proceed because the official seed is missing or unusable. */
+  public static final class SeedException extends IllegalStateException {
+    private static final long serialVersionUID = 1L;
+
+    SeedException(String message) {
+      super(message);
+    }
+
+    SeedException(String message, Throwable cause) {
+      super(message, cause);
+    }
   }
 
   /**
-   * Extracts the bundled seed into the operating directory on first use if the on-disk version
-   * marker is absent or does not match the bundled seed version. Idempotent and safe to call on
-   * every connection; the check runs at most once per JVM.
+   * Puts this jar's seed in place under {@code operatingBase} unless the catalog installed
+   * there already declares the same schema. Safe to call on every connection; the check runs
+   * once per JVM.
    *
-   * @param operatingBase absolute path of the operating-directory base (e.g. {@code ~/.govdata});
-   *                      a null/empty value is a no-op
+   * @throws SeedException if the jar carries no seed or no schema listing for it, or the seed
+   *     cannot be extracted
    */
   public static synchronized void ensureSeeded(String operatingBase) {
     if (checkedThisJvm) {
       return;
     }
-    checkedThisJvm = true;
-
     if (operatingBase == null || operatingBase.isEmpty()) {
-      return;
+      throw new SeedException("No operating directory was given for the govdata catalog seed");
     }
-
     installBundledSchemaCache();
-
-    // A JAR built without running bundleGovdataSeed has no seed resource: nothing to do.
     byte[] zipBytes = readResourceBytes(SEED_ZIP_RESOURCE);
     if (zipBytes == null) {
-      LOGGER.debug("No bundled govdata seed ({}); skipping seed (cold start)", SEED_ZIP_RESOURCE);
-      return;
+      throw new SeedException("This jar carries no govdata catalog seed (" + SEED_ZIP_RESOURCE
+          + "). The catalog is never built at run time; use a jar built with its seed.");
     }
-    String bundledFingerprint = sha256Hex(zipBytes);
-    // Logged only, for a human comparing a bundled seed to its build — the fingerprint above,
-    // not this string, is what gates extraction.
-    String bundledVersion = readResourceText(SEED_VERSION_RESOURCE);
+    String seedListingText = readResourceText(GovDataSeedSchema.RESOURCE);
+    if (seedListingText == null) {
+      throw new SeedException("This jar's govdata catalog seed has no schema listing ("
+          + GovDataSeedSchema.RESOURCE + "); the seed was packaged without it.");
+    }
+    List<String> seedListing = GovDataSeedSchema.parse(seedListingText);
+    if (seedListing.isEmpty()) {
+      throw new SeedException("This jar's govdata catalog seed declares no schema ("
+          + GovDataSeedSchema.RESOURCE + " is empty).");
+    }
+    seedSchemas = GovDataSeedSchema.schemas(seedListing);
 
     File base = new File(operatingBase);
-    File marker = new File(base, MARKER_RELATIVE);
     File catalogFile = new File(base, CATALOG_RELATIVE);
-
-    // A catalog rebuilt at runtime (DuckDBCatalogMaintenance.rebuildPendingViews — e.g. an
-    // operator "update schema" command) is newer than whatever seed this jar was built with.
-    // Never clobber that with the jar's bundled copy, fingerprint match or not: the datetime
-    // alone settles which one is authoritative, so a rebuilt catalog survives a restart.
-    File jarFile = runningJarFile();
-    if (jarFile != null && catalogFile.isFile()
-        && catalogFile.lastModified() > jarFile.lastModified()) {
-      LOGGER.info("govdata catalog {} ({}) is newer than the running jar ({}); leaving it in place",
-          catalogFile.getAbsolutePath(),
-          java.time.Instant.ofEpochMilli(catalogFile.lastModified()),
-          java.time.Instant.ofEpochMilli(jarFile.lastModified()));
-      return;
+    String reason = reasonToReplace(catalogFile, seedListing);
+    if (reason != null) {
+      try {
+        int entries = extractInto(new java.io.ByteArrayInputStream(zipBytes), base);
+        LOGGER.info("Put the jar's govdata catalog seed in place ({}): {} entr{} into {} "
+            + "(seed version {})", reason, entries, entries == 1 ? "y" : "ies",
+            base.getAbsolutePath(), readResourceText(SEED_VERSION_RESOURCE));
+      } catch (IOException e) {
+        throw new SeedException("Could not put the govdata catalog seed in place under "
+            + base.getAbsolutePath() + ": " + e.getMessage(), e);
+      }
     }
-
-    String onDiskFingerprint = marker.isFile() ? readFileText(marker) : null;
-    if (bundledFingerprint.equals(onDiskFingerprint) && catalogFile.isFile()) {
-      LOGGER.debug("govdata seed up to date (fingerprint {}, version {}); skipping extraction",
-          bundledFingerprint, bundledVersion);
-      return;
-    }
-    if (bundledFingerprint.equals(onDiskFingerprint)) {
-      LOGGER.info("govdata seed marker matches but catalog file {} is missing; re-extracting seed",
-          catalogFile.getAbsolutePath());
-    }
-
-    try {
-      int entries = extractInto(new java.io.ByteArrayInputStream(zipBytes), base);
-      writeFileText(marker, bundledFingerprint);
-      LOGGER.info("Seeded govdata catalog: extracted {} entr{} into {} (fingerprint {}, version {})",
-          entries, entries == 1 ? "y" : "ies", base.getAbsolutePath(), bundledFingerprint,
-          bundledVersion);
-    } catch (IOException e) {
-      // A failed seed is recoverable: the runtime rebuilds views/trackers from s3:// on demand.
-      LOGGER.warn("Failed to seed govdata catalog into {}: {}", base.getAbsolutePath(),
-          e.getMessage(), e);
-    }
+    checkedThisJvm = true;
   }
 
   /**
-   * Absolute path this class was loaded from, or {@code null} if not running from an actual jar
-   * file (e.g. an exploded classes directory in a test/IDE run) — there's no meaningful build
-   * time to compare a catalog's freshness against in that case.
+   * Why the installed catalog must be replaced by the seed, or null when it is left as it is.
    */
-  private static File runningJarFile() {
+  private static String reasonToReplace(File catalogFile, List<String> seedListing) {
+    if (!catalogFile.isFile()) {
+      return "no catalog installed";
+    }
+    List<String> installed;
     try {
-      java.security.CodeSource codeSource =
-          GovDataSeedInstaller.class.getProtectionDomain().getCodeSource();
-      if (codeSource == null) {
+      installed = GovDataSeedSchema.listing(catalogFile);
+    } catch (SQLException e) {
+      if (isHeldByAnotherProcess(e)) {
+        LOGGER.info("govdata catalog {} is held open by another process; leaving it in place. "
+            + "This process opens its own copy, taken from this jar's seed.",
+            catalogFile.getAbsolutePath());
         return null;
       }
-      File jarFile = new File(codeSource.getLocation().toURI());
-      return jarFile.isFile() ? jarFile : null;
-    } catch (java.net.URISyntaxException e) {
+      return "the installed catalog cannot be read: " + e.getMessage();
+    }
+    if (installed.equals(seedListing)) {
+      LOGGER.debug("govdata catalog {} declares the seed's schema; leaving it in place",
+          catalogFile.getAbsolutePath());
       return null;
+    }
+    return "the installed catalog declares a different schema (" + installed.size()
+        + " columns, the seed " + seedListing.size() + ")";
+  }
+
+  /** DuckDB's refusal to open a catalog file another process holds, in its several wordings. */
+  private static boolean isHeldByAnotherProcess(SQLException e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      String message = t.getMessage();
+      if (message != null) {
+        String lower = message.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("could not set lock") || lower.contains("conflicting lock")
+            || lower.contains("being used by another process")
+            || lower.contains("sharing violation")
+            || (lower.contains("cannot open file") && lower.contains("already open in"))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Stops the start unless the official seed declares {@code schemaName}. A schema of the
+   * model that the seed does not declare cannot be served: it is never built at run time.
+   *
+   * @throws SeedException naming the schema the seed lacks
+   */
+  public static synchronized void requireSchema(String schemaName) {
+    if (seedSchemas == null) {
+      throw new SeedException("The govdata catalog seed was not put in place before schema '"
+          + schemaName + "' was opened");
+    }
+    if (!seedSchemas.contains(schemaName)) {
+      throw new SeedException("The govdata catalog seed in this jar does not declare schema '"
+          + schemaName + "' (it declares " + seedSchemas + "). A schema is never built at run "
+          + "time; use a jar whose seed covers the model.");
     }
   }
 
@@ -284,43 +320,6 @@ public final class GovDataSeedInstaller {
       LOGGER.warn("Could not read seed resource {}: {}", resource, e.getMessage());
       return null;
     }
-  }
-
-  /** SHA-256 of {@code bytes}, as lowercase hex — the content fingerprint gating extraction. */
-  private static String sha256Hex(byte[] bytes) {
-    try {
-      java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-      byte[] hash = digest.digest(bytes);
-      StringBuilder sb = new StringBuilder(hash.length * 2);
-      for (byte b : hash) {
-        sb.append(Character.forDigit((b >> 4) & 0xF, 16));
-        sb.append(Character.forDigit(b & 0xF, 16));
-      }
-      return sb.toString();
-    } catch (java.security.NoSuchAlgorithmException e) {
-      // SHA-256 is a JLS-mandated algorithm, guaranteed present on every JVM.
-      throw new IllegalStateException("SHA-256 unavailable", e);
-    }
-  }
-
-  /** Reads a file as a trimmed UTF-8 string, or null on error. */
-  private static String readFileText(File file) {
-    try {
-      return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8).trim();
-      // fallback-guard: allow reads an idempotency marker file, documented 'or null on error'; unreadable marker only risks a safe redundant reinstall
-    } catch (IOException e) {
-      LOGGER.debug("Could not read seed marker {}: {}", file.getAbsolutePath(), e.getMessage());
-      return null;
-    }
-  }
-
-  /** Writes {@code content} to {@code file}, creating parent directories as needed. */
-  private static void writeFileText(File file, String content) throws IOException {
-    File parent = file.getParentFile();
-    if (parent != null) {
-      Files.createDirectories(parent.toPath());
-    }
-    Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
   }
 
   private static byte[] readAll(InputStream is) throws IOException {
