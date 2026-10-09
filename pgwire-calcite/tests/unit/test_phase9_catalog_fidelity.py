@@ -176,7 +176,7 @@ def test_row_count_mode_off_disables_counting(calcite_backend):
             state,
             "SELECT reltuples FROM pg_catalog.pg_class WHERE lower(relname) = 'emps'",
         )
-        # -1 is "never analyzed" since PostgreSQL 14, the version the server declares; 0 would
+        # -1 is "never analyzed" since PostgreSQL 14 (the server declares 16); 0 would
         # claim the table is known to be empty.
         assert rows == [(-1.0,)]
     finally:
@@ -247,6 +247,22 @@ def test_pg_stats_is_queryable_and_empty():
         "WHERE schemaname = 'SALES' AND tablename = 'emps'",
     ) == []
     catalog.invalidate_catalog_cache()
+
+
+def test_server_declares_postgresql_16_and_serves_its_catalog_columns():
+    state = _keyed_state(StubBackend())
+    try:
+        assert _rows(state, "SELECT setting FROM pg_catalog.pg_settings "
+                            "WHERE name = 'server_version_num'") == [("160000",)]
+        assert catalog._KNOWN_SETTINGS["server_version"] == "16.0"
+        # Columns PostgreSQL added in 15 and 16; a client that keys its catalog queries on the
+        # declared version selects them.
+        assert _rows(state, "SELECT datlocprovider, daticulocale, daticurules, datcollversion "
+                            "FROM pg_catalog.pg_database") == [("c", None, None, None)]
+        assert _rows(state, "SELECT DISTINCT indnullsnotdistinct "
+                            "FROM pg_catalog.pg_index") in ([], [(False,)])
+    finally:
+        catalog.invalidate_catalog_cache()
 
 
 def test_launcher_refuses_recorded_counts_from_a_backend_that_holds_none(capsys):

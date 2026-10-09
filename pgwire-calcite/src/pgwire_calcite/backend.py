@@ -157,7 +157,7 @@ class StubBackend:
     """
 
     #: Reported by SELECT version() and used to satisfy DuckDB's >=12 / clients' >=14 gate.
-    SERVER_VERSION = "14.0 (pgwire-calcite stub backend, Phase 0)"
+    SERVER_VERSION = "16.0 (pgwire-calcite stub backend, Phase 0)"
 
     @property
     def extensions(self) -> frozenset:

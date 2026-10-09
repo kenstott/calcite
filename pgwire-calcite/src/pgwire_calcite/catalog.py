@@ -643,6 +643,7 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("indkey", "ARRAY"),
         ("indexprs", "text"),
         ("indpred", "text"),
+        ("indnullsnotdistinct", "boolean"),
     ],
     "pg_constraint": [
         ("oid", "oid"),
@@ -735,6 +736,10 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("datcollate", "text"),
         ("datctype", "text"),
         ("datacl", "ARRAY"),
+        ("datlocprovider", "char"),
+        ("daticulocale", "text"),
+        ("daticurules", "text"),
+        ("datcollversion", "text"),
     ],
     "pg_settings": [
         ("name", "text"),
@@ -1309,8 +1314,8 @@ def _handle_typeinfo_tree(oids: list[int]):
 
 
 _KNOWN_SETTINGS = {
-    "server_version": "14.0",
-    "server_version_num": "140000",
+    "server_version": "16.0",
+    "server_version_num": "160000",
     "server_encoding": "UTF8",
     "client_encoding": "UTF8",
     "datestyle": "ISO, MDY",
@@ -2094,7 +2099,8 @@ def _populate_empty_system_tables(db) -> None:
         indimmediate BOOLEAN, indisclustered BOOLEAN, indisvalid BOOLEAN,
         indcheckxmin BOOLEAN, indisready BOOLEAN, indislive BOOLEAN,
         indisreplident BOOLEAN, indkey INTEGER[], indcollation INTEGER[],
-        indclass INTEGER[], indoption SMALLINT[], indexprs VARCHAR, indpred VARCHAR)""")
+        indclass INTEGER[], indoption SMALLINT[], indexprs VARCHAR, indpred VARCHAR,
+        indnullsnotdistinct BOOLEAN)""")
     db.execute("""CREATE TABLE _pg_proc (
         oid INTEGER, proname VARCHAR, pronamespace INTEGER, proowner INTEGER,
         prolang INTEGER, procost REAL, prorows REAL, provariadic INTEGER,
@@ -2347,16 +2353,17 @@ def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
         oid INTEGER, datname VARCHAR, datdba INTEGER, encoding INTEGER,
         datlocprovider VARCHAR, datistemplate BOOLEAN, datallowconn BOOLEAN,
         datconnlimit INTEGER, datfrozenxid INTEGER, datminmxid INTEGER,
-        dattablespace INTEGER, datcollate VARCHAR, datctype VARCHAR, datacl VARCHAR)""")
+        dattablespace INTEGER, datcollate VARCHAR, datctype VARCHAR, datacl VARCHAR,
+        daticulocale VARCHAR, daticurules VARCHAR, datcollversion VARCHAR)""")
     db.execute(
-        f"INSERT INTO _pg_database VALUES (16384,'{_DATABASE_NAME}',10,6,'c',FALSE,TRUE,-1,726,1,1663,'en_US.UTF-8','en_US.UTF-8',NULL)"
+        f"INSERT INTO _pg_database VALUES (16384,'{_DATABASE_NAME}',10,6,'c',FALSE,TRUE,-1,726,1,1663,'en_US.UTF-8','en_US.UTF-8',NULL,NULL,NULL,NULL)"
     )
 
 
 _PG_SETTINGS_ROWS: list[tuple] = [
     (
         "server_version",
-        "14.0",
+        "16.0",
         None,
         "Preset Options",
         "Shows the server version.",
@@ -2367,15 +2374,15 @@ _PG_SETTINGS_ROWS: list[tuple] = [
         None,
         None,
         None,
-        "14.0",
-        "14.0",
+        "16.0",
+        "16.0",
         None,
         None,
         False,
     ),
     (
         "server_version_num",
-        "140000",
+        "160000",
         None,
         "Preset Options",
         "Shows the server version as an integer.",
@@ -2386,8 +2393,8 @@ _PG_SETTINGS_ROWS: list[tuple] = [
         None,
         None,
         None,
-        "140000",
-        "140000",
+        "160000",
+        "160000",
         None,
         None,
         False,
@@ -2854,7 +2861,7 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
                 _idx_oid, conrelid, n, n, True, row[3] == "p", False,
                 True, False, True, False, True, True, False,
                 conkey, [_DEFAULT_COLLATION_OID] * n, [_SYNTH_BTREE_OPCLASS_OID] * n,
-                [0] * n, None, None,
+                [0] * n, None, None, False,
             ))
             index_class_rows.append((
                 _idx_oid, conname, ns_oid, 0, 0, 10, 403, 0, 0, 0, 0.0, 0, 0,
@@ -2881,7 +2888,7 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
             constraint_rows,
         )
     if index_rows:
-        db.executemany(f"INSERT INTO _pg_index VALUES ({','.join(['?'] * 20)})", index_rows)
+        db.executemany(f"INSERT INTO _pg_index VALUES ({','.join(['?'] * 21)})", index_rows)
         db.executemany(f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", index_class_rows)
     return constraint_rows
 
@@ -3557,7 +3564,7 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if fn in ("current_database",):
                 return exp.Literal.string(_DATABASE_NAME)
             if fn == "version":
-                return exp.Literal.string("PostgreSQL 14.0 on Provisa")
+                return exp.Literal.string("PostgreSQL 16.0 on Provisa")
             if "set_config" in fn:
                 return exp.null()
             if "current_setting" in fn:
@@ -3670,7 +3677,7 @@ def _handle_scalar(sql: str, role_id: str):
     if "current_database" in s:
         return QueryResult(rows=[(_DATABASE_NAME,)], column_names=["current_database"])
     if "version()" in s:
-        return QueryResult(rows=[("PostgreSQL 14.0 on Provisa",)], column_names=["version"])
+        return QueryResult(rows=[("PostgreSQL 16.0 on Provisa",)], column_names=["version"])
     if "current_schema()" in s:
         return QueryResult(rows=[("public",)], column_names=["current_schema"])
     if "pg_backend_pid()" in s:

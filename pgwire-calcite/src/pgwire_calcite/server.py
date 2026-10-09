@@ -983,8 +983,8 @@ class CalciteConnection(Connection):
         return CalciteSession()
 
     def parameters(self) -> dict[str, str]:
-        # Startup ParameterStatus set. server_version declares PG 14, so we report the
-        # full PG-14 hard-wired set (PG protocol §54.2), including the PG-14 additions
+        # Startup ParameterStatus set. server_version declares PG 16, so we report the
+        # full hard-wired set (PG protocol §54.2), unchanged since the PG-14 additions
         # default_transaction_read_only and in_hot_standby. Values are sourced from
         # _KNOWN_SETTINGS so the handshake and SHOW/current_setting stay consistent
         # (server_version >= 14 also clears DuckDB's >=12 gate and DBeaver/DataGrip
