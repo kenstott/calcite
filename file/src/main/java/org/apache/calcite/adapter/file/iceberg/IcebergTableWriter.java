@@ -758,7 +758,6 @@ public class IcebergTableWriter {
              table.newScan().filter(scanFilter).planFiles()) {
       for (FileScanTask task : tasks) {
         DataFile oldFile = task.file();
-        List<Map<String, Object>> keepRows = new ArrayList<>();
         long matchedInFile = 0;
 
         InputFile in = table.io().newInputFile(oldFile.path().toString());
@@ -771,8 +770,6 @@ public class IcebergTableWriter {
           for (Record record : records) {
             if (rowMatches.test(record)) {
               matchedInFile++;
-            } else {
-              keepRows.add(recordToMap(record, schema));
             }
           }
         }
@@ -785,7 +782,7 @@ public class IcebergTableWriter {
         deletedRows += matchedInFile;
         filesToDelete.add(oldFile);
 
-        if (!keepRows.isEmpty()) {
+        if (matchedInFile < oldFile.recordCount()) {
           Map<String, String> partitionValues = new HashMap<>();
           for (int i = 0; i < spec.fields().size(); i++) {
             Object value = oldFile.partition().get(i, Object.class);
@@ -793,7 +790,7 @@ public class IcebergTableWriter {
               partitionValues.put(spec.fields().get(i).name(), String.valueOf(value));
             }
           }
-          DataFile replacement = writeRecords(keepRows, partitionValues);
+          DataFile replacement = copyRowsNotMatching(oldFile, rowMatches, partitionValues);
           if (replacement != null) {
             replacementFiles.add(replacement);
           }
@@ -1006,15 +1003,6 @@ public class IcebergTableWriter {
     }
   }
 
-  /** Converts an Iceberg {@link Record} to a plain map, for feeding back into {@link #writeRecords}. */
-  private static Map<String, Object> recordToMap(Record record, Schema schema) {
-    Map<String, Object> row = new HashMap<>();
-    for (org.apache.iceberg.types.Types.NestedField field : schema.columns()) {
-      row.put(field.name(), record.getField(field.name()));
-    }
-    return row;
-  }
-
   /**
    * Writes records to Iceberg using the native Parquet writer with proper field IDs.
    *
@@ -1036,23 +1024,7 @@ public class IcebergTableWriter {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
 
-    // Generate unique file path in data location
-    String dataLocation = table.location() + "/data";
-    String partitionPath = buildPartitionPath(partitionValues);
-    // buildPartitionPath returns "" for a table whose spec has no fields (materialize.partition.
-    // columns: []). Concatenating a separator on both sides of that empty string yields
-    // "data//data_x.parquet", and S3/MinIO reject the empty path segment with HTTP 400 "Object name
-    // contains unsupported characters" — which failed EVERY write for the unpartitioned geo
-    // reference tables (state_ref, zcta_ref, census_regions, census_divisions), losing the whole
-    // batch each run ("Closing writer with N unflushed partition buffers - data will be lost").
-    String filePath = dataLocation + "/"
-        + (partitionPath.isEmpty() ? "" : partitionPath + "/")
-        + "data_" + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
-
-    // Normalize to s3a:// for Iceberg/Hadoop compatibility
-    if (filePath.startsWith("s3://")) {
-      filePath = "s3a://" + filePath.substring(5);
-    }
+    String filePath = newDataFilePath(partitionValues);
 
     LOGGER.debug("Writing {} records to {} with partition {}", records.size(), filePath, partitionValues);
 
@@ -1110,6 +1082,66 @@ public class IcebergTableWriter {
         dataFile.path(), dataFile.recordCount(), dataFile.fileSizeInBytes());
 
     return dataFile;
+  }
+
+  /** Generates a unique data-file path under the table's data location for a partition. */
+  private String newDataFilePath(Map<String, String> partitionValues) {
+    String dataLocation = table.location() + "/data";
+    String partitionPath = buildPartitionPath(partitionValues);
+    // buildPartitionPath returns "" for a table whose spec has no fields (materialize.partition.
+    // columns: []). Concatenating a separator on both sides of that empty string yields
+    // "data//data_x.parquet", and S3/MinIO reject the empty path segment with HTTP 400 "Object name
+    // contains unsupported characters" — which failed EVERY write for the unpartitioned geo
+    // reference tables (state_ref, zcta_ref, census_regions, census_divisions), losing the whole
+    // batch each run ("Closing writer with N unflushed partition buffers - data will be lost").
+    String filePath = dataLocation + "/"
+        + (partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + "data_" + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+
+    // Normalize to s3a:// for Iceberg/Hadoop compatibility
+    if (filePath.startsWith("s3://")) {
+      filePath = "s3a://" + filePath.substring(5);
+    }
+    return filePath;
+  }
+
+  /**
+   * Streams the rows of {@code oldFile} that do not satisfy {@code rowMatches} into a new data
+   * file, holding one row at a time. Rows already conform to the table schema, so no coercion is
+   * applied.
+   */
+  private DataFile copyRowsNotMatching(DataFile oldFile, java.util.function.Predicate<Record> rowMatches,
+      Map<String, String> partitionValues) throws IOException {
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    setPartitionKeyValues(partitionKey, spec, schema, partitionValues);
+
+    OutputFile outputFile = table.io().newOutputFile(newDataFilePath(partitionValues));
+    InputFile in = table.io().newInputFile(oldFile.path().toString());
+    DataWriter<Record> writer = Parquet.writeData(outputFile)
+        .schema(schema)
+        .withSpec(spec)
+        .withPartition(partitionKey)
+        .createWriterFunc(GenericParquetWriter::buildWriter)
+        .overwrite()
+        .build();
+    long kept = 0;
+    try (CloseableIterable<Record> records = Parquet.read(in)
+        .project(schema)
+        .createReaderFunc(fileSchema ->
+            org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(schema, fileSchema))
+        .build()) {
+      for (Record record : records) {
+        if (!rowMatches.test(record)) {
+          writer.write(record);
+          kept++;
+        }
+      }
+    } finally {
+      writer.close();
+    }
+    return kept == 0 ? null : writer.toDataFile();
   }
 
   /**
