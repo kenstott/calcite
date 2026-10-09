@@ -46,8 +46,6 @@ permissions:
 
 env:
   PY_VERSION: "3.12"
-
-env:
   # The one switch for everything that publishes: signing with the project key, the Sigstore
   # attestation, and attaching to the release. A release event publishes; a run started by
   # hand publishes only when asked to. Every publishing step tests this value, and the
