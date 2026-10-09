@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
@@ -130,7 +132,8 @@ public final class ClosureResolver {
   private static String relativize(String tableName, CharSequence absolutePath) {
     String abs = absolutePath.toString();
     String marker = "/" + tableName + "/";
-    int idx = abs.lastIndexOf(marker);
+    // A local path on Windows is separated by "\\"; the slashed form has the same length
+    int idx = LocalPaths.toSlashes(abs).lastIndexOf(marker);
     if (idx < 0) {
       throw new IllegalStateException(
           "File path '" + abs + "' does not contain table segment '" + marker + "'");

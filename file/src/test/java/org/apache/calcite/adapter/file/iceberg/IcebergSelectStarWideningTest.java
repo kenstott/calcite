@@ -140,7 +140,7 @@ public class IcebergSelectStarWideningTest extends BaseFileTest {
         + "        \"tables\": [\n"
         + "          {\n"
         + "            \"name\": \"orders\",\n"
-        + "            \"url\": \"" + ordersTablePath + "\",\n"
+        + "            \"url\": \"" + json(ordersTablePath) + "\",\n"
         + "            \"format\": \"iceberg\"\n"
         + "          }\n"
         + "        ]\n"
@@ -212,5 +212,10 @@ public class IcebergSelectStarWideningTest extends BaseFileTest {
       assertEquals(1, rowsWithAmount,
           "Exactly the appended row should have a non-null amount");
     }
+  }
+
+  /** A path as the body of a JSON string: Windows separators are escapes there. */
+  private static String json(Object path) {
+    return path.toString().replace("\\", "\\\\");
   }
 }

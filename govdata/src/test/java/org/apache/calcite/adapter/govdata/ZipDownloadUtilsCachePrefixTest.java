@@ -18,6 +18,7 @@ package org.apache.calcite.adapter.govdata;
 
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,8 @@ public class ZipDownloadUtilsCachePrefixTest {
       File root = new File(trimmed).getParentFile();
       List<FileEntry> matches = new ArrayList<FileEntry>();
       for (FileEntry entry : super.listFiles(root.getPath(), true)) {
-        if (entry.getPath().startsWith(path)) {
+        // an object store's keys are separated by "/" whatever the platform
+        if (LocalPaths.toSlashes(entry.getPath()).startsWith(LocalPaths.toSlashes(path))) {
           matches.add(entry);
         }
       }

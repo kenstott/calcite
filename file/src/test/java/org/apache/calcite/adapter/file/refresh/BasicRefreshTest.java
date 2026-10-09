@@ -321,11 +321,18 @@ public class BasicRefreshTest {
     excelParquetFile.getParentFile().mkdirs();
     excelParquetFile.createNewFile();
 
-    // Record HTTP URL conversions
-    // Note: originalFile is the HTTP URL string, convertedFile is the local JSON file
-    metadata.recordConversion(new File(httpExcelUrl), excelJsonFile, "EXCEL_TO_JSON", excelParquetFile);
-    metadata.recordConversion(new File(httpHtmlUrl), htmlJsonFile, "HTML_TO_JSON");
-    metadata.recordConversion(new File(httpCsvUrl), csvJsonFile, "CSV_TO_JSON");
+    // Record HTTP URL conversions the way FileSchema does for a remote source: the record
+    // carries the URL as a string. A URL is not a file name (on Windows the colon after the
+    // scheme is refused outright), so it never goes through java.io.File.
+    metadata.recordConversion(excelJsonFile,
+        new ConversionMetadata.ConversionRecord(httpExcelUrl, excelJsonFile.getCanonicalPath(),
+            "EXCEL_TO_JSON", excelParquetFile.getCanonicalPath()));
+    metadata.recordConversion(htmlJsonFile,
+        new ConversionMetadata.ConversionRecord(httpHtmlUrl, htmlJsonFile.getCanonicalPath(),
+            "HTML_TO_JSON"));
+    metadata.recordConversion(csvJsonFile,
+        new ConversionMetadata.ConversionRecord(httpCsvUrl, csvJsonFile.getCanonicalPath(),
+            "CSV_TO_JSON"));
 
     // Verify the .conversions.json file was created
     File metadataFile = new File(aperioSchemaDir, ".conversions.json");
@@ -338,6 +345,10 @@ public class BasicRefreshTest {
     // Read and display the contents
     String content = java.nio.file.Files.readString(metadataFile.toPath());
     LOGGER.debug(".conversions.json CONTENT FOR HTTP URLs: {}", content);
+    for (String url : new String[] {httpExcelUrl, httpHtmlUrl, httpCsvUrl}) {
+      assertTrue(content.contains("\"" + url + "\""),
+          "the record must hold the URL as given: " + url);
+    }
 
     // Verify we can load it back
     ConversionMetadata reloaded = new ConversionMetadata(aperioSchemaDir);

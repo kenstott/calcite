@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.partition;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -763,7 +764,9 @@ public class ParquetReorganizer {
           java.util.regex.Pattern.compile(partitionColumn + "=([^/]+)");
 
       for (StorageProvider.FileEntry entry : entries) {
-        java.util.regex.Matcher matcher = valuePattern.matcher(entry.getPath());
+        // Read by "/": a local path on Windows is separated by "\\"
+        java.util.regex.Matcher matcher =
+            valuePattern.matcher(LocalPaths.toSlashes(entry.getPath()));
         if (matcher.find()) {
           values.add(matcher.group(1));
         }

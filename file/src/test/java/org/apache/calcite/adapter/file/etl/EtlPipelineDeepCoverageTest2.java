@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -371,7 +372,7 @@ public class EtlPipelineDeepCoverageTest2 {
     // data dir does not is an empty table (current-snapshot-id: -1) that was created and never
     // written to. Treating that as "data exists" is what let an empty table be skipped as
     // complete, so verifyDataExists deliberately looks at data/.
-    when(storageProvider.isDirectory(tempDir.toString() + "/test_table/data")).thenReturn(true);
+    when(storageProvider.isDirectory(LocalPaths.normalize(tempDir.toString() + "/test_table/data"))).thenReturn(true);
     boolean result = (boolean) method.invoke(pipeline, "test_table", config);
     assertTrue(result);
   }
@@ -1228,9 +1229,9 @@ public class EtlPipelineDeepCoverageTest2 {
 
     // Warehouse path is checked first and misses; the baseDirectory fallback hits. Both probe
     // data/, not metadata/.
-    when(storageProvider.isDirectory(tempDir.toString() + "/warehouse/test_table/data"))
+    when(storageProvider.isDirectory(LocalPaths.normalize(tempDir.toString() + "/warehouse/test_table/data")))
         .thenReturn(false);
-    when(storageProvider.isDirectory(tempDir.toString() + "/test_table/data"))
+    when(storageProvider.isDirectory(LocalPaths.normalize(tempDir.toString() + "/test_table/data")))
         .thenReturn(true);
 
     boolean result = (boolean) method.invoke(pipeline, "test_table", config);

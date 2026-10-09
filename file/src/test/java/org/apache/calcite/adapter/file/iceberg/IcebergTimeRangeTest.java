@@ -151,7 +151,7 @@ public class IcebergTimeRangeTest {
         + "        \"tables\": [\n"
         + "          {\n"
         + "            \"name\": \"orders_timeline\",\n"
-        + "            \"url\": \"" + ordersTablePath + "\",\n"
+        + "            \"url\": \"" + json(ordersTablePath) + "\",\n"
         + "            \"format\": \"iceberg\",\n"
         + "            \"timeRange\": {\n"
         + "              \"start\": \"2024-01-01T00:00:00Z\",\n"
@@ -197,4 +197,8 @@ public class IcebergTimeRangeTest {
     }
   }
 
+  /** A path as the body of a JSON string: Windows separators are escapes there. */
+  private static String json(Object path) {
+    return path.toString().replace("\\", "\\\\");
+  }
 }

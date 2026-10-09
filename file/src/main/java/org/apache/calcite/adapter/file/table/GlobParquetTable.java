@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.refresh.RefreshableTable;
 import org.apache.calcite.adapter.file.refresh.RefreshableTable.RefreshBehavior;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
@@ -277,7 +278,7 @@ public class GlobParquetTable extends AbstractTable
     String pattern;
 
     // Extract base path and pattern
-    int lastSeparator = globPattern.lastIndexOf(File.separator);
+    int lastSeparator = LocalPaths.lastSeparator(globPattern);
     if (lastSeparator >= 0) {
       basePath = Paths.get(globPattern.substring(0, lastSeparator));
       pattern = globPattern.substring(lastSeparator + 1);

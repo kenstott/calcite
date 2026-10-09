@@ -22,6 +22,7 @@ import org.apache.calcite.util.Sources;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -45,6 +46,7 @@ import static org.mockito.Mockito.when;
  * Coverage tests for {@link HLLAcceleratedTable}.
  * Tests wrapper table behavior without needing actual Parquet files.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("unit")
 class HLLAcceleratedTableCoverageTest {
 

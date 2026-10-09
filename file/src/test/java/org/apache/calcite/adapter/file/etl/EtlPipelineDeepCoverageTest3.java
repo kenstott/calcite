@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -328,7 +329,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testVerifyDataExists_icebergMetadataExists() throws Exception {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(false);
-    when(sp.isDirectory(tempDir.toString() + "/t/data")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize(tempDir.toString() + "/t/data"))).thenReturn(true);
     EtlPipelineConfig config =
         createHttpConfig("t", singleRangeDimension("y", 2020, 2020), MaterializeConfig.Format.ICEBERG, null, null);
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
@@ -350,7 +351,7 @@ public class EtlPipelineDeepCoverageTest3 {
 
   @Test void testVerifyDataExists_parquetDirExists() throws Exception {
     StorageProvider sp = mockStorage();
-    when(sp.isDirectory(tempDir.toString() + "/t")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize(tempDir.toString() + "/t"))).thenReturn(true);
     EtlPipelineConfig config =
         createHttpConfig("t", singleRangeDimension("y", 2020, 2020), MaterializeConfig.Format.PARQUET, null, null);
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
@@ -383,7 +384,7 @@ public class EtlPipelineDeepCoverageTest3 {
 
   @Test void testVerifyDataExists_icebergWithWarehouse() throws Exception {
     StorageProvider sp = mockStorage();
-    when(sp.isDirectory("/wh/t/data")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize("/wh/t/data"))).thenReturn(true);
     MaterializeConfig mat = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
@@ -401,7 +402,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testVerifyDataExists_icebergWarehouseFallback() throws Exception {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory("/wh/t/metadata")).thenReturn(false);
-    when(sp.isDirectory(tempDir.toString() + "/t/data")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize(tempDir.toString() + "/t/data"))).thenReturn(true);
     MaterializeConfig mat = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)

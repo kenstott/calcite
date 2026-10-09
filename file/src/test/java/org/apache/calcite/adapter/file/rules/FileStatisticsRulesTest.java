@@ -25,6 +25,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -51,6 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>getTableStatistics() for statistics access</li>
  * </ul>
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("integration")
 public class FileStatisticsRulesTest {
 

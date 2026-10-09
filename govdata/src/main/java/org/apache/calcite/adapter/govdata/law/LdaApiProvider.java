@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.govdata.GovDataException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -378,10 +379,11 @@ public class LdaApiProvider implements StorageAwareDataProvider {
     }
     List<String> stale = new ArrayList<String>();
     for (StorageProvider.FileEntry f : files) {
-      String path = f.getPath();
+      // a local cache on Windows lists its files with "\" between the directories
+      String path = LocalPaths.toSlashes(f.getPath());
       if (!f.isDirectory() && path.contains("/" + window + "__open-")
           && !path.contains("/" + todayKey + "/")) {
-        stale.add(path);
+        stale.add(f.getPath());
       }
     }
     if (!stale.isEmpty()) {

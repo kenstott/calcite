@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,7 +91,7 @@ final class StorageRawCache implements RawCache {
     // a provider may fetch several URLs within one batch (the IRS business master file is four
     // regional shards), and a single fixed filename would make them overwrite one another and
     // serve whichever landed last for all four.
-    int slash = path.lastIndexOf('/');
+    int slash = LocalPaths.lastSeparator(path);
     String dir = slash > 0 ? path.substring(0, slash) : path;
     return new StorageRawCache(storageProvider, dir, bypass);
   }
@@ -119,7 +120,8 @@ final class StorageRawCache implements RawCache {
     if (tail.isEmpty()) {
       tail = "response";
     }
-    return cacheDir + "/" + HttpSource.sanitizePathComponent(tail) + "_" + digest(url);
+    return LocalPaths.join(cacheDir,
+        HttpSource.sanitizePathComponent(tail) + "_" + digest(url));
   }
 
   /** Short, stable digest of the full URL. */

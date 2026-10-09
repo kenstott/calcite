@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.Lex;
@@ -2109,7 +2110,8 @@ public class DuckDBJdbcSchemaFactory {
               icebergTablePath = record.sourceFile;
             } else {
               // Fallback: compute from baseDirectory + schemaName + tableName
-              icebergTablePath = directoryPath + "/" + calciteSchemaName + "/" + tableName;
+              icebergTablePath =
+                  LocalPaths.normalize(directoryPath + "/" + calciteSchemaName + "/" + tableName);
               LOGGER.warn("ICEBERG_PARQUET table '{}' has unexpected sourceFile '{}', using computed path: {}",
                          tableName, record.sourceFile, icebergTablePath);
             }

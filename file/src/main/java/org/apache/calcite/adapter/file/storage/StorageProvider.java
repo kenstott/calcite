@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.file.storage;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -283,7 +285,7 @@ public interface StorageProvider {
   default String getStagingDirectory(String purpose) throws IOException {
     // Default implementation uses system temp directory
     String tempDir = System.getProperty("java.io.tmpdir");
-    String stagingPath = tempDir + "/.staging/" + purpose;
+    String stagingPath = LocalPaths.join(tempDir, ".staging/" + purpose);
     createDirectories(stagingPath);
     return stagingPath;
   }
@@ -615,7 +617,8 @@ public interface StorageProvider {
     }
 
     // Clean up macOS metadata files after writing
-    String parentDir = java.nio.file.Paths.get(path).getParent().toString();
+    // By string: the path may be a URI, which is not a path Windows accepts
+    String parentDir = LocalPaths.parent(path);
     cleanupMacosMetadata(parentDir);
   }
 
