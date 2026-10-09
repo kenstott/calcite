@@ -92,9 +92,19 @@ public class ChartSvgTest {
         // font further -- to 10px here -- so the full title still fits without needing
         // to fall back to ellipsis truncation at all.
         String title = "Empirical check: days from CVE publication to CISA KEV listing";
+        //
+        // The panel is sized from this machine's own measurement of the title -- the widest
+        // panel in which it fits at 10px and no larger -- because the SansSerif font, and so
+        // the width at which that happens, differs by platform (412px on macOS, less on
+        // Windows, whose SansSerif is narrower).
+        int widthAt10 = ChartScene.textWidth(title, 10, true);
+        assertTrue(ChartScene.textWidth(title, 11, true) > widthAt10,
+            "the title must measure wider at 11px than at 10px for this test to mean anything");
+        // fittedTitleSize keeps 12px of the panel clear of the title
+        int panelWidth = widthAt10 + 12;
         String svg = ChartRenderer.layout("bar", title, "Days", "Share", Arrays.asList(
             "<=0 (same day/before)", "1-7", "8-30", "31+"),
-            Arrays.asList(series("Share", 29, 26, 20, 25)), 412, 268).toSvg();
+            Arrays.asList(series("Share", 29, 26, 20, 25)), panelWidth, 268).toSvg();
 
         int at = svg.indexOf(title);
         assertTrue(at > 0, "shrinking further must keep the title readable in full: " + svg);
@@ -468,8 +478,12 @@ public class ChartSvgTest {
         // Tick COUNT comes from the data range, not the panel width — niceTicks never sees the
         // width — so a wider panel cannot gain labels. Thinning only ever removes, and must do
         // so only when the labels would actually collide.
+        //
+        // The narrow panel leaves each of the six ticks a slot of about 23px, which no
+        // platform's SansSerif fits a five-digit money label into. A 300px panel was tight
+        // only for the wider fonts of macOS and Linux; on Windows every label still fitted.
         int narrow = xTickPositions(ChartRenderer.layoutPoints("scatter", "t",
-            "Median household income ($)", "Rate", moneyPoints(), 300, 300).toSvg()).size();
+            "Median household income ($)", "Rate", moneyPoints(), 200, 300).toSvg()).size();
         int roomy = xTickPositions(ChartRenderer.layoutPoints("scatter", "t",
             "Median household income ($)", "Rate", moneyPoints(), 430, 300).toSvg()).size();
         assertTrue(narrow < roomy,
