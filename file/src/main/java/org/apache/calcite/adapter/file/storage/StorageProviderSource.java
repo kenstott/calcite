@@ -130,6 +130,11 @@ public class StorageProviderSource implements Source {
     // Calculate relative path for display only
     String basePath = source.path();
     String thisPath = displayPath;
+    if (File.separatorChar == '\\' && "local".equals(storageProvider.getStorageType())) {
+      // A local path on Windows may be written with either separator
+      basePath = basePath.replace('\\', '/');
+      thisPath = thisPath.replace('\\', '/');
+    }
 
     // Normalize paths for comparison
     if (basePath.startsWith("/") && !thisPath.startsWith("/")) {

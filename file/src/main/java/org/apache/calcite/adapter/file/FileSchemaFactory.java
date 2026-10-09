@@ -681,7 +681,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       boolean isAbsolute = directory.startsWith("/") || directory.matches("^[a-zA-Z]:[\\\\/].*"); // Unix or Windows absolute
       if ("local".equals(storageType) && modelFileDirPath != null && !isAbsolute) {
         // Relative path - resolve against model file directory
-        directoryPath = modelFileDirPath + (modelFileDirPath.endsWith("/") ? "" : "/") + directory;
+        directoryPath = new File(modelFileDirPath, directory).getPath();
         LOGGER.info("Resolved relative path against model directory: {} -> {}", directory, directoryPath);
       } else {
         // Absolute path or cloud URI - use as-is
