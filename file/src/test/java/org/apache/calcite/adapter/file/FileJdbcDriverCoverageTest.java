@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.avatica.DriverVersion;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
@@ -316,7 +317,7 @@ class FileJdbcDriverCoverageTest {
         invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
-    assertEquals(System.getProperty("java.io.tmpdir") + "/calcite_file_storage",
+    assertEquals(LocalPaths.join(System.getProperty("java.io.tmpdir"), "calcite_file_storage"),
         invokeGetter(schemas.get(0), "getStoragePath"));
   }
 
@@ -326,7 +327,7 @@ class FileJdbcDriverCoverageTest {
         invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
-    assertEquals(System.getProperty("user.dir") + "/data",
+    assertEquals(LocalPaths.join(System.getProperty("user.dir"), "data"),
         invokeGetter(schemas.get(0), "getDataPath"));
   }
 

@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -315,7 +317,7 @@ class FileJdbcDriverDeepCoverageTest {
     Object schemaConfig = schemas.get(0);
     String storagePath = (String) invokeGetter(schemaConfig, "getStoragePath");
     String expectedDefault =
-        System.getProperty("java.io.tmpdir") + "/calcite_file_storage";
+        LocalPaths.join(System.getProperty("java.io.tmpdir"), "calcite_file_storage");
     assertEquals(expectedDefault, storagePath,
         "Default storage path should use java.io.tmpdir");
   }
@@ -332,7 +334,7 @@ class FileJdbcDriverDeepCoverageTest {
 
     Object schemaConfig = schemas.get(0);
     String dataPath = (String) invokeGetter(schemaConfig, "getDataPath");
-    String expectedDefault = System.getProperty("user.dir") + "/data";
+    String expectedDefault = LocalPaths.join(System.getProperty("user.dir"), "data");
     assertEquals(expectedDefault, dataPath,
         "Default data path should use user.dir/data");
   }

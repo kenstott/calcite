@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.storage;
 
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -234,7 +235,7 @@ public class StorageProviderDefaultMethodsCoverageTest {
       // we test that it returns the expected format
       String tempDirProp = System.getProperty("java.io.tmpdir");
       String result = provider.getStagingDirectory("iceberg");
-      String expectedPath = tempDirProp + "/.staging/iceberg";
+      String expectedPath = LocalPaths.join(tempDirProp, ".staging/iceberg");
       assertEquals(expectedPath, result);
     }
 

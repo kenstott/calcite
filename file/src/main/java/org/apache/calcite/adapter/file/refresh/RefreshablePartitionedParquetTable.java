@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
 import org.apache.calcite.adapter.file.metadata.TableConstraints;
+import org.apache.calcite.adapter.file.util.GlobMatcher;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -30,8 +31,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.FileSystems;
-import java.nio.file.PathMatcher;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -661,8 +660,9 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
       List<org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry> allFiles =
           storageProvider.listFiles(directoryPath, true);
 
-      // Create PathMatcher for glob pattern matching
-      PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+      // The files may be keys of an object store, which are not paths of this file system
+      GlobMatcher matcher =
+          GlobMatcher.of(pattern, "local".equals(storageProvider.getStorageType()));
 
       // Filter files that match the pattern
       List<String> matchingFiles = new ArrayList<>();
@@ -671,9 +671,7 @@ public class RefreshablePartitionedParquetTable extends AbstractTable
           // Get relative path from directoryPath for pattern matching
           String relativePath = getRelativePath(directoryPath, entry.getPath());
           if (relativePath != null) {
-            // Convert to Path for matching
-            java.nio.file.Path relPath = java.nio.file.Paths.get(relativePath);
-            if (matcher.matches(relPath)) {
+            if (matcher.matches(relativePath)) {
               matchingFiles.add(entry.getPath());
             }
           }

@@ -285,7 +285,7 @@ public interface StorageProvider {
   default String getStagingDirectory(String purpose) throws IOException {
     // Default implementation uses system temp directory
     String tempDir = System.getProperty("java.io.tmpdir");
-    String stagingPath = tempDir + "/.staging/" + purpose;
+    String stagingPath = LocalPaths.join(tempDir, ".staging/" + purpose);
     createDirectories(stagingPath);
     return stagingPath;
   }

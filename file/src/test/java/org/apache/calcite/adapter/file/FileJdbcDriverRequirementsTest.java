@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -80,9 +82,9 @@ public class FileJdbcDriverRequirementsTest {
     Object sc = schemasOf(config).get(0);
     assertEquals("parquet", get(sc, "getEngineType"), "default engine is parquet");
     assertEquals(2048, get(sc, "getBatchSize"), "default batchSize is 2048");
-    assertEquals(System.getProperty("java.io.tmpdir") + "/calcite_file_storage",
+    assertEquals(LocalPaths.join(System.getProperty("java.io.tmpdir"), "calcite_file_storage"),
         get(sc, "getStoragePath"), "default storagePath under java.io.tmpdir");
-    assertEquals(System.getProperty("user.dir") + "/data",
+    assertEquals(LocalPaths.join(System.getProperty("user.dir"), "data"),
         get(sc, "getDataPath"), "default dataPath under user.dir");
   }
 

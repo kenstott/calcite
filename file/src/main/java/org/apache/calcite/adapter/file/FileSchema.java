@@ -45,6 +45,7 @@ import org.apache.calcite.adapter.file.table.GlobParquetTable;
 import org.apache.calcite.adapter.file.table.JsonScannableTable;
 import org.apache.calcite.adapter.file.table.ParquetTranslatableTable;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
+import org.apache.calcite.adapter.file.util.GlobMatcher;
 import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.Function;
@@ -71,11 +72,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -4714,7 +4711,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // so existence checking always goes through the StorageProvider abstraction.
     StorageProvider provider =
         storageProvider != null ? storageProvider : StorageProviderFactory.createFromUrl(tablePath);
-    String versionHintPath = tablePath + "/metadata/version-hint.text";
+    String versionHintPath = LocalPaths.join(tablePath, "metadata/version-hint.text");
     if (!provider.exists(versionHintPath)) {
       return false;
     }
@@ -4736,12 +4733,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           + "treating table as not materialized", versionHintPath, versionText);
       return false;
     }
-    String metadataJsonPath = tablePath + "/metadata/v" + version + ".metadata.json";
+    String metadataJsonPath =
+        LocalPaths.join(tablePath, "metadata/v" + version + ".metadata.json");
     if (provider.exists(metadataJsonPath)) {
       return true;
     }
     // Iceberg also accepts a gzip-compressed metadata file under the same version number.
-    return provider.exists(tablePath + "/metadata/v" + version + ".gz.metadata.json");
+    return provider.exists(
+        LocalPaths.join(tablePath, "metadata/v" + version + ".gz.metadata.json"));
   }
 
   /**
@@ -4918,6 +4917,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
   }
 
+  /** Whether a provider's paths are paths of this machine's file system, not keys or URLs. */
+  private static boolean isLocal(StorageProvider storageProvider) {
+    return "local".equals(storageProvider.getStorageType());
+  }
+
   private void collectFilesAtDepth(StorageProvider storageProvider, String path, int depth,
       String[] patternParts, List<StorageProvider.FileEntry> result) {
     try {
@@ -4930,12 +4934,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // "type=x/frequency=*/...") so it never crawls sibling directories — critical when
         // baseDirectory is a shared bucket root holding every schema's prefixes side by side.
         int segmentIndex = patternParts.length - 1 - depth;
-        PathMatcher segmentMatcher =
-            FileSystems.getDefault().getPathMatcher("glob:" + patternParts[segmentIndex]);
+        GlobMatcher segmentMatcher =
+            GlobMatcher.of(patternParts[segmentIndex], isLocal(storageProvider));
         for (StorageProvider.FileEntry entry : entries) {
-          // Paths.get here only builds an in-memory Path for glob PathMatcher.matches();
-          // no filesystem access — same idiom as the pattern filter below.
-          if (entry.isDirectory() && segmentMatcher.matches(Paths.get(entry.getName()))) {
+          if (entry.isDirectory() && segmentMatcher.matches(entry.getName())) {
             collectFilesAtDepth(storageProvider, entry.getPath(), depth - 1, patternParts, result);
           }
         }
@@ -4980,16 +4982,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         if (!java.nio.file.Files.exists(basePath)) {
           return result;
         }
-        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
-        PathMatcher rootMatcher = null;
+        GlobMatcher matcher = GlobMatcher.forLocalPaths(pattern);
+        GlobMatcher rootMatcher = null;
         if (pattern.startsWith("**/")) {
-          rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern.substring(3));
+          rootMatcher = GlobMatcher.forLocalPaths(pattern.substring(3));
         }
-        final PathMatcher finalRootMatcher = rootMatcher;
+        final GlobMatcher finalRootMatcher = rootMatcher;
         try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(basePath)) {
           walk.filter(java.nio.file.Files::isRegularFile)
               .forEach(p -> {
-                java.nio.file.Path relativePath = basePath.relativize(p);
+                String relativePath = basePath.relativize(p).toString();
                 if (matcher.matches(relativePath)
                     || (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
                   result.add(p.toString());
@@ -5038,13 +5040,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
 
       // Create glob matcher for the pattern
-      PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+      // The files may be keys of an object store, which are not paths of this file system
+      boolean local = isLocal(storageProvider);
+      GlobMatcher matcher = GlobMatcher.of(pattern, local);
 
       // Special handling for patterns starting with "**/": also match root files
-      PathMatcher rootMatcher = null;
+      GlobMatcher rootMatcher = null;
       if (pattern.startsWith("**/")) {
         String rootPattern = pattern.substring(3); // Get pattern after "**/"
-        rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + rootPattern);
+        rootMatcher = GlobMatcher.of(rootPattern, local);
       }
 
       // Filter files by pattern
@@ -5063,14 +5067,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           relativePath = entry.getName();
         }
 
-        // Convert to Path for glob matching
-        Path relPath = Paths.get(relativePath);
-
         // Pattern matching happens here, but no need to log every file check
 
         // Match against main pattern OR root pattern (if applicable)
-        if (matcher.matches(relPath) ||
-            (rootMatcher != null && rootMatcher.matches(relPath))) {
+        if (matcher.matches(relativePath) ||
+            (rootMatcher != null && rootMatcher.matches(relativePath))) {
           result.add(fullPath);
           LOGGER.debug("findMatchingFiles: MATCHED file: {}, relativePath: {}", fullPath, relativePath);
         }
@@ -5455,13 +5456,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       });
 
       // Create a glob matcher if a directory pattern is configured
-      final java.nio.file.PathMatcher globMatcher;
-      final java.nio.file.PathMatcher rootGlobMatcher;
+      final GlobMatcher globMatcher;
+      final GlobMatcher rootGlobMatcher;
       if (directoryPattern != null && !directoryPattern.isEmpty()) {
-        globMatcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + directoryPattern);
+        boolean local = isLocal(storageProvider);
+        globMatcher = GlobMatcher.of(directoryPattern, local);
         // Also match root-level files when pattern starts with **/
         if (directoryPattern.startsWith("**/")) {
-          rootGlobMatcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + directoryPattern.substring(3));
+          rootGlobMatcher = GlobMatcher.of(directoryPattern.substring(3), local);
         } else {
           rootGlobMatcher = null;
         }
@@ -5525,8 +5527,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             if (relativePath == null) {
               relativePath = entryPath;
             }
-            if (!globMatcher.matches(java.nio.file.Paths.get(relativePath))
-                && (rootGlobMatcher == null || !rootGlobMatcher.matches(java.nio.file.Paths.get(relativePath)))) {
+            if (!globMatcher.matches(relativePath)
+                && (rootGlobMatcher == null || !rootGlobMatcher.matches(relativePath))) {
               LOGGER.debug("Skipping file {} - does not match glob pattern '{}'", entry.getName(), directoryPattern);
               continue;
             }

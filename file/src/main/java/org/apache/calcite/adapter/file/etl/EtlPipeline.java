@@ -3835,13 +3835,13 @@ public class EtlPipeline {
             && !materializeConfig.getIceberg().getWarehousePath().isEmpty()) {
           icebergBase = materializeConfig.getIceberg().getWarehousePath();
         }
-        String dataPath = icebergBase + "/" + pipelineName + "/data";
+        String dataPath = LocalPaths.join(icebergBase, pipelineName + "/data");
         if (storageProvider.isDirectory(dataPath)) {
           LOGGER.debug("Verified Iceberg data exists at {}", dataPath);
           return true;
         }
         if (!icebergBase.equals(baseDirectory)) {
-          String fallbackPath = baseDirectory + "/" + pipelineName + "/data";
+          String fallbackPath = LocalPaths.join(baseDirectory, pipelineName + "/data");
           if (storageProvider.isDirectory(fallbackPath)) {
             LOGGER.debug("Verified Iceberg data exists at fallback {}", fallbackPath);
             return true;
@@ -3849,7 +3849,7 @@ public class EtlPipeline {
         }
       } else {
         // For Parquet format, check if data directory has files
-        String dataPath = baseDirectory + "/" + pipelineName;
+        String dataPath = LocalPaths.join(baseDirectory, pipelineName);
         if (storageProvider.isDirectory(dataPath)) {
           LOGGER.debug("Verified data exists at {}", dataPath);
           return true;

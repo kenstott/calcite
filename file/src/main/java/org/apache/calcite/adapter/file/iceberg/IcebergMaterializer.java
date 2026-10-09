@@ -1774,7 +1774,8 @@ public class IcebergMaterializer {
       parts.add(k + "=" + batch.get(k));
     }
     String key = parts.isEmpty() ? "all" : join("_", parts);
-    return warehousePath + "/chunk-progress/" + config.getTargetTableId() + "/" + key + ".json";
+    return LocalPaths.join(warehousePath,
+        "chunk-progress/" + config.getTargetTableId() + "/" + key + ".json");
   }
 
   private static String join(String sep, List<String> parts) {

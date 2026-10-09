@@ -120,7 +120,8 @@ final class StorageRawCache implements RawCache {
     if (tail.isEmpty()) {
       tail = "response";
     }
-    return cacheDir + "/" + HttpSource.sanitizePathComponent(tail) + "_" + digest(url);
+    return LocalPaths.join(cacheDir,
+        HttpSource.sanitizePathComponent(tail) + "_" + digest(url));
   }
 
   /** Short, stable digest of the full URL. */

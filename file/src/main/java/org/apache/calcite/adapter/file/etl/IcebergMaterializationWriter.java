@@ -2481,7 +2481,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       throws IOException {
     String timestamp = utcFormat("yyyyMMdd_HHmmss").format(new Date());
     String jsonFileName = "batch_" + timestamp + "_" + UUID.randomUUID().toString().substring(0, 8) + ".json";
-    String jsonPath = stagingPath + "/" + jsonFileName;
+    String jsonPath = LocalPaths.join(stagingPath, jsonFileName);
 
     // Build JSON content
     StringBuilder jsonContent = new StringBuilder();
