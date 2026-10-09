@@ -900,7 +900,10 @@ final class QuestionDiagnostics {
         geographyLevelMixing(sql, rows, columns, warnings);
         rollupContamination(sql, rows, columns, warnings);
         nameMatchingWithoutResolution(sql, warnings);
-        explicitExclusion(sql, rows, runner, warnings);
+        // A page or a capped result holds only part of what the predicates kept, so comparing
+        // it with the unpaged relaxed statement would name every row outside the page as
+        // excluded; the probe runs the full original itself instead.
+        explicitExclusion(sql, offset > 0 || capped ? null : rows, runner, warnings);
 
         ObjectNode out = envelope(warnings);
         ObjectNode diag = (ObjectNode) out.get("diagnostics");
