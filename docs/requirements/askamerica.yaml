@@ -4,7 +4,12 @@
 # (askamerica-engine) and the pg-wire server bundle it installs and starts (pgwire-govdata,
 # built by .github/workflows/pgwire-adapters-release.yml). The source is the owner's decisions.
 #
-#   accepted = an owner decision with no implementation, or one not yet proven by a test.
+#   accepted = an owner decision with no implementation, or a design the owner has confirmed
+#              that is not yet proven by a test cited in `tests:`.
+#   proposed = a possible future feature; no decision to build it.
+#
+# ASKAM-002 and ASKAM-004 confirm the existing design. They are not new decisions. Where the
+# code departs from that design, the departure is listed in `source:` as a defect against it.
 
 # ===================================== platforms ===============================================
 
@@ -76,22 +81,28 @@
     file's bytes, is never rebuilt by a live walk at run time, and a missing one or one that
     does not cover the model is an error by name; building it is a release step.
   source: >
-    owner rulings 2026-10-09. State on main at 6e664777a4, read from the code:
-    GovDataSeedInstaller.ensureSeeded is called only from GovDataDriver.connect, so the
-    pg-wire bundle, whose model names GovDataSchemaFactory directly with database_filename
-    ${GOVDATA_DUCKDB_CATALOG:govdata-catalog.duckdb}, never installs a seed and, with that
-    variable unset, creates an empty catalog and discovers every schema
-    (DuckDBJdbcSchemaFactory "Creating new DuckDB database"); a jar without a seed and a
-    failed extraction both fall through to discovery by design ("pure accelerator"); the
-    installed catalog is compared with the jar's seed by a SHA-256 of the seed zip's bytes
-    kept in .duckdb/govdata.duckdb.version, not by schema; a catalog file newer than the jar
-    is left in place; ?rebuildCatalog=true deletes the catalog so it is rebuilt by discovery;
-    the pickle cache is named by a SHA-256 of model.json's bytes and rebuilt by a live walk
-    when absent or unreadable (catalog_populate.py populate_state_cached); a second process
-    that meets the catalog's lock already gets a numbered copy taken from the jar's seed
-    (DuckDBJdbcSchemaFactory isCatalogLockConflict, seedCatalogCopy*). That a read-only open
-    is locked too is the owner's statement; the code does not say so in a comment found by
-    search.
+    The existing design, confirmed by the owner 2026-10-09 ("these are not changes - this is
+    just confirming the design requirement"). Defects against it on main at 6e664777a4, read
+    from the code: (a) the standalone pg-wire server never puts a seed in place:
+    GovDataSeedInstaller.ensureSeeded is called only from GovDataDriver.connect, while the
+    bundle's model names GovDataSchemaFactory directly with database_filename
+    ${GOVDATA_DUCKDB_CATALOG:govdata-catalog.duckdb}, so with that variable unset an empty
+    catalog is created (DuckDBJdbcSchemaFactory "Creating new DuckDB database") and filled by
+    discovery; (b) a jar without a seed and a failed extraction both continue into discovery
+    instead of stopping (GovDataSeedInstaller, "pure accelerator"); (c) an installed catalog
+    is compared with the seed by a SHA-256 of the seed zip's bytes kept in
+    .duckdb/govdata.duckdb.version, not by schema; (d) a catalog file newer than the jar is
+    kept even when it differs; (e) ?rebuildCatalog=true and -Dgovdata.rebuild.catalog delete
+    the catalog so that it is rebuilt by discovery (GovDataDriver); (f) a seeded catalog copy
+    that cannot be opened is replaced by an empty catalog whose views are rebuilt
+    (DuckDBJdbcSchemaFactory, lock-fallback loop); (g) a view the catalog lacks is created on
+    demand from the warehouse (DuckDBPendingViews.createOnDemand, as cited in
+    GovDataSchemaFactory); (h) the pickle cache is named by a SHA-256 of model.json's bytes
+    and rebuilt by a live walk when absent or unreadable (catalog_populate.py
+    populate_state_cached); (i) DuckDBCatalogMaintenance.rebuildPendingViews rebuilds views
+    at run time and has no caller. Already as designed: a process that meets the catalog's
+    lock takes a numbered copy seeded from the jar's seed (see ASKAM-004). That a read-only
+    open is locked too is the owner's statement; no comment in the code says so.
   tests: []
 
 # ===================================== updates =================================================
@@ -115,5 +126,40 @@
     unstamped jar counts as differing and an unreachable release lookup counts as not
     differing. In server mode the running jar serves and the new one is downloaded beside it
     for the next launch. A jar named by ASKAMERICA_ENGINE_JAR, or placed beside the launcher,
-    is a pin and is never replaced, which is how updates are declined today.
+    is a pin and is never replaced, which is how updates are declined today. Why the check
+    runs so often and why agreement is hard to ask: the thin launcher is started by an MCP host
+    (Claude Desktop passes --mcp, McpServerLauncher) each time that host starts the server, so
+    "every restart" is every launch by the host, and in that mode the process is a stdio MCP
+    server with nobody at a prompt. Its standard output is the protocol; the launcher and the
+    installer report on standard error, which the host captures (EngineInstaller.report). How
+    often a host relaunches is the host's behaviour and is not stated in this repository.
+  tests: []
+
+# ===================================== concurrency =============================================
+
+- id: ASKAM-004
+  module: askamerica
+  status: accepted
+  group: concurrency
+  category: Concurrent engine processes
+  priority: MUST
+  type: constraint
+  description: >
+    Several AskAmerica engine processes run concurrently on one host, as an MCP host starts
+    them, and each has the catalog available at once. DuckDB locks a catalog file against
+    other processes, so a process that finds the catalog held takes a copy of its own; the
+    copies exist only because of that lock. A copy left by a process that has ended is
+    reused or removed by a later process, so copies do not accumulate without bound. The
+    large object cache is shared by all processes and stays shared; only the catalog copy,
+    the pid and the log are per process.
+  source: >
+    The existing design, confirmed by the owner 2026-10-09 ("they need to be concurrent, and
+    this drives the sharing of the catalog"; "I think it already works anyway"). Met in
+    file/src/main/java/org/apache/calcite/adapter/file/duckdb/DuckDBJdbcSchemaFactory.java
+    on main at 6e664777a4: isCatalogLockConflict recognises the lock; the fallback loop opens
+    {name}_N.duckdb for N up to MAX_CATALOG_LOCK_FALLBACKS (16), taking the lowest free one,
+    each seeded from the jar's bundled seed (seedCatalogCopy*); cleanupStaleNumberedCopies,
+    once per JVM, deletes a numbered copy that is old enough and that this process can open
+    itself, and leaves one another process holds. The standalone pg-wire server opens its
+    catalog through the same factory. No test is cited yet.
   tests: []
