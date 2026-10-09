@@ -1,0 +1,513 @@
+# Salesforce adapter — requirements ledger. Schema: README.md.
+#
+# Unit of work = a capability of the adapter (connection, catalog, read pushdown, writes) or of
+# one of its two packagings (pgwire bundle, Trino connector). Reverse-engineered 2026-10 from
+# salesforce/, trino-salesforce/, pgwire-salesforce/ and pgwire-calcite's write routing.
+#
+# Status rule used here, per ../testing/strategy.md (a golden is hermetic):
+#   complete  = verified by a test that needs no Salesforce org (SOQLBuilderTest, DescribeCacheTest,
+#               TestSalesforceClientModule).
+#   accepted  = the feature exists and is verified only against a live org: by the
+#               `integration`-tagged tests, which are cited in `tests:` but are not goldens, or by
+#               the manual run of 2026-10-08 named in `source:`. Golden pending.
+#   proposed  = stated in a README but not found verified anywhere.
+
+# ===================================== connection ==============================================
+
+- id: SF-001
+  module: salesforce
+  status: accepted
+  group: connection
+  category: Authentication
+  priority: MUST
+  type: behavioral
+  description: >
+    The adapter authenticates to a Salesforce org with the OAuth client credentials flow: given the
+    org's My Domain login URL and a connected app's consumer key and secret, it obtains an access
+    token and the instance URL, and every later call carries that token.
+  scenario: >
+    Given loginUrl, clientId and clientSecret of a connected app with the client credentials flow
+    enabled
+    When a connection is opened
+    Then a token is issued and the org's sObjects can be listed.
+  source: SalesforceConnection (grant_type=client_credentials); pgwire-salesforce/README.md
+  tests: [ salesforce/SalesforceIntegrationTest#schemaExposesStandardSObjectsAsTables ]
+
+- id: SF-002
+  module: salesforce
+  status: accepted
+  group: connection
+  category: Authentication
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Two other credential sets are accepted in place of client credentials: username and password
+    (with optional security token) together with a connected app's key and secret, and a
+    pre-issued access token together with its instance URL.
+  source: SalesforceConnection (grant_type=password; accessToken + instanceUrl)
+  tests: []
+
+- id: SF-003
+  module: salesforce
+  status: accepted
+  group: connection
+  category: Failure reporting
+  priority: MUST
+  type: constraint
+  description: >
+    A refused authentication, a failed query, a failed describe and a failed sObject listing each
+    raise an error carrying Salesforce's response; none is replaced by an empty result.
+  source: SalesforceConnection ("Authentication failed", "Query failed", "Describe of ... failed")
+  tests: []
+
+- id: SF-004
+  module: salesforce
+  status: accepted
+  group: connection
+  category: JDBC driver
+  priority: SHOULD
+  type: behavioral
+  description: >
+    A jdbc:salesforce: URL whose parameters name the login URL and credentials opens a connection
+    to the org through SalesforceDriver, with no model file.
+  source: SalesforceDriver
+  tests: [ salesforce/SalesforceIntegrationTest#jdbcDriverUrl ]
+
+# ===================================== catalog =================================================
+
+- id: SF-010
+  module: salesforce
+  status: accepted
+  group: catalog
+  category: Tables
+  priority: MUST
+  type: structural
+  description: >
+    Every queryable sObject of the org, standard and custom, is one SQL table named as in
+    Salesforce; an sObject that is not queryable is not a table.
+  source: SalesforceSchema (sObject.queryable)
+  tests: [ salesforce/SalesforceIntegrationTest#schemaExposesStandardSObjectsAsTables ]
+
+- id: SF-011
+  module: salesforce
+  status: accepted
+  group: catalog
+  category: Type mapping
+  priority: MUST
+  type: structural
+  description: >
+    A table's columns and their types come from the sObject's describe: id, reference, string,
+    picklist, multipicklist, textarea, phone, email, url and combobox are VARCHAR (with the
+    field's length); boolean is BOOLEAN; int is INTEGER; double and percent are DOUBLE; currency
+    is DECIMAL with the field's precision and scale; date is DATE; datetime is TIMESTAMP; time is
+    TIME. The Id column is VARCHAR(18).
+  source: SalesforceTable (field type switch)
+  tests: [ salesforce/SalesforceIntegrationTest#describeMapsFieldTypesToColumns ]
+
+- id: SF-012
+  module: salesforce
+  status: accepted
+  group: catalog
+  category: Nullability
+  priority: MUST
+  type: structural
+  description: >
+    A column is nullable when the field allows nulls, or when an INSERT may omit it because
+    Salesforce fills it (a field that is not createable, or is defaulted on create); otherwise it
+    is NOT NULL.
+  source: SalesforceTable.withWriteNullability
+  tests: [ salesforce/SalesforceIntegrationTest#insertWithoutRequiredFieldIsRejected ]
+
+- id: SF-013
+  module: salesforce
+  status: complete
+  group: catalog
+  category: Describe cache
+  priority: MUST
+  type: behavioral
+  description: >
+    An sObject's describe is kept on disk and reused by a later process until its time to live
+    passes, after which it is read from Salesforce again. Describes of different orgs, API
+    versions or credentials are kept apart.
+  scenario: >
+    Given a describe stored by one cache instance
+    When a new cache instance over the same directory and scope asks for it within the time to live
+    Then it is returned without calling the loader; after the time to live the loader is called;
+    and another scope does not see it.
+  source: DescribeCache
+  tests:
+    - salesforce/DescribeCacheTest#describeSurvivesANewCacheInstance
+    - salesforce/DescribeCacheTest#expiredDescribeIsReloaded
+    - salesforce/DescribeCacheTest#scopesDoNotShareDescribes
+  since: 2026-10
+
+- id: SF-014
+  module: salesforce
+  status: complete
+  group: catalog
+  category: Describe cache
+  priority: MUST
+  type: constraint
+  description: >
+    A time to live of zero keeps nothing on disk; a describe that fails to load writes nothing; a
+    negative time to live and a name that is not an sObject name are rejected.
+  source: DescribeCache
+  tests:
+    - salesforce/DescribeCacheTest#zeroTimeToLiveKeepsNothingOnDisk
+    - salesforce/DescribeCacheTest#failedLoadWritesNothing
+    - salesforce/DescribeCacheTest#negativeTimeToLiveIsRejected
+    - salesforce/DescribeCacheTest#nameThatIsNotAnSObjectIsRejected
+  since: 2026-10
+
+- id: SF-015
+  module: salesforce
+  status: accepted
+  group: catalog
+  category: API allowance
+  priority: MUST
+  type: constraint
+  description: >
+    Describing the org costs one Salesforce API call per sObject (about 1,200 for a typical org)
+    and is paid once: a second connection inside the time to live issues no describe calls, so
+    restarts and repeated test runs do not spend the org's daily API allowance again.
+  scenario: >
+    Given a connection that has described the org
+    When a second connection is opened over the same describe cache directory
+    Then the tables' columns are available without a describe call to Salesforce.
+  source: "DescribeCache; pgwire-salesforce/README.md (Startup time and caching)"
+  tests: [ salesforce/SalesforceIntegrationTest#describeIsCachedOnDiskBetweenConnections ]
+
+# ===================================== read ====================================================
+
+- id: SF-020
+  module: salesforce
+  status: complete
+  group: read
+  category: Filter pushdown
+  priority: MUST
+  type: behavioral
+  description: >
+    A comparison of a column with a literal (=, <>, <, <=, >, >=), IN, LIKE, IS NULL, IS NOT NULL,
+    and AND, OR and NOT over them are written into the SOQL WHERE clause. An IN list that the
+    planner turns into a range search is written as comparisons, and a string literal is escaped.
+  scenario: >
+    Given a condition such as Name = 'O''Brien' or Id IN (...)
+    When the WHERE clause is built
+    Then the SOQL holds the same comparison with the literal escaped.
+  source: SOQLBuilder
+  tests:
+    - salesforce/SOQLBuilderTest#comparisonWithLiteral
+    - salesforce/SOQLBuilderTest#inListPlannedAsSearchBecomesComparisons
+    - salesforce/SOQLBuilderTest#stringLiteralIsEscaped
+  since: 2026-10
+
+- id: SF-021
+  module: salesforce
+  status: complete
+  group: read
+  category: Filter pushdown
+  priority: MUST
+  type: constraint
+  description: >
+    A condition that cannot be written faithfully as SOQL is not pushed and is evaluated by
+    Calcite: a string literal containing the bind template mark, a bind parameter of a type SOQL
+    has no literal for, and a bare bind parameter used as a condition.
+  source: SOQLBuilder
+  tests:
+    - salesforce/SOQLBuilderTest#stringLiteralWithTemplateMarkIsNotPushedDown
+    - salesforce/SOQLBuilderTest#bindParameterOfUnsupportedTypeIsNotPushedDown
+    - salesforce/SOQLBuilderTest#bareBindParameterIsNotPushedDown
+  since: 2026-10
+
+- id: SF-022
+  module: salesforce
+  status: complete
+  group: read
+  category: Bind parameters
+  priority: MUST
+  type: behavioral
+  description: >
+    A comparison with a prepared-statement parameter is pushed into SOQL and the value is bound when
+    the statement runs, including inside OR, for each supported parameter type. A NULL parameter
+    in a comparison matches no row, also below NOT, as SQL requires.
+  scenario: >
+    Given WHERE Name = ? with a value, and the same with NULL
+    When the statement runs
+    Then the first is sent as SOQL with the value in place and the second returns no row.
+  source: SOQLBuilder
+  tests:
+    - salesforce/SOQLBuilderTest#bindParameterIsBoundAtExecution
+    - salesforce/SOQLBuilderTest#bindParametersNestedInOr
+    - salesforce/SOQLBuilderTest#bindParameterTypes
+    - salesforce/SOQLBuilderTest#nullBindParameterMatchesNoRow
+    - salesforce/SOQLBuilderTest#nullBindParameterBelowNotMatchesNoRow
+  since: 2026-10
+
+- id: SF-023
+  module: salesforce
+  status: accepted
+  group: read
+  category: Pushdown
+  priority: MUST
+  type: behavioral
+  description: >
+    Filters, the selected columns, ORDER BY (with its direction and NULLS FIRST or LAST) and LIMIT
+    are sent to Salesforce as one SOQL query, and the rows returned are the rows the SQL asks for.
+  scenario: >
+    Given a query on Account with a filter, a column list, an ORDER BY and a LIMIT
+    When it runs against an org
+    Then the rows match the filter, come in the requested order and number at most the limit.
+  source: SalesforceRules (filter, project and sort rules); SalesforceToEnumerableConverter
+  tests:
+    - salesforce/SalesforceIntegrationTest#filterProjectSortLimit
+    - salesforce/SalesforceIntegrationTest#preparedStatementParameterFiltersRows
+    - salesforce/SalesforceIntegrationTest#preparedStatementTypedParameters
+    - salesforce/SalesforceIntegrationTest#inListOfIdsWithARepeatedColumn
+
+- id: SF-024
+  module: salesforce
+  status: accepted
+  group: read
+  category: Kept in Calcite
+  priority: MUST
+  type: behavioral
+  description: >
+    Joins, aggregates, computed projections and filters with no SOQL form are evaluated by Calcite
+    over the rows Salesforce returns, and give the same result as if the whole query had run in
+    one engine.
+  source: SalesforceRules (no join or aggregate rule)
+  tests:
+    - salesforce/SalesforceIntegrationTest#joinAcrossSObjects
+    - salesforce/SalesforceIntegrationTest#countRows
+    - salesforce/SalesforceIntegrationTest#computedProjectionAndNonPushableFilterRunInCalcite
+
+- id: SF-025
+  module: salesforce
+  status: proposed
+  group: read
+  category: Offset
+  priority: SHOULD
+  type: constraint
+  description: >
+    OFFSET is sent to Salesforce, with LIMIT 2000 added when the query has no limit because SOQL
+    requires one. What a query receives for an offset beyond Salesforce's own maximum is not
+    established.
+  source: SalesforceToEnumerableConverter (OFFSET clause)
+  tests: []
+
+- id: SF-026
+  module: salesforce
+  status: accepted
+  group: read
+  category: Temporal values
+  priority: MUST
+  type: behavioral
+  description: >
+    A datetime field read as the only column of a query is returned as a SQL TIMESTAMP.
+  source: SalesforceEnumerator
+  tests: [ salesforce/SalesforceIntegrationTest#singleTimestampColumn ]
+
+# ===================================== write ===================================================
+
+- id: SF-030
+  module: salesforce
+  status: accepted
+  group: write
+  category: INSERT, UPDATE, DELETE
+  priority: MUST
+  type: behavioral
+  description: >
+    INSERT creates records, UPDATE changes the records its WHERE clause selects and DELETE removes
+    them, each reporting the number of rows affected; the change is visible to the next query.
+  scenario: >
+    Given an INSERT of Accounts, an UPDATE of one of them and a DELETE of all of them
+    When each runs against an org
+    Then the row counts are those of the statements and a following SELECT shows each change.
+  source: "SalesforceTable (toModificationRel, write); live run 2026-10-08 through pgwire (INSERT 0 2, UPDATE 1, DELETE 3, 0 rows left)"
+  tests: [ salesforce/SalesforceIntegrationTest#insertUpdateDelete ]
+
+- id: SF-031
+  module: salesforce
+  status: accepted
+  group: write
+  category: Rejected writes
+  priority: MUST
+  type: constraint
+  description: >
+    A write to a field the describe marks as not createable (on INSERT) or not updateable (on
+    UPDATE) is refused naming the sObject and field, and an INSERT that omits a required field is
+    refused; neither writes a partial record.
+  source: SalesforceTable (insertRecords, updateRecords)
+  tests:
+    - salesforce/SalesforceIntegrationTest#insertIntoSystemFieldIsRejected
+    - salesforce/SalesforceIntegrationTest#insertWithoutRequiredFieldIsRejected
+
+- id: SF-032
+  module: salesforce
+  status: accepted
+  group: write
+  category: Atomicity
+  priority: MUST
+  type: constraint
+  description: >
+    Rows are written in batches of 200 through the sObject Collections API with allOrNone: one
+    batch is all written or not at all, and a statement spanning several batches is not atomic
+    across them.
+  source: SalesforceConnection (COLLECTION_BATCH_SIZE = 200, allOrNone); SalesforceTable Javadoc
+  tests: []
+
+# ===================================== pgwire ==================================================
+
+- id: SF-040
+  module: salesforce
+  status: accepted
+  group: pgwire
+  category: Packaging
+  priority: MUST
+  type: infrastructure
+  description: >
+    The adapter ships as the pgwire-salesforce bundle: the pgwire-calcite server with this
+    adapter's model and jars, a bundled Python and Java runtime, needing neither installed. A
+    PostgreSQL client reads the org's sObjects as tables of the salesforce schema.
+  source: pgwire-salesforce/README.md; .github/workflows/pgwire-adapters-release.yml
+  tests: []
+
+- id: SF-041
+  module: salesforce
+  status: accepted
+  group: pgwire
+  category: Write gating
+  priority: MUST
+  type: constraint
+  description: >
+    A server started without --allow-writes refuses INSERT, UPDATE and DELETE with a message
+    saying it is read-only, and writes nothing. The bundle's launcher starts with --allow-writes.
+  scenario: >
+    Given a server over a Salesforce org started without --allow-writes
+    When an INSERT into Account is sent
+    Then it is refused and no Account is created.
+  source: "pgwire-calcite write routing; live run 2026-10-08 (refused, 0 rows created)"
+  tests: [ pgwire-calcite/test_dml.py#test_write_is_rejected_without_allow_writes ]
+
+- id: SF-042
+  module: salesforce
+  status: accepted
+  group: pgwire
+  category: Transactions
+  priority: MUST
+  type: constraint
+  description: >
+    Each write is final when it runs. BEGIN and COMMIT are accepted and change nothing; a ROLLBACK
+    after a write is refused with an error saying the write cannot be undone, and the write stays.
+    The error is deliberate, not a no-op: a client that depends on the rollback has to be told it
+    did not happen.
+  scenario: >
+    Given BEGIN followed by a DELETE of one Account
+    When ROLLBACK is sent
+    Then it is refused and the Account remains deleted.
+  source: "pgwire-calcite write routing; live run 2026-10-08 (DELETE 1, ROLLBACK refused)"
+  tests: [ pgwire-calcite/test_dml.py#test_commit_after_a_write_succeeds_and_rollback_is_refused ]
+
+- id: SF-043
+  module: salesforce
+  status: accepted
+  group: pgwire
+  category: RETURNING
+  priority: MUST
+  type: behavioral
+  description: >
+    INSERT, UPDATE and DELETE accept RETURNING: an INSERT returns the new rows with the Id
+    Salesforce assigned, an UPDATE the rows as they are after the write, a DELETE the rows it
+    removed. The statement writes exactly once.
+  scenario: >
+    Given INSERT ... RETURNING "Id", "Name" of two Accounts, then UPDATE ... RETURNING and
+    DELETE ... RETURNING
+    When each runs
+    Then two rows with new Ids, the one changed row, and every removed row are returned.
+  source: "pgwire-calcite write routing; live run 2026-10-08 (2 rows, 1 row, 3 rows returned)"
+  tests:
+    - pgwire-calcite/test_dml.py#test_insert_returning_gives_the_new_rows_in_key_order
+    - pgwire-calcite/test_dml.py#test_update_returning_gives_the_values_after_the_write
+    - pgwire-calcite/test_dml.py#test_delete_returning_gives_the_rows_it_removed
+    - pgwire-calcite/test_dml.py#test_parameterised_returning_writes_exactly_once
+
+- id: SF-045
+  module: salesforce
+  status: proposed
+  group: pgwire
+  category: Transactions
+  priority: MAY
+  type: behavioral
+  description: >
+    Where a source or engine supports transactions, BEGIN, COMMIT and ROLLBACK are real: writes
+    inside a transaction take effect on COMMIT and are undone by ROLLBACK. Not implemented for any
+    source; until it is, the refusal of SF-042 stands.
+  source: owner statement 2026-10-08
+  tests: []
+
+- id: SF-044
+  module: salesforce
+  status: proposed
+  group: pgwire
+  category: Startup
+  priority: SHOULD
+  type: behavioral
+  description: >
+    The server's finished catalog is stored beside the model and loaded on later starts, keyed by
+    a hash of the model, so only the first start after a model change describes the org.
+  source: "pgwire-salesforce/README.md (catalog-cache-<hash>.pkl)"
+  tests: []
+
+# ===================================== trino ===================================================
+
+- id: SF-050
+  module: salesforce
+  status: complete
+  group: trino
+  category: Catalog properties
+  priority: MUST
+  type: constraint
+  description: >
+    The Trino connector builds the adapter's connection from catalog properties. Exactly one
+    complete credential set is required: client credentials; or username and password with a
+    connected app's key and secret; or an access token with its instance URL. The connector
+    refuses to start with none, with a username and password but no connected app, or with an
+    access token but no instance URL. The describe cache settings reach the adapter.
+  source: trino-salesforce (SalesforceClientModule)
+  tests:
+    - trino-salesforce/TestSalesforceClientModule#clientCredentialsUrl
+    - trino-salesforce/TestSalesforceClientModule#usernamePasswordNeedsConnectedApp
+    - trino-salesforce/TestSalesforceClientModule#accessTokenNeedsInstanceUrl
+    - trino-salesforce/TestSalesforceClientModule#noCredentials
+    - trino-salesforce/TestSalesforceClientModule#describeCacheSettingsReachTheDriver
+  since: 2026-10
+
+- id: SF-051
+  module: salesforce
+  status: accepted
+  group: trino
+  category: Queries
+  priority: MUST
+  type: behavioral
+  description: >
+    Through Trino the org's sObjects are listed and described as tables, and filters, aggregates
+    and joins over them return the rows the SQL asks for.
+  source: trino-salesforce/README.md
+  tests:
+    - trino-salesforce/TestSalesforceConnector#testShowTables
+    - trino-salesforce/TestSalesforceConnector#testDescribe
+    - trino-salesforce/TestSalesforceConnector#testFilterAndAggregate
+    - trino-salesforce/TestSalesforceConnector#testJoin
+
+- id: SF-052
+  module: salesforce
+  status: proposed
+  group: trino
+  category: Name matching
+  priority: MUST
+  type: constraint
+  description: >
+    The connector fails at startup unless case-insensitive-name-matching is true, because sObject
+    names are mixed case and Trino lower-cases identifiers.
+  source: trino-salesforce/README.md (Configure a catalog)
+  tests: []
