@@ -79,6 +79,14 @@ public class ConstraintAwareJdbcSchema implements CommentableSchema, Wrapper {
     return delegate;
   }
 
+  /**
+   * Gets the FileSchema this schema was built for, or null when it was built without one.
+   * @return the owning FileSchema
+   */
+  public FileSchema getOwner() {
+    return owner;
+  }
+
   @SuppressWarnings("deprecation")
   @Override public @Nullable Table getTable(String name) {
     // Deferred FK validation: run once here — the lazy consumption point reached only

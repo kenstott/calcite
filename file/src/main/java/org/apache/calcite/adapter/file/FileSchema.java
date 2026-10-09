@@ -2461,6 +2461,57 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * Row counts already recorded for this schema's declared relations, by declared name — read
+   * from memory, with no I/O and no table resolution, so a catalog listing can report
+   * cardinalities without touching a single table. A table's count is the one last read from its
+   * Iceberg metadata and kept in the conversion tracker, else the {@code observedCoverage.rowCount}
+   * of its declaration. A declared view is 0: nothing is read or computed for it. A declared
+   * table with neither source is absent from the result.
+   */
+  public Map<String, Long> getRecordedRowCounts() {
+    Map<String, ConversionMetadata.ConversionRecord> tracked = conversionMetadata == null
+        ? Collections.<String, ConversionMetadata.ConversionRecord>emptyMap()
+        : conversionMetadata.getAllConversions();
+    List<Map<String, Object>> declared = new ArrayList<>(this.tables);
+    if (this.partitionedTables != null) {
+      declared.addAll(this.partitionedTables);
+    }
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> tableDef : declared) {
+      Object declaredName = tableDef.get("name");
+      if (declaredName == null) {
+        continue;
+      }
+      String tableName = String.valueOf(declaredName);
+      if ("view".equals(tableDef.get("type"))) {
+        counts.put(tableName, Long.valueOf(0L));
+        continue;
+      }
+      ConversionMetadata.ConversionRecord record = tracked.get(tableName);
+      if (record != null && record.rowCount != null) {
+        counts.put(tableName, record.rowCount);
+        continue;
+      }
+      Object coverage = tableDef.get("observedCoverage");
+      if (coverage instanceof Map) {
+        Object rowCount = ((Map<?, ?>) coverage).get("rowCount");
+        if (rowCount instanceof Number) {
+          counts.put(tableName, Long.valueOf(((Number) rowCount).longValue()));
+        }
+      }
+    }
+    if (this.views != null) {
+      for (Map<String, Object> view : this.views) {
+        Object viewName = view.get("name");
+        if (viewName != null) {
+          counts.put(String.valueOf(viewName), Long.valueOf(0L));
+        }
+      }
+    }
+    return counts;
+  }
+
+  /**
    * Declared tables omitted so far because their backing Iceberg table is not yet materialized
    * — by {@link #getTableMap()} or a lazy {@link #getDeclaredTable} resolution. Callers that list
    * {@link #getDeclaredTableNames()} must exclude these: {@link #getDeclaredTable} returns null
