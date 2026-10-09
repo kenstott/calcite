@@ -118,13 +118,16 @@ jobs:
         # flags: extra launcher arguments baked into the bundle's entry script. Only an
         # adapter whose tables are modifiable gets --allow-writes (INSERT/UPDATE/DELETE);
         # the rest serve read-only.
+        # govdata reports pg_class.reltuples from the counts its schemas already hold
+        # (--row-counts recorded): counting ~600 Iceberg tables on a client's first
+        # pg_catalog query held that query for many minutes.
         adapter:
           - { name: file,       module: file,            flags: "" }
           - { name: sharepoint, module: sharepoint-list, flags: "--allow-writes" }
           - { name: splunk,     module: splunk,          flags: "" }
           - { name: salesforce, module: salesforce,      flags: "--allow-writes" }
           - { name: cloudops,   module: cloud-ops,       flags: "" }
-          - { name: govdata,    module: govdata,         flags: "" }
+          - { name: govdata,    module: govdata,         flags: "--row-counts recorded" }
         os:
           - { runner: ubuntu-latest, variant: linux-x86_64 }
           - { runner: macos-14,      variant: macos-arm64 }

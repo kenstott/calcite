@@ -395,6 +395,15 @@ def main(argv: list | None = None) -> int:
         "Requires --table-coverage-file.",
     )
     parser.add_argument(
+        "--row-counts",
+        choices=["count", "recorded", "off"],
+        default="count",
+        help="where pg_class.reltuples comes from: 'count' runs COUNT(*) on every table when "
+        "the catalog is first built; 'recorded' reports what the adapter already holds and "
+        "resolves no table (a table with nothing recorded is logged by name and reports -1); "
+        "'off' reports -1 for every table.",
+    )
+    parser.add_argument(
         "--table-coverage-file",
         default=None,
         help="JSON of schema.table -> {row_count, partition_columns}, written by "
@@ -499,6 +508,11 @@ def main(argv: list | None = None) -> int:
         CalciteBackend.admission = AdmissionPolicy(
             args.max_unfiltered_scan_rows, load_coverage(args.table_coverage_file)
         )
+    if args.row_counts == "recorded" and not hasattr(backend, "recorded_row_counts"):
+        parser.error(f"--row-counts recorded is not supported by the {args.backend} backend")
+    from pgwire_calcite import catalog as _catalog
+
+    _catalog.set_row_count_mode(args.row_counts)
     CancelScope.max_queue_wait_ms = max(0, args.max_queue_wait_ms)
     InFlightStatement.cancel_grace_ms = max(0, args.cancel_grace_ms)
     try:

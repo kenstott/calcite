@@ -89,6 +89,10 @@ while [[ $# -gt 0 ]]; do
         # meaningful with --single-connection: the enumeration is what fills the cache, and a
         # per-schema loop would publish 24 partial caches over the top of each other.
         --publish-schema-cache) PUBLISH_ARGS+=(--publish-schema-cache); shift ;;
+        # Also COUNT(*) every base table of the schemas after the first. The runner probes only
+        # the first schema of a connection, so on a single connection this is the only thing that
+        # records a row count for the rest.
+        --record-row-counts) PUBLISH_ARGS+=(--record-row-counts); shift ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
         --mode)
             MODE="$2"
@@ -103,7 +107,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#PUBLISH_ARGS[@]} -gt 0 && "$SINGLE_CONNECTION" != "true" ]]; then
-    echo "Error: --publish-schema-cache requires --single-connection." >&2
+    echo "Error: --publish-schema-cache and --record-row-counts require --single-connection." >&2
     echo "       The per-schema loop would publish one partial cache per schema, each" >&2
     echo "       overwriting the last, leaving only the final schema's tables published." >&2
     exit 2
