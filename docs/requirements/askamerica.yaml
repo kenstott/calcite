@@ -67,6 +67,14 @@
     stays possible and belongs to the release path (govdata/scripts/build-seed.sh), which is
     how the official seed is made. The standalone pg-wire server puts its own jar's seed in
     place on every start, into its state directory, without its caller naming a catalog.
+    Each server process has its own copy of the catalog, because DuckDB locks a catalog file
+    against other processes even when it is opened read-only; the copies are an artifact of
+    that lock, every one comes from the jar's seed, and none is built, merged or reconciled
+    with another: "different" is always measured against the jar, never between copies. The
+    pg-wire server's own catalog cache (the pickle file shipped beside the model) is under
+    the same rule: the shipped one is official, is judged by schema and never by the model
+    file's bytes, is never rebuilt by a live walk at run time, and a missing one or one that
+    does not cover the model is an error by name; building it is a release step.
   source: >
     owner rulings 2026-10-09. State on main at 6e664777a4, read from the code:
     GovDataSeedInstaller.ensureSeeded is called only from GovDataDriver.connect, so the
@@ -77,5 +85,11 @@
     failed extraction both fall through to discovery by design ("pure accelerator"); the
     installed catalog is compared with the jar's seed by a SHA-256 of the seed zip's bytes
     kept in .duckdb/govdata.duckdb.version, not by schema; a catalog file newer than the jar
-    is left in place; ?rebuildCatalog=true deletes the catalog so it is rebuilt by discovery.
+    is left in place; ?rebuildCatalog=true deletes the catalog so it is rebuilt by discovery;
+    the pickle cache is named by a SHA-256 of model.json's bytes and rebuilt by a live walk
+    when absent or unreadable (catalog_populate.py populate_state_cached); a second process
+    that meets the catalog's lock already gets a numbered copy taken from the jar's seed
+    (DuckDBJdbcSchemaFactory isCatalogLockConflict, seedCatalogCopy*). That a read-only open
+    is locked too is the owner's statement; the code does not say so in a comment found by
+    search.
   tests: []
