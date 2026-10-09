@@ -359,6 +359,29 @@ final class PgwireGovDataConnector {
     return null;
   }
 
+  /** The application name that puts a connection on pgwire-calcite's reserved probe connection.
+   * Must equal pgwire_calcite.backend.PROBE_APPLICATION_NAME. */
+  static final String PROBE_APPLICATION_NAME = "pgwire-healthcheck";
+
+  /**
+   * The connection properties for the identity check, or for the connection that runs queries.
+   *
+   * @param probe whether the connection is for the identity check alone
+   */
+  static Properties connectionProperties(boolean probe) {
+    Properties props = new Properties();
+    props.setProperty("user", "askamerica");
+    props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_MILLIS / 1000));
+    // Bounds EVERY query on the connection, not just the identity check — a shared
+    // server that wedges mid-query must not silently freeze whatever MCP tool call is
+    // waiting on it forever.
+    props.setProperty("socketTimeout", "30");
+    if (probe) {
+      props.setProperty("ApplicationName", PROBE_APPLICATION_NAME);
+    }
+    return props;
+  }
+
   private static Connection tryDirectConnect() {
     // A raw socket probe first: DriverManager.getConnection's own timeout handling for a
     // straight ECONNREFUSED varies by platform/driver version, and this needs to fail fast
@@ -369,27 +392,26 @@ final class PgwireGovDataConnector {
       return null;
     }
     try {
-      Properties props = new Properties();
-      props.setProperty("user", "askamerica");
-      props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_MILLIS / 1000));
-      // Bounds EVERY query on this connection, not just the identity check below — a shared
-      // server that wedges mid-query must not silently freeze whatever MCP tool call is
-      // waiting on it forever.
-      props.setProperty("socketTimeout", "30");
-      // Routes the identity check to pgwire-calcite's reserved probe connection, so it
-      // reports "busy" only when the server truly is, never because a user scan holds the
-      // main connection. Must equal pgwire_calcite.backend.PROBE_APPLICATION_NAME.
-      props.setProperty("ApplicationName", "pgwire-healthcheck");
-      Connection c = DriverManager.getConnection(
-          "jdbc:postgresql://" + host() + ":" + port() + "/govdata", props);
-      if (!verifyIsGovData(c)) {
+      String url = "jdbc:postgresql://" + host() + ":" + port() + "/govdata";
+      // The identity check runs on pgwire-calcite's reserved probe connection, so it reports
+      // "busy" only when the server truly is, never because a user scan holds the main
+      // connection. That connection is closed once it has answered: the queries that follow
+      // are the user scans the reserved connection is kept clear of.
+      Connection probe = DriverManager.getConnection(url, connectionProperties(true));
+      boolean isGovData;
+      try {
+        isGovData = verifyIsGovData(probe);
+      } finally {
+        closeQuietly(probe);
+      }
+      if (!isGovData) {
         log().println("[askamerica-mcp] Something is listening on " + host() + ":" + port()
             + " but it isn't pgwire-govdata (it does not mount the sec, fec and crime schemas) — treating the "
             + "port as unavailable rather than using the wrong catalog. Point "
             + "ASKAMERICA_PGWIRE_PORT at a free port for this connector, or free this one.");
-        closeQuietly(c);
         return null;
       }
+      Connection c = DriverManager.getConnection(url, connectionProperties(false));
       return c;
     // Logged below, and null means "not connected," never confused with a real connection.
     // fallback-guard: allow -- see log line below
