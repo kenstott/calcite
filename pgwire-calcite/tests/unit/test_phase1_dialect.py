@@ -125,3 +125,10 @@ def test_duckdb_collate_c_pushdown_is_the_binary_comparison_calcite_makes():
 def test_any_other_collation_is_refused_by_name(collation):
     with pytest.raises(UnsupportedConstruct, match=f"COLLATE {collation}"):
         transpile_pg_to_calcite(f'SELECT 1 FROM t WHERE r = \'eu\' COLLATE {collation}')
+
+
+@pytest.mark.parametrize("fn", ["random()", "RAND()"])
+def test_random_stays_a_calcite_operator_not_dbms_random(fn):
+    out = transpile_pg_to_calcite(f"SELECT a FROM t ORDER BY {fn} LIMIT 1")
+    assert "DBMS_RANDOM" not in out
+    assert "ORDER BY RAND()" in out

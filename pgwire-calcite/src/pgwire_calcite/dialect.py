@@ -51,9 +51,16 @@ class Calcite(Oracle):
                 out += f" FOR {length}"
             return out + ")"
 
+        def _rand_calcite(self, expression) -> str:
+            # Oracle renders random() as DBMS_RANDOM.VALUE(), which is not in the connection's
+            # operator table; RAND([seed]) is a standard Calcite operator.
+            seed = self.sql(expression, "this")
+            return f"RAND({seed})"
+
         TRANSFORMS = {
             **Oracle.Generator.TRANSFORMS,
             exp.Substring: _substring_ansi,
+            exp.Rand: _rand_calcite,
         }
 
         # Undo Oracle-specific type spellings; Calcite uses standard SQL names.
