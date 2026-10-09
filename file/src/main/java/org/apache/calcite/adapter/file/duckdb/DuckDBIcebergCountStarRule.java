@@ -356,6 +356,19 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
     if (icebergTable == null) {
       return null;
     }
+    // loadTable opens a FileIO (an S3 client for an S3-backed schema) for this one call; nothing
+    // else holds the table, so it is released here rather than left to the finalizer.
+    try {
+      return wholeTableCount(tableName, tableLocation, conversionMetadata, record, icebergTable);
+    } finally {
+      icebergTable.io().close();
+    }
+  }
+
+  private Long wholeTableCount(String tableName, String tableLocation,
+      org.apache.calcite.adapter.file.metadata.ConversionMetadata conversionMetadata,
+      org.apache.calcite.adapter.file.metadata.ConversionMetadata.ConversionRecord record,
+      org.apache.iceberg.Table icebergTable) {
     org.apache.iceberg.Snapshot snapshot = icebergTable.currentSnapshot();
     Long snapshotId = snapshot == null ? null : Long.valueOf(snapshot.snapshotId());
 
@@ -416,7 +429,12 @@ public class DuckDBIcebergCountStarRule extends RelOptRule {
     if (icebergTable == null) {
       return null;
     }
-    Long count = IcebergPartitionRowCount.countMatching(icebergTable, predicate);
+    Long count;
+    try {
+      count = IcebergPartitionRowCount.countMatching(icebergTable, predicate);
+    } finally {
+      icebergTable.io().close();
+    }
     if (count == null) {
       LOGGER.debug("[ICEBERG COUNT*] '{}' cannot answer {} from partitions", tableName,
           acceptedValues);
