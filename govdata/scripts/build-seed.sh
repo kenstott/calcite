@@ -136,7 +136,9 @@ echo "Warehouse:             $GOVDATA_PARQUET_DIR"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-VERIFY_ARGS=(--no-probes --no-dup --publish-schema-cache)
+# --record-row-counts: the runner probes only the first schema of a connection, so without it
+# only that schema's trackers carry a row count and every other table ships with none.
+VERIFY_ARGS=(--no-probes --no-dup --publish-schema-cache --record-row-counts)
 if [[ -n "$SOURCE" ]]; then
     VERIFY_ARGS+=(--source "$SOURCE")
     echo "WARNING: --source given; the resulting seed is PARTIAL (missing schemas cold-start normally)."
@@ -254,6 +256,11 @@ if [[ -f "$WAL" ]]; then
     exit 1
 fi
 echo "Catalog checkpointed, no WAL: $CATALOG"
+
+# Every Iceberg table in the seed must carry a row count: pgwire reports it as the table's size
+# without reading the table, and a table with none reports "unknown".
+echo "=== build-seed: checking every Iceberg table has a recorded row count ==="
+python3 "$SCRIPT_DIR/seed-row-count-check.py" "$STAGING/.aperio"
 
 # --- Phase 2: PACKAGE via the Gradle task ----------------------------------------------------
 echo "=== build-seed: packaging seed zip ==="

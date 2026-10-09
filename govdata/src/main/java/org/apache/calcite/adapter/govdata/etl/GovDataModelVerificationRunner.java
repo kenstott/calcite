@@ -125,6 +125,9 @@ public final class GovDataModelVerificationRunner {
     // Publish the Iceberg schema cache this run materialized. Enumerating every table is exactly
     // what fills that cache, so seed generation reuses this run rather than adding a second pass.
     boolean publishSchemaCache = false;
+    // Count every base table of the schemas mounted after the primary. Only the primary is probed,
+    // so without this a seed-generation run leaves every other schema's tracker with no row count.
+    boolean recordRowCounts = false;
   }
 
   /** A table/view defined in a schema YAML, with its category and (for views) dependencies. */
@@ -199,6 +202,11 @@ public final class GovDataModelVerificationRunner {
       System.exit(2);
       return;
     }
+    if (cfg.recordRowCounts && cfg.source == null) {
+      System.err.println("--record-row-counts requires --source");
+      System.exit(2);
+      return;
+    }
 
     Properties props = new Properties();
     props.setProperty("lex", "ORACLE");
@@ -242,6 +250,7 @@ public final class GovDataModelVerificationRunner {
     try {
       List<TableResult> results = probeTables(conn, cfg);
       int probeFailures = runProbes(conn, cfg);
+      int rowCountFailures = cfg.recordRowCounts ? recordSecondaryRowCounts(conn, cfg) : 0;
 
       // ---- categorized report ----
       // Classify every table defined in the bundled schema YAML(s) as a base table, an
@@ -350,6 +359,9 @@ public final class GovDataModelVerificationRunner {
         System.out.println("  unclassified         : " + cOther.line());
       }
       System.out.println("  feature-probe failures: " + probeFailures);
+      if (cfg.recordRowCounts) {
+        System.out.println("  row-count failures   : " + rowCountFailures);
+      }
       System.out.println("  duplicate-PK tables  : " + dupped.size()
           + (cfg.dupCheck ? "" : "   (dup-check disabled)"));
       if (cfg.dupCheck) {
@@ -382,8 +394,8 @@ public final class GovDataModelVerificationRunner {
       // non-unique declared primary keys, and globbing scans fail the run.
       int errs = cBase.error + cIntra.error + cInter.error + cOther.error;
       int missingHard = cBase.missing + cIntra.missing;
-      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()
-          || !globbing.isEmpty()) ? 1 : 0;
+      int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || rowCountFailures > 0
+          || !dupped.isEmpty() || !globbing.isEmpty()) ? 1 : 0;
 
       if (cfg.publishSchemaCache) {
         // Enumerating every table above is what materialized the schema cache, so publishing is
@@ -849,6 +861,65 @@ public final class GovDataModelVerificationRunner {
     return sb.append(')').toString();
   }
 
+  /**
+   * The base tables declared by every schema in {@code source} after the first, as
+   * {@code {schema, table}} pairs. The first schema is the primary, which {@link #probeTables}
+   * already counts.
+   */
+  static List<String[]> secondaryBaseTables(String source) {
+    Set<String> secondary = new LinkedHashSet<String>();
+    String primary = null;
+    String[] parts = source.split(",");
+    for (int i = 0; i < parts.length; i++) {
+      String s = parts[i].trim().toLowerCase();
+      if (s.isEmpty()) {
+        continue;
+      }
+      if (primary == null) {
+        primary = s;
+      } else if (!s.equals(primary)) {
+        secondary.add(s);
+      }
+    }
+    List<String[]> tables = new ArrayList<String[]>();
+    for (Defined d : classifyDefined(secondary).values()) {
+      if (BASE.equals(d.category)) {
+        tables.add(new String[] {d.schema, d.table});
+      }
+    }
+    return tables;
+  }
+
+  /**
+   * Runs COUNT(*) on every base table of the schemas mounted after the primary and returns how
+   * many failed. A base table's COUNT(*) is answered from its Iceberg manifests, and answering it
+   * is what writes the count into the schema's conversion tracker; the primary's tables get that
+   * from {@link #probeTables}, the others only from here.
+   */
+  private static int recordSecondaryRowCounts(Connection conn, Config cfg) {
+    List<String[]> tables = secondaryBaseTables(cfg.source);
+    System.out.println();
+    System.out.println("================ ROW COUNTS (schemas after the primary) ================");
+    System.out.printf("  %-15s %-34s %12s%n", "SCHEMA", "TABLE", "ROWS");
+    int failures = 0;
+    for (int i = 0; i < tables.size(); i++) {
+      String schema = tables.get(i)[0];
+      String table = tables.get(i)[1];
+      try {
+        long rows = scalarCount(conn,
+            "SELECT COUNT(*) FROM \"" + schema + "\".\"" + table + "\"");
+        System.out.printf("  %-15s %-34s %12d%n", schema, trunc(table, 34), rows);
+      } catch (Exception e) {
+        failures++;
+        System.out.printf("  %-15s %-34s %12s  %s%n", schema, trunc(table, 34), "ERROR",
+            trunc(String.valueOf(e.getMessage()), 120));
+      }
+    }
+    System.out.println("  counted " + (tables.size() - failures) + " of " + tables.size()
+        + " base tables");
+    return failures;
+  }
+
   /** Runs a single-column COUNT query and returns the long value (0 if no row). */
   private static long scalarCount(Connection conn, String sql) throws Exception {
     Statement st = null;
@@ -1005,6 +1076,8 @@ public final class GovDataModelVerificationRunner {
         cfg.dupCheck = false;
       } else if ("--publish-schema-cache".equals(a)) {
         cfg.publishSchemaCache = true;
+      } else if ("--record-row-counts".equals(a)) {
+        cfg.recordRowCounts = true;
       } else if ("--dup-threshold".equals(a)) {
         cfg.dupThreshold = Integer.parseInt(args[++i]);
       } else if ("--expected".equals(a)) {
@@ -1278,5 +1351,7 @@ public final class GovDataModelVerificationRunner {
     System.err.println("  --expected  file of 'schema.table' lines; reports defined-but-not-exposed");
     System.err.println("  --probes    file of 'label|||SQL' lines for feature probes (geo, semantic)");
     System.err.println("  --schemas   comma-separated schema allow-list (default: all)");
+    System.err.println("  --record-row-counts  also COUNT(*) every base table of the schemas after "
+        + "the first in --source, so each one's row count is recorded");
   }
 }
