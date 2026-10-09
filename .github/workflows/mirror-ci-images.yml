@@ -29,12 +29,19 @@ jobs:
         run: |
           set -euo pipefail
           for list in .github/ci-images/*.txt; do
-            grep -v '^[[:space:]]*#' "$list" | while read -r name upstream; do
+            grep -v '^[[:space:]]*#' "$list" | while read -r name upstream tag; do
               [ -n "$name" ] || continue
               digest="${upstream##*@}"
-              target="ghcr.io/kenstott/calcite/ci-${name}"
-              echo "copying ${upstream} -> ${target}@${digest}"
-              skopeo copy --all --preserve-digests "docker://${upstream}" "docker://${target}:mirror"
+              if [ -n "${tag:-}" ]; then
+                # A third column: the image is asked for by that tag under ci-hub/<path>
+                # (see testcontainers.txt).
+                target="ghcr.io/kenstott/calcite/ci-hub/${name}"
+              else
+                target="ghcr.io/kenstott/calcite/ci-${name}"
+                tag="mirror"
+              fi
+              echo "copying ${upstream} -> ${target}:${tag} (${digest})"
+              skopeo copy --all --preserve-digests "docker://${upstream}" "docker://${target}:${tag}"
               # The copy is addressed by the upstream digest; a different digest is a failed copy.
               skopeo inspect --raw "docker://${target}@${digest}" > /dev/null
             done
