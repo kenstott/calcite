@@ -59,13 +59,17 @@ jobs:
     runs-on: windows-latest
     steps:
     - name: 'Install winutils'
-      # Hadoop's local file system shells out to winutils.exe on Windows. Apache publishes no
-      # binary; this is the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
+      # Hadoop's local file system needs winutils.exe and hadoop.dll on Windows. Apache publishes no
+      # binaries; these are the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
       shell: pwsh
       run: |
         $bin = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\hadoop\bin"
-        Invoke-WebRequest -OutFile "$bin\winutils.exe" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/winutils.exe"
+        foreach ($file in "winutils.exe", "hadoop.dll") {
+          Invoke-WebRequest -OutFile "$bin\$file" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/$file"
+        }
         "HADOOP_HOME=$env:RUNNER_TEMP\hadoop" >> $env:GITHUB_ENV
+        # hadoop.dll is found through the library path, which Windows takes from PATH
+        "$bin" >> $env:GITHUB_PATH
     - uses: actions/checkout@v5
       with:
         fetch-depth: 50
@@ -97,13 +101,17 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 'Install winutils'
-        # Hadoop's local file system shells out to winutils.exe on Windows. Apache publishes no
-        # binary; this is the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
+        # Hadoop's local file system needs winutils.exe and hadoop.dll on Windows. Apache publishes no
+        # binaries; these are the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
         shell: pwsh
         run: |
           $bin = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\hadoop\bin"
-          Invoke-WebRequest -OutFile "$bin\winutils.exe" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/winutils.exe"
+          foreach ($file in "winutils.exe", "hadoop.dll") {
+            Invoke-WebRequest -OutFile "$bin\$file" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/$file"
+          }
           "HADOOP_HOME=$env:RUNNER_TEMP\hadoop" >> $env:GITHUB_ENV
+          # hadoop.dll is found through the library path, which Windows takes from PATH
+          "$bin" >> $env:GITHUB_PATH
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
@@ -135,13 +143,17 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 'Install winutils'
-        # Hadoop's local file system shells out to winutils.exe on Windows. Apache publishes no
-        # binary; this is the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
+        # Hadoop's local file system needs winutils.exe and hadoop.dll on Windows. Apache publishes no
+        # binaries; these are the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
         shell: pwsh
         run: |
           $bin = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\hadoop\bin"
-          Invoke-WebRequest -OutFile "$bin\winutils.exe" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/winutils.exe"
+          foreach ($file in "winutils.exe", "hadoop.dll") {
+            Invoke-WebRequest -OutFile "$bin\$file" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/$file"
+          }
           "HADOOP_HOME=$env:RUNNER_TEMP\hadoop" >> $env:GITHUB_ENV
+          # hadoop.dll is found through the library path, which Windows takes from PATH
+          "$bin" >> $env:GITHUB_PATH
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
