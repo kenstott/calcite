@@ -16,6 +16,8 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -156,6 +158,9 @@ class EtlPipelineCommitFailureTrackerTest {
     return candidate;
   }
 
+  @DisabledOnOs(value = OS.WINDOWS,
+      disabledReason = "the commit is made to fail by a read-only directory, and Windows "
+          + "has no read-only directories: File.setWritable(false) is refused for one")
   @Test void failedCommitLeavesNoPerComboTrackerMark() throws IOException {
     File warehouseDir = new File(tempDir, "warehouse");
     warehouseDir.mkdirs();

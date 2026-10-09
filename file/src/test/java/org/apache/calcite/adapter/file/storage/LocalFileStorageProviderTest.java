@@ -20,6 +20,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -231,7 +232,8 @@ public class LocalFileStorageProviderTest {
 
   @Test void testResolvePathNormalizes() {
     String result = provider.resolvePath("/base/dir", "sub/../other.txt");
-    assertEquals("/base/dir/other.txt", result);
+    // A local path comes back in the platform's own form
+    assertEquals(Paths.get("/base/dir/other.txt").toString(), result);
   }
 
   // --- writeFile with file:// URLs ---

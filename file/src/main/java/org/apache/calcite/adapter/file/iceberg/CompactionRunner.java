@@ -171,8 +171,9 @@ public class CompactionRunner {
    */
   private static Table loadTableDirect(Configuration conf, String tablePath)
       throws Exception {
-    FileSystem fs = FileSystem.get(new java.net.URI(tablePath), conf);
-    Path metadataDir = new Path(tablePath + "/metadata");
+    // Through Path, not java.net.URI: a Windows drive path is not a valid URI.
+    Path metadataDir = new Path(tablePath, "metadata");
+    FileSystem fs = metadataDir.getFileSystem(conf);
 
     // Find highest version metadata file
     int maxVersion = 0;
