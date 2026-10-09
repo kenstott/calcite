@@ -65,7 +65,7 @@
     seed covers the model, is measured by schema only: the schemas, their tables, and the
     columns and types the seed declares. Recorded row counts, statistics, timestamps, version
     strings and file bytes do not make a seed different. A jar that carries no seed, or a seed
-    that does not declare a schema or table of the model, is an error that names what is
+    that does not declare a schema of the model, is an error that names what is
     missing and stops the start; there is no fallback to building one. Statistics in the seed
     may be out of date; that is accepted and is never a reason to build, recount or refresh at
     run time. A newer official seed reaches an install only with a newer jar. Building a seed
