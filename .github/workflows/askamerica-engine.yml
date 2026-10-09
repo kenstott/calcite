@@ -405,7 +405,7 @@ jobs:
             if [ "${IN_FLIGHT:-0}" = "0" ]; then
               echo "Dispatching pgwire-adapters release for $VERSION"
               gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
-                -f version="$VERSION"
+                -f version="$VERSION" -f publish=true
             else
               echo "A pgwire-adapters release run for $VERSION is already in flight -- waiting on it."
             fi
@@ -1101,5 +1101,5 @@ jobs:
           BARE="${{ github.ref_name }}"
           BARE="${BARE#engine-v}"
           gh workflow run "pgwire-calcite release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
-          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
+          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}" --field publish=true
           echo "Dispatched pgwire-calcite + pgwire-adapters releases for version ${BARE}"

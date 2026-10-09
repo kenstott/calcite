@@ -10,7 +10,9 @@ name: pgwire-adapters release
 # cut in quick succession (0.94.1/0.94.2/0.94.3) each saw a stale in-flight run for an OLDER
 # version and skipped dispatching its own, so the asset it was actually waiting on never got
 # built and the installer jobs hung the full 45 minutes before failing.
-run-name: "pgwire-adapters release ${{ inputs.version || 'auto' }}"
+# A run that does not publish must NOT carry the version in its title: that step would take it
+# for the publishing run of that version and wait for assets it never attaches.
+run-name: "${{ (github.event_name == 'release' || inputs.publish == true) && format('pgwire-adapters release {0}', inputs.version || 'auto') || format('pgwire-adapters check, not published ({0})', github.ref_name) }}"
 
 on:
   workflow_dispatch:
@@ -18,6 +20,17 @@ on:
       version:
         description: "release version (e.g. 0.28.0)"
         required: true
+      publish:
+        description: "sign, attest and attach the bundles to engine-v<version> (false: build and smoke-test only)"
+        type: boolean
+        default: false
+      scope:
+        description: "which bundles to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - linux-file-govdata
   release:
     types: [created]
 
@@ -34,21 +47,67 @@ permissions:
 env:
   PY_VERSION: "3.12"
 
+env:
+  # The one switch for everything that publishes: signing with the project key, the Sigstore
+  # attestation, and attaching to the release. A release event publishes; a run started by
+  # hand publishes only when asked to. Every publishing step tests this value, and the
+  # publish job refuses to run without it.
+  PUBLISH: ${{ github.event_name == 'release' || inputs.publish == true }}
+
 jobs:
+  # Which adapters and platforms this run builds. "linux-file-govdata" is the branch check:
+  # the file bundle (which the smoke job runs) and the govdata bundle, for linux-x86_64 only.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      jars: ${{ steps.plan.outputs.jars }}
+      adapters: ${{ steps.plan.outputs.adapters }}
+      os: ${{ steps.plan.outputs.os }}
+      smoke_os: ${{ steps.plan.outputs.smoke_os }}
+    steps:
+      - id: plan
+        env:
+          SCOPE: ${{ inputs.scope || 'all' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          scope = os.environ["SCOPE"]
+          adapters = [
+              {"name": "file", "module": "file", "flags": ""},
+              {"name": "sharepoint", "module": "sharepoint-list", "flags": "--allow-writes"},
+              {"name": "splunk", "module": "splunk", "flags": ""},
+              {"name": "salesforce", "module": "salesforce", "flags": "--allow-writes"},
+              {"name": "cloudops", "module": "cloud-ops", "flags": ""},
+              {"name": "govdata", "module": "govdata", "flags": ""},
+          ]
+          platforms = [
+              {"runner": "ubuntu-latest", "variant": "linux-x86_64"},
+              {"runner": "macos-14", "variant": "macos-arm64"},
+              {"runner": "windows-latest", "variant": "windows-x86_64"},
+          ]
+          if scope == "linux-file-govdata":
+              adapters = [a for a in adapters if a["name"] in ("file", "govdata")]
+              platforms = [p for p in platforms if p["variant"] == "linux-x86_64"]
+          elif scope != "all":
+              raise SystemExit(f"unknown scope: {scope}")
+          # The smoke job runs the file bundle; there is no Windows smoke.
+          smoke = [p for p in platforms if p["variant"] != "windows-x86_64"]
+          print("jars=" + json.dumps([{"name": a["name"], "module": a["module"]} for a in adapters]))
+          print("adapters=" + json.dumps(adapters))
+          print("os=" + json.dumps(platforms))
+          print("smoke_os=" + json.dumps(smoke))
+          PY
+
   # Per-adapter: build the adapter module jar + its full runtime classpath, plus the shared
   # pgwire UDF + Java launcher jars. Built once per adapter and shared across OS variants.
   jars:
+    needs: plan
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        adapter:
-          - { name: file,       module: file }
-          - { name: sharepoint, module: sharepoint-list }
-          - { name: splunk,     module: splunk }
-          - { name: salesforce, module: salesforce }
-          - { name: cloudops,   module: cloud-ops }
-          - { name: govdata,    module: govdata }
+        adapter: ${{ fromJSON(needs.plan.outputs.jars) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -111,24 +170,15 @@ jobs:
           path: out
 
   bundle:
-    needs: jars
+    needs: [plan, jars]
     strategy:
       fail-fast: false
       matrix:
         # flags: extra launcher arguments baked into the bundle's entry script. Only an
         # adapter whose tables are modifiable gets --allow-writes (INSERT/UPDATE/DELETE);
-        # the rest serve read-only.
-        adapter:
-          - { name: file,       module: file,            flags: "" }
-          - { name: sharepoint, module: sharepoint-list, flags: "--allow-writes" }
-          - { name: splunk,     module: splunk,          flags: "" }
-          - { name: salesforce, module: salesforce,      flags: "--allow-writes" }
-          - { name: cloudops,   module: cloud-ops,       flags: "" }
-          - { name: govdata,    module: govdata,         flags: "" }
-        os:
-          - { runner: ubuntu-latest, variant: linux-x86_64 }
-          - { runner: macos-14,      variant: macos-arm64 }
-          - { runner: windows-latest, variant: windows-x86_64 }
+        # the rest serve read-only. The lists are in the plan job.
+        adapter: ${{ fromJSON(needs.plan.outputs.adapters) }}
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
     runs-on: ${{ matrix.os.runner }}
     defaults:
       run:
@@ -145,6 +195,7 @@ jobs:
       # detached-signed the same way below, in addition to the existing sha256 (integrity, not
       # authenticity) and Sigstore attestation (keyless, not this project's own key).
       - name: Import GPG key
+        if: env.PUBLISH == 'true'
         run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
       - uses: actions/download-artifact@v4
         with:
@@ -371,6 +422,7 @@ jobs:
           echo "built ${name}.tar.gz ($(cat ${name}.tar.gz.sha256))"
 
       - name: GPG-sign tarball
+        if: env.PUBLISH == 'true'
         env:
           GPG_KEY_ID:     ${{ secrets.GPG_KEY_ID }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -417,6 +469,7 @@ jobs:
             -o json --file "${BUNDLE_NAME}.cve-report.json" --fail-on critical
 
       - name: Sign tarball (Sigstore attestation)
+        if: env.PUBLISH == 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "${{ env.BUNDLE_NAME }}.tar.gz"
@@ -431,23 +484,6 @@ jobs:
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.sbom.cdx.json
             pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.cve-report.json
 
-      - name: Attach to release
-        # On a release event use its tag; on workflow_dispatch (used because a release created
-        # by GITHUB_TOKEN emits no release event) target engine-v<version>. Plain upload with
-        # --clobber: softprops/action-gh-release tries to *update* the release object as well,
-        # which a dispatched run's token is not allowed to do.
-        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
-          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz \
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.asc \
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.tar.gz.sha256 \
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.sbom.cdx.json \
-            pgwire-${{ matrix.adapter.name }}-*-${{ matrix.os.variant }}.cve-report.json
-
   # Proves a just-built bundle actually runs on a clean machine: no repo checkout
   # venv, no setup-java/setup-uv, nothing but the tarball itself + a psql client.
   # This is what would have caught the airgapped-bundle relocation defect (an
@@ -455,13 +491,11 @@ jobs:
   # `bundle` only ever ran on the SAME runner/checkout that built the bundle.
   # Any failing step here fails the workflow run.
   smoke:
-    needs: bundle
+    needs: [plan, bundle]
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - { runner: ubuntu-latest, variant: linux-x86_64 }
-          - { runner: macos-14,      variant: macos-arm64 }
+        os: ${{ fromJSON(needs.plan.outputs.smoke_os) }}
     runs-on: ${{ matrix.os.runner }}
     defaults:
       run:
@@ -554,3 +588,43 @@ jobs:
       - name: Server log
         if: always()
         run: cat smoke-server.log || true
+
+  # The only job that attaches anything to a release. It runs after the smoke job, so a bundle
+  # that does not start is never published, and only when this run publishes (see PUBLISH).
+  publish:
+    needs: [plan, bundle, smoke]
+    if: github.event_name == 'release' || inputs.publish == true
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # One bundle per job: a govdata tarball alone is close to a gigabyte.
+        adapter: ${{ fromJSON(needs.plan.outputs.adapters) }}
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
+    steps:
+      - name: Refuse to publish from a run that was not asked to
+        run: |
+          test "$PUBLISH" = "true" || { echo "PUBLISH is '$PUBLISH'; this job must not run" >&2; exit 1; }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle-${{ matrix.adapter.name }}-${{ matrix.os.variant }}
+          path: dist
+
+      - name: Attach to release
+        # On a release event use its tag; on workflow_dispatch (used because a release created
+        # by GITHUB_TOKEN emits no release event) target engine-v<version>. Plain upload with
+        # --clobber: softprops/action-gh-release tries to *update* the release object as well,
+        # which a dispatched run's token is not allowed to do.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
+          ls -la dist
+          # Every published tarball carries its signature: an unsigned one here means a
+          # signing step was skipped in a run that publishes.
+          for tarball in dist/pgwire-*.tar.gz; do
+            test -f "${tarball}.asc" || { echo "${tarball} has no signature" >&2; exit 1; }
+          done
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber dist/pgwire-*
