@@ -22,7 +22,10 @@
 # SharePoint Integration Test Configuration
 SHAREPOINT_TENANT_ID=your-azure-tenant-id-here
 SHAREPOINT_CLIENT_ID=your-azure-app-client-id-here
-SHAREPOINT_CLIENT_SECRET=your-azure-app-client-secret-here
+# The live tests authenticate with a certificate: the PFX file of the app registration
+# (absolute path) and its password. sharepoint-list's live tests require both.
+SHAREPOINT_CERT_PATH=/absolute/path/to/app-registration.pfx
+SHAREPOINT_CERT_PASSWORD=your-pfx-password
 SHAREPOINT_SITE_URL=https://yourcompany.sharepoint.com/sites/yoursite
 SHAREPOINT_TEST_PATH=/Shared Documents
 

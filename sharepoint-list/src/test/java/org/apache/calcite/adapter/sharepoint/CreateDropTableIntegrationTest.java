@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
 
@@ -40,7 +39,6 @@ public class CreateDropTableIntegrationTest {
 
   private String tenantId;
   private String clientId;
-  private String clientSecret;
   private String siteUrl;
   private MicrosoftGraphListClient graphClient;
   private SharePointDdlExecutor ddlExecutor;
@@ -52,62 +50,27 @@ public class CreateDropTableIntegrationTest {
    * Check if integration test configuration is available.
    */
   static boolean isConfigured() {
-    try {
-      Properties props = new Properties();
-      props.load(new FileInputStream("local-test.properties"));
-
-      String tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
-      String clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
-      String clientSecret = props.getProperty("SHAREPOINT_CLIENT_SECRET");
-      String siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
-
-      boolean configured = tenantId != null && !tenantId.isEmpty() &&
-                          clientId != null && !clientId.isEmpty() &&
-                          clientSecret != null && !clientSecret.isEmpty() &&
-                          siteUrl != null && !siteUrl.isEmpty();
-
-      if (configured) {
-        System.out.println("CREATE/DROP TABLE integration tests enabled");
-      }
-
-      return configured;
-    } catch (Exception e) {
-      return false;
-    }
+    // The live tests run on request; SharePointTestCredentials then requires the settings
+    return "true".equals(System.getenv("SHAREPOINT_INTEGRATION_TESTS"));
   }
 
   @BeforeEach
   public void setUp() throws Exception {
-    props = new Properties();
-    props.load(new FileInputStream("local-test.properties"));
+    props = SharePointTestCredentials.load().properties();
 
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
-    clientSecret = props.getProperty("SHAREPOINT_CLIENT_SECRET");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
-    String certPassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
-
-    // Use certificate authentication
-    org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager tokenManager =
-        new org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager(
-            tenantId, clientId, "../file/src/test/resources/SharePointAppOnlyCert.pfx",
-            certPassword, siteUrl);
-
-    SharePointAuth auth = new SharePointAuth() {
-      @Override public String getAccessToken() throws IOException, InterruptedException {
-        return tokenManager.getAccessToken();
-      }
-    };
+    // A token for Microsoft Graph: one issued for the SharePoint REST API is refused by Graph
+    // as having the wrong audience
+    SharePointAuth auth = SharePointTestCredentials.load().auth();
 
     graphClient = new MicrosoftGraphListClient(siteUrl, auth);
     ddlExecutor = new SharePointDdlExecutor();
 
     // Create schema
     java.util.Map<String, Object> authConfig = new java.util.HashMap<>();
-    authConfig.put("authType", "CLIENT_CREDENTIALS");
-    authConfig.put("tenantId", tenantId);
-    authConfig.put("clientId", clientId);
-    authConfig.put("clientSecret", clientSecret);
+    authConfig.putAll(SharePointTestCredentials.load().authConfig());
 
     schema = new SharePointListSchema(siteUrl, authConfig);
   }
@@ -131,6 +94,8 @@ public class CreateDropTableIntegrationTest {
 
       JsonNode createResponse = graphClient.executeGraphCall("POST", createUrl, requestBody);
       assertNotNull(createResponse);
+      // The list was created with a raw call, which the discovery cache knows nothing of
+      graphClient.invalidateListCache();
 
       String listId = createResponse.get("id").asText();
       System.out.println("✅ List created successfully with ID: " + listId);
@@ -154,6 +119,7 @@ public class CreateDropTableIntegrationTest {
           String.format("%s/sites/%s/lists/%s", graphClient.getGraphApiBase(), graphClient.getSiteId(), listId);
 
       graphClient.executeGraphCall("DELETE", deleteUrl, null);
+      graphClient.invalidateListCache();
       System.out.println("✅ List deleted successfully");
 
       // Verify the list is gone

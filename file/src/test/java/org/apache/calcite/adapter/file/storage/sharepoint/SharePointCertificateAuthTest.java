@@ -47,18 +47,8 @@ public class SharePointCertificateAuthTest {
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
-    certificatePath = props.getProperty("SHAREPOINT_CERTIFICATE_PATH");
+    certificatePath = props.getProperty("SHAREPOINT_CERT_PATH");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");  // Updated property name
-
-    // Check if certificate file exists
-    if (certificatePath == null) {
-      // Try default location
-      File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
-      if (certFile.exists()) {
-        certificatePath = certFile.getAbsolutePath();
-        System.out.println("Found certificate at: " + certificatePath);
-      }
-    }
 
     if (tenantId == null || clientId == null || siteUrl == null ||
         certificatePath == null || certificatePassword == null) {
@@ -67,7 +57,7 @@ public class SharePointCertificateAuthTest {
       System.out.println("  SHAREPOINT_TENANT_ID=<your-tenant-id>");
       System.out.println("  SHAREPOINT_CLIENT_ID=<your-app-client-id>");
       System.out.println("  SHAREPOINT_SITE_URL=https://<tenant>.sharepoint.com");
-      System.out.println("  SHAREPOINT_CERTIFICATE_PATH=<path-to-pfx-file>");
+      System.out.println("  SHAREPOINT_CERT_PATH=<path-to-pfx-file>");
       System.out.println("  SHAREPOINT_CERT_PASSWORD=<pfx-password>");
       return;
     }
@@ -85,7 +75,7 @@ public class SharePointCertificateAuthTest {
     // Load from environment variables
     String[] envVars = {
         "SHAREPOINT_TENANT_ID", "SHAREPOINT_CLIENT_ID", "SHAREPOINT_SITE_URL",
-        "SHAREPOINT_CERTIFICATE_PATH", "SHAREPOINT_CERT_PASSWORD"
+        "SHAREPOINT_CERT_PATH", "SHAREPOINT_CERT_PASSWORD"
     };
 
     for (String var : envVars) {

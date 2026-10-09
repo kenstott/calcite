@@ -83,6 +83,13 @@ docker run -d -p 6379:6379 redis:alpine
 ```
 
 ### SharePoint Integration Tests
+> The settings below are for the file adapter's own SharePoint storage tests that sign in with
+> a client secret. Those are skipped (`@Disabled`) since 2026-10-08, when the test tenant moved
+> to certificate sign-in: `MicrosoftGraphCredentialTest`, `MicrosoftGraphStorageProviderTest`
+> and `SharePointAutoConfigTest.testSharePointConnection`. The `sharepoint-list` live tests use
+> `SHAREPOINT_CERT_PATH` and `SHAREPOINT_CERT_PASSWORD` in place of the secret; see
+> `file/local-test.properties.sample`.
+
 **Required Properties:**
 ```bash
 -DSHAREPOINT_INTEGRATION_TESTS=true

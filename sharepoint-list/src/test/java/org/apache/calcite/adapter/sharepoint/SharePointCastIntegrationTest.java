@@ -25,12 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -72,12 +68,13 @@ public class SharePointCastIntegrationTest {
   @BeforeEach
   public void setUp() throws Exception {
     testListName = "cast_test_" + UUID.randomUUID().toString().substring(0, 8).toLowerCase(Locale.ROOT);
-    connection = createConnection();
     client = createDirectClient();
 
     // Create test list with various column types for CAST testing
     createTestList();
     populateTestData();
+    // A schema reads the site's lists when it is created, so the list must exist first
+    connection = createConnection();
   }
 
   @AfterEach
@@ -141,7 +138,12 @@ public class SharePointCastIntegrationTest {
 
     assertNotNull(numAsString, "Numeric to string cast should work");
     assertNotNull(amountAsString, "Amount to string cast should work");
-    assertTrue(numAsString.matches("\\d+"), "Should be a numeric string");
+    // A SharePoint number column holds a floating-point value, whatever its displayed decimal
+    // places, so a whole number is read as a DOUBLE and casts to "1.0", not "1"
+    assertTrue(numAsString.matches("\\d+\\.\\d+"),
+        "Should be a floating-point string: " + numAsString);
+    assertEquals(Math.rint(Double.parseDouble(numAsString)), Double.parseDouble(numAsString),
+        "A whole number was stored: " + numAsString);
   }
 
   @Test public void testCastDateTimeToString() throws SQLException {
@@ -202,8 +204,9 @@ public class SharePointCastIntegrationTest {
     boolean originalBool = rs.getBoolean("original_bool");
 
     assertNotNull(boolAsString, "Boolean to string cast should work");
-    assertTrue(boolAsString.equals("true") || boolAsString.equals("false"),
-        "Boolean string should be 'true' or 'false'");
+    // Calcite, as the SQL standard has it, casts a boolean to 'TRUE' or 'FALSE'
+    assertTrue(boolAsString.equals("TRUE") || boolAsString.equals("FALSE"),
+        "Boolean string should be 'TRUE' or 'FALSE': " + boolAsString);
   }
 
   @Test public void testCastBooleanToNumeric() throws SQLException {
@@ -382,34 +385,14 @@ public class SharePointCastIntegrationTest {
   }
 
   private static Properties loadTestConfig() throws IOException {
-    Properties props = new Properties();
-
-    Path configPath = Paths.get("../file/local-test.properties");
-    if (!Files.exists(configPath)) {
-      configPath = Paths.get("../../file/local-test.properties");
-    }
-
-    if (Files.exists(configPath)) {
-      try (FileInputStream fis = new FileInputStream(configPath.toFile())) {
-        props.load(fis);
-      }
-    } else {
-      props.setProperty("SHAREPOINT_TENANT_ID",
-          System.getenv().getOrDefault("SHAREPOINT_TENANT_ID", ""));
-      props.setProperty("SHAREPOINT_CLIENT_ID",
-          System.getenv().getOrDefault("SHAREPOINT_CLIENT_ID", ""));
-      props.setProperty("SHAREPOINT_CLIENT_SECRET",
-          System.getenv().getOrDefault("SHAREPOINT_CLIENT_SECRET", ""));
-      props.setProperty("SHAREPOINT_SITE_URL",
-          System.getenv().getOrDefault("SHAREPOINT_SITE_URL", ""));
-    }
-
-    return props;
+    return SharePointTestCredentials.load().properties();
   }
 
   private Connection createConnection() throws SQLException {
     Properties info = new Properties();
     info.setProperty("lex", "JAVA");
+    // CONCAT is not in Calcite's standard function library
+    info.setProperty("fun", "standard,postgresql");
 
     Connection connection = DriverManager.getConnection("jdbc:calcite:", info);
     CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class);
@@ -417,10 +400,7 @@ public class SharePointCastIntegrationTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("siteUrl", testConfig.getProperty("SHAREPOINT_SITE_URL"));
-    operand.put("authType", "CLIENT_CREDENTIALS");
-    operand.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    operand.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    operand.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    operand.putAll(SharePointTestCredentials.load().authConfig());
 
     SharePointListSchema sharePointSchema =
         new SharePointListSchema(testConfig.getProperty("SHAREPOINT_SITE_URL"), operand);
@@ -431,10 +411,7 @@ public class SharePointCastIntegrationTest {
 
   private MicrosoftGraphListClient createDirectClient() {
     Map<String, Object> authConfig = new HashMap<>();
-    authConfig.put("authType", "CLIENT_CREDENTIALS");
-    authConfig.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    authConfig.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    authConfig.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    authConfig.putAll(SharePointTestCredentials.load().authConfig());
 
     return new MicrosoftGraphListClient(testConfig.getProperty("SHAREPOINT_SITE_URL"),
         org.apache.calcite.adapter.sharepoint.auth.SharePointAuthFactory.createAuth(authConfig));

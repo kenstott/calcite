@@ -449,9 +449,10 @@ public class SharePointLiveIntegrationTest {
       // Check if certificate is configured
       Properties localProps = loadLocalProperties();
       String certPassword = localProps.getProperty("SHAREPOINT_CERT_PASSWORD");
+      String configuredCertPath = localProps.getProperty("SHAREPOINT_CERT_PATH");
       if (certPassword != null) {
         // Use certificate authentication for SharePoint REST API
-        File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
+        File certFile = new File(configuredCertPath == null ? "" : configuredCertPath);
         if (certFile.exists()) {
           System.out.println("Using certificate authentication for SharePoint REST API");
           storageConfig.put("certificatePath", certFile.getAbsolutePath());
@@ -707,7 +708,9 @@ public class SharePointLiveIntegrationTest {
     } else if (certPassword != null) {
       // Use certificate authentication for SharePoint REST API
       System.out.println("Using certificate-based SharePoint REST authentication");
-      String certPath = "src/test/resources/SharePointAppOnlyCert.pfx";
+      String certPath =
+          java.util.Objects.requireNonNull(localProps.getProperty("SHAREPOINT_CERT_PATH"),
+              "SHAREPOINT_CERT_PATH is not set in local-test.properties");
       SharePointCertificateTokenManager certTokenManager =
           new SharePointCertificateTokenManager(tenantId, clientId, certPath, certPassword, siteUrl);
       provider = new SharePointRestStorageProvider(certTokenManager);
@@ -755,7 +758,9 @@ public class SharePointLiveIntegrationTest {
     if (certPassword != null) {
       // Use certificate authentication
       System.out.println("Using certificate-based SharePoint REST authentication for file download");
-      String certPath = "src/test/resources/SharePointAppOnlyCert.pfx";
+      String certPath =
+          java.util.Objects.requireNonNull(localProps.getProperty("SHAREPOINT_CERT_PATH"),
+              "SHAREPOINT_CERT_PATH is not set in local-test.properties");
       SharePointCertificateTokenManager certTokenManager =
           new SharePointCertificateTokenManager(tenantId, clientId, certPath, certPassword, siteUrl);
       provider = new SharePointRestStorageProvider(certTokenManager);
@@ -817,7 +822,9 @@ public class SharePointLiveIntegrationTest {
     SharePointRestStorageProvider restProvider;
     if (certPassword != null) {
       System.out.println("Using certificate-based authentication for REST API");
-      String certPath = "src/test/resources/SharePointAppOnlyCert.pfx";
+      String certPath =
+          java.util.Objects.requireNonNull(localProps.getProperty("SHAREPOINT_CERT_PATH"),
+              "SHAREPOINT_CERT_PATH is not set in local-test.properties");
       SharePointCertificateTokenManager certTokenManager =
           new SharePointCertificateTokenManager(tenantId, clientId, certPath, certPassword, siteUrl);
       restProvider = new SharePointRestStorageProvider(certTokenManager);
