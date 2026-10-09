@@ -14,6 +14,7 @@ the theory and [../testing/plan.md](../testing/plan.md) for the build-out plan.
 | [sharepoint-list.yaml](sharepoint-list.yaml) | `sharepoint-list` | `SPLIST-` | (TBD) |
 | [salesforce.yaml](salesforce.yaml) | `salesforce` | `SF-` | a capability of the adapter or of a packaging (pgwire, Trino) |
 | [servicenow.yaml](servicenow.yaml) | `servicenow` | `SNOW-` | a capability; the adapter is on branch `feat/servicenow-adapter`, not on `main` |
+| [askamerica.yaml](askamerica.yaml) | `askamerica` | `ASKAM-` | a capability of AskAmerica as distributed (the engine and the pg-wire server bundle it installs) |
 
 IDs are `<PREFIX>-NNN`, unique within their file.
 

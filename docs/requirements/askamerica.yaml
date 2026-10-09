@@ -1,0 +1,43 @@
+# AskAmerica — requirements ledger. Schema: README.md.
+#
+# Unit of work = a capability of AskAmerica as it is distributed: the engine
+# (askamerica-engine) and the pg-wire server bundle it installs and starts (pgwire-govdata,
+# built by .github/workflows/pgwire-adapters-release.yml). The source is the owner's decisions.
+#
+#   accepted = an owner decision with no implementation, or one not yet proven by a test.
+
+# ===================================== platforms ===============================================
+
+- id: ASKAM-001
+  module: askamerica
+  status: accepted
+  group: platforms
+  category: NixOS
+  priority: MUST
+  type: infrastructure
+  description: >
+    AskAmerica is supported on NixOS: its engine and its pg-wire server install and start on a
+    NixOS host and serve as they do on other Linux hosts, with what the host must provide
+    stated. The host provides nix-ld with the libraries the bundle's runtimes link against, and
+    a PATH carrying bash, coreutils and tar for the process that starts the server; that list
+    is published as a ready-made NixOS configuration snippet. The bundle brings its own Java
+    and Python runtimes and needs neither a JDK nor JAVA_HOME from the host. Nothing is written
+    into the install tree while the server runs: run-time files go to a state directory that
+    can be set per server process by environment. On a NixOS host without nix-ld the server is
+    not started; the engine fails before the spawn and prints the snippet. A release is not
+    published unless a NixOS guest configured with only that snippet unpacks the linux-x86_64
+    bundle, starts the server and answers a query.
+  source: >
+    owner decisions 2026-10-09. State on main at 06ae0654b0, read from the code: installs go
+    under the user's home and change nothing on the host (PgwireGovDataInstaller,
+    EngineInstaller); the launcher is a bash script with an env shebang
+    (pgwire-adapters-release.yml, "Stage adapter model + launcher"); the query-engine JVM is
+    started with no JVM path, so the host's JAVA_HOME is used although the bundle carries a JRE
+    (calcite_backend.py _start_jvm); jars.classpath is rewritten in the bundle at every start
+    and the catalog cache is written beside model.json (catalog_populate.py
+    catalog_cache_path); the port probe runs lsof (PgwireGovDataConnector.portListenerPid); no
+    certificate bundle is configured for the Python side; the engine's native installer for
+    Linux is a .deb only; only linux-x86_64 is published for Linux. Whether lsof and the
+    certificate bundle are removed from the host's list or added to it is settled in the
+    implementation and then stated here.
+  tests: []

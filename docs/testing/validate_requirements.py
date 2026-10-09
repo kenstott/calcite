@@ -2,7 +2,7 @@
 """Validate the per-adapter requirement ledgers under docs/requirements/*.yaml.
 
 Schema + cross-field checks, plus coverage and a 3-state matrix view. Scoped to the adapters we own
-(file, govdata, splunk, sharepoint-list, salesforce, servicenow) — Calcite core is never touched.
+(file, govdata, splunk, sharepoint-list, salesforce, servicenow, askamerica) — Calcite core is never touched.
 
 Usage (run from repo root, needs python3 + pyyaml):
   python3 docs/testing/validate_requirements.py            # schema validation (exit 1 on error)
@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LEDGER_DIR = ROOT / "docs" / "requirements"
 
 PREFIX = {"file": "FILE", "govdata": "GOV", "splunk": "SPLUNK", "sharepoint-list": "SPLIST",
-          "salesforce": "SF", "servicenow": "SNOW"}
+          "salesforce": "SF", "servicenow": "SNOW", "askamerica": "ASKAM"}
 STATUS = {"proposed", "accepted", "in-progress", "complete", "rejected"}
 PRIORITY = {"MUST", "SHOULD", "MAY"}
 RTYPE = {"behavioral", "structural", "constraint", "ui", "infrastructure"}
