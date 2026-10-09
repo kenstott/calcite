@@ -240,7 +240,10 @@ jobs:
 
       - name: Minimal bundled JRE (jlink)
         run: |
-          "$JAVA_HOME/bin/jlink" --add-modules java.base,java.sql,java.naming,java.management,jdk.unsupported \
+          # Every JDK module: this runtime starts the launcher AND, through JPype, the Calcite
+          # JVM that loads the adapter's whole classpath (see PGWIRE_CALCITE_JAVA_HOME in the
+          # launcher below). A hand-picked module list would have to track every adapter jar.
+          "$JAVA_HOME/bin/jlink" --add-modules ALL-MODULE-PATH \
             --strip-debug --no-header-files --no-man-pages --compress=2 --output bundle/jre
 
       - name: Stage adapter model + launcher
@@ -290,8 +293,15 @@ jobs:
           cat > "bundle/bin/pgwire-${{ matrix.adapter.name }}" <<'SH'
           #!/usr/bin/env bash
           HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-          ls "$HERE"/jars/*.jar | paste -sd: - > "$HERE/jars.classpath"
-          export PGWIRE_CALCITE_CLASSPATH_FILE="$HERE/jars.classpath"
+          # Nothing is written under $HERE while the server runs: the install tree may be
+          # read-only (a Nix store path, a root-owned directory). The classpath is the jars
+          # directory itself, and what the server writes goes to the state directory, which a
+          # caller sets per server process (one per organisation, say).
+          export PGWIRE_CALCITE_CLASSPATH_DIR="$HERE/jars"
+          export PGWIRE_CALCITE_STATE_DIR="${PGWIRE_CALCITE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/pgwire-${{ matrix.adapter.name }}}"
+          # The Calcite JVM starts from the runtime this bundle carries, so the host needs
+          # neither a JDK nor JAVA_HOME.
+          export PGWIRE_CALCITE_JAVA_HOME="$HERE/jre"
           # embedder.py's is_available() checks this directory's existence -- harmless when
           # absent (every adapter but govdata; embedder.py is only ever imported once EMBED()
           # actually appears in a query, per its own is_available() gate).
@@ -318,10 +328,12 @@ jobs:
           @echo off
           setlocal enabledelayedexpansion
           for %%i in ("%~dp0..") do set "HERE=%%~fi"
-          set "CP="
-          for %%f in ("%HERE%\jars\*.jar") do set "CP=!CP!%%f;"
-          > "%HERE%\jars.classpath" echo !CP!
-          set "PGWIRE_CALCITE_CLASSPATH_FILE=%HERE%\jars.classpath"
+          rem The classpath is the jars directory itself; no classpath file is written into
+          rem the install tree. What the server writes goes to the state directory.
+          set "PGWIRE_CALCITE_CLASSPATH_DIR=%HERE%\jars"
+          if not defined PGWIRE_CALCITE_STATE_DIR set "PGWIRE_CALCITE_STATE_DIR=%LOCALAPPDATA%\pgwire-__ADAPTER__"
+          rem The Calcite JVM starts from the runtime this bundle carries.
+          set "PGWIRE_CALCITE_JAVA_HOME=%HERE%\jre"
           set "EMBED_MODEL_CACHE_DIR=%HERE%\model\embedder"
           rem The venv's launcher stub (cpython\Scripts\python.exe) reads pyvenv.cfg's `home`
           rem line at every invocation to find the real interpreter to exec. It was built on
@@ -498,7 +510,11 @@ jobs:
       - name: Start pgwire-file and wait for the port
         run: |
           set -euo pipefail
-          "$BUNDLE_DIR/bin/pgwire-file" --port 5455 --auth trust > smoke-server.log 2>&1 &
+          # The install tree is made read-only and the host offers no Java: the server must
+          # start from the runtime it carries and write only to its state directory.
+          chmod -R a-w "$BUNDLE_DIR"
+          export PGWIRE_CALCITE_STATE_DIR="$PWD/smoke-state"
+          env -u JAVA_HOME "$BUNDLE_DIR/bin/pgwire-file" --port 5455 --auth trust > smoke-server.log 2>&1 &
           echo $! > smoke-server.pid
           for _ in $(seq 1 60); do
             if (exec 3<>/dev/tcp/127.0.0.1/5455) 2>/dev/null; then
@@ -516,6 +532,16 @@ jobs:
         run: |
           set -euo pipefail
           psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
+
+      - name: Query the fixture table, from the bundled runtime, with nothing written to the install tree
+        run: |
+          set -euo pipefail
+          rows="$(psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -At -c "SELECT count(*) FROM people;")"
+          test "$rows" = "2" || { echo "expected 2 rows in people, got '$rows'" >&2; exit 1; }
+          grep -F "JVM library: $(cd "$BUNDLE_DIR" && pwd)/jre/" smoke-server.log \
+            || { echo "the Calcite JVM did not start from the bundled runtime" >&2; exit 1; }
+          test ! -e "$BUNDLE_DIR/jars.classpath" \
+            || { echo "jars.classpath was written into the install tree" >&2; exit 1; }
 
       - name: Stop pgwire-file
         if: always()

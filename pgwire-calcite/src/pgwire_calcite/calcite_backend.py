@@ -54,6 +54,38 @@ _CALCITE_DRIVER = "org.apache.calcite.jdbc.Driver"
 #: A statement parameter as a client writes it: ``$1``, ``$2``...
 _PLACEHOLDER_RE = re.compile(r"\$(\d+)")
 
+#: Home of the Java runtime the Calcite JVM is started from. A bundle's launcher sets it to
+#: the runtime the bundle carries, so the host needs neither a JDK nor JAVA_HOME. Unset, JPype
+#: finds a JVM the way it always has (JAVA_HOME, then the host's install locations).
+JAVA_HOME_ENV = "PGWIRE_CALCITE_JAVA_HOME"
+
+#: Where libjvm sits under a Java home, by platform layout.
+_LIBJVM_RELATIVE = (
+    os.path.join("lib", "server", "libjvm.so"),
+    os.path.join("lib", "server", "libjvm.dylib"),
+    os.path.join("bin", "server", "jvm.dll"),
+)
+
+
+def bundled_jvm_path() -> Optional[str]:
+    """The JVM library under ``PGWIRE_CALCITE_JAVA_HOME``, or None when it is not set.
+
+    A home that is set but holds no JVM library is an error by name: starting some other
+    JVM found on the host instead would hide a broken bundle.
+    """
+    java_home = os.environ.get(JAVA_HOME_ENV)
+    if not java_home:
+        return None
+    for relative in _LIBJVM_RELATIVE:
+        candidate = os.path.join(java_home, relative)
+        if os.path.isfile(candidate):
+            return candidate
+    raise RuntimeError(
+        f"{JAVA_HOME_ENV} names {java_home}, which holds no JVM library "
+        f"(looked for {', '.join(_LIBJVM_RELATIVE)})"
+    )
+
+
 def _attach_current_thread_to_jvm() -> None:
     """Make the calling thread able to call Java.
 
@@ -410,7 +442,12 @@ class CalciteBackend:
                 key = prop.split("=", 1)[0]
                 if not any(a.startswith(key) for a in args):
                     args.append(prop)
-            jpype.startJVM(*args, classpath=self._classpath, convertStrings=True)
+            jvm_path = bundled_jvm_path()
+            log.info("[CALCITE] JVM library: %s", jvm_path or "found by JPype on the host")
+            if jvm_path is None:
+                jpype.startJVM(*args, classpath=self._classpath, convertStrings=True)
+            else:
+                jpype.startJVM(jvm_path, *args, classpath=self._classpath, convertStrings=True)
             log.info("[CALCITE] JVM started with %d classpath entries", len(self._classpath))
 
     def _connect(self) -> None:

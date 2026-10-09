@@ -10,7 +10,8 @@
 """Resolve the Calcite JVM runtime classpath for the JPype backend.
 
 Phase 1 loads the classpath from (in order): an explicit list, the
-``PGWIRE_CALCITE_CLASSPATH`` env var (os.pathsep-separated), or a file named by
+``PGWIRE_CALCITE_CLASSPATH`` env var (os.pathsep-separated), the directory named by
+``PGWIRE_CALCITE_CLASSPATH_DIR`` (every ``*.jar`` in it), or a file named by
 ``PGWIRE_CALCITE_CLASSPATH_FILE`` / the default ``.calcite-classpath.txt`` beside
 the project root. The file is produced from the Calcite build's runtime
 classpath (a Gradle init task; see scripts/print-calcite-classpath.gradle).
@@ -56,6 +57,18 @@ def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
     if env:
         return _validate(vendored + env.split(os.pathsep), source="PGWIRE_CALCITE_CLASSPATH")
 
+    # A bundle names its jars directory: the classpath is read from the directory at start,
+    # so nothing is written into the install tree (it may be read-only).
+    dir_env = os.environ.get("PGWIRE_CALCITE_CLASSPATH_DIR")
+    if dir_env:
+        jar_dir = pathlib.Path(dir_env)
+        if not jar_dir.is_dir():
+            raise ClasspathError(
+                f"PGWIRE_CALCITE_CLASSPATH_DIR names {dir_env}, which is not a directory."
+            )
+        jars = [str(p) for p in sorted(jar_dir.glob("*.jar"))]
+        return _validate(vendored + jars, source=f"PGWIRE_CALCITE_CLASSPATH_DIR ({dir_env})")
+
     file_env = os.environ.get("PGWIRE_CALCITE_CLASSPATH_FILE")
     candidates = []
     if file_env:
@@ -73,6 +86,7 @@ def resolve_classpath(explicit: Optional[List[str]] = None) -> List[str]:
 
     raise ClasspathError(
         "No Calcite classpath resolved. Set PGWIRE_CALCITE_CLASSPATH, or "
+        "PGWIRE_CALCITE_CLASSPATH_DIR, or "
         "PGWIRE_CALCITE_CLASSPATH_FILE, or place a classpath file at "
         f"{_project_root() / _DEFAULT_FILE}. Generate one with the Gradle init task "
         "in scripts/print-calcite-classpath.gradle."
