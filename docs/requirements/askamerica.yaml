@@ -93,3 +93,27 @@
     is locked too is the owner's statement; the code does not say so in a comment found by
     search.
   tests: []
+
+# ===================================== updates =================================================
+
+- id: ASKAM-003
+  module: askamerica
+  status: proposed
+  group: updates
+  category: Agreed update
+  priority: MAY
+  type: behavioral
+  description: >
+    The user agrees before the engine replaces its jar with a newer release. A future
+    feature, not a decision to build. Open questions a design must answer: where the
+    agreement is asked when the engine runs as a headless server; a setting that turns
+    updates off; and what not taking an update means for an install whose seed then lags.
+  source: >
+    owner remark 2026-10-09 ("we'll just add that as a future feature"). Baseline on main at
+    6e664777a4, read from EngineInstaller: on every restart the engine compares its jar's
+    stamped version with the latest release and downloads only when they differ; an
+    unstamped jar counts as differing and an unreachable release lookup counts as not
+    differing. In server mode the running jar serves and the new one is downloaded beside it
+    for the next launch. A jar named by ASKAMERICA_ENGINE_JAR, or placed beside the launcher,
+    is a pin and is never replaced, which is how updates are declined today.
+  tests: []
