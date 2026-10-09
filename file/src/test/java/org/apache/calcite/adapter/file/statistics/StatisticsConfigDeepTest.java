@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.statistics;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Deep coverage tests for StatisticsConfig covering builder validation,
  * default values, constants, and toString.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("unit")
 public class StatisticsConfigDeepTest {
 
