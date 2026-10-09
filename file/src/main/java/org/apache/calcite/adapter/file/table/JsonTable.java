@@ -230,7 +230,7 @@ public class JsonTable extends AbstractTable {
     for (JsonNode element : pathData) {
       if (element.isObject()) {
         LinkedHashMap<String, Object> row = new LinkedHashMap<>();
-        Iterator<Map.Entry<String, JsonNode>> fields = element.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = element.properties().iterator();
         while (fields.hasNext()) {
           Map.Entry<String, JsonNode> field = fields.next();
           row.put(field.getKey(), convertJsonValue(field.getValue()));

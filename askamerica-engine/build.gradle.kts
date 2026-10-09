@@ -28,6 +28,7 @@ if (JavaVersion.current() < JavaVersion.VERSION_21) {
     afterEvaluate {
         tasks.withType<JavaCompile>().configureEach { enabled = false }
         tasks.withType<Test>().configureEach { enabled = false }
+        tasks.withType<Javadoc>().configureEach { enabled = false }
     }
 } else {
     // Override the root's --release 11 convention: at 11 javac refuses to read
@@ -125,9 +126,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform {
+        // The tests tagged "integration" need the warehouse, a pgwire server or a network
+        // service, so an ordinary build leaves them out; -PincludeTags=integration runs them.
         val tags = project.findProperty("includeTags") as String?
         if (tags != null) {
             includeTags(tags)
+        } else {
+            excludeTags("integration")
         }
     }
     // Tests spawn the shadow JAR as a subprocess — ensure it's built first

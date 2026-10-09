@@ -40,7 +40,6 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Discovers and parses FEC's official "{year} Presidential General Election Results" XLSX.
@@ -68,9 +67,6 @@ public class PresidentialResultsTransformer implements ResponseTransformer {
       LoggerFactory.getLogger(PresidentialResultsTransformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String FEC_BASE = "https://www.fec.gov";
-
-  private static final Pattern RESULTS_LINK =
-      Pattern.compile("href=\"([^\"]*?(\\d{4})presgeresults\\.xlsx)\"");
 
   private static final Set<String> SKIP_HEADERS = new HashSet<>(java.util.Arrays.asList(
       "STATE", "ELECTORAL VOTES", "TOTAL VOTES"));

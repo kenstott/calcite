@@ -396,19 +396,17 @@ public class AWSProvider implements CloudProvider {
     if (shouldCache) {
       return cacheManager.getOrCompute(
           cacheKey, () -> executeStorageResourceQuery(
-          accountIds, projectionHandler, sortHandler, paginationHandler, filterHandler));
+          accountIds, projectionHandler, paginationHandler));
     } else {
       // Execute directly without caching for highly specific queries
       return executeStorageResourceQuery(
-          accountIds, projectionHandler, sortHandler, paginationHandler, filterHandler);
+          accountIds, projectionHandler, paginationHandler);
     }
   }
 
   private List<Map<String, Object>> executeStorageResourceQuery(List<String> accountIds,
                                                                @Nullable CloudOpsProjectionHandler projectionHandler,
-                                                               @Nullable CloudOpsSortHandler sortHandler,
-                                                               @Nullable CloudOpsPaginationHandler paginationHandler,
-                                                               @Nullable CloudOpsFilterHandler filterHandler) {
+                                                               @Nullable CloudOpsPaginationHandler paginationHandler) {
     List<Map<String, Object>> results = new ArrayList<>();
 
     // Determine which fields are needed based on projection

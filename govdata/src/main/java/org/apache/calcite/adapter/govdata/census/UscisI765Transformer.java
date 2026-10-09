@@ -50,9 +50,6 @@ public class UscisI765Transformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(UscisI765Transformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private static final String FILE_BASE =
-      "https://www.uscis.gov/sites/default/files/document/data/"
-          + "i765_application_for_employment_fy%d_q%d%s.xlsx";
   private static final String[] SUFFIXES = {"_v1", "", "_v2", "_v3"};
   private static final String USER_AGENT =
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -75,7 +72,10 @@ public class UscisI765Transformer implements ResponseTransformer {
     for (int quarter = 1; quarter <= 4; quarter++) {
       InputStream xlsx = null;
       for (String suffix : SUFFIXES) {
-        xlsx = open(String.format(FILE_BASE, fiscalYear, quarter, suffix));
+        xlsx = open(String.format(
+            "https://www.uscis.gov/sites/default/files/document/data/"
+                + "i765_application_for_employment_fy%d_q%d%s.xlsx",
+            fiscalYear, quarter, suffix));
         if (xlsx != null) {
           break;
         }

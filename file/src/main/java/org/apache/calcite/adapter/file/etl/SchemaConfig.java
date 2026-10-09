@@ -28,7 +28,7 @@ import java.util.Set;
  *   <li>List of table configurations (EtlPipelineConfig)</li>
  * </ul>
  *
- * <h3>YAML Configuration Example</h3>
+ * <h2>YAML Configuration Example</h2>
  * <pre>{@code
  * schema:
  *   name: econ

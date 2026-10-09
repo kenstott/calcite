@@ -190,14 +190,14 @@ public class HouseStockTransactionsProvider implements DataProvider {
       }
       int rowSeq = 1;
       for (HousePtrTextParser.Row t : transactions) {
-        out.addLast(row(year, entry, url, rowSeq++, t));
+        out.addLast(row(entry, url, rowSeq++, t));
       }
     } finally {
       Files.deleteIfExists(pdf.toPath());
     }
   }
 
-  private static Map<String, Object> row(String year, HouseFinancialDisclosureIndex.Entry entry,
+  private static Map<String, Object> row(HouseFinancialDisclosureIndex.Entry entry,
       String pdfUrl, int rowSeq, HousePtrTextParser.Row t) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("chamber", "house");

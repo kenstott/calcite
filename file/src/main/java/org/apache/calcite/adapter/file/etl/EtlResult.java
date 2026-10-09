@@ -20,7 +20,7 @@ import java.util.List;
  * <p>EtlResult contains statistics and status information about a completed
  * or failed pipeline execution.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * EtlResult result = pipeline.execute();
  * if (result.isSuccessful()) {

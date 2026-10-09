@@ -219,18 +219,4 @@ final class FreshnessConfig {
   private static String asString(Object o) {
     return o == null ? null : String.valueOf(o);
   }
-
-  private static Integer asInteger(Object o) {
-    if (o == null) {
-      return null;
-    }
-    if (o instanceof Number) {
-      return ((Number) o).intValue();
-    }
-    try {
-      return Integer.parseInt(String.valueOf(o).trim());
-    } catch (NumberFormatException e) {
-      return null;
-    }
-  }
 }

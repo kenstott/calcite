@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +53,7 @@ public class BuildingPermitsDimensionResolver implements DimensionResolver {
   public List<String> resolve(String dimensionName, DimensionConfig config,
       Map<String, String> context, StorageProvider storageProvider) {
     if (!"period_code".equals(dimensionName)) {
-      return Collections.emptyList();
+      return new ArrayList<String>();
     }
 
     // The year demarcation is in PUBLISH years (the global GOVDATA_START_YEAR boundary, passed

@@ -11,7 +11,6 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.FileSchemaFactory;
-import org.apache.calcite.adapter.file.similarity.SimilarityFunctions;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
@@ -303,21 +302,6 @@ public class SecEmbeddingSchemaFactory implements SchemaFactory {
         // To enable debug logging for SEC adapter, set logger "org.apache.calcite.adapter.govdata.sec" to DEBUG level
         LOGGER.info("Debug mode enabled");
       }
-    }
-  }
-
-  /**
-   * Register vector similarity functions with the schema.
-   */
-  private void registerVectorFunctions(SchemaPlus schema) {
-    if (schema == null) return;
-
-    try {
-      // Register all vector functions using file adapter's SimilarityFunctions
-      SimilarityFunctions.registerFunctions(schema);
-      LOGGER.debug("Registered vector functions using file adapter's SimilarityFunctions");
-    } catch (Exception e) {
-      LOGGER.warn("Failed to register vector functions: " + e.getMessage());
     }
   }
 

@@ -21,7 +21,7 @@ import java.util.Map;
  * query parameters, headers, and dimension values that were used to make the HTTP request.
  * This allows transformers to make context-aware decisions during transformation.
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * public class MyResponseTransformer implements ResponseTransformer {
  *     public String transform(String response, RequestContext context) {

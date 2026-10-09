@@ -210,38 +210,6 @@ public class EtlRunner {
     return exitCode;
   }
 
-  /** Resolve ${ENV_VAR} references in s3Config and trackerConfig values. */
-  @SuppressWarnings("unchecked")
-  private Map<String, Object> resolveOperandEnvVars(Map<String, Object> operand) {
-    Map<String, Object> resolved = new HashMap<>(operand);
-    for (String configKey : new String[]{"s3Config", "trackerConfig"}) {
-      Object configObj = resolved.get(configKey);
-      if (configObj instanceof Map) {
-        Map<String, Object> config = new HashMap<>((Map<String, Object>) configObj);
-        for (Map.Entry<String, Object> entry : config.entrySet()) {
-          Object val = entry.getValue();
-          if (val instanceof String) {
-            String str = (String) val;
-            if (str.contains("${")) {
-              entry.setValue(
-                  org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(str));
-            }
-          }
-        }
-        resolved.put(configKey, config);
-      }
-    }
-    return resolved;
-  }
-
-  private int getIntFromOperand(Map<String, Object> operand, String key, int defaultValue) {
-    Object val = operand.get(key);
-    if (val instanceof Number) {
-      return ((Number) val).intValue();
-    }
-    return defaultValue;
-  }
-
   /**
    * Process a single schema by creating a JDBC connection (triggers ETL).
    */

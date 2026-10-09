@@ -23,6 +23,7 @@ import org.apache.calcite.adapter.govdata.TestEnvironmentLoader;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,11 +35,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -51,10 +55,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -338,6 +345,73 @@ class WeatherExtSmokeTest {
   // ClimateNormalsTransformer — unit tests (synthetic CDO NORMAL_MLY)
   // =========================================================================
 
+  /**
+   * Runs {@link ClimateNormalsTransformer} for one state against a local server that answers
+   * with the given CDO pages, the first at offset 1 and each next one 1000 further on. The
+   * station file is replaced by {@code stationStates} (station id to state FIPS).
+   */
+  private static List<Map<String, Object>> climateNormals(String stateFips,
+      final Map<String, String> stationStates, final List<Integer> offsetsRequested,
+      final String... pages) throws Exception {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/data", exchange -> {
+      Matcher offset = Pattern.compile("offset=(\\d+)").matcher(exchange.getRequestURI().getQuery());
+      if (!offset.find()) {
+        exchange.sendResponseHeaders(400, -1);
+        exchange.close();
+        return;
+      }
+      int requested = Integer.parseInt(offset.group(1));
+      offsetsRequested.add(Integer.valueOf(requested));
+      int page = (requested - 1) / 1000;
+      if (page >= pages.length) {
+        exchange.sendResponseHeaders(404, -1);
+        exchange.close();
+        return;
+      }
+      byte[] body = pages[page].getBytes(StandardCharsets.UTF_8);
+      exchange.getResponseHeaders().add("Content-Type", "application/json");
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream out = exchange.getResponseBody()) {
+        out.write(body);
+      }
+    });
+    server.start();
+    try {
+      Map<String, String> dims = new HashMap<>();
+      if (stateFips != null) {
+        dims.put("state_fips", stateFips);
+      }
+      RequestContext ctx = RequestContext.builder()
+          .url("http://127.0.0.1:" + server.getAddress().getPort() + "/data?datasetid=NORMAL_MLY")
+          .dimensionValues(dims)
+          .build();
+      ClimateNormalsTransformer transformer = new ClimateNormalsTransformer() {
+        @Override String stationStateFips(String stationId, RequestContext context) {
+          return stationStates.get(stationId);
+        }
+      };
+      List<Map<String, Object>> rows = new ArrayList<>();
+      Iterator<Map<String, Object>> fetched = transformer.fetchAndTransform(ctx);
+      while (fetched.hasNext()) {
+        rows.add(fetched.next());
+      }
+      return rows;
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  private static Map<String, String> montgomeryInAlabama() {
+    Map<String, String> states = new HashMap<>();
+    states.put("USW00013876", "01");
+    return states;
+  }
+
+  private static double number(Map<String, Object> row, String column) {
+    return ((Number) row.get(column)).doubleValue();
+  }
+
   @Tag("unit")
   @Test void testClimateNormalsPivot() throws Exception {
     // Raw values are in CDO's default "standard" units, which the query deliberately keeps (see
@@ -358,32 +432,74 @@ class WeatherExtSmokeTest {
         + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":588}"
         + "]}";
 
-    Map<String, String> dims = new HashMap<>();
-    dims.put("state_fips", "01");
-    RequestContext ctx = RequestContext.builder()
-        .url("https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY")
-        .dimensionValues(dims)
-        .build();
+    List<Map<String, Object>> rows =
+        climateNormals("01", montgomeryInAlabama(), new ArrayList<Integer>(), response);
 
-    String result = new ClimateNormalsTransformer().transform(response, ctx);
-    JsonNode rows = MAPPER.readTree(result);
-
-    assertTrue(rows.isArray());
     assertEquals(2, rows.size(), "Should have 2 rows (Jan + Feb)");
 
-    JsonNode jan = rows.get(0);
-    assertEquals("USW00013876", jan.get("station_id").asText());
-    assertEquals("01", jan.get("state_fips").asText());
-    assertEquals(1, jan.get("month").intValue());
-    assertEquals(13.9, jan.get("normal_tmax_c").doubleValue(), 0.05, "570 tenths °F = 57.0°F → 13.9°C");
-    assertEquals(4.4, jan.get("normal_tmin_c").doubleValue(), 0.05, "399 tenths °F = 39.9°F → 4.4°C");
-    assertEquals(121.9, jan.get("normal_prcp_mm").doubleValue(), 0.05,
+    Map<String, Object> jan = rows.get(0);
+    assertEquals("USW00013876", jan.get("station_id"));
+    assertEquals("01", jan.get("state_fips"));
+    assertEquals(Integer.valueOf(1), jan.get("month"));
+    assertEquals(13.9, number(jan, "normal_tmax_c"), 0.05, "570 tenths °F = 57.0°F → 13.9°C");
+    assertEquals(4.4, number(jan, "normal_tmin_c"), 0.05, "399 tenths °F = 39.9°F → 4.4°C");
+    assertEquals(121.9, number(jan, "normal_prcp_mm"), 0.05,
         "480 hundredths of an inch = 4.80in → 121.9mm");
-    assertTrue(jan.get("county_fips").isNull(), "county_fips should be null (post-ETL join)");
+    assertTrue(jan.containsKey("county_fips") && jan.get("county_fips") == null,
+        "county_fips should be null (post-ETL join)");
 
-    JsonNode feb = rows.get(1);
-    assertEquals(2, feb.get("month").intValue());
-    assertEquals(14.9, feb.get("normal_tmax_c").doubleValue(), 0.05, "588 tenths °F = 58.8°F → 14.9°C");
+    Map<String, Object> feb = rows.get(1);
+    assertEquals(Integer.valueOf(2), feb.get("month"));
+    assertEquals(14.9, number(feb, "normal_tmax_c"), 0.05, "588 tenths °F = 58.8°F → 14.9°C");
+  }
+
+  @Tag("unit")
+  @Test void testClimateNormalsPivotSpansPages() throws Exception {
+    // One station-month whose datatypes fall either side of a page boundary: the reason the
+    // transformer pages by itself instead of being handed one page at a time.
+    String page1 = "{"
+        + "\"metadata\":{\"resultset\":{\"offset\":1,\"count\":1001,\"limit\":1000}},"
+        + "\"results\":["
+        + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-TMAX-NORMAL\","
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":570}"
+        + "]}";
+    String page2 = "{"
+        + "\"metadata\":{\"resultset\":{\"offset\":1001,\"count\":1001,\"limit\":1000}},"
+        + "\"results\":["
+        + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-TMIN-NORMAL\","
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":399}"
+        + "]}";
+
+    List<Integer> offsets = new ArrayList<Integer>();
+    List<Map<String, Object>> rows =
+        climateNormals("01", montgomeryInAlabama(), offsets, page1, page2);
+
+    assertEquals(java.util.Arrays.asList(Integer.valueOf(1), Integer.valueOf(1001)), offsets);
+    assertEquals(1, rows.size(), "both pages belong to one station-month");
+    assertEquals(13.9, number(rows.get(0), "normal_tmax_c"), 0.05);
+    assertEquals(4.4, number(rows.get(0), "normal_tmin_c"), 0.05);
+  }
+
+  @Tag("unit")
+  @Test void testClimateNormalsKeepsOnlyTheStatesOwnStations() throws Exception {
+    // CDO's state filter also returns stations just across the border; USC00090010 is one the
+    // station file puts in Georgia (13), so the Alabama request must not emit it.
+    String response = "{"
+        + "\"metadata\":{\"resultset\":{\"offset\":1,\"count\":2,\"limit\":1000}},"
+        + "\"results\":["
+        + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-TMAX-NORMAL\","
+        + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":570},"
+        + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-TMAX-NORMAL\","
+        + " \"station\":\"GHCND:USC00090010\",\"attributes\":\"C\",\"value\":560}"
+        + "]}";
+    Map<String, String> states = montgomeryInAlabama();
+    states.put("USC00090010", "13");
+
+    List<Map<String, Object>> rows =
+        climateNormals("01", states, new ArrayList<Integer>(), response);
+
+    assertEquals(1, rows.size());
+    assertEquals("USW00013876", rows.get(0).get("station_id"));
   }
 
   @Tag("unit")
@@ -391,6 +507,7 @@ class WeatherExtSmokeTest {
     // -7777 is CDO's trace flag occupying the value field. Converted arithmetically it becomes
     // -1975.4 mm, a negative precipitation normal.
     String response = "{"
+        + "\"metadata\":{\"resultset\":{\"offset\":1,\"count\":2,\"limit\":1000}},"
         + "\"results\":["
         + "{\"date\":\"2010-01-01T00:00:00\",\"datatype\":\"MLY-PRCP-NORMAL\","
         + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":-7777},"
@@ -398,29 +515,25 @@ class WeatherExtSmokeTest {
         + " \"station\":\"GHCND:USW00013876\",\"attributes\":\"C\",\"value\":-7777}"
         + "]}";
 
-    Map<String, String> dims = new HashMap<>();
-    dims.put("state_fips", "01");
-    RequestContext ctx = RequestContext.builder()
-        .url("https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY")
-        .dimensionValues(dims)
-        .build();
-
-    JsonNode rows = MAPPER.readTree(new ClimateNormalsTransformer().transform(response, ctx));
+    List<Map<String, Object>> rows =
+        climateNormals("01", montgomeryInAlabama(), new ArrayList<Integer>(), response);
     assertEquals(1, rows.size());
-    assertEquals(0.0, rows.get(0).get("normal_prcp_mm").doubleValue(), 0.001,
+    assertEquals(0.0, number(rows.get(0), "normal_prcp_mm"), 0.001,
         "trace must not become negative precipitation");
-    assertEquals(0.0, rows.get(0).get("normal_snow_mm").doubleValue(), 0.001,
+    assertEquals(0.0, number(rows.get(0), "normal_snow_mm"), 0.001,
         "trace must not become negative snowfall");
   }
 
   @Tag("unit")
   @Test void testClimateNormalsEmpty() throws Exception {
-    RequestContext ctx = RequestContext.builder()
-        .url("https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=NORMAL_MLY")
-        .dimensionValues(new HashMap<String, String>())
-        .build();
-    assertEquals("[]", new ClimateNormalsTransformer().transform("", ctx));
-    assertEquals("[]", new ClimateNormalsTransformer().transform(null, ctx));
+    // CDO answers a state it holds no normals for with an empty object
+    assertTrue(
+        climateNormals("01", montgomeryInAlabama(), new ArrayList<Integer>(), "{}").isEmpty());
+    // The transformer no longer takes a response body: it is given the state to fetch
+    assertThrows(UnsupportedOperationException.class,
+        () -> new ClimateNormalsTransformer().transform("", null));
+    assertThrows(IllegalStateException.class,
+        () -> climateNormals(null, montgomeryInAlabama(), new ArrayList<Integer>(), "{}"));
   }
 
   // =========================================================================

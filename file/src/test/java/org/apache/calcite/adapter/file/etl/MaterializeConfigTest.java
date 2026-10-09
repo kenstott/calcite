@@ -394,6 +394,8 @@ public class MaterializeConfigTest {
     assertNull(ColumnConfig.fromMap(null));
   }
 
+  // The deprecated TTL accessors are the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test void testIcebergConfigIncrementalTtlDefaults() {
     Map<String, Object> map = new HashMap<String, Object>();
     map.put("warehousePath", "/data/wh");
@@ -402,6 +404,8 @@ public class MaterializeConfigTest {
     assertEquals(0L, cfg.getIncrementalTtlMillis());
   }
 
+  // The deprecated TTL accessors are the subject of this test.
+  @SuppressWarnings("deprecation")
   @Test void testIcebergConfigIncrementalTtlFromMap() {
     Map<String, Object> map = new HashMap<String, Object>();
     map.put("warehousePath", "/data/wh");

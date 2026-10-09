@@ -126,7 +126,7 @@ public abstract class AbstractArcGisFeatureTransformer implements StreamingRespo
       lastExceeded = root.path("exceededTransferLimit").asBoolean(false);
       JsonNode features = root.path("features");
       if (!features.isArray() || features.size() == 0) {
-        return Collections.emptyList();
+        return new ArrayList<JsonNode>();
       }
       List<JsonNode> out = new ArrayList<JsonNode>(features.size());
       for (JsonNode f : features) {

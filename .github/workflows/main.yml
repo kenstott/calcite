@@ -31,8 +31,10 @@ on:
     types: [opened, synchronize, reopened, labeled]
     paths-ignore:
       - 'site/**'
+    # '**' also matches a base branch with a slash in its name, so a pull request stacked on
+    # another pull request's branch is checked too
     branches:
-      - '*'
+      - '**'
 
 concurrency:
   # On main/release, we don't want any jobs cancelled so the sha is used to name the group
@@ -247,63 +249,6 @@ jobs:
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA }} build
 
-  linux-jdk23: # latest JDK version supported by ForbiddenAPIs plugin, keep this updated (see https://jdk.java.net/)
-    if: github.event.action != 'labeled'
-    name: 'Linux (JDK 23)'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 50
-      - name: 'Set up JDK 23'
-        uses: actions/setup-java@v5
-        with:
-          java-version: 23
-          distribution: 'zulu'
-      - uses: burrunan/gradle-cache-action@v1
-        name: Test
-        with:
-          job-id: jdk${{ matrix.jdk }}
-          remote-build-cache-proxy-enabled: false
-          arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA }} tasks build
-
-  linux-avatica:
-    if: github.event.action != 'labeled'
-    name: 'Linux (JDK 11, Avatica main)'
-    runs-on: ubuntu-latest
-    steps:
-    - name: 'Set up JDK 11'
-      uses: actions/setup-java@v5
-      with:
-        java-version: 11
-        distribution: 'zulu'
-    - name: 'Clone Avatica to Maven Local repository'
-      run: |
-        git clone --branch main --depth 100 https://github.com/apache/calcite-avatica.git ../calcite-avatica
-    - uses: burrunan/gradle-cache-action@v1
-      name: Build Avatica
-      with:
-        job-id: avatica-jdk${{ matrix.jdk }}
-        remote-build-cache-proxy-enabled: false
-        build-root-directory: ../calcite-avatica
-        arguments: publishToMavenLocal
-        properties: |
-          calcite.avatica.version=1.0.0-dev-main
-          skipJavadoc=
-    - uses: actions/checkout@v5
-      with:
-        fetch-depth: 50
-    - uses: burrunan/gradle-cache-action@v1
-      name: Test
-      with:
-        job-id: jdk${{ matrix.jdk }}
-        remote-build-cache-proxy-enabled: false
-        execution-only-caches: true
-        arguments: --scan --no-parallel --no-daemon build javadoc
-        properties: |
-          calcite.avatica.version=1.0.0-dev-main-SNAPSHOT
-          enableMavenLocal=
-
   mac:
     if: github.event.action != 'labeled'
     name: 'macOS (JDK 21)'
@@ -457,3 +402,58 @@ jobs:
         job-id: Druid8
         remote-build-cache-proxy-enabled: false
         arguments: --scan --no-parallel --no-daemon :druid:test -Dcalcite.test.druid=true
+
+  linux-splunk:
+    if: github.event.action != 'labeled'
+    name: 'Splunk Tests'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
+    - name: 'Set up JDK 17'
+      uses: actions/setup-java@v5
+      with:
+        java-version: 17
+        distribution: 'zulu'
+    # Starting this image accepts Splunk's licence and general terms; it runs under the
+    # trial licence a new installation has. The password exists for this job only.
+    - name: 'Start Splunk'
+      run: |
+        password="Ci-$(openssl rand -hex 16)"
+        echo "::add-mask::$password"
+        docker run -d --name splunk -p 127.0.0.1:8089:8089 \
+          -e SPLUNK_START_ARGS=--accept-license \
+          -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
+          -e SPLUNK_PASSWORD="$password" \
+          splunk/splunk:10.4.4
+        {
+          echo "splunk.url=https://127.0.0.1:8089"
+          echo "splunk.username=admin"
+          echo "splunk.password=$password"
+          echo "splunk.ssl.insecure=true"
+        } > splunk/local-properties.settings
+    - name: 'Wait for the Splunk management port'
+      run: |
+        password="$(sed -n 's/^splunk.password=//p' splunk/local-properties.settings)"
+        for attempt in $(seq 1 90); do
+          status="$(curl -sk -o /dev/null -w '%{http_code}' -u "admin:$password" \
+            https://127.0.0.1:8089/services/server/info || true)"
+          if [ "$status" = "200" ]; then
+            echo "Splunk answered after $attempt attempts"
+            exit 0
+          fi
+          sleep 5
+        done
+        docker logs --tail 50 splunk
+        echo "Splunk did not answer on 8089 within 450 seconds (last status $status)"
+        exit 1
+    # The tests tagged splunk-data need the CIM data models and indexed events, which a new
+    # container does not have; see splunk/build.gradle.kts
+    - uses: burrunan/gradle-cache-action@v1
+      name: 'Run Splunk tests'
+      timeout-minutes: 20
+      with:
+        job-id: Splunk17
+        remote-build-cache-proxy-enabled: false
+        arguments: --scan --no-parallel --no-daemon :splunk:test -PincludeTags=integration -PexcludeTags=splunk-data

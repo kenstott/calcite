@@ -471,7 +471,7 @@ public class FormatAwareSchemaResolver {
     }
 
     if (node.isObject()) {
-      Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+      Iterator<Map.Entry<String, JsonNode>> fields = node.properties().iterator();
       while (fields.hasNext()) {
         Map.Entry<String, JsonNode> field = fields.next();
         String fieldName = field.getKey();

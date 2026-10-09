@@ -27,6 +27,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.BufferedReader;
 import java.io.StringReader;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -242,20 +244,38 @@ class StooqDownloaderTest {
   }
 
   @Test void testRateLimiterWaitTiming() throws InterruptedException {
-    StooqDownloader.RateLimiter limiter = new StooqDownloader.RateLimiter(100, 1000, 3);
+    // The limiter's own clock, advanced by its waits: what it decides to wait is asserted
+    // exactly, where elapsed wall-clock time on a busy machine could only be bounded loosely
+    final long[] clock = {1_000_000L};
+    final List<Long> waits = new ArrayList<>();
+    StooqDownloader.RateLimiter limiter = new StooqDownloader.RateLimiter(100, 1000, 3) {
+      @Override long currentTimeMillis() {
+        return clock[0];
+      }
 
-    // First call should not wait (no previous request)
-    long start = System.currentTimeMillis();
-    limiter.waitForRateLimit();
-    long elapsed = System.currentTimeMillis() - start;
-    assertTrue(elapsed < 50, "First call should not wait significantly");
+      @Override void sleep(long millis) {
+        waits.add(millis);
+        clock[0] += millis;
+      }
+    };
 
-    // Second call should wait approximately 100ms
-    start = System.currentTimeMillis();
+    // First call does not wait (no previous request)
     limiter.waitForRateLimit();
-    elapsed = System.currentTimeMillis() - start;
-    assertTrue(elapsed >= 80, "Second call should wait at least ~80ms");
-    assertTrue(elapsed < 200, "Second call should not wait more than ~200ms");
+    assertTrue(waits.isEmpty(), "First call should not wait, waited " + waits);
+
+    // A second call straight after waits the whole 100ms window
+    limiter.waitForRateLimit();
+    assertEquals(Collections.singletonList(100L), waits);
+
+    // 40ms later only the remaining 60ms are waited
+    clock[0] += 40;
+    limiter.waitForRateLimit();
+    assertEquals(Arrays.asList(100L, 60L), waits);
+
+    // Once the window has passed there is nothing to wait for
+    clock[0] += 100;
+    limiter.waitForRateLimit();
+    assertEquals(Arrays.asList(100L, 60L), waits);
   }
 
   @Test void testBulkIngestFailureIsNotSwallowed() {

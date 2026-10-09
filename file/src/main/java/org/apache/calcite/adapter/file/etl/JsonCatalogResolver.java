@@ -28,14 +28,14 @@ import java.util.List;
  * <p>Supports loading JSON resources from the classpath and extracting
  * values using simple path expressions.
  *
- * <h3>Path Expression Syntax</h3>
+ * <h2>Path Expression Syntax</h2>
  * <ul>
  *   <li>{@code field.subfield} - Dot notation for nested objects</li>
  *   <li>{@code array[*]} - Iterate all elements in an array</li>
  *   <li>{@code array[*].field} - Extract field from each array element</li>
  * </ul>
  *
- * <h3>Examples</h3>
+ * <h2>Examples</h2>
  * <pre>{@code
  * // JSON: {"countries": ["USA", "CAN", "MEX"]}
  * resolve(json, "countries") -> ["USA", "CAN", "MEX"]

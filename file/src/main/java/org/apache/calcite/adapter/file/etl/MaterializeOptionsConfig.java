@@ -24,7 +24,7 @@ import java.util.Map;
  *   <li>preserveInsertionOrder - Whether to maintain row order (default: false for performance)</li>
  * </ul>
  *
- * <h3>YAML Configuration</h3>
+ * <h2>YAML Configuration</h2>
  * <pre>{@code
  * options:
  *   threads: 4
@@ -34,7 +34,7 @@ import java.util.Map;
  *   preserveInsertionOrder: false
  * }</pre>
  *
- * <h3>Performance Considerations</h3>
+ * <h2>Performance Considerations</h2>
  * <ul>
  *   <li>Higher thread count speeds up I/O-bound operations but uses more memory</li>
  *   <li>Larger row groups improve compression but require more memory to buffer</li>

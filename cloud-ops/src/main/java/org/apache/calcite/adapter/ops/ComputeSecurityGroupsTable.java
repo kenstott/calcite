@@ -76,8 +76,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
   }
 
   /**
-   * Two foreign keys: {@code compute_resource_id} -> compute_resources.resource_id (the instance
-   * ARN, a globally-unique primary key), and {@code (cloud_provider, security_group_id)} ->
+   * Two foreign keys: {@code compute_resource_id} -&gt; compute_resources.resource_id (the instance
+   * ARN, a globally-unique primary key), and {@code (cloud_provider, security_group_id)} -&gt;
    * network_resources(cloud_provider, network_resource) (the bare security-group native ID).
    */
   @Override protected List<RelReferentialConstraint> referentialConstraints(List<String> columnNames) {

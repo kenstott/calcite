@@ -58,6 +58,8 @@ final class ScotusCasePages {
   /** Decides whether a page opens a case. */
   interface StartRule {
     /**
+     * Returns whether a case starts on this page.
+     *
      * @param pdfPage 1-based page number within the PDF
      * @param head the first characters of the page's text, whitespace collapsed
      */

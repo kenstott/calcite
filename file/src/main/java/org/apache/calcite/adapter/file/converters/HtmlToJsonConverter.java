@@ -560,7 +560,7 @@ public class HtmlToJsonConverter {
    * @param startUrl The starting URL to crawl from
    * @param outputDir The directory to write JSON files to
    * @param config The crawler configuration
-   * @return Map of generated JSON files (URL -> List of files)
+   * @return Map of generated JSON files (URL -&gt; List of files)
    * @throws IOException if conversion fails
    */
   public static Map<String, List<File>> convertWithCrawling(String startUrl, File outputDir,
@@ -575,7 +575,7 @@ public class HtmlToJsonConverter {
    * @param outputDir The directory to write JSON files to
    * @param config The crawler configuration
    * @param columnNameCasing The casing strategy for column names
-   * @return Map of generated JSON files (URL -> List of files)
+   * @return Map of generated JSON files (URL -&gt; List of files)
    * @throws IOException if conversion fails
    */
   public static Map<String, List<File>> convertWithCrawling(String startUrl, File outputDir,
@@ -592,7 +592,7 @@ public class HtmlToJsonConverter {
    * @param config The crawler configuration
    * @param columnNameCasing The casing strategy for column names
    * @param tableNameCasing The casing strategy for table names
-   * @return Map of generated JSON files (URL -> List of files)
+   * @return Map of generated JSON files (URL -&gt; List of files)
    * @throws IOException if conversion fails
    */
   public static Map<String, List<File>> convertWithCrawling(String startUrl, File outputDir,

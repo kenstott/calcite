@@ -197,9 +197,9 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
                 db.get("KMSMasterKeyArn"),
             null, // TLS version not directly exposed
             db.get("BackupRetentionPeriod") != null ?
-                ((Number) db.get("BackupRetentionPeriod")).intValue() :
+                Integer.valueOf(((Number) db.get("BackupRetentionPeriod")).intValue()) :
                 db.get("SnapshotRetentionLimit") != null ?
-                    ((Number) db.get("SnapshotRetentionLimit")).intValue() : null,
+                    Integer.valueOf(((Number) db.get("SnapshotRetentionLimit")).intValue()) : null,
             db.get("PreferredBackupWindow") != null ? db.get("PreferredBackupWindow") :
                 db.get("SnapshotWindow"),
             CloudOpsDataConverter.convertValue(

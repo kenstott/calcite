@@ -279,7 +279,6 @@ public class SharePointMetadataSchema extends AbstractSchema {
       Map<String, Table> tables = sourceSchema.getTableMapForMetadata();
 
       for (Map.Entry<String, Table> entry : tables.entrySet()) {
-        String tableName = entry.getKey();
         Table table = entry.getValue();
 
         if (table instanceof SharePointListTable) {
@@ -573,7 +572,7 @@ public class SharePointMetadataSchema extends AbstractSchema {
   /**
    * SQL standard information_schema.views.
    */
-  private class InformationSchemaViewsTable extends AbstractTable implements ScannableTable {
+  private static class InformationSchemaViewsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("TABLE_CATALOG", SqlTypeName.VARCHAR)
@@ -600,7 +599,7 @@ public class SharePointMetadataSchema extends AbstractSchema {
   /**
    * SQL standard information_schema.table_constraints.
    */
-  private class InformationSchemaTableConstraintsTable extends AbstractTable implements ScannableTable {
+  private static class InformationSchemaTableConstraintsTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)
@@ -627,7 +626,7 @@ public class SharePointMetadataSchema extends AbstractSchema {
   /**
    * SQL standard information_schema.key_column_usage.
    */
-  private class InformationSchemaKeyColumnUsageTable extends AbstractTable implements ScannableTable {
+  private static class InformationSchemaKeyColumnUsageTable extends AbstractTable implements ScannableTable {
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
       return typeFactory.builder()
           .add("CONSTRAINT_CATALOG", SqlTypeName.VARCHAR)

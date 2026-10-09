@@ -394,9 +394,6 @@ public class StatisticsBuilder {
     // Create HLL sketch by scanning actual Parquet data
     HyperLogLogSketch hllSketch = new HyperLogLogSketch(precision);
 
-    // Default estimate for fallback cases
-    int estimatedDistinctCount = 1000;
-
     try {
       org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(parquetFile.getAbsolutePath());
       org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();

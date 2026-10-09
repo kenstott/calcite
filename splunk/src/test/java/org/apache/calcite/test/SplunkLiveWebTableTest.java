@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * These tests require a live Splunk connection configured in local-properties.settings.
  */
 @Tag("integration")
+@Tag("splunk-data")
 class SplunkLiveWebTableTest {
   // Connection properties loaded from local-properties.settings
   private static String SPLUNK_URL = null;

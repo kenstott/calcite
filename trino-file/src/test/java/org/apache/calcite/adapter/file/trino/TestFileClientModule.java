@@ -237,6 +237,25 @@ class TestFileClientModule
     }
 
     @Test
+    void testCrawlFlowsIntoOperandAsTheAdaptersOwnSettings()
+            throws Exception
+    {
+        FileConfig config = new FileConfig().setGlob("/mnt/wiki").setCrawl(
+                "{\"startUrls\":[\"https://example.test/wiki/Start\"],\"maxDepth\":1,"
+                        + "\"removeSelectors\":[\".navbox\"]}");
+        Map<String, Object> operand = firstSchemaOperand(FileClientModule.buildModelJson(config, NO_ENV));
+        Map<?, ?> crawl = (Map<?, ?>) operand.get("crawl");
+        assertEquals(java.util.Collections.singletonList("https://example.test/wiki/Start"), crawl.get("startUrls"));
+        assertEquals(1, crawl.get("maxDepth"));
+        assertEquals(java.util.Collections.singletonList(".navbox"), crawl.get("removeSelectors"));
+
+        assertFalse(firstSchemaOperand(FileClientModule.buildModelJson(new FileConfig().setGlob("/mnt/wiki"), NO_ENV))
+                .containsKey("crawl"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(new FileConfig().setGlob("/mnt/wiki").setCrawl("not json"), NO_ENV));
+    }
+
+    @Test
     void testNoRefreshIntervalOmitsOperand()
             throws Exception
     {

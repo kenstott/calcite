@@ -23,6 +23,8 @@ enum OpenAPIMethod {
   OPENAPI_QUERYABLE_FIND(OpenAPITable.OpenAPIQueryable.class, "find",
       Map.class, List.class, List.class, Long.class, Long.class);
 
+  // java.lang.reflect.Method carries no immutability annotation; it is never changed here.
+  @SuppressWarnings("ImmutableEnumChecker")
   public final Method method;
 
   public static final String OPENAPI_PACKAGE = "org.apache.calcite.adapter.openapi";

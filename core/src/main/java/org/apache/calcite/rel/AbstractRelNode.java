@@ -239,8 +239,10 @@ public abstract class AbstractRelNode implements RelNode {
       RelMetadataQuery mq) {
     final MetadataFactory factory = cluster.getMetadataFactory();
     final M metadata = factory.query(this, mq, metadataClass);
-    checkNotNull(metadata, "no provider found (rel=%s, m=%s); "
-        + "a backstop provider is recommended", this, metadataClass);
+    // Not Guava's checkNotNull: the oldest supported Guava declares it without nullness
+    // annotations, and CheckerFramework then rejects a nullable argument
+    requireNonNull(metadata, () -> "no provider found (rel=" + this + ", m=" + metadataClass
+        + "); a backstop provider is recommended");
     // Usually the metadata belongs to the rel that created it. RelSubset and
     // HepRelVertex are notable exceptions, so disable the assertion. It's not
     // worth the performance hit to override this method for them.

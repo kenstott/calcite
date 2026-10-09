@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li><b>Vector similarity</b> — {@code COSINE_SIMILARITY}, {@code EUCLIDEAN_DISTANCE},
  *       {@code DOT_PRODUCT}, … (from {@link SimilarityFunctions}).</li>
- *   <li><b>Spatial</b> — {@code ST_*} (from calcite-core's {@link SpatialTypeFunctions});
+ *   <li><b>Spatial</b> — {@code ST_*} (from calcite-core's {@code SpatialTypeFunctions});
  *       the names match DuckDB's spatial extension so they pass through unchanged.</li>
  * </ul>
  */

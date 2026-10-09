@@ -33,7 +33,7 @@ import java.util.Map;
  *   <li>{@code P001001} (Census 2010) → {@code total_population}</li>
  * </ul>
  *
- * <h3>Mapping File Format</h3>
+ * <h2>Mapping File Format</h2>
  * <p>The mapping file should be JSON with a {@code conceptualVariables} object:
  * <pre>{@code
  * {
@@ -50,7 +50,7 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <h3>Usage in schema YAML</h3>
+ * <h2>Usage in schema YAML</h2>
  * <pre>{@code
  * hooks:
  *   variableNormalizer: "org.apache.calcite.adapter.file.etl.MappingFileVariableNormalizer"

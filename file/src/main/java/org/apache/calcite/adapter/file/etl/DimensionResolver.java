@@ -29,7 +29,7 @@ import java.util.Map;
  *   <li><b>Dependent dimensions</b> - values that depend on other dimension values</li>
  * </ul>
  *
- * <h3>Context-Aware Resolution</h3>
+ * <h2>Context-Aware Resolution</h2>
  * <p>The resolver receives a context map containing the current values of
  * previously-resolved dimensions. This enables dependent dimension patterns:
  *
@@ -47,7 +47,7 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <h3>Schema Configuration</h3>
+ * <h2>Schema Configuration</h2>
  * <pre>{@code
  * hooks:
  *   dimensionResolver: "org.apache.calcite.adapter.govdata.econ.BeaDimensionResolver"

@@ -170,9 +170,16 @@ public class SplunkDataModelDiscoveryTest {
     }
   }
 
-  @Test public void testDataModelDiscoveryWithDifferentApps() throws Exception {
+  private static Properties settings() {
     Properties props = new Properties();
-    props.load(SplunkDataModelDiscoveryTest.class.getResourceAsStream("/splunk-connection.properties"));
+    props.setProperty("splunk.url", SplunkTestSettings.url());
+    props.setProperty("splunk.username", SplunkTestSettings.user());
+    props.setProperty("splunk.password", SplunkTestSettings.password());
+    return props;
+  }
+
+  @Test public void testDataModelDiscoveryWithDifferentApps() throws Exception {
+    Properties props = settings();
 
     String[] apps = {"Splunk_SA_CIM", "search", "SplunkEnterpriseSecuritySuite"};
 
@@ -214,8 +221,7 @@ public class SplunkDataModelDiscoveryTest {
   }
 
   @Test public void testDataModelFiltering() throws Exception {
-    Properties props = new Properties();
-    props.load(SplunkDataModelDiscoveryTest.class.getResourceAsStream("/splunk-connection.properties"));
+    Properties props = settings();
 
     String[] filters = {"auth*", "web", "/^(auth|web|network)/"};
 

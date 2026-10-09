@@ -155,7 +155,7 @@ public class SharePointRestListClient {
         URLEncoder.encode(filename, StandardCharsets.UTF_8));
 
     // Use POST with X-HTTP-Method override for DELETE
-    JsonNode response = executeRestCall("POST", apiUrl, null, Map.of("X-HTTP-Method", "DELETE"));
+    executeRestCall("POST", apiUrl, null, Map.of("X-HTTP-Method", "DELETE"));
 
     return true; // If no exception thrown, consider success
   }

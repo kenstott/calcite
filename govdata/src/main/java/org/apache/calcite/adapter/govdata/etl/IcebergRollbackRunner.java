@@ -19,9 +19,6 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.io.CloseableIterable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -63,7 +60,6 @@ import java.util.Set;
  */
 public class IcebergRollbackRunner {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(IcebergRollbackRunner.class);
   private static final String BAR =
       "============================================================";
 

@@ -1156,14 +1156,6 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     }
   }
 
-  /**
-   * Materializes staging parquet files to Iceberg tables using the file adapter's
-   * IcebergMaterializer. This method is called after DocumentETLProcessor completes
-   * to commit the staging parquet files to their corresponding Iceberg tables.
-   *
-   * @param operand Schema operand with configuration
-   * @param secParquetDir Base directory for SEC parquet files
-   */
   @SuppressWarnings("unchecked")
   /**
    * Returns the ETL pass's own record of the source files it uploaded, draining it so it cannot

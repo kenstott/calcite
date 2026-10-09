@@ -67,7 +67,7 @@ public class OpenFdaPartitionResolver implements DimensionResolver {
       if (!partitions.isArray() || partitions.size() == 0) {
         LOGGER.warn("OpenFdaPartitionResolver: no partitions for endpoint '{}' in {}",
             endpoint, DOWNLOAD_JSON);
-        return Collections.emptyList();
+        return new ArrayList<String>();
       }
 
       List<String> files = new ArrayList<String>();

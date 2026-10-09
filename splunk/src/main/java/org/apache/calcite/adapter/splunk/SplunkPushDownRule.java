@@ -650,6 +650,9 @@ public class SplunkPushDownRule
    * Converts any timestamp representation to epoch seconds.
    * Handles: String, java.sql.Timestamp, java.sql.Date, Long, Integer, Calendar
    */
+  // The value may be a java.sql.Time, whose toInstant() throws; getTime() is the one call
+  // every java.util.Date supports.
+  @SuppressWarnings("JavaUtilDate")
   private static long convertToEpochSeconds(Object timestampValue) throws Exception {
     if (timestampValue instanceof java.sql.Timestamp) {
       return ((java.sql.Timestamp) timestampValue).getTime() / 1000;
@@ -924,96 +927,6 @@ public class SplunkPushDownRule
     return str;
   }
 
-  /**
-   * Converts a RexLiteral to a string representation suitable for Splunk queries.
-   * Handles nullable types and all SQL data types.
-   */
-  private static String toString(boolean like, RexLiteral literal) {
-    String value = null;
-    SqlTypeName litSqlType = literal.getTypeName();
-
-    if (SqlTypeName.NUMERIC_TYPES.contains(litSqlType)) {
-      // Handle all numeric types: INTEGER, BIGINT, DECIMAL, DOUBLE, FLOAT, etc.
-      Object literalValue = literal.getValue();
-      if (literalValue != null) {
-        value = literalValue.toString();
-      }
-    } else if (SqlTypeName.STRING_TYPES.contains(litSqlType)) {
-      // Handle all string types: CHAR, VARCHAR, LONGVARCHAR, CLOB, NCHAR, NVARCHAR,
-      // LONGNVARCHAR, NCLOB
-      Object literalValue = literal.getValue();
-      if (literalValue instanceof NlsString) {
-        value = ((NlsString) literalValue).getValue();
-      } else if (literalValue != null) {
-        value = literalValue.toString();
-      } else {
-        return null; // null literal value
-      }
-      if (like) {
-        value = value.replace("%", "*");
-      }
-      value = searchEscape(value);
-    } else if (SqlTypeName.DATETIME_TYPES.contains(litSqlType)) {
-      // Handle DATE, TIME, TIMESTAMP, etc.
-      Object literalValue = literal.getValue();
-      if (literalValue != null) {
-        if (literalValue instanceof java.sql.Timestamp) {
-          // Convert SQL Timestamp to epoch seconds for Splunk (as numeric, not escaped)
-          value = String.valueOf(((java.sql.Timestamp) literalValue).getTime() / 1000);
-        } else if (literalValue instanceof java.sql.Date) {
-          // Convert SQL Date to epoch seconds
-          value = String.valueOf(((java.sql.Date) literalValue).getTime() / 1000);
-        } else if (literalValue instanceof Long) {
-          // Already epoch milliseconds - convert to seconds
-          value = String.valueOf(((Long) literalValue) / 1000);
-        } else if (literalValue instanceof Integer) {
-          // Might be epoch seconds or days since epoch
-          Integer intValue = (Integer) literalValue;
-          if (litSqlType == SqlTypeName.DATE) {
-            // Days since epoch - convert to epoch seconds
-            value = String.valueOf(intValue * 24L * 60L * 60L);
-          } else {
-            // Assume it's already in seconds
-            value = intValue.toString();
-          }
-        } else {
-          // Fallback: try to parse as string and convert
-          String strValue = literalValue.toString();
-          try {
-            // Try parsing as epoch milliseconds first
-            long epochMs = Long.parseLong(strValue);
-            value = String.valueOf(epochMs / 1000);
-          } catch (NumberFormatException e) {
-            // If it's not a number, treat as string and escape
-            value = searchEscape(strValue);
-          }
-        }
-        // Note: Don't escape numeric timestamp values - they should remain as numbers
-      }
-    } else if (litSqlType == SqlTypeName.BOOLEAN) {
-      // Handle BOOLEAN type
-      Object literalValue = literal.getValue();
-      if (literalValue != null) {
-        value = literalValue.toString();
-      }
-    } else if (SqlTypeName.BINARY_TYPES.contains(litSqlType)) {
-      // Handle BINARY, VARBINARY - might need special encoding for Splunk
-      Object literalValue = literal.getValue();
-      if (literalValue != null) {
-        value = literalValue.toString();
-        value = searchEscape(value);
-      }
-    } else {
-      // Handle any other types by converting to string
-      Object literalValue = literal.getValue();
-      if (literalValue != null) {
-        value = literalValue.toString();
-        value = searchEscape(value);
-      }
-    }
-
-    return value;
-  }
 
   // transform the call from SplunkUdxRel to FarragoJavaUdxRel
   // usually used to stop the optimizer from calling us

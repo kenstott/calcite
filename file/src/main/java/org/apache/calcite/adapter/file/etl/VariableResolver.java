@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  *   <li>{@code {env:VAR_NAME:default}} - Environment variable with default value</li>
  * </ul>
  *
- * <h3>Usage Example</h3>
+ * <h2>Usage Example</h2>
  * <pre>{@code
  * // Simple substitution
  * String url = VariableResolver.substitute(
