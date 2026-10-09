@@ -1,11 +1,9 @@
 name: Windows file tests
 
 # Runs only the file adapter's tests on Windows, so a Windows fix can be checked without the
-# whole CI build. Starts on a push to the branch the Windows work is on, or by hand.
+# whole CI build. Started by hand.
 
 on:
-  push:
-    branches: ['fix/file-windows']
   workflow_dispatch:
 
 permissions:
