@@ -81,11 +81,8 @@ public class IcebergIntegrationTest {
   @AfterEach
   void tearDown() {
     IcebergCatalogManager.clearCache();
-    try {
-      hadoopCatalog.close();
-    } catch (Exception ignored) {
-      // Ignore close errors
-    }
+    // hadoopCatalog is not closed: closing a Hadoop catalog clears the commit locks of every
+    // catalog in the JVM (see EtlPipeline.openHadoopCatalog).
   }
 
   // ==========================================================================
