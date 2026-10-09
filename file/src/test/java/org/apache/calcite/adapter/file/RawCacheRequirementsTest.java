@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.etl.cache.BundleEntry;
 import org.apache.calcite.adapter.file.etl.cache.BundleIndex;
 import org.apache.calcite.adapter.file.etl.cache.CacheResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -148,7 +149,7 @@ public class RawCacheRequirementsTest {
     String result = resolver.resolve("file.csv");
 
     assertNotNull(result);
-    assertEquals(cacheDir.toString() + "/file.csv", result);
+    assertEquals(LocalPaths.join(cacheDir.toString(), "file.csv"), result);
     assertEquals("local content", new String(Files.readAllBytes(localFile), StandardCharsets.UTF_8));
   }
 

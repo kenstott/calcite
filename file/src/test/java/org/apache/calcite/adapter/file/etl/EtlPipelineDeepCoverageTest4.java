@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -531,7 +532,7 @@ public class EtlPipelineDeepCoverageTest4 {
   @Test void testVerifyDataExists_icebergWarehousePathUsed() throws Exception {
     StorageProvider sp = mockStorage();
     // First call for warehouse path - true; second for fallback - false
-    when(sp.isDirectory(eq("/wh/tbl/data"))).thenReturn(true);
+    when(sp.isDirectory(eq(LocalPaths.normalize("/wh/tbl/data")))).thenReturn(true);
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
@@ -550,8 +551,8 @@ public class EtlPipelineDeepCoverageTest4 {
 
   @Test void testVerifyDataExists_icebergWarehouseFallbackToBase() throws Exception {
     StorageProvider sp = mockStorage();
-    when(sp.isDirectory(eq("/wh/tbl/data"))).thenReturn(false); // warehouse miss — fallback to base
-    when(sp.isDirectory(eq("/base/tbl/data"))).thenReturn(true);
+    when(sp.isDirectory(eq(LocalPaths.normalize("/wh/tbl/data")))).thenReturn(false); // warehouse miss — fallback to base
+    when(sp.isDirectory(eq(LocalPaths.normalize("/base/tbl/data")))).thenReturn(true);
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
