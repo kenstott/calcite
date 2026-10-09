@@ -129,13 +129,20 @@ _REG_CAST_TYPES = frozenset(
     }
 )
 
-# Row-count sourcing for pg_class.reltuples (PGW-051). "count" issues one COUNT(*) per table
-# through the backend at catalog-build time (once per memoized catalog, never per query);
-# "off" leaves reltuples at 0, which is PG's "never analyzed" value. Counting is exact but
-# O(tables) full scans, so a deployment over a very large or slow adapter sets "off" via
-# set_row_count_mode(). Only a backend that implements table_row_count() is ever counted.
-_ROW_COUNT_MODES = ("count", "off")
+# Row-count sourcing for pg_class.reltuples (PGW-051).
+#   "count"    one COUNT(*) per table through the backend at catalog-build time (once per
+#              memoized catalog, never per query). Exact, but it resolves every table and is
+#              O(tables) metadata or data reads, so the first pg_catalog query waits for all of it.
+#   "recorded" what the adapter already holds for each relation, fetched in ONE backend call that
+#              resolves and reads nothing: a table's count as last read from its own metadata, a
+#              view's 0. A table with nothing recorded is reported by name and left unanalyzed.
+#   "off"      no counts at all.
+# A relation with no count carries -1, PostgreSQL's "never analyzed" value since version 14 (the
+# version this server declares); 0 is a real count there and on a view. Selected once at startup
+# via set_row_count_mode().
+_ROW_COUNT_MODES = ("count", "recorded", "off")
 _ROW_COUNT_MODE = "count"
+_NEVER_ANALYZED = -1.0
 
 
 def set_row_count_mode(mode: str) -> None:
@@ -237,6 +244,7 @@ _TABLE_MAP: dict[tuple[str, str], str] = {
     ("pg_catalog", "pg_subscription"): "_pg_subscription",
     ("pg_catalog", "pg_event_trigger"): "_pg_event_trigger",
     ("pg_catalog", "pg_stat_user_indexes"): "_pg_stat_user_indexes",
+    ("pg_catalog", "pg_stats"): "_pg_stats",
     ("pg_catalog", "pg_locks"): "_pg_locks",
     ("pg_catalog", "pg_stat_ssl"): "_pg_stat_ssl",
     ("pg_catalog", "pg_timezone_names"): "_pg_timezone_names",
@@ -1071,6 +1079,22 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("evtenabled", "char"),
         ("evttags", "ARRAY"),
     ],
+    "pg_stats": [
+        ("schemaname", "name"),
+        ("tablename", "name"),
+        ("attname", "name"),
+        ("inherited", "boolean"),
+        ("null_frac", "real"),
+        ("avg_width", "integer"),
+        ("n_distinct", "real"),
+        ("most_common_vals", "text"),
+        ("most_common_freqs", "ARRAY"),
+        ("histogram_bounds", "text"),
+        ("correlation", "real"),
+        ("most_common_elems", "text"),
+        ("most_common_elem_freqs", "ARRAY"),
+        ("elem_count_histogram", "ARRAY"),
+    ],
     "pg_stat_user_indexes": [
         ("relid", "oid"),
         ("indexrelid", "oid"),
@@ -1689,7 +1713,7 @@ def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | Non
     for _, s, t, _, toid in idx.tables:
         ns_oid = idx.ns_map.get(s, 2200)
         natts = natts_by_toid.get(toid, 0)
-        reltuples = float(row_counts.get(toid, 0.0)) if row_counts else 0.0
+        reltuples = float(row_counts.get(toid, _NEVER_ANALYZED)) if row_counts else _NEVER_ANALYZED
         pg_class_rows.append(
             (
                 toid,
@@ -2215,6 +2239,13 @@ def _populate_empty_system_tables(db) -> None:
     )
     db.execute(
         "CREATE TABLE _pg_event_trigger (oid INTEGER, evtname VARCHAR, evtevent VARCHAR, evtowner INTEGER, evtfoid INTEGER, evtenabled VARCHAR, evttags VARCHAR)"
+    )
+    # PostgreSQL 16's column list. No rows: per-column statistics are not served yet, which is
+    # what PostgreSQL itself shows for a table that has never been analyzed. The relation exists
+    # so a client that plans from statistics (it reads pg_class.reltuples and this view) gets an
+    # empty answer rather than "relation does not exist".
+    db.execute(
+        "CREATE TABLE _pg_stats (schemaname VARCHAR, tablename VARCHAR, attname VARCHAR, inherited BOOLEAN, null_frac REAL, avg_width INTEGER, n_distinct REAL, most_common_vals VARCHAR, most_common_freqs VARCHAR, histogram_bounds VARCHAR, correlation REAL, most_common_elems VARCHAR, most_common_elem_freqs VARCHAR, elem_count_histogram VARCHAR)"
     )
     db.execute(
         "CREATE TABLE _pg_stat_user_indexes (relid INTEGER, indexrelid INTEGER, schemaname VARCHAR, relname VARCHAR, indexrelname VARCHAR, idx_scan BIGINT, idx_tup_read BIGINT, idx_tup_fetch BIGINT)"
@@ -2996,11 +3027,14 @@ def _fetch_row_counts(ctx, idx: CatalogIndex, backend) -> dict[int, float]:
     Runs ONCE per catalog build (the catalog DB is memoized per role and invalidated on
     DDL / re-populate), never per query. Backends that cannot count — the Phase-0 stub, the
     bridge backend whose JVM lives in the child — do not implement ``table_row_count`` and
-    contribute nothing, leaving reltuples at 0 (PG's "never analyzed"). Counting is skipped
-    entirely under ``set_row_count_mode("off")``.
+    contribute nothing, leaving every relation unanalyzed. Nothing is fetched under
+    ``set_row_count_mode("off")``; ``"recorded"`` takes the counts the adapter already holds
+    instead of counting (see :func:`_recorded_row_counts`).
     """
     if _ROW_COUNT_MODE == "off" or ctx is None or backend is None:
         return {}
+    if _ROW_COUNT_MODE == "recorded":
+        return _recorded_row_counts(ctx, idx, backend)
     counter = getattr(backend, "table_row_count", None)
     if counter is None:
         return {}
@@ -3017,16 +3051,48 @@ def _fetch_row_counts(ctx, idx: CatalogIndex, backend) -> dict[int, float]:
             # hits the same class of not-yet-ETL'd table earlier in startup). Must not take
             # the whole catalog build down with it: every OTHER table in a 26-schema
             # warehouse having already mounted successfully is the normal case, and one
-            # still-materializing table falls back to reltuples=0 ("never analyzed" in PG's
-            # own semantics, the same value already used for backends that cannot count at
-            # all) exactly like FileSchema's own per-table metadata recording already
-            # tolerates a missing table elsewhere in the same schema instead of aborting
-            # the whole schema.
+            # still-materializing table is left unanalyzed (the same value already used for
+            # backends that cannot count at all) exactly like FileSchema's own per-table
+            # metadata recording already tolerates a missing table elsewhere in the same
+            # schema instead of aborting the whole schema.
             log.warning(
-                "table_row_count failed for %s.%s (%s: %s) — leaving reltuples=0",
+                "table_row_count failed for %s.%s (%s: %s) — leaving reltuples unanalyzed",
                 schema_name, table_name, type(e).__name__, e,
             )
-            counts[toid] = 0.0
+            counts[toid] = _NEVER_ANALYZED
+    return counts
+
+
+def _recorded_row_counts(ctx, idx: CatalogIndex, backend) -> dict[int, float]:
+    """pg_class.reltuples from what the adapter has already recorded — no table is resolved.
+
+    ``backend.recorded_row_counts()`` answers for every relation in one call: a table's count
+    as last read from its metadata, 0 for a view. Counting is never the fallback here: a table
+    the adapter holds nothing for is a defect in its recorded metadata, so it is named in the
+    log and left unanalyzed rather than resolved and counted behind the client's first
+    pg_catalog query.
+    """
+    recorded = {
+        (schema.lower(), table.lower()): count
+        for (schema, table), count in backend.recorded_row_counts().items()
+    }
+    physical = {tm.table_id: (tm.schema_name, tm.table_name) for tm in ctx.tables.values()}
+    counts: dict[int, float] = {}
+    unrecorded: list[str] = []
+    for _cat, _sch, _tname, table_id, toid in idx.tables:
+        schema_name, table_name = physical[table_id]
+        count = recorded.get((schema_name.lower(), table_name.lower()))
+        if count is None:
+            unrecorded.append(f"{schema_name}.{table_name}")
+            counts[toid] = _NEVER_ANALYZED
+        else:
+            counts[toid] = float(count)
+    if unrecorded:
+        log.warning(
+            "[CATALOG] no recorded row count for %d of %d relation(s); each reports "
+            "reltuples=-1 (never analyzed) until the adapter records one: %s",
+            len(unrecorded), len(counts), ", ".join(sorted(unrecorded)),
+        )
     return counts
 
 

@@ -40,6 +40,22 @@ uv pip install --python .venv -e ./vendor/buenavista -e . pytest
 psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
 ```
 
+## Row counts in `pg_class.reltuples`
+
+Clients that attach the server as a database (DuckDB, the PostgreSQL scanner, Trino's
+PostgreSQL connector) read `pg_catalog` first and use `reltuples` to plan. `--row-counts`
+selects where it comes from:
+
+- `count` (default): one `COUNT(*)` per table when the catalog is first built. Exact, but the
+  first `pg_catalog` query waits for every table to be resolved and counted.
+- `recorded`: the counts the adapter already holds, fetched in one call that resolves no table.
+  For the file adapter that is a table's count as last read from its Iceberg metadata, else the
+  `observedCoverage.rowCount` of its declaration; a view is 0. A table with nothing recorded is
+  named in the log and reports -1. The pgwire-govdata bundle starts in this mode.
+- `off`: every table reports -1.
+
+-1 is PostgreSQL's "never analyzed" value since version 14.
+
 ## Rejecting unfiltered scans of large tables
 
 A SELECT that scans a very large table with no partition filter holds the shared engine

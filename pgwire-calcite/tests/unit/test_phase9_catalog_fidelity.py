@@ -176,7 +176,9 @@ def test_row_count_mode_off_disables_counting(calcite_backend):
             state,
             "SELECT reltuples FROM pg_catalog.pg_class WHERE lower(relname) = 'emps'",
         )
-        assert rows == [(0.0,)]
+        # -1 is "never analyzed" since PostgreSQL 14, the version the server declares; 0 would
+        # claim the table is known to be empty.
+        assert rows == [(-1.0,)]
     finally:
         catalog.set_row_count_mode("count")
         catalog.invalidate_catalog_cache()
@@ -189,6 +191,75 @@ def test_row_count_mode_rejects_an_unknown_mode():
 
 def test_backend_table_row_count_is_exact(calcite_backend):
     assert calcite_backend.table_row_count("SALES", "emps") == 10
+
+
+class _RecordedBackend(StubBackend):
+    """Holds a count for depts only. Counting a table is the thing "recorded" must never do."""
+
+    def recorded_row_counts(self):
+        return {("sales", "DEPTS"): 4}
+
+    def table_row_count(self, schema, table):
+        raise AssertionError(f"recorded mode counted {schema}.{table}")
+
+
+def test_recorded_mode_reports_held_counts_and_names_the_table_without_one(caplog):
+    catalog.set_row_count_mode("recorded")
+    try:
+        state = _keyed_state(_RecordedBackend())
+        with caplog.at_level("WARNING"):
+            rows = _rows(
+                state,
+                "SELECT lower(relname), reltuples FROM pg_catalog.pg_class "
+                "WHERE lower(relname) IN ('emps', 'depts') AND relkind = 'r' ORDER BY 1",
+            )
+        assert rows == [("depts", 4.0), ("emps", -1.0)]
+        assert "SALES.emps" in caplog.text
+        assert "SALES.depts" not in caplog.text
+    finally:
+        catalog.set_row_count_mode("count")
+        catalog.invalidate_catalog_cache()
+
+
+def test_recorded_mode_reports_zero_for_a_view():
+    class _ViewBackend(_RecordedBackend):
+        def recorded_row_counts(self):
+            return {("SALES", "depts"): 4, ("SALES", "emps"): 0}
+
+    catalog.set_row_count_mode("recorded")
+    try:
+        state = _keyed_state(_ViewBackend())
+        rows = _rows(
+            state, "SELECT reltuples FROM pg_catalog.pg_class WHERE lower(relname) = 'emps'"
+        )
+        assert rows == [(0.0,)]
+    finally:
+        catalog.set_row_count_mode("count")
+        catalog.invalidate_catalog_cache()
+
+
+def test_pg_stats_is_queryable_and_empty():
+    # What a statistics-driven client (Trino's PostgreSQL connector) sends per table.
+    state = _keyed_state(StubBackend())
+    assert _rows(
+        state,
+        "SELECT attname, null_frac, n_distinct, avg_width FROM pg_catalog.pg_stats "
+        "WHERE schemaname = 'SALES' AND tablename = 'emps'",
+    ) == []
+    catalog.invalidate_catalog_cache()
+
+
+def test_launcher_refuses_recorded_counts_from_a_backend_that_holds_none(capsys):
+    # The stub backend records nothing. Starting anyway would silently serve -1 for every table.
+    with pytest.raises(SystemExit):
+        launcher.main(["--backend", "stub", "--port", "0", "--row-counts", "recorded"])
+    assert "--row-counts recorded is not supported by the stub backend" in capsys.readouterr().err
+
+
+def test_backend_recorded_row_counts_resolves_no_table(calcite_backend):
+    # The fixture's tables are plain CSV files: the adapter holds no count for them, and says so
+    # rather than counting. The call itself reaching the adapter is what this proves.
+    assert calcite_backend.recorded_row_counts() == {}
 
 
 # --------------------------------------------------------------------------- 5

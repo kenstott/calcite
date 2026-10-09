@@ -489,6 +489,27 @@ class CalciteBackend:
             finally:
                 stmt.close()
 
+    def recorded_row_counts(self) -> dict:
+        """``{(schema, table): rows}`` for every relation the file adapter already holds a
+        count for, for pg_class.reltuples under ``--row-counts recorded``.
+
+        One call into the adapter's own bookkeeping (``RecordedRowCounts``): it reads what the
+        mounted schemas have in memory and resolves no table, so it costs the same whether the
+        model has ten tables or a thousand.
+        """
+        if self._conn is None:
+            raise RuntimeError("Calcite connection is not open")
+        import jpype
+
+        lookup = jpype.JClass("org.apache.calcite.adapter.file.metadata.RecordedRowCounts")
+        with self._lock:
+            by_schema = lookup.forConnection(self._conn)
+            return {
+                (str(schema.getKey()), str(table.getKey())): int(table.getValue().longValue())
+                for schema in by_schema.entrySet()
+                for table in schema.getValue().entrySet()
+            }
+
     @property
     def connection(self):
         """The embedded java.sql.Connection (used by catalog_populate, Phase 2)."""
