@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.file.converters;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -474,9 +475,9 @@ public class FileConversionManager {
           fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
 
       // If relativePath is provided, include directory prefix in the pattern
-      if (relativePath != null && relativePath.contains(File.separator)) {
-        String dirPrefix = relativePath.substring(0, relativePath.lastIndexOf(File.separator))
-            .replace(File.separator, "_");
+      String dirPrefix =
+          relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
+      if (dirPrefix != null) {
         baseName = dirPrefix + "_" + baseName;
       }
 

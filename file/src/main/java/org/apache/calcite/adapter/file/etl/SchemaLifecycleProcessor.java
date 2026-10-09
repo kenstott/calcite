@@ -15,6 +15,7 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.etl.cache.BundleArchiver;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -363,11 +364,7 @@ public class SchemaLifecycleProcessor {
     String schemaName = context.getSchemaContext().getConfig().getName();
     String schemaMaterializeDir = baseMaterializeDir;
     if (baseMaterializeDir != null && schemaName != null && !schemaName.isEmpty()) {
-      if (!baseMaterializeDir.endsWith("/")) {
-        schemaMaterializeDir = baseMaterializeDir + "/" + schemaName;
-      } else {
-        schemaMaterializeDir = baseMaterializeDir + schemaName;
-      }
+      schemaMaterializeDir = LocalPaths.join(baseMaterializeDir, schemaName);
     }
 
     // Create and execute the ETL pipeline

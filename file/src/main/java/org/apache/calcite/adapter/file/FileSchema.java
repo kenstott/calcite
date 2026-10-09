@@ -45,6 +45,7 @@ import org.apache.calcite.adapter.file.table.GlobParquetTable;
 import org.apache.calcite.adapter.file.table.JsonScannableTable;
 import org.apache.calcite.adapter.file.table.ParquetTranslatableTable;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.SchemaPlus;
@@ -1396,6 +1397,23 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * The path the storage provider is listed from: the base directory, or the root when
+   * there is none. A relative local base directory is taken from the root; a URI and an
+   * absolute local path, which on Windows starts with a drive letter, are used as given.
+   */
+  private String storageBasePath() {
+    if (baseDirectory == null) {
+      return "/";
+    }
+    if (baseDirectory.startsWith("s3://") || baseDirectory.startsWith("gs://")
+        || baseDirectory.startsWith("azure://") || baseDirectory.startsWith("http")
+        || LocalPaths.isAbsolute(baseDirectory)) {
+      return baseDirectory;
+    }
+    return "/" + baseDirectory;
+  }
+
+  /**
    * Converts complex file types from storage provider to JSON.
    * Downloads convertible files (Excel, HTML, DOCX, etc.) to cache and converts them.
    */
@@ -1406,18 +1424,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Determine the base path for storage provider using baseDirectory (data directory)
     // not sourceDirectory (which may be the working directory)
-    String basePath = "/";
-    if (baseDirectory != null) {
-      basePath = baseDirectory;
-      // Handle cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
-    }
+    String basePath = storageBasePath();
 
     try {
       LOGGER.debug("Checking storage provider for convertible files at: {}", basePath);
@@ -1443,10 +1450,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
             // Calculate relative path to preserve directory structure
             String relativePath = entry.getName();
-            if (basePath != null && !basePath.equals("/") && relativePath.startsWith(basePath)) {
-              relativePath = relativePath.substring(basePath.length());
-              if (relativePath.startsWith("/")) {
-                relativePath = relativePath.substring(1);
+            if (!basePath.equals("/")) {
+              String underBase = LocalPaths.relativize(basePath, relativePath);
+              if (underBase != null) {
+                relativePath = underBase;
               }
             }
 
@@ -1487,9 +1494,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Create cached file path preserving directory structure
     String relativePath = entry.getName();
-    if (relativePath.contains("/")) {
+    String subPath = LocalPaths.parent(relativePath);
+    if (subPath != null) {
       // Create subdirectories if needed
-      String subPath = relativePath.substring(0, relativePath.lastIndexOf("/"));
       File subDir = new File(cacheDir, subPath);
       if (!subDir.exists()) {
         subDir.mkdirs();
@@ -2507,13 +2514,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         return null;
       }
       String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
-      warehousePath = baseDirectory + "/" + schemaSegment;
+      warehousePath = LocalPaths.normalize(baseDirectory + "/" + schemaSegment);
     }
     String icebergTableName = icebergConf != null ? (String) icebergConf.get("tableName") : null;
     if (icebergTableName == null) {
       icebergTableName = tableName;
     }
-    return warehousePath.endsWith("/") ? warehousePath + icebergTableName : warehousePath + "/" + icebergTableName;
+    return LocalPaths.join(warehousePath, icebergTableName);
   }
 
   private @Nullable Map<String, Object> findDeclaredTableDef(String tableName) {
@@ -4484,7 +4491,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           String warehousePath = icebergConf != null ? (String) icebergConf.get("warehousePath") : null;
           if (warehousePath == null && baseDirectory != null) {
             String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
-            warehousePath = baseDirectory + "/" + schemaSegment;
+            warehousePath = LocalPaths.normalize(baseDirectory + "/" + schemaSegment);
           }
           if (warehousePath == null) {
             throw new RuntimeException("Cannot create IcebergTable for '" + config.getName()
@@ -4496,9 +4503,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             icebergTableName = config.getName();
           }
 
-          String tablePath = warehousePath.endsWith("/")
-              ? warehousePath + icebergTableName
-              : warehousePath + "/" + icebergTableName;
+          String tablePath = LocalPaths.join(warehousePath, icebergTableName);
 
           // A declared Iceberg table with no backing data yet (ETL hasn't materialized it) must
           // not be registered: IcebergTable loads lazily, so a phantom entry here would sail
@@ -4631,12 +4636,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               continue;
             }
 
-            // Ensure path separator
-            if (!basePath.endsWith("/")) {
-              basePath = basePath + "/";
-            }
-
-            String patternPath = basePath + config.getPattern();
+            String patternPath = LocalPaths.join(basePath, config.getPattern());
             partitionSource = Sources.of(patternPath);
             LOGGER.info("Recording metadata for lazy-initialized table '{}' using pattern: {}",
                 config.getName(), patternPath);
@@ -4788,7 +4788,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // This is the default convention used by the ETL pipeline
     if (warehousePath == null && baseDirectory != null) {
       String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
-      warehousePath = baseDirectory + "/" + schemaSegment;
+      warehousePath = LocalPaths.normalize(baseDirectory + "/" + schemaSegment);
       LOGGER.debug("Using default warehouse path for table '{}': {}", tableName, warehousePath);
     }
     if (warehousePath == null) {
@@ -4802,11 +4802,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     try {
       // Build the full table location path using original s3:// format for consistency
-      String tableLocation = warehousePath;
-      if (!tableLocation.endsWith("/")) {
-        tableLocation = tableLocation + "/";
-      }
-      tableLocation = tableLocation + icebergTableName;
+      String tableLocation = LocalPaths.join(warehousePath, icebergTableName);
 
       // Check the Iceberg table exists via its metadata pointer using the StorageProvider
       // (AWS SDK v2 for S3, or local FS) rather than a HadoopCatalog — this keeps the
@@ -4975,6 +4971,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // Fallback to local file system when no storage provider is configured
     if (storageProvider == null) {
       LOGGER.debug("findMatchingFiles: using local file system fallback for pattern={}", pattern);
+      if (LocalPaths.isUri(searchPath)) {
+        // Not a directory of the local file system, and not a path Windows accepts
+        return result;
+      }
       try {
         java.nio.file.Path basePath = java.nio.file.Paths.get(searchPath);
         if (!java.nio.file.Files.exists(basePath)) {
@@ -5058,13 +5058,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         String relativePath;
 
         // Extract relative path by removing the base directory prefix
-        if (fullPath.startsWith(searchPath)) {
-          relativePath = fullPath.substring(searchPath.length());
-          // Remove leading slash if present
-          while (relativePath.startsWith("/")) {
-            relativePath = relativePath.substring(1);
-          }
-        } else {
+        relativePath = LocalPaths.relativize(searchPath, fullPath);
+        if (relativePath == null) {
           relativePath = entry.getName();
         }
 
@@ -5267,18 +5262,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Determine the base path to start from
-    String basePath = "/";
-    if (baseDirectory != null) {
-      basePath = baseDirectory;
-      // Don't normalize S3 or other cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
-    }
+    String basePath = storageBasePath();
 
     List<File> files = new ArrayList<>();
 
@@ -5342,9 +5326,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // Skip hidden directories (e.g., .aperio, .DS_Store directories)
         // Converted files from .aperio/conversions/ are handled separately
         String dirName = entry.getName();
-        if (dirName.contains("/")) {
-          dirName = dirName.substring(dirName.lastIndexOf('/') + 1);
-        }
+        dirName = LocalPaths.fileName(dirName);
         if (dirName.startsWith(".")) {
           LOGGER.debug("Skipping hidden directory: {}", entry.getPath());
           continue;
@@ -5359,9 +5341,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       } else if (!entry.isDirectory()) {
         // Skip hidden files
         String fileName = entry.getName();
-        if (fileName.contains("/")) {
-          fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
-        }
+        fileName = LocalPaths.fileName(fileName);
         if (fileName.startsWith(".")) {
           continue;
         }
@@ -5450,18 +5430,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Determine the base path to start from
-    String basePath = "/";
-    if (baseDirectory != null) {
-      basePath = baseDirectory;
-      // Don't normalize S3 or other cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
-    }
+    String basePath = storageBasePath();
 
     try {
       LOGGER.debug("[processStorageProviderFiles] Processing files from storage provider at: {}, recursive={}", basePath, recursive);
@@ -5552,12 +5521,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           if (globMatcher != null) {
             // Compute relative path from base for glob matching
             String entryPath = entry.getPath();
-            String relativePath = entryPath;
-            if (entryPath.startsWith(basePath)) {
-              relativePath = entryPath.substring(basePath.length());
-              if (relativePath.startsWith("/") || relativePath.startsWith(File.separator)) {
-                relativePath = relativePath.substring(1);
-              }
+            String relativePath = LocalPaths.relativize(basePath, entryPath);
+            if (relativePath == null) {
+              relativePath = entryPath;
             }
             if (!globMatcher.matches(java.nio.file.Paths.get(relativePath))
                 && (rootGlobMatcher == null || !rootGlobMatcher.matches(java.nio.file.Paths.get(relativePath)))) {

@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.iceberg;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -208,7 +210,6 @@ public class CompactionRunner {
   }
 
   private static String tableName(String tablePath) {
-    int lastSlash = tablePath.lastIndexOf('/');
-    return lastSlash >= 0 ? tablePath.substring(lastSlash + 1) : tablePath;
+    return LocalPaths.fileName(tablePath);
   }
 }

@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.file.iceberg;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
@@ -2444,7 +2445,7 @@ public class IcebergMaterializer {
    * interprets.
    */
   private static String deriveFileSuffix(String sourcePattern) {
-    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    int lastSlashIdx = LocalPaths.lastSeparator(sourcePattern);
     if (lastSlashIdx > 0) {
       String filePattern = sourcePattern.substring(lastSlashIdx + 1);
       int starIdx = filePattern.indexOf('*');
@@ -2532,11 +2533,13 @@ public class IcebergMaterializer {
     String yearMarker = "year=" + year + "/";
     List<String> matched = new ArrayList<String>();
     for (String path : staged) {
-      int markerIdx = path.indexOf(yearMarker);
+      // Read by "/": a staged local file on Windows is separated by "\\"
+      String slashed = LocalPaths.toSlashes(path);
+      int markerIdx = slashed.indexOf(yearMarker);
       if (markerIdx < 0) {
         continue;
       }
-      String remainder = path.substring(markerIdx + yearMarker.length());
+      String remainder = slashed.substring(markerIdx + yearMarker.length());
       if (remainder.indexOf('/') >= 0) {
         continue;
       }
@@ -2608,7 +2611,7 @@ public class IcebergMaterializer {
   private Map<String, Set<String>> getSourceAccessions(String sourcePattern, String year) {
     // Extract file suffix from source pattern (e.g., "_facts.parquet" from "year=*/*_facts.parquet")
     String fileSuffix = "_metadata.parquet"; // default
-    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    int lastSlashIdx = LocalPaths.lastSeparator(sourcePattern);
     if (lastSlashIdx > 0) {
       String filePattern = sourcePattern.substring(lastSlashIdx + 1);
       // Pattern is like "*_facts.parquet" - extract "_facts.parquet"
@@ -2660,9 +2663,10 @@ public class IcebergMaterializer {
         if (file.isDirectory()) {
           continue;
         }
-        int markerIdx = file.getPath().indexOf(yearMarker);
+        String slashed = LocalPaths.toSlashes(file.getPath());
+        int markerIdx = slashed.indexOf(yearMarker);
         if (markerIdx >= 0
-            && file.getPath().indexOf('/', markerIdx + yearMarker.length()) >= 0) {
+            && slashed.indexOf('/', markerIdx + yearMarker.length()) >= 0) {
           continue;
         }
         String fileName = file.getName();
@@ -3537,7 +3541,7 @@ public class IcebergMaterializer {
     int wildcardIdx = basePath.indexOf('*');
     if (wildcardIdx >= 0) {
       basePath = basePath.substring(0, wildcardIdx);
-      int lastSlash = basePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(basePath);
       if (lastSlash >= 0) {
         basePath = basePath.substring(0, lastSlash + 1);
       }
@@ -3622,7 +3626,7 @@ public class IcebergMaterializer {
     if (sourcePattern == null) {
       return null;
     }
-    String fileName = sourcePattern.substring(sourcePattern.lastIndexOf('/') + 1);
+    String fileName = LocalPaths.fileName(sourcePattern);
     int open = fileName.indexOf('*');
     if (open < 0) {
       return null;

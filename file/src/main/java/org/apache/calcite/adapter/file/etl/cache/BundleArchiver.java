@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl.cache;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -312,14 +313,8 @@ public class BundleArchiver {
   private static String relativize(File root, File file) {
     String rootPath = root.getAbsolutePath();
     String filePath = file.getAbsolutePath();
-    if (filePath.startsWith(rootPath)) {
-      String rel = filePath.substring(rootPath.length());
-      if (rel.startsWith("/") || rel.startsWith(File.separator)) {
-        rel = rel.substring(1);
-      }
-      return rel;
-    }
-    return file.getName();
+    String rel = LocalPaths.relativize(rootPath, filePath);
+    return rel != null ? rel : file.getName();
   }
 
   /** Recursively collects all files under a directory. */

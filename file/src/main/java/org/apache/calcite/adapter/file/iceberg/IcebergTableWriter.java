@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.iceberg;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
@@ -411,7 +412,7 @@ public class IcebergTableWriter {
         // immutability (corrupts time-travel, and lets a concurrent reader/cache observe a
         // mutating object). Keep the partition directory, but give each moved file a unique name,
         // matching writeRecords()/compaction.
-        int relLastSlash = relativePath.lastIndexOf('/');
+        int relLastSlash = LocalPaths.lastSeparator(relativePath);
         String partitionDir = relLastSlash >= 0 ? relativePath.substring(0, relLastSlash + 1) : "";
         String uniqueName = "data_"
             + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
@@ -451,12 +452,10 @@ public class IcebergTableWriter {
     // file in a Hive-partitioned staging dir landed at table-root/data/<file>.parquet with no
     // partition value, corrupting partition-pruning metadata while the column data stayed
     // correct). Strip the scheme from both sides before comparing so partition dirs survive.
-    String normalizedBase = stripS3Scheme(basePath);
-    normalizedBase = normalizedBase.endsWith("/") ? normalizedBase : normalizedBase + "/";
-    String normalizedFull = stripS3Scheme(fullPath);
-
-    if (normalizedFull.startsWith(normalizedBase)) {
-      return normalizedFull.substring(normalizedBase.length());
+    String relativePath =
+        LocalPaths.relativize(stripS3Scheme(basePath), stripS3Scheme(fullPath));
+    if (relativePath != null && !relativePath.isEmpty()) {
+      return relativePath;
     }
 
     throw new IllegalStateException("Staged file " + fullPath
@@ -468,7 +467,7 @@ public class IcebergTableWriter {
    * Gets the parent path of a file path.
    */
   private String getParentPath(String path) {
-    int lastSlash = path.lastIndexOf('/');
+    int lastSlash = LocalPaths.lastSeparator(path);
     if (lastSlash <= 0) {
       return null;
     }
@@ -492,8 +491,10 @@ public class IcebergTableWriter {
 
     // Extract partition values from Hive-style path
     org.apache.iceberg.PartitionData partitionData = new org.apache.iceberg.PartitionData(spec.partitionType());
-    int dataIdx = pathStr.indexOf("/data/");
-    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
+    // Read by "/": a local path on Windows is separated by "\\"
+    String slashed = LocalPaths.toSlashes(pathStr);
+    int dataIdx = slashed.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? slashed.substring(dataIdx + 6) : slashed;
     String[] pathParts = relativePath.split("/");
 
     for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename
@@ -1634,7 +1635,7 @@ public class IcebergTableWriter {
     java.util.TreeMap<Integer, String> versionToPath = new java.util.TreeMap<>();
     for (StorageProvider.FileEntry entry : metadataFiles) {
       String path = entry.getPath();
-      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      String fileName = LocalPaths.fileName(path);
       java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
       if (matcher.find()) {
         versionToPath.put(Integer.parseInt(matcher.group(1)), path);
@@ -2655,11 +2656,7 @@ public class IcebergTableWriter {
       int maxVersion = 0;
       java.util.regex.Pattern versionPattern = java.util.regex.Pattern.compile("v(\\d+)\\.metadata\\.json$");
       for (StorageProvider.FileEntry entry : metadataFiles) {
-        String fileName = entry.getPath();
-        int lastSlash = fileName.lastIndexOf('/');
-        if (lastSlash >= 0) {
-          fileName = fileName.substring(lastSlash + 1);
-        }
+        String fileName = LocalPaths.fileName(entry.getPath());
         java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
         if (matcher.find()) {
           int version = Integer.parseInt(matcher.group(1));
@@ -2756,7 +2753,7 @@ public class IcebergTableWriter {
     java.util.TreeSet<Integer> candidates = new java.util.TreeSet<>(java.util.Collections.reverseOrder());
     for (StorageProvider.FileEntry entry : metadataFiles) {
       String path = entry.getPath();
-      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      String fileName = LocalPaths.fileName(path);
       java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
       if (matcher.find()) {
         candidates.add(Integer.parseInt(matcher.group(1)));

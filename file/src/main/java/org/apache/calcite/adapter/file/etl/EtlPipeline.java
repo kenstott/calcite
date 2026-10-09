@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -878,11 +879,7 @@ public class EtlPipeline {
       String tableDirectory = baseDirectory;
       if (format != MaterializeConfig.Format.ICEBERG
           && tableName != null && !tableName.isEmpty()) {
-        if (!baseDirectory.endsWith("/")) {
-          tableDirectory = baseDirectory + "/" + tableName;
-        } else {
-          tableDirectory = baseDirectory + tableName;
-        }
+        tableDirectory = LocalPaths.join(baseDirectory, tableName);
       }
 
       // materialize.enabled: false means "run the pipeline, write nothing" — a supported
@@ -3929,7 +3926,7 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
@@ -4053,7 +4050,7 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
@@ -4155,7 +4152,7 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }

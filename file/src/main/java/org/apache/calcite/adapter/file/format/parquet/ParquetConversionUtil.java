@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFile;
 import org.apache.calcite.adapter.file.table.CsvTable;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.file.util.NullEquivalents;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
@@ -125,11 +126,7 @@ public class ParquetConversionUtil {
     baseName = org.apache.calcite.adapter.file.converters.ConverterUtils.sanitizeIdentifier(baseName);
 
     // Create target Parquet file path
-    String targetPath = cacheDirFile.getPath();
-    if (!targetPath.endsWith("/")) {
-      targetPath += "/";
-    }
-    targetPath += baseName + ".parquet";
+    String targetPath = LocalPaths.join(cacheDirFile.getPath(), baseName + ".parquet");
 
     StorageProviderFile parquetFile = StorageProviderFile.create(targetPath, storageProvider);
 

@@ -21,6 +21,7 @@ import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.materialize.MaterializationService;
@@ -684,8 +685,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         directoryPath = new File(modelFileDirPath, directory).getPath();
         LOGGER.info("Resolved relative path against model directory: {} -> {}", directory, directoryPath);
       } else {
-        // Absolute path or cloud URI - use as-is
-        directoryPath = directory;
+        // Absolute path or cloud URI - used as given, but for a local path on Windows
+        // written with both separators, which is given one
+        directoryPath = LocalPaths.normalize(directory);
         LOGGER.info("Using directory path: {}", directoryPath);
       }
     } else if (modelFileDirPath != null) {

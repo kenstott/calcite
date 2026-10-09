@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
@@ -2365,7 +2366,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * Gets the parent path for a remote path.
    */
   private String getRemoteParentPath(String path) {
-    int lastSlash = path.lastIndexOf('/');
+    int lastSlash = LocalPaths.lastSeparator(path);
     if (lastSlash <= 0) {
       return null;
     }
@@ -2389,8 +2390,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Extract partition values from Hive-style path
     org.apache.iceberg.PartitionData partitionData =
         new org.apache.iceberg.PartitionData(spec.partitionType());
-    int dataIdx = pathStr.indexOf("/data/");
-    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
+    // Read by "/": a local path on Windows is separated by "\\"
+    String slashed = LocalPaths.toSlashes(pathStr);
+    int dataIdx = slashed.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? slashed.substring(dataIdx + 6) : slashed;
     String[] pathParts = relativePath.split("/");
 
     for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename

@@ -15,6 +15,7 @@ import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.metadata.TableConstraints;
 import org.apache.calcite.adapter.file.partition.PartitionDetector;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
@@ -1399,7 +1400,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
         }
       }
       // Just use parent directory
-      int lastSlash = firstFile.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(firstFile);
       if (lastSlash > 0) {
         return firstFile.substring(0, lastSlash);
       }
@@ -1466,7 +1467,7 @@ public class PartitionedParquetTable extends AbstractTable implements ScannableT
     // Fallback: use first file's directory with glob
     if (!filePaths.isEmpty()) {
       String firstFile = filePaths.get(0);
-      int lastSlash = firstFile.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(firstFile);
       if (lastSlash > 0) {
         String dir = firstFile.substring(0, lastSlash);
         // Go up to find type= directory for proper partitioning

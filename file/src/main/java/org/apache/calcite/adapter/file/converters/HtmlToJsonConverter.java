@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.file.converters;
 import org.apache.calcite.adapter.file.converters.HtmlCrawler.CrawlResult;
 import org.apache.calcite.adapter.file.converters.HtmlTableScanner.TableInfo;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.util.Source;
 import org.apache.calcite.util.Sources;
 
@@ -172,9 +173,9 @@ public class HtmlToJsonConverter {
         String baseFileName = ConverterUtils.getBaseFileName(htmlFile.getName(), ".html", ".htm");
 
         // Include directory structure in the filename if relativePath is provided
-        if (relativePath != null && relativePath.contains(File.separator)) {
-          String dirPrefix = relativePath.substring(0, relativePath.lastIndexOf(File.separator))
-              .replace(File.separator, "_");
+        String dirPrefix =
+            relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
+        if (dirPrefix != null) {
           baseFileName = dirPrefix + "_" + baseFileName;
         }
 
