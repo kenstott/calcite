@@ -41,3 +41,41 @@
     certificate bundle are removed from the host's list or added to it is settled in the
     implementation and then stated here.
   tests: []
+
+# ===================================== catalog seed ============================================
+
+- id: ASKAM-002
+  module: askamerica
+  status: accepted
+  group: catalog seed
+  category: Official seed
+  priority: MUST
+  type: constraint
+  description: >
+    At run time AskAmerica never builds its catalog by discovery: not on a first start, not
+    when the installed catalog is missing, and not when it differs from the model. The seed
+    packaged in the jar is the official one. On start the jar's seed is put in place, and doing
+    so again when nothing changed is a no-op; an installed catalog that differs from the jar's
+    seed is replaced by it, never repaired or rebuilt. Whether two seeds differ, and whether a
+    seed covers the model, is measured by schema only: the schemas, their tables, and the
+    columns and types the seed declares. Recorded row counts, statistics, timestamps, version
+    strings and file bytes do not make a seed different. A jar that carries no seed, or a seed
+    that does not declare a schema or table of the model, is an error that names what is
+    missing and stops the start; there is no fallback to building one. Statistics in the seed
+    may be out of date; that is accepted and is never a reason to build, recount or refresh at
+    run time. A newer official seed reaches an install only with a newer jar. Building a seed
+    stays possible and belongs to the release path (govdata/scripts/build-seed.sh), which is
+    how the official seed is made. The standalone pg-wire server puts its own jar's seed in
+    place on every start, into its state directory, without its caller naming a catalog.
+  source: >
+    owner rulings 2026-10-09. State on main at 6e664777a4, read from the code:
+    GovDataSeedInstaller.ensureSeeded is called only from GovDataDriver.connect, so the
+    pg-wire bundle, whose model names GovDataSchemaFactory directly with database_filename
+    ${GOVDATA_DUCKDB_CATALOG:govdata-catalog.duckdb}, never installs a seed and, with that
+    variable unset, creates an empty catalog and discovers every schema
+    (DuckDBJdbcSchemaFactory "Creating new DuckDB database"); a jar without a seed and a
+    failed extraction both fall through to discovery by design ("pure accelerator"); the
+    installed catalog is compared with the jar's seed by a SHA-256 of the seed zip's bytes
+    kept in .duckdb/govdata.duckdb.version, not by schema; a catalog file newer than the jar
+    is left in place; ?rebuildCatalog=true deletes the catalog so it is rebuilt by discovery.
+  tests: []

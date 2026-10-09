@@ -2,14 +2,15 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**321 requirements across 7 adapters.**
+**322 requirements across 7 adapters.**
 
 
-## askamerica  (1: 1 accepted)
+## askamerica  (2: 2 accepted)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
 | [ ] | ASKAM-001 | MUST | infrastructure | platforms / NixOS | AskAmerica is supported on NixOS: its engine and its pg-wire server install and start on a NixOS host and ser… | — |
+| [ ] | ASKAM-002 | MUST | constraint | catalog seed / Official seed | At run time AskAmerica never builds its catalog by discovery: not on a first start, not when the installed ca… | — |
 
 ## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
 
