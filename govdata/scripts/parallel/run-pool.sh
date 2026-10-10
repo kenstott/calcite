@@ -128,7 +128,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, law, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking"
+  echo "                 ref, fec, fedregister, law, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking, fisheries"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -205,6 +205,7 @@ for arg in "$@"; do
       queue+=(research:historical research:daily)
       queue+=(fiscal:historical fiscal:daily)
       queue+=(banking:historical banking:daily)
+      queue+=(fisheries:historical fisheries:daily)
       queue+=(econ_reference:daily law:daily)
       # See the daily) alias below for why ref:daily is queued last here too.
       queue+=(ref:daily)
@@ -285,7 +286,7 @@ for arg in "$@"; do
       _year_schemas=(
         sec_primary sec_13f
         econ census geo crime weather energy
-        fec fedregister cftc
+        fec fedregister cftc fisheries
         health edu patents lands
         # Split-schema year-addressable tables (snapshots handled by the :once slots above).
         housing transport environment ag disasters fiscal banking
@@ -306,7 +307,7 @@ for arg in "$@"; do
         sec:dq sec_secondary:dq sec_prices:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq officials:dq law:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq banking:dq
+        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq banking:dq fisheries:dq
       )
       ;;
 
@@ -319,7 +320,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild officials:dq-rebuild law:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild banking:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild banking:dq-rebuild fisheries:dq-rebuild
       )
       ;;
 
@@ -332,7 +333,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume officials:dq-etl-resume law:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume banking:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume banking:dq-etl-resume fisheries:dq-etl-resume
       )
       ;;
 
@@ -373,6 +374,7 @@ for arg in "$@"; do
         # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
         officials:daily cyber_vuln:daily edu:daily
         fedregister:daily "sec_prices:daily" patents:daily
+        fisheries:daily
         # ref:daily stays last (29m): queue position is a soft bias so its entity-resolution
         # bridge sees the same-day data of the schemas it reads (fec/patents/sec/health/
         # environment/energy/transport/fiscal). The bridge fully rebuilds every day, so a

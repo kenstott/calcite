@@ -1,0 +1,217 @@
+# ============================================================================
+# U.S. Fisheries Schema (FISHERIES)
+# ============================================================================
+# Data Source:
+#   - NOAA Fisheries FOSS (Fisheries One Stop Shop) landings, ODS REST API
+#     https://apps-st.fisheries.noaa.gov/ods/foss/landings/ (keyless JSON)
+#     Metadata: https://apps-st.fisheries.noaa.gov/ods/foss/metadata-catalog/landings/
+#
+# Features:
+#   - Commercial landings (pounds, dollars) and recreational catch (MRIP fish counts)
+#     by state, species and year, 1950 onward
+#   - Salmon flagged and split by species; Great Lakes stocked salmon marked non-native
+#   - Cross-references geo.state_ref via state_abbr
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:fisheries}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
+
+comment: >
+  U.S. fisheries data from NOAA Fisheries. One table today: noaa_commercial_landings, annual
+  commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
+  and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
+  pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
+  salmon abundance trends, with the caveat that harvest also reflects regulation and effort.
+  Joins to geo.state_ref via state_abbr.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  iceberg_common: &iceberg_common
+    warehousePath: "${GOVDATA_PARQUET_DIR}/fisheries"
+    catalogType: hadoop
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728
+    compactionMinFiles: 5
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # dataLag: 2 — FOSS carries data through current-2 (2024 is the newest year as of Oct 2026;
+  # 2025 returns an empty page). The URL templates {effective_year}. The default start is
+  # 1952 so effective_year begins at 1950, the first year FOSS has any rows.
+  foss_years: &foss_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1952}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 2
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # NOAA_COMMERCIAL_LANDINGS — FOSS landings by state x species x year
+  # ---------------------------------------------------------------------------
+  - name: noaa_commercial_landings
+    # NOAA revises recent years as state agencies finalize; 2 re-fetches the two newest years.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=noaa_landings/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NOAA Fisheries FOSS annual landings by state and species, 1950 to current-2. Two
+      collections: 'Commercial' (pounds, dollars; ~3,200 rows/year in recent years) and
+      'Recreational' (MRIP estimates; fish_count, and pounds where estimated; from 1981).
+      Salmon rows are flagged is_salmon = true with salmon_species (chinook, coho, sockeye,
+      chum, pink, atlantic, pacific_unspecified) and salmon_origin ('coastal' for Alaska,
+      Pacific Coast, New England etc.; 'great_lakes_stocked' for the Great Lakes region, where
+      salmon are stocked non-native fish) — filter salmon_origin = 'coastal' for wild-stock
+      states. Alaska dominates (2022: ~381M lb sockeye, ~216M lb pink, ~82M lb chum); CA, OR,
+      WA also report every year. This is harvest, not run size or escapement: it tracks
+      population trends only loosely, since regulation, closures and market affect it. For
+      Columbia River adult counts see the planned dart_adult_counts table.
+      NOAA publishes several source rows per state + species + source + collection (MRIP and
+      confidential-species rows are split), so there is no primary key: always SUM(pounds),
+      SUM(dollars) or SUM(fish_count) grouped by the keys you need. state_name
+      'PROCESS AT SEA' (2008+) is landings processed offshore: state_abbr is null and
+      is_state = false, so exclude it from by-state rollups. FLORIDA-EAST and FLORIDA-WEST both
+      map to state_abbr 'FL'. Cross-references geo.state_ref via state_abbr.
+
+    dimensions:
+      type:
+        - noaa_landings
+      year: *foss_years
+
+    columns:
+      - name: landing_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the landings
+      - name: collection
+        type: string
+        nullable: false
+        comment: "'Commercial' (pounds, dollars) or 'Recreational' (MRIP catch estimates)"
+      - name: source
+        type: string
+        nullable: false
+        comment: Originating NOAA data system (e.g. AKFIN, PACFIN, MRIP, GLAKES, PIFSC)
+      - name: state_name
+        type: string
+        nullable: false
+        comment: NOAA state name in upper case, including FLORIDA-EAST/FLORIDA-WEST and PROCESS AT SEA
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter state/territory abbreviation; null for PROCESS AT SEA
+      - name: is_state
+        type: boolean
+        nullable: false
+        comment: false for the PROCESS AT SEA pseudo-state, true otherwise; filter on it for by-state rollups
+      - name: region_name
+        type: string
+        nullable: true
+        comment: NOAA region (Alaska, Pacific Coast, New England, Great Lakes, Gulf, ...); null on some recreational rows
+      - name: tsn
+        type: string
+        nullable: true
+        comment: ITIS taxonomic serial number of the species (0 = withheld for confidentiality)
+      - name: species_name
+        type: string
+        nullable: true
+        comment: NOAA/AFS common name in upper case (e.g. 'SALMON, SOCKEYE'); trailing ** marks a grouped category
+      - name: scientific_name
+        type: string
+        nullable: true
+        comment: Scientific name; null for most recreational rows
+      - name: pounds
+        type: double
+        nullable: true
+        comment: Landed weight in pounds
+      - name: dollars
+        type: double
+        nullable: true
+        comment: Ex-vessel value in nominal dollars; null for recreational rows
+      - name: fish_count
+        type: double
+        nullable: true
+        comment: Estimated number of fish caught (MRIP recreational rows only)
+      - name: is_salmon
+        type: boolean
+        nullable: false
+        comment: true when species_name starts with 'SALMON, '
+      - name: salmon_species
+        type: string
+        nullable: true
+        comment: "Lower-case salmon species (chinook, coho, sockeye, chum, pink, atlantic, pacific); null for non-salmon. 'pacific' is NOAA's unspecified Pacific salmon group"
+      - name: salmon_origin
+        type: string
+        nullable: true
+        comment: "'coastal' or 'great_lakes_stocked' (non-native, stocked salmon in the Great Lakes region); null for non-salmon"
+
+    source:
+      type: http
+      # The q filter is URL-encoded inline: its literal braces would otherwise be read as
+      # {variable} placeholders.
+      url: "https://apps-st.fisheries.noaa.gov/ods/foss/landings/?q=%7B%22year%22%3A{effective_year}%7D"
+      method: GET
+      response:
+        format: json
+        dataPath: "items"
+        pagination:
+          type: OFFSET
+          limitParam: "limit"
+          offsetParam: "offset"
+          pageSize: 10000
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # Disabled by design: a paginated source's raw cache replays as a {"results":[...]}
+      # envelope, which FisheriesLandingsTransformer (reading the live {"items":[...]} page)
+      # would reject. A year is ~1.7 MB, so refetching costs nothing.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesLandingsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=noaa_landings/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: noaa_commercial_landings
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
