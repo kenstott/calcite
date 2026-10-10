@@ -66,8 +66,20 @@ configurations.all {
 }
 
 dependencies {
-    implementation(project(":driver-base"))
-    implementation(project(":govdata"))
+    // The engine is the MCP server and the setup wizard: protocol, tools, a pg-wire client.
+    // Everything that touches data lives in the data server (owner rules 2026-10-10, ASKAM-008
+    // and ASKAM-009). It does NOT depend on :govdata, :file or :driver-base. The three small
+    // classes it shares with them, and the schema YAMLs the catalog tools read, are compiled
+    // in from their one copy in the source tree; see sourceSets below.
+    //
+    // Calcite itself is here for its SQL parser only (ExclusionProbe, reserved words).
+    implementation(project(":core"))
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17")
+    // SnakeYAML, for YamlUtils (YAML anchors in the schema files).
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17")
+    implementation("org.slf4j:slf4j-api")
+    // ClaimsServer keeps the browser extension's reports in a local DuckDB file.
+    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
     // Babel's SqlBabelParserImpl accepts the Postgres/DuckDB-shell "expr::type" infix cast
     // syntax that Calcite's default core parser has no grammar production for at all — a
     // parser-factory connection property (see McpServer's connection setup), not a dialect
@@ -123,7 +135,41 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")  // in-memory DB for surface tests
+    // Tests that run SQL against an in-process Calcite or DuckDB to check what the tools send.
+    // Test scope only: none of this reaches the shaded jar.
+    testImplementation(project(":govdata"))
+    testImplementation(project(":file"))
+}
+
+// One copy in the source tree, compiled into both sides: the store-credential provider and
+// the catalog reader live in govdata's sources, the variable resolver in the file adapter's.
+// Each depends only on Jackson, SnakeYAML and SLF4J. The engine and govdata never share a
+// classpath, so the classes are not duplicated at run time.
+val sharedSources by tasks.registering(Sync::class) {
+    from("../govdata/src/main/java") {
+        include("org/apache/calcite/adapter/govdata/R2CredentialProvider.java")
+        include("org/apache/calcite/adapter/govdata/GovDataCatalog.java")
+        include("org/apache/calcite/adapter/govdata/YamlUtils.java")
+    }
+    from("../file/src/main/java") {
+        include("org/apache/calcite/adapter/file/etl/VariableResolver.java")
+    }
+    into(layout.buildDirectory.dir("shared-sources"))
+}
+// What search_catalog and the tool descriptions read without a server: the schema YAMLs.
+// Also govdata's log4j2.xml, the logging configuration this jar has always shipped.
+val sharedResources by tasks.registering(Sync::class) {
+    from("../govdata/src/main/resources") {
+        include("**/*-schema.yaml")
+        include("log4j2.xml")
+    }
+    into(layout.buildDirectory.dir("shared-resources"))
+}
+sourceSets {
+    main {
+        java.srcDir(sharedSources)
+        resources.srcDir(sharedResources)
+    }
 }
 
 tasks.test {
@@ -371,24 +417,41 @@ tasks.shadowJar {
             attributes["AskAmerica-Engine-Version"] = engineReleaseVersion
         }
     }
-    // The engine jar carries no embedder (ASKAM-007): fail the build that would ship one.
+    // The engine jar carries no embedder (ASKAM-007) and nothing that opens the store
+    // (ASKAM-008, ASKAM-009): fail the build that would ship either. From the govdata package
+    // only the three shared classes may be present.
     doLast {
         val jar = archiveFile.get().asFile
-        val embedder = ZipFile(jar).use { zip ->
+        val sharedGovdata = setOf("R2CredentialProvider", "GovDataCatalog", "YamlUtils")
+        val forbidden = listOf(
+            "ai/onnxruntime/", "models/snowflake-arctic-embed-xs/",
+            "org/apache/hadoop/", "org/apache/iceberg/", "software/amazon/", "com/amazonaws/",
+            "org/apache/parquet/", "org/apache/arrow/",
+            "org/apache/calcite/adapter/driver/", "org/apache/calcite/adapter/askamerica/AskAmericaDriver")
+        val found = ZipFile(jar).use { zip ->
             zip.entries().asSequence().map { entry -> entry.name }
                 .filter { name ->
-                    name.startsWith("ai/onnxruntime/") ||
-                        name.startsWith("models/snowflake-arctic-embed-xs/") ||
-                        name.endsWith(".onnx")
+                    name.endsWith(".onnx") ||
+                        forbidden.any { prefix -> name.startsWith(prefix) } ||
+                        (name.startsWith("org/apache/calcite/adapter/file/") &&
+                            !name.startsWith("org/apache/calcite/adapter/file/etl/VariableResolver")) ||
+                        (name.startsWith("org/apache/calcite/adapter/govdata/") &&
+                            name.endsWith(".class") &&
+                            sharedGovdata.none { shared ->
+                                name.substringAfterLast('/').substringBefore('.')
+                                    .substringBefore('$') == shared
+                            })
                 }
-                .take(5).toList()
+                .take(8).toList()
         }
-        if (embedder.isNotEmpty()) {
+        if (found.isNotEmpty()) {
             throw GradleException(
-                "${jar.name} contains an embedder (${embedder.joinToString()}); the engine jar " +
-                    "carries none - semantic search is served by the data server")
+                "${jar.name} contains what the engine jar must not carry " +
+                    "(${found.joinToString()}): no embedder, and nothing that opens the store - " +
+                    "data and semantic search are served by the data server")
         }
-        logger.lifecycle("${jar.name}: ${jar.length() / (1024 * 1024)} MB, no embedder inside")
+        logger.lifecycle("${jar.name}: ${jar.length() / (1024 * 1024)} MB, thin: no embedder, " +
+            "no govdata, file adapter, hadoop, iceberg, aws, parquet or arrow inside")
     }
 }
 

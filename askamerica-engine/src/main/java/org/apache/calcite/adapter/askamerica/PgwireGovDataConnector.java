@@ -46,9 +46,9 @@ import org.apache.calcite.adapter.govdata.R2CredentialProvider;
  * serves every schema this engine's tools ask for — there is no per-schema connection to manage
  * on this side at all.
  *
- * <p><b>On by default.</b> See {@link #isEnabled()}'s own doc for why, and for the deliberate
- * absence of a silent fallback to the embedded path on a pgwire failure — set {@code
- * ASKAMERICA_PGWIRE_MODE=0} to opt back into embedded-only as an explicit operator choice.
+ * <p>This is the engine's only way to data (owner rule 2026-10-10, ASKAM-008). There is no
+ * in-process engine to fall back to: a server that cannot be reached is waited for within a
+ * bound or reported by name.
  */
 final class PgwireGovDataConnector {
   // Read dynamically, not cached: McpServer.log is null until McpServer.main() assigns it,
@@ -97,24 +97,17 @@ final class PgwireGovDataConnector {
 
   private PgwireGovDataConnector() {}
 
-  /**
-   * On by default (kenstott/calcite#364). The embedded per-process DuckDB engine this replaces
-   * has no working default on a machine with more than one Claude Desktop install (standalone +
-   * MSIX/Store) — every launch spawns two McpServer processes racing for the same catalog
-   * write-lock, permanently duplicating disk/memory and paying a reseed cost on every single
-   * start, not as a rare edge case. Set ASKAMERICA_PGWIRE_MODE=0 (or false) to opt back into the
-   * embedded-only path, as a deliberate operator choice — getSchemaConnection() does NOT fall
-   * back to it automatically on a pgwire failure. Two data-access paths that could each be
-   * seeded from a different build is exactly the multiple-divergent-instance problem this
-   * design exists to eliminate; a pgwire failure surfaces as a loud, clear error instead.
-   */
-  static boolean isEnabled() {
-    return !falsy(System.getenv("ASKAMERICA_PGWIRE_MODE"))
-        && !falsy(System.getProperty("ASKAMERICA_PGWIRE_MODE"));
-  }
-
-  private static boolean falsy(String v) {
-    return v != null && (v.equals("0") || v.equalsIgnoreCase("false"));
+  /** Says once, at start, that a mode switch left in the environment does nothing. */
+  static void noteRetiredModeSwitch() {
+    String v = System.getenv("ASKAMERICA_PGWIRE_MODE");
+    if (v == null) {
+      v = System.getProperty("ASKAMERICA_PGWIRE_MODE");
+    }
+    if (v != null) {
+      log().println("[askamerica-mcp] ASKAMERICA_PGWIRE_MODE=" + v + " is ignored: the engine "
+          + "has one mode and serves data through the pgwire-govdata server. Remove the "
+          + "setting.");
+    }
   }
 
   private static String host() {

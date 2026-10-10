@@ -10,9 +10,6 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
-import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
-import org.apache.calcite.adapter.govdata.GovDataDriver;
-import org.apache.calcite.adapter.govdata.R2CredentialProvider;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.SchemaPlus;
@@ -44,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -343,36 +339,6 @@ public class McpServer {
         + "fedregister,law,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
         + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking";
 
-    // Connections keyed by comma-joined source set. The all-schemas set is warmed at
-    // startup and backs every tool; narrower sets exist only for legacy callers.
-    private static final ConcurrentHashMap<String, Connection> schemaConns =
-        new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, CountDownLatch> schemaLatches =
-        new ConcurrentHashMap<>();
-    // Throwable, not Exception: an Error during driver init (NoClassDefFoundError,
-    // ExceptionInInitializerError, OOM in the Parquet/DuckDB native path) must be
-    // recorded too, or the latch releases with no connection and no recorded cause.
-    private static final ConcurrentHashMap<String, Throwable> schemaErrors =
-        new ConcurrentHashMap<>();
-    // Epoch millis each cached connection was opened. isValid(5) only catches a DEAD
-    // connection — a live one is handed out forever even though the Iceberg tables it
-    // was built against are read once at connection-open and never re-resolved (a
-    // schema/table build is a one-time construction, not a per-query lookup). Observed:
-    // a 'sec' connection opened hours before a same-day R2 backfill kept serving the
-    // pre-backfill row counts indefinitely after the backfill completed, with no error
-    // and no way to tell from the response that the answer was stale. This TTL forces a
-    // periodic reconnect (which rebuilds the schema from current Iceberg state) so
-    // staleness is bounded instead of open-ended.
-    private static final ConcurrentHashMap<String, Long> schemaConnOpenedAtMillis =
-        new ConcurrentHashMap<>();
-    private static final long SCHEMA_CONN_TTL_MILLIS =
-        TimeUnit.MINUTES.toMillis(resolveSchemaConnTtlMinutes());
-
-    private static long resolveSchemaConnTtlMinutes() {
-        String raw = System.getenv("ASKAMERICA_SCHEMA_CONN_TTL_MINUTES");
-        return (raw == null || raw.isEmpty()) ? 30L : Long.parseLong(raw);
-    }
-
     // Package-private (not private): PgwireGovDataConnector shares this same diagnostic
     // stream so its spawn/connect logging interleaves with the rest of the engine's log.
     static PrintStream log;
@@ -399,22 +365,9 @@ public class McpServer {
         // Fixed loopback endpoint for the browser extension: claim verdicts by article URL.
         ClaimsServer.start(System.err);
 
-        // DuckDBJdbcSchemaFactory's own default (4GB) is sized for many small connections
-        // sharing a box; this server holds one long-lived, many-schema connection serving
-        // real analytical queries, which needs more headroom. Only sets it if the operator
-        // hasn't already passed -Dcalcite.duckdb.memoryLimit — never override an explicit
-        // choice. Adjustable at runtime via the set_memory_limit tool.
-        if (System.getProperty("calcite.duckdb.memoryLimit") == null) {
-            System.setProperty("calcite.duckdb.memoryLimit", "8GB");
-        }
-
         // Resolve the data dir: MCP_DATA_DIR (server-specific override) → default ~/.mcp_askamerica.
-        // Exported as ASKAMERICA_DATA_DIR so any code that reads that name (e.g. a spawned
-        // subprocess) sees it too, then pinned directly via AskAmericaDriver.pinOperatingDir().
-        // This server connects govdata straight through GovDataDriver (see getSchemaConnection()
-        // below), never through jdbc:askamerica:, so AskAmericaDriver.connect() is never invoked
-        // here and cannot be relied on to do this pinning as a side effect of some unrelated
-        // DriverManager call.
+        // Exported as ASKAMERICA_DATA_DIR: PgwireGovDataConnector reads it to tell the data
+        // server it spawns which catalog file to use.
         String resolvedDataDir = System.getenv("ASKAMERICA_DATA_DIR");
         if (resolvedDataDir == null || resolvedDataDir.isEmpty()) {
             resolvedDataDir = System.getProperty("ASKAMERICA_DATA_DIR");
@@ -430,7 +383,6 @@ public class McpServer {
         }
         if (resolvedDataDir != null && !resolvedDataDir.isEmpty()) {
             System.setProperty("ASKAMERICA_DATA_DIR", resolvedDataDir);
-            AskAmericaDriver.pinOperatingDir(resolvedDataDir);
         }
 
         // Capture the real stdout before any framework can write to it, then
@@ -450,6 +402,7 @@ public class McpServer {
         log.println("[askamerica-mcp] logging binding="
             + org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName());
 
+        PgwireGovDataConnector.noteRetiredModeSwitch();
         configureQueryEmbedder();
 
         // Mount every allowed schema on one connection up front, off the request thread.
@@ -459,29 +412,9 @@ public class McpServer {
             long t0 = System.currentTimeMillis();
             try {
                 getCatalogConnection();
-                if (PgwireGovDataConnector.isEnabled()) {
-                    // The counters/catalog path below describe the embedded DuckDB engine,
-                    // which this mode never instantiates (getSchemaConnection's pgwire
-                    // short-circuit runs before GovDataDriver is ever constructed) — printing
-                    // them here would report misleading zeros for a mount that actually
-                    // succeeded through the shared pgwire-govdata server instead.
-                    log.println("[askamerica-mcp] All schemas mounted in "
-                        + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
-                        + PgwireGovDataConnector.describeTarget() + ")");
-                } else {
-                    // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
-                    // metadata end in the same mounted state, so without these counts a mount that
-                    // spent minutes on object-store round trips is indistinguishable in the log from
-                    // one that started instantly. Printed to this stream, not through SLF4J, because
-                    // the shaded jar's logging binding drops adapter logs entirely.
-                    log.println("[askamerica-mcp] All schemas mounted in "
-                        + (System.currentTimeMillis() - t0) + "ms"
-                        + " — catalog=" + new java.io.File(
-                            System.getProperty("govdata.operating.dir.base", "?"),
-                            ".duckdb/govdata.duckdb")
-                        + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
-                        + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
-                }
+                log.println("[askamerica-mcp] All schemas mounted in "
+                    + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
+                    + PgwireGovDataConnector.describeTarget() + ")");
             } catch (Throwable e) {
                 log.println("[askamerica-mcp] Schema warm-up failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -639,9 +572,8 @@ public class McpServer {
      * PgwireGovDataConnector#killAndRespawn}), which also severs the socket the stuck thread is
      * blocked reading from — unlike a same-process cancel, a killed socket connection is
      * something Java's I/O layer reliably observes even when a cooperative interrupt flag isn't
-     * being checked. In embedded mode (the explicit opt-out), it evicts the cached embedded
-     * connection instead, same as before. Neither path reclaims whatever the stuck native call
-     * was doing before the kill/evict — see the caveat in DEFECTS-OPEN.md #16.
+     * being checked. It does not reclaim whatever the stuck native call was doing before the
+     * kill — see the caveat in DEFECTS-OPEN.md #16.
      */
     private static final int WATCHDOG_TIMEOUT_MULTIPLE = 2;
 
@@ -668,37 +600,15 @@ public class McpServer {
                     long cancelAtMillis = timeoutSeconds * 1000L * WATCHDOG_TIMEOUT_MULTIPLE;
                     long evictAtMillis = cancelAtMillis * 2;
                     if (ageMillis >= evictAtMillis) {
-                        // Measured live 2026-09-23: in the default pgwire-enabled configuration,
-                        // the schemaConns eviction below is dead code — that map is only ever
-                        // populated by the EMBEDDED-mode branch of getSchemaConnection, which
-                        // pgwire mode bypasses entirely. So this branch used to do nothing at
-                        // all for the one configuration everyone actually runs, and the stuck
-                        // thread held DB_LOCK forever with no recovery. killAndRespawn kills the
-                        // separate pgwire-govdata OS process outright (see its own javadoc for
-                        // why that unsticks a blocked socket read where an in-process interrupt
-                        // flag might not) — this is the real fix for that path; schemaConns
-                        // eviction remains correct and unchanged for the embedded-mode opt-out.
-                        if (PgwireGovDataConnector.isEnabled()) {
-                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
-                                + (ageMillis / 1000) + "s after starting (timeout was "
-                                + timeoutSeconds + "s) — cancel() did not unstick it; killing "
-                                + "the shared pgwire-govdata process so it respawns fresh.");
-                            PgwireGovDataConnector.killAndRespawn(
-                                "statement active " + (ageMillis / 1000) + "s, cancel() failed");
-                        } else {
-                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
-                                + (ageMillis / 1000) + "s after starting (timeout was "
-                                + timeoutSeconds + "s) — cancel() did not unstick it; evicting "
-                                + "the embedded connection so future callers get a fresh one. "
-                                + "This does NOT reclaim whatever the stuck query is still "
-                                + "doing.");
-                            String catalogKey = String.join(",", allowedSchemas());
-                            Connection stuck = schemaConns.remove(catalogKey);
-                            schemaConnOpenedAtMillis.remove(catalogKey);
-                            if (stuck != null) {
-                                closeQuietly(stuck, catalogKey);
-                            }
-                        }
+                        // killAndRespawn kills the separate pgwire-govdata OS process outright
+                        // (see its own javadoc for why that unsticks a blocked socket read where
+                        // an in-process interrupt flag might not).
+                        log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                            + (ageMillis / 1000) + "s after starting (timeout was "
+                            + timeoutSeconds + "s) — cancel() did not unstick it; killing "
+                            + "the shared pgwire-govdata process so it respawns fresh.");
+                        PgwireGovDataConnector.killAndRespawn(
+                            "statement active " + (ageMillis / 1000) + "s, cancel() failed");
                         // Removing the entry (not the ACTIVE_STATEMENTS registration) is
                         // deliberate: leaving the registration in place stops this branch from
                         // re-firing every 15s for the same statement while it is still there,
@@ -1722,11 +1632,7 @@ public class McpServer {
             "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
             + "the top hits are frequently boilerplate, so a short list can contain no real "
             + "match at all."));
-        // Offered whenever semantic search can be served: by the data server in pg-wire mode
-        // (every install), or, with that mode switched off, by an embedder the operator
-        // named. Otherwise the tool would fail with "no embedder configured" the instant
-        // it's called. See configureQueryEmbedder().
-        if (embedderConfigured()) {
+        // Served by the data server, which carries the embedder. See configureQueryEmbedder().
         tools.add(
             tool("semantic_search",
             "Search TEXT by meaning rather than by keyword — SEC MD&A, risk factors and "
@@ -1769,7 +1675,6 @@ public class McpServer {
             + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "
             + "hits. Do not expect the embedding score alone to make any of these distinctions.",
             schema(semProps, new String[]{"query"})));
-        }
 
         ObjectNode relProps = MAPPER.createObjectNode();
         relProps.set("lei", prop("string",
@@ -3624,19 +3529,6 @@ public class McpServer {
             + "Current status: " + (telemetryOptIn ? "OPTED IN" : "OPTED OUT") + ".",
             schema(telemetryProps, new String[]{"enabled"})));
 
-        ObjectNode memoryLimitProps = MAPPER.createObjectNode();
-        memoryLimitProps.set(
-            "limit",
-            prop("string",
-            "DuckDB size literal, e.g. '8GB', '12GB'. Current default: 8GB."));
-        tools.add(
-            tool("set_memory_limit",
-            "Raise (or lower) the DuckDB memory ceiling for this server, e.g. after a query "
-            + "fails with an out-of-memory error on a large aggregation. Applies immediately "
-            + "to the live connection — no reconnect needed — and persists for connections "
-            + "opened after this call too.",
-            schema(memoryLimitProps, new String[]{"limit"})));
-
         if (EVAL_MODE) {
             // Never registered for a real user — see EVAL_MODE and deliverReport() above.
             ObjectNode deliverProps = MAPPER.createObjectNode();
@@ -3663,208 +3555,15 @@ public class McpServer {
     }
 
     /**
-     * Ensure R2 credentials are fresh before connecting.
-     * Uses the ASKAMERICA_API_KEY to fetch credentials from the AskAmerica API
-     * and caches them at ~/.askamerica/credentials.json so GovDataDriver picks them up.
+     * The connection every tool runs on: the shared pgwire-govdata server's. The engine has one
+     * mode (owner rule 2026-10-10, ASKAM-008): data is served by the data server. Nothing in
+     * this process opens Calcite, govdata or DuckDB on the store. A server that is not
+     * reachable is waited for within a bound or reported by name (see
+     * {@link PgwireGovDataConnector#getSharedConnection()}); there is no other path to fall
+     * back to. Returns a live connection or throws with the cause; never null.
      */
-    private static void ensureFreshR2Credentials() {
-        java.util.Map<String, String> existing = R2CredentialProvider.resolve();
-        log.println("[askamerica-mcp] R2 creds endpoint=" + existing.get("endpoint")
-            + " keyId=" + existing.get("accessKeyId"));
-
-        // FREE_ASKAMERICA_KEY takes precedence over ASKAMERICA_API_KEY, which may hold a
-        // metering-bypass self-test key the catalog endpoint rejects. Never log the key.
-        String apiKey = R2CredentialProvider.credentialApiKey();
-        if (apiKey == null || apiKey.isEmpty()) {
-            log.println("[askamerica-mcp] No catalog API key set (FREE_ASKAMERICA_KEY or "
-                + "ASKAMERICA_API_KEY) — cannot fetch R2 credentials.");
-            return;
-        }
-        try {
-            java.util.Map<String, String> fresh = R2CredentialProvider.refresh(apiKey);
-            log.println("[askamerica-mcp] R2 credentials refreshed endpoint=" + fresh.get("endpoint"));
-        } catch (Exception e) {
-            // Do not claim a working fallback: there are no baked-in defaults
-            // (config/r2-defaults.json ships as "{}"). Log the real failure and let the
-            // driver fail loudly if it genuinely needs R2, rather than proceeding with nulls.
-            log.println("[askamerica-mcp] R2 credential refresh FAILED: " + e.getMessage()
-                + " — no usable R2 credentials from the catalog API.");
-        }
-    }
-
-    /**
-     * Get (or start initializing) a per-schema connection.
-     * Returns a live connection, or throws with the underlying cause. Never returns null.
-     */
-    /**
-     * Closes a discarded schema connection, logging rather than throwing on failure.
-     *
-     * <p>A connection being replaced is already suspect — it may be past its TTL or dead — so a
-     * failure to close it must not propagate into the caller's tool call. The point is to release
-     * the sockets, and a best-effort close does that in every case where a close was possible at
-     * all.
-     */
-    private static void closeQuietly(Connection conn, String schemaName) {
-        if (conn == null) {
-            return;
-        }
-        try {
-            conn.close();
-        } catch (Exception e) {
-            log.println("[askamerica-mcp] Failed to close discarded connection for '"
-                + schemaName + "': " + e);
-        }
-    }
-
     static Connection getSchemaConnection(final String schemaName) throws Exception {
-        // On by default (kenstott/calcite#364): every schema is mounted on one shared
-        // server-side catalog, so one shared client connection answers for all of them —
-        // bypass the per-schema embedded-DuckDB path below entirely. Deliberately NO
-        // fallback to the embedded path on a pgwire failure: two data-access paths that
-        // could each be seeded from a different build (askamerica-engine.yml and
-        // pgwire-adapters-release.yml are separate CI pipelines) is exactly the
-        // multiple-divergent-instance problem this whole design exists to eliminate — a
-        // silent fallback would trade a loud, actionable pgwire failure for a quiet,
-        // possibly-inconsistent second version of the data. If pgwire is unreachable, the
-        // caller gets a clear error naming why; ASKAMERICA_PGWIRE_MODE=0 is the only
-        // supported way to run on the embedded path, as a deliberate operator choice, not
-        // an automatic degradation.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return PgwireGovDataConnector.getSharedConnection();
-        }
-        Connection existing = schemaConns.get(schemaName);
-        if (existing != null) {
-            Long openedAt = schemaConnOpenedAtMillis.get(schemaName);
-            long ageMillis = (openedAt == null) ? Long.MAX_VALUE
-                : System.currentTimeMillis() - openedAt;
-            // A cached-but-dead connection would otherwise be handed out forever, so a
-            // connection that has died since init drops out of the cache and re-inits below.
-            // A cached-but-STALE connection is the same failure mode with no exception to
-            // catch it by: isValid(5) only pings the connection, it does not know the
-            // Iceberg tables built at open time have since changed on R2. TTL expiry forces
-            // the same re-init path so staleness is bounded rather than open-ended.
-            if (ageMillis < SCHEMA_CONN_TTL_MILLIS && existing.isValid(5)) {
-                return existing;
-            }
-            log.println("[askamerica-mcp] Cached connection for '" + schemaName
-                + "' is " + (ageMillis >= SCHEMA_CONN_TTL_MILLIS ? "past its TTL" : "dead")
-                + " — discarding and re-initializing.");
-            schemaConns.remove(schemaName, existing);
-            schemaConnOpenedAtMillis.remove(schemaName);
-            schemaLatches.remove(schemaName);
-            schemaErrors.remove(schemaName);
-            // Dropping the map entry does NOT release the connection. Everything the schema
-            // built at open time stays reachable through it — including the S3 client each
-            // govdata schema creates for its materialized and cache storage, with a
-            // 200-connection Apache pool behind it. Left unclosed, those sockets sit idle
-            // until the object store sends FIN and nothing answers, so they pile up in
-            // CLOSE_WAIT: a user on a MinIO-backed dev server reported 214 of them.
-            // Reported as "calling MinIO every few minutes and never closing the connection";
-            // the periodic part is this TTL re-init, the leak is that the old connection was
-            // only forgotten, never closed.
-            closeQuietly(existing, schemaName);
-        }
-
-        // Atomically start initialization the first time this schema is requested.
-        schemaLatches.computeIfAbsent(schemaName, k -> {
-            final CountDownLatch latch = new CountDownLatch(1);
-            Thread t = new Thread(() -> {
-                try {
-                    log.println("[askamerica-mcp] Initializing schema: " + k);
-                    ensureFreshR2Credentials();
-                    GovDataDriver driver = new GovDataDriver();
-                    Properties connProps = new Properties();
-                    // GovDataDriver's own default (standard,postgresql,spatial,mssql) has no
-                    // DATE_TRUNC operator at all -- it is registered only under the bigquery
-                    // function library (SqlLibraryOperators.DATE_TRUNC, signature <DATE>,
-                    // <DATETIME_INTERVAL>) -- so a caller's DATE_TRUNC('month', d) fails
-                    // validation with "No match found for function signature" before ever
-                    // reaching DuckDB. Adding bigquery here is scoped to this engine's own
-                    // connections only (GovDataDriver only applies its default when the caller
-                    // has not already set "fun"), not to the shared driver default other
-                    // tooling (DQ, ETL, model-verify) still uses.
-                    connProps.setProperty("fun", "standard,postgresql,spatial,mssql,bigquery");
-                    // GovDataDriver's shared default has no parserFactory at all, so this passes
-                    // straight through unmodified to the connection Calcite builds -- scoped to
-                    // this engine's own connections only, same as fun= above, not to the shared
-                    // driver default other tooling (DQ, ETL, model-verify) still uses. Calcite's
-                    // default core parser grammar has no "::" cast production; callers whose
-                    // training data defaults to Postgres/DuckDB-shell SQL (this warehouse's own
-                    // storage engine) reach for expr::type and hit an opaque JavaCC parse error
-                    // instead of either accepting it or explaining what's wrong. Babel's parser
-                    // is a strict grammar superset built for exactly this kind of dialect
-                    // compatibility, already wires "::" to SqlLibraryOperators.INFIX_CAST.
-                    connProps.setProperty("parserFactory",
-                        "org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY");
-                    Connection c = driver.connect("jdbc:govdata:source=" + k, connProps);
-                    if (c == null) {
-                        throw new IllegalStateException(
-                            "GovDataDriver returned null for schema: " + k);
-                    }
-                    // Meter + quota/license-gate the govdata connection the MCP server actually
-                    // uses — metering belongs on the calcite/govdata path, not only on the
-                    // jdbc:askamerica driver. wrap() is a no-op when no API key is present, and
-                    // returns the connection unwrapped for a self-test bypass key (presented as
-                    // ASKAMERICA_API_KEY with -Daskamerica.selftest.enabled=true or
-                    // ASKAMERICA_SELFTEST_ENABLED=true).
-                    c = UsageMetering.wrap(c, UsageMetering.resolveApiKey(null));
-                    schemaConns.put(k, c);
-                    schemaConnOpenedAtMillis.put(k, System.currentTimeMillis());
-                    // Clear any error from a previous attempt. Readers no longer consume it,
-                    // so success is the only thing that retires it — otherwise a recovered
-                    // schema would keep reporting the failure that is no longer true.
-                    schemaErrors.remove(k);
-                    log.println("[askamerica-mcp] Schema ready: " + k);
-                } catch (Throwable e) {
-                    schemaErrors.put(k, e);
-                    log.println("[askamerica-mcp] Schema init failed: " + k
-                        + " — " + e.getClass().getName() + ": " + e.getMessage());
-                    for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
-                        log.println("[askamerica-mcp]   caused by: "
-                            + cause.getClass().getName() + ": " + cause.getMessage());
-                    }
-                    for (StackTraceElement f : e.getStackTrace()) {
-                        log.println("[askamerica-mcp]   at " + f);
-                    }
-                } finally {
-                    latch.countDown();
-                }
-            }, "conn-init-" + k);
-            t.setDaemon(true);
-            t.start();
-            return latch;
-        });
-
-        CountDownLatch latch = schemaLatches.get(schemaName);
-        if (!latch.await(600, TimeUnit.SECONDS)) {
-            throw new RuntimeException(
-                "Schema '" + schemaName + "' is still initializing "
-                + "(first use can take several minutes). Please retry.");
-        }
-        // Drop the completed latch before reading the outcome so the next call genuinely
-        // retries init. Leaving it in place made computeIfAbsent skip initialization
-        // forever, so a single transient failure bricked the schema until restart.
-        Throwable err = schemaErrors.get(schemaName);
-        Connection ready = schemaConns.get(schemaName);
-        if (ready == null) {
-            schemaLatches.remove(schemaName);
-        }
-        if (err != null) {
-            // The error is NOT removed here. It used to be, and every caller that had
-            // already passed the latch then found neither a connection nor an error and
-            // reported that instead — so the real cause was consumed by whichever caller
-            // read it first. A dnsjava ServiceConfigurationError hid behind that message
-            // for an entire release. It is cleared when init next succeeds, not on read.
-            throw new RuntimeException(
-                "Schema '" + schemaName + "' failed to initialize: "
-                + err.getClass().getName() + ": " + err.getMessage(), err);
-        }
-        if (ready == null) {
-            throw new IllegalStateException(
-                "Schema '" + schemaName + "' initialization completed without producing a "
-                + "connection and without recording an error.");
-        }
-        return ready;
+        return PgwireGovDataConnector.getSharedConnection();
     }
 
     private static final DatasetRegistry DATASETS = new DatasetRegistry();
@@ -4172,12 +3871,6 @@ public class McpServer {
                             tsText(args, "score_domain",
                                 TextScoringEngine.DEFAULT_DOMAIN)).toString();
                     }
-                    break;
-                }
-                case "set_memory_limit": {
-                    String limit = args.path("limit").asText();
-                    log.println("[askamerica-mcp] tool=set_memory_limit limit=" + limit);
-                    text = setMemoryLimit(limit);
                     break;
                 }
                 case "resolve_geo": {
@@ -5684,73 +5377,14 @@ public class McpServer {
 
     /** The effective set of schema names (env override, else the built-in default set). */
     /**
-     * Says at startup where semantic search is served, and in the one mode that needs it points
-     * {@code EmbeddingService} at a developer's embedder.
-     *
-     * <p>The engine carries no embedder (owner rule 2026-10-10, ASKAM-007). In pg-wire mode,
-     * the mode every install runs in, {@code SEMANTIC_SEARCH} and {@code EMBED} are SQL sent to
-     * the pgwire-govdata server, which embeds with the embedder it carries; this process
-     * embeds nothing. With pg-wire mode switched off the query runs in this process, and then
-     * only an embedder the operator names can serve it: an explicit
-     * {@code calcite.embed.command|home|script}, or the CPU embed venv and {@code embed.py}
-     * that {@code vss-embed-setup.sh} provisions on a development or ETL machine. Without
-     * one, that mode does not offer the tool and says why here.
+     * Says at startup where semantic search is served. The engine carries no embedder and has
+     * one mode (owner rules 2026-10-10, ASKAM-007 and ASKAM-008): {@code SEMANTIC_SEARCH} and
+     * {@code EMBED} are SQL sent to the pgwire-govdata server, which embeds with the embedder
+     * it carries.
      */
-    /**
-     * Whether {@code configureQueryEmbedder()} (called once at startup, before toolDefs() is
-     * ever built) found or was given a usable embedder. Same three properties it resolves —
-     * checked here rather than cached separately so there is exactly one source of truth for
-     * "is an embedder actually reachable."
-     */
-    private static boolean embedderConfigured() {
-        // In pgwire mode, SEMANTIC_SEARCH/EMBED execute wherever Calcite actually runs — the
-        // shared pgwire-govdata server's own JVM (started via JPype from Python), not this
-        // client process — so this client's own local calcite.embed.* properties describe
-        // nothing relevant. The pgwire-govdata bundle always carries the embedder (see
-        // pgwire-adapters-release.yml's "Pre-download EMBED() model" step and
-        // pgwire_calcite/embedder.py), so pgwire mode alone is the correct signal here.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return true;
-        }
-        return !System.getProperty("calcite.embed.command", "").isEmpty()
-            || !System.getProperty("calcite.embed.home", "").isEmpty()
-            || !System.getProperty("calcite.embed.script", "").isEmpty();
-    }
-
     private static void configureQueryEmbedder() {
-        if (PgwireGovDataConnector.isEnabled()) {
-            log.println("[askamerica-mcp] semantic search: served by the data server "
-                + "(pgwire-govdata), which carries the embedder; this process embeds nothing");
-            return;
-        }
-        if (!System.getProperty("calcite.embed.command", "").isEmpty()
-            || !System.getProperty("calcite.embed.home", "").isEmpty()
-            || !System.getProperty("calcite.embed.script", "").isEmpty()) {
-            log.println("[askamerica-mcp] embedder: explicitly configured, leaving as-is");
-            return;
-        }
-
-        String venv = System.getenv("VSS_EMBED_VENV");
-        String govdataHome = System.getenv("GOVDATA_HOME");
-        java.io.File py = (venv != null && !venv.isEmpty())
-            ? new java.io.File(venv, "bin/python")
-            : (govdataHome != null && !govdataHome.isEmpty()
-                ? new java.io.File(govdataHome, "build/.venv-embed/bin/python") : null);
-        java.io.File script = (govdataHome != null && !govdataHome.isEmpty())
-            ? new java.io.File(govdataHome, "scripts/embed.py") : null;
-        if (py != null && py.canExecute() && script != null && script.isFile()) {
-            System.setProperty("calcite.embed.python", py.getAbsolutePath());
-            System.setProperty("calcite.embed.script", script.getAbsolutePath());
-            log.println("[askamerica-mcp] embedder: venv " + py.getAbsolutePath()
-                + " + " + script.getAbsolutePath());
-            return;
-        }
-
-        log.println("[askamerica-mcp] semantic search needs the data server: pg-wire mode is "
-            + "switched off (ASKAMERICA_PGWIRE_MODE) and this process carries no embedder, so "
-            + "the semantic_search tool is not offered and SEMANTIC_SEARCH/EMBED will refuse. "
-            + "Switch pg-wire mode back on, or name an embedder with calcite.embed.command, "
-            + "calcite.embed.home or calcite.embed.script.");
+        log.println("[askamerica-mcp] semantic search: served by the data server "
+            + "(pgwire-govdata), which carries the embedder; this process embeds nothing");
     }
 
     private static java.util.Set<String> allowedSchemas() {
@@ -14491,43 +14125,6 @@ public class McpServer {
         return enabled
             ? "Telemetry enabled. Anonymous tool-call metrics will be shared."
             : "Telemetry disabled. No data will be shared.";
-    }
-
-    private static final java.util.regex.Pattern MEMORY_LIMIT_PATTERN =
-        java.util.regex.Pattern.compile("^[0-9]+(\\.[0-9]+)?\\s*(B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)?$",
-            java.util.regex.Pattern.CASE_INSENSITIVE);
-
-    /**
-     * Sets DuckDB's memory_limit/max_memory on the live connection immediately, and updates the
-     * calcite.duckdb.memoryLimit system property so connections opened later (e.g. after
-     * a TTL-driven reconnect) pick up the same value instead of reverting to the 8GB startup
-     * default.
-     */
-    private static String setMemoryLimit(String limit) throws Exception {
-        if (limit == null || !MEMORY_LIMIT_PATTERN.matcher(limit.trim()).matches()) {
-            return "Invalid memory limit '" + limit
-                + "' — expected a DuckDB size literal, e.g. '8GB' or '12GB'.";
-        }
-        String normalized = limit.trim();
-        System.setProperty("calcite.duckdb.memoryLimit", normalized);
-
-        // The shared pgwire connection isn't a CalciteConnection, and DuckDB's memory_limit
-        // there is server-wide, shared across every connected client.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return "set_memory_limit is not available while ASKAMERICA_PGWIRE_MODE is enabled "
-                + "(this engine is a thin client of a shared pgwire-govdata server; "
-                + "set its memory limit directly instead).";
-        }
-
-        Connection conn = getCatalogConnection();
-        org.apache.calcite.jdbc.CalciteConnection calciteConn =
-            conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
-        org.apache.calcite.adapter.file.duckdb.DuckDBCatalogMaintenance.setMemoryLimit(
-            calciteConn, normalized);
-
-        log.println("[askamerica-mcp] memory_limit set to " + normalized);
-        return "DuckDB memory limit set to " + normalized + " on the live connection, and will "
-            + "apply to any new connections opened after this.";
     }
 
     private static boolean loadTelemetryOptIn() {

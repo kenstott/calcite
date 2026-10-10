@@ -192,3 +192,54 @@
     of .github/workflows/askamerica-engine.yml; no test is cited. With pg-wire mode switched
     off the engine has no embedder unless an operator names one (calcite.embed.*).
   tests: []
+
+- id: ASKAM-008
+  module: askamerica
+  status: accepted
+  group: engine
+  category: One mode
+  priority: MUST
+  type: constraint
+  description: >
+    The engine has one mode: it serves data through the data server. There is no in-process
+    query mode. No code path in the engine opens Calcite, govdata or DuckDB on the store. A
+    data server that is not reachable is transient - a bounded wait - or an error by name;
+    never a fall-back to in-process. An ASKAMERICA_PGWIRE_MODE setting left in an environment
+    is ignored and said so in one log line.
+  source: >
+    owner 2026-10-10, on being told a non-pgwire mode (ASKAMERICA_PGWIRE_MODE=0) still
+    existed: "there is NO such mode. If this is the case its an error, or is transient and
+    should retry and then error." With it go the in-process JDBC driver (jdbc:askamerica:,
+    AskAmericaDriver) and the Python wheel's embedded engine: asked whether they stay as a
+    product, the owner chose "They go" - anything wanting SQL connects to the data server
+    over pg-wire. No stub driver is left behind ("No stub, class gone"). The set_memory_limit
+    tool, which already refused in pg-wire mode, is removed with the mode. No test is cited.
+  tests: []
+
+- id: ASKAM-009
+  module: askamerica
+  status: accepted
+  group: installer
+  category: Thin engine jar
+  priority: MUST
+  type: constraint
+  description: >
+    The engine jar is thin: the MCP protocol, the tools, a pg-wire client and the setup
+    wizard. It contains no govdata, no file adapter, no hadoop, iceberg, aws, parquet or
+    arrow; everything that touches data lives in the server download. Calcite is present for
+    its SQL parser only. The build of the engine jar fails when any of these is inside.
+  source: >
+    owner 2026-10-10 ("remove govdata from the engine jar too"; "remove hadoop, iceberg, aws
+    from the engine jar too"; on Calcite's parser: "Keep the parser"; on OpenBLAS: "Leave it
+    for now"). Read from the code: the engine's direct use of govdata and the file adapter
+    was six classes - the in-process driver and connection (deleted with the mode,
+    ASKAM-008), the store-credential provider, the catalog reader with its YAML helper and
+    a variable resolver. The last four have no heavy dependency and are compiled into the
+    engine from their one copy in the source tree, with the schema YAMLs the catalog tools
+    read, so search_catalog still answers without a server. Enforced by the shadowJar task of
+    askamerica-engine/build.gradle.kts and the "Slimming guards" step of
+    .github/workflows/askamerica-engine.yml; no test is cited. Still in the jar by the
+    engine's own use: OpenBLAS (statistics tools), DuckDB's driver (the browser extension's
+    local reports file), POI, PDFBox and jsoup (web_fetch), charts, the PostgreSQL driver.
+  tests: []
+

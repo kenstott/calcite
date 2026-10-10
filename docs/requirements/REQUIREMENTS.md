@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**325 requirements across 7 adapters.**
+**327 requirements across 7 adapters.**
 
 
-## askamerica  (5: 4 accepted, 1 proposed)
+## askamerica  (7: 6 accepted, 1 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -14,6 +14,8 @@
 | [.] | ASKAM-003 | MAY | behavioral | updates / Agreed update | The user agrees before the engine replaces its jar with a newer release. A future feature, not a decision to … | — |
 | [ ] | ASKAM-004 | MUST | constraint | concurrency / Concurrent engine processes | Several AskAmerica engine processes run concurrently on one host, as an MCP host starts them, and each has th… | — |
 | [ ] | ASKAM-007 | MUST | constraint | installer / Thin engine jar | The engine jar carries no embedder: no ONNX Runtime and no embedding model. Semantic search (the semantic_sea… | — |
+| [ ] | ASKAM-008 | MUST | constraint | engine / One mode | The engine has one mode: it serves data through the data server. There is no in-process query mode. No code p… | — |
+| [ ] | ASKAM-009 | MUST | constraint | installer / Thin engine jar | The engine jar is thin: the MCP protocol, the tools, a pg-wire client and the setup wizard. It contains no go… | — |
 
 ## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
 
