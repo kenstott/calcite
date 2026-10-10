@@ -542,9 +542,14 @@ jobs:
       - name: Start pgwire-file and wait for the port
         run: |
           set -euo pipefail
-          # The install tree is made read-only and the host offers no Java: the server must
-          # start from the runtime it carries and write only to its state directory.
-          chmod -R a-w "$BUNDLE_DIR"
+          # Everything the bundle ships is made read-only and the host offers no Java: the
+          # server must start from the runtime it carries and write no classpath file. model/
+          # stays writable: the file adapter keeps its data directory and its cache beside
+          # its model (model/data, model/.aperio), which is how this bundle has always worked.
+          for part in "$BUNDLE_DIR"/*; do
+            [ "$(basename "$part")" = "model" ] || chmod -R a-w "$part"
+          done
+          chmod a-w "$BUNDLE_DIR"
           export PGWIRE_CALCITE_STATE_DIR="$PWD/smoke-state"
           env -u JAVA_HOME "$BUNDLE_DIR/bin/pgwire-file" --port 5455 --auth trust > smoke-server.log 2>&1 &
           echo $! > smoke-server.pid
@@ -565,7 +570,7 @@ jobs:
           set -euo pipefail
           psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -c "SELECT 1;"
 
-      - name: Query the fixture table, from the bundled runtime, with nothing written to the install tree
+      - name: Query the fixture table, from the bundled runtime, with no classpath file written
         run: |
           set -euo pipefail
           rows="$(psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -At -c "SELECT count(*) FROM people;")"
