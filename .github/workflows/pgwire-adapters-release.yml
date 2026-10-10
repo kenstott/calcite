@@ -634,12 +634,14 @@ jobs:
           # The host offers no Java: the server must start from the runtime it carries.
           Remove-Item Env:JAVA_HOME -ErrorAction SilentlyContinue
           $env:PGWIRE_CALCITE_STATE_DIR = "$PWD\smoke-state"
-          Start-Process cmd.exe -ArgumentList '/c', "`"$env:BUNDLE_DIR\bin\pgwire-file.bat`" --port 5455 --auth trust > `"$PWD\smoke-server.log`" 2>&1" -WindowStyle Hidden
+          # Started directly, with its output redirected by PowerShell: a `cmd /c` line holding
+          # two quoted paths loses its outer quotes and starts nothing.
+          Start-Process -FilePath "$env:BUNDLE_DIR\bin\pgwire-file.bat" -ArgumentList '--port', '5455', '--auth', 'trust' -RedirectStandardOutput smoke-server.out -RedirectStandardError smoke-server.log -WindowStyle Hidden
           $up = $false
           foreach ($i in 1..120) {
             try { $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 5455); $c.Close(); $up = $true; break } catch { Start-Sleep -Milliseconds 500 }
           }
-          if (-not $up) { Get-Content smoke-server.log -ErrorAction SilentlyContinue; throw "pgwire-file never opened port 5455" }
+          if (-not $up) { throw "pgwire-file never opened port 5455" }
           Write-Host "port 5455 is up"
 
       - name: Query the fixture table, from the bundled runtime, with the whole classpath
@@ -647,7 +649,7 @@ jobs:
           $psql = if ($env:PGBIN) { Join-Path $env:PGBIN 'psql.exe' } else { 'psql.exe' }
           $rows = & $psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -At -c "SELECT count(*) FROM people;"
           if ($LASTEXITCODE -ne 0 -or "$rows".Trim() -ne '2') { throw "expected 2 rows in people, got '$rows' (psql exit $LASTEXITCODE)" }
-          $log = Get-Content smoke-server.log -Raw
+          $log = "$(Get-Content smoke-server.log -Raw)$(Get-Content smoke-server.out -Raw)"
           $jars = @(Get-ChildItem "$env:BUNDLE_DIR\jars" -Filter *.jar).Count
           if ($log -notmatch 'JVM started with (\d+) classpath entries') { throw "the server did not say how many classpath entries its JVM started with" }
           $entries = [int]$Matches[1]
@@ -663,7 +665,9 @@ jobs:
 
       - name: Server log
         if: always()
-        run: Get-Content smoke-server.log -ErrorAction SilentlyContinue
+        run: |
+          Get-Content smoke-server.out -ErrorAction SilentlyContinue
+          Get-Content smoke-server.log -ErrorAction SilentlyContinue
 
   publish:
     needs: [plan, bundle, smoke, smoke-windows]
