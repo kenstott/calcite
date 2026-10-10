@@ -59,7 +59,8 @@ class IcebergLockReleaseConcurrencyTest {
           String owner = "lock-release-test-" + id;
           for (int i = 0; i < ROUNDS; i++) {
             // An entity of this thread's own, as the metadata file of its own table is.
-            String entity = "file:/lock-release-test/t" + id + "_" + i + "/metadata/v1.metadata.json";
+            String entity =
+                "file:/lock-release-test/t" + id + "_" + i + "/metadata/v1.metadata.json";
             try {
               manager.acquire(entity, owner);
               manager.release(entity, owner);
