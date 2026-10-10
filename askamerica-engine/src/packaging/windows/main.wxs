@@ -118,6 +118,33 @@
                Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
     </UI>
 
+    <!-- End our own launcher processes before the old version is removed. Claude Desktop
+         keeps one "AskAmerica MCP.exe" running per session, holding the runtime image and
+         the launcher jar open; a removal that finds them in use queues their deletion for
+         the next restart of Windows, and the new install, finding identical files in place,
+         keeps exactly those (kenstott/calcite#491). They have no window, so Windows' Restart
+         Manager does not close them. Claude starts the server again the next time it is
+         used. Only this product's launcher is named; the data server it may have started
+         runs under generic names (java.exe, python.exe) and is left alone.
+         An immediate action, because the old version's removal runs before anything
+         deferred does. Nothing running is not an error. -->
+    <CustomAction Id="SetKillLauncherCmd" Property="WixQuietExecCmdLine"
+                  Value="&quot;[SystemFolder]taskkill.exe&quot; /F /IM &quot;AskAmerica MCP.exe&quot;" />
+    <CustomAction Id="KillLauncher" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+
+    <!-- And everything else running FROM the installed product's directory: up to 0.109.2
+         the data server lived inside it and runs as java.exe and python.exe. Those are matched
+         by the path of their executable under the install location Windows has on record for
+         this product (64-bit registry view, whatever the bitness of the action's host), never
+         by image name: another program's java.exe or python.exe is not touched. With no
+         product installed there is no location and nothing is ended.
+         In this formatted string [\[] and [\]] are literal brackets. -->
+    <CustomAction Id="SetKillInstalledCmd" Property="WixQuietExecCmdLine"
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;$d = $null; $u = [\[]Microsoft.Win32.RegistryKey[\]]::OpenBaseKey('LocalMachine', 'Registry64').OpenSubKey('SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'); foreach ($n in $u.GetSubKeyNames()) { $k = $u.OpenSubKey($n); if ($k.GetValue('DisplayName') -eq 'AskAmerica MCP') { $d = $k.GetValue('InstallLocation') } }; if ($d -and $d.Length -gt 3) { Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like ($d + '*') } | ForEach-Object { Write-Output ('ending ' + $_.ProcessId + ' ' + $_.ExecutablePath); Stop-Process -Id $_.ProcessId -Force } }&quot;" />
+    <CustomAction Id="KillInstalled" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+
     <InstallExecuteSequence>
       <Custom Action="JpSetARPINSTALLLOCATION" After="CostFinalize">Not Installed</Custom>
       <Custom Action="JpSetARPCOMMENTS" After="CostFinalize">Not Installed</Custom>
@@ -139,6 +166,17 @@
       <?ifndef JpAllowDowngrades ?>
       <Custom Action="JpDisallowDowngrade" After="JpFindRelatedProducts">JP_DOWNGRADABLE_FOUND</Custom>
       <?endif?>
+      <!-- The old version is removed FIRST, as jpackage's own template has it. Removing it
+           after the new one is installed is not possible with what jpackage generates: the
+           old product's removal deletes the install directory's files by name, whatever
+           their component's other owners, and took the new install's launcher and runtime
+           with it (seen in the installer test: exit code 0, product registered, files gone).
+           What makes the early removal safe is that nothing of ours is running when it
+           happens: KillLauncher, just before it. -->
+      <Custom Action="SetKillLauncherCmd" Before="KillLauncher"/>
+      <Custom Action="KillLauncher" Before="SetKillInstalledCmd"/>
+      <Custom Action="SetKillInstalledCmd" Before="KillInstalled"/>
+      <Custom Action="KillInstalled" Before="RemoveExistingProducts"/>
       <RemoveExistingProducts Before="CostInitialize"/>
       <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts"/>
     </InstallExecuteSequence>

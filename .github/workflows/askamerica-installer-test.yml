@@ -1,0 +1,554 @@
+name: AskAmerica installer test
+
+# Builds the Windows .msi and the Linux .deb from this ref, INSTALLS each on a clean runner,
+# and checks that what was installed works: the launcher is where the installer says it put
+# it, the installer is small, and the installed launcher started with `--mcp` (the way Claude
+# Desktop starts it) completes the MCP initialize exchange. On Windows it also upgrades over
+# the previous release while that release is running, and uninstalls.
+#
+# No job here reads the production store, uses an API key, or signs anything: the handshake
+# needs none of them, and the engine jar the launcher loads is built by this run.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'askamerica-engine/**'
+      - '.github/workflows/askamerica-installer-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: askamerica-installer-test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Higher than any released engine version, so the upgrade job upgrades. An MSI version's
+  # first two fields are at most 255 and its third at most 65535.
+  TEST_VERSION: 0.250.${{ github.run_number }}
+  # The rule: the installer is small and has a step to download its assets (ASKAM-005).
+  LIMIT_MB: "100"
+  # The release the upgrade job installs first and upgrades from: the one in the report that
+  # Claude Desktop could not start the server after installing the .msi. Named, not "latest":
+  # the latest release has no installers until its own workflow has finished.
+  PREVIOUS_RELEASE: engine-v0.109.1
+  # The release whose Windows server bundle the server-windows job unpacks and has the engine
+  # spawn. Its JVM must be given the whole classpath (issue 497): set this to a release built
+  # after the fix to prove a Windows data server starts.
+  BUNDLE_RELEASE: engine-v0.109.3
+
+jobs:
+  # The engine jar from this ref. The installed launcher is pointed at it with
+  # ASKAMERICA_ENGINE_JAR, so the handshake exercises this ref's engine and nothing is fetched.
+  jar:
+    name: Engine jar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Build the engine jar
+        run: |
+          set -euo pipefail
+          ./gradlew :askamerica-engine:shadowJar --no-daemon -PreleaseVersion="$TEST_VERSION"
+          JAR=$(ls askamerica-engine/build/libs/*.jar | grep -v -e '-sources' -e '-javadoc' | xargs ls -S | head -1)
+          cp "$JAR" askamerica-engine.jar
+          ls -la askamerica-engine.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-test-engine-jar
+          path: askamerica-engine.jar
+          retention-days: 3
+
+  build:
+    name: Build installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_glob: "*.msi"
+          - os: ubuntu-latest
+            artifact_glob: "*.deb"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # jpackage builds the Windows MSI with WiX 3 (candle.exe/light.exe); newer runner images
+      # ship WiX 4. Same step as askamerica-engine.yml.
+      - name: Install WiX Toolset 3.14 (Windows only)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\wix.zip"
+          Expand-Archive "$env:RUNNER_TEMP\wix.zip" -DestinationPath "$env:RUNNER_TEMP\wix314" -Force
+          if (-not (Test-Path "$env:RUNNER_TEMP\wix314\candle.exe")) { throw "candle.exe missing after WiX extract" }
+          Add-Content -Path $env:GITHUB_PATH -Value "$env:RUNNER_TEMP\wix314"
+
+      - name: Build the installer
+        shell: bash
+        run: ./gradlew :askamerica-engine:jpackage --no-daemon -PreleaseVersion="$TEST_VERSION"
+
+      - name: Installer stays small
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' installer; do
+            found=1
+            bytes=$(wc -c < "$installer" | tr -d '[:space:]')
+            mb=$(( (bytes + 1048575) / 1048576 ))
+            echo "$installer: ${mb} MB (limit ${LIMIT_MB} MB)"
+            if [ "$mb" -gt "$LIMIT_MB" ]; then
+              echo "::error::$installer is ${mb} MB; an installer must stay under ${LIMIT_MB} MB and download its assets instead of carrying them"
+              exit 1
+            fi
+          done < <(find askamerica-engine/build/jpackage -maxdepth 1 -type f -name '${{ matrix.artifact_glob }}' -print0)
+          if [ "$found" != "1" ]; then
+            echo "::error::no installer matching ${{ matrix.artifact_glob }} under askamerica-engine/build/jpackage"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-test-${{ matrix.os }}
+          path: askamerica-engine/build/jpackage/${{ matrix.artifact_glob }}
+          retention-days: 3
+
+      # The WiX sources jpackage generated for this .msi (the file and component list, the
+      # install sequence): what the installer is, as built, for reading.
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.os == 'windows-latest'
+        with:
+          name: installer-test-wix-sources
+          path: |
+            askamerica-engine/build/jpackage-temp/config/**
+            askamerica-engine/build/jpackage-temp/**/*.wxs
+            askamerica-engine/build/jpackage-temp/**/*.wxf
+            askamerica-engine/build/jpackage-temp/**/*.wxi
+          if-no-files-found: warn
+          retention-days: 7
+
+  # A clean machine: install, find the launcher where the installer recorded it, handshake,
+  # uninstall.
+  install-windows:
+    name: Install the .msi, handshake, uninstall
+    needs: [jar, build]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-windows-latest
+          path: installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-engine-jar
+          path: engine
+
+      - name: Install silently
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          if (Test-Path "C:\Program Files\AskAmerica MCP") { throw "the runner already has an AskAmerica MCP directory" }
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\install.log" -Wait -PassThru
+          Write-Host "msiexec exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 80; throw "the install did not succeed (exit $($p.ExitCode))" }
+
+      # Where the installer itself says it put the product, read from its uninstall record;
+      # never an assumed path.
+      - name: The launcher is where the installer recorded it
+        shell: pwsh
+        run: |
+          $entry = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -eq 'AskAmerica MCP' } | Select-Object -First 1
+          if (-not $entry) { throw "no uninstall record named 'AskAmerica MCP'" }
+          Write-Host "InstallLocation: $($entry.InstallLocation)  DisplayVersion: $($entry.DisplayVersion)"
+          if (-not $entry.InstallLocation) { throw "the uninstall record has no InstallLocation" }
+          $exe = Join-Path $entry.InstallLocation 'AskAmerica MCP.exe'
+          if (-not (Test-Path $exe)) { Get-ChildItem $entry.InstallLocation -ErrorAction SilentlyContinue; throw "the launcher is not at $exe" }
+          $size = (Get-ChildItem $entry.InstallLocation -Recurse -File | Measure-Object Length -Sum).Sum
+          Write-Host ("installed: {0:N0} MB in {1}" -f ($size / 1MB), $entry.InstallLocation)
+          "ASKAMERICA_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "ASKAMERICA_INSTALL_DIR=$($entry.InstallLocation)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: The installed launcher completes the MCP handshake
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_handshake.py "$env:ASKAMERICA_EXE"
+          if ($LASTEXITCODE -ne 0) { throw "the MCP handshake failed" }
+
+      # Claude Desktop starts the server a second time, from a pool, for Cowork and Code
+      # sessions: two at once, another working directory, a bare environment, another profile,
+      # and through a shell. See mcp_start_cases.py for which of these must answer.
+      - name: The other ways a host starts it
+        if: always() && env.ASKAMERICA_EXE != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_start_cases.py "$env:ASKAMERICA_EXE"
+          if ($LASTEXITCODE -ne 0) { throw "a start that must work did not" }
+
+      # Issue 484: with the data server unable to start, a query must fail by name within
+      # seconds, not wait past the four minutes after which Claude Desktop cancels the call.
+      - name: A query with the data server unreachable fails by name, quickly
+        if: always() && env.ASKAMERICA_EXE != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_unreachable_query.py "$env:ASKAMERICA_EXE"
+          if ($LASTEXITCODE -ne 0) { throw "a query with no data server was not answered with a named error in time" }
+
+      - name: Uninstall removes the product
+        if: always() && env.ASKAMERICA_EXE != ''
+        shell: pwsh
+        run: |
+          # With the launcher RUNNING, as Claude Desktop leaves it: the uninstall ends it itself.
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Process cmd.exe -ArgumentList '/c', "(ping -n 600 127.0.0.1 > nul) | `"$env:ASKAMERICA_EXE`" --mcp > `"$env:RUNNER_TEMP\uninstall-mcp.log`" 2>&1" -WindowStyle Hidden
+          Start-Sleep -Seconds 20
+          $running = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) })
+          Write-Host "running from the install directory before the uninstall: $($running.Count)"
+          if ($running.Count -eq 0) { throw "the launcher was not running before the uninstall; the case was not exercised" }
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\uninstall.log" -Wait -PassThru
+          Write-Host "msiexec exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\uninstall.log" -Tail 80; throw "the uninstall did not succeed (exit $($p.ExitCode))" }
+          if (Test-Path $env:ASKAMERICA_EXE) { throw "the launcher is still at $env:ASKAMERICA_EXE after uninstall" }
+          $left = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) })
+          if ($left.Count -gt 0) { throw "$($left.Count) processes from the install directory survived the uninstall" }
+          if (Test-Path $env:ASKAMERICA_INSTALL_DIR) { Write-Host "left behind in the install directory:"; Get-ChildItem $env:ASKAMERICA_INSTALL_DIR -Recurse -File | Select-Object -First 20 | ForEach-Object { Write-Host "  $($_.FullName)" } }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-test-windows-logs
+          path: ${{ runner.temp }}/*.log
+          retention-days: 7
+
+  # The case a user of an earlier release meets: the previous release is installed AND
+  # RUNNING (Claude Desktop keeps the launcher running; a server it started may be running
+  # from the install directory too) when the new .msi is installed over it. The new install
+  # must leave a complete product that needs no restart of Windows to be whole.
+  upgrade-windows:
+    name: Upgrade over the running previous release
+    needs: [jar, build]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-windows-latest
+          path: installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-engine-jar
+          path: engine
+
+      - name: Install the previous release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force previous | Out-Null
+          gh release download $env:PREVIOUS_RELEASE --repo "${{ github.repository }}" --pattern "*.msi" --dir previous
+          if ($LASTEXITCODE -ne 0) { throw "could not download the .msi of $env:PREVIOUS_RELEASE" }
+          $msi = (Get-ChildItem previous -Filter *.msi | Select-Object -First 1).FullName
+          if (-not $msi) { throw "$env:PREVIOUS_RELEASE has no .msi" }
+          Write-Host ("previous release installer: {0} ({1:N0} MB)" -f $msi, ((Get-Item $msi).Length / 1MB))
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\previous-install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\previous-install.log" -Tail 80; throw "the previous release did not install (exit $($p.ExitCode))" }
+          $entry = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object { $_.DisplayName -eq 'AskAmerica MCP' } | Select-Object -First 1
+          Write-Host "previous: $($entry.DisplayVersion) at $($entry.InstallLocation)"
+          "PREVIOUS_DIR=$($entry.InstallLocation)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # As Claude Desktop leaves it: the launcher running with --mcp, its standard input held
+      # open by a pipe that says nothing. If that release carries its server inside the install
+      # directory, that server is started the way the engine starts it (its own .bat through
+      # cmd.exe), since a user's machine has it running from there; what it prints is kept,
+      # because whether it can run from Program Files at all is itself in question.
+      - name: Leave the previous release running
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          $exe = Join-Path $env:PREVIOUS_DIR 'AskAmerica MCP.exe'
+          if (-not (Test-Path $exe)) { throw "the previous release's launcher is not at $exe" }
+          Start-Process cmd.exe -ArgumentList '/c', "(ping -n 3600 127.0.0.1 > nul) | `"$exe`" --mcp > `"$env:RUNNER_TEMP\previous-mcp.log`" 2>&1" -WindowStyle Hidden
+          $bat = Join-Path $env:PREVIOUS_DIR 'app\pgwire-govdata\bin\pgwire-govdata.bat'
+          if (Test-Path $bat) {
+            Write-Host "the previous release carries its server: $bat"
+            Start-Process cmd.exe -ArgumentList '/c', "`"$bat`" --port 5459 --auth trust > `"$env:RUNNER_TEMP\previous-bundled-server.log`" 2>&1" -WindowStyle Hidden
+          } else {
+            Write-Host "the previous release does not carry its server"
+          }
+          # A process of a generic name running FROM the install directory, as the old data
+          # server's java.exe and python.exe do: the bundle's own Python, doing nothing. The
+          # installer must end it by its path (it cannot be named), or its files stay in use.
+          $py = Get-ChildItem (Join-Path $env:PREVIOUS_DIR 'app\pgwire-govdata') -Recurse -Filter python.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*\python\cpython-*' } | Select-Object -First 1
+          if ($py) {
+            $idle = Start-Process $py.FullName -ArgumentList '-c', '"import time; time.sleep(3600)"' -WindowStyle Hidden -PassThru
+            Write-Host "left running from the install directory: $($py.FullName) (pid $($idle.Id))"
+            "IDLE_PID=$($idle.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Host "the previous release has no python.exe under the install directory to leave running"
+          }
+          Start-Sleep -Seconds 45
+          Write-Host "processes running from the install directory:"
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:PREVIOUS_DIR) } | Select-Object Id, Path | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+          if (Test-Path "$env:RUNNER_TEMP\previous-bundled-server.log") {
+            Write-Host "--- what the bundled server printed, started from the install directory:"
+            Get-Content "$env:RUNNER_TEMP\previous-bundled-server.log" -Tail 40
+          }
+
+      - name: Install this build over it
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\upgrade.log" -Wait -PassThru
+          Write-Host "msiexec exit code: $($p.ExitCode)"
+          "UPGRADE_EXIT=$($p.ExitCode)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # What the upgrade must not do: queue for deletion at the next restart a file the NEW
+      # version installs (issue 491). Files only the old version had, still in use, may wait
+      # for a restart; that is reported, with the exit code, and does not fail.
+      - name: The upgrade queued nothing of the new version for deletion
+        shell: pwsh
+        run: |
+          $problems = @()
+          Write-Host "msiexec exit code: $env:UPGRADE_EXIT (3010 = Windows asks for a restart)"
+          if ($env:UPGRADE_EXIT -ne '0' -and $env:UPGRADE_EXIT -ne '3010') { $problems += "msiexec failed with $env:UPGRADE_EXIT" }
+          $entries = @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object { $_.DisplayName -eq 'AskAmerica MCP' })
+          Write-Host "uninstall records named AskAmerica MCP: $($entries.Count)"
+          $entries | ForEach-Object { Write-Host "  $($_.DisplayVersion) at $($_.InstallLocation)" }
+          if ($entries.Count -ne 1) { $problems += "expected one installed product, found $($entries.Count)" }
+          $dir = if ($entries.Count -ge 1) { $entries[0].InstallLocation } else { $env:PREVIOUS_DIR }
+          $exe = Join-Path $dir 'AskAmerica MCP.exe'
+          if (-not (Test-Path $exe)) { $problems += "the launcher is not at $exe after the upgrade" }
+          # The names of the files the new .msi installs, from its own File table.
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $db = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($msi, 0))
+          $view = $db.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $db, @('SELECT `FileName` FROM `File`'))
+          $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null) | Out-Null
+          $newNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+          while ($true) {
+            $rec = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+            if (-not $rec) { break }
+            $name = $rec.GetType().InvokeMember('StringData', 'GetProperty', $null, $rec, @(1))
+            [void]$newNames.Add(($name -split '\|')[-1])
+          }
+          Write-Host "the new .msi installs $($newNames.Count) distinct file names"
+          # Deletions Windows deferred to the next restart, under the install directory.
+          $pending = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations
+          $ours = @($pending | Where-Object { $_ -and $_ -like "*AskAmerica MCP*" } | ForEach-Object { $_ -replace '^\*?\d*\\\?\?\\', '' })
+          $ofNew = @($ours | Where-Object { $newNames.Contains((Split-Path $_ -Leaf)) })
+          Write-Host "file operations deferred to restart under the install directory: $($ours.Count); of files the new version installs: $($ofNew.Count)"
+          $ofNew | Select-Object -First 20 | ForEach-Object { Write-Host "  queued, and the new version needs it: $_" }
+          $ours | Where-Object { $ofNew -notcontains $_ } | Select-Object -First 5 | ForEach-Object { Write-Host "  queued, old version only: $_" }
+          if ($ofNew.Count -gt 0) { $problems += "$($ofNew.Count) files the new version installs are queued for deletion at the next restart" }
+          # What ran from the old install directory under a generic name must have been ended
+          # by the installer, by its path.
+          if ($env:IDLE_PID) {
+            $still = Get-Process -Id $env:IDLE_PID -ErrorAction SilentlyContinue
+            if ($still) { $problems += "process $env:IDLE_PID ($($still.Path)), running from the old install directory, survived the upgrade" }
+            else { Write-Host "the process left running from the install directory (pid $env:IDLE_PID) was ended by the installer" }
+          }
+          Select-String -Path "$env:RUNNER_TEMP\upgrade.log" -Pattern 'WixQuietExec:\s+(ending|SUCCESS)' | Select-Object -First 12 | ForEach-Object { Write-Host $_.Line }
+          $ours | Set-Content "$env:RUNNER_TEMP\queued-deletions.txt"
+          Select-String -Path "$env:RUNNER_TEMP\upgrade.log" -Pattern "Won't Overwrite|WixCloseApplications|Return value 3" | Select-Object -First 12 | ForEach-Object { Write-Host $_.Line }
+          "ASKAMERICA_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "UPGRADED_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($problems.Count -gt 0) { $problems | ForEach-Object { Write-Host "::error::$_" }; throw "the upgrade queued files of the new install for deletion, or did not complete" }
+
+      # A runner cannot be restarted. This does what the restart would: nothing of ours is
+      # running any more, and the deletions Windows queued are carried out. The product must
+      # still start afterwards.
+      - name: After what a restart would do, the product is whole
+        if: always() && env.UPGRADED_DIR != ''
+        shell: pwsh
+        run: |
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:UPGRADED_DIR) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          $queued = @(Get-Content "$env:RUNNER_TEMP\queued-deletions.txt" -ErrorAction SilentlyContinue | Where-Object { $_ })
+          $gone = 0
+          foreach ($path in $queued) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -Recurse -ErrorAction SilentlyContinue; $gone++ } }
+          Write-Host "carried out $gone of $($queued.Count) queued deletions"
+          foreach ($needed in 'AskAmerica MCP.exe', 'runtime\lib\modules') {
+            $p = Join-Path $env:UPGRADED_DIR $needed
+            if (-not (Test-Path -LiteralPath $p)) { Write-Host "::error::after the restart's deletions $p is gone" }
+          }
+
+      - name: The upgraded launcher completes the MCP handshake
+        if: always() && env.UPGRADED_DIR != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_handshake.py "$env:ASKAMERICA_EXE"
+          if ($LASTEXITCODE -ne 0) { throw "the MCP handshake failed after the upgrade" }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-test-upgrade-logs
+          path: ${{ runner.temp }}/*.log
+          retention-days: 7
+
+  # Does a RELEASED server bundle come up when the engine spawns it on Windows, from a place
+  # it can write to? The bundle of PREVIOUS_RELEASE is unpacked under the profile and named
+  # with ASKAMERICA_PGWIRE_LAUNCHER; one MCP process, then two at once, must each leave a
+  # server listening. This does not exercise the engine's own download of the bundle.
+  server-windows:
+    name: The engine's spawn of a released server bundle listens (Windows)
+    needs: [jar, build]
+    runs-on: windows-latest
+    # Write access only so that this job can read the assets of a release that is still a
+    # DRAFT (a draft is invisible to a read-only token); it writes nothing.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-windows-latest
+          path: installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-engine-jar
+          path: engine
+
+      - name: Install silently
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 80; throw "the install did not succeed (exit $($p.ExitCode))" }
+          $entry = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object { $_.DisplayName -eq 'AskAmerica MCP' } | Select-Object -First 1
+          "ASKAMERICA_EXE=$(Join-Path $entry.InstallLocation 'AskAmerica MCP.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Unpack the released server bundle under the profile
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force bundle-download | Out-Null
+          gh release download $env:BUNDLE_RELEASE --repo "${{ github.repository }}" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz.sha256" --dir bundle-download
+          if ($LASTEXITCODE -ne 0) { throw "could not download the Windows server bundle of $env:BUNDLE_RELEASE" }
+          Write-Host "server bundle under test: $env:BUNDLE_RELEASE"
+          $tar = (Get-ChildItem bundle-download -Filter *.tar.gz | Select-Object -First 1).FullName
+          $want = ((Get-Content "$tar.sha256" -Raw).Trim() -split '\s+')[0].ToLower()
+          $have = (Get-FileHash $tar -Algorithm SHA256).Hash.ToLower()
+          if ($want -ne $have) { throw "checksum mismatch for ${tar}: published $want, downloaded $have" }
+          $root = Join-Path $env:USERPROFILE 'askamerica-installer-test\pgwire-govdata'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          tar -xzf $tar -C $root
+          if ($LASTEXITCODE -ne 0) { throw "could not unpack $tar" }
+          $bat = Get-ChildItem $root -Recurse -Filter pgwire-govdata.bat | Select-Object -First 1
+          if (-not $bat) { Get-ChildItem $root | Select-Object -First 30; throw "the bundle has no pgwire-govdata.bat" }
+          Write-Host "server launcher: $($bat.FullName)"
+          "SERVER_LAUNCHER=$($bat.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SERVER_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: One MCP process leaves a server listening
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_server_reachable.py "$env:ASKAMERICA_EXE" "$env:SERVER_LAUNCHER" 1
+          $code = $LASTEXITCODE
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:SERVER_ROOT) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          if ($code -ne 0) { throw "the server spawned by one MCP process did not come up and stay up" }
+
+      - name: Two MCP processes at once leave a server listening
+        if: always() && env.SERVER_LAUNCHER != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_server_reachable.py "$env:ASKAMERICA_EXE" "$env:SERVER_LAUNCHER" 2
+          $code = $LASTEXITCODE
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:SERVER_ROOT) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          if ($code -ne 0) { throw "the server spawned by two MCP processes at once did not come up and stay up" }
+
+  install-linux:
+    name: Install the .deb, handshake, remove
+    needs: [jar, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-ubuntu-latest
+          path: installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-engine-jar
+          path: engine
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          deb=$(ls installer/*.deb | head -1)
+          dpkg-deb --info "$deb" | sed -n '1,25p'
+          # The package's dependencies first, then the package itself; any error dpkg reports
+          # for the package, its own scripts' included, fails the step here.
+          sudo apt-get update -y
+          sudo apt-get install -y $(dpkg-deb --field "$deb" Depends | tr -d ' ' | tr ',' ' ')
+          sudo dpkg -i "$deb"
+          dpkg -s "$(dpkg-deb --field "$deb" Package)" | grep -x 'Status: install ok installed'
+          # Nothing is left for apt to repair, on this host with no desktop menu.
+          sudo apt-get install -f -y | tee apt-fix.log
+          grep -q '0 upgraded, 0 newly installed, 0 to remove' apt-fix.log
+          ! grep -q 'not fully installed or removed' apt-fix.log
+          package=$(dpkg-deb --field "$deb" Package)
+          echo "ASKAMERICA_PACKAGE=$package" >> "$GITHUB_ENV"
+
+      # Where the package itself says it put the launcher, from its file list.
+      - name: The launcher is where the package put it
+        run: |
+          set -euo pipefail
+          launcher=$(dpkg -L "$ASKAMERICA_PACKAGE" | grep -E '/bin/[^/]+$' | head -1)
+          test -n "$launcher" || { echo "::error::the package lists no launcher under a bin directory"; dpkg -L "$ASKAMERICA_PACKAGE" | head -40; exit 1; }
+          test -x "$launcher" || { echo "::error::$launcher is not executable"; exit 1; }
+          echo "launcher: $launcher"
+          du -sh "$(dirname "$(dirname "$launcher")")"
+          echo "ASKAMERICA_EXE=$launcher" >> "$GITHUB_ENV"
+
+      - name: The installed launcher completes the MCP handshake
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
+        run: python3 askamerica-engine/installer-test/mcp_handshake.py "$ASKAMERICA_EXE"
+
+      - name: The other ways a host starts it
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
+        run: python3 askamerica-engine/installer-test/mcp_start_cases.py "$ASKAMERICA_EXE"
+
+      - name: A query with the data server unreachable fails by name, quickly
+        if: always() && env.ASKAMERICA_EXE != ''
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
+        run: python3 askamerica-engine/installer-test/mcp_unreachable_query.py "$ASKAMERICA_EXE"
+
+      - name: Removing the package removes the launcher
+        if: always() && env.ASKAMERICA_EXE != ''
+        run: |
+          set -euo pipefail
+          sudo dpkg -r "$ASKAMERICA_PACKAGE"
+          test ! -e "$ASKAMERICA_EXE" || { echo "::error::$ASKAMERICA_EXE is still there after removal"; exit 1; }
+          # dpkg knows nothing more of it (removed, or removed with only config files left).
+          ! dpkg -s "$ASKAMERICA_PACKAGE" 2>/dev/null | grep -q 'Status: install ok installed'
+          ! dpkg --audit | grep -q "$ASKAMERICA_PACKAGE"
