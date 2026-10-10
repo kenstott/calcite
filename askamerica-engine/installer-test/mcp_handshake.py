@@ -12,8 +12,8 @@ MCP `initialize` exchange over its standard input and output.
 
     mcp_handshake.py "<path to the installed launcher>"
 
-Exits 0 when the server answers `initialize` with its serverInfo, 1 otherwise (printing what
-it wrote). The server is given no API key and reads no data: `initialize` needs neither.
+Exits 0 when the server answers `initialize` with its serverInfo, in UTF-8, 1 otherwise
+(printing what it wrote). The server is given no API key and reads no data: `initialize` needs neither.
 """
 import json
 import os
@@ -23,6 +23,9 @@ import sys
 import threading
 
 TIMEOUT_SECONDS = 600  # a first start may fetch the engine jar before it answers
+# Marks a line of the server's standard output that is not UTF-8. MCP is UTF-8; a server that
+# writes in the system's code page corrupts every non-ASCII character it sends (issue 486).
+NOT_UTF8 = "[test] standard output is not valid UTF-8: "
 
 
 def handshake(command, cwd=None, env=None, shell=False):
@@ -63,6 +66,12 @@ def handshake(command, cwd=None, env=None, shell=False):
                 closed += 1
                 continue
             text = raw.decode("utf-8", "replace").rstrip()
+            if name == "out":
+                try:
+                    raw.decode("utf-8")
+                except UnicodeDecodeError as e:
+                    seen.append(NOT_UTF8 + f"byte 0x{raw[e.start]:02x} at {e.start} in: "
+                                + text[max(0, e.start - 40):e.start + 40])
             seen.append(f"[{name}] {text}")
             if name != "out":
                 continue
@@ -92,9 +101,15 @@ def main() -> int:
         print(f"the launcher is not at {launcher}", file=sys.stderr)
         return 1
     answered, seen = handshake([launcher, "--mcp"])
-    if answered:
+    garbled = [line for line in seen if line.startswith(NOT_UTF8)]
+    if answered and not garbled:
         print(seen[-1][len("[test] "):])
         return 0
+    if answered:
+        print("the server answered initialize, but not in UTF-8:", file=sys.stderr)
+        for line in garbled:
+            print("  " + line, file=sys.stderr)
+        return 1
     print("the server did not complete the MCP handshake; what it wrote:", file=sys.stderr)
     for line in seen[-80:]:
         print("  " + line, file=sys.stderr)
