@@ -365,7 +365,10 @@ public class SetupWindow {
         relaunchBtn.setEnabled(false);
         setStatus("Quitting Claude Desktop…", null);
         try {
-            quitClaudeDesktop();
+            // The program Claude Desktop is running from, read before it is asked to quit:
+            // that exact program is what is started again, never a name looked up afterwards.
+            Path desktopProgram = ClaudeDesktop.runningProgram();
+            ClaudeDesktop.quit();
             // Graceful quit is async — Desktop decides its own shutdown pace (it may have
             // its own confirmation dialogs). Poll rather than assume a fixed delay, but
             // don't wait forever: relaunching over a still-shutting-down instance is
@@ -376,7 +379,7 @@ public class SetupWindow {
                 Thread.sleep(300);
             }
             setStatus("Relaunching Claude Desktop…", null);
-            relaunchClaudeDesktop();
+            ClaudeDesktop.relaunch(desktopProgram);
             setStatus("Done! Claude Desktop is restarting with the new configuration.", true);
             relaunchBtn.setVisible(false);
             frame.pack();
@@ -543,72 +546,16 @@ public class SetupWindow {
     // ── Claude Desktop process management ────────────────────────────────────
 
     /**
-     * Best-effort, platform-specific "is the app running" check. False on any failure —
-     * an unrecognized platform or a failed process probe should hide the relaunch button
-     * (nothing to offer), never crash the wizard over it.
+     * Whether Claude Desktop is running. False on any failure: a failed process probe should
+     * hide the relaunch button (nothing to offer), never crash the wizard over it. Identified
+     * as the desktop application, not by the name it shares with the Claude Code command-line
+     * tool: see {@link ClaudeDesktop}.
      */
     private static boolean isClaudeDesktopRunning() {
-        String os = System.getProperty("os.name", "").toLowerCase();
         try {
-            if (os.contains("win")) {
-                Process p = new ProcessBuilder(
-                    "tasklist", "/FI", "IMAGENAME eq Claude.exe").start();
-                String out = new String(p.getInputStream().readAllBytes(),
-                    java.nio.charset.StandardCharsets.UTF_8);
-                p.waitFor();
-                return out.toLowerCase().contains("claude.exe");
-            }
-            // macOS and Linux Electron builds both register the process name "Claude".
-            Process p = new ProcessBuilder("pgrep", "-x", "Claude").start();
-            return p.waitFor() == 0;
-        } catch (Exception e) {
+            return !ClaudeDesktop.running().isEmpty();
+        } catch (RuntimeException e) {
             return false;
-        }
-    }
-
-    /**
-     * Asks Claude Desktop to quit — a graceful, OS-level request the app can act on
-     * normally (save state, decline via a dialog), never a forced kill. A forced kill
-     * (SIGKILL / {@code taskkill /F}) risks losing session state for the sake of a config
-     * change that will apply just as well on the next ordinary restart.
-     */
-    private static void quitClaudeDesktop() throws IOException, InterruptedException {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("mac")) {
-            new ProcessBuilder("osascript", "-e", "quit app \"Claude\"").start().waitFor();
-        } else if (os.contains("win")) {
-            // No /F: a plain taskkill sends WM_CLOSE, giving the app the same chance to
-            // shut down cleanly that closing its window would.
-            new ProcessBuilder("taskkill", "/IM", "Claude.exe").start().waitFor();
-        } else {
-            // Plain pkill sends SIGTERM, not SIGKILL — same "ask nicely" intent.
-            new ProcessBuilder("pkill", "-x", "Claude").start().waitFor();
-        }
-    }
-
-    /**
-     * Relaunches Claude Desktop after a quit. Best-effort per platform; a failure here is
-     * reported to the user as "please reopen it yourself" rather than treated as fatal —
-     * the config change itself already succeeded regardless of whether this step works.
-     */
-    private static void relaunchClaudeDesktop() throws IOException {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("mac")) {
-            new ProcessBuilder("open", "-a", "Claude").start();
-        } else if (os.contains("win")) {
-            String localAppData = System.getenv("LOCALAPPDATA");
-            Path exe = localAppData == null ? null
-                : Paths.get(localAppData, "Programs", "Claude", "Claude.exe");
-            if (exe != null && Files.exists(exe)) {
-                new ProcessBuilder(exe.toString()).start();
-            } else {
-                // Falls through to whatever "Claude" resolves to on PATH/shell association;
-                // may not resolve on every install layout, which is why the caller reports
-                // failure back to the user rather than assuming success.
-                new ProcessBuilder("cmd", "/c", "start", "", "Claude").start();
-            }
-        } else {
-            new ProcessBuilder("claude-desktop").start();
         }
     }
 
@@ -727,21 +674,65 @@ public class SetupWindow {
         return shim.toString();
     }
 
-    private static String executablePath() {
-        // The launcher records the exact executable it was started from — use it so
-        // Claude Desktop is pointed at the real binary regardless of install location.
+    /**
+     * The launcher this wizard is running from: the one file Claude Desktop is to start.
+     *
+     * <p>It is the executable the running process reports for itself, recorded by
+     * {@link McpServerLauncher}, and it must exist. There is no assumed install location: an
+     * entry pointing at a path nobody checked is how Claude Desktop came to be told to start
+     * {@code C:\\Program Files\\AskAmerica MCP\\AskAmerica MCP.exe} on a machine where that
+     * folder did not exist. When the launcher cannot be named, nothing is written.
+     */
+    static String executablePath() throws IOException {
         String actual = System.getProperty("askamerica.launcher.command");
-        if (actual != null && !actual.isBlank()) {
-            return actual;
+        if (actual == null || actual.isBlank()) {
+            throw new IOException("AskAmerica MCP could not determine which program it is "
+                + "running from, so Claude Desktop was not configured. Start AskAmerica MCP "
+                + "from where it is installed and configure again.");
         }
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("mac")) {
-            return "/Applications/AskAmerica MCP.app/Contents/MacOS/AskAmerica MCP";
-        } else if (os.contains("win")) {
-            return "C:\\Program Files\\AskAmerica MCP\\AskAmerica MCP.exe";
-        } else {
-            return "/opt/askamerica-mcp/bin/AskAmerica MCP";
+        if (!Files.isRegularFile(Paths.get(actual))) {
+            throw new IOException("AskAmerica MCP's program is not at " + actual
+                + ", so Claude Desktop was not configured.");
         }
+        return actual;
+    }
+
+    /**
+     * What setup would do on this machine, as JSON, without doing it: the program Claude
+     * Desktop would be told to start, the config files that would be written, and how Claude
+     * Desktop would be restarted. A part that cannot be determined carries the reason instead.
+     * Printed by the launcher's {@code --print-setup}, so an installed product can be checked
+     * without a person at the window.
+     */
+    public static String describeSetup() {
+        ObjectNode out = MAPPER.createObjectNode();
+        try {
+            out.put("launcher", executablePath());
+        } catch (IOException e) {
+            out.put("launcherError", e.getMessage());
+        }
+        try {
+            com.fasterxml.jackson.databind.node.ArrayNode files = out.putArray("configFiles");
+            for (Path path : claudeConfigPaths()) {
+                files.add(path.toString());
+            }
+        } catch (IOException e) {
+            out.remove("configFiles");
+            out.put("configFilesError", e.getMessage());
+        }
+        Path program = ClaudeDesktop.runningProgram();
+        out.put("claudeDesktopRunning", program != null);
+        try {
+            com.fasterxml.jackson.databind.node.ArrayNode command = out.putArray("relaunch");
+            for (String part : ClaudeDesktop.relaunchCommand(
+                System.getProperty("os.name", ""), program, ClaudeDesktop.WINDOWS_STORE)) {
+                command.add(part);
+            }
+        } catch (IOException e) {
+            out.remove("relaunch");
+            out.put("relaunchError", e.getMessage());
+        }
+        return out.toPrettyString();
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────
