@@ -17,7 +17,7 @@
 | [ ] | ASKAM-006 | MUST | behavioral | semantic-search / Semantic search | Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing set by the user, the … | — |
 | [ ] | ASKAM-010 | MUST | constraint | data-server / Key sign-in | Every connection to the pgwire-govdata server passes its AskAmerica API key as the PostgreSQL password, and t… | pgwire-calcite/tests/unit/test_key_sign_in.py, askamerica-e… |
 
-## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
+## file  (191: 161 complete, 12 in-progress, 15 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -211,6 +211,7 @@
 | [~] | FILE-188 | SHOULD | behavioral | aperio-uri / consumer uri emission | The consumer URI for a lake is derived by AperioDriver.deriveConsumerUri(storage, schema): the lake location … | file/AperioDriverOperandTest#deriveConsumerUriPointsAtLakeR… |
 | [x] | FILE-189 | SHOULD | behavioral | aperio-uri / persistent remote-read cache | The DuckDB query engine loads the cache_httpfs community extension by default (non-Windows; WSL included) and… | — |
 | [x] | FILE-190 | MUST | behavioral | aperio-uri / connection defaults | AperioDriver defaults conformance.raggedUnionTypesToVarying=true on the delegated Calcite connection; an expl… | file/AperioDriverConformanceTest |
+| [x] | FILE-191 | MUST | constraint | iceberg / commit locking | Iceberg is at 1.5.2 or later. Commits to different Iceberg tables from several threads of one JVM must not fa… | file/IcebergLockReleaseConcurrencyTest |
 
 ## govdata  (74: 74 accepted)
 

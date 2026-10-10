@@ -105,20 +105,20 @@ dependencies {
 
     // Apache Iceberg support
     // iceberg-api is exposed as api() so dependent modules can use Iceberg Table type
-    api("org.apache.iceberg:iceberg-api:1.4.0")
-    implementation("org.apache.iceberg:iceberg-core:1.4.0")
-    implementation("org.apache.iceberg:iceberg-common:1.4.0")
+    api("org.apache.iceberg:iceberg-api:1.5.2")
+    implementation("org.apache.iceberg:iceberg-core:1.5.2")
+    implementation("org.apache.iceberg:iceberg-common:1.5.2")
     // Theta sketches for Iceberg Puffin column statistics. Declared explicitly rather than
     // relying on the com.yahoo.datasketches:sketches-core that arrives transitively via Calcite
     // core: Iceberg's StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1 names the Apache
     // serialization, and a blob written under that type must actually carry it or it fails at
     // read time in Spark/Trino — long after the snapshot committed — rather than at write time.
     implementation("org.apache.datasketches:datasketches-java:6.1.1")
-    implementation("org.apache.iceberg:iceberg-parquet:1.4.0")
-    implementation("org.apache.iceberg:iceberg-data:1.4.0")
+    implementation("org.apache.iceberg:iceberg-parquet:1.5.2")
+    implementation("org.apache.iceberg:iceberg-data:1.5.2")
     // iceberg-aws provides S3FileIO (AWS SDK v2) so the read path can load Iceberg
     // tables from S3/MinIO without hadoop-aws + the AWS SDK v1 bundle (S3AFileSystem).
-    implementation("org.apache.iceberg:iceberg-aws:1.4.0")
+    implementation("org.apache.iceberg:iceberg-aws:1.5.2")
     // AWS SDK v2 — the one JVM S3 stack, shared by S3StorageProvider, Iceberg's S3FileIO and
     // (since 3.4.x) Hadoop's S3AFileSystem. BOM-pinned so every awssdk module resolves to one
     // version; 2.35.4 is what hadoop-project 3.4.3 pins, so S3A gets the version it expects.
