@@ -125,11 +125,55 @@ def _scheduler_view(runs_dir):
     return None
 
 
+POOL_LOG_LINE_RE = re.compile(rb"^Pool log: (\S+)\s*$", re.M)
+
+
+def _last_pool_log_named(path):
+    """The pool-*.log file name the newest 'Pool log:' line in a scheduled-*.log announces, or None.
+
+    Read from the end in 1 MB steps so a long window log only costs what it takes to reach the
+    last attempt's banner."""
+    step = 1 << 20
+    try:
+        with open(path, "rb") as fh:
+            size = fh.seek(0, os.SEEK_END)
+            end = size
+            while end > 0:
+                start = max(0, end - step)
+                fh.seek(start)
+                found = POOL_LOG_LINE_RE.findall(fh.read(end - start))
+                if found:
+                    return os.path.basename(found[-1].decode("utf-8", "replace"))
+                end = start
+    except OSError:
+        return None
+    return None
+
+
+def _scheduled_log_for_missing_pool_log(runs_dir, newest_pool):
+    """The newest scheduled-*.log when the pool log it announced no longer exists, else None.
+
+    The scheduler tees the pool's whole output into scheduled-*.log, so that file parses the same
+    way a pool log does. Without this, a window whose pool-*.log was deleted (observed 2026-10-10:
+    the historical window's log was gone while the pool kept running) leaves the dashboard showing
+    the newest surviving pool log, a finished run from hours earlier. Only used when the scheduled
+    log has been written since that surviving pool log, so a later explicit pool run still wins."""
+    scheduled = glob.glob(os.path.join(runs_dir, "scheduled-*.log"))
+    if not scheduled:
+        return None
+    sched = max(scheduled, key=os.path.getmtime)
+    announced = _last_pool_log_named(sched)
+    if announced is None or os.path.exists(os.path.join(runs_dir, announced)):
+        return None
+    if newest_pool is not None and os.path.getmtime(newest_pool) >= os.path.getmtime(sched):
+        return None
+    return sched
+
+
 def newest_pool_log(runs_dir):
     logs = glob.glob(os.path.join(runs_dir, "pool-*.log"))
-    if not logs:
-        return None
-    return max(logs, key=os.path.getmtime)
+    newest = max(logs, key=os.path.getmtime) if logs else None
+    return _scheduled_log_for_missing_pool_log(runs_dir, newest) or newest
 
 
 def parse(path):

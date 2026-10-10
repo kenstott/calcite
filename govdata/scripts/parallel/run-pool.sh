@@ -340,38 +340,43 @@ for arg in "$@"; do
       # Recurring workers — run every day on the production server.
       export GOVDATA_RUN_MODE="daily"
       _cy=$(date +%Y)
+      # Longest-running schemas first. Admission is capped at -j 8 concurrent, so this is a
+      # makespan problem: a slow schema queued late starts late and the whole window waits on
+      # it (2026-10-09: housing:daily was queued near the end, started ~09:41 and ran 226m, so
+      # the 30-worker pool finished at 13:27 when the work itself totals ~3h of 8-wide
+      # capacity). Order = typical wall time from the 2026-10-09 daily run, longest first;
+      # re-sort from a fresh run's "finished OK (Nm)" lines when the mix changes.
       queue+=(
-        "sec_primary:${_cy}"
-        econ:daily census:daily geo:daily crime:daily weather:daily
+        housing:daily                 # 226m
+        health:daily                  # 136m
+        econ:daily                    # 136m
+        law:daily                     # 128m
+        fec:daily                     # 97m
+        cftc:daily                    # 83m
+        transport:daily               # 68m
+        environment:daily             # 62m
+        weather:daily                 # 48m
+        geo:daily                     # 47m
+        disasters:daily               # 44m
+        ag:daily                      # 43m
+        "sec_primary:${_cy}"          # 41m
+        census:daily crime:daily      # 33m
+        "sec_13f:${_cy}"              # 33m
+        banking:daily                 # 27m
+        energy:daily                  # 25m
+        lands:daily                   # 20m
+        cyber_threat:daily            # 17m
+        fiscal:daily                  # 16m
+        econ_reference:daily          # 12m
+        research:daily                # 10m
         # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
         # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
-        "sec_13f:${_cy}"
-        "sec_prices:daily"
-        fec:daily fedregister:daily officials:daily
-        cyber_vuln:daily cyber_threat:daily
-        health:daily
-        edu:daily
-        energy:daily
-        patents:daily lands:daily cftc:daily
-        ag:daily
-        disasters:daily
-        housing:daily
-        transport:daily
-        environment:daily
-        research:daily
-        fiscal:daily
-        banking:daily
-        econ_reference:daily
-        law:daily
-        # ref:daily is queued last, not for a hard ordering guarantee (this pool has none —
-        # admission is memory-budget-gated, not dependency-gated, so ref can still start
-        # concurrently with a still-running earlier slot) but because queue position is a real,
-        # if soft, bias on admission order: ref's entity-resolution bridge (EntityBridgeListener)
-        # reads live iceberg_scan snapshots of fec/patents/sec/health/environment/energy/
-        # transport/fiscal, so queuing it after them makes it more likely to see each schema's
-        # same-day data rather than yesterday's. Harmless either way if it doesn't: the bridge
-        # fully rebuilds (overwritePartitions: true) every day, so a same-day miss is at most a
-        # one-day-stale cross-reference that self-corrects on tomorrow's run, not a lasting gap.
+        officials:daily cyber_vuln:daily edu:daily
+        fedregister:daily "sec_prices:daily" patents:daily
+        # ref:daily stays last (29m): queue position is a soft bias so its entity-resolution
+        # bridge sees the same-day data of the schemas it reads (fec/patents/sec/health/
+        # environment/energy/transport/fiscal). The bridge fully rebuilds every day, so a
+        # same-day miss self-corrects on the next run.
         ref:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true

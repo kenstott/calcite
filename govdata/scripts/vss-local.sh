@@ -69,53 +69,14 @@ EOF
 # comment for the live incident (ops#302, 2026-09-15) that exposed this gap.
 POOL_BUDGET_FILE="$GOVDATA_HOME/scripts/parallel/runs/pool-budget.conf"
 
-# Gracefully stop every live top-level run-pool.sh instance before claiming the box.
-# MAX_WORKERS=0 alone only blocks NEW admissions — it does nothing about JVMs already
-# running, and those directly compete with vss-local.py's all-core torch pin for the
-# whole embedding run (confirmed live 2026-09-15: this is exactly what forced a manual
-# kill of a live x-schema run earlier the same day). SIGTERM to the top-level PID (not
-# SIGKILL) is deliberate: run-pool.sh's own `trap cleanup INT TERM` already kills its
-# active workers' sessions cleanly and records a proper .exit marker for each, the same
-# graceful path a Ctrl-C gets. For a SCHEDULED instance (a child of run-scheduled.sh's
-# run_window()), this exits 130, which run_window()'s crash-handling branch treats as
-# one restart (of its 5-attempt budget) after a 30s delay -- but the relaunched instance
-# immediately sees MAX_WORKERS=0 (set right after this function returns) and just idles,
-# polling harmlessly with no new workers admitted, until the budget is restored on exit --
-# so it comes back on its own the moment this script finishes, no separate restart logic
-# needed. Ad-hoc/remediation-launched instances (not children of run_window()) won't
-# auto-restart the same way; that's a smaller, separate gap.
-_vss_gracefully_stop_etl() {
-  local pids
-  pids=$(pgrep -f 'run-pool.sh' | while read -r p; do
-    _cmd=$(ps -o cmd= -p "$p" 2>/dev/null)
-    # Skip the /timeout NNN wrapper duplicate (real child is a separate PID) and any
-    # harness/monitoring shell whose own text merely mentions run-pool.sh rather than
-    # actually being an invocation of it (same false-positive class as elsewhere today).
-    echo "$_cmd" | grep -qE '/timeout [0-9]|eval .' && continue
-    echo "$p"
-  done)
-  if [ -z "$pids" ]; then
-    echo "[vss-local] no live run-pool.sh instances to stop"
-    return 0
-  fi
-  echo "[vss-local] gracefully stopping live run-pool.sh instance(s): $(echo "$pids" | tr '\n' ' ')"
-  echo "$pids" | xargs -r kill -TERM
-  # Poll up to 2 minutes for them to actually exit (each one's own cleanup() kills its
-  # workers with a 2s TERM->KILL grace period per worker, so this can take a little
-  # while with several active workers).
-  local waited=0
-  while [ "$waited" -lt 120 ]; do
-    local still
-    still=$(echo "$pids" | xargs -r -I{} sh -c 'kill -0 {} 2>/dev/null && echo {}')
-    [ -z "$still" ] && { echo "[vss-local] all stopped after ${waited}s"; return 0; }
-    sleep 5
-    waited=$((waited + 5))
-  done
-  echo "[vss-local] WARNING: some run-pool.sh instance(s) still alive after 120s: $still" >&2
-}
+# Running ETL is never stopped here. The box is claimed by setting the pool budget to its
+# minimum (MAX_WORKERS=0, RESERVE_MB = total memory - 2000) so no NEW worker is admitted
+# while vss runs; workers already running finish on their own. An earlier version sent
+# SIGTERM to every live run-pool.sh instance to give torch the whole machine, which also
+# killed long-running remediation pools (the #911 sec_primary workers, 2026-10-09) that
+# nothing restarts.
 
 _vss_claim_exclusive_budget() {
-  _vss_gracefully_stop_etl
   _vss_prior_budget=""
   [ -f "$POOL_BUDGET_FILE" ] && _vss_prior_budget=$(cat "$POOL_BUDGET_FILE")
   _vss_restore_budget() {
