@@ -2693,6 +2693,12 @@ public class McpServer {
             "description",
             "For 'line'/'bar'/'pie' only. X-axis categories shared by every series, e.g. "
             + "years, dates, or names. For 'pie', these are the slice labels.");
+        chartProps.set("highlight_groups", prop("object",
+            "For 'line'/'bar'/'pie' only. Object of group name -> array of category labels, "
+            + "e.g. {\"bottom\":[\"ND\",\"WY\"]}; every label must be one of categories. "
+            + "Carried to the chatbot by create_report_artifact as a rendering hint; "
+            + "render_chart and preview_report do not draw it. For scatter/bubble use the "
+            + "per-series highlight instead."));
         chartProps.set("categories", categoriesProp);
         ObjectNode chartSeriesProp = MAPPER.createObjectNode();
         chartSeriesProp.put("type", "array");
@@ -8815,6 +8821,44 @@ public class McpServer {
         return growHeight ? o.growing() : o;
     }
 
+    /** Reads a category chart's {@code highlight_groups}; every named label must be a category,
+     *  so a misspelt label is refused instead of silently highlighting nothing. */
+    private static java.util.Map<String, java.util.List<String>> readHighlightGroups(
+            JsonNode pn, String title, java.util.List<String> categories) {
+        java.util.Map<String, java.util.List<String>> groups = new java.util.LinkedHashMap<>();
+        JsonNode hg = pn.path("highlight_groups");
+        if (hg.isMissingNode() || hg.isNull()) {
+            return groups;
+        }
+        if (!hg.isObject()) {
+            throw new IllegalArgumentException("chart panel '" + (title == null ? "untitled" : title)
+                + "': highlight_groups must be an object of group name -> array of category "
+                + "labels.");
+        }
+        java.util.Iterator<java.util.Map.Entry<String, JsonNode>> it = hg.fields();
+        while (it.hasNext()) {
+            java.util.Map.Entry<String, JsonNode> g = it.next();
+            if (!g.getValue().isArray()) {
+                throw new IllegalArgumentException("chart panel '"
+                    + (title == null ? "untitled" : title) + "': highlight_groups['" + g.getKey()
+                    + "'] must be an array of category labels.");
+            }
+            java.util.List<String> names = new java.util.ArrayList<>();
+            for (JsonNode label : g.getValue()) {
+                String l = label.asText();
+                if (!categories.contains(l)) {
+                    throw new IllegalArgumentException("chart panel '"
+                        + (title == null ? "untitled" : title) + "': highlight_groups['"
+                        + g.getKey() + "'] names '" + l + "', which is not one of the categories "
+                        + categories + ".");
+                }
+                names.add(l);
+            }
+            groups.put(g.getKey(), names);
+        }
+        return groups;
+    }
+
     static DashboardLayout.Panel readPanel(JsonNode pn) {
         DashboardLayout.Panel p = new DashboardLayout.Panel();
         p.kind = pn.path("type").asText("chart");
@@ -8859,6 +8903,7 @@ public class McpServer {
         for (JsonNode c : pn.path("categories")) {
             p.categories.add(c.asText());
         }
+        p.highlightGroups = readHighlightGroups(pn, p.title, p.categories);
         p.series = new java.util.ArrayList<>();
         for (JsonNode sNode : pn.path("series")) {
             java.util.List<Double> vals = new java.util.ArrayList<>();

@@ -134,6 +134,9 @@ final class ReportArtifact {
         putIfPresent(n, "x_label", p.xLabel);
         putIfPresent(n, "y_label", p.yLabel);
         ObjectNode hints = n.putObject("hints");
+        if (p.bar.valueFormat != null) {
+            hints.put("value_format", p.bar.valueFormat.spec());
+        }
         ArrayNode suppressed = hints.putArray("suppressed_cells");
         if (p.points != null) {
             ArrayNode series = n.putArray("points");
@@ -178,6 +181,16 @@ final class ReportArtifact {
         for (String c : p.categories) {
             cats.add(c);
             longest = Math.max(longest, c.length());
+        }
+        if (!p.highlightGroups.isEmpty()) {
+            ObjectNode hg = hints.putObject("highlight_groups");
+            for (java.util.Map.Entry<String, java.util.List<String>> g
+                : p.highlightGroups.entrySet()) {
+                ArrayNode names = hg.putArray(g.getKey());
+                for (String l : g.getValue()) {
+                    names.add(l);
+                }
+            }
         }
         ArrayNode series = n.putArray("series");
         for (ChartRenderer.SeriesSpec s : p.series) {
