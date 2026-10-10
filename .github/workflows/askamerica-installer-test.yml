@@ -115,6 +115,20 @@ jobs:
           path: askamerica-engine/build/jpackage/${{ matrix.artifact_glob }}
           retention-days: 3
 
+      # The WiX sources jpackage generated for this .msi (the file and component list, the
+      # install sequence): what the installer is, as built, for reading.
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.os == 'windows-latest'
+        with:
+          name: installer-test-wix-sources
+          path: |
+            askamerica-engine/build/jpackage-temp/config/**
+            askamerica-engine/build/jpackage-temp/**/*.wxs
+            askamerica-engine/build/jpackage-temp/**/*.wxf
+            askamerica-engine/build/jpackage-temp/**/*.wxi
+          if-no-files-found: warn
+          retention-days: 7
+
   # A clean machine: install, find the launcher where the installer recorded it, handshake,
   # uninstall.
   install-windows:
