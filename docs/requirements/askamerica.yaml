@@ -239,3 +239,38 @@
     the way the stored vectors were made.
     No test is cited.
   tests: []
+
+- id: ASKAM-010
+  module: askamerica
+  status: accepted
+  group: data-server
+  category: Key sign-in
+  priority: MUST
+  type: constraint
+  description: >
+    Every connection to the pgwire-govdata server passes its AskAmerica API key as the
+    PostgreSQL password, and that connection is metered under that key: quota is checked
+    and usage reported per connection, never from the server's own environment. A
+    connection with no key, an empty one, or a key the key service refuses is refused at
+    sign-in (SQLSTATE 28P01). When the key service cannot be asked, sign-in is refused
+    (SQLSTATE 08006): it fails closed. A key out of quota signs in and its statements are
+    refused (SQLSTATE 53400). FREE_ASKAMERICA_KEY wins over ASKAMERICA_API_KEY when both
+    are set, in every client. Sign-in is on by default in the govdata launcher; only an
+    explicit launcher argument turns it off, and no environment variable does. No log line,
+    error or test output shows a key or a part of one.
+  source: >
+    owner 2026-10-10: "we need every connection to the pgwire-server to include its
+    ASKAMERICA_API_KEY."; "every connection to the pgwire-govdata server must pass the
+    askamerica_api_key as the password. That instance of the connection must pass that key
+    for use in metering."; on whose store credentials read the data: "for reading the data
+    its irrelevant - all credentials unwrap the r2 creds for reading." Chosen by the owner
+    from options: refuse when the key service is unreachable; FREE_ASKAMERICA_KEY first; on
+    by default in the launcher. The exchange is the cleartext password message because the
+    server must hold the key itself to meter under it. Store credentials stay process-wide,
+    fetched and rotated with the key of whoever started the server, which is never anyone's
+    metering identity. Known limit, not built: if the starter's key is revoked, rotation
+    fails and every reader loses the store when the credentials lapse, though their own
+    keys are valid.
+  tests:
+    - pgwire-calcite/tests/unit/test_key_sign_in.py
+    - askamerica-engine/src/test/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnectorSignInTest.java
