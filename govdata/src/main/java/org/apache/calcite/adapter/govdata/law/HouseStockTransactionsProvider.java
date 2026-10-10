@@ -43,10 +43,9 @@ import javax.xml.stream.XMLStreamException;
  * (PTRs) — the STOCK Act disclosures of a member's, spouse's or dependent child's stock trades —
  * from the Clerk of the House's own bulk financial-disclosure system.
  *
- * <p>Coverage is House only. The Senate's parallel eFD system (efdsearch.senate.gov) gates every
- * request behind a click-through agreement enforcing 5 U.S.C. app. {@literal @} 105(c)'s
- * restrictions on commercial use, solicitation and credit-worthiness use of these reports — a
- * legal question, not an engineering one, so it is deliberately not automated past here.
+ * <p>Coverage is House only. The Senate's parallel eFD filings (efdsearch.senate.gov) are read by
+ * {@link SenateFinancialDisclosureProvider} into {@code fd_transactions} and the other {@code fd_*}
+ * tables.
  *
  * <p>The {@code year} dimension selects one annual index,
  * {@code disclosures-clerk.house.gov/public_disc/financial-pdfs/{year}FD.zip}, which lists every

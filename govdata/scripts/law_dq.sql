@@ -6,7 +6,9 @@
 --         bill_amendments, bill_amendment_actions, bill_amendment_cosponsors,
 --         bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
 --         bill_cbo_cost_estimates, bill_committee_reports, bill_notes, scotus_reports_cases,
---         scotus_slip_opinions, scotus_dockets, scotus_docket_entries, member_stock_transactions
+--         scotus_slip_opinions, scotus_dockets, scotus_docket_entries, member_stock_transactions,
+--         fd_filings, fd_assets, fd_income, fd_transactions, fd_liabilities, fd_gifts, fd_travel,
+--         fd_positions, fd_agreements, fd_compensation (Senate eFD financial disclosures)
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'title'; T5 also excludes 'release_point' (one value per run
 -- by design: the whole table is replaced from a single OLRC release point).
@@ -4017,6 +4019,806 @@ SELECT 'law', 'member_stock_transactions', 'T7_transaction_date_near_year',
   n, 0, 'Rows whose transaction_date year is more than 1 away from the partition year'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_stock_transactions', allow_moved_paths := true)
       WHERE ABS(CAST(SUBSTR(transaction_date, 1, 4) AS INTEGER) - year) > 1);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_filings
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Expected at least 100 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, filer_type, state, report_kind, report_type
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, filer_type, report_kind, report_type, is_amendment, view_status)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR filer_type IS NULL OR report_kind IS NULL OR report_type IS NULL OR is_amendment IS NULL OR view_status IS NULL);
+
+-- T6: primary key uniqueness (filing_id)
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true)
+        GROUP BY 1 HAVING COUNT(*) > 1));
+-- T7: filing_date falls in the partition year
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T7_filing_date_in_year',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows whose filing_date year differs from the partition year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true)
+      WHERE CAST(SUBSTR(filing_date, 1, 4) AS INTEGER) <> year);
+
+-- T7: report_kind and view_status use the documented vocabulary
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T7_kind_status_vocabulary',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with an undocumented report_kind or view_status'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true)
+      WHERE report_kind NOT IN ('annual', 'ptr', 'extension_notice')
+         OR view_status NOT IN ('parsed', 'unavailable', 'extension_notice'));
+
+-- T7: unavailable filings have no detail rows and no non-unavailable filing is missing its detail
+INSERT INTO dq_results
+SELECT 'law', 'fd_filings', 'T7_annual_parsed_has_assets',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Parsed senator annual reports with no fd_assets row (candidate reports may answer No to Part 3)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_filings', allow_moved_paths := true) f
+      WHERE f.report_kind = 'annual' AND f.view_status = 'parsed' AND f.filer_type <> 'Candidate'
+        AND NOT EXISTS (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true) a WHERE a.filing_id = f.filing_id));
+
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_assets
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T2_row_count',
+  CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END,
+  n, 500, 'Expected at least 500 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, parent_item_no, asset_name
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq, asset_type, owner)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL OR asset_type IS NULL OR owner IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+-- T7: sub-items point at a parent that exists in the same filing
+INSERT INTO dq_results
+SELECT 'law', 'fd_assets', 'T7_parent_item_exists',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Sub-items whose parent_item_no is not an item_no in the same filing (a few filings number a sub-item such as 106.1 without ever listing its parent)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true) a
+      WHERE a.parent_item_no IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_assets', allow_moved_paths := true) p WHERE p.filing_id = a.filing_id AND p.item_no = a.parent_item_no));
+
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_income
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_income', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_income', 'T2_row_count',
+  CASE WHEN n >= 20 THEN 'pass' ELSE 'fail' END,
+  n, 20, 'Expected at least 20 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, source_part, item_no, row_seq, activity_date
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_income', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_income', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_income', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, source_part, item_no, row_seq, income_type)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR source_part IS NULL OR item_no IS NULL OR row_seq IS NULL OR income_type IS NULL);
+
+-- T6: primary key uniqueness (filing_id, source_part, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_income', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, source_part, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, source_part, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_income', allow_moved_paths := true)
+        GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_transactions
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Expected at least 50 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, source_part, item_no, row_seq, owner
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, source_part, item_no, row_seq, owner, asset_name, transaction_type, transaction_date)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR source_part IS NULL OR item_no IS NULL OR row_seq IS NULL OR owner IS NULL OR asset_name IS NULL OR transaction_type IS NULL OR transaction_date IS NULL);
+
+-- T6: primary key uniqueness (filing_id, source_part, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, source_part, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, source_part, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true)
+        GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+-- T7: amount bounds present, and the amount_range vocabulary
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T7_amount_bounds_present',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with no amount_min, or with amount_max null but amount_range not starting with Over'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true)
+      WHERE amount_min IS NULL OR (amount_max IS NULL AND amount_range NOT LIKE 'Over%'));
+
+-- T7: owner_code uses the documented vocabulary when present
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T7_owner_code_vocabulary',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows whose owner_code is not SP, JT or DC'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true)
+      WHERE owner_code IS NOT NULL AND owner_code NOT IN ('SP', 'JT', 'DC'));
+
+-- T7: transaction_date within 3 years of the partition year (annual Part 4b covers earlier calendar years; late filings and amendments reach back further)
+INSERT INTO dq_results
+SELECT 'law', 'fd_transactions', 'T7_transaction_date_near_year',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Rows (transaction_date from 2000 on) more than 3 years from the partition year; a few source typos such as year 1013 are excluded'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_transactions', allow_moved_paths := true)
+      WHERE CAST(SUBSTR(transaction_date, 1, 4) AS INTEGER) >= 2000
+        AND ABS(CAST(SUBSTR(transaction_date, 1, 4) AS INTEGER) - year) > 3);
+
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_liabilities
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_liabilities', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_liabilities', 'T2_row_count',
+  CASE WHEN n >= 10 THEN 'pass' ELSE 'fail' END,
+  n, 10, 'Expected at least 10 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, incurred, debtor
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_liabilities', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_liabilities', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_liabilities', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_liabilities', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_liabilities', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_gifts
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_gifts', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_gifts', 'T2_row_count',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Expected at least 1 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, event_date, recipient
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_gifts', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_gifts', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_gifts', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_gifts', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_gifts', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_travel
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_travel', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_travel', 'T2_row_count',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Expected at least 1 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, event_date, travelers
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_travel', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_travel', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_travel', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_travel', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_travel', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_positions
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_positions', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_positions', 'T2_row_count',
+  CASE WHEN n >= 10 THEN 'pass' ELSE 'fail' END,
+  n, 10, 'Expected at least 10 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, position_dates, position_held
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_positions', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_positions', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_positions', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_positions', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_positions', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_agreements
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_agreements', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_agreements', 'T2_row_count',
+  CASE WHEN n >= 10 THEN 'pass' ELSE 'fail' END,
+  n, 10, 'Expected at least 10 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, event_date, parties
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_agreements', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_agreements', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_agreements', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_agreements', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_agreements', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: fd_compensation
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by filing year. T4/T5 exclude partition columns 'type' and 'year' and the
+-- legitimately-constant 'chamber' (Senate only; see the table comment).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'fd_compensation', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'law', 'fd_compensation', 'T2_row_count',
+  CASE WHEN n >= 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Expected at least 1 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, filing_id, filer_last_name, report_title, filing_date, calendar_year, item_no, row_seq, source, duties
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'fd_compensation', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'fd_compensation', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'chamber', 'calendar_year')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'fd_compensation', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL in a NOT NULL column (chamber, filing_id, filer_last_name, report_title, filing_date, filing_url, item_no, row_seq)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true)
+      WHERE chamber IS NULL OR filing_id IS NULL OR filer_last_name IS NULL OR report_title IS NULL OR filing_date IS NULL OR filing_url IS NULL OR item_no IS NULL OR row_seq IS NULL);
+
+-- T6: primary key uniqueness (filing_id, row_seq)
+INSERT INTO dq_results
+SELECT 'law', 'fd_compensation', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_id, row_seq) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT filing_id, row_seq
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true)
+        GROUP BY 1, 2 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

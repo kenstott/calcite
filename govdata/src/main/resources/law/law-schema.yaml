@@ -228,6 +228,17 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
+  # Filing years of the Senate eFD system's electronic reports. 2012-2013 are scanned paper only
+  # (verified live 2026-10-09: every 2012-2013 listing row is a /search/view/paper/ page), and 2014
+  # is the first year with HTML annual reports and PTRs. The year is the year a report was filed,
+  # not the calendar year it covers. The end follows GOVDATA_END_YEAR, else the current year,
+  # whose listing gains reports continuously.
+  senate_fd_year_range: &senate_fd_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2014}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
 # ============================================================================
 # PARTITIONED TABLES
 # ============================================================================
@@ -4913,9 +4924,8 @@ partitionedTables:
   # MEMBER_STOCK_TRANSACTIONS — House members' STOCK Act periodic transaction reports
   # ---------------------------------------------------------------------------
   # Source: the Clerk of the House's bulk financial-disclosure system
-  # (disclosures-clerk.house.gov). House only — see the table comment and
-  # HouseStockTransactionsProvider's class comment for why the Senate's eFD system is not
-  # included. One row per transaction (a single PTR PDF can list several); filing_id groups the
+  # (disclosures-clerk.house.gov). House only — the Senate's eFD filings are in fd_transactions
+  # and the other fd_* tables. One row per transaction (a single PTR PDF can list several); filing_id groups the
   # rows of one filing, row_seq orders them as the PDF lists them.
   - name: member_stock_transactions
     pattern: "type=member_stock_transactions/year=*/*.parquet"
@@ -4933,7 +4943,8 @@ partitionedTables:
       Reports — stock, option and fund trades disclosed within 30-45 days of the transaction, from
       the Clerk of the House's own bulk financial-disclosure system. Not annual financial
       disclosures (outside income, asset/liability ranges, gifts) and not the Senate's parallel
-      eFD filings — see the column-level and class-level comments for why. `filing_id` groups the
+      eFD filings, which are in fd_transactions (PTRs and annual-report transactions) and the
+      other fd_* tables. `filing_id` groups the
       one or more transaction rows a single PTR lists; `row_seq` (from 1) is their order in the
       filing. `owner_code` is blank for the member's own holding, SP for a spouse, JT for a joint
       holding, DC for a dependent child. `asset_type_code` is the source's own abbreviation (ST,
@@ -4956,7 +4967,7 @@ partitionedTables:
       - name: chamber
         type: string
         nullable: false
-        comment: Always "house" — the Senate's eFD system is not sourced here; see the table comment
+        comment: Always "house" — the Senate's eFD filings are in fd_transactions, with chamber "senate"
       - name: filer_last_name
         type: string
         nullable: false
@@ -5055,6 +5066,1225 @@ partitionedTables:
         catalogType: hadoop
         warehousePath: "${GOVDATA_PARQUET_DIR}/law"
         tableName: member_stock_transactions
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_filings
+    pattern: "type=fd_filings/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Every non-paper U.S. Senate financial-disclosure filing in the Senate eFD system
+      (efdsearch.senate.gov), one row per filing: annual reports (Ethics in Government Act Parts
+      1-10), candidate and new-filer reports, STOCK Act periodic transaction reports (PTRs) and
+      due-date-extension notices, for senators, former senators and candidates, by the year the
+      report was filed. The detail of each filing is in fd_assets, fd_income, fd_transactions,
+      fd_liabilities, fd_gifts, fd_travel, fd_positions, fd_agreements and fd_compensation (join
+      on filing_id). `report_kind` is annual (annual, candidate and new-filer reports), ptr or
+      extension_notice; `report_type` is the report's own type name. `view_status` is parsed when
+      the report page was read, extension_notice when the filing is a notice with no report to
+      read, and unavailable when the Senate no longer serves the page (candidate reports expire a
+      year after the candidacy ends) — such filings are listed here but have no detail rows.
+      Scanned paper filings (eFD's /search/view/paper/ pages, all of 2012-2013 and a few percent
+      of later years) have no machine-readable text and are excluded; each year's count is logged
+      by the ETL. `state` is the state eFD's per-state listing places the filer in; it is null for
+      candidates and for the few senators that listing omits. Senate filings only: House annual
+      reports are not sourced, and PTRs of the House are in member_stock_transactions. Use of
+      these reports is restricted by 5 U.S.C. § 13107(c): not for credit rating, not for
+      soliciting money, and commercial use only by news and communications media.
+
+    dimensions:
+      type:
+        - fd_filings
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: filer_type
+        type: string
+        nullable: false
+        comment: "Senator, Former Senator or Candidate, as eFD lists the filer"
+      - name: state
+        type: string
+        nullable: true
+        comment: "Two-letter state code from eFD's per-state listing; null for candidates and for senators that listing omits"
+      - name: report_kind
+        type: string
+        nullable: false
+        comment: "annual (annual, candidate and new-filer reports), ptr or extension_notice"
+      - name: report_type
+        type: string
+        nullable: false
+        comment: "Report type name with the date, calendar year and amendment suffix removed, e.g. \"Annual Report\", \"Candidate Report\", \"Periodic Transaction Report\", \"Due Date Extension\""
+      - name: is_amendment
+        type: boolean
+        nullable: false
+        comment: "True when the title carries an \"(Amendment)\" suffix"
+      - name: amendment_number
+        type: integer
+        nullable: true
+        comment: "N of \"(Amendment N)\"; null for originals and for amendments the title does not number"
+      - name: view_status
+        type: string
+        nullable: false
+        comment: "parsed, extension_notice or unavailable (the Senate no longer serves the report page)"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_filings/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_filings
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_assets
+    pattern: "type=fd_assets/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 3 (Assets and Unearned Income) of Senate annual, candidate and new-filer
+      financial-disclosure reports: one row per reported asset line, with the value bracket and
+      the income it produced. Assets held inside a trust, fund or similar are listed under their
+      parent as sub-items (`item_no` "6.1" under "6"; `parent_item_no` names the parent), so a
+      count of top-level assets is the rows with a null parent_item_no. `owner` is Self, Spouse,
+      Joint or Child. `asset_type` and `asset_type_detail` are eFD's own category and sub-category
+      (e.g. Trust / General Trust, Bank Deposit); `asset_detail` is the location and description
+      notes eFD prints under the asset name. `value_*` bounds the asset's value bracket and
+      `income_*` the income bracket; `income_range` can carry an exact "Other $N" figure after the
+      bracket, in which case the bounds are the bracket's. Senate only; see fd_filings for
+      coverage.
+
+    dimensions:
+      type:
+        - fd_assets
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: parent_item_no
+        type: string
+        nullable: true
+        comment: "item_no of the parent asset for a sub-item (\"6\" for \"6.1\"); null for a top-level asset"
+      - name: asset_name
+        type: string
+        nullable: true
+        comment: "Asset name as printed in bold, with any ticker the filer typed in; null where the filing leaves it blank (two 2014 rows)"
+      - name: asset_detail
+        type: string
+        nullable: true
+        comment: "Location, \"Type:\" and \"Description:\" notes eFD prints under the asset name"
+      - name: asset_type
+        type: string
+        nullable: false
+        comment: "eFD asset category (Bank Deposit, Trust, Real Estate, Business Entity, ...)"
+      - name: asset_type_detail
+        type: string
+        nullable: true
+        comment: "eFD asset sub-category (General Trust, Commercial, ...); null when none"
+      - name: owner
+        type: string
+        nullable: false
+        comment: "Self, Spouse, Joint or Child"
+      - name: value_range
+        type: string
+        nullable: true
+        comment: "Asset value as eFD prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $5,000,000\"), an exact figure (\"$2,148.46\") or a note (\"None (or less than $201)\"); null when the cell is blank"
+      - name: value_min
+        type: bigint
+        nullable: true
+        comment: "Lower bound of value_range in whole dollars; equal to value_max for an exact figure; null when the range states no figure"
+      - name: value_max
+        type: bigint
+        nullable: true
+        comment: "Upper bound of value_range in whole dollars; null for an open-ended top bracket or a range with no figure"
+      - name: income_type
+        type: string
+        nullable: true
+        comment: "Kind of income the asset produced (Interest, Dividends, Rent/Royalties, ...), as printed; null when blank"
+      - name: income_range
+        type: string
+        nullable: true
+        comment: "Income from the asset as eFD prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $5,000,000\"), an exact figure (\"$2,148.46\") or a note (\"None (or less than $201)\"); null when the cell is blank"
+      - name: income_min
+        type: bigint
+        nullable: true
+        comment: "Lower bound of income_range in whole dollars; equal to income_max for an exact figure; null when the range states no figure"
+      - name: income_max
+        type: bigint
+        nullable: true
+        comment: "Upper bound of income_range in whole dollars; null for an open-ended top bracket or a range with no figure"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_assets/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_assets
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_income
+    pattern: "type=fd_income/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Earned and non-investment income of Senate financial-disclosure filers, from Part 2 (Earned
+      and Non-Investment Income: salary, board compensation, retirement distributions, ...) and
+      Part 1 (Honoraria Payments or Payments to Charity in Lieu of Honoraria), one row per
+      reported payment. `source_part` is "2" or "1": Part 2 rows have no activity_date and name
+      the payer (`payer`) and who was paid (`recipient` is Self or Spouse); Part 1 rows have the
+      activity's date and name the payer and the recipient of the payment. `amount_range` is the
+      amount as printed: an exact figure, or a threshold such as "> $1,000" for spouse income eFD
+      only requires as a threshold. Investment income is on the asset it came from, in fd_assets.
+
+    dimensions:
+      type:
+        - fd_income
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: source_part
+        type: string
+        nullable: false
+        comment: "2 for Part 2 earned and non-investment income, 1 for Part 1 honoraria"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: activity_date
+        type: string
+        nullable: true
+        comment: "Part 1 only: the date of the article, speech or appearance, as printed (MM/DD/YYYY); null for Part 2"
+      - name: recipient
+        type: string
+        nullable: true
+        comment: "Who was paid: Self or Spouse (Part 2), or the person or charity that received the payment (Part 1)"
+      - name: income_type
+        type: string
+        nullable: false
+        comment: "Part 2 income type (Salary, Board Compensation, Other (...) ...) or the Part 1 activity"
+      - name: payer
+        type: string
+        nullable: true
+        comment: "Who paid, with their city and state as printed"
+      - name: amount_range
+        type: string
+        nullable: true
+        comment: "Amount paid as eFD prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $5,000,000\"), an exact figure (\"$2,148.46\") or a note (\"None (or less than $201)\"); null when the cell is blank"
+      - name: amount_min
+        type: bigint
+        nullable: true
+        comment: "Lower bound of amount_range in whole dollars; equal to amount_max for an exact figure; null when the range states no figure"
+      - name: amount_max
+        type: bigint
+        nullable: true
+        comment: "Upper bound of amount_range in whole dollars; null for an open-ended top bracket or a range with no figure"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed (\"n/a\" when the filer wrote none)"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_income/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_income
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_transactions
+    pattern: "type=fd_transactions/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Securities and property transactions disclosed by U.S. Senators, former senators and
+      candidates, in the shape of member_stock_transactions: one row per transaction, from the
+      STOCK Act periodic transaction reports (`source_part` = ptr) and from Part 4b of annual
+      reports (`source_part` = annual_4b — transactions the annual report lists that were not
+      reported on a PTR). Part 4a of an annual report, which only repeats already-filed PTRs, is
+      not read, so a PTR transaction appears once. `owner` is Self, Spouse, Joint or Child and
+      `owner_code` is the same in member_stock_transactions' convention (null for Self, SP, JT,
+      DC). `asset_type` is eFD's asset category on PTRs (Stock, Corporate Bond, ...) and null for
+      Part 4b rows, which have none. `transaction_type` is as eFD prints it (Purchase, Sale
+      (Full), Sale (Partial), Exchange). `row_seq` is the row's 1-based position within its part
+      of the report page (eFD's own `#` repeats in some 2014-2015 PTRs; it is kept in item_no).
+      `amount_*` bounds the disclosed bracket; eFD never discloses an exact amount. The filing's
+      dates and filer are in fd_filings.
+
+    dimensions:
+      type:
+        - fd_transactions
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: source_part
+        type: string
+        nullable: false
+        comment: "ptr for a periodic transaction report, annual_4b for Part 4b of an annual report"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: owner
+        type: string
+        nullable: false
+        comment: "Self, Spouse, Joint or Child"
+      - name: owner_code
+        type: string
+        nullable: true
+        comment: "SP (spouse), JT (joint) or DC (dependent child); null for the filer's own holding"
+      - name: ticker
+        type: string
+        nullable: true
+        comment: "Ticker as printed; \"--\" when eFD prints none; null when blank"
+      - name: asset_name
+        type: string
+        nullable: false
+        comment: "Asset name as printed"
+      - name: asset_type
+        type: string
+        nullable: true
+        comment: "eFD asset category on a PTR (Stock, Corporate Bond, ...); null for annual-report Part 4b rows"
+      - name: transaction_type
+        type: string
+        nullable: false
+        comment: "Purchase, Sale (Full), Sale (Partial) or Exchange, as printed"
+      - name: transaction_date
+        type: string
+        nullable: false
+        comment: "Date of the transaction (YYYY-MM-DD)"
+      - name: amount_range
+        type: string
+        nullable: true
+        comment: "Transaction amount as eFD prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $5,000,000\"), an exact figure (\"$2,148.46\") or a note (\"None (or less than $201)\"); null when the cell is blank"
+      - name: amount_min
+        type: bigint
+        nullable: true
+        comment: "Lower bound of amount_range in whole dollars; equal to amount_max for an exact figure; null when the range states no figure"
+      - name: amount_max
+        type: bigint
+        nullable: true
+        comment: "Upper bound of amount_range in whole dollars; null for an open-ended top bracket or a range with no figure"
+      - name: comment
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed (e.g. Dividend Reinvestment)"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_transactions/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_transactions
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_liabilities
+    pattern: "type=fd_liabilities/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 7 (Liabilities) of Senate annual, candidate and new-filer financial-disclosure reports:
+      one row per reportable liability of the filer, spouse or dependent child — mortgages, loans
+      and lines of credit, with the creditor and the amount bracket. `incurred` is the date or
+      month the liability was incurred as printed (e.g. "Mar 2019"), `item_type` its kind
+      (Mortgage on ..., Loan, ...), `points` and `rate_term` the interest points and the rate and
+      term as printed. A report with no liabilities has no rows.
+
+    dimensions:
+      type:
+        - fd_liabilities
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: incurred
+        type: string
+        nullable: true
+        comment: "When the liability was incurred, as printed"
+      - name: debtor
+        type: string
+        nullable: true
+        comment: "Who owes it: Self, Spouse, Joint or Child"
+      - name: item_type
+        type: string
+        nullable: true
+        comment: "Kind of liability as printed"
+      - name: points
+        type: string
+        nullable: true
+        comment: "Points as printed"
+      - name: rate_term
+        type: string
+        nullable: true
+        comment: "Interest rate and term as printed"
+      - name: amount_range
+        type: string
+        nullable: true
+        comment: "Liability amount as eFD prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $5,000,000\"), an exact figure (\"$2,148.46\") or a note (\"None (or less than $201)\"); null when the cell is blank"
+      - name: amount_min
+        type: bigint
+        nullable: true
+        comment: "Lower bound of amount_range in whole dollars; equal to amount_max for an exact figure; null when the range states no figure"
+      - name: amount_max
+        type: bigint
+        nullable: true
+        comment: "Upper bound of amount_range in whole dollars; null for an open-ended top bracket or a range with no figure"
+      - name: creditor
+        type: string
+        nullable: true
+        comment: "Who is owed, with city and state as printed"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_liabilities/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_liabilities
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_gifts
+    pattern: "type=fd_gifts/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 5 (Gifts) of Senate annual, candidate and new-filer financial-disclosure reports: one
+      row per reportable gift received by the filer, spouse or dependent child, with the donor and
+      the value. `event_date` is the gift date as printed (MM/DD/YYYY), `recipient` Self, Spouse
+      or Child, and `value_range` the value as printed (usually an exact figure).
+
+    dimensions:
+      type:
+        - fd_gifts
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: event_date
+        type: string
+        nullable: true
+        comment: "Date of the gift as printed (MM/DD/YYYY)"
+      - name: recipient
+        type: string
+        nullable: true
+        comment: "Who received the gift: Self, Spouse or Child"
+      - name: gift
+        type: string
+        nullable: true
+        comment: "Description of the gift"
+      - name: value_range
+        type: string
+        nullable: true
+        comment: "Gift value as eFD prints it: a bracket (\"$1,001 - $15,000\"), an open-ended top bracket (\"Over $5,000,000\"), an exact figure (\"$2,148.46\") or a note (\"None (or less than $201)\"); null when the cell is blank"
+      - name: value_min
+        type: bigint
+        nullable: true
+        comment: "Lower bound of value_range in whole dollars; equal to value_max for an exact figure; null when the range states no figure"
+      - name: value_max
+        type: bigint
+        nullable: true
+        comment: "Upper bound of value_range in whole dollars; null for an open-ended top bracket or a range with no figure"
+      - name: gift_from
+        type: string
+        nullable: true
+        comment: "Donor, with city and state as printed"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_gifts/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_gifts
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_travel
+    pattern: "type=fd_travel/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 6 (Travel) of Senate annual, candidate and new-filer financial-disclosure reports: one
+      row per reportable trip paid for or reimbursed by an outside sponsor. `event_date` holds the
+      trip dates as printed, `travelers` who traveled, `travel_type` the trip kind, `itinerary`
+      the places, `reimbursed_for` what the sponsor covered and `who_paid` the sponsor. Most
+      reports have no travel and so no rows.
+
+    dimensions:
+      type:
+        - fd_travel
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: event_date
+        type: string
+        nullable: true
+        comment: "Trip date(s) as printed"
+      - name: travelers
+        type: string
+        nullable: true
+        comment: "Who traveled"
+      - name: travel_type
+        type: string
+        nullable: true
+        comment: "Kind of trip as printed"
+      - name: itinerary
+        type: string
+        nullable: true
+        comment: "Itinerary as printed"
+      - name: reimbursed_for
+        type: string
+        nullable: true
+        comment: "What the sponsor paid for (e.g. Lodging, Meals)"
+      - name: who_paid
+        type: string
+        nullable: true
+        comment: "Sponsor that paid, with city and state as printed"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_travel/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_travel
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_positions
+    pattern: "type=fd_positions/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 8 (Positions) of Senate annual, candidate and new-filer financial-disclosure reports:
+      one row per reportable outside position — board seats, trusteeships, officer and advisory
+      roles, paid or unpaid — with the entity. `position_dates` is the span as printed (e.g. "Jun
+      1994 to present"), `position_held` the title with its qualifier (e.g. "Other (Member,
+      Visiting Committee (Uncompensated))"), `entity` the organization with city and state, and
+      `entity_type` the organization's category.
+
+    dimensions:
+      type:
+        - fd_positions
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: position_dates
+        type: string
+        nullable: true
+        comment: "Dates held as printed (e.g. \"Jun 1994 to present\")"
+      - name: position_held
+        type: string
+        nullable: true
+        comment: "Position title as printed"
+      - name: entity
+        type: string
+        nullable: true
+        comment: "Organization, with city and state as printed"
+      - name: entity_type
+        type: string
+        nullable: true
+        comment: "Organization category as printed"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_positions/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_positions
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_agreements
+    pattern: "type=fd_agreements/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 9 (Agreements) of Senate annual, candidate and new-filer financial-disclosure reports:
+      one row per reportable agreement or arrangement with an outside entity — future employment,
+      leaves of absence, continuing payments from a former employer, book contracts. `event_date`
+      is the agreement date as printed (e.g. "Oct 2015"), `parties` who is party to it,
+      `item_type` its kind and `status_and_terms` the filer's description of its status and terms.
+
+    dimensions:
+      type:
+        - fd_agreements
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: event_date
+        type: string
+        nullable: true
+        comment: "Date of the agreement as printed (e.g. \"Oct 2015\")"
+      - name: parties
+        type: string
+        nullable: true
+        comment: "Parties involved as printed"
+      - name: item_type
+        type: string
+        nullable: true
+        comment: "Kind of agreement as printed"
+      - name: status_and_terms
+        type: string
+        nullable: true
+        comment: "Status and terms as the filer describes them"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_agreements/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_agreements
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # Source: the Senate eFD system (efdsearch.senate.gov), read as HTML through one scripted
+  # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
+  - name: fd_compensation
+    pattern: "type=fd_compensation/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      Part 10 (Compensation) of Senate candidate and new-filer financial-disclosure reports, which
+      alone must list any person or entity that paid the filer more than $5,000 for services: one
+      row per source, with the duties performed. Annual reports of sitting senators answer "This
+      is not my first report" and have no rows, so the table is small and holds candidates and
+      first reports.
+
+    dimensions:
+      type:
+        - fd_compensation
+      year: *senate_fd_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: "Always \"senate\" — the Senate eFD system; the House's own disclosures are in member_stock_transactions"
+      - name: filing_id
+        type: string
+        nullable: false
+        comment: "The eFD report UUID (the last path segment of filing_url); with the row keys of each table it identifies one row"
+      - name: filer_first_name
+        type: string
+        nullable: true
+        comment: "Filer's first (and middle) name as the eFD listing prints it; \"Candidate\" filers are listed without a name"
+      - name: filer_last_name
+        type: string
+        nullable: false
+        comment: "Filer's last name as the eFD listing prints it, suffixes included (e.g. \"McConnell, Jr.\"); \"Candidate\" for candidate filers, whom eFD lists anonymously"
+      - name: report_title
+        type: string
+        nullable: false
+        comment: "The report title as eFD lists it, e.g. \"Annual Report for CY 2024\", \"Periodic Transaction Report for 12/19/2025\", \"Candidate Report  (Amendment 1)\""
+      - name: filing_date
+        type: string
+        nullable: false
+        comment: "Date the report was filed with the Senate (YYYY-MM-DD); the year dimension is this date's year"
+      - name: calendar_year
+        type: integer
+        nullable: true
+        comment: "Calendar year the report covers (the \"CY 2024\" of an annual report); null for PTRs and extension notices, which cover no calendar year"
+      - name: filing_url
+        type: string
+        nullable: false
+        comment: "efdsearch.senate.gov URL of the report page (the Senate's terms-of-use agreement must be accepted to open it)"
+      - name: item_no
+        type: string
+        nullable: false
+        comment: "The report's own row number within the part; a trust's underlying holdings are \"6.1\", \"6.2\", ... under asset 6"
+      - name: row_seq
+        type: integer
+        nullable: false
+        comment: "1-based position of the row within its part of the report page; eFD's own item numbers repeat within some filings, so this is the row key"
+      - name: source
+        type: string
+        nullable: true
+        comment: "Who paid more than $5,000, as printed"
+      - name: duties
+        type: string
+        nullable: true
+        comment: "Duties performed as printed"
+      - name: comments
+        type: string
+        nullable: true
+        comment: "Filer's comment as printed"
+
+    source:
+      type: http
+      url: "https://efdsearch.senate.gov/search/report/data/?year={year}"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.SenateFinancialDisclosureProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fd_compensation/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: fd_compensation
         batchPartitionColumns: [year]
         incrementalKeys: [year]
         overwritePartitions: true
