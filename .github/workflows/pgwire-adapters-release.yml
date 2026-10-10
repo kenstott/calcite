@@ -595,8 +595,10 @@ jobs:
   # Requirement ASKAM-001: AskAmerica is supported on NixOS. Boots a NixOS guest whose only
   # provision for the bundles is askamerica-engine/nixos/host.nix (the published host module),
   # hands it the file and govdata bundles built by this run, and runs
-  # askamerica-engine/nixos/prove.sh in it: each bundle is unpacked read-only, started from the
-  # runtimes it carries, and queried. No credential is given to the guest.
+  # askamerica-engine/nixos/prove.sh in it: each bundle is unpacked read-only and started from
+  # the runtimes it carries. The file bundle is queried. The govdata bundle is shown to start its
+  # JVM and listen: it opens its schemas against the object store at the first connection, and
+  # no credential is given to the guest.
   nixos:
     needs: [plan, bundle]
     runs-on: ubuntu-latest
