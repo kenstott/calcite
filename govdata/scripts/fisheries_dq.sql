@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings
+-- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -444,6 +444,88 @@ SELECT 'fisheries', 'esa_salmonid_listings', 'T8_pk_duplicates',
   'Duplicate common_name x population_name x esa_status keys'
 FROM (SELECT COUNT(*) AS n FROM (SELECT common_name, population_name, esa_status FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true)
                                  GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- wdfw_salmonid_escapement
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Table exists and is readable'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T2_row_count',
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END, n, 20000, 'Row count (source has ~26,000 estimate rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')
+  )
+);
+
+-- state_abbr is constant 'WA' (WDFW covers Washington only)
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'state_abbr')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL stock_number, population_name, data_series_num, species, year, abundance_qty or data_type rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true)
+      WHERE stock_number IS NULL OR population_name IS NULL OR data_series_num IS NULL
+         OR species IS NULL OR year IS NULL OR abundance_qty IS NULL OR data_type IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T7_value_ranges',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Negative abundance_qty or year outside 1930-2100'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true)
+      WHERE abundance_qty < 0 OR year < 1930 OR year > 2100);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T7_species',
+  CASE WHEN bad = 0 AND n >= 6 THEN 'pass' ELSE 'fail' END, n, 6,
+  'Distinct species (expect >= 6); rows outside the known set: ' || bad
+FROM (SELECT COUNT(DISTINCT species) AS n,
+             COUNT(*) FILTER (WHERE species NOT IN ('Chinook','Coho','Chum','Pink','Sockeye','Steelhead','Bull Trout','Cutthroat')) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true));
+
+-- Known fact: Discovery Bay Coho (stock 3273) 2023 trap-count escapement = 1778 (live Socrata row)
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T7_discovery_bay_coho_2023',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Stock 3273 year 2023 Escapement Fish rows with abundance_qty = 1778'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true)
+      WHERE stock_number = 3273 AND year = 2023 AND data_type = 'Escapement Fish' AND abundance_qty = 1778);
+
+-- The source repeats 13 keys with near-identical values; fail only if that grows materially
+INSERT INTO dq_results
+SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T8_pk_duplicates',
+  CASE WHEN n <= 25 THEN 'pass' ELSE 'fail' END, n, 25,
+  'Duplicate stock x series x year x data_type x sub_population keys (source repeats 13)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT stock_number, data_series_num, year, data_type, sub_population_name
+                                 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true)
+                                 GROUP BY 1, 2, 3, 4, 5 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

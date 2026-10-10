@@ -17,6 +17,8 @@
 #     https://www.adfg.alaska.gov/sf/FishCounts/ (keyless JSON export)
 #   - CDFW GrandTab Central Valley Chinook escapement, via SacPAS (Columbia Basin Research)
 #     https://www.cbr.washington.edu/sacramento/data/query_adult_grandtab.html (keyless CSV)
+#   - WDFW Salmonid Population Indicators (SPI) escapement, data.wa.gov dataset fgyz-n3uk
+#     https://data.wa.gov/resource/fgyz-n3uk.json (keyless Socrata JSON)
 #   - USFWS ECOS species report (ESA listing status of salmon/steelhead ESUs/DPSs)
 #     https://ecos.fws.gov/ecp/pullreports/ (keyless JSON)
 #   - Cross-references geo.state_ref via state_abbr
@@ -26,7 +28,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Tables: esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -664,6 +666,128 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: esa_salmonid_listings
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # WDFW_SALMONID_ESCAPEMENT — Washington stock-level spawner / escapement series
+  # ---------------------------------------------------------------------------
+  - name: wdfw_salmonid_escapement
+    freshness:
+      type: hash
+    pattern: "type=wdfw_salmonid_escapement/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Washington Department of Fish and Wildlife Salmonid Population Indicators (SPI, the
+      SCoRE / State of Our Salmon data): annual adult spawner and escapement estimates for
+      wild and hatchery salmon, steelhead, bull trout and cutthroat stocks across Washington
+      (Puget Sound, coast, Columbia basin), one row per stock x data series x year x data_type,
+      1938 to the latest completed return year. Species are Chinook, Coho, Chum, Pink,
+      Sockeye, Steelhead, Bull Trout and Cutthroat. abundance_qty is a count of fish (or redds
+      where data_type is 'Spawner Redds'); data_type says what is counted (Spawner Fish,
+      Escapement Fish, Spawner Redds, or the SPI codes NOSAEJ natural-origin spawners, HOSAEJ
+      hatchery-origin spawners, TSAEJ total spawners; IJ variants include jacks, EJ exclude
+      them), production_type is Natural / Hatchery / Composite and calculation_type is
+      Expanded / Unexpanded. A stock can appear under several data_types and series, so filter
+      to one data_type (and production_type) before summing or comparing years; do not add
+      across data_types. The state is always WA (state_abbr); this is the stock-level
+      counterpart to dart_adult_counts (dam passage) and adfg_fish_counts (Alaska). Years
+      with no estimate are absent, not zero (zero-fish estimates are kept). The source itself
+      repeats 13 stock x series x year x data_type keys with slightly different values.
+
+    dimensions:
+      type:
+        - wdfw_salmonid_escapement
+
+    columns:
+      - name: stock_number
+        type: bigint
+        nullable: false
+        comment: WDFW SPI stock identifier (e.g. 3273 Discovery Bay Coho)
+      - name: population_name
+        type: string
+        nullable: false
+        comment: Stock name including species, e.g. 'Skagit River Summer/Fall Chinook'
+      - name: sub_population_name
+        type: string
+        nullable: true
+        comment: Sub-population within the stock where the series is split; null when the stock is not subdivided
+      - name: data_series_num
+        type: bigint
+        nullable: false
+        comment: Series number within the stock; a stock may carry several series (methods or eras)
+      - name: species
+        type: string
+        nullable: false
+        comment: Chinook, Coho, Chum, Pink, Sockeye, Steelhead, Bull Trout or Cutthroat
+      - name: year
+        type: bigint
+        nullable: false
+        comment: Return / spawning year of the estimate
+      - name: abundance_qty
+        type: double
+        nullable: false
+        comment: Estimated count of fish (redds when data_type is 'Spawner Redds'); zero is a real estimate
+      - name: data_type
+        type: string
+        nullable: false
+        comment: What is counted - Spawner Fish, Escapement Fish, Spawner Redds, or SPI codes such as NOSAEJ, HOSAEJ, TSAEJ, NOSAIJ, HOSAIJ, TSAIJ, NOBroodStockRemoved
+      - name: production_type
+        type: string
+        nullable: false
+        comment: Natural, Hatchery, Composite, Unknown or NA - origin of the fish counted
+      - name: calculation_type
+        type: string
+        nullable: false
+        comment: Expanded (extrapolated from index surveys to the whole stock), Unexpanded, Unknown or NA
+      - name: escapement_methodology
+        type: string
+        nullable: false
+        comment: How the count was made, e.g. Trap Count, Total Natural Spawners, or the SPI data_type code
+      - name: report_types
+        type: string
+        nullable: true
+        comment: WDFW report the series feeds - SCoRE or 'SOS, SCoRE' (State of Our Salmon); null where WDFW lists no report (about 11% of rows)
+      - name: last_update
+        type: string
+        nullable: true
+        comment: Timestamp WDFW last updated the row (ISO 8601, no zone)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: Always WA; joins to geo.state_ref
+
+    source:
+      type: http
+      url: "https://data.wa.gov/resource/fgyz-n3uk.json?$select=stock_number,population_name,sub_population_name,data_series_num,species,year,abundance_qty,data_type,production_type,calculation_type,escapement_methodology,report_types,last_update&$order=stock_number,data_series_num,year,data_type&$limit=100000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer drops estimate-less series rows, so a raw-cache replay of the
+      # post-transform rows would not parse.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesWdfwEscapementTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=wdfw_salmonid_escapement/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: wdfw_salmonid_escapement
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
