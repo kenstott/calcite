@@ -296,12 +296,15 @@ jobs:
           Write-Host "msiexec exit code: $($p.ExitCode)"
           "UPGRADE_EXIT=$($p.ExitCode)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: The upgrade left a whole product that needs no restart
+      # What the upgrade must not do: queue for deletion at the next restart a file the NEW
+      # version installs (issue 491). Files only the old version had, still in use, may wait
+      # for a restart; that is reported, with the exit code, and does not fail.
+      - name: The upgrade queued nothing of the new version for deletion
         shell: pwsh
         run: |
           $problems = @()
-          if ($env:UPGRADE_EXIT -eq '3010') { $problems += "msiexec asked for a restart of Windows (3010): files were in use" }
-          elseif ($env:UPGRADE_EXIT -ne '0') { $problems += "msiexec failed with $env:UPGRADE_EXIT" }
+          Write-Host "msiexec exit code: $env:UPGRADE_EXIT (3010 = Windows asks for a restart)"
+          if ($env:UPGRADE_EXIT -ne '0' -and $env:UPGRADE_EXIT -ne '3010') { $problems += "msiexec failed with $env:UPGRADE_EXIT" }
           $entries = @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object { $_.DisplayName -eq 'AskAmerica MCP' })
           Write-Host "uninstall records named AskAmerica MCP: $($entries.Count)"
           $entries | ForEach-Object { Write-Host "  $($_.DisplayVersion) at $($_.InstallLocation)" }
@@ -309,18 +312,54 @@ jobs:
           $dir = if ($entries.Count -ge 1) { $entries[0].InstallLocation } else { $env:PREVIOUS_DIR }
           $exe = Join-Path $dir 'AskAmerica MCP.exe'
           if (-not (Test-Path $exe)) { $problems += "the launcher is not at $exe after the upgrade" }
-          # Deletions or replacements Windows deferred to the next restart, under the install
-          # directory: after that restart they would take the new install's files with them.
+          # The names of the files the new .msi installs, from its own File table.
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $db = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($msi, 0))
+          $view = $db.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $db, @('SELECT `FileName` FROM `File`'))
+          $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null) | Out-Null
+          $newNames = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+          while ($true) {
+            $rec = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+            if (-not $rec) { break }
+            $name = $rec.GetType().InvokeMember('StringData', 'GetProperty', $null, $rec, @(1))
+            [void]$newNames.Add(($name -split '\|')[-1])
+          }
+          Write-Host "the new .msi installs $($newNames.Count) distinct file names"
+          # Deletions Windows deferred to the next restart, under the install directory.
           $pending = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations
-          $ours = @($pending | Where-Object { $_ -and $_ -like "*AskAmerica MCP*" })
-          Write-Host "file operations deferred to restart under the install directory: $($ours.Count)"
-          $ours | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
-          if ($ours.Count -gt 0) { $problems += "$($ours.Count) file operations under the install directory were deferred to the next restart" }
-          Select-String -Path "$env:RUNNER_TEMP\upgrade.log" -Pattern 'in use|being held|RestartManager|reboot|PendingFileRename|1603|Rollback' -SimpleMatch:$false | Select-Object -First 40 | ForEach-Object { Write-Host $_.Line }
+          $ours = @($pending | Where-Object { $_ -and $_ -like "*AskAmerica MCP*" } | ForEach-Object { $_ -replace '^\*?\d*\\\?\?\\', '' })
+          $ofNew = @($ours | Where-Object { $newNames.Contains((Split-Path $_ -Leaf)) })
+          Write-Host "file operations deferred to restart under the install directory: $($ours.Count); of files the new version installs: $($ofNew.Count)"
+          $ofNew | Select-Object -First 20 | ForEach-Object { Write-Host "  queued, and the new version needs it: $_" }
+          $ours | Where-Object { $ofNew -notcontains $_ } | Select-Object -First 5 | ForEach-Object { Write-Host "  queued, old version only: $_" }
+          if ($ofNew.Count -gt 0) { $problems += "$($ofNew.Count) files the new version installs are queued for deletion at the next restart" }
+          $ours | Set-Content "$env:RUNNER_TEMP\queued-deletions.txt"
+          Select-String -Path "$env:RUNNER_TEMP\upgrade.log" -Pattern "Won't Overwrite|WixCloseApplications|Return value 3" | Select-Object -First 12 | ForEach-Object { Write-Host $_.Line }
           "ASKAMERICA_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          if ($problems.Count -gt 0) { $problems | ForEach-Object { Write-Host "::error::$_" }; throw "the upgrade did not leave a whole product" }
+          "UPGRADED_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($problems.Count -gt 0) { $problems | ForEach-Object { Write-Host "::error::$_" }; throw "the upgrade queued files of the new install for deletion, or did not complete" }
+
+      # A runner cannot be restarted. This does what the restart would: nothing of ours is
+      # running any more, and the deletions Windows queued are carried out. The product must
+      # still start afterwards.
+      - name: After what a restart would do, the product is whole
+        if: always() && env.UPGRADED_DIR != ''
+        shell: pwsh
+        run: |
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:UPGRADED_DIR) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          $queued = @(Get-Content "$env:RUNNER_TEMP\queued-deletions.txt" -ErrorAction SilentlyContinue | Where-Object { $_ })
+          $gone = 0
+          foreach ($path in $queued) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force -Recurse -ErrorAction SilentlyContinue; $gone++ } }
+          Write-Host "carried out $gone of $($queued.Count) queued deletions"
+          foreach ($needed in 'AskAmerica MCP.exe', 'runtime\lib\modules') {
+            $p = Join-Path $env:UPGRADED_DIR $needed
+            if (-not (Test-Path -LiteralPath $p)) { Write-Host "::error::after the restart's deletions $p is gone" }
+          }
 
       - name: The upgraded launcher completes the MCP handshake
+        if: always() && env.UPGRADED_DIR != ''
         shell: pwsh
         env:
           ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
