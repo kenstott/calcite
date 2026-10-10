@@ -177,6 +177,9 @@ jobs:
             c=$(echo "$entries" | grep -cE "^${pat}" || true)
             [ "$c" -eq 0 ] || { echo "FAIL: orphan '$pat' present ($c)"; fail=1; }
           done
+          # ASKAM-007: no embedder in the engine jar; semantic search is served by the data server.
+          c=$(echo "$entries" | grep -cE '^ai/onnxruntime/|^models/snowflake-arctic-embed-xs/|\.onnx$' || true)
+          [ "$c" -eq 0 ] || { echo "FAIL: $c embedder entries (ONNX Runtime or a model) in the engine jar"; fail=1; }
           # Tier-3: Arrow Gandiva must be stripped (reached only via reflective .arrow path).
           for pat in 'gandiva_jni/' 'org/apache/arrow/gandiva/'; do
             c=$(echo "$entries" | grep -cE "^${pat}" || true)
@@ -209,8 +212,9 @@ jobs:
             echo "FAIL: log4j2.xml Console appender targets SYSTEM_OUT (corrupts MCP stdio)"
             fail=1
           fi
-          # Size ceiling — catches a bloat regression (current ~441 MB after Tier-1/2a/3).
-          sz=$(stat -c%s "$JAR"); ceil=$((500*1024*1024))
+          # Size ceiling — catches a bloat regression (436 MB at 0.109.1; about 336 MB once
+          # ONNX Runtime and the embedding model were taken out, ASKAM-007).
+          sz=$(stat -c%s "$JAR"); ceil=$((400*1024*1024))
           echo "JAR size: $((sz/1024/1024)) MB (ceiling $((ceil/1024/1024)) MB)"
           [ "$sz" -le "$ceil" ] || { echo "FAIL: jar exceeds size ceiling"; fail=1; }
           [ "$fail" -eq 0 ] && echo "All slimming guards passed." || exit 1

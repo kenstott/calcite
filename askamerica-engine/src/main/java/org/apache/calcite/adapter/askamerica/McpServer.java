@@ -1722,14 +1722,10 @@ public class McpServer {
             "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
             + "the top hits are frequently boilerplate, so a short list can contain no real "
             + "match at all."));
-        // No auto-provisioning exists for the embedder (unlike the engine jar and
-        // pgwire-govdata, both of which self-install on first use) — only a manual operator
-        // script (govdata/scripts/vss-embed-setup.sh) that nobody runs on a real Claude
-        // Desktop install. Advertising this tool unconditionally means every real install
-        // gets offered a capability guaranteed to fail with "no embedder configured" the
-        // instant it's called. Gate registration on the same properties
-        // configureQueryEmbedder() (called at startup, before toolDefs() is ever built) uses
-        // to decide whether an embedder is actually reachable.
+        // Offered whenever semantic search can be served: by the data server in pg-wire mode
+        // (every install), or, with that mode switched off, by an embedder the operator
+        // named. Otherwise the tool would fail with "no embedder configured" the instant
+        // it's called. See configureQueryEmbedder().
         if (embedderConfigured()) {
         tools.add(
             tool("semantic_search",
@@ -5688,27 +5684,17 @@ public class McpServer {
 
     /** The effective set of schema names (env override, else the built-in default set). */
     /**
-     * Points {@code EmbeddingService} at a query-time embedder, so {@code SEMANTIC_SEARCH} can
-     * embed the query rather than failing with "no embedder configured".
+     * Says at startup where semantic search is served, and in the one mode that needs it points
+     * {@code EmbeddingService} at a developer's embedder.
      *
-     * <p>Nothing else in the product sets {@code calcite.embed.*}, so without this the consumer
-     * half of semantic search could never start: {@code vss-local.py} writes the corpus codes
-     * and the query side had no way to reach the same vector space.
-     *
-     * <p>Order matters and is not arbitrary:
-     * <ol>
-     *   <li>an explicit {@code calcite.embed.command|home|script} always wins — never override a
-     *       deliberate choice;</li>
-     *   <li>a bundle home ({@code bin/hugot-embed}, {@code lib/}, {@code model/}) under the
-     *       operating dir — the self-contained option, the only one viable on a client device;</li>
-     *   <li>the CPU embed venv + {@code embed.py} that {@code vss-embed-setup.sh} provisions —
-     *       the dev/ETL-box path, which needs torch and is not client-shippable.</li>
-     * </ol>
-     *
-     * <p>Resolution only; it never installs anything. If neither exists the properties stay unset
-     * and {@code SEMANTIC_SEARCH} reports the same explicit error as before — a wrong embedder
-     * would be far worse than none, because query vectors from a different pipeline than the
-     * corpus still return rows, just silently mis-ranked.
+     * <p>The engine carries no embedder (owner rule 2026-10-10, ASKAM-007). In pg-wire mode,
+     * the mode every install runs in, {@code SEMANTIC_SEARCH} and {@code EMBED} are SQL sent to
+     * the pgwire-govdata server, which embeds with the embedder it carries; this process
+     * embeds nothing. With pg-wire mode switched off the query runs in this process, and then
+     * only an embedder the operator names can serve it: an explicit
+     * {@code calcite.embed.command|home|script}, or the CPU embed venv and {@code embed.py}
+     * that {@code vss-embed-setup.sh} provisions on a development or ETL machine. Without
+     * one, that mode does not offer the tool and says why here.
      */
     /**
      * Whether {@code configureQueryEmbedder()} (called once at startup, before toolDefs() is
@@ -5732,21 +5718,16 @@ public class McpServer {
     }
 
     private static void configureQueryEmbedder() {
+        if (PgwireGovDataConnector.isEnabled()) {
+            log.println("[askamerica-mcp] semantic search: served by the data server "
+                + "(pgwire-govdata), which carries the embedder; this process embeds nothing");
+            return;
+        }
         if (!System.getProperty("calcite.embed.command", "").isEmpty()
             || !System.getProperty("calcite.embed.home", "").isEmpty()
             || !System.getProperty("calcite.embed.script", "").isEmpty()) {
             log.println("[askamerica-mcp] embedder: explicitly configured, leaving as-is");
             return;
-        }
-
-        String dataDir = System.getProperty("ASKAMERICA_DATA_DIR", "");
-        if (!dataDir.isEmpty()) {
-            java.io.File home = new java.io.File(dataDir, "embedder");
-            if (new java.io.File(home, "bin/hugot-embed").isFile()) {
-                System.setProperty("calcite.embed.home", home.getAbsolutePath());
-                log.println("[askamerica-mcp] embedder: bundle home " + home.getAbsolutePath());
-                return;
-            }
         }
 
         String venv = System.getenv("VSS_EMBED_VENV");
@@ -5765,10 +5746,11 @@ public class McpServer {
             return;
         }
 
-        log.println("[askamerica-mcp] embedder: none found — semantic_search/SEMANTIC_SEARCH will "
-            + "report 'no embedder configured'. Provide a bundle at <data-dir>/embedder "
-            + "(bin/hugot-embed, lib/, model/), or set GOVDATA_HOME with the venv from "
-            + "govdata/scripts/vss-embed-setup.sh.");
+        log.println("[askamerica-mcp] semantic search needs the data server: pg-wire mode is "
+            + "switched off (ASKAMERICA_PGWIRE_MODE) and this process carries no embedder, so "
+            + "the semantic_search tool is not offered and SEMANTIC_SEARCH/EMBED will refuse. "
+            + "Switch pg-wire mode back on, or name an embedder with calcite.embed.command, "
+            + "calcite.embed.home or calcite.embed.script.");
     }
 
     private static java.util.Set<String> allowedSchemas() {

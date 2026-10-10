@@ -202,14 +202,19 @@ tasks.shadowJar {
     // specifically so no per-platform tokenizer binary is needed.
     exclude("ai/djl/**")
 
-    // ONNX Runtime is REQUIRED at query time and must NOT be excluded. SEMANTIC_SEARCH and
-    // EMBED embed the query through OnnxClsEmbedder; without these classes both fail with
-    // "no embedder configured", which is exactly the state this jar shipped in until now.
-    // The earlier "not used at query time" assumption held only while embeddings were an
-    // ETL-only concern.
+    // No embedder in the engine jar (owner rule 2026-10-10, ASKAM-007: "remove onnx from the
+    // engine jar"). The engine sends SEMANTIC_SEARCH and EMBED to the pgwire-govdata server as
+    // SQL, and the server embeds in its own JVM, from the unshaded jars its bundle carries;
+    // nothing in this process embeds.
+    // ONNX Runtime (every platform's native library, ~84 MB of this jar, ~370 MB unpacked) and
+    // the arctic-embed-xs model (~16 MB) were here for an in-process embedder
+    // (file adapter's OnnxClsEmbedder) that the shipped mode never reaches. Without the model
+    // resource that embedder reports itself unconfigured before it touches an ONNX class, so
+    // an in-process SEMANTIC_SEARCH fails by name, not with a missing class.
+    exclude("ai/onnxruntime/**")
+    exclude("models/snowflake-arctic-embed-xs/**")
 
-    // Orphaned ML resources — nothing loads these any more (the arctic-embed-xs int8 model
-    // under models/snowflake-arctic-embed-xs/ is the live one and is deliberately kept).
+    // Orphaned ML resources — nothing loads these any more.
     exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB, superseded, mean-pooled
     exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives (DJL)
 
@@ -363,6 +368,25 @@ tasks.shadowJar {
         manifest {
             attributes["AskAmerica-Engine-Version"] = engineReleaseVersion
         }
+    }
+    // The engine jar carries no embedder (ASKAM-007): fail the build that would ship one.
+    doLast {
+        val jar = archiveFile.get().asFile
+        val embedder = java.util.zip.ZipFile(jar).use { zip ->
+            zip.entries().asSequence().map { it.name }
+                .filter {
+                    it.startsWith("ai/onnxruntime/") ||
+                        it.startsWith("models/snowflake-arctic-embed-xs/") ||
+                        it.endsWith(".onnx")
+                }
+                .take(5).toList()
+        }
+        if (embedder.isNotEmpty()) {
+            throw GradleException(
+                "${jar.name} contains an embedder (${embedder.joinToString()}); the engine jar " +
+                    "carries none - semantic search is served by the data server")
+        }
+        logger.lifecycle("${jar.name}: ${jar.length() / (1024 * 1024)} MB, no embedder inside")
     }
 }
 

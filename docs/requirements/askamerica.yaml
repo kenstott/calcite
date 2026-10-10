@@ -166,3 +166,29 @@
     itself, and leaves one another process holds. The standalone pg-wire server opens its
     catalog through the same factory. No test is cited yet.
   tests: []
+
+- id: ASKAM-007
+  module: askamerica
+  status: accepted
+  group: installer
+  category: Thin engine jar
+  priority: MUST
+  type: constraint
+  description: >
+    The engine jar carries no embedder: no ONNX Runtime and no embedding model. Semantic
+    search (the semantic_search tool, SQL SEMANTIC_SEARCH and EMBED) is served by the data
+    server, to which the engine sends it as SQL. The build of the engine jar fails when the
+    jar contains ai/onnxruntime, the snowflake-arctic-embed-xs model or any .onnx file.
+  source: >
+    owner 2026-10-10 ("remove onnx from the engine jar"; "if the server can create
+    embeddings in SQL - why not just use that"; "everything uses the snowflake model").
+    Measured in the 0.109.1 engine jar (436 MB): ONNX Runtime, every platform's native
+    library, 84 MB in the jar and 370 MB unpacked; the model 16 MB. Read from the code: in
+    pg-wire mode, the mode every install runs in, the MCP process embeds nothing;
+    SEMANTIC_SEARCH is evaluated in the server's JVM by the file adapter's OnnxClsEmbedder
+    (CLS pooling, the reference for the stored vectors), from the unshaded jars the server
+    bundle carries, and a literal EMBED('...') by the server's Python embedder. Enforced by
+    the shadowJar task of askamerica-engine/build.gradle.kts and the "Slimming guards" step
+    of .github/workflows/askamerica-engine.yml; no test is cited. With pg-wire mode switched
+    off the engine has no embedder unless an operator names one (calcite.embed.*).
+  tests: []
