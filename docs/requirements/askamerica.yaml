@@ -115,6 +115,10 @@
     seed, no build-time coverage check, no gate on the release script. What the server does
     is put its jar's seed in place at start (a no-op when the installed catalog's schema
     matches) and stop by name when the jar has no seed.
+    His reason, the same day: "that's also possible if table has never gone through ETL,
+    which is why its better to NOT check." A table or column the model declares and the seed
+    lacks is a normal state - declared, not yet ingested - not a defect, so nothing compares
+    the seed's coverage with the model, at build time or at run time.
   tests: []
 
 # ===================================== updates =================================================
