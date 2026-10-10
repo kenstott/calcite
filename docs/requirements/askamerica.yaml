@@ -1,0 +1,168 @@
+# AskAmerica — requirements ledger. Schema: README.md.
+#
+# Unit of work = a capability of AskAmerica as it is distributed: the engine
+# (askamerica-engine) and the pg-wire server bundle it installs and starts (pgwire-govdata,
+# built by .github/workflows/pgwire-adapters-release.yml). The source is the owner's decisions.
+#
+#   accepted = an owner decision with no implementation, or a design the owner has confirmed
+#              that is not yet proven by a test cited in `tests:`.
+#   proposed = a possible future feature; no decision to build it.
+#
+# ASKAM-002 and ASKAM-004 confirm the existing design. They are not new decisions. Where the
+# code departs from that design, the departure is listed in `source:` as a defect against it.
+
+# ===================================== platforms ===============================================
+
+- id: ASKAM-001
+  module: askamerica
+  status: accepted
+  group: platforms
+  category: NixOS
+  priority: MUST
+  type: infrastructure
+  description: >
+    AskAmerica is supported on NixOS: its engine and its pg-wire server install and start on a
+    NixOS host and serve as they do on other Linux hosts, with what the host must provide
+    stated. The host provides nix-ld with the libraries the bundle's runtimes link against, and
+    a PATH carrying bash, coreutils and tar for the process that starts the server; that list
+    is published as a ready-made NixOS configuration snippet. The bundle brings its own Java
+    and Python runtimes and needs neither a JDK nor JAVA_HOME from the host. Nothing is written
+    into the install tree while the server runs: run-time files go to a state directory that
+    can be set per server process by environment. On a NixOS host without nix-ld the server is
+    not started; the engine fails before the spawn and prints the snippet. A release is not
+    published unless a NixOS guest configured with only that snippet unpacks the linux-x86_64
+    bundle, starts the server and answers a query.
+  source: >
+    owner decisions 2026-10-09. State on main at 06ae0654b0, read from the code: installs go
+    under the user's home and change nothing on the host (PgwireGovDataInstaller,
+    EngineInstaller); the launcher is a bash script with an env shebang
+    (pgwire-adapters-release.yml, "Stage adapter model + launcher"); the query-engine JVM is
+    started with no JVM path, so the host's JAVA_HOME is used although the bundle carries a JRE
+    (calcite_backend.py _start_jvm); jars.classpath is rewritten in the bundle at every start
+    and the catalog cache is written beside model.json (catalog_populate.py
+    catalog_cache_path); the port probe runs lsof (PgwireGovDataConnector.portListenerPid); no
+    certificate bundle is configured for the Python side; the engine's native installer for
+    Linux is a .deb only; only linux-x86_64 is published for Linux. Whether lsof and the
+    certificate bundle are removed from the host's list or added to it is settled in the
+    implementation and then stated here.
+  tests: []
+
+# ===================================== catalog seed ============================================
+
+- id: ASKAM-002
+  module: askamerica
+  status: accepted
+  group: catalog seed
+  category: Official seed
+  priority: MUST
+  type: constraint
+  description: >
+    At run time AskAmerica never builds its catalog by discovery: not on a first start, not
+    when the installed catalog is missing, and not when it differs from the model. The seed
+    packaged in the jar is the official one. On start the jar's seed is put in place, and doing
+    so again when nothing changed is a no-op; an installed catalog that differs from the jar's
+    seed is replaced by it, never repaired or rebuilt. Whether two seeds differ, and whether a
+    seed covers the model, is measured by schema only: the schemas, their tables, and the
+    columns and types the seed declares. Recorded row counts, statistics, timestamps, version
+    strings and file bytes do not make a seed different. A jar that carries no seed, or a seed
+    that does not declare a schema of the model, is an error that names what is
+    missing and stops the start; there is no fallback to building one. Statistics in the seed
+    may be out of date; that is accepted and is never a reason to build, recount or refresh at
+    run time. A newer official seed reaches an install only with a newer jar. Building a seed
+    stays possible and belongs to the release path (govdata/scripts/build-seed.sh), which is
+    how the official seed is made. The standalone pg-wire server puts its own jar's seed in
+    place on every start, into its state directory, without its caller naming a catalog.
+    Each server process has its own copy of the catalog, because DuckDB locks a catalog file
+    against other processes even when it is opened read-only; the copies are an artifact of
+    that lock, every one comes from the jar's seed, and none is built, merged or reconciled
+    with another: "different" is always measured against the jar, never between copies. The
+    pg-wire server's own catalog cache (the pickle file shipped beside the model) is under
+    the same rule: the shipped one is official, is judged by schema and never by the model
+    file's bytes, is never rebuilt by a live walk at run time, and a missing one or one that
+    does not cover the model is an error by name; building it is a release step.
+  source: >
+    The existing design, confirmed by the owner 2026-10-09 ("these are not changes - this is
+    just confirming the design requirement"). Defects against it on main at 6e664777a4, read
+    from the code: (a) the standalone pg-wire server never puts a seed in place:
+    GovDataSeedInstaller.ensureSeeded is called only from GovDataDriver.connect, while the
+    bundle's model names GovDataSchemaFactory directly with database_filename
+    ${GOVDATA_DUCKDB_CATALOG:govdata-catalog.duckdb}, so with that variable unset an empty
+    catalog is created (DuckDBJdbcSchemaFactory "Creating new DuckDB database") and filled by
+    discovery; (b) a jar without a seed and a failed extraction both continue into discovery
+    instead of stopping (GovDataSeedInstaller, "pure accelerator"); (c) an installed catalog
+    is compared with the seed by a SHA-256 of the seed zip's bytes kept in
+    .duckdb/govdata.duckdb.version, not by schema; (d) a catalog file newer than the jar is
+    kept even when it differs; (e) ?rebuildCatalog=true and -Dgovdata.rebuild.catalog delete
+    the catalog so that it is rebuilt by discovery (GovDataDriver); (f) a seeded catalog copy
+    that cannot be opened is replaced by an empty catalog whose views are rebuilt
+    (DuckDBJdbcSchemaFactory, lock-fallback loop), which is left as it is; (g) the pickle
+    cache is named by a SHA-256 of model.json's bytes and rebuilt by a live walk when absent
+    or unreadable (catalog_populate.py populate_state_cached); (h)
+    DuckDBCatalogMaintenance.rebuildPendingViews rebuilds views at run time and has no
+    caller. Not a defect, and part of the design: a single view the seed lacks is created on
+    demand, the first time it is asked for (DuckDBPendingViews.createOnDemand); with an
+    up-to-date seed that is a no-op, it is how an install whose seed lags still answers, and
+    it is the only way the adapters without a seed get their views. Already as designed: a
+    process that meets the catalog's lock takes a numbered copy seeded from the jar's seed
+    (see ASKAM-004). That a read-only
+    open is locked too is the owner's statement; no comment in the code says so.
+  tests: []
+
+# ===================================== updates =================================================
+
+- id: ASKAM-003
+  module: askamerica
+  status: proposed
+  group: updates
+  category: Agreed update
+  priority: MAY
+  type: behavioral
+  description: >
+    The user agrees before the engine replaces its jar with a newer release. A future
+    feature, not a decision to build. Open questions a design must answer: where the
+    agreement is asked when the engine runs as a headless server; a setting that turns
+    updates off; and what not taking an update means for an install whose seed then lags.
+  source: >
+    owner remark 2026-10-09 ("we'll just add that as a future feature"). Baseline on main at
+    6e664777a4, read from EngineInstaller: on every restart the engine compares its jar's
+    stamped version with the latest release and downloads only when they differ; an
+    unstamped jar counts as differing and an unreachable release lookup counts as not
+    differing. In server mode the running jar serves and the new one is downloaded beside it
+    for the next launch. A jar named by ASKAMERICA_ENGINE_JAR, or placed beside the launcher,
+    is a pin and is never replaced, which is how updates are declined today. Why the check
+    runs so often and why agreement is hard to ask: the thin launcher is started by an MCP host
+    (Claude Desktop passes --mcp, McpServerLauncher) each time that host starts the server, so
+    "every restart" is every launch by the host, and in that mode the process is a stdio MCP
+    server with nobody at a prompt. Its standard output is the protocol; the launcher and the
+    installer report on standard error, which the host captures (EngineInstaller.report). How
+    often a host relaunches is the host's behaviour and is not stated in this repository.
+  tests: []
+
+# ===================================== concurrency =============================================
+
+- id: ASKAM-004
+  module: askamerica
+  status: accepted
+  group: concurrency
+  category: Concurrent engine processes
+  priority: MUST
+  type: constraint
+  description: >
+    Several AskAmerica engine processes run concurrently on one host, as an MCP host starts
+    them, and each has the catalog available at once. DuckDB locks a catalog file against
+    other processes, so a process that finds the catalog held takes a copy of its own; the
+    copies exist only because of that lock. A copy left by a process that has ended is
+    reused or removed by a later process, so copies do not accumulate without bound. The
+    large object cache is shared by all processes and stays shared; only the catalog copy,
+    the pid and the log are per process.
+  source: >
+    The existing design, confirmed by the owner 2026-10-09 ("they need to be concurrent, and
+    this drives the sharing of the catalog"; "I think it already works anyway"). Met in
+    file/src/main/java/org/apache/calcite/adapter/file/duckdb/DuckDBJdbcSchemaFactory.java
+    on main at 6e664777a4: isCatalogLockConflict recognises the lock; the fallback loop opens
+    {name}_N.duckdb for N up to MAX_CATALOG_LOCK_FALLBACKS (16), taking the lowest free one,
+    each seeded from the jar's bundled seed (seedCatalogCopy*); cleanupStaleNumberedCopies,
+    once per JVM, deletes a numbered copy that is old enough and that this process can open
+    itself, and leaves one another process holds. The standalone pg-wire server opens its
+    catalog through the same factory. No test is cited yet.
+  tests: []
