@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.110.0](https://github.com/kenstott/calcite/compare/engine-v0.109.0...engine-v0.110.0) (2026-10-10)
+
+
+### Features
+
+* **govdata/law:** Senate eFD financial disclosures (fd_* tables) ([1712085](https://github.com/kenstott/calcite/commit/171208550dbcc84c29457e73ee5c234e818dba29))
+* **pgwire-govdata:** every connection signs in with its API key and is metered under it (ASKAM-010) ([86e2821](https://github.com/kenstott/calcite/commit/86e2821990b4b8bf89c5dea78c702051b8dafd0d))
+* **pgwire-govdata:** every connection signs in with its API key and is metered under it (ASKAM-010) ([111cd90](https://github.com/kenstott/calcite/commit/111cd90c39e9ce525052465a3d3ee8bd65fe32d4))
+* **pgwire:** a bundle starts Calcite from its own runtime, writes no classpath file, and is published only after its smoke test ([1cf7811](https://github.com/kenstott/calcite/commit/1cf781135483a66fc76f7e602ea04cee6fd37cd3))
+* **pgwire:** a bundle writes nothing into its install tree and starts Calcite from its own runtime ([ec4ed4f](https://github.com/kenstott/calcite/commit/ec4ed4fdeef6918d62f78549dffd1c4865807a7e))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** compare explicit_exclusion against the full original, not the returned page ([f9cade2](https://github.com/kenstott/calcite/commit/f9cade2f8aa22bdc917a3534a8cc7394ffe38505))
+* **askamerica:** a data call is told at once when the data server cannot start ([39c4be2](https://github.com/kenstott/calcite/commit/39c4be225f649f3cbf01ebe95b66db4d5cb17812))
+* **askamerica:** a data call is told at once when the data server cannot start ([fda4df0](https://github.com/kenstott/calcite/commit/fda4df05a182790f57e01de4c626b62b79d77d41)), closes [#484](https://github.com/kenstott/calcite/issues/484)
+* **askamerica:** an upgrade over a running version ends our processes first, so nothing is queued for deletion ([7e9592b](https://github.com/kenstott/calcite/commit/7e9592b7c49d7681a41ccde59e31f7c7d715b5f2))
+* **askamerica:** an upgrade over a running version no longer queues the new install for deletion ([f51a9c7](https://github.com/kenstott/calcite/commit/f51a9c77d155cfe0a68e7be272730a4162f63c5f)), closes [#491](https://github.com/kenstott/calcite/issues/491)
+* **askamerica:** end the launcher before the old version is removed, and remove it first again ([aaabcce](https://github.com/kenstott/calcite/commit/aaabccebbe309e3640a31788dd078519797bb251))
+* **askamerica:** setup names only a launcher that exists, and starts the Store build of Claude Desktop by its identity ([5734e8e](https://github.com/kenstott/calcite/commit/5734e8e39f88b7996f7d5a9dfafd7e16736979b6))
+* **askamerica:** the .msi and .deb no longer carry the pgwire-govdata bundle; an installer over 100 MB fails the build ([db8b3ab](https://github.com/kenstott/calcite/commit/db8b3ab7703e6115e009546e4fd9d6a4cdfa7694))
+* **askamerica:** the .msi and .deb no longer carry the pgwire-govdata bundle; an installer over 100 MB fails the build ([3b32ce5](https://github.com/kenstott/calcite/commit/3b32ce542e31b514af1849a4dd02c2c1cf28fd71)), closes [#474](https://github.com/kenstott/calcite/issues/474)
+* **askamerica:** the installer also ends what runs from the installed product's directory ([82df93b](https://github.com/kenstott/calcite/commit/82df93b0cb74ef8eddc70054ed4ce4066b561476))
+* **askamerica:** the MCP server writes its answers and its log as UTF-8 on every platform ([e6dbe9a](https://github.com/kenstott/calcite/commit/e6dbe9af28c22318994e1309e58ab81adfd15800))
+* **askamerica:** the MCP server writes its answers and its log as UTF-8 on every platform ([b04fda4](https://github.com/kenstott/calcite/commit/b04fda4fe86ffc70d6df9ba50b649e63369c215c)), closes [#486](https://github.com/kenstott/calcite/issues/486)
+* **askamerica:** the setup wizard restarts Claude Desktop itself, never whatever answers to the name Claude ([79e59d3](https://github.com/kenstott/calcite/commit/79e59d3f8c19237b435d01e93bd15566dc347f02))
+* **askamerica:** the setup wizard restarts Claude Desktop itself, never whatever answers to the name Claude ([82c6540](https://github.com/kenstott/calcite/commit/82c6540514c47bd433c80b7133c93b239e06d283)), closes [#478](https://github.com/kenstott/calcite/issues/478)
+* **askamerica:** the start logic is its own object, and its test uses one of its own ([a8d92be](https://github.com/kenstott/calcite/commit/a8d92bea5534a4d6b3f960b936758364d591dbc9))
+* **file/iceberg:** stream rows when rewriting a file in deleteRows instead of buffering them ([c3519cc](https://github.com/kenstott/calcite/commit/c3519cc794db5426e0e2b9b03f56c455226b6fc8))
+* **file:** a refresh no longer leaves a table without its Parquet cache file ([#467](https://github.com/kenstott/calcite/issues/467)) ([c0de3a4](https://github.com/kenstott/calcite/commit/c0de3a4f6920e5f4b02898dd19e046c26acf2d24))
+* **file:** deleteRowsMatching asks the predicate once per row ([57be11d](https://github.com/kenstott/calcite/commit/57be11db2ac15ca7bc85c24e555cabd508842cad))
+* **file:** globs are matched on strings; default and cache paths are joined by the helper ([2da8935](https://github.com/kenstott/calcite/commit/2da8935a8bace0db55074c3be3de9e59094c6922))
+* **file:** HtmlCrawlStage compiles on JDK 11 with warnings as errors ([7d1b6dc](https://github.com/kenstott/calcite/commit/7d1b6dcc8e3608f6a9640477536ada16473434b8))
+* **file:** local paths with mixed separators name tables correctly on Windows ([374b52a](https://github.com/kenstott/calcite/commit/374b52a4b741c334e1da54f6c62ce0a2e083296b))
+* **file:** one helper for local path strings, used at every parse and compare ([ae9e720](https://github.com/kenstott/calcite/commit/ae9e7203b3a678fc30b83b58ccc08fda20df3fc2))
+* **file:** partition values read from a Windows path stop at the separator ([ae33010](https://github.com/kenstott/calcite/commit/ae33010c22c5a7108c39b2b004ae6203bb2e6875))
+* **file:** remove DuckDBCatalogMaintenance.rebuildPendingViews, which rebuilt views at run time and had no caller ([6f0e41c](https://github.com/kenstott/calcite/commit/6f0e41c472bef10bb2ba2115f83979ca53229b11))
+* **file:** the ETL pipeline no longer closes Hadoop catalogs, which dropped other commits' locks ([#469](https://github.com/kenstott/calcite/issues/469)) ([fb7f4fc](https://github.com/kenstott/calcite/commit/fb7f4fc31b002cc5ad11b9aa7558b0806883b69b))
+* **file:** Windows paths in the compaction runner, link lookup and tests ([d2c3063](https://github.com/kenstott/calcite/commit/d2c30636c58a2d2f268fc73cdb3dbc91d0615af0))
+* **govdata/law:** the fd_* tables get constraints entries and two durations are written in minutes ([e33889c](https://github.com/kenstott/calcite/commit/e33889c06bc03140f4056fca6c554e910b4b9262))
+* **govdata/law:** the fd_* tables get constraints entries and two durations are written in minutes ([5db2c6e](https://github.com/kenstott/calcite/commit/5db2c6e7b3a509e3c5c0392a599cf04a405f210b))
+* **govdata/law:** the Senate eFD listing takes the current year in UTC ([79efdb1](https://github.com/kenstott/calcite/commit/79efdb1ef5f8dc32131cd0d9851f76ebb9b39d1b))
+* **govdata/ref:** stop ChunkOrganizer re-sweeping sources whose data has not changed ([b810d40](https://github.com/kenstott/calcite/commit/b810d40ebfe8f384cf8055e28aa3fa244ce2150e))
+* **govdata/scripts:** vss drains instead of killing pools; daily queue longest-first; dashboard falls back to the scheduled log ([7d4c222](https://github.com/kenstott/calcite/commit/7d4c222294c82f6ddd9bcbe6b2a1b15b4db45a0c))
+* **govdata/sec:** re-enable stock_prices, undoing an accidental disable in a coverage-refresh commit ([e068f8e](https://github.com/kenstott/calcite/commit/e068f8eb0b9058b323ef46d3a60e71ef898b02ee))
+* **govdata:** a server puts its jar's seed in place before it opens its catalog (ASKAM-002) ([b61fc30](https://github.com/kenstott/calcite/commit/b61fc3091eb2a9e18e4d4844d861fa44df21663c))
+* **govdata:** a server puts its jar's seed in place before it opens its catalog (ASKAM-002) ([f51ba62](https://github.com/kenstott/calcite/commit/f51ba621957640594770ae7114b82611445a2499)), closes [#498](https://github.com/kenstott/calcite/issues/498)
+* **govdata:** no check that the seed declares each schema of the model ([ca6681b](https://github.com/kenstott/calcite/commit/ca6681b4f73c51fe3e659d7cae8081ea12eb10e4))
+* **govdata:** remove duplicate materialize.iceberg keys in four ref entity tables ([12dc294](https://github.com/kenstott/calcite/commit/12dc2945778d1ce6dd6cf98eddc2321cb5b902b0))
+* **govdata:** stale lobbying pages are found in a local cache on Windows ([cef634e](https://github.com/kenstott/calcite/commit/cef634e4fb9f078ff230cfe15efa20131dae20f8))
+* **govdata:** the jar's seed is the catalog; it is compared by schema and never built at run time ([356a6d7](https://github.com/kenstott/calcite/commit/356a6d77f0d7d62907d2c45b121dc284b08c0b9c))
+* **pgwire-calcite:** render random()/RAND() as RAND() instead of Oracle DBMS_RANDOM.VALUE() ([a967560](https://github.com/kenstott/calcite/commit/a9675603d3b9a1945b3f49686c4ef7d1ecdc0bf0))
+* **pgwire:** a parameter of a catalog statement is typed by the statement ([#463](https://github.com/kenstott/calcite/issues/463)) ([071958c](https://github.com/kenstott/calcite/commit/071958c0280ed8ebd41937cd0cf06dbe5b08eda0))
+
 ## [0.109.0](https://github.com/kenstott/calcite/compare/engine-v0.108.0...engine-v0.109.0) (2026-10-08)
 
 
