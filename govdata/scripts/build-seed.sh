@@ -32,7 +32,10 @@
 #
 # After it finishes, review and commit the two staged files:
 #   git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \
-#           govdata/src/main/resources/duckdb/seed/govdata-seed.version
+#           govdata/src/main/resources/duckdb/seed/govdata-seed.version \
+#           govdata/src/main/resources/duckdb/seed/govdata-seed.schema
+#   (the .schema listing is written by the same Gradle task; an installed catalog is compared
+#   with the seed by it, so the three are committed together)
 #
 # Exit codes: 0 seed built, 1/2 error, 10 seed not needed (only with --if-needed or --check).
 #
@@ -277,4 +280,5 @@ ls -lh "$SEED_DIR/govdata-seed.zip" "$SEED_DIR/govdata-seed.version" 2>/dev/null
 echo
 echo "Review the size, then commit them in-tree:"
 echo "  git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \\"
-echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.version"
+echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.version \\"
+echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.schema"

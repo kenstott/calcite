@@ -110,6 +110,36 @@ public final class GovDataSeedInstaller {
     if (operatingBase == null || operatingBase.isEmpty()) {
       throw new SeedException("No operating directory was given for the govdata catalog seed");
     }
+    File base = new File(operatingBase);
+    install(base, new File(base, CATALOG_RELATIVE));
+  }
+
+  /**
+   * Puts this jar's seed catalog in place at {@code catalogFile} unless the catalog installed
+   * there already declares the same schema. This is the start of a server, which names its
+   * catalog file itself (its model's {@code database_filename}) and connects through the
+   * schema factory, never through {@link GovDataDriver}: without this call nothing put the
+   * seed in place for it, and it built its whole catalog by discovery at every first start.
+   * Only the catalog is written; the seed's other entries belong to an operating directory,
+   * which a serving connection does not use. Safe to call for every schema of the model; the
+   * check runs once per JVM.
+   *
+   * @throws SeedException if the jar carries no seed or no schema listing for it, or the seed
+   *     cannot be extracted
+   */
+  public static synchronized void ensureCatalog(File catalogFile) {
+    if (checkedThisJvm) {
+      return;
+    }
+    if (catalogFile == null) {
+      throw new SeedException("No catalog file was given for the govdata catalog seed");
+    }
+    install(null, catalogFile.getAbsoluteFile());
+  }
+
+  /** {@code base} is the operating directory the whole seed is extracted into, or null to
+   *  write only the catalog, to {@code catalogFile}. */
+  private static void install(File base, File catalogFile) {
     installBundledSchemaCache();
     byte[] zipBytes = readResourceBytes(SEED_ZIP_RESOURCE);
     if (zipBytes == null) {
@@ -131,21 +161,47 @@ public final class GovDataSeedInstaller {
     }
     seedSchemas = GovDataSeedSchema.schemas(seedListing);
 
-    File base = new File(operatingBase);
-    File catalogFile = new File(base, CATALOG_RELATIVE);
     String reason = reasonToReplace(catalogFile, seedListing);
-    if (reason != null) {
+    if (reason == null) {
+      LOGGER.info("govdata catalog {}: the installed catalog declares the seed's schema; "
+          + "nothing to put in place", catalogFile.getAbsolutePath());
+    } else {
       try {
-        int entries = extractInto(new java.io.ByteArrayInputStream(zipBytes), base);
-        LOGGER.info("Put the jar's govdata catalog seed in place ({}): {} entr{} into {} "
-            + "(seed version {})", reason, entries, entries == 1 ? "y" : "ies",
-            base.getAbsolutePath(), readResourceText(SEED_VERSION_RESOURCE));
+        if (base != null) {
+          int entries = extractInto(new java.io.ByteArrayInputStream(zipBytes), base);
+          LOGGER.info("Put the jar's govdata catalog seed in place ({}): {} entr{} into {} "
+              + "(seed version {})", reason, entries, entries == 1 ? "y" : "ies",
+              base.getAbsolutePath(), readResourceText(SEED_VERSION_RESOURCE));
+        } else {
+          extractCatalogTo(new java.io.ByteArrayInputStream(zipBytes), catalogFile);
+          LOGGER.info("Put the jar's govdata catalog seed in place ({}): {} (seed version {})",
+              reason, catalogFile.getAbsolutePath(), readResourceText(SEED_VERSION_RESOURCE));
+        }
       } catch (IOException e) {
-        throw new SeedException("Could not put the govdata catalog seed in place under "
-            + base.getAbsolutePath() + ": " + e.getMessage(), e);
+        throw new SeedException("Could not put the govdata catalog seed in place at "
+            + catalogFile.getAbsolutePath() + ": " + e.getMessage(), e);
       }
     }
     checkedThisJvm = true;
+  }
+
+  /** Writes the seed's catalog entry, and nothing else of the seed, to {@code catalogFile}. */
+  private static void extractCatalogTo(InputStream zipIn, File catalogFile) throws IOException {
+    ZipInputStream zis = new ZipInputStream(zipIn);
+    ZipEntry entry;
+    while ((entry = zis.getNextEntry()) != null) {
+      if (!entry.isDirectory() && CATALOG_RELATIVE.equals(entry.getName())) {
+        File parent = catalogFile.getParentFile();
+        if (parent != null) {
+          Files.createDirectories(parent.toPath());
+        }
+        Files.copy(zis, catalogFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        discardOrphanedWal(catalogFile);
+        return;
+      }
+      zis.closeEntry();
+    }
+    throw new IOException("the seed holds no " + CATALOG_RELATIVE);
   }
 
   /**

@@ -171,6 +171,16 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("No dataSource specified, defaulting to 'sec'");
     }
 
+    // A serving connection never builds its catalog: the jar's seed is put in place before
+    // any DuckDB connection opens, whichever way the connection arrived (ASKAM-002).
+    File servedCatalog = servedCatalogFile(operand);
+    if (servedCatalog != null) {
+      GovDataSeedInstaller.ensureCatalog(servedCatalog);
+      // A schema of the model that the seed does not declare cannot be served: it would
+      // have to be built here, which a serving connection never does.
+      GovDataSeedInstaller.requireSchema(name);
+    }
+
     // Check if this schema was already created (e.g., as a dependency of another schema).
     // Include the operating-dir base in the key so connections with different ASKAMERICA_DATA_DIR
     // values get separate cache entries rather than reusing a stale schema from the wrong dir.
@@ -658,6 +668,42 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       }
     }
     return directory;
+  }
+
+  /**
+   * The shared DuckDB catalog file a SERVING connection is about to open, or null when this
+   * connection is not one: a model that serves reads from the store names a shared
+   * {@code database_filename}, runs on the DuckDB engine over an {@code s3://} directory and
+   * does not download. A model over local files is a test's or a tool's, not a server's. An ingest
+   * model ({@code autoDownload}) builds what it reads, and the release path that makes the
+   * seed ({@code -Dgovdata.seed.build}) builds the catalog itself.
+   *
+   * <p>A relative name is resolved as the file adapter resolves it
+   * (DuckDBJdbcSchemaFactory): under {@code <working dir>/.aperio/.duckdb/}.
+   */
+  static @Nullable File servedCatalogFile(Map<String, Object> operand) {
+    if (Boolean.getBoolean(GovDataDriver.SEED_BUILD_PROPERTY)) {
+      return null;
+    }
+    Object filename = operand.get("database_filename");
+    if (!(filename instanceof String) || ((String) filename).isEmpty()) {
+      return null;
+    }
+    if (!"duckdb".equalsIgnoreCase(String.valueOf(operand.get("executionEngine")))) {
+      return null;
+    }
+    if ("true".equalsIgnoreCase(String.valueOf(operand.get("autoDownload")))) {
+      return null;
+    }
+    if (!String.valueOf(operand.get("directory")).startsWith("s3://")) {
+      return null;
+    }
+    File file = new File((String) filename);
+    if (file.isAbsolute()) {
+      return file;
+    }
+    File duckdbDir = new File(new File(System.getProperty("user.dir"), ".aperio"), ".duckdb");
+    return new File(duckdbDir, (String) filename);
   }
 
   /**

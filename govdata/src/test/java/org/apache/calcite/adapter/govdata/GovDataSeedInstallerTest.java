@@ -152,6 +152,67 @@ class GovDataSeedInstallerTest {
     assertTrue(e.getMessage().contains("not_in_the_seed"), e.getMessage());
   }
 
+  @Test void theCommittedListingIsTheListingOfTheCommittedSeed(@TempDir Path tmpDir)
+      throws Exception {
+    // The listing is how an installed catalog is compared with the seed. One that was not
+    // regenerated when the seed was rebuilt would make every start replace its catalog.
+    GovDataSeedInstaller.ensureSeeded(tmpDir.toString());
+    assertEquals(seedListing(), GovDataSeedSchema.listing(catalogIn(tmpDir)),
+        "govdata-seed.schema is the schema of govdata-seed.zip; regenerate it with "
+            + "./gradlew :govdata:writeGovdataSeedSchema when the seed changes");
+  }
+
+  @Test void aServerIsGivenTheSeedAtTheCatalogFileItNames(@TempDir Path tmpDir)
+      throws Exception {
+    File catalog = new File(tmpDir.toFile(), "state/govdata-catalog.duckdb");
+    GovDataSeedInstaller.ensureCatalog(catalog);
+    assertTrue(catalog.isFile(), "the seed's catalog is where the server will open it");
+    assertEquals(seedListing(), GovDataSeedSchema.listing(catalog));
+    assertTrue(!new File(tmpDir.toFile(), "state/.aperio").exists(),
+        "only the catalog is written for a server");
+    GovDataSeedInstaller.requireSchema("sec");
+  }
+
+  @Test void aServersCatalogThatDeclaresTheSeedsSchemaIsLeftInPlace(@TempDir Path tmpDir)
+      throws Exception {
+    File catalog = new File(tmpDir.toFile(), "govdata-catalog.duckdb");
+    GovDataSeedInstaller.ensureCatalog(catalog);
+    long written = catalog.lastModified();
+    assertTrue(catalog.setLastModified(written - 60_000L));
+    GovDataSeedInstaller.resetForTesting();
+    GovDataSeedInstaller.ensureCatalog(catalog);
+    assertEquals(written - 60_000L, catalog.lastModified(), "a matching catalog is not rewritten");
+  }
+
+  @Test void whichConnectionsAreServed() {
+    java.util.Map<String, Object> served = new java.util.HashMap<>();
+    served.put("database_filename", "/state/govdata.duckdb");
+    served.put("executionEngine", "duckdb");
+    served.put("autoDownload", Boolean.FALSE);
+    served.put("directory", "s3://bucket");
+    assertEquals(new File("/state/govdata.duckdb"),
+        GovDataSchemaFactory.servedCatalogFile(served));
+
+    java.util.Map<String, Object> ingest = new java.util.HashMap<>(served);
+    ingest.put("autoDownload", Boolean.TRUE);
+    assertEquals(null, GovDataSchemaFactory.servedCatalogFile(ingest), "an ingest builds");
+
+    java.util.Map<String, Object> local = new java.util.HashMap<>(served);
+    local.put("directory", "/tmp/parquet");
+    assertEquals(null, GovDataSchemaFactory.servedCatalogFile(local), "local files: not a server");
+
+    java.util.Map<String, Object> noCatalog = new java.util.HashMap<>(served);
+    noCatalog.remove("database_filename");
+    assertEquals(null, GovDataSchemaFactory.servedCatalogFile(noCatalog));
+
+    java.util.Map<String, Object> relative = new java.util.HashMap<>(served);
+    relative.put("database_filename", "govdata-catalog.duckdb");
+    assertEquals(
+        new File(System.getProperty("user.dir"), ".aperio/.duckdb/govdata-catalog.duckdb"),
+        GovDataSchemaFactory.servedCatalogFile(relative),
+        "a relative name is resolved as the file adapter resolves it");
+  }
+
   @Test void noOperatingDirectoryIsAnErrorNotASkip() {
     assertThrows(GovDataSeedInstaller.SeedException.class,
         () -> GovDataSeedInstaller.ensureSeeded(null));
