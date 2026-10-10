@@ -636,7 +636,9 @@ jobs:
           New-Item -ItemType Directory -Force "$env:BUNDLE_DIR\model\data" | Out-Null
           Set-Content -Path "$env:BUNDLE_DIR\model\data\people.csv" -Value "id,name`n1,alice`n2,bob" -Encoding ascii
 
-      - name: Start pgwire-file and wait for the port
+      # One step: a Windows runner ends the processes a step started when the step ends, so a
+      # server started in one step is gone by the next.
+      - name: Start pgwire-file and query the fixture table, from the bundled runtime, with the whole classpath
         run: |
           # The host offers no Java: the server must start from the runtime it carries.
           Remove-Item Env:JAVA_HOME -ErrorAction SilentlyContinue
@@ -651,9 +653,8 @@ jobs:
           if (-not $up) { throw "pgwire-file never opened port 5455" }
           Write-Host "port 5455 is up"
 
-      - name: Query the fixture table, from the bundled runtime, with the whole classpath
-        run: |
           $psql = if ($env:PGBIN) { Join-Path $env:PGBIN 'psql.exe' } else { 'psql.exe' }
+          Write-Host "psql: $((Get-Command $psql).Source)"
           $rows = & $psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -At -c "SELECT count(*) FROM people;"
           if ($LASTEXITCODE -ne 0 -or "$rows".Trim() -ne '2') { throw "expected 2 rows in people, got '$rows' (psql exit $LASTEXITCODE)" }
           $log = "$(Get-Content smoke-server.log -Raw)$(Get-Content smoke-server.out -Raw)"
