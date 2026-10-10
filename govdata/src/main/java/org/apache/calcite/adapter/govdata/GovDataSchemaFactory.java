@@ -176,9 +176,6 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     File servedCatalog = servedCatalogFile(operand);
     if (servedCatalog != null) {
       GovDataSeedInstaller.ensureCatalog(servedCatalog);
-      // A schema of the model that the seed does not declare cannot be served: it would
-      // have to be built here, which a serving connection never does.
-      GovDataSeedInstaller.requireSchema(name);
     }
 
     // Check if this schema was already created (e.g., as a dependency of another schema).

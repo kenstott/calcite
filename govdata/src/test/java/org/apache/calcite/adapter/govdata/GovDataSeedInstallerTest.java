@@ -142,16 +142,6 @@ class GovDataSeedInstallerTest {
         "the WAL of the replaced catalog must be discarded, not inherited by the new one");
   }
 
-  @Test void aSchemaTheSeedDoesNotDeclareStopsTheStartByName(@TempDir Path tmpDir) {
-    GovDataSeedInstaller.ensureSeeded(tmpDir.toString());
-
-    GovDataSeedInstaller.requireSchema("sec");
-    GovDataSeedInstaller.SeedException e =
-        assertThrows(GovDataSeedInstaller.SeedException.class,
-            () -> GovDataSeedInstaller.requireSchema("not_in_the_seed"));
-    assertTrue(e.getMessage().contains("not_in_the_seed"), e.getMessage());
-  }
-
   @Test void theCommittedListingIsTheListingOfTheCommittedSeed(@TempDir Path tmpDir)
       throws Exception {
     // The listing is how an installed catalog is compared with the seed. One that was not
@@ -170,7 +160,6 @@ class GovDataSeedInstallerTest {
     assertEquals(seedListing(), GovDataSeedSchema.listing(catalog));
     assertTrue(!new File(tmpDir.toFile(), "state/.aperio").exists(),
         "only the catalog is written for a server");
-    GovDataSeedInstaller.requireSchema("sec");
   }
 
   @Test void aServersCatalogThatDeclaresTheSeedsSchemaIsLeftInPlace(@TempDir Path tmpDir)

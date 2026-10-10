@@ -70,16 +70,12 @@ public final class GovDataSeedInstaller {
   /** Seed check is a once-per-JVM operation; connect() is called for every connection. */
   private static volatile boolean checkedThisJvm;
 
-  /** Schemas the jar's seed declares; set by {@link #ensureSeeded(String)}. */
-  private static java.util.Set<String> seedSchemas;
-
   private GovDataSeedInstaller() {
   }
 
   /** Test-only: clears the once-per-JVM gate so {@link #ensureSeeded(String)} runs again. */
   static void resetForTesting() {
     checkedThisJvm = false;
-    seedSchemas = null;
   }
 
   /** The start cannot proceed because the official seed is missing or unusable. */
@@ -159,7 +155,6 @@ public final class GovDataSeedInstaller {
       throw new SeedException("This jar's govdata catalog seed declares no schema ("
           + GovDataSeedSchema.RESOURCE + " is empty).");
     }
-    seedSchemas = GovDataSeedSchema.schemas(seedListing);
 
     String reason = reasonToReplace(catalogFile, seedListing);
     if (reason == null) {
@@ -247,24 +242,6 @@ public final class GovDataSeedInstaller {
       }
     }
     return false;
-  }
-
-  /**
-   * Stops the start unless the official seed declares {@code schemaName}. A schema of the
-   * model that the seed does not declare cannot be served: it is never built at run time.
-   *
-   * @throws SeedException naming the schema the seed lacks
-   */
-  public static synchronized void requireSchema(String schemaName) {
-    if (seedSchemas == null) {
-      throw new SeedException("The govdata catalog seed was not put in place before schema '"
-          + schemaName + "' was opened");
-    }
-    if (!seedSchemas.contains(schemaName)) {
-      throw new SeedException("The govdata catalog seed in this jar does not declare schema '"
-          + schemaName + "' (it declares " + seedSchemas + "). A schema is never built at run "
-          + "time; use a jar whose seed covers the model.");
-    }
   }
 
   /**
