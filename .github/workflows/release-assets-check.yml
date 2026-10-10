@@ -1,0 +1,31 @@
+name: Release assets check
+
+# Reads one engine release and says whether it is complete: every download a release must
+# have, by name. Changes nothing. The same check decides when askamerica-engine.yml publishes
+# a release; this runs it by hand against any release, and on a pull request that changes it,
+# against the release named below.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "release tag (e.g. engine-v0.109.2)"
+        required: true
+  pull_request:
+    paths:
+      - '.github/scripts/release-assets-complete.sh'
+      - '.github/workflows/release-assets-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Is the release complete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: List and compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/release-assets-complete.sh "${{ github.repository }}" "${{ github.event.inputs.tag || 'engine-v0.109.2' }}"
