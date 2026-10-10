@@ -118,15 +118,20 @@
                Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
     </UI>
 
-    <!-- End our own launcher processes before any file is touched. Claude Desktop keeps one
-         "AskAmerica MCP.exe" running per session, holding the runtime and the launcher jar
-         open; Windows' Restart Manager does not close them (they have no window), and an
-         install over them needs a restart of Windows to finish. Claude starts the server
-         again the next time it is used. Only this product's launcher is named; the data
-         server it may have started runs under generic names (java.exe, python.exe) and is
-         left alone. -->
-    <util:CloseApplication Id="CloseAskAmericaLauncher" Target="AskAmerica MCP.exe"
-                           CloseMessage="no" RebootPrompt="no" TerminateProcess="1" />
+    <!-- End our own launcher processes before the old version is removed. Claude Desktop
+         keeps one "AskAmerica MCP.exe" running per session, holding the runtime image and
+         the launcher jar open; a removal that finds them in use queues their deletion for
+         the next restart of Windows, and the new install, finding identical files in place,
+         keeps exactly those (kenstott/calcite#491). They have no window, so Windows' Restart
+         Manager does not close them. Claude starts the server again the next time it is
+         used. Only this product's launcher is named; the data server it may have started
+         runs under generic names (java.exe, python.exe) and is left alone.
+         An immediate action, because the old version's removal runs before anything
+         deferred does. Nothing running is not an error. -->
+    <CustomAction Id="SetKillLauncherCmd" Property="WixQuietExecCmdLine"
+                  Value="&quot;[SystemFolder]taskkill.exe&quot; /F /IM &quot;AskAmerica MCP.exe&quot;" />
+    <CustomAction Id="KillLauncher" BinaryKey="WixCA" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
 
     <InstallExecuteSequence>
       <Custom Action="JpSetARPINSTALLLOCATION" After="CostFinalize">Not Installed</Custom>
@@ -149,15 +154,16 @@
       <?ifndef JpAllowDowngrades ?>
       <Custom Action="JpDisallowDowngrade" After="JpFindRelatedProducts">JP_DOWNGRADABLE_FOUND</Custom>
       <?endif?>
-      <!-- The old version is removed AFTER the new one is installed (jpackage's own template
-           removes it first, Before="CostInitialize"). Removed first, every file the running
-           old version held open was queued for deletion at the next restart of Windows, and
-           the new version, finding identical files in place, kept exactly those: after the
-           restart the new install had lost its runtime image and launcher jar
-           (kenstott/calcite#491). Removed last, a file both versions install is never removed
-           at all. This relies on a file keeping its component identity from one version to
-           the next, which jpackage gives it: the identity is derived from the file's path. -->
-      <RemoveExistingProducts After="InstallFinalize"/>
+      <!-- The old version is removed FIRST, as jpackage's own template has it. Removing it
+           after the new one is installed is not possible with what jpackage generates: the
+           old product's removal deletes the install directory's files by name, whatever
+           their component's other owners, and took the new install's launcher and runtime
+           with it (seen in the installer test: exit code 0, product registered, files gone).
+           What makes the early removal safe is that nothing of ours is running when it
+           happens: KillLauncher, just before it. -->
+      <Custom Action="SetKillLauncherCmd" Before="KillLauncher"/>
+      <Custom Action="KillLauncher" Before="RemoveExistingProducts"/>
+      <RemoveExistingProducts Before="CostInitialize"/>
       <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts"/>
     </InstallExecuteSequence>
 
