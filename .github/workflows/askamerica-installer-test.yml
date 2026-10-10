@@ -36,7 +36,7 @@ env:
   # The release whose Windows server bundle the server-windows job unpacks and has the engine
   # spawn. Its JVM must be given the whole classpath (issue 497): set this to a release built
   # after the fix to prove a Windows data server starts.
-  BUNDLE_RELEASE: engine-v0.109.1
+  BUNDLE_RELEASE: engine-v0.109.3
 
 jobs:
   # The engine jar from this ref. The installed launcher is pointed at it with
