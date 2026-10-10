@@ -77,7 +77,12 @@ jobs:
               {"name": "splunk", "module": "splunk", "flags": ""},
               {"name": "salesforce", "module": "salesforce", "flags": "--allow-writes"},
               {"name": "cloudops", "module": "cloud-ops", "flags": ""},
-              {"name": "govdata", "module": "govdata", "flags": ""},
+              # govdata: every connection signs in with its AskAmerica API key as the
+              # password (owner rule 2026-10-10, ASKAM-010). On by default, baked into the
+              # launcher, so nothing can start an open govdata server by omission. The
+              # caller's arguments follow these, so only an explicit `--auth none` argument
+              # turns it off - a test's choice; no environment variable does.
+              {"name": "govdata", "module": "govdata", "flags": "--auth askamerica-key"},
           ]
           platforms = [
               {"runner": "ubuntu-latest", "variant": "linux-x86_64"},
