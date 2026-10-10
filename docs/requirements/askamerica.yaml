@@ -189,6 +189,10 @@
     with a named status - "the data server is being installed (N of M MB)" or "this
     version's data server is not published yet" - never a silent wait, and the download
     continues in the background outside the query lock.
+    The standard the .msi and the .deb are validated against is the macOS package: a small
+    installer; the server bundle downloaded under the user's own directory and kept at the
+    engine's version; Claude given a launcher path with no spaces; no server inside the
+    install directory. The .msi and the .deb are correct when they behave the same.
   source: >
     owner rule 2026-10-10 ("the installer is small and has a step to download its assets").
     History, from the release assets and git: through engine-v0.90.1 the installers were
@@ -201,6 +205,10 @@
     by the owner's lead on 2026-10-10, after reading showed that without them the ~900 MB
     bundle arrives silently inside the first query (PgwireGovDataInstaller), so that "small"
     and "says what it is downloading" are not separated again. Neither is built yet.
+    The macOS standard: owner 2026-10-10, after installing the 0.109.2 .pkg ("just downloaded
+    and tested it. it works. It seems that it is the standard to validate the msi and deb
+    against."). Where Windows differs from it today: the server inside Program Files, a
+    launcher path with spaces handed to Claude, the server started by a .bat through cmd.exe.
   tests: []
 
 - id: ASKAM-006
