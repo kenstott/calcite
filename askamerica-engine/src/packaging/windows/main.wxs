@@ -118,6 +118,16 @@
                Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
     </UI>
 
+    <!-- End our own launcher processes before any file is touched. Claude Desktop keeps one
+         "AskAmerica MCP.exe" running per session, holding the runtime and the launcher jar
+         open; Windows' Restart Manager does not close them (they have no window), and an
+         install over them needs a restart of Windows to finish. Claude starts the server
+         again the next time it is used. Only this product's launcher is named; the data
+         server it may have started runs under generic names (java.exe, python.exe) and is
+         left alone. -->
+    <util:CloseApplication Id="CloseAskAmericaLauncher" Target="AskAmerica MCP.exe"
+                           CloseMessage="no" RebootPrompt="no" TerminateProcess="1" />
+
     <InstallExecuteSequence>
       <Custom Action="JpSetARPINSTALLLOCATION" After="CostFinalize">Not Installed</Custom>
       <Custom Action="JpSetARPCOMMENTS" After="CostFinalize">Not Installed</Custom>
@@ -139,7 +149,15 @@
       <?ifndef JpAllowDowngrades ?>
       <Custom Action="JpDisallowDowngrade" After="JpFindRelatedProducts">JP_DOWNGRADABLE_FOUND</Custom>
       <?endif?>
-      <RemoveExistingProducts Before="CostInitialize"/>
+      <!-- The old version is removed AFTER the new one is installed (jpackage's own template
+           removes it first, Before="CostInitialize"). Removed first, every file the running
+           old version held open was queued for deletion at the next restart of Windows, and
+           the new version, finding identical files in place, kept exactly those: after the
+           restart the new install had lost its runtime image and launcher jar
+           (kenstott/calcite#491). Removed last, a file both versions install is never removed
+           at all. This relies on a file keeping its component identity from one version to
+           the next, which jpackage gives it: the identity is derived from the file's path. -->
+      <RemoveExistingProducts After="InstallFinalize"/>
       <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts"/>
     </InstallExecuteSequence>
 
