@@ -86,6 +86,17 @@ public class McpServerLauncher {
             }
         }
 
+        if (Arrays.asList(args).contains("--print-setup")) {
+            // What setup would do on this machine, without doing it and without a window:
+            // lets an installed product be checked by a script.
+            Class<?> cls =
+                Class.forName("org.apache.calcite.adapter.askamerica.SetupWindow", true, loader);
+            Method describe = cls.getMethod("describeSetup");
+            System.out.println(describe.invoke(null));
+            System.exit(0);
+            return;
+        }
+
         if (mcpMode) {
             Class<?> cls =
                 Class.forName("org.apache.calcite.adapter.askamerica.McpServer", true, loader);

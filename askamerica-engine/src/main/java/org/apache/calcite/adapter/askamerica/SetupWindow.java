@@ -674,21 +674,65 @@ public class SetupWindow {
         return shim.toString();
     }
 
-    private static String executablePath() {
-        // The launcher records the exact executable it was started from — use it so
-        // Claude Desktop is pointed at the real binary regardless of install location.
+    /**
+     * The launcher this wizard is running from: the one file Claude Desktop is to start.
+     *
+     * <p>It is the executable the running process reports for itself, recorded by
+     * {@link McpServerLauncher}, and it must exist. There is no assumed install location: an
+     * entry pointing at a path nobody checked is how Claude Desktop came to be told to start
+     * {@code C:\\Program Files\\AskAmerica MCP\\AskAmerica MCP.exe} on a machine where that
+     * folder did not exist. When the launcher cannot be named, nothing is written.
+     */
+    static String executablePath() throws IOException {
         String actual = System.getProperty("askamerica.launcher.command");
-        if (actual != null && !actual.isBlank()) {
-            return actual;
+        if (actual == null || actual.isBlank()) {
+            throw new IOException("AskAmerica MCP could not determine which program it is "
+                + "running from, so Claude Desktop was not configured. Start AskAmerica MCP "
+                + "from where it is installed and configure again.");
         }
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("mac")) {
-            return "/Applications/AskAmerica MCP.app/Contents/MacOS/AskAmerica MCP";
-        } else if (os.contains("win")) {
-            return "C:\\Program Files\\AskAmerica MCP\\AskAmerica MCP.exe";
-        } else {
-            return "/opt/askamerica-mcp/bin/AskAmerica MCP";
+        if (!Files.isRegularFile(Paths.get(actual))) {
+            throw new IOException("AskAmerica MCP's program is not at " + actual
+                + ", so Claude Desktop was not configured.");
         }
+        return actual;
+    }
+
+    /**
+     * What setup would do on this machine, as JSON, without doing it: the program Claude
+     * Desktop would be told to start, the config files that would be written, and how Claude
+     * Desktop would be restarted. A part that cannot be determined carries the reason instead.
+     * Printed by the launcher's {@code --print-setup}, so an installed product can be checked
+     * without a person at the window.
+     */
+    public static String describeSetup() {
+        ObjectNode out = MAPPER.createObjectNode();
+        try {
+            out.put("launcher", executablePath());
+        } catch (IOException e) {
+            out.put("launcherError", e.getMessage());
+        }
+        try {
+            com.fasterxml.jackson.databind.node.ArrayNode files = out.putArray("configFiles");
+            for (Path path : claudeConfigPaths()) {
+                files.add(path.toString());
+            }
+        } catch (IOException e) {
+            out.remove("configFiles");
+            out.put("configFilesError", e.getMessage());
+        }
+        Path program = ClaudeDesktop.runningProgram();
+        out.put("claudeDesktopRunning", program != null);
+        try {
+            com.fasterxml.jackson.databind.node.ArrayNode command = out.putArray("relaunch");
+            for (String part : ClaudeDesktop.relaunchCommand(
+                System.getProperty("os.name", ""), program, ClaudeDesktop.WINDOWS_STORE)) {
+                command.add(part);
+            }
+        } catch (IOException e) {
+            out.remove("relaunch");
+            out.put("relaunchError", e.getMessage());
+        }
+        return out.toPrettyString();
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────

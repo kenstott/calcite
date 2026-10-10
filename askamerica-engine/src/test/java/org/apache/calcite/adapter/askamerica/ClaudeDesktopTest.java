@@ -17,8 +17,12 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -65,14 +69,85 @@ class ClaudeDesktopTest {
     assertFalse(ClaudeDesktop.isDesktopProgram(file(install.resolve("SomeApp.exe"))));
   }
 
-  @Test void nothingIsStartedWhenClaudeDesktopWasNotFound(@TempDir Path dir) throws IOException {
-    if (System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac")) {
-      // On macOS the application is started by its identifier, not from a program path.
-      return;
+  // --- how Claude Desktop is started again ------------------------------------------------
+
+  private static final ClaudeDesktop.StoreLookup NO_STORE_BUILD = () -> null;
+  private static final ClaudeDesktop.StoreLookup STORE_BUILD = () -> "Claude_pzs8sxrjxfjjc!Claude";
+
+  @Test void withNoClaudeDesktopNothingIsStarted(@TempDir Path dir) throws IOException {
+    for (String os : new String[] {"Windows 11", "Linux"}) {
+      IOException e = assertThrows(IOException.class,
+          () -> ClaudeDesktop.relaunchCommand(os, null, NO_STORE_BUILD));
+      assertTrue(e.getMessage().contains("nothing was started"), e.getMessage());
     }
-    assertThrows(IOException.class, () -> ClaudeDesktop.relaunch(null));
-    Path claudeCode = file(dir.resolve(".local/bin/claude"));
-    assertThrows(IOException.class, () -> ClaudeDesktop.relaunch(claudeCode),
+    Path claudeCode = file(dir.resolve(".local/bin/claude.exe"));
+    assertThrows(IOException.class,
+        () -> ClaudeDesktop.relaunchCommand("Windows 11", claudeCode, NO_STORE_BUILD),
         "the Claude Code command is refused, not started");
+  }
+
+  @Test void aClassicInstallIsStartedFromTheProgramThatWasRunning(@TempDir Path dir)
+      throws IOException {
+    Path install = dir.resolve("AppData/Local/AnthropicClaude/app-1.2.3");
+    file(install.resolve("resources/app.asar"));
+    Path program = file(install.resolve("Claude.exe"));
+    assertEquals(Collections.singletonList(program.toString()),
+        ClaudeDesktop.relaunchCommand("Windows 11", program, NO_STORE_BUILD));
+    assertEquals(Collections.singletonList(program.toString()),
+        ClaudeDesktop.relaunchCommand("Windows 11", program, STORE_BUILD),
+        "a classic install that was running is restarted as it was, Store build present or not");
+  }
+
+  @Test void theStoreBuildIsStartedByItsApplicationIdentityNeverByItsPath() throws IOException {
+    java.util.List<String> expected =
+        Arrays.asList("explorer.exe", "shell:AppsFolder\\Claude_pzs8sxrjxfjjc!Claude");
+    assertEquals(expected, ClaudeDesktop.relaunchCommand("Windows 11", null, STORE_BUILD),
+        "installed from the Store and not running");
+    Path storeProgram = java.nio.file.Paths.get(
+        "C:\\Program Files\\WindowsApps\\Claude_2.31226.1.0_x64__pzs8sxrjxfjjc\\app\\Claude.exe");
+    assertEquals(expected, ClaudeDesktop.relaunchCommand("Windows 11", storeProgram, STORE_BUILD),
+        "running from WindowsApps");
+  }
+
+  @Test void onMacOsItIsStartedByItsApplicationIdentifier() throws IOException {
+    assertEquals(Arrays.asList("open", "-b", "com.anthropic.claudefordesktop"),
+        ClaudeDesktop.relaunchCommand("Mac OS X", null, NO_STORE_BUILD));
+  }
+
+  @Test void onlyAPackageIdentityOfTheRightShapeIsAccepted() {
+    assertEquals("Claude_pzs8sxrjxfjjc!Claude",
+        ClaudeDesktop.parseAppUserModelId("\r\nClaude_pzs8sxrjxfjjc!Claude\r\n"));
+    assertNull(ClaudeDesktop.parseAppUserModelId(""));
+    assertNull(ClaudeDesktop.parseAppUserModelId(null));
+    assertNull(ClaudeDesktop.parseAppUserModelId("Get-AppxPackage : Access is denied."));
+    assertNull(ClaudeDesktop.parseAppUserModelId("claude!x"), "the bare name is not an identity");
+  }
+
+  // --- the program Claude Desktop is told to start ------------------------------------------
+
+  @Test void theConfiguredLauncherIsTheRunningProgramAndMustExist(@TempDir Path dir)
+      throws IOException {
+    String key = "askamerica.launcher.command";
+    String before = System.getProperty(key);
+    try {
+      System.clearProperty(key);
+      IOException unknown = assertThrows(IOException.class, SetupWindow::executablePath);
+      assertTrue(unknown.getMessage().contains("was not configured"), unknown.getMessage());
+
+      System.setProperty(key, dir.resolve("Program Files/AskAmerica MCP/AskAmerica MCP.exe").toString());
+      IOException missing = assertThrows(IOException.class, SetupWindow::executablePath,
+          "a launcher that is not there is never written into Claude Desktop's config");
+      assertTrue(missing.getMessage().contains("is not at"), missing.getMessage());
+
+      Path launcher = file(dir.resolve("installed/AskAmerica MCP.exe"));
+      System.setProperty(key, launcher.toString());
+      assertEquals(launcher.toString(), SetupWindow.executablePath());
+    } finally {
+      if (before == null) {
+        System.clearProperty(key);
+      } else {
+        System.setProperty(key, before);
+      }
+    }
   }
 }
