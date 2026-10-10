@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**339 requirements across 7 adapters.**
+**341 requirements across 7 adapters.**
 
 
-## askamerica  (9: 7 accepted, 1 complete, 1 proposed)
+## askamerica  (11: 9 accepted, 1 complete, 1 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -18,6 +18,8 @@
 | [ ] | ASKAM-010 | MUST | constraint | data-server / Key sign-in | Every connection to the pgwire-govdata server passes its AskAmerica API key as the PostgreSQL password, and t… | pgwire-calcite/tests/unit/test_key_sign_in.py, askamerica-e… |
 | [x] | ASKAM-011 | MUST | behavioral | data-server / Key sign-in | With no API key, the engine neither connects to nor starts a data server: the caller is told at once that no … | askamerica-engine/src/test/java/org/apache/calcite/adapter/… |
 | [ ] | ASKAM-007 | MUST | constraint | installer / Thin engine jar | The engine jar carries no embedder: no ONNX Runtime and no embedding model. Semantic search (the semantic_sea… | — |
+| [ ] | ASKAM-008 | MUST | constraint | engine / One mode | The engine has one mode: it serves data through the data server. There is no in-process query mode. No code p… | — |
+| [ ] | ASKAM-009 | MUST | constraint | installer / Thin engine jar | The engine jar is thin: the MCP protocol, the tools, a pg-wire client and the setup wizard. It contains no go… | — |
 
 ## file  (191: 161 complete, 12 in-progress, 15 proposed, 3 rejected)
 
