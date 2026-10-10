@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings, dart_adult_counts
+-- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -214,6 +214,84 @@ INSERT INTO dq_results
 SELECT 'fisheries', 'dart_adult_counts', 'T7_spans_states_consistency',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where spans_states disagrees with a comma in state_abbrs'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true) WHERE spans_states <> (state_abbrs LIKE '%,%'));
+
+-- ─────────────────────────────────────────────────────────────
+-- adfg_fish_counts
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true));
+
+-- ~100 location x species pairs with years of history each
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T2_row_count',
+  CASE WHEN n >= 1500 THEN 'pass' ELSE 'fail' END, n, 1500, 'Expected at least 1500 site x species x year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('location_id', 'species_id', 'type'))
+);
+
+-- state_abbr is a real constant: every ADF&G site is in Alaska
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true))
+        WHERE approx_unique <= 1 AND column_name NOT IN ('location_id', 'species_id', 'type', 'state_abbr'))
+);
+
+-- Natural key: site x species x year
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL key/NOT NULL columns'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true)
+      WHERE adfg_location_id IS NULL OR location_name IS NULL OR adfg_species_id IS NULL
+         OR species_name IS NULL OR count_year IS NULL OR total_count IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate adfg_location_id x adfg_species_id x count_year keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT adfg_location_id, adfg_species_id, count_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true)
+        GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T7_no_negative_counts',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with total_count < 0 or days_counted < 1'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true) WHERE total_count < 0 OR days_counted < 1);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T7_dates_in_year',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows whose first/last_count_date fall outside count_year'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true)
+      WHERE CAST(SUBSTR(first_count_date, 1, 4) AS INTEGER) <> count_year
+         OR CAST(SUBSTR(last_count_date, 1, 4) AS INTEGER) <> count_year);
+
+-- The Kenai early-run Chinook sonar and Russian River sockeye are the flagship sites
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T7_known_sites_loaded',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END, n, 4, 'Kenai Chinook, Russian River, Situk and Karluk sites present (expect 4)'
+FROM (SELECT COUNT(DISTINCT adfg_location_id) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true) WHERE adfg_location_id IN (72, 13, 5, 24));
+
+-- Russian River early-run sockeye escapement runs tens of thousands of fish per year
+INSERT INTO dq_results
+SELECT 'fisheries', 'adfg_fish_counts', 'T7_russian_sockeye_magnitude',
+  CASE WHEN mx BETWEEN 5000 AND 500000 THEN 'pass' ELSE 'fail' END, mx, 5000,
+  'Russian River early-run sockeye: max annual count (expect 5k-500k)'
+FROM (SELECT MAX(total_count) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true) WHERE adfg_location_id = 13 AND adfg_species_id = 421);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
