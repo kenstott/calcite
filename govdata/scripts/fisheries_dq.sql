@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts
+-- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -292,6 +292,70 @@ SELECT 'fisheries', 'adfg_fish_counts', 'T7_russian_sockeye_magnitude',
   CASE WHEN mx BETWEEN 5000 AND 500000 THEN 'pass' ELSE 'fail' END, mx, 5000,
   'Russian River early-run sockeye: max annual count (expect 5k-500k)'
 FROM (SELECT MAX(total_count) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/adfg_fish_counts', allow_moved_paths := true) WHERE adfg_location_id = 13 AND adfg_species_id = 421);
+
+-- ─────────────────────────────────────────────────────────────
+-- cdfw_grandtab_escapement
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true));
+
+-- 4 runs x 2 origins x ~70 years; not every run/origin has a series back to 1952
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T2_row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END, n, 300, 'Expected at least 300 rows (4 runs x 2 origins)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('year', 'type')));
+
+-- state_abbr is constant CA by construction (Central Valley only)
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true))
+        WHERE approx_unique = 1 AND column_name NOT IN ('year', 'type', 'state_abbr')));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with a null key or value column'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true)
+      WHERE run_name IS NULL OR origin_type IS NULL OR count_year IS NULL OR escapement IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate run_name x origin_type x count_year keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT run_name, origin_type, count_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true)
+                                 GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T7_all_runs_and_origins',
+  CASE WHEN n = 8 THEN 'pass' ELSE 'fail' END, n, 8, 'Distinct run x origin combinations (expect 8)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT DISTINCT run_name, origin_type FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true)));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T7_no_negative',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with escapement < 0'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true) WHERE escapement < 0);
+
+-- Fall-run Chinook is the bulk of the Central Valley return; 2025 in-river + hatchery ~235,769
+INSERT INTO dq_results
+SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T7_fall_2025_matches_source',
+  CASE WHEN total = 235769 THEN 'pass' ELSE 'fail' END, total, 235769,
+  'Fall run 2025 In-River + Hatchery vs SacPAS Chinook:Fall type=All (235,769)'
+FROM (SELECT COALESCE(SUM(escapement), 0) AS total FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true) WHERE run_name = 'Fall' AND count_year = 2025);
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

@@ -15,6 +15,8 @@
 #   - Salmon flagged and split by species; Great Lakes stocked salmon marked non-native
 #   - Alaska Dept. of Fish and Game Sport Fish Division daily fish counts (weirs, towers, sonar)
 #     https://www.adfg.alaska.gov/sf/FishCounts/ (keyless JSON export)
+#   - CDFW GrandTab Central Valley Chinook escapement, via SacPAS (Columbia Basin Research)
+#     https://www.cbr.washington.edu/sacramento/data/query_adult_grandtab.html (keyless CSV)
 #   - Cross-references geo.state_ref via state_abbr
 # ============================================================================
 
@@ -22,7 +24,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Two tables: dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -76,6 +78,16 @@ dimension_values:
   adfg_species: &adfg_species
     type: list
     values: ["410","411","412","420","421","422","430","540"]
+
+  # CDFW GrandTab Chinook runs and origins (the SacPAS query values). 'All' origin and the
+  # 'All' run are sums of these and are not fetched.
+  grandtab_runs: &grandtab_runs
+    type: list
+    values: ["Winter","Spring","Fall","Late-Fall"]
+
+  grandtab_origins: &grandtab_origins
+    type: list
+    values: ["In-River","Hatchery"]
 
   # Dams/counting projects with adult passage counts in DART (code used as proj=).
   dart_projects: &dart_projects
@@ -451,6 +463,102 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: adfg_fish_counts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # CDFW_GRANDTAB_ESCAPEMENT — California Central Valley Chinook escapement by run and origin
+  # ---------------------------------------------------------------------------
+  - name: cdfw_grandtab_escapement
+    freshness:
+      type: hash
+    pattern: "type=cdfw_grandtab_escapement/run=*/origin=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: run
+          type: VARCHAR
+        - name: origin
+          type: VARCHAR
+    comment: >
+      California Department of Fish and Wildlife GrandTab adult Chinook salmon escapement for
+      the Central Valley (Sacramento River system), served by SacPAS (Columbia Basin Research):
+      annual escapement, i.e. adult fish that returned from the ocean to spawning areas or
+      hatcheries, for the four runs (Winter, Spring, Fall, Late-Fall) split by origin
+      (In-River natural spawning vs Hatchery), one row per run x origin x year with an estimate, 1952 onward (years with no estimate are absent, not zero).
+      state_abbr is always CA. This is the California run-size series for Chinook; add
+      In-River and Hatchery for a run total, and sum the four runs for the Central Valley total
+      (the SacPAS 'All' selections are those sums and are not stored again). Values for the
+      latest years are preliminary (is_preliminary = true) and are revised. Sacramento system
+      only: San Joaquin tributaries and per-stream breakdowns are not in this table, and the
+      Klamath and Smith basins are not covered by GrandTab. Estimates mix methods (carcass
+      mark-recapture, video weirs, redd expansion, hatchery counts), so year-to-year jumps can
+      partly reflect method changes.
+
+    dimensions:
+      type:
+        - cdfw_grandtab_escapement
+      run: *grandtab_runs
+      origin: *grandtab_origins
+
+    columns:
+      - name: run_name
+        type: string
+        nullable: false
+        comment: Chinook run - Winter, Spring, Fall or Late-Fall
+      - name: origin_type
+        type: string
+        nullable: false
+        comment: In-River (natural spawning areas) or Hatchery
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: Always CA; join to geo.state_ref
+      - name: count_year
+        type: integer
+        nullable: false
+        comment: End year of the monitoring period (return year)
+      - name: escapement
+        type: bigint
+        nullable: false
+        comment: Estimated adult Chinook returning (escapement) for the run, origin and year, Sacramento River system
+      - name: is_preliminary
+        type: boolean
+        nullable: false
+        comment: true when CDFW marks the year's estimate as preliminary (not final)
+      - name: rolling_3yr_geomean
+        type: bigint
+        nullable: true
+        comment: 3-year rolling geometric mean of escapement as SacPAS computes it (this and the two previous years); null when SacPAS leaves it blank because an estimate is missing
+
+    source:
+      type: http
+      url: "https://www.cbr.washington.edu/sacramento/data/php/rpt/grandtab_graph.php?outputFormat=csv&species=Chinook:{run}&type={origin}&locType=location&location=SacPAS%20Sacramento%20River%20System:All:All&rolling=1"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The CSV carries notes and a citation that FisheriesGrandTabTransformer strips.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesGrandTabTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cdfw_grandtab_escapement/run=*/origin=*/"
+      partition:
+        columns: [type, run, origin]
+      iceberg:
+        <<: *iceberg_common
+        tableName: cdfw_grandtab_escapement
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
