@@ -673,7 +673,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
    * {@code database_filename}, runs on the DuckDB engine over an {@code s3://} directory and
    * does not download. A model over local files is a test's or a tool's, not a server's. An ingest
    * model ({@code autoDownload}) builds what it reads, and the release path that makes the
-   * seed ({@code -Dgovdata.seed.build}) builds the catalog itself.
+   * seed (the seed-build switch, {@link GovDataDriver#SEED_BUILD_PROPERTY}) builds the catalog
+   * itself.
    *
    * <p>A relative name is resolved as the file adapter resolves it
    * (DuckDBJdbcSchemaFactory): under {@code <working dir>/.aperio/.duckdb/}.
