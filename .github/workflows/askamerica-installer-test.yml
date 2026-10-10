@@ -29,6 +29,10 @@ env:
   TEST_VERSION: 0.250.${{ github.run_number }}
   # The rule: the installer is small and has a step to download its assets (ASKAM-005).
   LIMIT_MB: "100"
+  # The release the upgrade job installs first and upgrades from: the one in the report that
+  # Claude Desktop could not start the server after installing the .msi. Named, not "latest":
+  # the latest release has no installers until its own workflow has finished.
+  PREVIOUS_RELEASE: engine-v0.109.1
 
 jobs:
   # The engine jar from this ref. The installed launcher is pointed at it with
@@ -222,8 +226,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force previous | Out-Null
-          gh release download --repo "${{ github.repository }}" --pattern "*.msi" --dir previous
+          gh release download $env:PREVIOUS_RELEASE --repo "${{ github.repository }}" --pattern "*.msi" --dir previous
+          if ($LASTEXITCODE -ne 0) { throw "could not download the .msi of $env:PREVIOUS_RELEASE" }
           $msi = (Get-ChildItem previous -Filter *.msi | Select-Object -First 1).FullName
+          if (-not $msi) { throw "$env:PREVIOUS_RELEASE has no .msi" }
           Write-Host ("previous release installer: {0} ({1:N0} MB)" -f $msi, ((Get-Item $msi).Length / 1MB))
           $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\previous-install.log" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\previous-install.log" -Tail 80; throw "the previous release did not install (exit $($p.ExitCode))" }
@@ -332,6 +338,10 @@ jobs:
           sudo apt-get install -y $(dpkg-deb --field "$deb" Depends | tr -d ' ' | tr ',' ' ')
           sudo dpkg -i "$deb"
           dpkg -s "$(dpkg-deb --field "$deb" Package)" | grep -x 'Status: install ok installed'
+          # Nothing is left for apt to repair, on this host with no desktop menu.
+          sudo apt-get install -f -y | tee apt-fix.log
+          grep -q '0 upgraded, 0 newly installed, 0 to remove' apt-fix.log
+          ! grep -q 'not fully installed or removed' apt-fix.log
           package=$(dpkg-deb --field "$deb" Package)
           echo "ASKAMERICA_PACKAGE=$package" >> "$GITHUB_ENV"
 
@@ -356,3 +366,6 @@ jobs:
           set -euo pipefail
           sudo dpkg -r "$ASKAMERICA_PACKAGE"
           test ! -e "$ASKAMERICA_EXE" || { echo "::error::$ASKAMERICA_EXE is still there after removal"; exit 1; }
+          # dpkg knows nothing more of it (removed, or removed with only config files left).
+          ! dpkg -s "$ASKAMERICA_PACKAGE" 2>/dev/null | grep -q 'Status: install ok installed'
+          ! dpkg --audit | grep -q "$ASKAMERICA_PACKAGE"

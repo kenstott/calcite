@@ -1,0 +1,41 @@
+#!/bin/sh
+# postinst script for APPLICATION_PACKAGE
+#
+# jpackage's own template (JDK 21, template.postinst) with one change: a host that has no
+# desktop menu (a server, a CI runner, WSL) is not an error. There the menu entry for the
+# setup wizard is simply not added, and the package installs completely. jpackage's template
+# let xdg-desktop-menu's refusal ("No writable system menu directory found", exit status 3)
+# fail the whole script, which left the package half installed and unremovable.
+
+set -e
+
+package_type=deb
+LAUNCHER_AS_SERVICE_SCRIPTS
+
+case "$1" in
+    configure)
+set +e
+(
+set -e
+DESKTOP_COMMANDS_INSTALL
+)
+desktop_status=$?
+set -e
+if [ "$desktop_status" -eq 3 ]; then
+    echo "APPLICATION_PACKAGE: this host has no desktop menu; no menu entry was added" >&2
+elif [ "$desktop_status" -ne 0 ]; then
+    exit "$desktop_status"
+fi
+LAUNCHER_AS_SERVICE_COMMANDS_INSTALL
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0
