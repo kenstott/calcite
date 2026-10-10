@@ -585,6 +585,87 @@ jobs:
           test ! -e "$BUNDLE_DIR/jars.classpath" \
             || { echo "jars.classpath was written into the install tree" >&2; exit 1; }
 
+      # Key sign-in (ASKAM-010) on the bundle as built: the server, its launcher and the
+      # Python and Java it carries. The file bundle is used because it starts without a store;
+      # sign-in is the same server code under one launcher argument, which the govdata bundle
+      # has baked in. The key service is a stand-in on loopback and the keys are made up.
+      - name: Key sign-in on the built bundle, against a stand-in key service
+        run: |
+          set -euo pipefail
+          kill "$(cat smoke-server.pid)" 2>/dev/null || true
+          cat > key-service.py <<'PY'
+          import http.server, json, sys
+          GOOD = {"ask_smoke_key_alpha_0123456789", "ask_smoke_key_bravo_9876543210"}
+          SPENT = "ask_smoke_key_spent_5555555555"
+          class H(http.server.BaseHTTPRequestHandler):
+              def log_message(self, *a): pass
+              def _send(self, status, body):
+                  data = json.dumps(body).encode()
+                  self.send_response(status); self.send_header("Content-Length", str(len(data)))
+                  self.end_headers(); self.wfile.write(data)
+              def do_GET(self):
+                  key = self.headers.get("X-API-Key")
+                  if key in GOOD: self._send(200, {"remaining_bytes": 1000})
+                  elif key == SPENT: self._send(200, {"remaining_bytes": 0})
+                  else: self._send(401, {"error": "refused"})
+              def do_POST(self):
+                  self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                  with open("usage.log", "a") as f: f.write((self.headers.get("X-API-Key") or "") + "\n")
+                  self._send(200, {})
+          http.server.ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+          PY
+          python3 key-service.py 5490 & echo $! > key-service.pid
+          : > usage.log
+          export ASKAMERICA_API_URL="http://127.0.0.1:5490"
+          # The key of whoever starts the server is never anyone's metering identity.
+          export ASKAMERICA_API_KEY="ask_smoke_key_of_the_starter"
+          env -u JAVA_HOME "$BUNDLE_DIR/bin/pgwire-file" --port 5456 --auth askamerica-key > signin-server.log 2>&1 &
+          echo $! > smoke-server.pid
+          for _ in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/5456) 2>/dev/null; then exec 3>&- 3<&-; break; fi
+            sleep 0.5
+          done
+          conn="host=127.0.0.1 port=5456 user=askamerica dbname=postgres"
+          attempt() { PGPASSWORD="$1" psql -w -v VERBOSITY=verbose "$conn" -At -c "$2" > attempt.out 2>&1; }
+
+          if PGPASSWORD= psql -w "$conn" -At -c "SELECT 1" > attempt.out 2>&1; then
+            echo "a connection with no key was admitted" >&2; exit 1
+          fi
+          if attempt "ask_smoke_key_wrong_0000000000" "SELECT 1"; then
+            echo "a connection with a refused key was admitted" >&2; exit 1
+          fi
+          # psql prints a refused connection's message, not its SQLSTATE (28P01, which the
+          # server's own tests check on the wire).
+          grep -q "password authentication failed" attempt.out || { echo "a refused key was not refused as a failed sign-in:" >&2; cat attempt.out >&2; exit 1; }
+
+          attempt "ask_smoke_key_alpha_0123456789" "SELECT count(*) FROM people" || { cat attempt.out >&2; exit 1; }
+          test "$(cat attempt.out)" = "2" || { echo "a good key did not get its rows" >&2; cat attempt.out >&2; exit 1; }
+          attempt "ask_smoke_key_bravo_9876543210" "SELECT count(*) FROM people" || { cat attempt.out >&2; exit 1; }
+          attempt "ask_smoke_key_bravo_9876543210" "SELECT count(*) FROM people" || { cat attempt.out >&2; exit 1; }
+
+          if attempt "ask_smoke_key_spent_5555555555" "SELECT count(*) FROM people"; then
+            echo "a key out of quota ran a statement" >&2; exit 1
+          fi
+          grep -q "53400" attempt.out || { echo "an out-of-quota statement was not answered with 53400:" >&2; cat attempt.out >&2; exit 1; }
+
+          for _ in $(seq 1 20); do [ "$(wc -l < usage.log)" -ge 3 ] && break; sleep 0.5; done
+          echo "usage reported under: $(sort usage.log | uniq -c | sed 's/ask_smoke_key_\([a-z]*\)_.*/key \1/' | tr '\n' ';')"
+          test "$(grep -c alpha usage.log)" = "1" || { echo "usage under the first key: expected 1" >&2; exit 1; }
+          test "$(grep -c bravo usage.log)" = "2" || { echo "usage under the second key: expected 2" >&2; exit 1; }
+          ! grep -q "of_the_starter" usage.log || { echo "usage was reported under the starter's key" >&2; exit 1; }
+
+          kill "$(cat key-service.pid)"
+          sleep 1
+          if attempt "ask_smoke_key_charlie_1111111111" "SELECT 1"; then
+            echo "a key was admitted with the key service down" >&2; exit 1
+          fi
+          grep -q "key service could not be reached" attempt.out || { echo "sign-in with the key service down was not refused by name:" >&2; cat attempt.out >&2; exit 1; }
+
+          # No key, and no beginning of one, in anything the server wrote or psql was told.
+          ! grep -q "ask_smoke_key_" attempt.out || { echo "a key appears in a refusal" >&2; exit 1; }
+          ! grep -q "ask_smoke_key_" signin-server.log || { echo "a key appears in the server's log" >&2; exit 1; }
+          echo "key sign-in: refused without a key and with a refused key, admitted and metered per key, fails closed"
+
       - name: Stop pgwire-file
         if: always()
         run: |
