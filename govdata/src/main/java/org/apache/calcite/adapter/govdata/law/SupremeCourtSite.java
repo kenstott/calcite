@@ -78,8 +78,32 @@ final class SupremeCourtSite {
     }
   }
 
+  /** The time the spacing and the pauses run on; a test supplies its own. */
+  interface Clock {
+    long nowMs();
+
+    void sleep(long ms) throws IOException;
+  }
+
+  /** The machine's clock. */
+  private static final Clock SYSTEM_CLOCK = new Clock() {
+    @Override public long nowMs() {
+      return System.currentTimeMillis();
+    }
+
+    @Override public void sleep(long ms) throws IOException {
+      try {
+        Thread.sleep(ms);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException("Interrupted while waiting to call supremecourt.gov", e);
+      }
+    }
+  };
+
   private final long minIntervalMs;
   private final long[] backoffMs;
+  private final Clock clock;
   private long nextRequestAtMs;
 
   /**
@@ -87,8 +111,13 @@ final class SupremeCourtSite {
    * @param backoffMs pause before each retry; the number of retries is its length
    */
   SupremeCourtSite(long minIntervalMs, long[] backoffMs) {
+    this(minIntervalMs, backoffMs, SYSTEM_CLOCK);
+  }
+
+  SupremeCourtSite(long minIntervalMs, long[] backoffMs, Clock clock) {
     this.minIntervalMs = minIntervalMs;
     this.backoffMs = backoffMs.clone();
+    this.clock = clock;
   }
 
   /** Fetches an HTML page. */
@@ -172,25 +201,20 @@ final class SupremeCourtSite {
 
   /** Waits until the minimum interval since the previous request has passed, across threads. */
   private synchronized void pace() throws IOException {
-    long now = System.currentTimeMillis();
+    long now = clock.nowMs();
     long wait = nextRequestAtMs - now;
     if (wait > 0) {
       sleep(wait);
-      now = System.currentTimeMillis();
+      now = clock.nowMs();
     }
     nextRequestAtMs = now + minIntervalMs;
   }
 
-  private static void sleep(long ms) throws IOException {
+  private void sleep(long ms) throws IOException {
     if (ms <= 0) {
       return;
     }
-    try {
-      Thread.sleep(ms);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while waiting to call supremecourt.gov", e);
-    }
+    clock.sleep(ms);
   }
 
   private static long copy(InputStream in, OutputStream out, long limit) throws IOException {
