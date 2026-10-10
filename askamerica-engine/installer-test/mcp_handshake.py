@@ -25,13 +25,10 @@ import threading
 TIMEOUT_SECONDS = 600  # a first start may fetch the engine jar before it answers
 
 
-def main() -> int:
-    launcher = sys.argv[1]
-    if not os.path.isfile(launcher):
-        print(f"the launcher is not at {launcher}", file=sys.stderr)
-        return 1
+def handshake(command, cwd=None, env=None, shell=False):
+    """Starts `command`, sends `initialize`, and returns (answered, lines it wrote)."""
     proc = subprocess.Popen(
-        [launcher, "--mcp"],
+        command, cwd=cwd, env=env, shell=shell,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     lines: "queue.Queue[tuple[str, bytes]]" = queue.Queue()
 
@@ -48,17 +45,19 @@ def main() -> int:
         "params": {"protocolVersion": "2024-11-05", "capabilities": {},
                    "clientInfo": {"name": "installer-test", "version": "0"}},
     }
-    proc.stdin.write((json.dumps(request) + "\n").encode("utf-8"))
-    proc.stdin.flush()
-
     seen = []
     closed = 0
     try:
+        try:
+            proc.stdin.write((json.dumps(request) + "\n").encode("utf-8"))
+            proc.stdin.flush()
+        except OSError as e:
+            seen.append(f"[test] the process closed its input before reading: {e}")
         while closed < 2:
             try:
                 name, raw = lines.get(timeout=TIMEOUT_SECONDS)
             except queue.Empty:
-                print(f"no answer to initialize within {TIMEOUT_SECONDS}s", file=sys.stderr)
+                seen.append(f"[test] no answer to initialize within {TIMEOUT_SECONDS}s")
                 break
             if raw == b"":
                 closed += 1
@@ -71,15 +70,31 @@ def main() -> int:
                 message = json.loads(text)
             except ValueError:
                 continue
-            if message.get("id") == 1 and "result" in message:
+            if isinstance(message, dict) and message.get("id") == 1 and "result" in message:
                 info = message["result"].get("serverInfo", {})
-                print("initialize answered:", json.dumps(message["result"])[:400])
+                seen.append("[test] initialize answered: " + json.dumps(message["result"])[:400])
                 if info.get("name") == "AskAmerica":
-                    return 0
-                print("the answer names another server", file=sys.stderr)
+                    return True, seen
+                seen.append("[test] the answer names another server")
                 break
     finally:
+        if shell and os.name == "nt":
+            # The shell's child is the server: end the whole tree.
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         proc.kill()
+    return False, seen
+
+
+def main() -> int:
+    launcher = sys.argv[1]
+    if not os.path.isfile(launcher):
+        print(f"the launcher is not at {launcher}", file=sys.stderr)
+        return 1
+    answered, seen = handshake([launcher, "--mcp"])
+    if answered:
+        print(seen[-1][len("[test] "):])
+        return 0
     print("the server did not complete the MCP handshake; what it wrote:", file=sys.stderr)
     for line in seen[-80:]:
         print("  " + line, file=sys.stderr)

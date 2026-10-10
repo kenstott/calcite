@@ -184,6 +184,17 @@ jobs:
           python askamerica-engine/installer-test/mcp_handshake.py "$env:ASKAMERICA_EXE"
           if ($LASTEXITCODE -ne 0) { throw "the MCP handshake failed" }
 
+      # Claude Desktop starts the server a second time, from a pool, for Cowork and Code
+      # sessions: two at once, another working directory, a bare environment, another profile,
+      # and through a shell. See mcp_start_cases.py for which of these must answer.
+      - name: The other ways a host starts it
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_start_cases.py "$env:ASKAMERICA_EXE"
+          if ($LASTEXITCODE -ne 0) { throw "a start that must work did not" }
+
       - name: Uninstall removes the product
         shell: pwsh
         run: |
@@ -360,6 +371,11 @@ jobs:
         env:
           ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
         run: python3 askamerica-engine/installer-test/mcp_handshake.py "$ASKAMERICA_EXE"
+
+      - name: The other ways a host starts it
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
+        run: python3 askamerica-engine/installer-test/mcp_start_cases.py "$ASKAMERICA_EXE"
 
       - name: Removing the package removes the launcher
         run: |
