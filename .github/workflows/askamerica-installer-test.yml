@@ -215,12 +215,21 @@ jobs:
         if: always() && env.ASKAMERICA_EXE != ''
         shell: pwsh
         run: |
+          # With the launcher RUNNING, as Claude Desktop leaves it: the uninstall ends it itself.
           Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Process cmd.exe -ArgumentList '/c', "(ping -n 600 127.0.0.1 > nul) | `"$env:ASKAMERICA_EXE`" --mcp > `"$env:RUNNER_TEMP\uninstall-mcp.log`" 2>&1" -WindowStyle Hidden
+          Start-Sleep -Seconds 20
+          $running = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) })
+          Write-Host "running from the install directory before the uninstall: $($running.Count)"
+          if ($running.Count -eq 0) { throw "the launcher was not running before the uninstall; the case was not exercised" }
           $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
           $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\uninstall.log" -Wait -PassThru
           Write-Host "msiexec exit code: $($p.ExitCode)"
           if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\uninstall.log" -Tail 80; throw "the uninstall did not succeed (exit $($p.ExitCode))" }
           if (Test-Path $env:ASKAMERICA_EXE) { throw "the launcher is still at $env:ASKAMERICA_EXE after uninstall" }
+          $left = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) })
+          if ($left.Count -gt 0) { throw "$($left.Count) processes from the install directory survived the uninstall" }
+          if (Test-Path $env:ASKAMERICA_INSTALL_DIR) { Write-Host "left behind in the install directory:"; Get-ChildItem $env:ASKAMERICA_INSTALL_DIR -Recurse -File | Select-Object -First 20 | ForEach-Object { Write-Host "  $($_.FullName)" } }
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -285,6 +294,17 @@ jobs:
           } else {
             Write-Host "the previous release does not carry its server"
           }
+          # A process of a generic name running FROM the install directory, as the old data
+          # server's java.exe and python.exe do: the bundle's own Python, doing nothing. The
+          # installer must end it by its path (it cannot be named), or its files stay in use.
+          $py = Get-ChildItem (Join-Path $env:PREVIOUS_DIR 'app\pgwire-govdata') -Recurse -Filter python.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like '*\python\cpython-*' } | Select-Object -First 1
+          if ($py) {
+            $idle = Start-Process $py.FullName -ArgumentList '-c', '"import time; time.sleep(3600)"' -WindowStyle Hidden -PassThru
+            Write-Host "left running from the install directory: $($py.FullName) (pid $($idle.Id))"
+            "IDLE_PID=$($idle.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Host "the previous release has no python.exe under the install directory to leave running"
+          }
           Start-Sleep -Seconds 45
           Write-Host "processes running from the install directory:"
           Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:PREVIOUS_DIR) } | Select-Object Id, Path | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
@@ -339,6 +359,14 @@ jobs:
           $ofNew | Select-Object -First 20 | ForEach-Object { Write-Host "  queued, and the new version needs it: $_" }
           $ours | Where-Object { $ofNew -notcontains $_ } | Select-Object -First 5 | ForEach-Object { Write-Host "  queued, old version only: $_" }
           if ($ofNew.Count -gt 0) { $problems += "$($ofNew.Count) files the new version installs are queued for deletion at the next restart" }
+          # What ran from the old install directory under a generic name must have been ended
+          # by the installer, by its path.
+          if ($env:IDLE_PID) {
+            $still = Get-Process -Id $env:IDLE_PID -ErrorAction SilentlyContinue
+            if ($still) { $problems += "process $env:IDLE_PID ($($still.Path)), running from the old install directory, survived the upgrade" }
+            else { Write-Host "the process left running from the install directory (pid $env:IDLE_PID) was ended by the installer" }
+          }
+          Select-String -Path "$env:RUNNER_TEMP\upgrade.log" -Pattern 'WixQuietExec:\s+(ending|SUCCESS)' | Select-Object -First 12 | ForEach-Object { Write-Host $_.Line }
           $ours | Set-Content "$env:RUNNER_TEMP\queued-deletions.txt"
           Select-String -Path "$env:RUNNER_TEMP\upgrade.log" -Pattern "Won't Overwrite|WixCloseApplications|Return value 3" | Select-Object -First 12 | ForEach-Object { Write-Host $_.Line }
           "ASKAMERICA_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
