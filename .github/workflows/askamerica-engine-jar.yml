@@ -1,0 +1,43 @@
+name: AskAmerica engine jar
+
+# Builds the engine's shaded jar from a pull request that changes what goes into it, and says
+# what it weighs. The build itself fails if the jar contains an embedder (ASKAM-007). The
+# release workflow (askamerica-engine.yml) runs only on a tag, so without this a change to the
+# jar's contents is first built when it is released.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'askamerica-engine/build.gradle.kts'
+      - 'file/build.gradle.kts'
+      - 'govdata/build.gradle.kts'
+      - '.github/workflows/askamerica-engine-jar.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: askamerica-engine-jar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jar:
+    name: Shaded jar, contents and size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Build the shaded jar
+        run: ./gradlew :askamerica-engine:shadowJar --no-daemon
+      - name: What it weighs and what its largest parts are
+        run: |
+          set -euo pipefail
+          JAR=$(ls -S askamerica-engine/build/libs/*.jar | head -1)
+          echo "$JAR: $(( $(stat -c%s "$JAR") / 1048576 )) MB"
+          echo "largest top-level trees, MB compressed in the jar:"
+          unzip -lv "$JAR" | awk 'NR>3 && $8 != "" { split($8, p, "/"); k = p[1] "/" p[2]; c[k] += $3 }
+            END { for (k in c) printf "%8.1f  %s\n", c[k] / 1048576, k }' | sort -rn | sed -n '1,25p'
