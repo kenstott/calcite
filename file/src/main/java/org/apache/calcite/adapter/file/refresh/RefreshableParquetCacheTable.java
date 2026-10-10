@@ -174,30 +174,14 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
           }
         }
 
-        // Force delete the old parquet file to ensure a fresh conversion
-        if (parquetFile != null && parquetFile.exists()) {
-          long oldSize = parquetFile.length();
-          long oldModified = parquetFile.lastModified();
-          boolean deleted = parquetFile.delete();
-          LOGGER.info("Deleted old parquet cache file: {} (size={}, modified={}, deleted={})",
-                      parquetFile.getAbsolutePath(), oldSize, oldModified, deleted);
-        }
-
-        // Also delete any temporary parquet files that might be lingering
-        File[] tempFiles = cacheDir.listFiles((dir, name) ->
-            name.contains(".tmp.") && name.endsWith(".parquet"));
-        if (tempFiles != null) {
-          for (File tempFile : tempFiles) {
-            tempFile.delete();
-            LOGGER.debug("Deleted temp parquet file: {}", tempFile.getName());
-          }
-        }
-
-        // Atomically update the cache using the standard conversion method
+        // Rebuild the cache whatever the timestamps say. The current parquet file is not
+        // deleted first: a query on another thread reads it until the rebuilt file replaces
+        // it in one move, so the table never has a moment without a cache file.
         // Note: createSourceTable() reads from 'source' which may be the converted JSON
         this.parquetFile =
             ParquetConversionUtil.convertToParquet(source, new File(source.path()).getName(),
-            createSourceTable(), cacheDir, parentSchema, fileSchemaName, this.tableNameCasing);
+            createSourceTable(), cacheDir, parentSchema, fileSchemaName, this.tableNameCasing,
+            true);
 
         // Update delegate table to use new parquet file
         updateDelegateTable();

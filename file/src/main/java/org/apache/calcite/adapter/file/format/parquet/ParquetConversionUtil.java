@@ -105,6 +105,18 @@ public class ParquetConversionUtil {
   public static StorageProviderFile convertToParquet(Source source, String tableName, Table table,
       StorageProviderFile cacheDirFile, SchemaPlus parentSchema, String schemaName, String casing,
       StorageProvider storageProvider) throws Exception {
+    return convertToParquet(source, tableName, table, cacheDirFile, parentSchema, schemaName,
+        casing, storageProvider, false);
+  }
+
+  /**
+   * As the method above, and with {@code force} the Parquet file is rebuilt whatever the
+   * timestamps of source and Parquet file say. A local Parquet file is never removed first:
+   * the rebuilt file replaces it in one move, so a reader always finds a complete file.
+   */
+  public static StorageProviderFile convertToParquet(Source source, String tableName, Table table,
+      StorageProviderFile cacheDirFile, SchemaPlus parentSchema, String schemaName, String casing,
+      StorageProvider storageProvider, boolean force) throws Exception {
 
     StorageProviderFile sourceFile = StorageProviderFile.create(source.path(), storageProvider);
 
@@ -131,7 +143,7 @@ public class ParquetConversionUtil {
     StorageProviderFile parquetFile = StorageProviderFile.create(targetPath, storageProvider);
 
     // Check if conversion is needed
-    if (!needsConversion(sourceFile, parquetFile)) {
+    if (!force && !needsConversion(sourceFile, parquetFile)) {
       LOGGER.debug("Parquet file is up to date, skipping conversion: {}", parquetFile.getPath());
       return parquetFile;
     }
@@ -145,7 +157,7 @@ public class ParquetConversionUtil {
       File result =
           ConcurrentParquetCache.convertWithLocking(localSourceFile, localCacheDir, typeInferenceEnabled, schemaName, casing, tempFile -> {
         performConversion(source, tableName, table, tempFile, parentSchema, schemaName);
-      });
+      }, force);
       return StorageProviderFile.create(result.getAbsolutePath(), storageProvider);
     } else {
       // Use S3/remote storage approach
@@ -159,13 +171,24 @@ public class ParquetConversionUtil {
    */
   public static File convertToParquet(Source source, String tableName, Table table,
       File cacheDir, SchemaPlus parentSchema, String schemaName, String casing) throws Exception {
+    return convertToParquet(source, tableName, table, cacheDir, parentSchema, schemaName, casing,
+        false);
+  }
+
+  /**
+   * Local-file form of the forced conversion: see
+   * {@link #convertToParquet(Source, String, Table, StorageProviderFile, SchemaPlus, String, String, StorageProvider, boolean)}.
+   */
+  public static File convertToParquet(Source source, String tableName, Table table,
+      File cacheDir, SchemaPlus parentSchema, String schemaName, String casing, boolean force)
+      throws Exception {
 
     // Create StorageProviderFile instances for local files
     StorageProviderFile cacheDirFile =
         StorageProviderFile.create(cacheDir.getAbsolutePath(), new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider());
 
     StorageProviderFile result =
-        convertToParquet(source, tableName, table, cacheDirFile, parentSchema, schemaName, casing, new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider());
+        convertToParquet(source, tableName, table, cacheDirFile, parentSchema, schemaName, casing, new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider(), force);
 
     return result.getFile();
   }
