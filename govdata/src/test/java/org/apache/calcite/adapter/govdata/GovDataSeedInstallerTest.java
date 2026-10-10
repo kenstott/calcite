@@ -173,14 +173,15 @@ class GovDataSeedInstallerTest {
     assertEquals(written - 60_000L, catalog.lastModified(), "a matching catalog is not rewritten");
   }
 
-  @Test void whichConnectionsAreServed() {
+  @Test void whichConnectionsAreServed(@TempDir Path tmpDir) {
+    // An absolute path on whatever platform runs the test: "/state/..." is not one on Windows.
+    File absolute = tmpDir.resolve("state").resolve("govdata.duckdb").toFile();
     java.util.Map<String, Object> served = new java.util.HashMap<>();
-    served.put("database_filename", "/state/govdata.duckdb");
+    served.put("database_filename", absolute.getPath());
     served.put("executionEngine", "duckdb");
     served.put("autoDownload", Boolean.FALSE);
     served.put("directory", "s3://bucket");
-    assertEquals(new File("/state/govdata.duckdb"),
-        GovDataSchemaFactory.servedCatalogFile(served));
+    assertEquals(absolute, GovDataSchemaFactory.servedCatalogFile(served));
 
     java.util.Map<String, Object> ingest = new java.util.HashMap<>(served);
     ingest.put("autoDownload", Boolean.TRUE);
