@@ -106,6 +106,19 @@
     process that meets the catalog's lock takes a numbered copy seeded from the jar's seed
     (see ASKAM-004). That a read-only
     open is locked too is the owner's statement; no comment in the code says so.
+    Owner 2026-10-10, on whether the running server should also refuse a table or column the
+    seed lacks and whether the build should check the seed against the schema models: "the
+    daily release for calcite - 1) doesn't execute if there are no changes 2) the seed is
+    only rebuilt if the schema changes. It seems to me that additional runtime checks are not
+    needed. a release with a bad seed can only happen in a manual release. which is on the
+    person who did it." So: no run-time refusal for a table or column missing from the
+    seed, no build-time coverage check, no gate on the release script. What the server does
+    is put its jar's seed in place at start (a no-op when the installed catalog's schema
+    matches) and stop by name when the jar has no seed.
+    His reason, the same day: "that's also possible if table has never gone through ETL,
+    which is why its better to NOT check." A table or column the model declares and the seed
+    lacks is a normal state - declared, not yet ingested - not a defect, so nothing compares
+    the seed's coverage with the model, at build time or at run time.
   tests: []
 
 # ===================================== updates =================================================
