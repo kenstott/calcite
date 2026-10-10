@@ -326,7 +326,12 @@ jobs:
           set -euo pipefail
           deb=$(ls installer/*.deb | head -1)
           dpkg-deb --info "$deb" | sed -n '1,25p'
-          sudo dpkg -i "$deb" || { sudo apt-get install -f -y && sudo dpkg -i "$deb"; }
+          # The package's dependencies first, then the package itself; any error dpkg reports
+          # for the package, its own scripts' included, fails the step here.
+          sudo apt-get update -y
+          sudo apt-get install -y $(dpkg-deb --field "$deb" Depends | tr -d ' ' | tr ',' ' ')
+          sudo dpkg -i "$deb"
+          dpkg -s "$(dpkg-deb --field "$deb" Package)" | grep -x 'Status: install ok installed'
           package=$(dpkg-deb --field "$deb" Package)
           echo "ASKAMERICA_PACKAGE=$package" >> "$GITHUB_ENV"
 
