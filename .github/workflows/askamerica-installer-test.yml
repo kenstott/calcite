@@ -335,6 +335,77 @@ jobs:
           path: ${{ runner.temp }}/*.log
           retention-days: 7
 
+  # Does a RELEASED server bundle come up when the engine spawns it on Windows, from a place
+  # it can write to? The bundle of PREVIOUS_RELEASE is unpacked under the profile and named
+  # with ASKAMERICA_PGWIRE_LAUNCHER; one MCP process, then two at once, must each leave a
+  # server listening. This does not exercise the engine's own download of the bundle.
+  server-windows:
+    name: The engine's spawn of a released server bundle listens (Windows)
+    needs: [jar, build]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-windows-latest
+          path: installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-test-engine-jar
+          path: engine
+
+      - name: Install silently
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log" -Tail 80; throw "the install did not succeed (exit $($p.ExitCode))" }
+          $entry = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | Where-Object { $_.DisplayName -eq 'AskAmerica MCP' } | Select-Object -First 1
+          "ASKAMERICA_EXE=$(Join-Path $entry.InstallLocation 'AskAmerica MCP.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Unpack the released server bundle under the profile
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force bundle-download | Out-Null
+          gh release download $env:PREVIOUS_RELEASE --repo "${{ github.repository }}" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz.sha256" --dir bundle-download
+          if ($LASTEXITCODE -ne 0) { throw "could not download the Windows server bundle of $env:PREVIOUS_RELEASE" }
+          $tar = (Get-ChildItem bundle-download -Filter *.tar.gz | Select-Object -First 1).FullName
+          $want = ((Get-Content "$tar.sha256" -Raw).Trim() -split '\s+')[0].ToLower()
+          $have = (Get-FileHash $tar -Algorithm SHA256).Hash.ToLower()
+          if ($want -ne $have) { throw "checksum mismatch for ${tar}: published $want, downloaded $have" }
+          $root = Join-Path $env:USERPROFILE 'askamerica-installer-test\pgwire-govdata'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          tar -xzf $tar -C $root
+          if ($LASTEXITCODE -ne 0) { throw "could not unpack $tar" }
+          $bat = Get-ChildItem $root -Recurse -Filter pgwire-govdata.bat | Select-Object -First 1
+          if (-not $bat) { Get-ChildItem $root | Select-Object -First 30; throw "the bundle has no pgwire-govdata.bat" }
+          Write-Host "server launcher: $($bat.FullName)"
+          "SERVER_LAUNCHER=$($bat.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SERVER_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: One MCP process leaves a server listening
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_server_reachable.py "$env:ASKAMERICA_EXE" "$env:SERVER_LAUNCHER" 1
+          $code = $LASTEXITCODE
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:SERVER_ROOT) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          if ($code -ne 0) { throw "the server spawned by one MCP process did not come up and stay up" }
+
+      - name: Two MCP processes at once leave a server listening
+        if: always() && env.SERVER_LAUNCHER != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_server_reachable.py "$env:ASKAMERICA_EXE" "$env:SERVER_LAUNCHER" 2
+          $code = $LASTEXITCODE
+          Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:SERVER_ROOT) } | Stop-Process -Force -ErrorAction SilentlyContinue
+          if ($code -ne 0) { throw "the server spawned by two MCP processes at once did not come up and stay up" }
+
   install-linux:
     name: Install the .deb, handshake, remove
     needs: [jar, build]
