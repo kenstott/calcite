@@ -657,7 +657,7 @@ jobs:
             LogLevel ERROR
             ServerAliveInterval 30
           EOF
-          cp askamerica-engine/nixos/prove.sh nixos-bundles/prove.sh
+          cp askamerica-engine/nixos/prove.sh askamerica-engine/nixos/prove-data.sh nixos-bundles/
           ls -la nixos-bundles
 
       # path: takes the directory as it is on disk, the run's key included; a git flake would
@@ -688,6 +688,39 @@ jobs:
 
       - name: Prove both bundles in the guest
         run: ssh -F "$RUNNER_TEMP/vm_ssh_config" vm 'bash -lc "bash /mnt/bundles/prove.sh"'
+
+      # AskAmerica's own data served on NixOS (approved by the owner 2026-10-10): the govdata
+      # bundle is started again with the object store's credentials and answers SELECT 1, a
+      # table count for schema sec from its catalog, and ONE bounded read,
+      # `SELECT * FROM econ_reference.naics_sectors LIMIT 1` (a small reference table). All three
+      # are reads; nothing is written to the store.
+      #
+      # The four secrets the model requires are named here and nowhere else in this workflow.
+      # They are passed to this one step, travel to the guest in the ssh session's environment
+      # (SendEnv/AcceptEnv: not a command line, not a file), and are not printed: prove-data.sh
+      # runs with `set +x` and shows the server's log only with the four values removed. That
+      # log (govdata-data.log) is not among those the "Server logs" step prints.
+      #
+      # This workflow runs only on workflow_dispatch and on a release, never on pull_request, so
+      # a pull request, from a fork or otherwise, cannot reach this step; the condition below
+      # states it again. A missing secret fails the step by name; it is not skipped.
+      - name: Prove AskAmerica's data path in the guest
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_OVERRIDE: ${{ secrets.AWS_ENDPOINT_OVERRIDE }}
+          GOVDATA_PARQUET_DIR: ${{ secrets.GOVDATA_PARQUET_DIR }}
+        run: |
+          set +x
+          set -euo pipefail
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_ENDPOINT_OVERRIDE GOVDATA_PARQUET_DIR; do
+            [ -n "${!name:-}" ] || { echo "repository secret $name is not set" >&2; exit 1; }
+          done
+          ssh -F "$RUNNER_TEMP/vm_ssh_config" \
+            -o SendEnv=AWS_ACCESS_KEY_ID -o SendEnv=AWS_SECRET_ACCESS_KEY \
+            -o SendEnv=AWS_ENDPOINT_OVERRIDE -o SendEnv=GOVDATA_PARQUET_DIR \
+            vm 'bash -lc "bash /mnt/bundles/prove-data.sh"'
 
       - name: Server logs
         if: always()

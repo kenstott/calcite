@@ -20,7 +20,12 @@
     isNormalUser = true;
     openssh.authorizedKeys.keyFiles = [ ./ci_authorized_key.pub ];
   };
-  services.openssh.enable = true;
+  services.openssh = {
+    enable = true;
+    # The data-path step hands the object store's credentials to one ssh session through its
+    # environment; nothing else is accepted.
+    extraConfig = "AcceptEnv AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_ENDPOINT_OVERRIDE GOVDATA_PARQUET_DIR";
+  };
 
   # The test's client: it queries the server over the PostgreSQL wire protocol.
   environment.systemPackages = [ pkgs.postgresql ];
