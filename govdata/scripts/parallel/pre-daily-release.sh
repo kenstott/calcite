@@ -203,7 +203,8 @@ if $release_ok; then
       log "would release engine-v$next (code changed since $last_tag)"
     else
       log "releasing engine-v$next on $FORK (code changed since $last_tag)"
-      gh release create "engine-v$next" --repo "$FORK" --target "$head_sha" \
+      git tag "engine-v$next" "$head_sha" && git push origin "engine-v$next"
+      gh release create "engine-v$next" --repo "$FORK" --verify-tag --draft \
         --title "AskAmerica Engine v$next" --generate-notes
     fi
   fi
