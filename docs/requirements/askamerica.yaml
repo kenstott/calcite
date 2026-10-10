@@ -166,3 +166,27 @@
     itself, and leaves one another process holds. The standalone pg-wire server opens its
     catalog through the same factory. No test is cited yet.
   tests: []
+
+# ===================================== installer ===============================================
+
+- id: ASKAM-005
+  module: askamerica
+  status: accepted
+  group: installer
+  category: Small installer
+  priority: MUST
+  type: constraint
+  description: >
+    The installer is small and has a step to download its assets. No installer (.msi, .deb,
+    .pkg) carries the engine jar or the pg-wire server bundle; the installed launcher
+    downloads each on first use and verifies it. The installer build fails when an installer
+    exceeds 100 MB.
+  source: >
+    owner rule 2026-10-10 ("the installer is small and has a step to download its assets").
+    History, from the release assets and git: through engine-v0.90.1 the installers were
+    54 MB (.msi), 37 MB (.deb) and 33 MB (.pkg). Commit 79c476a075 (0.91.0) put the
+    pgwire-govdata bundle into all three (about 905 MB, 1,127 MB and 1,007 MB); dd4c66c3b1
+    took it out of the .pkg only, because notarization rejected it; the .msi and the .deb
+    shipped at about 920 MB and 1,220 MB through engine-v0.109.1. Enforced by the "Installer
+    stays small" step of .github/workflows/askamerica-engine.yml; no test is cited.
+  tests: []
