@@ -3931,65 +3931,58 @@ public class EtlPipeline {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
 
-      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
-      try {
-        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+      org.apache.iceberg.hadoop.HadoopCatalog catalog =
+          openHadoopCatalog(hadoopConf, warehousePath);
 
-        String tableName = tableLocation.substring(lastSlash + 1);
-        org.apache.iceberg.catalog.TableIdentifier tableId =
-            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+      String tableName = tableLocation.substring(lastSlash + 1);
+      org.apache.iceberg.catalog.TableIdentifier tableId =
+          org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
-        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+      org.apache.iceberg.Table table = catalog.loadTable(tableId);
 
-        // Schema validation if expected columns provided
-        if (expectedColumns != null && !expectedColumns.isEmpty()) {
-          org.apache.iceberg.Schema icebergSchema = table.schema();
-          Set<String> existingColumns = new HashSet<String>();
-          for (org.apache.iceberg.types.Types.NestedField field : icebergSchema.columns()) {
-            existingColumns.add(field.name().toLowerCase());
-          }
+      // Schema validation if expected columns provided
+      if (expectedColumns != null && !expectedColumns.isEmpty()) {
+        org.apache.iceberg.Schema icebergSchema = table.schema();
+        Set<String> existingColumns = new HashSet<String>();
+        for (org.apache.iceberg.types.Types.NestedField field : icebergSchema.columns()) {
+          existingColumns.add(field.name().toLowerCase());
+        }
 
-          Set<String> missingColumns = new HashSet<String>();
-          for (ColumnConfig col : expectedColumns) {
-            String colName = col.getName().toLowerCase();
-            if (!existingColumns.contains(colName)) {
-              missingColumns.add(col.getName());
-            }
-          }
-
-          if (!missingColumns.isEmpty()) {
-            LOGGER.warn("Iceberg table '{}' schema mismatch: missing columns {}. "
-                + "Dropping table for recreation.",
-                tableLocation, missingColumns);
-            catalog.dropTable(tableId, true);
-            return 0;
+        Set<String> missingColumns = new HashSet<String>();
+        for (ColumnConfig col : expectedColumns) {
+          String colName = col.getName().toLowerCase();
+          if (!existingColumns.contains(colName)) {
+            missingColumns.add(col.getName());
           }
         }
 
-        org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
-
-        if (snapshot == null) {
-          LOGGER.debug("Iceberg table '{}' has no snapshot, returning 0 row count", tableLocation);
+        if (!missingColumns.isEmpty()) {
+          LOGGER.warn("Iceberg table '{}' schema mismatch: missing columns {}. "
+              + "Dropping table for recreation.",
+              tableLocation, missingColumns);
+          catalog.dropTable(tableId, true);
           return 0;
         }
+      }
 
-        long totalRecords = 0;
-        for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
-          Long addedRows = manifest.addedRowsCount();
-          if (addedRows != null) {
-            totalRecords += addedRows;
-          }
-        }
+      org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
 
-        LOGGER.info("Read row count {} from Iceberg metadata for skipped table: {}",
-            totalRecords, tableLocation);
-        return totalRecords;
+      if (snapshot == null) {
+        LOGGER.debug("Iceberg table '{}' has no snapshot, returning 0 row count", tableLocation);
+        return 0;
+      }
 
-      } finally {
-        if (catalog != null) {
-          catalog.close();
+      long totalRecords = 0;
+      for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
+        Long addedRows = manifest.addedRowsCount();
+        if (addedRows != null) {
+          totalRecords += addedRows;
         }
       }
+
+      LOGGER.info("Read row count {} from Iceberg metadata for skipped table: {}",
+          totalRecords, tableLocation);
+      return totalRecords;
     // fallback-guard: allow The single caller (EtlPipeline around line 520-527) explicitly documents and implements a compensating fallback: 'If we couldn't read from Iceberg ... use the tracker's cached row count as the authoritative figure' — the 0 return is a known, handled signal.
     } catch (Exception e) {
       LOGGER.warn("Failed to read row count from Iceberg for '{}': {}", tableLocation, e.getMessage());
@@ -4055,57 +4048,50 @@ public class EtlPipeline {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
 
-      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
-      try {
-        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+      org.apache.iceberg.hadoop.HadoopCatalog catalog =
+          openHadoopCatalog(hadoopConf, warehousePath);
 
-        String tableName = tableLocation.substring(lastSlash + 1);
-        org.apache.iceberg.catalog.TableIdentifier tableId =
-            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+      String tableName = tableLocation.substring(lastSlash + 1);
+      org.apache.iceberg.catalog.TableIdentifier tableId =
+          org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
-        if (!catalog.tableExists(tableId)) {
-          return null;
-        }
+      if (!catalog.tableExists(tableId)) {
+        return null;
+      }
 
-        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+      org.apache.iceberg.Table table = catalog.loadTable(tableId);
 
-        // Read ETL properties
-        String configHash = table.properties().get("etl.config-hash");
-        String signature = table.properties().get("etl.signature");
-        String rowCountStr = table.properties().get("etl.row-count");
+      // Read ETL properties
+      String configHash = table.properties().get("etl.config-hash");
+      String signature = table.properties().get("etl.signature");
+      String rowCountStr = table.properties().get("etl.row-count");
 
-        if (configHash == null || signature == null) {
-          LOGGER.debug("Iceberg table '{}' has no cached ETL properties", tableLocation);
-          return null;
-        }
+      if (configHash == null || signature == null) {
+        LOGGER.debug("Iceberg table '{}' has no cached ETL properties", tableLocation);
+        return null;
+      }
 
-        long rowCount = 0;
-        if (rowCountStr != null) {
-          try {
-            rowCount = Long.parseLong(rowCountStr);
-          } catch (NumberFormatException e) {
-            // Fall back to reading from manifest
-            org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
-            if (snapshot != null) {
-              for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
-                Long addedRows = manifest.addedRowsCount();
-                if (addedRows != null) {
-                  rowCount += addedRows;
-                }
+      long rowCount = 0;
+      if (rowCountStr != null) {
+        try {
+          rowCount = Long.parseLong(rowCountStr);
+        } catch (NumberFormatException e) {
+          // Fall back to reading from manifest
+          org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
+          if (snapshot != null) {
+            for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
+              Long addedRows = manifest.addedRowsCount();
+              if (addedRows != null) {
+                rowCount += addedRows;
               }
             }
           }
         }
-
-        LOGGER.debug("Read cached ETL properties from '{}': configHash={}, signature={}, rows={}",
-            tableLocation, configHash, signature, rowCount);
-        return new CachedEtlProperties(configHash, signature, rowCount);
-
-      } finally {
-        if (catalog != null) {
-          catalog.close();
-        }
       }
+
+      LOGGER.debug("Read cached ETL properties from '{}': configHash={}, signature={}, rows={}",
+          tableLocation, configHash, signature, rowCount);
+      return new CachedEtlProperties(configHash, signature, rowCount);
     // fallback-guard: allow readEtlPropertiesFromIceberg is a fast-path cache lookup (per its class javadoc); null is the standard 'cache unavailable' contract for such an accessor, and it currently has no caller so nothing is masked in practice.
     } catch (Exception e) {
       LOGGER.debug("Failed to read ETL properties from Iceberg for '{}': {}",
@@ -4157,41 +4143,48 @@ public class EtlPipeline {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
 
-      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
-      try {
-        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+      org.apache.iceberg.hadoop.HadoopCatalog catalog =
+          openHadoopCatalog(hadoopConf, warehousePath);
 
-        String tableName = tableLocation.substring(lastSlash + 1);
-        org.apache.iceberg.catalog.TableIdentifier tableId =
-            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+      String tableName = tableLocation.substring(lastSlash + 1);
+      org.apache.iceberg.catalog.TableIdentifier tableId =
+          org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
-        if (!catalog.tableExists(tableId)) {
-          LOGGER.debug("Cannot store ETL properties: table doesn't exist at {}", tableLocation);
-          return;
-        }
-
-        org.apache.iceberg.Table table = catalog.loadTable(tableId);
-
-        // Store ETL properties
-        table.updateProperties()
-            .set("etl.config-hash", configHash)
-            .set("etl.signature", signature)
-            .set("etl.row-count", String.valueOf(rowCount))
-            .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
-            .commit();
-
-        LOGGER.info("Stored ETL properties to Iceberg table '{}' for fast-path skip: configHash={}",
-            tableLocation, configHash);
-
-      } finally {
-        if (catalog != null) {
-          catalog.close();
-        }
+      if (!catalog.tableExists(tableId)) {
+        LOGGER.debug("Cannot store ETL properties: table doesn't exist at {}", tableLocation);
+        return;
       }
+
+      org.apache.iceberg.Table table = catalog.loadTable(tableId);
+
+      // Store ETL properties
+      table.updateProperties()
+          .set("etl.config-hash", configHash)
+          .set("etl.signature", signature)
+          .set("etl.row-count", String.valueOf(rowCount))
+          .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
+          .commit();
+
+      LOGGER.info("Stored ETL properties to Iceberg table '{}' for fast-path skip: configHash={}",
+          tableLocation, configHash);
     } catch (Exception e) {
       LOGGER.debug("Failed to store ETL properties to Iceberg for '{}': {}",
           tableLocation, e.getMessage());
     }
+  }
+
+  /**
+   * Opens a Hadoop catalog on {@code warehousePath}. The catalog is never closed, on purpose.
+   * Closing a Hadoop catalog closes its lock manager, and Iceberg's in-memory lock manager
+   * keeps every catalog's commit locks and heartbeats in maps shared by the whole JVM: its
+   * {@code close()} clears those maps. A close here therefore dropped the lock of any commit
+   * in flight on any other table, and that commit then failed releasing it with a
+   * NullPointerException in {@code InMemoryLockManager.release}. The catalog owns nothing
+   * else that a close would free (the heartbeat scheduler is JVM-wide too).
+   */
+  private static org.apache.iceberg.hadoop.HadoopCatalog openHadoopCatalog(
+      org.apache.hadoop.conf.Configuration hadoopConf, String warehousePath) {
+    return new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
   }
 
   /**
