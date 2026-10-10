@@ -31,6 +31,7 @@ on:
         options:
           - all
           - linux-file-govdata
+          - windows-file
   release:
     types: [created]
 
@@ -88,6 +89,10 @@ jobs:
           if scope == "linux-file-govdata":
               adapters = [a for a in adapters if a["name"] in ("file", "govdata")]
               platforms = [p for p in platforms if p["variant"] == "linux-x86_64"]
+          elif scope == "windows-file":
+              # The smallest run that starts a Windows server: one jar set, one bundle.
+              adapters = [a for a in adapters if a["name"] == "file"]
+              platforms = [p for p in platforms if p["variant"] == "windows-x86_64"]
           elif scope != "all":
               raise SystemExit(f"unknown scope: {scope}")
           # The smoke job runs the file bundle on the Unix runners; smoke-windows runs it on
@@ -494,6 +499,8 @@ jobs:
   # Any failing step here fails the workflow run.
   smoke:
     needs: [plan, bundle]
+    # A run that builds no Unix bundle has nothing for this job (an empty matrix is an error).
+    if: needs.plan.outputs.smoke_os != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -671,9 +678,10 @@ jobs:
 
   publish:
     needs: [plan, bundle, smoke, smoke-windows]
-    # smoke-windows is skipped in a run that builds no Windows bundle; that must not skip this.
+    # A smoke job is skipped in a run that builds no bundle for it; that must not skip this.
     if: >-
-      always() && needs.bundle.result == 'success' && needs.smoke.result == 'success'
+      always() && needs.bundle.result == 'success'
+      && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
       && (needs.smoke-windows.result == 'success' || needs.smoke-windows.result == 'skipped')
       && (github.event_name == 'release' || inputs.publish == true)
     runs-on: ubuntu-latest
