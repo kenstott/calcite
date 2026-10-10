@@ -14,13 +14,15 @@
 Starts <instances> AskAmerica MCP processes at the same moment, each told to use the given
 pgwire-govdata launcher (ASKAMERICA_PGWIRE_LAUNCHER) on one free port. Every MCP process
 spawns the server at its own start; by design one server binds the port and the others'
-exit. Exits 0 when the port accepts a connection within OPEN_SECONDS and still does
-HOLD_SECONDS later, 1 otherwise, printing what the MCP processes said about the spawn and
-the end of the server's own output.
+exit. Exits 0 when the port accepts a connection within OPEN_SECONDS, the server's JVM was given
+its whole classpath, and the server then either stays up for HOLD_SECONDS or gets as far as
+the object store and stops on this test's placeholder for it; 1 otherwise. What the MCP
+processes said about the spawn and the end of the server's own output are printed.
 
 Reads no data and needs no key: the server is given placeholders for the store, and no query
-is sent. What this shows is that the server starts where it was unpacked and listens; that it
-answers queries needs the store.
+is sent. The server mounts its schemas when it starts, so without a store it stops there; a
+server that reached the store has loaded everything it has. That it answers queries needs
+the store.
 """
 import json
 import os
@@ -138,12 +140,21 @@ def main() -> int:
         print(f"::error::with {instances} MCP process(es) the data server's JVM was given "
               f"{entries} jars; a whole bundle has more than {MIN_CLASSPATH_ENTRIES}")
         return 1
-    if not held:
-        print(f"::error::with {instances} MCP process(es) the data server opened its port and "
-              f"was gone {HOLD_SECONDS}s later")
-        return 1
-    print(f"and was still open {HOLD_SECONDS}s later")
-    return 0
+    if held:
+        print(f"and was still open {HOLD_SECONDS}s later")
+        return 0
+    output = ""
+    if os.path.exists(spawn_log):
+        with open(spawn_log, "rb") as f:
+            f.seek(log_start)
+            output = f.read().decode("utf-8", "replace")
+    if "placeholder.invalid" in output:
+        print("the server then went to the object store and stopped on this test's placeholder "
+              "for it: it started as far as it can without a store")
+        return 0
+    print(f"::error::with {instances} MCP process(es) the data server opened its port and "
+          f"was gone {HOLD_SECONDS}s later, without having reached the object store")
+    return 1
 
 
 if __name__ == "__main__":
