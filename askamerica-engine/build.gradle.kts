@@ -14,6 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.util.zip.ZipFile
+
 plugins {
     id("com.github.johnrengelman.shadow")
     `maven-publish`
@@ -372,12 +374,12 @@ tasks.shadowJar {
     // The engine jar carries no embedder (ASKAM-007): fail the build that would ship one.
     doLast {
         val jar = archiveFile.get().asFile
-        val embedder = java.util.zip.ZipFile(jar).use { zip ->
-            zip.entries().asSequence().map { it.name }
-                .filter {
-                    it.startsWith("ai/onnxruntime/") ||
-                        it.startsWith("models/snowflake-arctic-embed-xs/") ||
-                        it.endsWith(".onnx")
+        val embedder = ZipFile(jar).use { zip ->
+            zip.entries().asSequence().map { entry -> entry.name }
+                .filter { name ->
+                    name.startsWith("ai/onnxruntime/") ||
+                        name.startsWith("models/snowflake-arctic-embed-xs/") ||
+                        name.endsWith(".onnx")
                 }
                 .take(5).toList()
         }
