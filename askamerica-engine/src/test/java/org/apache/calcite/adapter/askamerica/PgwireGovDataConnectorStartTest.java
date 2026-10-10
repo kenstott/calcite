@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.askamerica;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.File;
 import java.lang.reflect.Proxy;
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the next call.
  */
 @Tag("unit")
+@Isolated("the connector has one start in progress per process; concurrent tests would join it")
 class PgwireGovDataConnectorStartTest {
 
   private static Connection connection() {
