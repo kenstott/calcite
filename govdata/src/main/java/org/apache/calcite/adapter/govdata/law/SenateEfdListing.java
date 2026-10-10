@@ -142,7 +142,8 @@ final class SenateEfdListing {
     if (stateParam != null) {
       params.put(stateParam, state);
     }
-    JsonNode root = MAPPER.readTree(session.listing(params, year < LocalDate.now(ZoneOffset.UTC).getYear()));
+    boolean pastYear = year < LocalDate.now(ZoneOffset.UTC).getYear();
+    JsonNode root = MAPPER.readTree(session.listing(params, pastYear));
     long total = root.path("recordsTotal").asLong(-1);
     JsonNode data = root.path("data");
     if (total < 0 || !data.isArray()) {
