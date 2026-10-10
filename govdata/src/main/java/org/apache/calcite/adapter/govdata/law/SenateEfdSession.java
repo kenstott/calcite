@@ -181,7 +181,7 @@ final class SenateEfdSession {
 
   private static HttpRequest get(String path) {
     return HttpRequest.newBuilder(URI.create(SITE + path)).header("User-Agent", USER_AGENT)
-        .timeout(Duration.ofSeconds(120)).GET().build();
+        .timeout(Duration.ofMinutes(2)).GET().build();
   }
 
   private static HttpRequest post(String path, Map<String, String> fields, String referer,
@@ -197,7 +197,7 @@ final class SenateEfdSession {
     HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(SITE + path))
         .header("User-Agent", USER_AGENT).header("Referer", SITE + referer)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .timeout(Duration.ofSeconds(120)).POST(HttpRequest.BodyPublishers.ofString(body.toString()));
+        .timeout(Duration.ofMinutes(2)).POST(HttpRequest.BodyPublishers.ofString(body.toString()));
     if (csrfHeader != null) {
       builder.header("X-CSRFToken", csrfHeader);
     }
