@@ -217,13 +217,17 @@
     owner 2026-10-10 ("semantic search must work."), on an installed Windows product whose
     log said "embedder: none found - semantic_search/SEMANTIC_SEARCH will report 'no
     embedder configured'". Read from the code the same day: in the default (pg-wire) mode
-    there is one embedder, in the pgwire-govdata server (fastembed, snowflake-arctic-embed-xs,
-    the model carried in the bundle); the semantic_search tool runs SEMANTIC_SEARCH through
-    that server, and McpServer.embedderConfigured() offers the tool on that basis. The quoted
-    log line comes from McpServer.configureQueryEmbedder, which looks for an embedder of the
-    MCP process's own without asking which mode is on, and is false in the default mode.
-    On that machine the server never became reachable, which is why no data call, semantic
-    search included, worked. Not established: that each platform's bundle contains the
-    model, and that vectors stored before the corpus pipeline moved to fastembed match.
+    semantic search is served by the pgwire-govdata server: the semantic_search tool runs
+    SEMANTIC_SEARCH through that server, where the file adapter's in-JVM embedder
+    (OnnxClsEmbedder: snowflake-arctic-embed-xs, CLS pooling, L2-normalized) embeds the
+    query, and McpServer.embedderConfigured() offers the tool on that basis. The stored
+    vectors are produced by govdata/scripts/vss-local.py with sentence-transformers, same
+    model, normalized, then quantized. The quoted log line comes from
+    McpServer.configureQueryEmbedder, which looks for an embedder of the MCP process's own
+    without asking which mode is on, and is false in the default mode. On that machine the
+    server never became reachable, which is why no data call, semantic search included,
+    worked. Not established: that each platform's bundle contains the model; and that the
+    server's second embedder (Python fastembed, used only for a literal EMBED('...')) pools
+    the way the stored vectors were made.
     No test is cited.
   tests: []
