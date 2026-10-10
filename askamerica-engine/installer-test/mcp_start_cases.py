@@ -122,7 +122,7 @@ def main() -> int:
 
     two_at_once(command, "two at once", failures)
 
-    with tempfile.TemporaryDirectory() as elsewhere:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as elsewhere:
         answered, seen = handshake(command, cwd=elsewhere)
         report(f"from another working directory ({elsewhere})", answered, seen)
         if not answered:
@@ -133,7 +133,7 @@ def main() -> int:
     if not answered and not named_error(seen):
         failures.append("bare environment: neither an answer nor an error of the launcher's own")
 
-    with tempfile.TemporaryDirectory() as empty:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as empty:
         answered, seen = handshake(command, env=empty_profile_environment(empty))
         report(f"profile variables pointing at an empty directory ({empty})", answered, seen)
         if not answered and not named_error(seen):

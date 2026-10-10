@@ -58,7 +58,7 @@ def free_port():
 
 def main() -> int:
     launcher = sys.argv[1]
-    with tempfile.TemporaryDirectory() as root:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
         env = dict(os.environ)
         env["ASKAMERICA_PGWIRE_LAUNCHER"] = stand_in_server(root)
         env["ASKAMERICA_PGWIRE_PORT"] = str(free_port())

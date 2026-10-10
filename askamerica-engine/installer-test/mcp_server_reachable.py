@@ -31,6 +31,7 @@ import threading
 import time
 
 OPEN_SECONDS = 300
+MIN_CLASSPATH_ENTRIES = 200
 HOLD_SECONDS = 30
 PLACEHOLDERS = {
     "GOVDATA_PARQUET_DIR": "s3://askamerica-installer-test/placeholder",
@@ -122,6 +123,21 @@ def main() -> int:
               f"port within {OPEN_SECONDS}s")
         return 1
     print(f"the port opened after {opened_after:.0f}s")
+    # The server says how many jars its JVM was given. The Windows launcher of releases up to
+    # 0.109.2 built its classpath in one cmd.exe variable, which stops at 8,191 characters:
+    # 63 of about 260 jars, and no Calcite (issue to be linked). Too few is a failed start.
+    entries = None
+    if os.path.exists(spawn_log):
+        with open(spawn_log, "rb") as f:
+            f.seek(log_start)
+            for line in f.read().decode("utf-8", "replace").splitlines():
+                if "JVM started with" in line and "classpath entries" in line:
+                    entries = int(line.split("JVM started with")[1].split()[0])
+    print(f"classpath entries the server's JVM started with: {entries}")
+    if entries is not None and entries < MIN_CLASSPATH_ENTRIES:
+        print(f"::error::with {instances} MCP process(es) the data server's JVM was given "
+              f"{entries} jars; a whole bundle has more than {MIN_CLASSPATH_ENTRIES}")
+        return 1
     if not held:
         print(f"::error::with {instances} MCP process(es) the data server opened its port and "
               f"was gone {HOLD_SECONDS}s later")
