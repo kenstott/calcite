@@ -6801,3 +6801,81 @@ constraints:
     # as free text, not a bioguide_id, and name-matching across schemas is not done at ingest —
     # see the table comment.
     primaryKey: [filing_id, row_seq]
+
+  # ── Senate eFD financial disclosures ──────────────────────────────────────────────────────
+  # fd_filings has one row per filing, identified by the eFD report UUID. Each detail table
+  # holds the rows of one part of a report and joins to fd_filings on filing_id. Within a
+  # filing a detail row is identified by row_seq, its position within its part of the report
+  # page: eFD's own item numbers (item_no) repeat within some filings, so item_no is not a
+  # key, and fd_assets.parent_item_no is therefore not a foreign key either.
+  # No foreign key to officials.members, for the reason given for member_stock_transactions:
+  # the filer is a printed name, not a bioguide_id.
+  fd_filings:
+    primaryKey: [filing_id]
+
+  fd_assets:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_liabilities:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_gifts:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_travel:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_positions:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_agreements:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_compensation:
+    primaryKey: [filing_id, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_income:
+    # row_seq is a position within a part, and Part 2 and Part 1 rows of one report share this table,
+    # so source_part is part of the key.
+    primaryKey: [filing_id, source_part, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]
+
+  fd_transactions:
+    # row_seq is a position within a part, and periodic transaction reports and Part 4b of annual reports share this table,
+    # so source_part is part of the key.
+    primaryKey: [filing_id, source_part, row_seq]
+    foreignKeys:
+      - columns: [filing_id]
+        targetTable: fd_filings
+        targetColumns: [filing_id]

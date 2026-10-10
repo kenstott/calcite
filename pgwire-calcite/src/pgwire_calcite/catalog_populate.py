@@ -475,6 +475,32 @@ def deserialize_catalog(d: dict):
 _CACHE_FORMAT_VERSION = 1
 
 
+#: Directory for files this server writes while it runs. Settable per server process, so
+#: several servers on one host (one per organisation, say) keep separate state, and so an
+#: install tree can be read-only (a Nix store path, a root-owned directory).
+STATE_DIR_ENV = "PGWIRE_CALCITE_STATE_DIR"
+
+
+def _cache_file_name(model_path: str) -> str:
+    with open(model_path, "rb") as f:
+        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+    return f"catalog-cache-{model_hash}.pkl"
+
+
+def catalog_cache_write_path(model_path: str) -> str:
+    """Where a catalog cache built by this server is written, and looked for first.
+
+    ``PGWIRE_CALCITE_STATE_DIR`` when it is set; the model's own directory when it is not
+    (a checkout or a hand-made install, where that directory is the operator's to write).
+    A bundle's launcher always sets the variable, so a bundle never writes beside its model.
+    """
+    state_dir = os.environ.get(STATE_DIR_ENV)
+    if not state_dir:
+        return catalog_cache_path(model_path)
+    os.makedirs(state_dir, exist_ok=True)
+    return os.path.join(os.path.abspath(state_dir), _cache_file_name(model_path))
+
+
 def catalog_cache_path(model_path: str) -> str:
     """Deterministic cache filename next to ``model_path``, keyed by its content hash.
 
@@ -485,11 +511,9 @@ def catalog_cache_path(model_path: str) -> str:
     computation independently lands on the identical name, so the bundled release
     tarball needs no extra wiring at either build or install time.
     """
-    with open(model_path, "rb") as f:
-        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
     return os.path.join(
         os.path.dirname(os.path.abspath(model_path)),
-        f"catalog-cache-{model_hash}.pkl",
+        _cache_file_name(model_path),
     )
 
 
@@ -504,7 +528,7 @@ def build_and_cache_context(conn, model_path: str):
     served as the whole catalog on every later launch. A partial result is still
     returned for this launch, and the next launch walks live again."""
     ctx, column_types, gaps = build_context_reporting_gaps(conn)
-    cache_path = catalog_cache_path(model_path)
+    cache_path = catalog_cache_write_path(model_path)
     if gaps:
         log.error(
             "Catalog walk was incomplete (%d gap(s): %s) -- NOT writing %s; the next "
@@ -531,8 +555,15 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
     if model_path is None:
         populate_state(conn, state, role_id=role_id)
         return
-    cache_path = catalog_cache_path(model_path)
-    if os.path.isfile(cache_path):
+    # A cache this server wrote (state directory) is looked for before the one shipped beside
+    # the model; the two are the same file when no state directory is set.
+    candidates = [catalog_cache_write_path(model_path)]
+    shipped = catalog_cache_path(model_path)
+    if shipped not in candidates:
+        candidates.append(shipped)
+    for cache_path in candidates:
+        if not os.path.isfile(cache_path):
+            continue
         try:
             with open(cache_path, "rb") as f:
                 loaded = pickle.load(f)

@@ -377,6 +377,18 @@ public class McpServer {
     // stream so its spawn/connect logging interleaves with the rest of the engine's log.
     static PrintStream log;
 
+    /**
+     * A stream that writes characters to {@code out} as UTF-8, whatever encoding {@code out}
+     * itself was created with: the bytes pass through it unchanged.
+     */
+    static PrintStream utf8(OutputStream out, boolean autoFlush) {
+        try {
+            return new PrintStream(out, autoFlush, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new IllegalStateException("this runtime has no UTF-8", e);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         boolean mcpMode = false;
         for (String arg : args) {
@@ -392,12 +404,26 @@ public class McpServer {
             return;
         }
 
+        // Capture the real stdout before any framework can write to it, then
+        // replace System.out with stderr so all logging goes there instead.
+        // MCP JSON is written exclusively to the saved mcpOut stream.
+        // Both are written as UTF-8 whatever the platform's encoding: MCP is UTF-8, and so
+        // is what the host reads from this process's error stream. Left to the runtime,
+        // System.out and System.err through a pipe use the system code page on Windows, and
+        // every non-ASCII character in an answer or a log line arrived corrupted
+        // (kenstott/calcite#486).
+        PrintStream mcpOut = utf8(System.out, false);
+        PrintStream err = utf8(System.err, true);
+        System.setErr(err);
+        System.setOut(err);
+        log = err;
+
         // A stdio server with no display — render_chart draws through XChart/Java2D, which
         // otherwise probes for a real X11/Windows display and fails on a headless host.
         System.setProperty("java.awt.headless", "true");
 
         // Fixed loopback endpoint for the browser extension: claim verdicts by article URL.
-        ClaimsServer.start(System.err);
+        ClaimsServer.start(log);
 
         // DuckDBJdbcSchemaFactory's own default (4GB) is sized for many small connections
         // sharing a box; this server holds one long-lived, many-schema connection serving
@@ -433,13 +459,6 @@ public class McpServer {
             AskAmericaDriver.pinOperatingDir(resolvedDataDir);
         }
 
-        // Capture the real stdout before any framework can write to it, then
-        // replace System.out with stderr so all logging goes there instead.
-        // MCP JSON is written exclusively to the saved mcpOut stream.
-        PrintStream mcpOut = System.out;
-        System.setOut(System.err);
-
-        log = System.err;
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting... build=" + BUILD_ID);

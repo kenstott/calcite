@@ -91,9 +91,27 @@ final class PgwireGovDataConnector {
 
   /** How long killAndRespawn waits for a forcibly killed server to release its port. */
   private static final long KILL_EXIT_WAIT_SECONDS = 10;
+  /**
+   * How long one call waits on a start in progress before answering that the server is still
+   * starting. A start that has FAILED is reported at once, whatever this is; this only bounds
+   * the wait on a server that is alive and still mounting. Claude Desktop cancels a tool call
+   * after four minutes and shows the user nothing, so a call must answer well inside that.
+   */
+  static final long CALL_WAIT_MILLIS = 45_000;
+  /**
+   * After our own spawn has exited: how long another process's server gets to show itself on
+   * the port. A spawn that lost the bind race exits because the winner already holds the port,
+   * so the port is open at once; this covers only the scheduling gap. No listener by then
+   * means nothing won, and our spawn was a failed start.
+   */
+  private static final int LOSER_GRACE_MILLIS = 5000;
+  /** How much of the end of the spawned server's output a failed start's error carries. */
+  private static final int SPAWN_LOG_TAIL_BYTES = 2000;
 
   private static final Object LOCK = new Object();
   private static volatile Connection sharedConnection;
+  /** The one start in progress for this process, if any. Every call waits on its result. */
+  private static final Starter STARTER = new Starter();
 
   private PgwireGovDataConnector() {}
 
@@ -168,10 +186,77 @@ final class PgwireGovDataConnector {
       if (existing != null && !existing.isClosed() && existing.isValid(5)) {
         return existing;
       }
-      Connection fresh = connect();
-      sharedConnection = fresh;
-      return fresh;
     }
+    return STARTER.await(PgwireGovDataConnector::connect, CALL_WAIT_MILLIS,
+        c -> sharedConnection = c);
+  }
+
+  /**
+   * One start at a time, waited on by every caller. The start runs on its own thread and the
+   * starter's lock is held only to look at it, so a start that takes minutes does not queue
+   * every other data call behind a lock: each call gets the connection, the start's own
+   * failure, or after its wait the statement that the server is still starting. A failed
+   * start is forgotten once reported, so a later call tries again.
+   */
+  static final class Starter {
+    private java.util.concurrent.CompletableFuture<Connection> starting;
+    private long sinceMillis;
+
+    /**
+     * Waits, for at most {@code waitMillis}, on the start in progress, beginning it with
+     * {@code connect} when there is none. {@code onConnected} receives the connection on the
+     * starting thread, before any waiter is released.
+     */
+    Connection await(java.util.concurrent.Callable<Connection> connect, long waitMillis,
+        java.util.function.Consumer<Connection> onConnected) throws Exception {
+      final java.util.concurrent.CompletableFuture<Connection> start;
+      final long since;
+      synchronized (this) {
+        if (starting == null) {
+          final java.util.concurrent.CompletableFuture<Connection> begun =
+              new java.util.concurrent.CompletableFuture<>();
+          starting = begun;
+          sinceMillis = System.currentTimeMillis();
+          Thread t = new Thread(() -> {
+            try {
+              Connection c = connect.call();
+              onConnected.accept(c);
+              synchronized (Starter.this) {
+                starting = null;
+              }
+              begun.complete(c);
+            } catch (Throwable e) {
+              synchronized (Starter.this) {
+                starting = null;
+              }
+              begun.completeExceptionally(e);
+            }
+          }, "askamerica-pgwire-start");
+          t.setDaemon(true);
+          t.start();
+        }
+        start = starting;
+        since = sinceMillis;
+      }
+      try {
+        return start.get(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+      } catch (java.util.concurrent.TimeoutException e) {
+        throw new IllegalStateException(stillStartingMessage(
+            (System.currentTimeMillis() - since) / 1000));
+      } catch (java.util.concurrent.ExecutionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof Exception) {
+          throw (Exception) cause;
+        }
+        throw e;
+      }
+    }
+  }
+
+  static String stillStartingMessage(long secondsSoFar) {
+    return "pgwire-govdata, the data server, is still starting on " + host() + ":" + port()
+        + " (" + secondsSoFar + "s so far). A first start mounts every schema and can take "
+        + "several minutes. Try this call again shortly.";
   }
 
   private static Connection connect() throws Exception {
@@ -190,8 +275,10 @@ final class PgwireGovDataConnector {
     }
     log().println("[askamerica-mcp] No pgwire-govdata server listening on " + host() + ":" + port()
         + " — attempting to spawn one.");
+    File spawnLog = new File(cacheDirLogPath());
+    long spawnLogStart = spawnLog.length();
     Process spawned = spawnIfPossible();
-    boolean resolvedOccupant = false;
+    boolean respawned = false;
     long deadline = System.currentTimeMillis() + SPAWN_TIMEOUT_MILLIS;
     while (System.currentTimeMillis() < deadline) {
       c = tryDirectConnect();
@@ -201,28 +288,36 @@ final class PgwireGovDataConnector {
       }
       // A legitimate cold mount binds the port in milliseconds (pgwire-calcite's
       // claim_listen_socket()) and then stays alive for minutes while it mounts all 26
-      // govdata schemas — spawned.isAlive() stays true the whole time. If OUR spawn has
-      // already exited, it lost that bind race: something else was already listening on
-      // port() when we tried, and every probe above is hitting THAT process, not ours.
-      // Retrying the identical probe against it for the rest of this ten-minute budget can
-      // never succeed if that occupant is wedged rather than merely slow — confirmed live
-      // 2026-09-28: a five-hour-old smoke-test process squatting the port stalled every
-      // later launch this way, silently, for the full timeout. Kill the pre-spawn occupant
-      // once and let a fresh spawn win the now-free port — the same recovery
-      // killAndRespawn() already gives an in-flight wedge on an established connection (see
-      // McpServer's watchdog thread), applied here to the startup path it was missing from.
-      // The occupant is identified by who actually holds the port, not by the pid file: an
-      // orphan whose pid no file records (seen live 2026-09-30, pid file naming a long-dead
-      // pid) would otherwise be unkillable here.
-      if (!resolvedOccupant && spawned != null && !spawned.isAlive()) {
-        resolvedOccupant = true;
+      // govdata schemas — spawned.isAlive() stays true the whole time. Our spawn having
+      // EXITED means one of two things, and the port says which. Held by another process: our
+      // server lost the bind race to it (another conversation's spawn, by design — see
+      // spawnIfPossible), or to an orphan; wait for that one. Not held: nothing won, and our
+      // server could not start — report that now, with what it printed. Waiting out the
+      // spawn budget on a server that is already dead told the user nothing for ten minutes
+      // (kenstott/calcite#484).
+      if (spawned != null && !spawned.isAlive()) {
+        if (!portOpensWithin(LOSER_GRACE_MILLIS)) {
+          throw new IllegalStateException(failedStartMessage(spawned.pid(), spawned.exitValue(),
+              spawnLog, spawnLogTail(spawnLog, spawnLogStart)));
+        }
         log().println("[askamerica-mcp] Our own pgwire-govdata spawn (pid " + spawned.pid()
-            + ") exited without ever becoming reachable — something else holds " + host() + ":"
-            + port() + ".");
+            + ") exited, and " + host() + ":" + port() + " is held by another process — "
+            + "waiting for that one.");
+        // The occupant is identified by who actually holds the port, not by the pid file: an
+        // orphan whose pid no file records (seen live 2026-09-30, pid file naming a long-dead
+        // pid) would otherwise be unkillable here. A wedged one is killed, freeing the port.
         c = resolvePortOccupant();
         if (c != null) {
           return c;
         }
+        if (respawned) {
+          throw new IllegalStateException("pgwire-govdata could not be started on " + host()
+              + ":" + port() + ": twice a spawn exited while another process held the port, "
+              + "and that process went away without answering. Server output: " + spawnLog);
+        }
+        // The port's holder is gone: one fresh spawn can now win the port.
+        respawned = true;
+        spawnLogStart = spawnLog.length();
         spawned = spawnIfPossible();
       }
       Thread.sleep(SPAWN_POLL_INTERVAL_MILLIS);
@@ -230,6 +325,43 @@ final class PgwireGovDataConnector {
     throw new IllegalStateException(
         "pgwire-govdata did not start accepting connections on " + host() + ":" + port()
         + " within " + (SPAWN_TIMEOUT_MILLIS / 1000) + "s");
+  }
+
+  /** Whether anything listens on the port within {@code millis}. */
+  private static boolean portOpensWithin(int millis) throws InterruptedException {
+    long until = System.currentTimeMillis() + millis;
+    while (true) {
+      if (portIsOpen()) {
+        return true;
+      }
+      if (System.currentTimeMillis() >= until) {
+        return false;
+      }
+      Thread.sleep(250);
+    }
+  }
+
+  /** What the spawned server appended to {@code logFile} from {@code fromOffset} on: the last
+   *  {@value #SPAWN_LOG_TAIL_BYTES} bytes of it, for a failed start's error. */
+  static String spawnLogTail(File logFile, long fromOffset) throws IOException {
+    long length = logFile.length();
+    long from = Math.max(Math.min(fromOffset, length), length - SPAWN_LOG_TAIL_BYTES);
+    byte[] tail = new byte[(int) (length - from)];
+    try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(logFile, "r")) {
+      f.seek(from);
+      f.readFully(tail);
+    }
+    return new String(tail, java.nio.charset.StandardCharsets.UTF_8).trim();
+  }
+
+  static String failedStartMessage(long pid, int exitValue, File logFile, String output) {
+    return "pgwire-govdata, the data server, could not be started: its process (pid " + pid
+        + ") exited with status " + exitValue + " without listening on " + host() + ":" + port()
+        + ", and nothing else is listening there. "
+        + (output.isEmpty()
+            ? "It printed nothing."
+            : "The end of what it printed:\n" + output)
+        + "\nFull output: " + logFile;
   }
 
   /** What holds the pgwire port when pgwire-govdata isn't answering on it. */
@@ -308,8 +440,30 @@ final class PgwireGovDataConnector {
     try {
       pid = portListenerPid(port());
     } catch (IOException e) {
+      // The process cannot be named, so it can be neither classified nor killed. Wait for it:
+      // either it answers as pgwire-govdata, or it lets go of the port and null says so.
+      if (!portIsOpen()) {
+        return null;
+      }
       log().println("[askamerica-mcp] " + host() + ":" + port() + " is open but pgwire-govdata "
-          + "isn't answering, and the holder can't be identified (" + e.getMessage() + ").");
+          + "isn't answering, and the holder can't be identified (" + e.getMessage()
+          + ") — waiting for it to answer or to release the port.");
+      long deadline = System.currentTimeMillis() + SPAWN_TIMEOUT_MILLIS;
+      while (portIsOpen()) {
+        if (System.currentTimeMillis() >= deadline) {
+          throw new IllegalStateException(host() + ":" + port() + " is held by a process that "
+              + "cannot be identified (" + e.getMessage() + ") and has not answered as "
+              + "pgwire-govdata for " + (SPAWN_TIMEOUT_MILLIS / 1000) + "s. Free the port or "
+              + "point ASKAMERICA_PGWIRE_PORT at a free one.");
+        }
+        Thread.sleep(STARTING_POLL_INTERVAL_MILLIS);
+        Connection c = tryDirectConnect();
+        if (c != null) {
+          log().println("[askamerica-mcp] Connected to pgwire-govdata once the process holding "
+              + "the port finished starting.");
+          return c;
+        }
+      }
       return null;
     }
     if (pid == null) {
@@ -449,9 +603,8 @@ final class PgwireGovDataConnector {
    * Spawns the bundled pgwire-govdata launcher as a detached background process, if one can be
    * located. Race-safe by construction: if two processes spawn simultaneously, only one can
    * actually bind the port — the loser's spawned server exits immediately on bind failure, and
-   * both processes' poll loops converge on whichever one won. Silently does nothing (leaving the
-   * caller's poll loop to time out) if no launcher can be found at all — {@code
-   * getSchemaConnection()} then throws a clear error naming the failure. Deliberately NOT a
+   * both processes' poll loops converge on whichever one won. Throws, naming the cause, when no
+   * launcher can be found at all or the process cannot be created. Deliberately NOT a
    * fallback to the embedded engine: see getSchemaConnection()'s doc for why a silent
    * second data-access path is exactly the problem this design exists to eliminate.
    */
@@ -469,10 +622,9 @@ final class PgwireGovDataConnector {
       launcher = PgwireGovDataInstaller.ensureLauncher();
     }
     if (launcher == null) {
-      log().println("[askamerica-mcp] No pgwire-govdata launcher available "
-          + "(not bundled, and no matching release asset exists for this OS) — the "
-          + "connection attempt will time out and fail.");
-      return null;
+      throw new IllegalStateException("pgwire-govdata, the data server, is not installed and "
+          + "could not be: it is not bundled with this install, and this engine's release has "
+          + "no pgwire-govdata bundle published for this operating system.");
     }
     try {
       ProcessBuilder pb = new ProcessBuilder(launchCommand(launcher, isWindows()));
@@ -612,9 +764,9 @@ final class PgwireGovDataConnector {
           + launcher.getAbsolutePath() + " — log: " + logFile);
       return p;
     } catch (Exception e) {
-      log().println("[askamerica-mcp] Failed to spawn pgwire-govdata: "
-          + e.getClass().getSimpleName() + ": " + e.getMessage());
-      return null;
+      throw new IllegalStateException("pgwire-govdata, the data server, could not be started "
+          + "from " + launcher.getAbsolutePath() + ": " + e.getClass().getSimpleName() + ": "
+          + e.getMessage(), e);
     }
   }
 

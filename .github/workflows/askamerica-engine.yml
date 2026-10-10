@@ -344,27 +344,23 @@ jobs:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
-      # Bundles pgwire-govdata (and, via it, the EMBED() model — see
-      # pgwire-adapters-release.yml) directly into the installer, so a fresh install never
-      # needs a first-run download at all. That separate release workflow's own `release:
-      # types: [created]` trigger does not fire reliably (confirmed live: every prior run
-      # this project has had was a manual workflow_dispatch) -- so this step is
-      # self-sufficient: it dispatches that workflow itself if this version's bundle isn't
-      # already published, then waits.
+      # The installer is small and has a step to download its assets. It does NOT carry the
+      # pgwire-govdata bundle (about a gigabyte): the installed engine downloads the bundle of
+      # its own version on first use and verifies its sha256 (PgwireGovDataInstaller), on every
+      # platform, as it downloads the engine jar. From 0.91.0 to 0.109.1 the .msi and the .deb
+      # did carry it and were about 920 MB and 1,220 MB; the "Installer stays small" step below
+      # fails the build if that returns.
       #
-      # NOT on macOS: the bundle's jars carry native libraries (duckdb_jdbc, tokenizers,
-      # netty, onnxruntime, zstd-jni, jna, snappy-java, and the shaded sih-aperio jar that
-      # re-bundles several of these) that are unsigned inside their jar entries. Apple's
-      # notary service scans recursively into every jar/zip in the app bundle -- codesign
-      # on the assembled .app never reaches those nested entries, since they are zip
-      # contents, not files on disk -- so embedding this bundle made every macOS
-      # notarization submission fail (confirmed live via `xcrun notarytool log`, 2026-09-18:
-      # ~40 "binary is not signed" / "no secure timestamp" errors, all under
-      # pgwire-govdata/jars/). `prepareJpackageInput` in build.gradle.kts already treats a
-      # missing staged dir as the local-dev fallback (no bundled pgwire-govdata, matching
-      # PgwireGovDataInstaller's lazy-download-on-first-use path) -- skipping this step for
-      # macOS reaches that same fallback deliberately, keeping the notarized .app thin
-      # instead of re-signing dozens of nested native libraries on every build.
+      # What this step still does is make sure that download will succeed: the bundle for this
+      # version must be published before the installer that will ask for it. The bundle's own
+      # workflow's `release: types: [created]` trigger does not fire reliably (confirmed live:
+      # every prior run this project has had was a manual workflow_dispatch), so this step
+      # dispatches that workflow itself if this version's bundle is not yet published, waits
+      # for it, and checks the published tarball against its published sha256.
+      #
+      # Not on macOS, as before: that leg has never run this step (it was excluded when the
+      # bundle was taken out of the .pkg for notarization). The macOS bundle is built by the
+      # same dispatched workflow.
       - name: Ensure pgwire-govdata bundle for this version
         if: matrix.os != 'macos-latest'
         shell: bash
@@ -405,7 +401,7 @@ jobs:
             if [ "${IN_FLIGHT:-0}" = "0" ]; then
               echo "Dispatching pgwire-adapters release for $VERSION"
               gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
-                -f version="$VERSION"
+                -f version="$VERSION" -f publish=true
             else
               echo "A pgwire-adapters release run for $VERSION is already in flight -- waiting on it."
             fi
@@ -462,18 +458,8 @@ jobs:
             echo "::error::pgwire-govdata sha256 mismatch: expected $EXPECTED got $ACTUAL"
             exit 1
           fi
-          mkdir "$WORKDIR/extracted"
-          tar -xzf "$WORKDIR/pgwire-govdata.tar.gz" -C "$WORKDIR/extracted"
-          EXTRACTED=$(find "$WORKDIR/extracted" -mindepth 1 -maxdepth 1 -type d | head -1)
-          if [ -z "$EXTRACTED" ] || [ ! -d "$EXTRACTED" ]; then
-            echo "::error::tar extraction produced no directory under $WORKDIR/extracted"
-            ls -la "$WORKDIR/extracted"
-            exit 1
-          fi
-          mkdir -p askamerica-engine/build/pgwire-govdata-staged
-          cp -R "$EXTRACTED"/. askamerica-engine/build/pgwire-govdata-staged/
           rm -rf "$WORKDIR"
-          echo "Staged pgwire-govdata bundle: $(du -sh askamerica-engine/build/pgwire-govdata-staged | cut -f1)"
+          echo "$ASSET is published on $TAG and matches its sha256; it is not put into the installer."
 
       - name: Import Apple signing certificate (macOS only)
         if: matrix.os == 'macos-latest'
@@ -674,6 +660,32 @@ jobs:
           fi
           xcrun stapler staple "$PKG"
           echo "Notarization and stapling complete"
+
+      # The rule: the installer is small and has a step to download its assets. Before the
+      # pgwire-govdata bundle was put into them (0.91.0), the installers were 54 MB (.msi),
+      # 37 MB (.deb) and 33 MB (.pkg). 100 MB leaves room to grow and is a tenth of what an
+      # installer carrying the bundle weighs, so a build that bundles it again fails here.
+      - name: Installer stays small
+        shell: bash
+        env:
+          LIMIT_MB: "100"
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' installer; do
+            found=1
+            bytes=$(wc -c < "$installer" | tr -d '[:space:]')
+            mb=$(( (bytes + 1048575) / 1048576 ))
+            echo "$installer: ${mb} MB (limit ${LIMIT_MB} MB)"
+            if [ "$mb" -gt "$LIMIT_MB" ]; then
+              echo "::error::$installer is ${mb} MB; an installer must stay under ${LIMIT_MB} MB and download its assets instead of carrying them"
+              exit 1
+            fi
+          done < <(find askamerica-engine/build/jpackage -maxdepth 1 -type f -name '${{ matrix.artifact_glob }}' -print0)
+          if [ "$found" != "1" ]; then
+            echo "::error::no installer matching ${{ matrix.artifact_glob }} under askamerica-engine/build/jpackage"
+            exit 1
+          fi
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
@@ -1101,5 +1113,5 @@ jobs:
           BARE="${{ github.ref_name }}"
           BARE="${BARE#engine-v}"
           gh workflow run "pgwire-calcite release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
-          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
+          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}" --field publish=true
           echo "Dispatched pgwire-calcite + pgwire-adapters releases for version ${BARE}"
