@@ -14,7 +14,11 @@ again, from a pool, for Cowork and Code sessions.
     mcp_start_cases.py "<path to the installed launcher>"
 
 Cases that must complete the MCP `initialize` exchange:
-  - two starts at the same moment, both;
+  - two starts at the same moment, both, with the engine jar already on the machine;
+  - two starts at the same moment, both, with NO engine jar on the machine yet: each has to
+    fetch it, one waits on the other's download. The jar is served to them from this machine
+    (ASKAMERICA_ENGINE_URL), so this shows that both come up, not how long a real 415 MB
+    download keeps the second one waiting;
   - a start from another working directory;
   - on Windows, a start through cmd.exe with the launcher's path quoted.
 Cases that must complete it OR fail with a message of the launcher's own:
@@ -26,6 +30,8 @@ The launcher's path has spaces; what Windows prints for it is here to be compare
 
 Exits 0 when every required case holds, 1 otherwise.
 """
+import functools
+import http.server
 import os
 import sys
 import tempfile
@@ -68,15 +74,11 @@ def named_error(seen):
     return any(marker in line for line in seen for marker in OWN_ERRORS)
 
 
-def main() -> int:
-    launcher = sys.argv[1]
-    command = [launcher, "--mcp"]
-    failures = []
-
+def two_at_once(command, title, failures, env=None):
     results = [None, None]
 
     def start(i):
-        results[i] = handshake(command)
+        results[i] = handshake(command, env=env)
 
     threads = [threading.Thread(target=start, args=(i,)) for i in range(2)]
     for t in threads:
@@ -84,9 +86,41 @@ def main() -> int:
     for t in threads:
         t.join()
     for i, (answered, seen) in enumerate(results):
-        report(f"two at once, start {i + 1}", answered, seen)
+        report(f"{title}, start {i + 1}", answered, seen)
         if not answered:
-            failures.append(f"two at once: start {i + 1} did not answer")
+            failures.append(f"{title}: start {i + 1} did not answer")
+
+
+def two_first_starts(command, failures):
+    """Two starts at once on a machine with no engine jar: both fetch it, from this machine."""
+    title = "two at once, no engine jar on the machine"
+    built = os.environ.get("ASKAMERICA_ENGINE_JAR")
+    cached = os.path.join(os.path.expanduser("~"), ".askamerica", "engine", "askamerica-engine.jar")
+    if not built or not os.path.isfile(built):
+        failures.append(f"{title}: ASKAMERICA_ENGINE_JAR does not name the jar to serve")
+        return
+    if os.path.exists(cached):
+        failures.append(f"{title}: a jar is already cached at {cached}; the case cannot run")
+        return
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler, directory=os.path.dirname(os.path.abspath(built)))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        env = {k: v for k, v in os.environ.items() if k != "ASKAMERICA_ENGINE_JAR"}
+        env["ASKAMERICA_ENGINE_URL"] = (
+            f"http://127.0.0.1:{server.server_address[1]}/{os.path.basename(built)}")
+        two_at_once(command, title, failures, env=env)
+    finally:
+        server.shutdown()
+
+
+def main() -> int:
+    launcher = sys.argv[1]
+    command = [launcher, "--mcp"]
+    failures = []
+
+    two_at_once(command, "two at once", failures)
 
     with tempfile.TemporaryDirectory() as elsewhere:
         answered, seen = handshake(command, cwd=elsewhere)
@@ -113,6 +147,9 @@ def main() -> int:
             failures.append("through cmd.exe with the path quoted: did not answer")
         answered, seen = handshake(f"{launcher} --mcp", shell=True)
         report("through cmd.exe, path NOT quoted (shown only)", answered, seen)
+
+    # Last: it leaves a jar in the cache, which the cases above must not find.
+    two_first_starts(command, failures)
 
     for failure in failures:
         print(f"::error::{failure}")
