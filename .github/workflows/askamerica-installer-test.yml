@@ -415,6 +415,10 @@ jobs:
     name: The engine's spawn of a released server bundle listens (Windows)
     needs: [jar, build]
     runs-on: windows-latest
+    # Write access only so that this job can read the assets of a release that is still a
+    # DRAFT (a draft is invisible to a read-only token); it writes nothing.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
