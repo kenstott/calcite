@@ -525,6 +525,10 @@ final class PgwireGovDataConnector {
     try {
       Properties props = new Properties();
       props.setProperty("user", "askamerica");
+      // Every connection to pgwire-govdata signs in with its API key as the password, and
+      // is metered under it (owner rule 2026-10-10, ASKAM-010). A server from before that
+      // rule ignores the password.
+      props.setProperty("password", requireApiKey());
       props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_MILLIS / 1000));
       // Bounds EVERY query on this connection, not just the identity check below — a shared
       // server that wedges mid-query must not silently freeze whatever MCP tool call is
@@ -548,10 +552,49 @@ final class PgwireGovDataConnector {
     // Logged below, and null means "not connected," never confused with a real connection.
     // fallback-guard: allow -- see log line below
     } catch (SQLException e) {
+      String signIn = signInRefusal(e.getSQLState());
+      if (signIn != null) {
+        // The server is there and answered: waiting or spawning another will not help.
+        throw new IllegalStateException(signIn + " (" + e.getMessage() + ")", e);
+      }
       log().println("[askamerica-mcp] pgwire-govdata port is open but JDBC connect failed: "
           + e.getMessage());
       return null;
     }
+  }
+
+  /**
+   * This process's API key: FREE_ASKAMERICA_KEY when set, else ASKAMERICA_API_KEY, the same
+   * precedence everywhere. There is no connecting without one.
+   */
+  static String requireApiKey() {
+    String key = R2CredentialProvider.credentialApiKey();
+    if (key == null || key.isEmpty()) {
+      throw new IllegalStateException("No AskAmerica API key: set ASKAMERICA_API_KEY. The "
+          + "data server signs every connection in with it.");
+    }
+    return key;
+  }
+
+  /**
+   * What the data server's refusal of a sign-in means, by its SQLSTATE; null when the error
+   * is not a sign-in refusal (the server is still starting, say). The text never includes
+   * the key.
+   */
+  static String signInRefusal(String sqlState) {
+    if ("28P01".equals(sqlState)) {
+      return "The data server refused this AskAmerica API key: it is missing, invalid, "
+          + "expired or revoked. Check ASKAMERICA_API_KEY";
+    }
+    if ("28000".equals(sqlState)) {
+      return "The data server has locked out this AskAmerica API key after repeated refused "
+          + "sign-ins. Wait and try again with a valid key";
+    }
+    if ("08006".equals(sqlState)) {
+      return "The data server could not check the AskAmerica API key because the key service "
+          + "did not answer. Try again shortly";
+    }
+    return null;
   }
 
   /**
