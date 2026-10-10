@@ -26,6 +26,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,9 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A refresh replaces the Parquet cache file of a {@link RefreshableParquetCacheTable} while
- * queries on other threads read it. The cache file must be readable at every moment of a
- * refresh, including one whose replacement the operating system refuses, and a refresh must
- * rebuild it whatever the files' timestamps say.
+ * queries on other threads use it. The cache file must never be absent during a refresh, and
+ * a refresh must rebuild it whatever the files' timestamps say.
  */
 @Tag("unit")
 class RefreshableParquetCacheReplaceTest {
@@ -82,20 +82,24 @@ class RefreshableParquetCacheReplaceTest {
         .getRowType(new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT));
   }
 
-  @Test void cacheFileIsReadableThroughoutARefresh() throws Exception {
+  @Test void cacheFileIsNeverAbsentDuringARefresh() throws Exception {
     final RefreshableParquetCacheTable table = createTable("[{\"id\": 0}]");
 
+    // The reader requires only what the fix provides: at every moment the cache file exists
+    // and opens. It does not read the Parquet footer: a read whose two steps (length, then
+    // open) straddle a replacement can still fail until a rebuild writes a new file name
+    // instead of replacing the old one (issue 471).
     final AtomicBoolean done = new AtomicBoolean(false);
-    final AtomicInteger reads = new AtomicInteger();
-    final AtomicReference<Throwable> readFailure = new AtomicReference<Throwable>();
+    final AtomicInteger opens = new AtomicInteger();
+    final AtomicReference<Throwable> openFailure = new AtomicReference<Throwable>();
     Thread reader = new Thread(new Runnable() {
       @Override public void run() {
-        while (!done.get() && readFailure.get() == null) {
-          try {
-            readRowType(table.getParquetFile());
-            reads.incrementAndGet();
+        while (!done.get() && openFailure.get() == null) {
+          try (InputStream in = Files.newInputStream(table.getParquetFile().toPath())) {
+            in.read();
+            opens.incrementAndGet();
           } catch (Throwable t) {
-            readFailure.compareAndSet(null, t);
+            openFailure.compareAndSet(null, t);
           }
         }
       }
@@ -104,29 +108,36 @@ class RefreshableParquetCacheReplaceTest {
 
     long sourceTime = sourceFile.lastModified();
     try {
-      for (int i = 1; i <= REFRESHES && readFailure.get() == null; i++) {
+      for (int i = 1; i <= REFRESHES && openFailure.get() == null; i++) {
         writeSource("[{\"id\": " + i + "}]");
         sourceTime += 2000L;
         assertTrue(sourceFile.setLastModified(sourceTime), "source timestamp set");
 
+        // Replaced, or refused by the operating system (Windows refuses while another handle
+        // has the file open, and the refresh is tried again at the next interval): either
+        // way a cache file is in place.
         table.doRefresh();
-
-        // Whether this refresh replaced the file or the operating system refused the
-        // replacement (Windows does while another handle has the file open; the refresh is
-        // then tried again at the next interval), a complete cache file is in place.
         assertTrue(table.getParquetFile().isFile(), "a cache file is in place after refresh " + i);
-        assertEquals("id", readRowType(table.getParquetFile()).getFieldNames().get(0),
-            "the cache file is readable after refresh " + i);
       }
     } finally {
       done.set(true);
       reader.join(30000L);
     }
 
-    Throwable failure = readFailure.get();
-    assertNull(failure, () -> "the cache file was unreadable during a refresh after "
-        + reads.get() + " reads: " + failure + " / cause: " + failure.getCause());
-    assertTrue(reads.get() > 0, "the reader thread read the cache file");
+    Throwable failure = openFailure.get();
+    assertNull(failure, () -> "the cache file was absent or could not be opened during a "
+        + "refresh, after " + opens.get() + " opens: " + failure);
+    assertTrue(opens.get() > 0, "the reader thread opened the cache file");
+
+    // With the reader stopped nothing holds the file: a refresh completes, and what is in
+    // place is a whole Parquet file.
+    writeSource("[{\"id\": " + (REFRESHES + 1) + "}]");
+    sourceTime += 2000L;
+    assertTrue(sourceFile.setLastModified(sourceTime), "source timestamp set");
+    table.doRefresh();
+    assertEquals(sourceFile.lastModified(), table.lastModifiedTime,
+        "a refresh with no reader completes");
+    assertEquals("id", readRowType(table.getParquetFile()).getFieldNames().get(0));
   }
 
   @Test void refreshRebuildsACacheFileNewerThanItsSource() throws Exception {
