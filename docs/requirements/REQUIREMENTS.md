@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**325 requirements across 7 adapters.**
+**326 requirements across 7 adapters.**
 
 
-## askamerica  (5: 4 accepted, 1 proposed)
+## askamerica  (6: 5 accepted, 1 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -14,6 +14,7 @@
 | [.] | ASKAM-003 | MAY | behavioral | updates / Agreed update | The user agrees before the engine replaces its jar with a newer release. A future feature, not a decision to … | — |
 | [ ] | ASKAM-004 | MUST | constraint | concurrency / Concurrent engine processes | Several AskAmerica engine processes run concurrently on one host, as an MCP host starts them, and each has th… | — |
 | [ ] | ASKAM-005 | MUST | constraint | installer / Small installer | The installer is small and has a step to download its assets. No installer (.msi, .deb, .pkg) carries the eng… | — |
+| [ ] | ASKAM-006 | MUST | behavioral | semantic-search / Semantic search | Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing set by the user, the … | — |
 
 ## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
 

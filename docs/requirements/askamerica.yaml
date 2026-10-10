@@ -181,6 +181,14 @@
     .pkg) carries the engine jar or the pg-wire server bundle; the installed launcher
     downloads each on first use and verifies it. The installer build fails when an installer
     exceeds 100 MB.
+    The download is a step the user sees: the setup wizard fetches this version's pg-wire
+    server bundle (which carries the embedder model) with progress and the sizes stated,
+    verified by checksum and resumable, before it offers to configure and relaunch Claude.
+    On every path that reaches a data call without the bundle (a pip install, a cleared
+    cache, a release whose bundle is not attached yet, an update) the call answers at once
+    with a named status - "the data server is being installed (N of M MB)" or "this
+    version's data server is not published yet" - never a silent wait, and the download
+    continues in the background outside the query lock.
   source: >
     owner rule 2026-10-10 ("the installer is small and has a step to download its assets").
     History, from the release assets and git: through engine-v0.90.1 the installers were
@@ -189,4 +197,33 @@
     took it out of the .pkg only, because notarization rejected it; the .msi and the .deb
     shipped at about 920 MB and 1,220 MB through engine-v0.109.1. Enforced by the "Installer
     stays small" step of .github/workflows/askamerica-engine.yml; no test is cited.
+    The visible download step and the at-once status were added to this entry's acceptance
+    by the owner's lead on 2026-10-10, after reading showed that without them the ~900 MB
+    bundle arrives silently inside the first query (PgwireGovDataInstaller), so that "small"
+    and "says what it is downloading" are not separated again. Neither is built yet.
+  tests: []
+
+- id: ASKAM-006
+  module: askamerica
+  status: accepted
+  group: semantic-search
+  category: Semantic search
+  priority: MUST
+  type: behavioral
+  description: >
+    Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing
+    set by the user, the semantic_search tool and SQL SEMANTIC_SEARCH / EMBED return results.
+  source: >
+    owner 2026-10-10 ("semantic search must work."), on an installed Windows product whose
+    log said "embedder: none found - semantic_search/SEMANTIC_SEARCH will report 'no
+    embedder configured'". Read from the code the same day: in the default (pg-wire) mode
+    there is one embedder, in the pgwire-govdata server (fastembed, snowflake-arctic-embed-xs,
+    the model carried in the bundle); the semantic_search tool runs SEMANTIC_SEARCH through
+    that server, and McpServer.embedderConfigured() offers the tool on that basis. The quoted
+    log line comes from McpServer.configureQueryEmbedder, which looks for an embedder of the
+    MCP process's own without asking which mode is on, and is false in the default mode.
+    On that machine the server never became reachable, which is why no data call, semantic
+    search included, worked. Not established: that each platform's bundle contains the
+    model, and that vectors stored before the corpus pipeline moved to fastembed match.
+    No test is cited.
   tests: []
