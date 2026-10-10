@@ -188,6 +188,7 @@ jobs:
       # sessions: two at once, another working directory, a bare environment, another profile,
       # and through a shell. See mcp_start_cases.py for which of these must answer.
       - name: The other ways a host starts it
+        if: always() && env.ASKAMERICA_EXE != ''
         shell: pwsh
         env:
           ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar

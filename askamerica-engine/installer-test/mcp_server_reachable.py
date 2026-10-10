@@ -131,4 +131,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # What the server wrote is printed as it came; on Windows the console encoding cannot
+    # hold every character of it, and a print must not be what fails the check.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())
