@@ -13,7 +13,6 @@ package org.apache.calcite.adapter.askamerica;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.File;
 import java.lang.reflect.Proxy;
@@ -38,8 +37,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the next call.
  */
 @Tag("unit")
-@Isolated("the connector has one start in progress per process; concurrent tests would join it")
 class PgwireGovDataConnectorStartTest {
+
+  /** This test's own starter: the connector's is shared by the whole process, and another
+   *  test's real start in progress would be joined by these calls. */
+  private final PgwireGovDataConnector.Starter starter = new PgwireGovDataConnector.Starter();
+
+  private static void ignore(Connection c) {
+  }
 
   private static Connection connection() {
     return (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
@@ -53,20 +58,20 @@ class PgwireGovDataConnectorStartTest {
     long began = System.currentTimeMillis();
     IllegalStateException failure =
         assertThrows(IllegalStateException.class, () ->
-            PgwireGovDataConnector.awaitStart(() -> {
+            starter.await(() -> {
               starts.incrementAndGet();
               throw new IllegalStateException("the server exited with status 1");
-            }, 60_000));
+            }, 60_000, PgwireGovDataConnectorStartTest::ignore));
     assertEquals("the server exited with status 1", failure.getMessage());
     assertTrue(System.currentTimeMillis() - began < 10_000,
         "a failed start is reported without waiting out the call's bound");
 
     Connection up = connection();
     assertSame(up,
-        PgwireGovDataConnector.awaitStart(() -> {
+        starter.await(() -> {
           starts.incrementAndGet();
           return up;
-        }, 60_000));
+        }, 60_000, PgwireGovDataConnectorStartTest::ignore));
     assertEquals(2, starts.get(), "the next call started the server again");
   }
 
@@ -82,11 +87,11 @@ class PgwireGovDataConnectorStartTest {
     try {
       IllegalStateException first =
           assertThrows(IllegalStateException.class,
-              () -> PgwireGovDataConnector.awaitStart(slow, 200));
+              () -> starter.await(slow, 200, PgwireGovDataConnectorStartTest::ignore));
       assertTrue(first.getMessage().contains("still starting"), first.getMessage());
       IllegalStateException second =
           assertThrows(IllegalStateException.class,
-              () -> PgwireGovDataConnector.awaitStart(slow, 200));
+              () -> starter.await(slow, 200, PgwireGovDataConnectorStartTest::ignore));
       assertTrue(second.getMessage().contains("still starting"), second.getMessage());
       assertEquals(1, starts.get(), "the second call waited on the first call's start");
     } finally {
@@ -94,7 +99,7 @@ class PgwireGovDataConnectorStartTest {
     }
     // Either this call joins the start just released, or that one has finished and this
     // begins one of its own; both return a connection.
-    assertFalse(PgwireGovDataConnector.awaitStart(() -> up, 60_000) == null);
+    assertFalse(starter.await(() -> up, 60_000, PgwireGovDataConnectorStartTest::ignore) == null);
   }
 
   @Test void failedStartErrorCarriesOnlyWhatThisSpawnPrinted(@TempDir Path dir) throws Exception {

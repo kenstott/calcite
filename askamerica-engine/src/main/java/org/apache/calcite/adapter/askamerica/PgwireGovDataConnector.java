@@ -110,9 +110,8 @@ final class PgwireGovDataConnector {
 
   private static final Object LOCK = new Object();
   private static volatile Connection sharedConnection;
-  /** The start in progress, if any; guarded by LOCK. Every call waits on this one result. */
-  private static java.util.concurrent.CompletableFuture<Connection> starting;
-  private static long startingSinceMillis;
+  /** The one start in progress for this process, if any. Every call waits on its result. */
+  private static final Starter STARTER = new Starter();
 
   private PgwireGovDataConnector() {}
 
@@ -188,59 +187,69 @@ final class PgwireGovDataConnector {
         return existing;
       }
     }
-    return awaitStart(PgwireGovDataConnector::connect, CALL_WAIT_MILLIS);
+    return STARTER.await(PgwireGovDataConnector::connect, CALL_WAIT_MILLIS,
+        c -> sharedConnection = c);
   }
 
   /**
-   * Waits, for at most {@code waitMillis}, on the one start in progress, beginning it with
-   * {@code connect} when there is none. The start runs on its own thread and LOCK is held only
-   * to look at it, so a start that takes minutes does not queue every other data call behind
-   * a lock: each call gets the connection, the start's own failure, or after {@code
-   * waitMillis} the statement that the server is still starting. A failed start is forgotten
-   * once reported, so a later call tries again.
+   * One start at a time, waited on by every caller. The start runs on its own thread and the
+   * starter's lock is held only to look at it, so a start that takes minutes does not queue
+   * every other data call behind a lock: each call gets the connection, the start's own
+   * failure, or after its wait the statement that the server is still starting. A failed
+   * start is forgotten once reported, so a later call tries again.
    */
-  static Connection awaitStart(java.util.concurrent.Callable<Connection> connect,
-      long waitMillis) throws Exception {
-    final java.util.concurrent.CompletableFuture<Connection> start;
-    final long since;
-    synchronized (LOCK) {
-      if (starting == null) {
-        final java.util.concurrent.CompletableFuture<Connection> begun =
-            new java.util.concurrent.CompletableFuture<>();
-        starting = begun;
-        startingSinceMillis = System.currentTimeMillis();
-        Thread t = new Thread(() -> {
-          try {
-            Connection c = connect.call();
-            synchronized (LOCK) {
-              sharedConnection = c;
-              starting = null;
+  static final class Starter {
+    private java.util.concurrent.CompletableFuture<Connection> starting;
+    private long sinceMillis;
+
+    /**
+     * Waits, for at most {@code waitMillis}, on the start in progress, beginning it with
+     * {@code connect} when there is none. {@code onConnected} receives the connection on the
+     * starting thread, before any waiter is released.
+     */
+    Connection await(java.util.concurrent.Callable<Connection> connect, long waitMillis,
+        java.util.function.Consumer<Connection> onConnected) throws Exception {
+      final java.util.concurrent.CompletableFuture<Connection> start;
+      final long since;
+      synchronized (this) {
+        if (starting == null) {
+          final java.util.concurrent.CompletableFuture<Connection> begun =
+              new java.util.concurrent.CompletableFuture<>();
+          starting = begun;
+          sinceMillis = System.currentTimeMillis();
+          Thread t = new Thread(() -> {
+            try {
+              Connection c = connect.call();
+              onConnected.accept(c);
+              synchronized (Starter.this) {
+                starting = null;
+              }
+              begun.complete(c);
+            } catch (Throwable e) {
+              synchronized (Starter.this) {
+                starting = null;
+              }
+              begun.completeExceptionally(e);
             }
-            begun.complete(c);
-          } catch (Throwable e) {
-            synchronized (LOCK) {
-              starting = null;
-            }
-            begun.completeExceptionally(e);
-          }
-        }, "askamerica-pgwire-start");
-        t.setDaemon(true);
-        t.start();
+          }, "askamerica-pgwire-start");
+          t.setDaemon(true);
+          t.start();
+        }
+        start = starting;
+        since = sinceMillis;
       }
-      start = starting;
-      since = startingSinceMillis;
-    }
-    try {
-      return start.get(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
-    } catch (java.util.concurrent.TimeoutException e) {
-      throw new IllegalStateException(stillStartingMessage(
-          (System.currentTimeMillis() - since) / 1000));
-    } catch (java.util.concurrent.ExecutionException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof Exception) {
-        throw (Exception) cause;
+      try {
+        return start.get(waitMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+      } catch (java.util.concurrent.TimeoutException e) {
+        throw new IllegalStateException(stillStartingMessage(
+            (System.currentTimeMillis() - since) / 1000));
+      } catch (java.util.concurrent.ExecutionException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof Exception) {
+          throw (Exception) cause;
+        }
+        throw e;
       }
-      throw e;
     }
   }
 
