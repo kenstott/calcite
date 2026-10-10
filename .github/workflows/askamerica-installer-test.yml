@@ -195,7 +195,19 @@ jobs:
           python askamerica-engine/installer-test/mcp_start_cases.py "$env:ASKAMERICA_EXE"
           if ($LASTEXITCODE -ne 0) { throw "a start that must work did not" }
 
+      # Issue 484: with the data server unable to start, a query must fail by name within
+      # seconds, not wait past the four minutes after which Claude Desktop cancels the call.
+      - name: A query with the data server unreachable fails by name, quickly
+        if: always() && env.ASKAMERICA_EXE != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_unreachable_query.py "$env:ASKAMERICA_EXE"
+          if ($LASTEXITCODE -ne 0) { throw "a query with no data server was not answered with a named error in time" }
+
       - name: Uninstall removes the product
+        if: always() && env.ASKAMERICA_EXE != ''
         shell: pwsh
         run: |
           Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:ASKAMERICA_INSTALL_DIR) } | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -377,7 +389,14 @@ jobs:
           ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
         run: python3 askamerica-engine/installer-test/mcp_start_cases.py "$ASKAMERICA_EXE"
 
+      - name: A query with the data server unreachable fails by name, quickly
+        if: always() && env.ASKAMERICA_EXE != ''
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}/engine/askamerica-engine.jar
+        run: python3 askamerica-engine/installer-test/mcp_unreachable_query.py "$ASKAMERICA_EXE"
+
       - name: Removing the package removes the launcher
+        if: always() && env.ASKAMERICA_EXE != ''
         run: |
           set -euo pipefail
           sudo dpkg -r "$ASKAMERICA_PACKAGE"
