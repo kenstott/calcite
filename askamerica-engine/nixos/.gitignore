@@ -1,0 +1,3 @@
+# Written by the nixos job of pgwire-adapters-release.yml for one run.
+ci_authorized_key.pub
+flake.lock
