@@ -40,4 +40,4 @@ jobs:
           echo "$JAR: $(( $(stat -c%s "$JAR") / 1048576 )) MB"
           echo "largest top-level trees, MB compressed in the jar:"
           unzip -lv "$JAR" | awk 'NR>3 && $8 != "" { split($8, p, "/"); k = p[1] "/" p[2]; c[k] += $3 }
-            END { for (k in c) printf "%8.1f  %s\n", c[k] / 1048576, k }' | sort -rn | head -25
+            END { for (k in c) printf "%8.1f  %s\n", c[k] / 1048576, k }' | sort -rn | sed -n '1,25p'
