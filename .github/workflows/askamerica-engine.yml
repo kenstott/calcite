@@ -1084,12 +1084,12 @@ jobs:
             --title "AskAmerica Engine ${TAG}" --notes-file /tmp/release-notes.md
           shopt -s globstar
           gh release upload "$TAG" --repo "${{ github.repository }}" --clobber release-assets/**/*
-          # release-please creates the release as a draft (release-please-config.json), so it
-          # is not releases/latest until now. Published before its jar was attached, every
-          # installed launcher saw a newer version, downloaded
-          # releases/latest/download/askamerica-engine.jar, got 404, and could not start
-          # (engine-v0.100.1, 2026-09-30).
-          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest
+          # NOT published here. The release stays a draft, and so is not releases/latest,
+          # until every download it must have is attached: see the publish-release job. Published
+          # before its jar was attached, every installed launcher saw a newer version,
+          # downloaded releases/latest/download/askamerica-engine.jar, got 404, and could not
+          # start (engine-v0.100.1, 2026-09-30); published before its server bundles, an engine
+          # at that version found no data server to install.
 
       # The pgwire-calcite installers attach on a release event, but a release created above by
       # GITHUB_TOKEN does not emit one. Dispatch that workflow explicitly now that the release
@@ -1103,3 +1103,50 @@ jobs:
           gh workflow run "pgwire-calcite release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
           gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}" --field publish=true
           echo "Dispatched pgwire-calcite + pgwire-adapters releases for version ${BARE}"
+
+  # The one place a release becomes public. Owner rule 2026-10-10: only a successful build
+  # flips the release; otherwise it stays a draft. The server bundles are attached by the two
+  # workflows dispatched above, which this workflow cannot wait on by run, so this waits on the
+  # result itself: the release's own asset list, complete by name. If a build fails the wait
+  # runs out, the release stays a draft and the previous release stays "latest"; re-running
+  # the failed jobs and then this one completes it.
+  publish-release:
+    name: Publish the release when it is complete
+    runs-on: ubuntu-latest
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 300
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for every download to be attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          deadline=$(( $(date +%s) + 270 * 60 ))
+          until .github/scripts/release-assets-complete.sh "${{ github.repository }}" "$TAG" > assets.txt; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              cat assets.txt
+              {
+                echo "### $TAG was NOT published"
+                echo "It is still a draft; the previous release is still \"latest\". Missing:"
+                echo '```'
+                grep '^missing' assets.txt || true
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::$TAG is incomplete after 270 minutes and stays a draft"
+              exit 1
+            fi
+            tail -1 assets.txt
+            sleep 120
+          done
+          cat assets.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest
+          echo "### $TAG published as the latest release, complete" >> "$GITHUB_STEP_SUMMARY"
