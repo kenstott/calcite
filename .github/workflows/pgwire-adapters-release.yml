@@ -31,6 +31,7 @@ on:
         options:
           - all
           - linux-file-govdata
+          - windows-file
   release:
     types: [created]
 
@@ -62,6 +63,7 @@ jobs:
       adapters: ${{ steps.plan.outputs.adapters }}
       os: ${{ steps.plan.outputs.os }}
       smoke_os: ${{ steps.plan.outputs.smoke_os }}
+      smoke_windows: ${{ steps.plan.outputs.smoke_windows }}
     steps:
       - id: plan
         env:
@@ -87,10 +89,17 @@ jobs:
           if scope == "linux-file-govdata":
               adapters = [a for a in adapters if a["name"] in ("file", "govdata")]
               platforms = [p for p in platforms if p["variant"] == "linux-x86_64"]
+          elif scope == "windows-file":
+              # The smallest run that starts a Windows server: one jar set, one bundle.
+              adapters = [a for a in adapters if a["name"] == "file"]
+              platforms = [p for p in platforms if p["variant"] == "windows-x86_64"]
           elif scope != "all":
               raise SystemExit(f"unknown scope: {scope}")
-          # The smoke job runs the file bundle; there is no Windows smoke.
+          # The smoke job runs the file bundle on the Unix runners; smoke-windows runs it on
+          # Windows, whose launcher is a .bat and shares nothing with the Unix one.
           smoke = [p for p in platforms if p["variant"] != "windows-x86_64"]
+          windows = any(p["variant"] == "windows-x86_64" for p in platforms)
+          print("smoke_windows=" + ("true" if windows else "false"))
           print("jars=" + json.dumps([{"name": a["name"], "module": a["module"]} for a in adapters]))
           print("adapters=" + json.dumps(adapters))
           print("os=" + json.dumps(platforms))
@@ -490,6 +499,8 @@ jobs:
   # Any failing step here fails the workflow run.
   smoke:
     needs: [plan, bundle]
+    # A run that builds no Unix bundle has nothing for this job (an empty matrix is an error).
+    if: needs.plan.outputs.smoke_os != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -594,9 +605,86 @@ jobs:
 
   # The only job that attaches anything to a release. It runs after the smoke job, so a bundle
   # that does not start is never published, and only when this run publishes (see PUBLISH).
+  # The Windows bundle, started. Its launcher is generated separately from the Unix one (a .bat
+  # run through cmd.exe), and until this job nothing in a release build ran it: the Windows
+  # server of 0.109.2 and earlier could not start at all (its classpath was cut at cmd.exe's
+  # 8,191 characters, issue 497) and every release build was green.
+  smoke-windows:
+    needs: [plan, bundle]
+    if: needs.plan.outputs.smoke_windows == 'true'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle-file-windows-x86_64
+          path: dl
+
+      - name: Extract with Python's safe tarfile filter (proves relocatability)
+        run: |
+          $tar = (Get-ChildItem dl -Filter 'pgwire-file-*-windows-x86_64.tar.gz' | Select-Object -First 1).FullName
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          python -c "import sys, tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter='data')" $tar smoke
+          if ($LASTEXITCODE -ne 0) { throw "could not extract $tar" }
+          $bundle = (Get-ChildItem smoke -Directory -Filter 'pgwire-file-*' | Select-Object -First 1).FullName
+          "BUNDLE_DIR=$bundle" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Fixture directory (one CSV) for the file adapter's model.json
+        run: |
+          New-Item -ItemType Directory -Force "$env:BUNDLE_DIR\model\data" | Out-Null
+          Set-Content -Path "$env:BUNDLE_DIR\model\data\people.csv" -Value "id,name`n1,alice`n2,bob" -Encoding ascii
+
+      # One step: a Windows runner ends the processes a step started when the step ends, so a
+      # server started in one step is gone by the next.
+      - name: Start pgwire-file and query the fixture table, from the bundled runtime, with the whole classpath
+        run: |
+          # The host offers no Java: the server must start from the runtime it carries.
+          Remove-Item Env:JAVA_HOME -ErrorAction SilentlyContinue
+          $env:PGWIRE_CALCITE_STATE_DIR = "$PWD\smoke-state"
+          # Started directly, with its output redirected by PowerShell: a `cmd /c` line holding
+          # two quoted paths loses its outer quotes and starts nothing.
+          Start-Process -FilePath "$env:BUNDLE_DIR\bin\pgwire-file.bat" -ArgumentList '--port', '5455', '--auth', 'trust' -RedirectStandardOutput smoke-server.out -RedirectStandardError smoke-server.log -WindowStyle Hidden
+          $up = $false
+          foreach ($i in 1..120) {
+            try { $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 5455); $c.Close(); $up = $true; break } catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (-not $up) { throw "pgwire-file never opened port 5455" }
+          Write-Host "port 5455 is up"
+
+          $psql = if ($env:PGBIN) { Join-Path $env:PGBIN 'psql.exe' } else { 'psql.exe' }
+          Write-Host "psql: $((Get-Command $psql).Source)"
+          $rows = & $psql "host=127.0.0.1 port=5455 user=tester dbname=postgres" -At -c "SELECT count(*) FROM people;"
+          if ($LASTEXITCODE -ne 0 -or "$rows".Trim() -ne '2') { throw "expected 2 rows in people, got '$rows' (psql exit $LASTEXITCODE)" }
+          $log = "$(Get-Content smoke-server.log -Raw)$(Get-Content smoke-server.out -Raw)"
+          $jars = @(Get-ChildItem "$env:BUNDLE_DIR\jars" -Filter *.jar).Count
+          if ($log -notmatch 'JVM started with (\d+) classpath entries') { throw "the server did not say how many classpath entries its JVM started with" }
+          $entries = [int]$Matches[1]
+          Write-Host "the bundle holds $jars jars; the JVM started with $entries classpath entries"
+          if ($entries -lt $jars) { throw "the JVM was given $entries of the bundle's $jars jars" }
+          if ($log -notmatch 'JVM library: .*\\jre\\') { throw "the Calcite JVM did not start from the bundled runtime" }
+          if (Test-Path "$env:BUNDLE_DIR\jars.classpath") { throw "jars.classpath was written into the install tree" }
+
+      - name: Stop pgwire-file
+        if: always()
+        run: |
+          Get-Process | Where-Object { $_.Path -and $env:BUNDLE_DIR -and $_.Path.StartsWith($env:BUNDLE_DIR) } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Server log
+        if: always()
+        run: |
+          Get-Content smoke-server.out -ErrorAction SilentlyContinue
+          Get-Content smoke-server.log -ErrorAction SilentlyContinue
+
   publish:
-    needs: [plan, bundle, smoke]
-    if: github.event_name == 'release' || inputs.publish == true
+    needs: [plan, bundle, smoke, smoke-windows]
+    # A smoke job is skipped in a run that builds no bundle for it; that must not skip this.
+    if: >-
+      always() && needs.bundle.result == 'success'
+      && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
+      && (needs.smoke-windows.result == 'success' || needs.smoke-windows.result == 'skipped')
+      && (github.event_name == 'release' || inputs.publish == true)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
