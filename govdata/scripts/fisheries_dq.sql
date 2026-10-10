@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings
+-- Tables: noaa_commercial_landings, dart_adult_counts
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -139,6 +139,81 @@ SELECT 'fisheries', 'noaa_commercial_landings', 'T7_salmon_flag_consistency',
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_commercial_landings', allow_moved_paths := true)
       WHERE (is_salmon AND (salmon_species IS NULL OR salmon_origin IS NULL))
          OR (NOT is_salmon AND (salmon_species IS NOT NULL OR salmon_origin IS NOT NULL)));
+
+-- ─────────────────────────────────────────────────────────────
+-- dart_adult_counts
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true));
+
+-- 17 projects, most with decades of history across several species
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T2_row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END, n, 3000, 'Expected at least 3000 project x year x species rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('project', 'type'))
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true))
+        WHERE approx_unique <= 1 AND column_name NOT IN ('project', 'type'))
+);
+
+-- Natural key: project x year x species
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL key/NOT NULL columns'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true)
+      WHERE project_code IS NULL OR project_name IS NULL OR river IS NULL OR state_abbrs IS NULL
+         OR count_year IS NULL OR species IS NULL OR adult_count IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate project_code x count_year x species keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT project_code, count_year, species FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true)
+        GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T7_no_large_negatives',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with adult_count below -10 (the source reports net counts, so tiny negatives from fallback are real: 5 rows of -1..-4)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true) WHERE adult_count < -10);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T7_all_projects_loaded',
+  CASE WHEN n = 17 THEN 'pass' ELSE 'fail' END, n, 17, 'Distinct project_code values (expect 17)'
+FROM (SELECT COUNT(DISTINCT project_code) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true));
+
+-- Bonneville 2023 Chinook is on the order of 100k-500k adults; the series starts in 1938
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T7_bonneville_chinook_magnitude',
+  CASE WHEN yrs >= 80 AND mx BETWEEN 2e5 AND 2e6 THEN 'pass' ELSE 'fail' END, mx, 2e5,
+  'Bonneville Chinook: max annual count (expect 200k-2M) over ' || yrs || ' years (expect >= 80)'
+FROM (SELECT MAX(adult_count) AS mx, COUNT(DISTINCT count_year) AS yrs FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true)
+      WHERE project_code = 'BON' AND species = 'Chinook');
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'dart_adult_counts', 'T7_spans_states_consistency',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where spans_states disagrees with a comma in state_abbrs'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/dart_adult_counts', allow_moved_paths := true) WHERE spans_states <> (state_abbrs LIKE '%,%'));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

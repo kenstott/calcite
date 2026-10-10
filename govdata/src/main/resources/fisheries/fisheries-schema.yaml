@@ -6,6 +6,9 @@
 #     https://apps-st.fisheries.noaa.gov/ods/foss/landings/ (keyless JSON)
 #     Metadata: https://apps-st.fisheries.noaa.gov/ods/foss/metadata-catalog/landings/
 #
+#   - Columbia Basin Research (Univ. of Washington) DART adult fish passage annual counts
+#     https://www.cbr.washington.edu/dart/query/adult_annual_sum (keyless CSV, USACE/PUD counts)
+#
 # Features:
 #   - Commercial landings (pounds, dollars) and recreational catch (MRIP fish counts)
 #     by state, species and year, 1950 onward
@@ -17,7 +20,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. One table today: noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Two tables: dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -56,6 +59,12 @@ column_templates:
 # ============================================================================
 
 dimension_values:
+
+  # Dams/counting projects with adult passage counts in DART (code used as proj=).
+  dart_projects: &dart_projects
+    type: list
+    values: ["BON","TDA","JDA","MCN","IHR","LMN","LGS","LWG","PRD","WAN","RIS","RRH","WEL",
+             "WFF","PRO","ROZ","TUM"]
 
   # dataLag: 2 — FOSS carries data through current-2 (2024 is the newest year as of Oct 2026;
   # 2025 returns an empty page). The URL templates {effective_year}. The default start is
@@ -215,3 +224,102 @@ partitionedTables:
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # DART_ADULT_COUNTS — adult salmon/steelhead passage counts at dams (WA/OR)
+  # ---------------------------------------------------------------------------
+  - name: dart_adult_counts
+    freshness:
+      type: hash
+    pattern: "type=dart_adult_counts/project=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: project
+          type: VARCHAR
+    comment: >
+      Annual adult fish passage counts at Columbia basin dams and fishways (Columbia Basin
+      Research DART, from USACE and public utility district counts): Chinook, Jack Chinook,
+      Steelhead, Wild Steelhead, Sockeye, Coho, Jack Coho, Chum, Pink, plus Shad, Lamprey
+      and Bull Trout, one row per project x year x species. 17 projects on the Columbia,
+      Snake, Yakima, Wenatchee and Willamette rivers; Bonneville back to 1938. This is the
+      closest keyless run-size signal for WA and OR salmon (Bonneville is the first dam up the
+      Columbia, so its Chinook/Steelhead/Sockeye counts approximate the total Columbia
+      return); it is a passage count at a dam, not a per-stock escapement estimate. Adults
+      counted at Lower Granite and the other Snake dams are headed to Idaho spawning grounds
+      but the dams are in Washington, so state_abbrs gives the dam's location, and
+      spans_states = true marks Columbia dams on the WA/OR border (BON, TDA, JDA, MCN): do not
+      add those to a by-state sum. Counts are not additive across dams in the same river
+      (the same fish is counted at each). Hatchery fish are included except where the species
+      column says Wild.
+
+    dimensions:
+      type:
+        - dart_adult_counts
+      project: *dart_projects
+
+    columns:
+      - name: project_code
+        type: string
+        nullable: false
+        comment: DART project code (BON, TDA, JDA, MCN, IHR, LMN, LGS, LWG, PRD, WAN, RIS, RRH, WEL, WFF, PRO, ROZ, TUM)
+      - name: project_name
+        type: string
+        nullable: false
+        comment: Dam or counting station name, e.g. Bonneville, Lower Granite, Willamette Falls
+      - name: river
+        type: string
+        nullable: false
+        comment: River the project sits on (Columbia, Snake, Yakima, Wenatchee, Willamette)
+      - name: state_abbrs
+        type: string
+        nullable: false
+        comment: Comma-separated 2-letter state(s) the dam sits in, e.g. 'WA' or 'OR,WA' for border dams; join to geo.state_ref
+      - name: spans_states
+        type: boolean
+        nullable: false
+        comment: true for Columbia dams on the Oregon/Washington border
+      - name: count_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the count
+      - name: species
+        type: string
+        nullable: false
+        comment: DART species/category, e.g. Chinook, Jack Chinook, Steelhead, Wild Steelhead, Sockeye, Coho, Jack Coho, Chum, Pink, Shad, Bull Trout, Lamprey (daytime)
+      - name: adult_count
+        type: bigint
+        nullable: false
+        comment: Net fish counted passing the project that year (fallbacks are subtracted, so a few rare years show -1 to -4); species with no count that year are absent, not zero-filled. The current calendar year is partial
+
+    source:
+      type: http
+      url: "https://www.cbr.washington.edu/dart/cs/php/rpt/adult_annual.php?sc=1&outputFormat=csv&year=2023&proj={project}&span=no&startdate=1%2F1&enddate=12%2F31&run="
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The CSV carries footnotes that FisheriesDartCountsTransformer strips; a raw-cache
+      # replay would hand it the post-transform envelope instead.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesDartCountsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=dart_adult_counts/project=*/"
+      partition:
+        columns: [type, project]
+      iceberg:
+        <<: *iceberg_common
+        tableName: dart_adult_counts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
