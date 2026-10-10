@@ -33,6 +33,10 @@ env:
   # Claude Desktop could not start the server after installing the .msi. Named, not "latest":
   # the latest release has no installers until its own workflow has finished.
   PREVIOUS_RELEASE: engine-v0.109.1
+  # The release whose Windows server bundle the server-windows job unpacks and has the engine
+  # spawn. Its JVM must be given the whole classpath (issue 497): set this to a release built
+  # after the fix to prove a Windows data server starts.
+  BUNDLE_RELEASE: engine-v0.109.1
 
 jobs:
   # The engine jar from this ref. The installed launcher is pointed at it with
@@ -409,8 +413,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force bundle-download | Out-Null
-          gh release download $env:PREVIOUS_RELEASE --repo "${{ github.repository }}" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz.sha256" --dir bundle-download
-          if ($LASTEXITCODE -ne 0) { throw "could not download the Windows server bundle of $env:PREVIOUS_RELEASE" }
+          gh release download $env:BUNDLE_RELEASE --repo "${{ github.repository }}" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz" --pattern "pgwire-govdata-*-windows-x86_64.tar.gz.sha256" --dir bundle-download
+          if ($LASTEXITCODE -ne 0) { throw "could not download the Windows server bundle of $env:BUNDLE_RELEASE" }
+          Write-Host "server bundle under test: $env:BUNDLE_RELEASE"
           $tar = (Get-ChildItem bundle-download -Filter *.tar.gz | Select-Object -First 1).FullName
           $want = ((Get-Content "$tar.sha256" -Raw).Trim() -split '\s+')[0].ToLower()
           $have = (Get-FileHash $tar -Algorithm SHA256).Hash.ToLower()
