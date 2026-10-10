@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement
+-- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -356,6 +356,94 @@ SELECT 'fisheries', 'cdfw_grandtab_escapement', 'T7_fall_2025_matches_source',
   CASE WHEN total = 235769 THEN 'pass' ELSE 'fail' END, total, 235769,
   'Fall run 2025 In-River + Hatchery vs SacPAS Chinook:Fall type=All (235,769)'
 FROM (SELECT COALESCE(SUM(escapement), 0) AS total FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/cdfw_grandtab_escapement', allow_moved_paths := true) WHERE run_name = 'Fall' AND count_year = 2025);
+
+-- ─────────────────────────────────────────────────────────────
+-- esa_salmonid_listings
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T2_row_count',
+  CASE WHEN n >= 40 THEN 'pass' ELSE 'fail' END, n, 40, 'Expected at least 40 salmon/steelhead listing entities'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL common_name, scientific_name, species_group, esa_status or lead_agency rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true)
+      WHERE common_name IS NULL OR scientific_name IS NULL OR species_group IS NULL
+         OR esa_status IS NULL OR lead_agency IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T7_species_groups',
+  CASE WHEN bad = 0 AND n = 7 THEN 'pass' ELSE 'fail' END, n, 7,
+  'Distinct species_group values (expect 7: chinook, coho, chum, sockeye, pink, steelhead, atlantic); out-of-set rows: ' || bad
+FROM (SELECT COUNT(DISTINCT species_group) AS n,
+             COUNT(*) FILTER (WHERE species_group NOT IN ('chinook','coho','chum','sockeye','pink','steelhead','atlantic')) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true));
+
+-- Every listed/experimental entity carries states (the transformer rejects one without)
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T7_listed_have_states',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Listed rows with null state_abbrs'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true) WHERE status_category = 'Listed' AND state_abbrs IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T7_listing_date_format',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Non-null listing_date not in yyyy-MM-dd'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true)
+      WHERE listing_date IS NOT NULL AND NOT regexp_matches(listing_date, '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'));
+
+-- Known fact: Snake River sockeye ESU listed Endangered 1992-01-03 (50 CFR 224.101)
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T7_snake_sockeye_endangered',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Snake River sockeye rows with status Endangered and listing_date 1992-01-03'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true)
+      WHERE species_group = 'sockeye' AND esa_status = 'Endangered'
+        AND listing_date = '1992-01-03' AND state_abbrs = 'ID,OR,WA');
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'esa_salmonid_listings', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate common_name x population_name x esa_status keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT common_name, population_name, esa_status FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/esa_salmonid_listings', allow_moved_paths := true)
+                                 GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

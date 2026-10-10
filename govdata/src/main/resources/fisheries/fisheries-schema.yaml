@@ -17,6 +17,8 @@
 #     https://www.adfg.alaska.gov/sf/FishCounts/ (keyless JSON export)
 #   - CDFW GrandTab Central Valley Chinook escapement, via SacPAS (Columbia Basin Research)
 #     https://www.cbr.washington.edu/sacramento/data/query_adult_grandtab.html (keyless CSV)
+#   - USFWS ECOS species report (ESA listing status of salmon/steelhead ESUs/DPSs)
+#     https://ecos.fws.gov/ecp/pullreports/ (keyless JSON)
 #   - Cross-references geo.state_ref via state_abbr
 # ============================================================================
 
@@ -24,7 +26,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Tables: cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -559,6 +561,109 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: cdfw_grandtab_escapement
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # ESA_SALMONID_LISTINGS — ESA status of salmon / steelhead ESUs and DPSs
+  # ---------------------------------------------------------------------------
+  - name: esa_salmonid_listings
+    freshness:
+      type: hash
+    pattern: "type=esa_salmonid_listings/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Endangered Species Act status of every Pacific salmon, steelhead and Atlantic salmon
+      listing entity from the U.S. Fish and Wildlife Service ECOS species report (NOAA
+      Fisheries is the lead agency for these): one row per Evolutionarily Significant Unit
+      (salmon) or Distinct Population Segment (steelhead, Atlantic salmon), covering Chinook,
+      coho, chum, sockeye, pink, steelhead and Atlantic salmon. esa_status gives the
+      designation (Threatened, Endangered, Experimental Population Non-Essential, Under
+      Review, Resolved Taxon, Species of Concern, ...), status_category the listed / not
+      listed / delisted bucket, and listing_date when the unit was first listed. Use it to read
+      population trends against recovery status, e.g. which states have listed salmon:
+      state_abbrs is the comma-separated states each ESU/DPS spans (ECOS has no state column,
+      so this is derived from the ESU name; null where ECOS gives no geography). A snapshot of
+      current status, not a history of listing changes. Pink salmon and landlocked sockeye
+      (kokanee) have no listed units. Join to geo.state_ref by splitting state_abbrs.
+
+    dimensions:
+      type:
+        - esa_salmonid_listings
+
+    columns:
+      - name: common_name
+        type: string
+        nullable: false
+        comment: ECOS common name - Chinook salmon, Coho salmon, Chum salmon, Sockeye salmon, Pink Salmon, Steelhead (Rainbow Trout) or Atlantic salmon
+      - name: scientific_name
+        type: string
+        nullable: false
+        comment: Scientific name as ECOS records it, e.g. Oncorhynchus (=Salmo) tshawytscha
+      - name: species_group
+        type: string
+        nullable: false
+        comment: Normalised species - chinook, coho, chum, sockeye, pink, steelhead or atlantic; matches salmon_species in noaa_commercial_landings except steelhead
+      - name: population_name
+        type: string
+        nullable: true
+        comment: ESU or DPS name, e.g. Snake River spring/summer-run ESU, Puget Sound DPS; null where ECOS gives none
+      - name: esa_status
+        type: string
+        nullable: false
+        comment: ECOS ESA listing status - Threatened, Endangered, Experimental Population Non-Essential, Under Review, Resolved Taxon, Species of Concern, Status Undefined or Not Listed
+      - name: status_category
+        type: string
+        nullable: true
+        comment: ECOS listing status category - Listed, Not Listed, Delisted or Petitioned for Listing Under Review; null where ECOS leaves it blank
+      - name: cfr_citation
+        type: string
+        nullable: true
+        comment: 50 CFR section that lists the unit (223.102 threatened, 224.101 endangered); null where the entity name carries none
+      - name: listing_date
+        type: string
+        nullable: true
+        comment: Date the unit was listed (yyyy-MM-dd); null for experimental populations and never-listed units
+      - name: lead_agency
+        type: string
+        nullable: false
+        comment: Federal agency responsible - NMFS, FWS or FWS and NMFS
+      - name: state_abbrs
+        type: string
+        nullable: true
+        comment: Comma-separated 2-letter states the ESU/DPS spans (e.g. 'ID,OR,WA' for Snake River units); derived from the ESU name; null where ECOS gives no geography
+
+    source:
+      type: http
+      url: "https://ecos.fws.gov/ecp/pullreports/catalog/species/report/species/export?format=json&columns=%2Fspecies%40cn%2Csn%2Cstatus%2Cstatus_category%2Cdesc%2Clisting_date%2Cagency&filter=%2Fspecies%40sn%20like%20%27Oncorhynchus%25%27%20or%20%2Fspecies%40sn%20like%20%27Salmo%20salar%25%27&sort=%2Fspecies%40cn%20asc"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # FisheriesEsaListingsTransformer expects the ECOS envelope, so a raw-cache replay of the
+      # post-transform rows would not parse.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesEsaListingsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=esa_salmonid_listings/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: esa_salmonid_listings
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
