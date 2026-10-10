@@ -580,6 +580,11 @@ tasks.register<Exec>("jpackage") {
         "--temp", jpackageTempFile.absolutePath,
         "--java-options", "-Xms256m -Xmx2g",
         "--java-options", "-Dfile.encoding=UTF-8",
+        // file.encoding no longer decides how System.out and System.err encode through a
+        // pipe (they take the system code page on Windows); these do. McpServer also sets
+        // its own streams, which reaches installs made before this.
+        "--java-options", "-Dstdout.encoding=UTF-8",
+        "--java-options", "-Dstderr.encoding=UTF-8",
         // Windows: without these the MSI installs silently with no way to launch the
         // setup wizard. These add a Start-menu entry (+ desktop shortcut) so the user
         // can open "AskAmerica MCP", which shows SetupWindow to enter the API key.
