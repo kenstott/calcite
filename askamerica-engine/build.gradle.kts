@@ -556,6 +556,7 @@ tasks.register<Exec>("jpackage") {
     }
     val macResourceDir = project.file("src/packaging/mac").absolutePath
     val winResourceDir = project.file("src/packaging/windows").absolutePath
+    val linuxResourceDir = project.file("src/packaging/linux").absolutePath
 
     if (isMac) {
         dependsOn("jlinkRuntime")
@@ -615,9 +616,11 @@ tasks.register<Exec>("jpackage") {
                     // via `python3 -c "import uuid; print(uuid.uuid4())"` -- do not regenerate.
                     "--win-upgrade-uuid", "E661CE71-AEB5-4FD3-B203-55E775A04C4C")
         else emptyArray()),
-        // Linux: add an application-menu entry for the setup wizard.
+        // Linux: add an application-menu entry for the setup wizard. The resource directory
+        // holds our postinst and prerm: jpackage's own fail the package on a host that has no
+        // desktop menu (a server, a CI runner, WSL), where there is simply no entry to add.
         *(if (!isMac && !os.contains("win"))
-            arrayOf("--linux-shortcut")
+            arrayOf("--linux-shortcut", "--resource-dir", linuxResourceDir)
         else emptyArray()),
         *(if (isMac) arrayOf("--runtime-image", jlinkRuntimeDirFile.absolutePath) else emptyArray()),
         *(if (isMac) arrayOf("--resource-dir", macResourceDir) else emptyArray()),
