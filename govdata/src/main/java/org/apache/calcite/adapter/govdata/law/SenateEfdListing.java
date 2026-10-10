@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -141,7 +142,7 @@ final class SenateEfdListing {
     if (stateParam != null) {
       params.put(stateParam, state);
     }
-    JsonNode root = MAPPER.readTree(session.listing(params, year < LocalDate.now().getYear()));
+    JsonNode root = MAPPER.readTree(session.listing(params, year < LocalDate.now(ZoneOffset.UTC).getYear()));
     long total = root.path("recordsTotal").asLong(-1);
     JsonNode data = root.path("data");
     if (total < 0 || !data.isArray()) {
