@@ -2225,4 +2225,69 @@ public class EtlPipelineDeepCoverageTest4 {
     IncrementalTracker.NOOP.markTableCompleteWithConfig("a", "h", "s", 100);
     IncrementalTracker.NOOP.invalidateTableCompletion("a");
   }
+
+  // -----------------------------------------------------------------------
+  // Iceberg commit locks survive the pipeline's catalog use
+  // -----------------------------------------------------------------------
+
+  /**
+   * Iceberg's in-memory lock manager keeps the commit locks of every Hadoop catalog in the
+   * JVM in one shared map, and closing any Hadoop catalog clears it. The pipeline's metadata
+   * reads and its property commit run while other tables are being committed, so they must
+   * leave a lock held by another commit in place.
+   */
+  @Test void testIcebergMetadataAccessKeepsAnotherCommitsLock() throws Exception {
+    Path warehouse = tempDir.resolve("lock_warehouse");
+    Files.createDirectories(warehouse);
+    org.apache.iceberg.Schema schema =
+        new org.apache.iceberg.Schema(
+            org.apache.iceberg.types.Types.NestedField.optional(1, "id",
+                org.apache.iceberg.types.Types.StringType.get()));
+    new org.apache.iceberg.hadoop.HadoopCatalog(
+        new org.apache.hadoop.conf.Configuration(), warehouse.toString())
+        .createTable(org.apache.iceberg.catalog.TableIdentifier.of("tbl"), schema);
+    String tableLocation = warehouse.toString() + "/tbl";
+
+    StorageProvider sp = mockStorage();
+    EtlPipelineConfig config = createHttpConfig("tbl", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline = new EtlPipeline(config, sp, warehouse.toString());
+    List<ColumnConfig> cols =
+        Collections.singletonList(ColumnConfig.builder().name("id").type("VARCHAR").build());
+
+    // A commit on some other table, between taking its lock and releasing it
+    org.apache.iceberg.LockManager otherCommit =
+        org.apache.iceberg.util.LockManagers.defaultLockManager();
+    String entity = tempDir.resolve("other_table/metadata/v2.metadata.json").toString();
+    String owner = tempDir.resolve("other_table/metadata/tmp.metadata.json").toString();
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "readRowCountFromIceberg", new Class[]{String.class}, tableLocation);
+    assertTrue(otherCommit.release(entity, owner),
+        "readRowCountFromIceberg(String) left the other commit's lock in place");
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "readRowCountFromIceberg",
+        new Class[]{String.class, List.class}, tableLocation, cols);
+    assertTrue(otherCommit.release(entity, owner),
+        "readRowCountFromIceberg(String, List) left the other commit's lock in place");
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "readEtlPropertiesFromIceberg",
+        new Class[]{String.class}, tableLocation);
+    assertTrue(otherCommit.release(entity, owner),
+        "readEtlPropertiesFromIceberg left the other commit's lock in place");
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "storeEtlPropertiesToIceberg",
+        new Class[]{String.class, String.class, String.class, long.class},
+        tableLocation, "hash", "sig", 5L);
+    assertTrue(otherCommit.release(entity, owner),
+        "storeEtlPropertiesToIceberg left the other commit's lock in place");
+
+    // The property commit itself went through
+    org.apache.iceberg.Table table =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(tableLocation);
+    assertEquals("hash", table.properties().get("etl.config-hash"));
+  }
 }

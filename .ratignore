@@ -6,6 +6,7 @@
 **/.gitignore
 **/.gitattributes
 .github/workflows
+.github/ci-images
 .ratignore
 **/META-INF/services/java.sql.Driver
 **/src/test/resources/**/*.csv

@@ -1,0 +1,395 @@
+# ServiceNow adapter — requirements ledger. Schema: README.md.
+#
+# Unit of work = a capability of the adapter (catalog, read, pushdown, the verification harness)
+# or of one of its two packagings. The source is the owner's decisions of 2026-10-07 and
+# 2026-10-08, and the implementation on branch feat/servicenow-adapter.
+#
+# THE ADAPTER IS NOT ON MAIN, and nothing here has run against a ServiceNow instance. No
+# requirement is `complete`.
+#   in-progress = implemented on the branch under unit tests that run the real client against a
+#                 local stub of the documented Table API. The stub is this project's reading of
+#                 ServiceNow's documentation, not captured output. The test classes are named in
+#                 `source:`; `tests:` stays empty until they are on main.
+#   accepted    = an owner decision with no implementation, or one whose only possible
+#                 verification is a live instance.
+
+# ===================================== scope ===================================================
+
+- id: SNOW-001
+  module: servicenow
+  status: in-progress
+  group: scope
+  category: Read-only
+  priority: MUST
+  type: constraint
+  description: >
+    The first release is read-only: the adapter offers no INSERT, UPDATE or DELETE and never
+    writes to the instance.
+  source: owner decision 2026-10-07; branch feat/servicenow-adapter (servicenow/README.md)
+  tests: []
+
+- id: SNOW-002
+  module: servicenow
+  status: in-progress
+  group: scope
+  category: Packaging
+  priority: MUST
+  type: infrastructure
+  description: >
+    The adapter ships in both packagings in its first release: a pgwire bundle
+    (pgwire-servicenow) and a Trino connector (trino-servicenow).
+  source: "owner decision 2026-10-07; branch feat/servicenow-adapter (TestServiceNowClientModule; neither packaging has run against an instance, and neither is in a release workflow)"
+  tests: []
+
+- id: SNOW-003
+  module: servicenow
+  status: in-progress
+  group: scope
+  category: Authentication
+  priority: MUST
+  type: behavioral
+  description: >
+    The adapter authenticates with basic authentication (user and password). Another method named
+    in the configuration but not implemented is refused by name, never treated as basic.
+  source: "owner decision 2026-10-07 (whatever is needed to test initially); branch feat/servicenow-adapter (ServiceNowSchemaFactoryTest)"
+  tests: []
+
+# ===================================== catalog =================================================
+
+- id: SNOW-010
+  module: servicenow
+  status: in-progress
+  group: catalog
+  category: Discovery
+  priority: MUST
+  type: structural
+  description: >
+    Tables and columns come from the instance's own metadata (sys_db_object, sys_dictionary,
+    sys_glide_object), with inherited columns resolved. No table list is hard-coded, and columns
+    are never guessed from sample rows. An optional include list narrows the tables exposed.
+  source: owner decision 2026-10-07; branch feat/servicenow-adapter (CatalogTest)
+  tests: []
+
+- id: SNOW-011
+  module: servicenow
+  status: accepted
+  group: catalog
+  category: Schema layout
+  priority: SHOULD
+  type: structural
+  description: >
+    One SQL schema per application scope remains possible. Whether tables are grouped that way is
+    decided after a live instance has shown how many tables each scope holds and whether the
+    scopes are natural subdivisions.
+  source: "owner decision 2026-10-07 (count tables per scope before deciding); ServiceNowProbe on the branch does the count and has not been run"
+  tests: []
+
+- id: SNOW-012
+  module: servicenow
+  status: in-progress
+  group: catalog
+  category: Reference fields
+  priority: MUST
+  type: structural
+  description: >
+    A reference field is two columns: one holding the referenced record's sys_id and one holding
+    its display value.
+  source: "owner decision 2026-10-07 (both); branch feat/servicenow-adapter (<field> and <field>__display; ServiceNowSqlTest, ValueConverterTest)"
+  tests: []
+
+- id: SNOW-013
+  module: servicenow
+  status: in-progress
+  group: catalog
+  category: Nulls
+  priority: MUST
+  type: structural
+  description: >
+    An empty value from ServiceNow is SQL NULL for every column type, strings included; the
+    adapter never returns the empty string. Every column is declared nullable, sys_id included.
+  source: owner decision 2026-10-08; branch feat/servicenow-adapter (ValueConverterTest)
+  tests: []
+
+- id: SNOW-014
+  module: servicenow
+  status: in-progress
+  group: catalog
+  category: Type mapping
+  priority: MUST
+  type: constraint
+  description: >
+    A field whose type the adapter cannot map is an error naming the table, field and type, on the
+    table it belongs to; it is not coerced to text. Leaving such columns out is an explicit
+    configuration choice.
+  source: branch feat/servicenow-adapter (CatalogTest, ValueConverterTest; excludeColumnTypes)
+  tests: []
+
+# ===================================== read ====================================================
+
+- id: SNOW-020
+  module: servicenow
+  status: in-progress
+  group: read
+  category: Paging
+  priority: MUST
+  type: constraint
+  description: >
+    A scan reads pages until one comes back empty. A page that does not advance past the previous
+    page's last key, a response that is HTML with status 200, and truncated JSON are each an
+    error; none ends the scan quietly or repeats rows.
+  source: branch feat/servicenow-adapter (TableApiClientTest)
+  tests: []
+
+- id: SNOW-021
+  module: servicenow
+  status: in-progress
+  group: read
+  category: Rate limiting
+  priority: MUST
+  type: constraint
+  description: >
+    A rate-limit response (429) is retried only as its Retry-After allows and within a bounded
+    number of retries and a bounded total wait; beyond that it is an error carrying the server's
+    message.
+  source: branch feat/servicenow-adapter (TableApiClientTest)
+  tests: []
+
+- id: SNOW-022
+  module: servicenow
+  status: in-progress
+  group: read
+  category: LIMIT and ORDER BY
+  priority: MUST
+  type: constraint
+  description: >
+    LIMIT and ORDER BY are not sent to ServiceNow. A limit stops the page fetches early and is
+    applied after every filter, pushed or not, so it never cuts off rows that a filter still to be
+    evaluated would have removed.
+  source: "owner decision 2026-10-07 (a limit is pushed only when every filter was pushed and verified); branch feat/servicenow-adapter (ServiceNowSqlTest)"
+  tests: []
+
+- id: SNOW-023
+  module: servicenow
+  status: in-progress
+  group: read
+  category: Projection
+  priority: SHOULD
+  type: behavioral
+  description: >
+    Only the columns a query selects are requested from ServiceNow, and a reference field's
+    display value is requested only when its display column is selected.
+  source: branch feat/servicenow-adapter (ServiceNowSqlTest)
+  tests: []
+
+# ===================================== pushdown ================================================
+
+- id: SNOW-030
+  module: servicenow
+  status: in-progress
+  group: pushdown
+  category: Verified only
+  priority: MUST
+  type: constraint
+  description: >
+    A filter is sent to ServiceNow only when every capability entry it needs (operator, column
+    type, and position inside an AND or an OR group) has been verified by the differential harness
+    on a live instance. Otherwise the whole filter is evaluated by Calcite. An unverified entry is
+    never pushed silently. Trusting named entries without a record is an explicit configuration
+    choice that is logged.
+  source: "owner decision 2026-10-07 (probe predicate semantics, push only what is proven); branch feat/servicenow-adapter (EncodedQueryTranslatorTest)"
+  tests: []
+
+- id: SNOW-031
+  module: servicenow
+  status: in-progress
+  group: pushdown
+  category: Field names
+  priority: MUST
+  type: constraint
+  description: >
+    A field name is checked against the discovered metadata before a term naming it is pushed.
+    The adapter never relies on ServiceNow to reject an unknown field, because ServiceNow can drop
+    the term and return unfiltered rows.
+  source: owner statement 2026-10-08; branch feat/servicenow-adapter (EncodedQueryTranslatorTest)
+  tests: []
+
+- id: SNOW-032
+  module: servicenow
+  status: in-progress
+  group: pushdown
+  category: Null tests
+  priority: MUST
+  type: behavioral
+  description: >
+    IS NULL is pushed as ServiceNow's ISEMPTY and IS NOT NULL as ISNOTEMPTY. A literal empty
+    string in a predicate (= '', <> '', IN ('', ...)) is never pushed as an empty test: under SQL
+    no row equals '' once empties are NULL, so it must not match the empty rows.
+  source: owner decision 2026-10-08; branch feat/servicenow-adapter (EncodedQueryTranslatorTest)
+  tests: []
+
+- id: SNOW-033
+  module: servicenow
+  status: in-progress
+  group: pushdown
+  category: Negation
+  priority: MUST
+  type: behavioral
+  description: >
+    A negated operator (<>, NOT IN, NOT LIKE) is pushed only in a form whose result matches SQL
+    three-valued logic, where a NULL row satisfies neither the comparison nor its negation: if
+    ServiceNow's form includes empty rows, it is pushed with an added not-empty term or not at all.
+  source: "owner decision 2026-10-08; branch feat/servicenow-adapter (NE_NOT_EMPTY and NOT_IN_NOT_EMPTY entries; EncodedQueryTranslatorTest; NOT LIKE is never pushed)"
+  tests: []
+
+- id: SNOW-034
+  module: servicenow
+  status: in-progress
+  group: pushdown
+  category: Record scope
+  priority: MUST
+  type: constraint
+  description: >
+    A verification record is used only for the instance it was made on, and can be written only by
+    a harness run against a live instance, never by a run against the local stub.
+  source: branch feat/servicenow-adapter (PushdownHarnessTest)
+  tests: []
+
+# ===================================== harness =================================================
+
+- id: SNOW-040
+  module: servicenow
+  status: in-progress
+  group: harness
+  category: Differential test
+  priority: MUST
+  type: infrastructure
+  description: >
+    A harness decides each capability entry by running the same predicate twice over the same
+    table, once pushed to ServiceNow and once fetched unfiltered and evaluated by Calcite with SQL
+    three-valued logic and empties as NULL, and comparing the two sets of record ids. Equal sets
+    verify the entry; unequal sets record the differing rows and leave it unpushed.
+  source: "owner instruction 2026-10-08; branch feat/servicenow-adapter (PushdownHarness, PushdownCases; offline plumbing in PushdownHarnessTest; PushdownHarnessLiveTest has not been run)"
+  tests: []
+
+- id: SNOW-041
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Nulls and empty strings
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness establishes on a live instance how ServiceNow treats empty against null, and in
+    particular whether field!=x includes rows where the field is empty.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-042
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Case sensitivity
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness establishes whether =, LIKE, STARTSWITH and IN compare strings case-sensitively,
+    against mixed-case data.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-043
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Boolean shapes
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness establishes the precedence of ^OR against ^ and the meaning of ^NQ, tests nested
+    shapes such as (a OR b) AND (c OR d), and fixes which shapes are never pushed.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-044
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Dates and times
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness establishes the time zone in which a datetime literal is interpreted and how
+    BETWEEN and range bounds behave at their edges.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-045
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Reference and choice fields
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness establishes whether a comparison on a reference or choice field matches the stored
+    value (sys_id, choice value) or the display value, and how dot-walked fields such as
+    caller_id.department behave.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-046
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Invalid field names
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness records what the instance does with a query on a field that does not exist
+    (ignore the term and return unfiltered rows, or return none), and so which setting of
+    glide.invalid_query.returns_no_rows is in effect.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-047
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Escaping
+  priority: MUST
+  type: behavioral
+  description: >
+    The harness tests values containing ^, =, a comma inside an IN list and other operator text,
+    and a value that cannot be written safely is not pushed.
+  source: owner observations 2026-10-08
+  tests: []
+
+- id: SNOW-048
+  module: servicenow
+  status: accepted
+  group: harness
+  category: Live seeding
+  priority: MUST
+  type: constraint
+  description: >
+    The rows the live harness needs are written by the harness itself with direct REST calls,
+    under a prefix that marks them as its own, and deleted when it finishes. The adapter stays
+    read-only.
+  source: "branch feat/servicenow-adapter (PushdownHarnessLiveTest, rows prefixed ZZ_HARNESS_ in incident); not run"
+  tests: []
+
+# ===================================== fixtures ================================================
+
+- id: SNOW-050
+  module: servicenow
+  status: in-progress
+  group: fixtures
+  category: Provenance
+  priority: MUST
+  type: constraint
+  description: >
+    Until responses have been captured from an instance, the unit-test fixtures are labelled as
+    derived from ServiceNow's documentation, and every response-shape assumption that only a live
+    instance can confirm is listed beside them.
+  source: branch feat/servicenow-adapter (servicenow/src/test/resources/servicenow/doc-derived/README.md, 19 assumptions)
+  tests: []

@@ -2,8 +2,17 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**264 requirements across 4 adapters.**
+**324 requirements across 7 adapters.**
 
+
+## askamerica  (4: 3 accepted, 1 proposed)
+
+| | ID | Pri | Type | Group / Category | Guarantee | Tests |
+|---|---|---|---|---|---|---|
+| [ ] | ASKAM-001 | MUST | infrastructure | platforms / NixOS | AskAmerica is supported on NixOS: its engine and its pg-wire server install and start on a NixOS host and ser… | — |
+| [ ] | ASKAM-002 | MUST | constraint | catalog seed / Official seed | At run time AskAmerica never builds its catalog by discovery: not on a first start, not when the installed ca… | — |
+| [.] | ASKAM-003 | MAY | behavioral | updates / Agreed update | The user agrees before the engine replaces its jar with a newer release. A future feature, not a decision to … | — |
+| [ ] | ASKAM-004 | MUST | constraint | concurrency / Concurrent engine processes | Several AskAmerica engine processes run concurrently on one host, as an MCP host starts them, and each has th… | — |
 
 ## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
 
@@ -250,10 +259,10 @@
 | [ ] | GOV-044 | MUST | behavioral | energy / Units & meaning | eia_electricity_prices avg_price_cents_kwh is in cents per kWh, revenue_million_dollars in millions of dollar… | — |
 | [ ] | GOV-045 | MUST | structural | energy / Grain & keys | eia_power_plants (EIA-860) is one row per generator keyed (plant_id, generator_id, report_year), with capacit… | — |
 | [ ] | GOV-046 | MUST | constraint | energy / Freshness | Each EIA bulk source honors its archive publication lag via dataLag on the year range: EIA-861 utility (dataL… | — |
-| [ ] | GOV-047 | SHOULD | behavioral | energy / Partition strategy | Sub-annual EIA series (eia_electricity_generation, eia_fossil_fuel_production, eia_refinery_operations) parti… | — |
+| [ ] | GOV-047 | SHOULD | behavioral | energy / Partition strategy | Sub-annual EIA series (eia_electricity_generation, eia_crude_oil_production, eia_natural_gas_production, eia_… | — |
 | [ ] | GOV-048 | MUST | behavioral | energy / Units & meaning | eia_natural_gas_storage volumes are in billion cubic feet (volume_bcf), one row per (eia_region_code, storage… | — |
 | [ ] | GOV-049 | SHOULD | behavioral | energy / Encoded codes | eia_state_energy_consumption (SEDS) is one row per (state_abbr, msn, consumption_year) where msn is a 5-char … | — |
-| [ ] | GOV-050 | SHOULD | behavioral | energy / Grain & meaning | eia_fossil_fuel_production unions crude oil and natural gas into one table distinguished by fuel_type ('crude… | — |
+| [ ] | GOV-050 | SHOULD | behavioral | energy / Grain & meaning | Crude oil and natural gas production are separate tables, each one row per EIA area, process, year and month,… | — |
 | [ ] | GOV-051 | SHOULD | behavioral | energy / Grain & filtering | eia_coal_mines (MSHA MinesProdYearly joined to Mines on mine_id) is one row per (mine_id, subunit_code, repor… | — |
 | [ ] | GOV-052 | MAY | behavioral | energy / Derived views | state_energy_mix aggregates eia_electricity_generation to one row per state+year, classifying energy_source_c… | — |
 | [ ] | GOV-053 | MUST | structural | health / Schema shape | The health schema exposes openFDA, ClinicalTrials.gov, CDC, CMS, Medicaid, and RxNorm datasets as single-part… | — |
@@ -278,3 +287,69 @@
 | [ ] | GOV-072 | MUST | behavioral | cyber / Write-mode & idempotence | threat_pulses (OTX) gates on freshness type:version (max pulse modified) with watermark_var otxModifiedSince … | — |
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
+
+## salesforce  (29: 19 accepted, 6 complete, 4 proposed)
+
+| | ID | Pri | Type | Group / Category | Guarantee | Tests |
+|---|---|---|---|---|---|---|
+| [ ] | SF-001 | MUST | behavioral | connection / Authentication | The adapter authenticates to a Salesforce org with the OAuth client credentials flow: given the org's My Doma… | salesforce/SalesforceIntegrationTest#schemaExposesStandardS… |
+| [ ] | SF-002 | SHOULD | behavioral | connection / Authentication | Two other credential sets are accepted in place of client credentials: username and password (with optional s… | — |
+| [ ] | SF-003 | MUST | constraint | connection / Failure reporting | A refused authentication, a failed query, a failed describe and a failed sObject listing each raise an error … | — |
+| [ ] | SF-004 | SHOULD | behavioral | connection / JDBC driver | A jdbc:salesforce: URL whose parameters name the login URL and credentials opens a connection to the org thro… | salesforce/SalesforceIntegrationTest#jdbcDriverUrl |
+| [ ] | SF-010 | MUST | structural | catalog / Tables | Every queryable sObject of the org, standard and custom, is one SQL table named as in Salesforce; an sObject … | salesforce/SalesforceIntegrationTest#schemaExposesStandardS… |
+| [ ] | SF-011 | MUST | structural | catalog / Type mapping | A table's columns and their types come from the sObject's describe: id, reference, string, picklist, multipic… | salesforce/SalesforceIntegrationTest#describeMapsFieldTypes… |
+| [ ] | SF-012 | MUST | structural | catalog / Nullability | A column is nullable when the field allows nulls, or when an INSERT may omit it because Salesforce fills it (… | salesforce/SalesforceIntegrationTest#insertWithoutRequiredF… |
+| [x] | SF-013 | MUST | behavioral | catalog / Describe cache | An sObject's describe is kept on disk and reused by a later process until its time to live passes, after whic… | salesforce/DescribeCacheTest#describeSurvivesANewCacheInsta… |
+| [x] | SF-014 | MUST | constraint | catalog / Describe cache | A time to live of zero keeps nothing on disk; a describe that fails to load writes nothing; a negative time t… | salesforce/DescribeCacheTest#zeroTimeToLiveKeepsNothingOnDi… |
+| [ ] | SF-015 | MUST | constraint | catalog / API allowance | Describing the org costs one Salesforce API call per sObject (about 1,200 for a typical org) and is paid once… | salesforce/SalesforceIntegrationTest#describeIsCachedOnDisk… |
+| [x] | SF-020 | MUST | behavioral | read / Filter pushdown | A comparison of a column with a literal (=, <>, <, <=, >, >=), IN, LIKE, IS NULL, IS NOT NULL, and AND, OR an… | salesforce/SOQLBuilderTest#comparisonWithLiteral, salesforc… |
+| [x] | SF-021 | MUST | constraint | read / Filter pushdown | A condition that cannot be written faithfully as SOQL is not pushed and is evaluated by Calcite: a string lit… | salesforce/SOQLBuilderTest#stringLiteralWithTemplateMarkIsN… |
+| [x] | SF-022 | MUST | behavioral | read / Bind parameters | A comparison with a prepared-statement parameter is pushed into SOQL and the value is bound when the statemen… | salesforce/SOQLBuilderTest#bindParameterIsBoundAtExecution,… |
+| [ ] | SF-023 | MUST | behavioral | read / Pushdown | Filters, the selected columns, ORDER BY (with its direction and NULLS FIRST or LAST) and LIMIT are sent to Sa… | salesforce/SalesforceIntegrationTest#filterProjectSortLimit… |
+| [ ] | SF-024 | MUST | behavioral | read / Kept in Calcite | Joins, aggregates, computed projections and filters with no SOQL form are evaluated by Calcite over the rows … | salesforce/SalesforceIntegrationTest#joinAcrossSObjects, sa… |
+| [.] | SF-025 | SHOULD | constraint | read / Offset | OFFSET is sent to Salesforce, with LIMIT 2000 added when the query has no limit because SOQL requires one. Wh… | — |
+| [ ] | SF-026 | MUST | behavioral | read / Temporal values | A datetime field read as the only column of a query is returned as a SQL TIMESTAMP. | salesforce/SalesforceIntegrationTest#singleTimestampColumn |
+| [ ] | SF-030 | MUST | behavioral | write / INSERT, UPDATE, DELETE | INSERT creates records, UPDATE changes the records its WHERE clause selects and DELETE removes them, each rep… | salesforce/SalesforceIntegrationTest#insertUpdateDelete |
+| [ ] | SF-031 | MUST | constraint | write / Rejected writes | A write to a field the describe marks as not createable (on INSERT) or not updateable (on UPDATE) is refused … | salesforce/SalesforceIntegrationTest#insertIntoSystemFieldI… |
+| [ ] | SF-032 | MUST | constraint | write / Atomicity | Rows are written in batches of 200 through the sObject Collections API with allOrNone: one batch is all writt… | — |
+| [ ] | SF-040 | MUST | infrastructure | pgwire / Packaging | The adapter ships as the pgwire-salesforce bundle: the pgwire-calcite server with this adapter's model and ja… | — |
+| [ ] | SF-041 | MUST | constraint | pgwire / Write gating | A server started without --allow-writes refuses INSERT, UPDATE and DELETE with a message saying it is read-on… | pgwire-calcite/test_dml.py#test_write_is_rejected_without_a… |
+| [ ] | SF-042 | MUST | constraint | pgwire / Transactions | Each write is final when it runs. BEGIN and COMMIT are accepted and change nothing; a ROLLBACK after a write … | pgwire-calcite/test_dml.py#test_commit_after_a_write_succee… |
+| [ ] | SF-043 | MUST | behavioral | pgwire / RETURNING | INSERT, UPDATE and DELETE accept RETURNING: an INSERT returns the new rows with the Id Salesforce assigned, a… | pgwire-calcite/test_dml.py#test_insert_returning_gives_the_… |
+| [.] | SF-045 | MAY | behavioral | pgwire / Transactions | Where a source or engine supports transactions, BEGIN, COMMIT and ROLLBACK are real: writes inside a transact… | — |
+| [.] | SF-044 | SHOULD | behavioral | pgwire / Startup | The server's finished catalog is stored beside the model and loaded on later starts, keyed by a hash of the m… | — |
+| [x] | SF-050 | MUST | constraint | trino / Catalog properties | The Trino connector builds the adapter's connection from catalog properties. Exactly one complete credential … | trino-salesforce/TestSalesforceClientModule#clientCredentia… |
+| [ ] | SF-051 | MUST | behavioral | trino / Queries | Through Trino the org's sObjects are listed and described as tables, and filters, aggregates and joins over t… | trino-salesforce/TestSalesforceConnector#testShowTables, tr… |
+| [.] | SF-052 | MUST | constraint | trino / Name matching | The connector fails at startup unless case-insensitive-name-matching is true, because sObject names are mixed… | — |
+
+## servicenow  (27: 9 accepted, 18 in-progress)
+
+| | ID | Pri | Type | Group / Category | Guarantee | Tests |
+|---|---|---|---|---|---|---|
+| [~] | SNOW-001 | MUST | constraint | scope / Read-only | The first release is read-only: the adapter offers no INSERT, UPDATE or DELETE and never writes to the instan… | — |
+| [~] | SNOW-002 | MUST | infrastructure | scope / Packaging | The adapter ships in both packagings in its first release: a pgwire bundle (pgwire-servicenow) and a Trino co… | — |
+| [~] | SNOW-003 | MUST | behavioral | scope / Authentication | The adapter authenticates with basic authentication (user and password). Another method named in the configur… | — |
+| [~] | SNOW-010 | MUST | structural | catalog / Discovery | Tables and columns come from the instance's own metadata (sys_db_object, sys_dictionary, sys_glide_object), w… | — |
+| [ ] | SNOW-011 | SHOULD | structural | catalog / Schema layout | One SQL schema per application scope remains possible. Whether tables are grouped that way is decided after a… | — |
+| [~] | SNOW-012 | MUST | structural | catalog / Reference fields | A reference field is two columns: one holding the referenced record's sys_id and one holding its display valu… | — |
+| [~] | SNOW-013 | MUST | structural | catalog / Nulls | An empty value from ServiceNow is SQL NULL for every column type, strings included; the adapter never returns… | — |
+| [~] | SNOW-014 | MUST | constraint | catalog / Type mapping | A field whose type the adapter cannot map is an error naming the table, field and type, on the table it belon… | — |
+| [~] | SNOW-020 | MUST | constraint | read / Paging | A scan reads pages until one comes back empty. A page that does not advance past the previous page's last key… | — |
+| [~] | SNOW-021 | MUST | constraint | read / Rate limiting | A rate-limit response (429) is retried only as its Retry-After allows and within a bounded number of retries … | — |
+| [~] | SNOW-022 | MUST | constraint | read / LIMIT and ORDER BY | LIMIT and ORDER BY are not sent to ServiceNow. A limit stops the page fetches early and is applied after ever… | — |
+| [~] | SNOW-023 | SHOULD | behavioral | read / Projection | Only the columns a query selects are requested from ServiceNow, and a reference field's display value is requ… | — |
+| [~] | SNOW-030 | MUST | constraint | pushdown / Verified only | A filter is sent to ServiceNow only when every capability entry it needs (operator, column type, and position… | — |
+| [~] | SNOW-031 | MUST | constraint | pushdown / Field names | A field name is checked against the discovered metadata before a term naming it is pushed. The adapter never … | — |
+| [~] | SNOW-032 | MUST | behavioral | pushdown / Null tests | IS NULL is pushed as ServiceNow's ISEMPTY and IS NOT NULL as ISNOTEMPTY. A literal empty string in a predicat… | — |
+| [~] | SNOW-033 | MUST | behavioral | pushdown / Negation | A negated operator (<>, NOT IN, NOT LIKE) is pushed only in a form whose result matches SQL three-valued logi… | — |
+| [~] | SNOW-034 | MUST | constraint | pushdown / Record scope | A verification record is used only for the instance it was made on, and can be written only by a harness run … | — |
+| [~] | SNOW-040 | MUST | infrastructure | harness / Differential test | A harness decides each capability entry by running the same predicate twice over the same table, once pushed … | — |
+| [ ] | SNOW-041 | MUST | behavioral | harness / Nulls and empty strings | The harness establishes on a live instance how ServiceNow treats empty against null, and in particular whethe… | — |
+| [ ] | SNOW-042 | MUST | behavioral | harness / Case sensitivity | The harness establishes whether =, LIKE, STARTSWITH and IN compare strings case-sensitively, against mixed-ca… | — |
+| [ ] | SNOW-043 | MUST | behavioral | harness / Boolean shapes | The harness establishes the precedence of ^OR against ^ and the meaning of ^NQ, tests nested shapes such as (… | — |
+| [ ] | SNOW-044 | MUST | behavioral | harness / Dates and times | The harness establishes the time zone in which a datetime literal is interpreted and how BETWEEN and range bo… | — |
+| [ ] | SNOW-045 | MUST | behavioral | harness / Reference and choice fields | The harness establishes whether a comparison on a reference or choice field matches the stored value (sys_id,… | — |
+| [ ] | SNOW-046 | MUST | behavioral | harness / Invalid field names | The harness records what the instance does with a query on a field that does not exist (ignore the term and r… | — |
+| [ ] | SNOW-047 | MUST | behavioral | harness / Escaping | The harness tests values containing ^, =, a comma inside an IN list and other operator text, and a value that… | — |
+| [ ] | SNOW-048 | MUST | constraint | harness / Live seeding | The rows the live harness needs are written by the harness itself with direct REST calls, under a prefix that… | — |
+| [~] | SNOW-050 | MUST | constraint | fixtures / Provenance | Until responses have been captured from an instance, the unit-test fixtures are labelled as derived from Serv… | — |

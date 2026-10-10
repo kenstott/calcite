@@ -454,6 +454,13 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
+      if (!sourceHasCommitsSinceLastSweep(duckdb, pg,
+          base + "/" + src.sourceSchema + "/" + src.sourceTable, src.sourceTable)) {
+        LOGGER.info("ChunkOrganizer: {}.{} re-ran its ETL but committed no snapshot since the "
+            + "last sweep -- skipped", src.sourceSchema, src.sourceTable);
+        skipped++;
+        continue;
+      }
       // Captured BEFORE any scan starts and reused as the watermark markSwept persists: reading
       // completed_at again after the scan would record a value the scan never saw whenever the
       // source's own ETL finishes mid-sweep, and the next sweep would skip those changes.
@@ -489,6 +496,13 @@ public class ChunkOrganizer {
         continue;
       }
       if (!sourceNeedsSweep(pg, src.sourceTable)) {
+        skipped++;
+        continue;
+      }
+      if (!sourceHasCommitsSinceLastSweep(duckdb, pg,
+          base + "/" + src.sourceSchema + "/" + src.sourceTable, src.sourceTable)) {
+        LOGGER.info("ChunkOrganizer: {}.{} re-ran its ETL but committed no snapshot since the "
+            + "last sweep -- skipped", src.sourceSchema, src.sourceTable);
         skipped++;
         continue;
       }
@@ -528,6 +542,39 @@ public class ChunkOrganizer {
     }
     Long lastSwept = selectLastSweptCompletedAt(pg, sourceTable);
     return lastSwept == null || completedAt > lastSwept;
+  }
+
+  /** True if {@code loc}'s Iceberg table has committed a snapshot since the last completed sweep
+   *  of {@code sourceTable} (or it was never swept). {@link #sourceNeedsSweep} reads
+   *  table_completion.completed_at, which the source's ETL advances on every run -- including
+   *  runs that commit nothing -- so it alone re-queued a source whose data had not changed
+   *  (confirmed live 2026-10-09: patents.patent_grants, last snapshot 2026-08-31, re-hashed all
+   *  4.87M rows for 25 minutes with 0 replaced, every night, out of a 2h sweep budget). A
+   *  snapshot committed after the last sweep's watermark was necessarily written after that
+   *  watermark was read, so this never skips a change. */
+  static boolean sourceHasCommitsSinceLastSweep(Connection duckdb, Connection pg, String loc,
+      String sourceTable) throws SQLException {
+    Long lastSwept = selectLastSweptCompletedAt(pg, sourceTable);
+    if (lastSwept == null) {
+      return true;
+    }
+    return selectLatestSnapshotMillis(duckdb, loc) > lastSwept;
+  }
+
+  /** Commit time (epoch millis) of the newest snapshot of the Iceberg table at {@code loc}. */
+  static long selectLatestSnapshotMillis(Connection duckdb, String loc) throws SQLException {
+    try (Statement st = duckdb.createStatement();
+        ResultSet rs = st.executeQuery(
+            "SELECT epoch_ms(max(timestamp_ms)) FROM iceberg_snapshots('" + loc + "')")) {
+      if (!rs.next()) {
+        throw new IllegalStateException("iceberg_snapshots returned no row for " + loc);
+      }
+      long millis = rs.getLong(1);
+      if (rs.wasNull()) {
+        throw new IllegalStateException("no snapshots found for " + loc);
+      }
+      return millis;
+    }
   }
 
   static Long selectTableCompletedAt(Connection pg, String sourceTable)
@@ -752,10 +799,22 @@ public class ChunkOrganizer {
       return null;
     }
     Map<Integer, Long> perYearWatermarks = selectLastSweptCompletedAtByYear(pg, sourceTable);
+    // A year with no per-year row of its own was covered by the source-level sweep that
+    // vc_sync_state records: markSwept only runs once a whole sweep of the source finished, and
+    // that sweep scanned every year (or skipped it as already swept). So the source-level
+    // watermark is that year's watermark until the year gets a row of its own. Starting such a
+    // year at 0 instead re-hashed the entire year, years that had already been swept before
+    // per-year tracking existed (patents.patent_claims, 2026-10: 16 years, ~80M rows, none of
+    // them changed since the 2026-09-27 sweep). A source never swept at all has no watermark
+    // anywhere and is scanned in full.
+    Long sourceLevelWatermark = selectLastSweptCompletedAt(pg, sourceTable);
     Set<Integer> changedYears = new HashSet<Integer>();
     for (Map.Entry<Integer, Long> entry : yearCompletedAt.entrySet()) {
       Long lastSweptForYear = perYearWatermarks.get(entry.getKey());
-      if (entry.getValue() > (lastSweptForYear != null ? lastSweptForYear : 0L)) {
+      if (lastSweptForYear == null) {
+        lastSweptForYear = sourceLevelWatermark;
+      }
+      if (lastSweptForYear == null || entry.getValue() > lastSweptForYear) {
         changedYears.add(entry.getKey());
       }
     }
