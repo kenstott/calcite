@@ -365,7 +365,10 @@ public class SetupWindow {
         relaunchBtn.setEnabled(false);
         setStatus("Quitting Claude Desktop…", null);
         try {
-            quitClaudeDesktop();
+            // The program Claude Desktop is running from, read before it is asked to quit:
+            // that exact program is what is started again, never a name looked up afterwards.
+            Path desktopProgram = ClaudeDesktop.runningProgram();
+            ClaudeDesktop.quit();
             // Graceful quit is async — Desktop decides its own shutdown pace (it may have
             // its own confirmation dialogs). Poll rather than assume a fixed delay, but
             // don't wait forever: relaunching over a still-shutting-down instance is
@@ -376,7 +379,7 @@ public class SetupWindow {
                 Thread.sleep(300);
             }
             setStatus("Relaunching Claude Desktop…", null);
-            relaunchClaudeDesktop();
+            ClaudeDesktop.relaunch(desktopProgram);
             setStatus("Done! Claude Desktop is restarting with the new configuration.", true);
             relaunchBtn.setVisible(false);
             frame.pack();
@@ -543,72 +546,16 @@ public class SetupWindow {
     // ── Claude Desktop process management ────────────────────────────────────
 
     /**
-     * Best-effort, platform-specific "is the app running" check. False on any failure —
-     * an unrecognized platform or a failed process probe should hide the relaunch button
-     * (nothing to offer), never crash the wizard over it.
+     * Whether Claude Desktop is running. False on any failure: a failed process probe should
+     * hide the relaunch button (nothing to offer), never crash the wizard over it. Identified
+     * as the desktop application, not by the name it shares with the Claude Code command-line
+     * tool: see {@link ClaudeDesktop}.
      */
     private static boolean isClaudeDesktopRunning() {
-        String os = System.getProperty("os.name", "").toLowerCase();
         try {
-            if (os.contains("win")) {
-                Process p = new ProcessBuilder(
-                    "tasklist", "/FI", "IMAGENAME eq Claude.exe").start();
-                String out = new String(p.getInputStream().readAllBytes(),
-                    java.nio.charset.StandardCharsets.UTF_8);
-                p.waitFor();
-                return out.toLowerCase().contains("claude.exe");
-            }
-            // macOS and Linux Electron builds both register the process name "Claude".
-            Process p = new ProcessBuilder("pgrep", "-x", "Claude").start();
-            return p.waitFor() == 0;
-        } catch (Exception e) {
+            return !ClaudeDesktop.running().isEmpty();
+        } catch (RuntimeException e) {
             return false;
-        }
-    }
-
-    /**
-     * Asks Claude Desktop to quit — a graceful, OS-level request the app can act on
-     * normally (save state, decline via a dialog), never a forced kill. A forced kill
-     * (SIGKILL / {@code taskkill /F}) risks losing session state for the sake of a config
-     * change that will apply just as well on the next ordinary restart.
-     */
-    private static void quitClaudeDesktop() throws IOException, InterruptedException {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("mac")) {
-            new ProcessBuilder("osascript", "-e", "quit app \"Claude\"").start().waitFor();
-        } else if (os.contains("win")) {
-            // No /F: a plain taskkill sends WM_CLOSE, giving the app the same chance to
-            // shut down cleanly that closing its window would.
-            new ProcessBuilder("taskkill", "/IM", "Claude.exe").start().waitFor();
-        } else {
-            // Plain pkill sends SIGTERM, not SIGKILL — same "ask nicely" intent.
-            new ProcessBuilder("pkill", "-x", "Claude").start().waitFor();
-        }
-    }
-
-    /**
-     * Relaunches Claude Desktop after a quit. Best-effort per platform; a failure here is
-     * reported to the user as "please reopen it yourself" rather than treated as fatal —
-     * the config change itself already succeeded regardless of whether this step works.
-     */
-    private static void relaunchClaudeDesktop() throws IOException {
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("mac")) {
-            new ProcessBuilder("open", "-a", "Claude").start();
-        } else if (os.contains("win")) {
-            String localAppData = System.getenv("LOCALAPPDATA");
-            Path exe = localAppData == null ? null
-                : Paths.get(localAppData, "Programs", "Claude", "Claude.exe");
-            if (exe != null && Files.exists(exe)) {
-                new ProcessBuilder(exe.toString()).start();
-            } else {
-                // Falls through to whatever "Claude" resolves to on PATH/shell association;
-                // may not resolve on every install layout, which is why the caller reports
-                // failure back to the user rather than assuming success.
-                new ProcessBuilder("cmd", "/c", "start", "", "Claude").start();
-            }
-        } else {
-            new ProcessBuilder("claude-desktop").start();
         }
     }
 
