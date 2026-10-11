@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,13 +51,25 @@ class SupremeCourtSiteTest {
   private volatile List<Integer> script = Collections.emptyList();
   private volatile String contentType = "text/html";
   private volatile byte[] body = "<html>ok</html>".getBytes(StandardCharsets.UTF_8);
-  private final List<Long> arrivalTimes = Collections.synchronizedList(new ArrayList<Long>());
+  /** The clock's reading as each request reached the server. */
+  private final List<Long> requestTimes = Collections.synchronizedList(new ArrayList<Long>());
+  /** A clock that moves only when the site waits on it, so a request's start time is exact. */
+  private final AtomicLong testClockMs = new AtomicLong(1000000L);
+  private final SupremeCourtSite.Clock testClock = new SupremeCourtSite.Clock() {
+    @Override public long nowMs() {
+      return testClockMs.get();
+    }
+
+    @Override public void sleep(long ms) {
+      testClockMs.addAndGet(ms);
+    }
+  };
 
   @BeforeEach void start() throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/", new HttpHandler() {
       @Override public void handle(HttpExchange ex) throws IOException {
-        arrivalTimes.add(System.currentTimeMillis());
+        requestTimes.add(testClockMs.get());
         int n = requests.getAndIncrement();
         int status = n < script.size() ? script.get(n) : 200;
         if (status == 200) {
@@ -150,13 +163,16 @@ class SupremeCourtSiteTest {
   }
 
   @Test void requestsAreSpacedByTheMinimumInterval() throws IOException {
-    SupremeCourtSite spaced = site(80, 0);
+    // On the test's clock nothing but the site's own waiting moves time, so the reading as a
+    // request reaches the server is the time that request started.
+    SupremeCourtSite spaced = new SupremeCourtSite(80, new long[0], testClock);
     for (int i = 0; i < 4; i++) {
       spaced.getHtml(url());
     }
-    for (int i = 1; i < arrivalTimes.size(); i++) {
-      long gap = arrivalTimes.get(i) - arrivalTimes.get(i - 1);
-      assertTrue(gap >= 70, "gap " + gap + " ms between request " + (i - 1) + " and " + i);
+    assertEquals(4, requestTimes.size());
+    for (int i = 1; i < requestTimes.size(); i++) {
+      long gap = requestTimes.get(i) - requestTimes.get(i - 1);
+      assertTrue(gap >= 80, "gap " + gap + " ms between request " + (i - 1) + " and " + i);
     }
   }
 }
