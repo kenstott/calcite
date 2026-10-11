@@ -136,6 +136,14 @@ def main() -> int:
                 if "JVM started with" in line and "classpath entries" in line:
                     entries = int(line.split("JVM started with")[1].split()[0])
     print(f"classpath entries the server's JVM started with: {entries}")
+    # A server puts its jar's catalog seed in place before it opens its catalog, and says so.
+    # Shown, not required: a bundle from before that rule says nothing.
+    if os.path.exists(spawn_log):
+        with open(spawn_log, "rb") as f:
+            f.seek(log_start)
+            for line in f.read().decode("utf-8", "replace").splitlines():
+                if "catalog seed" in line or "govdata catalog" in line:
+                    print("the server on its catalog: " + line.strip()[:400])
     if entries is not None and entries < MIN_CLASSPATH_ENTRIES:
         print(f"::error::with {instances} MCP process(es) the data server's JVM was given "
               f"{entries} jars; a whole bundle has more than {MIN_CLASSPATH_ENTRIES}")

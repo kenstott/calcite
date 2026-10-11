@@ -29,14 +29,13 @@ env:
   TEST_VERSION: 0.250.${{ github.run_number }}
   # The rule: the installer is small and has a step to download its assets (ASKAM-005).
   LIMIT_MB: "100"
-  # The release the upgrade job installs first and upgrades from: the one in the report that
-  # Claude Desktop could not start the server after installing the .msi. Named, not "latest":
-  # the latest release has no installers until its own workflow has finished.
-  PREVIOUS_RELEASE: engine-v0.109.1
+  # The release the upgrade job installs first and upgrades from. Named, not "latest": the
+  # latest release has no installers until its own workflow has finished.
+  PREVIOUS_RELEASE: engine-v0.109.4
   # The release whose Windows server bundle the server-windows job unpacks and has the engine
   # spawn. Its JVM must be given the whole classpath (issue 497): set this to a release built
   # after the fix to prove a Windows data server starts.
-  BUNDLE_RELEASE: engine-v0.109.3
+  BUNDLE_RELEASE: engine-v0.109.5
 
 jobs:
   # The engine jar from this ref. The installed launcher is pointed at it with
