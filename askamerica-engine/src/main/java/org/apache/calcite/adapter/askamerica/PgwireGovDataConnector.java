@@ -113,6 +113,9 @@ final class PgwireGovDataConnector {
   /** The one start in progress for this process, if any. Every call waits on its result. */
   private static final Starter STARTER = new Starter();
 
+  /** Where a key is obtained; the same address the setup window links to. */
+  static final String SIGNUP_URL = "https://askamerica.ai/#signup";
+
   private PgwireGovDataConnector() {}
 
   /**
@@ -260,6 +263,10 @@ final class PgwireGovDataConnector {
   }
 
   private static Connection connect() throws Exception {
+    // Without a key there is nothing to do: no sign-in, and no credentials for the store a
+    // spawned server would need. Said to the caller at once, not left in a log behind a
+    // server that was started only to fail.
+    requireApiKey();
     Connection c = tryDirectConnect();
     if (c != null) {
       return c;
@@ -570,10 +577,22 @@ final class PgwireGovDataConnector {
   static String requireApiKey() {
     String key = R2CredentialProvider.credentialApiKey();
     if (key == null || key.isEmpty()) {
-      throw new IllegalStateException("No AskAmerica API key: set ASKAMERICA_API_KEY. The "
-          + "data server signs every connection in with it.");
+      throw new IllegalStateException(noApiKeyMessage());
     }
     return key;
+  }
+
+  /**
+   * What a caller with no API key is told: that it is missing, and the two ways to supply it
+   * that exist, the setup window (which writes it into Claude Desktop's configuration) and the
+   * environment variable.
+   */
+  static String noApiKeyMessage() {
+    return "No AskAmerica API key: set ASKAMERICA_API_KEY. The data server signs every "
+        + "connection in with it. To set it, open the AskAmerica MCP application and enter "
+        + "your key there (it writes the key into Claude Desktop's configuration; restart "
+        + "Claude Desktop afterwards), or set ASKAMERICA_API_KEY in the environment this "
+        + "server is started with. A free key: " + SIGNUP_URL;
   }
 
   /**
