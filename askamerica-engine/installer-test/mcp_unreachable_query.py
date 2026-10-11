@@ -34,6 +34,8 @@ import tempfile
 import threading
 import time
 
+import standin_key
+
 LIMIT_SECONDS = 60
 KEYLESS_LIMIT_SECONDS = 180  # a real server is started and given time to fail
 STARTUP_SECONDS = 600  # a first start may fetch the engine jar before it answers
@@ -70,12 +72,11 @@ def main() -> int:
         keyless = len(sys.argv) > 2
         if keyless:
             env["ASKAMERICA_PGWIRE_LAUNCHER"] = sys.argv[2]
-            for name in list(env):
-                if name in ("ASKAMERICA_API_KEY", "FREE_ASKAMERICA_KEY", "GOVDATA_PARQUET_DIR") \
-                        or name.startswith("AWS_"):
-                    del env[name]
+            standin_key.without_any_key(env)
         else:
             env["ASKAMERICA_PGWIRE_LAUNCHER"] = stand_in_server(root)
+            # The engine starts nothing for a caller with no key; this one stays on the machine.
+            standin_key.with_made_up_key(env)
         env["ASKAMERICA_PGWIRE_PORT"] = str(free_port())
         proc = subprocess.Popen(
             [launcher, "--mcp"], env=env,

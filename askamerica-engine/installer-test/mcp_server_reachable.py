@@ -32,6 +32,8 @@ import sys
 import threading
 import time
 
+import standin_key
+
 OPEN_SECONDS = 300
 MIN_CLASSPATH_ENTRIES = 200
 HOLD_SECONDS = 30
@@ -65,6 +67,8 @@ def main() -> int:
     port = free_port()
     env = dict(os.environ)
     env.update(PLACEHOLDERS)
+    # The engine starts nothing for a caller with no key; nothing of this key leaves the machine.
+    standin_key.with_made_up_key(env)
     env["ASKAMERICA_PGWIRE_LAUNCHER"] = server_launcher
     env["ASKAMERICA_PGWIRE_PORT"] = str(port)
     spawn_log = os.path.join(os.path.expanduser("~"), ".askamerica", "pgwire-govdata", "spawn.log")
