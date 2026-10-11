@@ -17,6 +17,12 @@ The installed launcher is started with ASKAMERICA_PGWIRE_LAUNCHER naming a stand
 pgwire-govdata server that exits at once, on a port nothing listens on. It is sent
 `initialize` and then one `query` tool call. Exits 0 when that call is answered within
 LIMIT_SECONDS with an error naming pgwire-govdata, 1 otherwise. Reads no data, needs no key.
+
+    mcp_unreachable_query.py "<path to the installed launcher>" "<a real pgwire-govdata launcher>"
+
+With a second argument the server is that real launcher, and the environment is a new
+user's: no API key and no object-store settings. The answer to the query is printed whole,
+because it is what such a user reads; it must be an error, and nothing else is required of it.
 """
 import json
 import os
@@ -29,6 +35,7 @@ import threading
 import time
 
 LIMIT_SECONDS = 60
+KEYLESS_LIMIT_SECONDS = 180  # a real server is started and given time to fail
 STARTUP_SECONDS = 600  # a first start may fetch the engine jar before it answers
 
 
@@ -60,7 +67,15 @@ def main() -> int:
     launcher = sys.argv[1]
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
         env = dict(os.environ)
-        env["ASKAMERICA_PGWIRE_LAUNCHER"] = stand_in_server(root)
+        keyless = len(sys.argv) > 2
+        if keyless:
+            env["ASKAMERICA_PGWIRE_LAUNCHER"] = sys.argv[2]
+            for name in list(env):
+                if name in ("ASKAMERICA_API_KEY", "FREE_ASKAMERICA_KEY", "GOVDATA_PARQUET_DIR") \
+                        or name.startswith("AWS_"):
+                    del env[name]
+        else:
+            env["ASKAMERICA_PGWIRE_LAUNCHER"] = stand_in_server(root)
         env["ASKAMERICA_PGWIRE_PORT"] = str(free_port())
         proc = subprocess.Popen(
             [launcher, "--mcp"], env=env,
@@ -111,7 +126,7 @@ def main() -> int:
             send({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
                   "params": {"name": "query",
                              "arguments": {"sql": "SELECT 1 FROM sec.filing_metadata"}}})
-            reply = answer(2, LIMIT_SECONDS)
+            reply = answer(2, KEYLESS_LIMIT_SECONDS if keyless else LIMIT_SECONDS)
             waited = time.monotonic() - started
         finally:
             proc.kill()
@@ -121,6 +136,18 @@ def main() -> int:
               f"{LIMIT_SECONDS}s; the user would be told nothing")
         return report(seen, 1)
     text = json.dumps(reply)
+    if keyless:
+        print(f"with no API key, the query was answered after {waited:.1f}s. The text a user reads:")
+        for item in reply.get("result", {}).get("content", []):
+            print(item.get("text", ""))
+        print("the whole answer: " + json.dumps(reply, ensure_ascii=False)[:6000])
+        print("what the MCP process wrote meanwhile:")
+        for line in seen[-40:]:
+            print("  " + line[:400])
+        if "error" in reply or reply.get("result", {}).get("isError") is True:
+            return 0
+        print("::error::a query with no API key was answered without an error")
+        return 1
     print(f"answered after {waited:.1f}s: {text[:1200]}")
     is_error = "error" in reply or reply.get("result", {}).get("isError") is True
     if not is_error:

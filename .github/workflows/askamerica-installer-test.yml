@@ -483,6 +483,16 @@ jobs:
           ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
         run: |
           python askamerica-engine/installer-test/mcp_server_reachable.py "$env:ASKAMERICA_EXE" "$env:SERVER_LAUNCHER" 2
+
+      # What a new user without an API key reads when they ask a question: the released
+      # server bundle, no key, no object-store settings, one query. Its answer is printed whole.
+      - name: A query with no API key says so
+        if: always() && env.SERVER_LAUNCHER != ''
+        shell: pwsh
+        env:
+          ASKAMERICA_ENGINE_JAR: ${{ github.workspace }}\engine\askamerica-engine.jar
+        run: |
+          python askamerica-engine/installer-test/mcp_unreachable_query.py "$env:ASKAMERICA_EXE" "$env:SERVER_LAUNCHER"
           $code = $LASTEXITCODE
           Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:SERVER_ROOT) } | Stop-Process -Force -ErrorAction SilentlyContinue
           if ($code -ne 0) { throw "the server spawned by two MCP processes at once did not come up and stay up" }
