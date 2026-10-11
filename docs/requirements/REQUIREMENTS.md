@@ -2,7 +2,7 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**327 requirements across 7 adapters.**
+**328 requirements across 7 adapters.**
 
 
 ## askamerica  (7: 6 accepted, 1 proposed)
