@@ -32,8 +32,9 @@ env:
   # The release the upgrade job installs first and upgrades from. Named, not "latest": the
   # latest release has no installers until its own workflow has finished.
   PREVIOUS_RELEASE: engine-v0.109.4
-  # The release whose Windows server bundle the server-windows job unpacks and has the engine
-  # spawn. Its JVM must be given the whole classpath (issue 497): set this to a release built
+  # The release under test: its published .msi is what the upgrade job installs over
+  # PREVIOUS_RELEASE, and its Windows server bundle is what the server-windows job unpacks and
+  # has the engine spawn. Its JVM must be given the whole classpath (issue 497): set this to a release built
   # after the fix to prove a Windows data server starts.
   BUNDLE_RELEASE: engine-v0.109.5
 
@@ -312,10 +313,18 @@ jobs:
             Get-Content "$env:RUNNER_TEMP\previous-bundled-server.log" -Tail 40
           }
 
-      - name: Install this build over it
+      # The upgrade target is the PUBLISHED installer of BUNDLE_RELEASE: the file a user
+      # downloads, not one built in this run.
+      - name: Install the published release over it
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $msi = (Get-ChildItem installer -Filter *.msi | Select-Object -First 1).FullName
+          gh release download $env:BUNDLE_RELEASE --repo "${{ github.repository }}" --pattern "*.msi" --dir published
+          if ($LASTEXITCODE -ne 0) { throw "could not download the .msi of $env:BUNDLE_RELEASE" }
+          $msi = (Get-ChildItem published -Filter *.msi | Select-Object -First 1).FullName
+          if (-not $msi) { throw "$env:BUNDLE_RELEASE has no .msi" }
+          Write-Host "upgrading $env:PREVIOUS_RELEASE to the published $env:BUNDLE_RELEASE installer: $(Split-Path $msi -Leaf), $([math]::Round((Get-Item $msi).Length / 1MB, 1)) MB"
           $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "$env:RUNNER_TEMP\upgrade.log" -Wait -PassThru
           Write-Host "msiexec exit code: $($p.ExitCode)"
           "UPGRADE_EXIT=$($p.ExitCode)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
