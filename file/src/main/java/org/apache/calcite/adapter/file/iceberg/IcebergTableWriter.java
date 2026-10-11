@@ -28,6 +28,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
+import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.DataWriter;
@@ -48,6 +49,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -70,6 +72,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
+
+  /** Read-then-commit passes {@code deleteRows} makes before surfacing a concurrent-rewrite conflict. */
+  private static final int DELETE_ROWS_MAX_ATTEMPTS = 3;
 
   /**
    * Floor on the per-record byte estimate used to size compaction output files. The estimate is
@@ -656,7 +661,7 @@ public class IcebergTableWriter {
     if (values == null || values.isEmpty()) {
       return;
     }
-    deleteRowsMatching(Expressions.in(column, values),
+    deleteRowsMatching(Expressions.in(column, values), Collections.singleton(column),
         record -> {
           Object fieldValue = record.getField(column);
           return fieldValue != null && values.contains(String.valueOf(fieldValue));
@@ -692,7 +697,7 @@ public class IcebergTableWriter {
       scanFilter = Expressions.and(scanFilter,
           Expressions.equal(entry.getKey(), coerceToColumnType(deleteScanSchema, entry)));
     }
-    deleteRowsMatching(scanFilter,
+    deleteRowsMatching(scanFilter, equalityFilter.keySet(),
         record -> {
           for (Map.Entry<String, String> entry : equalityFilter.entrySet()) {
             Object fieldValue = record.getField(entry.getKey());
@@ -746,8 +751,37 @@ public class IcebergTableWriter {
    * deleted outright with no replacement.
    */
   private void deleteRowsMatching(org.apache.iceberg.expressions.Expression scanFilter,
-      java.util.function.Predicate<Record> rowMatches, String description) throws IOException {
+      Collection<String> matchColumns, java.util.function.Predicate<Record> rowMatches,
+      String description) throws IOException {
+    for (int attempt = 1;; attempt++) {
+      table.refresh();
+      try {
+        deleteRowsMatchingOnce(scanFilter, matchColumns, rowMatches, description);
+        return;
+      } catch (ValidationException e) {
+        String message = e.getMessage();
+        if (message == null || !message.startsWith("Missing required files to delete")
+            || attempt >= DELETE_ROWS_MAX_ATTEMPTS) {
+          throw e;
+        }
+        LOGGER.warn("deleteRows: files read for {} were replaced by another writer before the "
+            + "commit (attempt {}/{}); re-reading against the current table state",
+            description, attempt, DELETE_ROWS_MAX_ATTEMPTS);
+      }
+    }
+  }
+
+  /**
+   * One read-then-commit pass of {@link #deleteRowsMatching}. {@code matchColumns} names the only
+   * columns {@code rowMatches} reads, so the match pass projects just those instead of decoding
+   * every column of every candidate file; null means the predicate needs the whole row. A file
+   * that does match is still re-read in full by {@link #copyRowsNotMatching}.
+   */
+  private void deleteRowsMatchingOnce(org.apache.iceberg.expressions.Expression scanFilter,
+      Collection<String> matchColumns, java.util.function.Predicate<Record> rowMatches,
+      String description) throws IOException {
     Schema schema = table.schema();
+    final Schema matchSchema = matchColumns == null ? schema : schema.select(matchColumns);
     PartitionSpec spec = table.spec();
 
     List<DataFile> filesToDelete = new ArrayList<>();
@@ -766,10 +800,10 @@ public class IcebergTableWriter {
 
         InputFile in = table.io().newInputFile(oldFile.path().toString());
         try (CloseableIterable<Record> records = Parquet.read(in)
-            .project(schema)
+            .project(matchSchema)
             .createReaderFunc(fileSchema ->
                 org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
-                    schema, fileSchema))
+                    matchSchema, fileSchema))
             .build()) {
           for (Record record : records) {
             if (rowMatches.test(record)) {
@@ -813,19 +847,26 @@ public class IcebergTableWriter {
     final long finalDeletedRows = deletedRows;
     final List<DataFile> finalFilesToDelete = filesToDelete;
     final List<DataFile> finalReplacementFiles = replacementFiles;
-    underCommitLock(() -> {
-      RewriteFiles rewrite = table.newRewrite();
-      if (table.currentSnapshot() != null) {
-        rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-      }
-      for (DataFile f : finalFilesToDelete) {
-        rewrite.deleteFile(f);
-      }
+    try {
+      underCommitLock(() -> {
+        RewriteFiles rewrite = table.newRewrite();
+        if (table.currentSnapshot() != null) {
+          rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+        }
+        for (DataFile f : finalFilesToDelete) {
+          rewrite.deleteFile(f);
+        }
+        for (DataFile f : finalReplacementFiles) {
+          rewrite.addFile(f);
+        }
+        rewrite.commit();
+      });
+    } catch (RuntimeException e) {
       for (DataFile f : finalReplacementFiles) {
-        rewrite.addFile(f);
+        table.io().deleteFile(f.path().toString());
       }
-      rewrite.commit();
-    });
+      throw e;
+    }
     LOGGER.info("deleteRows: removed {} row(s) across {} file(s) ({} replacement file(s) written)",
         finalDeletedRows, finalFilesToDelete.size(), finalReplacementFiles.size());
   }
@@ -896,7 +937,7 @@ public class IcebergTableWriter {
     final List<Types.NestedField> allColumns = schema.columns();
     final int[] groupGcd = before.groupGcd;
     final java.util.concurrent.atomic.AtomicLong removed = new java.util.concurrent.atomic.AtomicLong();
-    deleteRowsMatching(scanFilter, record -> {
+    deleteRowsMatching(scanFilter, null, record -> {
       RowDigestCounts.digest(md, record, allColumns, d);
       int slot = digests.find(d[0], d[1]);
       if (slot < 0) {
