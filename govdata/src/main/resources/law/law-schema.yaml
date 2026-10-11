@@ -2198,7 +2198,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 645
-      checkedAt: "2026-10-10T07:10:00Z"
+      checkedAt: "2026-10-11T07:42:03Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -2419,7 +2419,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1379186
-      checkedAt: "2026-10-10T07:10:07Z"
+      checkedAt: "2026-10-11T07:42:25Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -2704,7 +2704,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2740757
-      checkedAt: "2026-10-10T07:10:18Z"
+      checkedAt: "2026-10-11T07:42:51Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -2830,7 +2830,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 7104587
-      checkedAt: "2026-10-10T07:10:25Z"
+      checkedAt: "2026-10-11T07:43:08Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -2968,7 +2968,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 9834407
-      checkedAt: "2026-10-10T07:10:29Z"
+      checkedAt: "2026-10-11T07:43:19Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3068,7 +3068,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 12204
-      checkedAt: "2026-10-10T07:10:31Z"
+      checkedAt: "2026-10-11T07:43:23Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3213,7 +3213,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 20125
-      checkedAt: "2026-10-10T07:10:32Z"
+      checkedAt: "2026-10-11T07:43:30Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3357,7 +3357,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 271
-      checkedAt: "2026-10-10T07:10:33Z"
+      checkedAt: "2026-10-11T07:43:32Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3492,7 +3492,7 @@ partitionedTables:
       contiguous: false
       years: [2015, 2016, 2017, 2026]
       rowCount: 140549
-      checkedAt: "2026-10-10T07:10:36Z"
+      checkedAt: "2026-10-11T07:43:36Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3706,7 +3706,7 @@ partitionedTables:
       contiguous: false
       years: [2015, 2016, 2017, 2026]
       rowCount: 620594
-      checkedAt: "2026-10-10T07:10:38Z"
+      checkedAt: "2026-10-11T07:43:42Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3835,7 +3835,7 @@ partitionedTables:
       contiguous: false
       years: [2015, 2016, 2017, 2026]
       rowCount: 21982
-      checkedAt: "2026-10-10T07:10:39Z"
+      checkedAt: "2026-10-11T07:43:44Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -4570,7 +4570,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 585
-      checkedAt: "2026-10-10T07:10:40Z"
+      checkedAt: "2026-10-11T07:43:47Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -4713,7 +4713,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 576
-      checkedAt: "2026-10-10T07:10:41Z"
+      checkedAt: "2026-10-11T07:43:49Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -4844,7 +4844,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 26536
-      checkedAt: "2026-10-10T07:10:42Z"
+      checkedAt: "2026-10-11T07:43:52Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -4932,7 +4932,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 54267
-      checkedAt: "2026-10-10T07:10:43Z"
+      checkedAt: "2026-10-11T07:43:55Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5073,6 +5073,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_filings
     pattern: "type=fd_filings/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 4612
+      checkedAt: "2026-10-11T07:43:59Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5194,6 +5201,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_assets
     pattern: "type=fd_assets/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 137003
+      checkedAt: "2026-10-11T07:44:05Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5340,6 +5354,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_income
     pattern: "type=fd_income/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 6074
+      checkedAt: "2026-10-11T07:44:07Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5467,6 +5488,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_transactions
     pattern: "type=fd_transactions/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 55143
+      checkedAt: "2026-10-11T07:44:09Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5611,6 +5639,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_liabilities
     pattern: "type=fd_liabilities/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 3786
+      checkedAt: "2026-10-11T07:44:10Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5740,6 +5775,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_gifts
     pattern: "type=fd_gifts/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 102
+      checkedAt: "2026-10-11T07:44:12Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5859,6 +5901,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_travel
     pattern: "type=fd_travel/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 326
+      checkedAt: "2026-10-11T07:44:13Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5975,6 +6024,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_positions
     pattern: "type=fd_positions/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 4430
+      checkedAt: "2026-10-11T07:44:14Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -6084,6 +6140,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_agreements
     pattern: "type=fd_agreements/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 2429
+      checkedAt: "2026-10-11T07:44:16Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -6192,6 +6255,13 @@ partitionedTables:
   # session by SenateFinancialDisclosureProvider; see fd_filings for coverage and exclusions.
   - name: fd_compensation
     pattern: "type=fd_compensation/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2014
+      maxYear: 2026
+      distinctYears: 13
+      contiguous: true
+      rowCount: 1703
+      checkedAt: "2026-10-11T07:44:19Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
