@@ -1,0 +1,39 @@
+#!/bin/sh
+# prerm script for APPLICATION_PACKAGE
+#
+# jpackage's own template (JDK 21, template.prerm) with one change: a host that has no desktop
+# menu has no menu entry to take away, and that is not an error. See postinst.
+
+set -e
+
+package_type=deb
+DESKTOP_SCRIPTS
+LAUNCHER_AS_SERVICE_SCRIPTS
+
+case "$1" in
+    remove|upgrade|deconfigure)
+set +e
+(
+set -e
+DESKTOP_COMMANDS_UNINSTALL
+)
+desktop_status=$?
+set -e
+if [ "$desktop_status" -eq 3 ]; then
+    echo "APPLICATION_PACKAGE: this host has no desktop menu; there was no menu entry to remove" >&2
+elif [ "$desktop_status" -ne 0 ]; then
+    exit "$desktop_status"
+fi
+LAUNCHER_AS_SERVICE_COMMANDS_UNINSTALL
+    ;;
+
+    failed-upgrade)
+    ;;
+
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0
