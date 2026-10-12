@@ -32,7 +32,10 @@
 #
 # After it finishes, review and commit the two staged files:
 #   git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \
-#           govdata/src/main/resources/duckdb/seed/govdata-seed.version
+#           govdata/src/main/resources/duckdb/seed/govdata-seed.version \
+#           govdata/src/main/resources/duckdb/seed/govdata-seed.schema
+#   (the .schema listing is written by the same Gradle task; an installed catalog is compared
+#   with the seed by it, so the three are committed together)
 #
 # Exit codes: 0 seed built, 1/2 error, 10 seed not needed (only with --if-needed or --check).
 #
@@ -172,7 +175,9 @@ SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
 # a staging-scoped dir so generation gets real disk too, without touching the live workers' own.
 TMPDIR_STAGING="$STAGING/tmp"
 mkdir -p "$TMPDIR_STAGING"
-export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING"
+# -Dgovdata.seed.build=true: this is the one place a govdata catalog is built by discovery.
+# Without it GovDataDriver refuses to connect from a jar that carries no seed.
+export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING -Dgovdata.seed.build=true"
 
 # GENERATE must build every view fresh from the CURRENT schema YAML. GovDataSeedInstaller
 # (invoked by GovDataDriver on first connect) extracts the classpath jar's OWN bundled seed
@@ -275,4 +280,5 @@ ls -lh "$SEED_DIR/govdata-seed.zip" "$SEED_DIR/govdata-seed.version" 2>/dev/null
 echo
 echo "Review the size, then commit them in-tree:"
 echo "  git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \\"
-echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.version"
+echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.version \\"
+echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.schema"

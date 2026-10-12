@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import hashlib
 import logging
 import os
 import re
@@ -385,6 +386,8 @@ class CalciteQueryResult(BVQueryResult):
         self._meter_sql = original_sql
         self._meter_start = time.monotonic()
         self._sampler = metering.EgressSampler(len(self._cols))
+        #: The API key of the connection this result belongs to; set by the session.
+        self.metering_key: str | None = None
         ctypes = result.column_types
         if not ctypes or any(not t for t in ctypes):
             self._head = next(self._batch_iter, [])
@@ -439,7 +442,7 @@ class CalciteQueryResult(BVQueryResult):
             return
         self._closed = True
         duration_ms = int((time.monotonic() - self._meter_start) * 1000)
-        self._sampler.finish(self._meter_sql, duration_ms)
+        self._sampler.finish(self.metering_key, self._meter_sql, duration_ms)
         self._head = None
         self._pending, self._pending_idx = [], 0
         close = getattr(self._batch_iter, "close", None)
@@ -469,6 +472,10 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
     def __init__(self) -> None:
         super().__init__()
         self.role_id: str | None = None
+        #: This connection's AskAmerica API key when it signed in with one
+        #: (auth.AskAmericaKeyProvider): its quota is checked and its usage reported under
+        #: it. Never logged.
+        self.metering_key: str | None = None
         # The streaming result of the statement currently in flight. A wire session
         # runs one statement at a time, so starting the next one (or ending the
         # session — including on a client disconnect mid-stream) releases the JDBC
@@ -524,6 +531,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
     def _track(self, result: "CalciteQueryResult") -> "CalciteQueryResult":
         self._open_result = result
+        result.metering_key = self.metering_key
         return result
 
     @property
@@ -690,13 +698,11 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
 
             enforce_query(_grants, self.role_id or "", stripped, catalog_reads=_info_views)
 
-        # Usage quota (kenstott/calcite#364): a no-op when ASKAMERICA_API_KEY isn't
-        # set (local dev / self-hosted runs). Checked per query, same cadence as
-        # askamerica-engine's embedded-mode UsageMetering.StatementHandler; cheap
-        # thanks to metering.py's 60s cache. Raises PermissionError, already an
-        # established, handled error type on this exact call path (enforce_query
-        # above raises the same type for the same reason).
-        metering.enforce_quota()
+        # Usage quota, under THIS connection's key; a no-op for a connection that carries
+        # none. Checked per query; cheap thanks to metering.py's 60s cache. Raises
+        # PermissionError, already an established, handled error type on this exact call
+        # path (enforce_query above raises the same type for the same reason).
+        metering.enforce_quota(self.metering_key)
 
         # Non-catalog execution seam: Phase 0 StubBackend -> Phase 1 CalciteBackend.
         # stream=True selects the Arrow batch-streaming path at the wire (Phase 3);
@@ -780,7 +786,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             from pgwire_calcite.authz import enforce_query
 
             enforce_query(grants, self.role_id or "", pg_sql)
-        metering.enforce_quota()
+        metering.enforce_quota(self.metering_key)
 
         try:
             if plan is None:
@@ -791,6 +797,7 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
             else:
                 result = CalciteQueryResult(self._execute_returning(backend, plan), pg_sql)
                 result.row_tag_prefix = "INSERT 0" if kind == "INSERT" else kind
+            result.metering_key = self.metering_key
         except (PermissionError, PgProtocolError):
             raise
         except Exception as exc:
@@ -1355,13 +1362,24 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         # (PGWIRE_CALCITE_PAT_PREFIX / OIDC) apply here, uniformly, on every provider.
         _prov = getattr(_state, "auth_provider", None)
         if _prov is not None:
-            subject = subject_key(username)
+            key_sign_in = getattr(_prov, "password_is_metering_key", False)
+            # Under key sign-in every client has the same user name, so the lockout is kept
+            # per presented key (by its digest, never the key): a wrong key locks out only
+            # itself, not every reader on the machine.
+            subject = (
+                "key:" + hashlib.sha256(password.encode("utf-8")).hexdigest()
+                if key_sign_in
+                else subject_key(username)
+            )
             try:
                 role = throttled_auth(
                     lambda: _authenticate_credential(_prov, username, password), subject=subject
                 )
             except LockedOut as locked:
                 self._send_lockout(locked)
+                return
+            except metering.KeyServiceUnavailable as exc:
+                self._send_pg_error("FATAL", exc.sqlstate, str(exc))
                 return
             except ValueError as exc:
                 self._send_pg_error(
@@ -1379,6 +1397,8 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self._send_pg_error("FATAL", "28000", str(exc))
                 return
             ctx.session.role_id = role  # type: ignore[attr-defined]
+            if key_sign_in:
+                ctx.session.metering_key = password  # type: ignore[attr-defined]
             self.send_authentication_ok()
             self.handle_post_auth(ctx)
             return
@@ -1580,7 +1600,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 nrows = BinaryCopyHandler(self).handle(ctx, sql)  # type: ignore[arg-type]
                 self.send_command_complete(f"COPY {nrows}\x00")
             except PermissionError as exc:
-                self._send_pg_error("ERROR", "42501", str(exc))
+                self._send_pg_error("ERROR", getattr(exc, "sqlstate", None) or "42501", str(exc))
                 ctx.mark_error()
             except Exception as exc:
                 self._send_pg_error("ERROR", "0A000", str(exc))
@@ -1613,7 +1633,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                     nrows = BinaryCopyHandler(self).handle(ctx, stmt)  # type: ignore[arg-type]
                     self.send_command_complete(f"COPY {nrows}\x00")
                 except PermissionError as exc:
-                    self._send_pg_error("ERROR", "42501", str(exc))
+                    self._send_pg_error("ERROR", getattr(exc, "sqlstate", None) or "42501", str(exc))
                     ctx.mark_error()
                 except Exception as exc:
                     self._send_pg_error("ERROR", "0A000", str(exc))
@@ -1631,7 +1651,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 else:
                     query_result = ctx.execute_sql(stmt)
             except PermissionError as exc:
-                self._send_pg_error("ERROR", "42501", str(exc))
+                self._send_pg_error("ERROR", getattr(exc, "sqlstate", None) or "42501", str(exc))
                 ctx.mark_error()
                 break
             except Exception as exc:

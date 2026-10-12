@@ -352,7 +352,11 @@ def main(argv: list | None = None) -> int:
         help="extra Calcite JDBC connection property (repeatable)",
     )
     parser.add_argument(
-        "--auth", choices=["none", "simple", "trust", "local", "scram"], default="none"
+        "--auth",
+        choices=["none", "simple", "trust", "local", "scram", "askamerica-key"],
+        default="none",
+        help="askamerica-key: every connection's password is its AskAmerica API key, checked "
+        "with the key service and used to meter that connection (pgwire-govdata's default)",
     )
     parser.add_argument(
         "--auth-store", default=None, help="accounts JSON path for --auth local/scram (Phase 5b)"
@@ -479,6 +483,10 @@ def main(argv: list | None = None) -> int:
         args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child, extensions=enabled_ext
     )
     auth_provider = None
+    if args.auth == "askamerica-key":
+        from pgwire_calcite.auth import AskAmericaKeyProvider
+
+        auth_provider = AskAmericaKeyProvider()
     if args.auth in ("trust", "local", "scram"):
         from pgwire_calcite.auth import AccountStore, LocalAccountsProvider, TrustProvider
 

@@ -18,16 +18,17 @@ bypassing the Java-side Connection proxy ``UsageMetering.wrap()`` relies on
 entirely. Confirmed live: a real free-tier key showed ``used_bytes: 0`` after
 real query traffic, because nothing was tracking it at all.
 
-The API key is read ONCE from ``ASKAMERICA_API_KEY``, inherited from the parent
-askamerica-mcp Java process's environment when it spawns this server
-(``PgwireGovDataConnector.spawnIfPossible()`` uses a plain ``ProcessBuilder``,
-which inherits the parent's environment by default -- no explicit forwarding
-needed). This server is single-tenant per machine (one shared local instance
-per install, per kenstott/calcite#364), so every connection's usage belongs to
-the same key; there is no per-connection auth to thread through here.
+The API key is the CONNECTION's: every connection to pgwire-govdata presents its
+AskAmerica API key as its PostgreSQL password (``auth.AskAmericaKeyProvider``), the server
+keeps it with that connection, and quota is checked and usage reported under it -- per
+connection, never from this process's environment. Two connections with two keys are metered
+separately. The key in the server's environment, if any, belongs to whoever started the
+server and is used only to fetch and rotate the store credentials.
 
-With no API key configured (e.g. a local dev run), every function here is a
-no-op -- metering never blocks or fails a query when unconfigured.
+A connection that carries no key (another pgwire-* adapter, or a server started with key
+sign-in switched off for a test) is not metered: every function here is a no-op for it.
+
+No function here logs, prints or raises a key or any part of one.
 """
 
 from __future__ import annotations
@@ -59,34 +60,43 @@ _USER_AGENT = "pgwire-govdata-metering/1.0"
 _FROM_TABLE_RE = re.compile(r"\bFROM\s+([A-Za-z_][\w.]*)", re.IGNORECASE)
 
 _lock = threading.Lock()
-_quota_cache: dict | None = None  # {"key": str, "state": str, "expires": float}
+#: key -> {"state": str, "expires": float}. One entry per key seen in the last TTL.
+_quota_cache: dict = {}
 
 
 def _api_base() -> str:
     return os.environ.get("ASKAMERICA_API_URL", "https://api.askamerica.ai")
 
 
-def api_key() -> str | None:
-    key = os.environ.get("ASKAMERICA_API_KEY")
-    return key if key else None
-
-
 class QuotaExceeded(PermissionError):
-    """Raised when the configured API key is out of monthly egress quota."""
+    """Raised when the connection's API key is out of monthly egress quota."""
+
+    sqlstate = "53400"
 
 
 class QuotaAuthError(PermissionError):
-    """Raised when the configured API key is invalid, expired, or revoked."""
+    """Raised when the connection's API key is invalid, expired, or revoked."""
+
+    sqlstate = "28P01"
 
 
-def enforce_quota() -> None:
-    """Raise if the process's API key is over quota or rejected.
+class KeyServiceUnavailable(Exception):
+    """The key could not be checked at sign-in because the key service did not answer.
 
-    A no-op when no key is configured (matches UsageMetering.wrap()'s "no key ->
-    unmetered" behavior on the embedded-mode path). Called once per query, same
-    cadence as the Java side's StatementHandler -- cheap thanks to the 60s cache.
+    Sign-in fails closed: a server that admitted keys it could not check would admit any
+    string. SQLSTATE 08006 (connection_failure) tells the client it did nothing wrong and
+    may try again.
     """
-    key = api_key()
+
+    sqlstate = "08006"
+
+
+def enforce_quota(key: str | None) -> None:
+    """Raise if ``key``, the connection's API key, is over quota or rejected.
+
+    A no-op for a connection with no key. Called once per query; cheap thanks to the 60s
+    cache.
+    """
     if not key:
         return
     state = _quota_state(key)
@@ -98,24 +108,56 @@ def enforce_quota() -> None:
             "AskAmerica API key is invalid, expired, or revoked. See https://askamerica.ai")
 
 
-def _quota_state(key: str) -> str:
-    global _quota_cache
+def verify_key(key: str) -> bool:
+    """Sign-in check: True when the key service accepts ``key``, False when it refuses it.
+
+    Raises :class:`KeyServiceUnavailable` when the service cannot be asked. A key that is
+    merely out of quota is accepted here: the connection is admitted and its statements are
+    refused by :func:`enforce_quota`. An answer cached by a recent statement or sign-in under
+    the same key is reused.
+    """
     now = time.monotonic()
     with _lock:
-        cached = _quota_cache
-        if cached is not None and cached["key"] == key and cached["expires"] > now:
+        cached = _quota_cache.get(key)
+        if cached is not None and cached["expires"] > now:
+            return True
+    state = _fetch_quota_state(key, fail_open=False)
+    if state == "block_auth":
+        return False
+    _remember(key, state, now)
+    return True
+
+
+def _remember(key: str, state: str, now: float) -> None:
+    with _lock:
+        for stale in [k for k, v in _quota_cache.items() if v["expires"] <= now]:
+            del _quota_cache[stale]
+        _quota_cache[key] = {"state": state, "expires": now + _QUOTA_TTL_SECONDS}
+
+
+def _quota_state(key: str) -> str:
+    now = time.monotonic()
+    with _lock:
+        cached = _quota_cache.get(key)
+        if cached is not None and cached["expires"] > now:
             return cached["state"]
     state = _fetch_quota_state(key)
     # Never cache an auth block -- a brief 401 from KV propagation lag (e.g. a
     # freshly minted key) self-heals on the next query rather than locking the
-    # user out for the whole TTL, matching UsageMetering.java's quotaState().
+    # user out for the whole TTL.
     if state != "block_auth":
-        with _lock:
-            _quota_cache = {"key": key, "state": state, "expires": now + _QUOTA_TTL_SECONDS}
+        _remember(key, state, now)
     return state
 
 
-def _fetch_quota_state(key: str) -> str:
+def _fetch_quota_state(key: str, fail_open: bool = True) -> str:
+    """``allow``, ``block_quota`` or ``block_auth`` for ``key``.
+
+    When the service cannot be asked or answers something else: ``allow`` for a statement
+    (``fail_open``; a transient fault must not hard-block a signed-in reader), and
+    :class:`KeyServiceUnavailable` at sign-in. The exception text never contains the key:
+    the key travels in a header, and only the status or the error's class is named.
+    """
     req = urllib.request.Request(
         f"{_api_base()}/v1/quota",
         headers={"X-API-Key": key, "User-Agent": _USER_AGENT},
@@ -126,19 +168,32 @@ def _fetch_quota_state(key: str) -> str:
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
             return "block_auth"  # fail closed -- an explicit rejection
+        if not fail_open:
+            raise KeyServiceUnavailable(
+                f"the AskAmerica key service answered HTTP {e.code}; the API key could not "
+                "be checked. Try again shortly.") from None
         return "allow"  # fail open -- a transient infra error must not hard-block
-    except Exception:
+    except Exception as e:
+        if not fail_open:
+            raise KeyServiceUnavailable(
+                f"the AskAmerica key service could not be reached ({type(e).__name__}); the "
+                "API key could not be checked. Try again shortly.") from None
         return "allow"  # fail open on network/timeout
     try:
         remaining = json.loads(body).get("remaining_bytes")
     except Exception:
+        if not fail_open:
+            raise KeyServiceUnavailable(
+                "the AskAmerica key service gave an answer that could not be read; the API "
+                "key could not be checked. Try again shortly.") from None
         return "allow"
     return "block_quota" if (remaining is not None and remaining <= 0) else "allow"
 
 
-def report_usage_async(sql: str, row_count: int, egress_bytes: int, duration_ms: int) -> None:
-    """Fire-and-forget usage report. No-op with no key configured or zero rows."""
-    key = api_key()
+def report_usage_async(
+    key: str | None, sql: str, row_count: int, egress_bytes: int, duration_ms: int
+) -> None:
+    """Fire-and-forget usage report under ``key``. No-op with no key or zero rows."""
     if not key or row_count <= 0:
         return
     t = threading.Thread(
@@ -197,7 +252,8 @@ class EgressSampler:
             except Exception:
                 pass  # best-effort sampling -- never let this break a real result
 
-    def finish(self, sql: str, duration_ms: int) -> None:
+    def finish(self, key: str | None, sql: str, duration_ms: int) -> None:
+        """Reports what was streamed under ``key``, the key of the connection it ran on."""
         if self._row_count <= 0:
             return
         if self._row_count <= _SAMPLE_ROWS:
@@ -205,4 +261,4 @@ class EgressSampler:
         else:
             est = int(self._sample_bytes / _SAMPLE_ROWS * self._row_count)
         egress = max(est, self._row_count * self._col_count)
-        report_usage_async(sql, self._row_count, egress, duration_ms)
+        report_usage_async(key, sql, self._row_count, egress, duration_ms)
