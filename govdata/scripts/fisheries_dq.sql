@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement
+-- Tables: noaa_feus_economic_impacts, noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -677,6 +677,121 @@ INSERT INTO dq_results
 SELECT 'fisheries', 'mrip_recreational_effort', 'T7_florida_trips_magnitude',
   CASE WHEN t BETWEEN 5e6 AND 2e8 THEN 'pass' ELSE 'fail' END, t, 5e6, 'Max single-year Florida angler trips (expect 5M-200M)'
 FROM (SELECT MAX(s) AS t FROM (SELECT catch_year, SUM(angler_trips) AS s FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) WHERE state_abbr = 'FL' GROUP BY catch_year));
+
+-- ─────────────────────────────────────────────────────────────
+-- noaa_feus_economic_impacts
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true));
+
+-- Source carries 1,152 commercial + 500 recreational impact rows
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T2_row_count',
+  CASE WHEN n >= 1600 THEN 'pass' ELSE 'fail' END, n, 1600, 'Expected 1,652 rows (1,152 commercial + 500 recreational)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'feus_file')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true))
+    -- geo_level (state / national) is exempt: SUMMARIZE's approximate distinct count reads a
+    -- two-value column as one; T7_geo_levels checks it exactly.
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'feus_file', 'geo_level')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL industry, geography, geo_level, data_year, sector, row_level, impact_type or unit rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
+      WHERE industry IS NULL OR geography IS NULL OR geo_level IS NULL OR data_year IS NULL
+         OR sector IS NULL OR row_level IS NULL OR impact_type IS NULL OR unit IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T7_domains',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Rows outside the expected industry / impact_type / row_level / imports_basis / data_year values'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
+      WHERE industry NOT IN ('commercial', 'recreational')
+         OR impact_type NOT IN ('jobs', 'sales', 'income', 'value_added')
+         OR row_level NOT IN ('component', 'total', 'durable_expenditures')
+         OR (industry = 'commercial' AND (imports_basis IS NULL OR imports_basis NOT IN ('with_imports', 'without_imports')))
+         OR (industry = 'recreational' AND imports_basis IS NOT NULL)
+         OR data_year NOT BETWEEN 2019 AND 2100
+         OR (geo_level = 'state' AND state_abbr IS NULL)
+         OR (geo_level = 'national' AND state_abbr IS NOT NULL));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T7_geo_levels',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'Exact distinct geo_level values (state, national)'
+FROM (SELECT COUNT(DISTINCT geo_level) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true));
+
+-- Known fact (FEUS 2021): U.S. seafood industry supports 1,364,316 jobs with imports and 193,177,981 thousand dollars of sales
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T7_us_commercial_totals',
+  CASE WHEN jobs = 1364316 AND sales = 193177981 THEN 'pass' ELSE 'fail' END, jobs, 1364316,
+  'U.S. commercial Total Impacts with imports: jobs ' || jobs || ' (1364316), sales ' || sales || ' (193177981)'
+FROM (SELECT COALESCE(SUM(impact_value) FILTER (WHERE impact_type = 'jobs'), 0) AS jobs,
+             COALESCE(SUM(impact_value) FILTER (WHERE impact_type = 'sales'), 0) AS sales
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
+      WHERE industry = 'commercial' AND geography = 'United States' AND sector = 'Total Impacts'
+        AND imports_basis = 'with_imports');
+
+-- Known fact (FEUS 2021): recreational fishing supports 106,057,480 thousand dollars of U.S. sales
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T7_us_recreational_sales',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1,
+  'U.S. Total United States Economic Impacts sales = 106057480'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
+      WHERE industry = 'recreational' AND geography = 'United States' AND impact_type = 'sales'
+        AND sector = 'Total United States Economic Impacts' AND impact_value = 106057480);
+
+-- State recreational trip modes sum to the state total (rounding aside) where every mode is disclosed
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T7_components_sum_to_total',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END, bad, 0,
+  'Recreational state x measure groups whose For-Hire + Private Boat + Shore differs from the total by more than 5 (rounding)'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT geography, impact_type,
+               SUM(impact_value) FILTER (WHERE row_level = 'component') AS comp,
+               SUM(impact_value) FILTER (WHERE row_level = 'total') AS tot,
+               COUNT(*) FILTER (WHERE row_level = 'component' AND impact_value IS NULL) AS nulls
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
+        WHERE industry = 'recreational' AND geo_level = 'state'
+        GROUP BY 1, 2)
+      WHERE nulls = 0 AND tot IS NOT NULL AND ABS(comp - tot) > 5);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate industry x geography x sector x impact_type x imports_basis keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT industry, geography, sector, impact_type, imports_basis
+                                 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
+                                 GROUP BY 1, 2, 3, 4, 5 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

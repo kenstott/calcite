@@ -26,6 +26,10 @@
 #     https://data.wa.gov/resource/fgyz-n3uk.json (keyless Socrata JSON)
 #   - USFWS ECOS species report (ESA listing status of salmon/steelhead ESUs/DPSs)
 #     https://ecos.fws.gov/ecp/pullreports/ (keyless JSON)
+#   - NOAA Fisheries Economics of the United States (FEUS) data tool: jobs, sales, income and
+#     value-added impacts of the commercial seafood and recreational fishing industries by state
+#     https://www.fisheries.noaa.gov/data-tools/fisheries-economics-united-states-data-and-visualizations
+#     (keyless JavaScript data files on www.st.nmfs.noaa.gov; file names carry a date stamp)
 #   - Cross-references geo.state_ref via state_abbr
 # ============================================================================
 
@@ -33,7 +37,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Tables: wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: noaa_feus_economic_impacts (jobs, sales, income and value added of commercial and recreational fishing by state), wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -112,6 +116,13 @@ dimension_values:
     start: "${GOVDATA_START_YEAR:1982}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
+
+  # FEUS data-tool files: Comm (commercial seafood industry) and Rec (marine recreational
+  # fishing). The URL embeds the publication date (03_27_25); a refresh moves it, and the
+  # table then fails on the 404 until this value is updated.
+  feus_files: &feus_files
+    type: list
+    values: ["Comm","Rec"]
 
   # dataLag: 2 — FOSS carries data through current-2 (2024 is the newest year as of Oct 2026;
   # 2025 returns an empty page). The URL templates {effective_year}. The default start is
@@ -1142,6 +1153,134 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: wdfw_salmonid_escapement
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # NOAA_FEUS_ECONOMIC_IMPACTS — jobs, sales, income, value added by state and sector
+  # ---------------------------------------------------------------------------
+  - name: noaa_feus_economic_impacts
+    freshness:
+      type: hash
+    pattern: "type=noaa_feus_economic_impacts/feus_file=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: feus_file
+          type: VARCHAR
+    comment: >
+      NOAA Fisheries Economics of the United States (FEUS): the economic footprint of fishing
+      by state, one row per geography x sector x impact measure (x imports basis for the
+      commercial industry). industry is commercial (the seafood industry: commercial
+      harvesters, seafood processors and dealers, seafood wholesalers and distributors, retail
+      and importers) or recreational (marine recreational fishing expenditures: for-hire,
+      private boat and shore trips, plus durable-goods expenditures). impact_type is jobs
+      (unit jobs), or sales, income or value_added (unit thousand_usd, thousands of dollars),
+      all modelled economic impacts including multiplier effects rather than direct landings
+      revenue: use noaa_commercial_landings for pounds and dollars landed. Commercial rows
+      come in two bases, imports_basis with_imports (counts the importer sector and the
+      activity it supports) and without_imports; the two must not be added together, and a
+      recreational row has no imports_basis. row_level separates the components from the
+      rollups so nothing is double counted: for a state, the component rows (sectors, or for
+      recreational the three trip modes) sum to the total row (sector 'Total Impacts'
+      commercial, 'Total State Economic Impacts' recreational) within rounding. Recreational
+      durable-goods spending is published only for the United States, where the national total
+      ('Total United States Economic Impacts') equals the trip modes plus durable_expenditures;
+      state durable_expenditures values are confidential (null) and a state total excludes
+      them. Sum the components or read the total, not both. Geography is 23
+      coastal states plus the United States (geo_level national, state_abbr null); recreational
+      reports East and West Florida separately and commercial reports Florida as a whole.
+      noaa_region is the NOAA region of the state (null for the national rows and commercial
+      Florida). impact_value is null where NOAA withholds a confidential value (about 22% of
+      recreational rows, chiefly state durable expenditures). data_year is the
+      year NOAA states for that geography (2021, except 2020 for commercial Florida); this is the latest-year
+      snapshot published in the data tool, not a time series. Inland states and non-coastal
+      territories are not covered. Join to geo.state_ref via state_abbr.
+
+    dimensions:
+      type:
+        - noaa_feus_economic_impacts
+      feus_file: *feus_files
+
+    columns:
+      - name: industry
+        type: string
+        nullable: false
+        comment: commercial (seafood industry) or recreational (marine recreational fishing); never mix their jobs or dollars into one total, they overlap in the economy
+      - name: geography
+        type: string
+        nullable: false
+        comment: Geography as NOAA names it - a state, East Florida or West Florida (recreational only), or United States
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: state or national
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter state code; East and West Florida are both FL; null for the national rows; joins to geo.state_ref
+      - name: noaa_region
+        type: string
+        nullable: true
+        comment: NOAA region of the state (North Pacific, Pacific, Western Pacific, Gulf of America, South Atlantic, Mid-Atlantic, New England); null for national rows and commercial Florida, which spans two regions
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Year of the estimates for this geography as stated in NOAA's table title (2021; 2020 for commercial Florida)
+      - name: sector
+        type: string
+        nullable: false
+        comment: Commercial - Commercial Harvesters, Seafood Processors & Dealers, Seafood Wholesalers & Distributors, Retail, Importers, Total Impacts; recreational - For-Hire, Private Boat, Shore, Total Durable Expenditures, Total State Economic Impacts, Total United States Economic Impacts
+      - name: row_level
+        type: string
+        nullable: false
+        comment: component (a sector or trip mode), total (the rollup of the components) or durable_expenditures (recreational equipment spending, published nationally only, part of the national total); add components or read the total, not both
+      - name: impact_type
+        type: string
+        nullable: false
+        comment: jobs, sales, income or value_added
+      - name: unit
+        type: string
+        nullable: false
+        comment: jobs for impact_type jobs, thousand_usd (thousands of dollars) for the other three
+      - name: imports_basis
+        type: string
+        nullable: true
+        comment: with_imports or without_imports for commercial rows (do not add the two); null for recreational rows
+      - name: impact_value
+        type: double
+        nullable: true
+        comment: Impact in jobs or thousands of dollars per unit; null where NOAA withholds a confidential value
+
+    source:
+      type: http
+      url: "https://www.st.nmfs.noaa.gov/data-and-tools/FEUS/datatablesStrings_{feus_file}_03_27_25.js"
+      method: GET
+      response:
+        format: TEXT   # the body is JavaScript, not JSON; FisheriesFeusImpactsTransformer emits the JSON rows
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The response is JavaScript, not JSON, and FisheriesFeusImpactsTransformer reshapes it, so
+      # a raw-cache replay of the post-transform rows would not parse.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesFeusImpactsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=noaa_feus_economic_impacts/feus_file=*/"
+      partition:
+        columns: [type, feus_file]
+      iceberg:
+        <<: *iceberg_common
+        tableName: noaa_feus_economic_impacts
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
