@@ -7,6 +7,8 @@
 #   - EPA GHGRP            — greenhouse-gas facility emissions (Envirofacts)
 #   - EPA eGRID            — regional power-plant emission rates by fuel type (XLSX)
 #   - USGS NWIS            — surface-water sites + daily streamflow (RDB)
+#   - NOAA Coral Reef Watch — CoralTemp monthly SST/anomaly via CoastWatch ERDDAP griddap
+#                            (CSV subset), aggregated to US large marine ecosystems
 #   - USGS Water Use       — county-level withdrawal census, 2015 (ScienceBase CSV)
 #   - EPA SDWIS            — public drinking-water systems (Envirofacts)
 #   - EPA ECHO / FRS       — facility registry + compliance (ECHO Exporter)
@@ -92,6 +94,14 @@ column_templates:
       - *partition_type
       - *partition_state
 
+  ocean_sst_partitions: &ocean_sst_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+      - name: month
+        type: VARCHAR
+
   state_year_partitions: &state_year_partitions
     style: hive
     columnDefinitions:
@@ -157,6 +167,14 @@ dimension_values:
   usgs_year_range: &usgs_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2015}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+    descending: true
+
+  # CoralTemp monthly SST begins 1985-01; no earlier year exists.
+  ocean_sst_year_range: &ocean_sst_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1985}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
     descending: true
@@ -2576,6 +2594,111 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # OCEAN SST — NOAA Coral Reef Watch CoralTemp monthly SST + anomaly, aggregated to US LMEs
+  # ---------------------------------------------------------------------------
+  - name: ocean_sst_monthly
+    pattern: "type=ocean_sst_monthly/year=*/month=*/*.parquet"
+    partitions: *ocean_sst_partitions
+    comment: >
+      Monthly sea surface temperature (SST) and SST anomaly for the 11 U.S.-adjacent NOAA
+      large marine ecosystems (LMEs), 1985 to present — one row per (LME, month). Source is
+      the NOAA Coral Reef Watch CoralTemp v3.1 5 km monthly mean analysis served by the
+      CoastWatch ERDDAP dataset NOAA_DHW_monthly_Lon0360 (keyless; public domain, cite NOAA
+      Coral Reef Watch). The grid is thinned server-side to every 5th cell (0.25 degrees) and
+      each cell center is assigned to the first LME polygon containing it (NOAA LME boundary
+      set, simplified; point-in-polygon on the cell center); cells over land or outside every
+      LME, and cells with no SST, are dropped. mean_sst_c and mean_sst_anomaly_c are
+      unweighted means of the cell values in degrees Celsius. The anomaly is the monthly
+      mean SST minus the CoralTemp monthly-mean climatology, whose baseline period is 1985-1990
+      plus 1993 (derived from 1985-2012 data and re-centered; see
+      https://coralreefwatch.noaa.gov/product/5km/methodology.php), so recent anomalies are
+      against a mid-1980s reference and run warm. cell_count is the number of
+      valid 0.25 degree cells averaged, so area is roughly cell_count x ~690 km2 at 40 N.
+      Region key: lme_number / lme_name (the fisheries regional_ecosystem names follow the
+      same LME naming) and state_abbrs, a comma-separated list of the coastal states whose
+      adjacent waters the LME covers (the Caribbean Sea LME spans the whole Caribbean basin,
+      not just PR and VI, and the Beaufort Sea LME extends into Canadian waters). Months NOAA
+      has not yet published return no rows. Pairs with the fisheries landings and salmon
+      tables on lme_name, year and month.
+    dqRowLimit: 5000
+
+    dimensions:
+      type:
+        - ocean_sst_monthly
+      year: *ocean_sst_year_range
+      month:
+        type: list
+        values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+        descending: true
+
+    columns:
+      - name: lme_number
+        type: integer
+        nullable: false
+        comment: NOAA large marine ecosystem number (1 East Bering Sea, 2 Gulf of Alaska, 3 California Current, 5 Gulf of Mexico, 6 Southeast U.S. Continental Shelf, 7 Northeast U.S. Continental Shelf, 10 Insular Pacific-Hawaiian, 12 Caribbean Sea, 54 Northern Bering-Chukchi Seas, 55 Beaufort Sea, 65 Aleutian Islands)
+      - name: lme_name
+        type: string
+        nullable: false
+        comment: NOAA large marine ecosystem name
+      - name: state_abbrs
+        type: string
+        nullable: false
+        comment: Comma-separated 2-letter codes of the coastal states and territories adjacent to the LME (e.g. 'WA,OR,CA' for the California Current)
+      - <<: *year_column
+      - name: month
+        type: string
+        nullable: false
+        comment: "2-digit month (01-12) of the monthly mean composite"
+      - name: mean_sst_c
+        type: double
+        nullable: false
+        comment: Mean sea surface temperature over the LME's valid 0.25 degree cells, degrees Celsius (CoralTemp v3.1 monthly mean)
+      - name: mean_sst_anomaly_c
+        type: double
+        nullable: true
+        comment: Mean SST anomaly over the LME's valid cells, degrees Celsius, relative to the CoralTemp monthly climatology (baseline period 1985-1990 plus 1993)
+      - name: cell_count
+        type: integer
+        nullable: false
+        comment: Number of valid 0.25 degree grid cells (after server-side 5x thinning of the 5 km grid) averaged into the row
+
+    source:
+      type: http
+      url: "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW_monthly_Lon0360.csv?sea_surface_temperature%5B({year}-{month}-16T00:00:00Z)%5D%5B(7.025):5:(80.025)%5D%5B(165.025):5:(300.025)%5D,sea_surface_temperature_anomaly%5B({year}-{month}-16T00:00:00Z)%5D%5B(7.025):5:(80.025)%5D%5B(165.025):5:(300.025)%5D"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.environment.OceanSstLmeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ocean_sst_monthly/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/environment"
+        tableName: ocean_sst_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -2687,6 +2810,9 @@ constraints:
       - columns: [site_no]
         targetTable: water_sites
         targetColumns: [site_no]
+
+  ocean_sst_monthly:
+    primaryKey: [lme_number, year, month]
 
   water_withdrawals:
     primaryKey: [county_fips, year, sector]
