@@ -34,6 +34,7 @@ jobs:
           - { module: trino-cloudops,     pub: TrinoCloudops,     artifact: trino-cloudops }
           - { module: trino-file,         pub: TrinoFile,         artifact: trino-file }
           - { module: trino-salesforce,   pub: TrinoSalesforce,   artifact: trino-salesforce }
+          - { module: trino-servicenow,   pub: TrinoServicenow,   artifact: trino-servicenow }
           - { module: trino-sharepoint,   pub: TrinoSharepoint,   artifact: trino-sharepoint }
           - { module: trino-splunk,       pub: TrinoSplunk,       artifact: trino-splunk }
     steps:

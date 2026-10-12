@@ -35,7 +35,7 @@ required=(
   "askamerica-mcp_${version}_amd64.deb"
   "AskAmerica.MCP-${version}.msi"
 )
-for plugin in calcite cloudops file salesforce sharepoint splunk; do
+for plugin in calcite cloudops file salesforce servicenow sharepoint splunk; do
   required+=("trino-${plugin}-plugin.zip")
 done
 # The pg-wire server bundles the engine and Provisa download and run, each with its checksum:
