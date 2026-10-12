@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_feus_economic_impacts, noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement, stock_smart_assessments
+-- Tables: noaa_feus_economic_impacts, noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement, stock_smart_assessments, rmis_releases, rmis_locations
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -882,6 +882,75 @@ SELECT 'fisheries', 'stock_smart_assessments', 'T8_pk_duplicates',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
   'Duplicate assessment_id keys'
 FROM (SELECT COUNT(*) AS n FROM (SELECT assessment_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true) GROUP BY 1 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- rmis_releases / rmis_locations
+-- Constant-by-design: none beyond partition column 'type'.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected at least 1000 release records in the DQ scope'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T3_null_keys',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with null agency / tag code / species / record_type'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true) WHERE reporting_agency IS NULL OR tag_code_or_release_id IS NULL OR species IS NULL OR record_type IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T4_species_known',
+  CASE WHEN bad = 0 AND n >= 3 THEN 'pass' ELSE 'fail' END, n, 3, 'Distinct species (expect >= 3: Chinook, Coho, Steelhead...); species outside set: ' || bad || ''
+FROM (SELECT COUNT(DISTINCT species) AS n, COUNT(*) FILTER (WHERE species NOT IN ('Chinook','Coho','Steelhead','Sockeye','Chum','Pink','Masu','Cutthroat','Atlantic Salmon')) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T5_brood_year_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with brood_year outside 1950..2027'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true) WHERE brood_year < 1950 OR brood_year > 2027);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T6_total_released_positive',
+  CASE WHEN n > 0.9 * tot THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with total_released > 0 should be >90% of rows'
+FROM (SELECT COUNT(*) FILTER (WHERE total_released > 0) AS n, COUNT(*) AS tot FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T7_state_known',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'state_abbr outside AK/BC/WA/ID/OR/CA/HS'
+FROM (SELECT COUNT(*) FILTER (WHERE state_abbr IS NOT NULL AND state_abbr NOT IN ('AK','BC','WA','ID','OR','CA','HS')) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate reporting_agency x tag_code_or_release_id x record_type x brood_year keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true) GROUP BY reporting_agency, tag_code_or_release_id, record_type, brood_year HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_locations', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_locations', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_locations', 'T2_row_count',
+  CASE WHEN n >= 30000 THEN 'pass' ELSE 'fail' END, n, 30000, 'Expected about 38,800 location rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_locations', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_locations', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with null location_code or location_type'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_locations', allow_moved_paths := true) WHERE location_code IS NULL OR location_type IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_locations', 'T7_lat_lon_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Coordinates outside lat 30..75 / lon -180..180'
+FROM (SELECT COUNT(*) FILTER (WHERE latitude NOT BETWEEN 30 AND 75 OR longitude NOT BETWEEN -180 AND 180) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_locations', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'rmis_releases', 'T7_release_location_resolves',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Release rows whose release_location_code has no rmis_locations row'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_releases', allow_moved_paths := true) x WHERE release_location_code IS NOT NULL AND NOT EXISTS (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/rmis_locations', allow_moved_paths := true) y WHERE y.location_code = x.release_location_code));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

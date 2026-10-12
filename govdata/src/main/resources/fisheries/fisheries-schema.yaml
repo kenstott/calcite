@@ -32,6 +32,8 @@
 #     (keyless JavaScript data files on www.st.nmfs.noaa.gov; file names carry a date stamp)
 #   - NOAA Stock SMART assessment summaries (F/Fmsy, B/Bmsy by stock and assessment year),
 #     https://apps-st.fisheries.noaa.gov/stocksmart/ (keyless sis_servlet + data-export-servlet)
+#   - RMIS (Regional Mark Processing Center, PSMFC) release groups and locations, PSC format v5.0
+#     https://www.rmpc.org/pub/data/ (keyless CSV bulk files)
 #   - Cross-references geo.state_ref via state_abbr
 # ============================================================================
 
@@ -39,7 +41,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Tables: noaa_feus_economic_impacts (jobs, sales, income and value added of commercial and recreational fishing by state), wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) stock_smart_assessments (NOAA stock assessment F/Fmsy and B/Bmsy by stock), noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: rmis_releases and rmis_locations (RMIS hatchery/wild salmon and steelhead release groups and the location lookup), noaa_feus_economic_impacts (jobs, sales, income and value added of commercial and recreational fishing by state), wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) stock_smart_assessments (NOAA stock assessment F/Fmsy and B/Bmsy by stock), noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -103,6 +105,11 @@ dimension_values:
   grandtab_origins: &grandtab_origins
     type: list
     values: ["In-River","Hatchery"]
+
+  # RMIS reporting agencies that have a per-agency release file (RL050_<agency>_FULLSET.csv)
+  rmis_agencies: &rmis_agencies
+    type: list
+    values: ["ADFG","CCT","CDFO","CDFW","CRITFC","CTUIR","IDFG","NMFS","NPT","NWIFC","ODFW","QDNR","RMPC","STIL","USFWS","WDFW","YAKA"]
 
   # Dams/counting projects with adult passage counts in DART (code used as proj=).
   dart_projects: &dart_projects
@@ -1475,6 +1482,281 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: noaa_feus_economic_impacts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # RMIS_RELEASES — hatchery and wild salmon/steelhead release groups (RMIS)
+  # ---------------------------------------------------------------------------
+  - name: rmis_releases
+    freshness:
+      type: hash
+    pattern: "type=rmis_releases/agency=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: agency
+          type: VARCHAR
+    comment: >
+      Hatchery and wild salmon, steelhead and trout release groups recorded in the Regional Mark
+      Information System (RMIS, Regional Mark Processing Center / PSMFC, PSC format v5.0), one
+      row per coded-wire-tag release group (tagged) or untagged release group, brood years 1950
+      onward, about 190,000 records from 17 reporting agencies (WDFW, CDFO, ADFG, ODFW, NWIFC,
+      USFWS, CDFW, IDFG, NMFS and tribes) across Alaska, British Columbia, Washington, Idaho,
+      Oregon and California. Gives how many fish were released (total_released, cwt_tagged_count,
+      non-CWT mark counts), species, brood year and release dates, release stage, rearing type,
+      broodstock origin, average weight and length, and the release / hatchery / stock location
+      codes (join to rmis_locations for site name, basin, region and coordinates). Use it to set
+      hatchery stocking against the adult returns in dart_adult_counts, adfg_fish_counts,
+      cdfw_grandtab_escapement and wdfw_salmonid_escapement. Counts are as submitted by each
+      agency: tagged groups carry both tagged and untagged-fish counts, so total_released is the
+      group size, not the CWT count alone. Canadian (CDFO, state_abbr BC) releases are included.
+      Mark counts are null when the agency did not report them. RMPC refreshes the files as
+      agencies submit validated data.
+
+    dimensions:
+      type:
+        - rmis_releases
+      agency: *rmis_agencies
+
+    columns:
+      - name: record_type
+        type: string
+        nullable: false
+        comment: "tagged (coded-wire-tag release group, T record) or untagged (release group with marks only, N record)"
+      - name: reporting_agency
+        type: string
+        nullable: false
+        comment: "Agency that submitted the record to RMIS (WDFW, CDFO, ADFG, ODFW, NWIFC, USFWS, CDFW, IDFG, NMFS, tribes)"
+      - name: release_agency
+        type: string
+        nullable: false
+        comment: "Agency that made the release"
+      - name: tag_code_or_release_id
+        type: string
+        nullable: false
+        comment: "CWT tag code for tagged records, or the agency release identifier for untagged records"
+      - name: species_code
+        type: string
+        nullable: false
+        comment: "PSC species code 1-9"
+      - name: species
+        type: string
+        nullable: false
+        comment: "Chinook, Coho, Steelhead, Sockeye, Chum, Pink, Masu, Cutthroat or Atlantic Salmon"
+      - name: run_code
+        type: string
+        nullable: true
+        comment: "PSC run code as submitted (numeric code, see PSC format v5.0 run table); null when the agency left it blank"
+      - name: brood_year
+        type: integer
+        nullable: true
+        comment: "Brood year of the release group"
+      - name: first_release_date
+        type: date
+        nullable: true
+        comment: "First release date"
+      - name: last_release_date
+        type: date
+        nullable: true
+        comment: "Last release date"
+      - name: release_year
+        type: integer
+        nullable: true
+        comment: "Calendar year of last_release_date"
+      - name: release_location_code
+        type: string
+        nullable: true
+        comment: "RMIS release location code; join to rmis_locations.location_code for site name, basin and region"
+      - name: hatchery_location_code
+        type: string
+        nullable: true
+        comment: "RMIS location code of the rearing hatchery; join to rmis_locations.location_code"
+      - name: stock_location_code
+        type: string
+        nullable: true
+        comment: "RMIS location code of the stock of origin"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "State/province of the release location from the first character of its code: AK, BC, WA, ID, OR, CA, or HS for high-seas locations (BC is Canada and HS is not a state; neither joins to geo.state_ref); null when no release location. Join to geo.state_ref for US states"
+      - name: release_stage_code
+        type: string
+        nullable: true
+        comment: "PSC release stage letter as submitted"
+      - name: release_stage
+        type: string
+        nullable: true
+        comment: "Zygote, Emergent fry, Fed fry, Fingerling, Advanced fingerling, Yearling, Pre-smolt, Smolt, Adult or Multiple"
+      - name: rearing_type
+        type: string
+        nullable: true
+        comment: "Hatchery, Wild, Mixed or Unknown rearing method"
+      - name: broodstock_origin_type
+        type: string
+        nullable: true
+        comment: "PSC broodstock origin letter (H hatchery, W wild, M mixed, N natural, C captive, O other, U unknown)"
+      - name: release_strategy
+        type: string
+        nullable: true
+        comment: "FR forced, VO volitional, MX mixed, NP net pen, BG barge; null when not reported"
+      - name: avg_weight_g
+        type: double
+        nullable: true
+        comment: "Average weight at release in grams"
+      - name: avg_length_mm
+        type: double
+        nullable: true
+        comment: "Average fork length at release in millimeters"
+      - name: cwt_1st_mark
+        type: string
+        nullable: true
+        comment: "Mark code applied to the coded-wire-tagged fish (for example an adipose clip)"
+      - name: cwt_tagged_count
+        type: bigint
+        nullable: true
+        comment: "Number of fish released with a coded-wire tag (both CWT mark groups); null when not reported"
+      - name: non_cwt_1st_mark
+        type: string
+        nullable: true
+        comment: "Mark code of the first group of released fish without a CWT"
+      - name: non_cwt_1st_mark_count
+        type: bigint
+        nullable: true
+        comment: "Fish released without a CWT in the first mark group"
+      - name: non_cwt_2nd_mark_count
+        type: bigint
+        nullable: true
+        comment: "Fish released without a CWT in the second mark group (commonly the unmarked fish)"
+      - name: total_released
+        type: bigint
+        nullable: true
+        comment: "Sum of the reported CWT and non-CWT counts for the release group; null when none is reported"
+
+    source:
+      type: http
+      url: "https://www.rmpc.org/pub/data/RL050_{agency}_FULLSET.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer reshapes the PSC-format CSV; a raw-cache replay would hand it the
+      # post-transform rows instead.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesRmisTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rmis_releases/agency=*/"
+      partition:
+        columns: [type, agency]
+      iceberg:
+        <<: *iceberg_common
+        tableName: rmis_releases
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # RMIS_LOCATIONS — RMIS location lookup (site, basin, region)
+  # ---------------------------------------------------------------------------
+  - name: rmis_locations
+    freshness:
+      type: hash
+    pattern: "type=rmis_locations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      RMIS location lookup (RMPC/PSMFC, PSC format v5.0): about 38,800 rows of release, recovery,
+      catch, hatchery and stock locations with name, latitude/longitude, PSC basin and PSC
+      region, as defined by each reporting agency. Join rmis_releases.release_location_code,
+      hatchery_location_code or stock_location_code to location_code (and filter location_type =
+      1 release, 4 hatchery or 5 stock to get one row per code).
+
+    dimensions:
+      type:
+        - rmis_locations
+
+    columns:
+      - name: location_code
+        type: string
+        nullable: false
+        comment: "RMIS location code; the first character gives the state (1 AK, 2 BC, 3 WA, 4 ID, 5 OR, 6 CA, 7 HS high seas)"
+      - name: location_type
+        type: string
+        nullable: false
+        comment: "PSC location type: 1 release, 2 recovery, 3 catch, 4 hatchery or 5 stock location"
+      - name: reporting_agency
+        type: string
+        nullable: false
+        comment: "Agency that defined the location"
+      - name: name
+        type: string
+        nullable: true
+        comment: "Location name, for example a stream, hatchery or fishery"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "State/province from the code prefix: AK, BC, WA, ID, OR, CA, or HS for high-seas locations"
+      - name: latitude
+        type: double
+        nullable: true
+        comment: "Latitude, decimal degrees"
+      - name: longitude
+        type: double
+        nullable: true
+        comment: "Longitude, decimal degrees"
+      - name: psc_basin
+        type: string
+        nullable: true
+        comment: "PSC basin code (for example SMIT, SNAK, LOCR)"
+      - name: psc_region
+        type: string
+        nullable: true
+        comment: "PSC region code (for example NOCA, UPCR, SEAK)"
+      - name: description
+        type: string
+        nullable: true
+        comment: "Free-text location description"
+
+    source:
+      type: http
+      url: "https://www.rmpc.org/pub/data/LC050_ALL_FULLSET.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer reshapes the PSC-format CSV; a raw-cache replay would hand it the
+      # post-transform rows instead.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesRmisTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rmis_locations/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: rmis_locations
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
