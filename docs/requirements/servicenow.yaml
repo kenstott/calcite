@@ -66,8 +66,26 @@
   description: >
     Tables and columns come from the instance's own metadata (sys_db_object, sys_dictionary,
     sys_glide_object), with inherited columns resolved. No table list is hard-coded, and columns
-    are never guessed from sample rows. An optional include list narrows the tables exposed.
-  source: owner decision 2026-10-07; branch feat/servicenow-adapter (CatalogTest)
+    are never guessed from sample rows.
+    [SUPERSEDED by SNOW-010, 2026-10-12 -- the operand now names the registered tables, the only
+    ones exposed. Kept here for history; do not implement against it.]
+    An optional include list narrows the tables exposed.
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-12, listing and registration:) An instance has thousands of tables, grouped
+    into themes, and a steward must be able to tell them apart. The schema always holds two
+    listing tables. _servicenow_tables(name, label, theme) lists every table the instance has,
+    however many, from one keyset-paged read of sys_db_object; its theme is the name of the
+    package that delivers the table (the sys_package reference's display value), "(no package)"
+    for a table no package delivers, and "(unnamed package <sys_id>)" for a package whose name is
+    empty, one group per package. It reads no column metadata. _servicenow_columns(table_name,
+    column_name, data_type, ordinal_position) gives the columns of the one table a query names
+    with table_name = '<table>', read from that table's and its ancestors' sys_dictionary rows
+    only, and refuses a query that names no table. A table's column metadata is read only when
+    that table is selected for registration or queried. The tables operand names the registered
+    tables, which alone become SQL tables; without it the schema holds only the two listing
+    tables, because a host such as the pgwire server reads the columns of every SQL table when
+    it starts.
+  source: "owner decisions 2026-10-07 and 2026-10-12 (theme = sys_package, name + label, columns resolved only on selection, operand = registered tables); branch feat/servicenow-adapter (CatalogTest, ServiceNowSqlTest)"
   tests: []
 
 - id: SNOW-011
@@ -81,7 +99,11 @@
     One SQL schema per application scope remains possible. Whether tables are grouped that way is
     decided after a live instance has shown how many tables each scope holds and whether the
     scopes are natural subdivisions.
-  source: "owner decision 2026-10-07 (count tables per scope before deciding); ServiceNowProbe on the branch does the count and has not been run"
+    (Amended 2026-10-12, counted on dev453859:) Scopes are not natural subdivisions: of the 6,554
+    tables the integration user can read, 82% are in the Global scope, incident, change_request
+    and sys_user among them.
+    Tables stay in one SQL schema and are grouped by package as their theme (SNOW-010).
+  source: "owner decisions 2026-10-07 (count tables per scope before deciding) and 2026-10-12 (theme = package); count of sys_db_object by sys_scope on dev453859, 2026-10-12"
   tests: []
 
 - id: SNOW-012

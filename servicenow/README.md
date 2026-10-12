@@ -20,9 +20,20 @@ No live instance was available when this was written. What that means in practic
 ## What works (against the local stub)
 
 - Table and column discovery from the instance's metadata tables `sys_db_object`, `sys_dictionary`
-  and `sys_glide_object`, with inherited columns (`incident` extends `task`), cached on disk per
-  instance and user. If the user cannot read the metadata tables, startup fails and says which
-  table; columns are never guessed from sample rows.
+  and `sys_glide_object`, with inherited columns (`incident` extends `task`). If the user cannot
+  read a metadata table, the read fails and says which table; columns are never guessed from
+  sample rows.
+- Two listing tables, always in the schema:
+  - `_servicenow_tables(name, label, theme)`: every table on the instance, from one read of
+    `sys_db_object` (the table list is cached on disk per instance and user). The theme is the
+    name of the package that delivers the table, `(no package)` when none does, and
+    `(unnamed package <sys_id>)` when the package's name is empty. It reads no column metadata.
+  - `_servicenow_columns(table_name, column_name, data_type, ordinal_position)`: the columns of
+    the one table named with `table_name = '<table>'`, read from that table's and its ancestors'
+    `sys_dictionary` rows only. `data_type` is the PostgreSQL name the pgwire server reports. A
+    query without `table_name = '<table>'` is refused.
+- Only the registered tables, named in the `tables` operand, are SQL tables. A table's columns
+  are read when it is first queried, not at startup.
 - Keyset paging on `sys_id`; a scan ends only on an empty page; a page that does not advance is an
   error (see "Paging").
 - Projection pushdown (`sysparm_fields`; `sys_id` is always added for paging).
@@ -41,7 +52,7 @@ pgwire `model.json` operand and the Trino catalog properties):
 | `instanceUrl` (required) | `https://<instance>.service-now.com`; plain http only for localhost |
 | `authType` (required) | `basic`. `oauth_client_credentials` is recognised and rejected as not implemented; the seam is `ServiceNowAuth` |
 | `username`, `password` | for `basic`; use a dedicated least-privilege integration user |
-| `tables` | only these tables (list or comma-separated); default: every table in `sys_db_object`. The table set always comes from discovery; keeping one SQL schema per application scope is a change in `ServiceNowSchema` and the catalog, not in the scan |
+| `tables` | the registered tables (list or comma-separated), the only ServiceNow tables exposed as SQL tables; each must be in `sys_db_object`. Without it the schema holds only `_servicenow_tables` and `_servicenow_columns` |
 | `excludeColumnTypes` | field types whose columns are left out; a column of a type the adapter cannot map is otherwise an error on the table it belongs to |
 | `pageSize` / `metadataPageSize` | rows per request, default 1000 |
 | `maxConcurrentRequests` | default 2: REST traffic shares a small thread pool with the customer's other integrations |

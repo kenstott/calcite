@@ -37,8 +37,8 @@ import java.util.Set;
  *   <li>{@code authType}: {@code basic}. {@code oauth_client_credentials} is recognised and
  *   rejected as not implemented yet. It is never inferred from which credentials are present.
  *   <li>{@code username}, {@code password}: for {@code basic}.
- *   <li>{@code tables}: names of the only tables to expose, as a list or comma-separated text.
- *   Default: every table in {@code sys_db_object}.
+ *   <li>{@code tables}: names of the registered tables, the only ServiceNow tables exposed, as a
+ *   list or comma-separated text. Without it the schema holds only the listing tables.
  *   <li>{@code excludeColumnTypes}: field types whose columns are left out, as a list or
  *   comma-separated text. A column of a type the adapter cannot map is otherwise an error.
  *   <li>{@code pageSize}: rows per request when reading a table; default 1000.

@@ -19,8 +19,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -41,9 +46,37 @@ class CatalogTest {
   }
 
   private static ServiceNowCatalog load(FixtureServer server) {
-    return new ServiceNowCatalog(
-        ServiceNowCatalog.load(TableApiClientTest.connection(server), 2),
-        Collections.<String>emptySet());
+    return load(server, Collections.<String>emptySet());
+  }
+
+  private static ServiceNowCatalog load(FixtureServer server, Set<String> excludedTypes) {
+    final ServiceNowConnection connection = TableApiClientTest.connection(server);
+    return new ServiceNowCatalog(ServiceNowCatalog.load(connection, 2), excludedTypes,
+        ServiceNowCatalog.metadata(connection, 2));
+  }
+
+  /** Column metadata given in the test, never read from an instance. */
+  private static ServiceNowCatalog.Metadata metadata(ServiceNowCatalog.DictionaryRow... rows) {
+    return new ServiceNowCatalog.Metadata() {
+      @Override public List<ServiceNowCatalog.DictionaryRow> dictionary(List<String> tables) {
+        final List<ServiceNowCatalog.DictionaryRow> result = new ArrayList<>();
+        for (ServiceNowCatalog.DictionaryRow row : rows) {
+          if (tables.contains(row.table)) {
+            result.add(row);
+          }
+        }
+        return result;
+      }
+
+      @Override public Map<String, String> glideTypes() {
+        return Collections.emptyMap();
+      }
+    };
+  }
+
+  private static ServiceNowCatalog.TableRow tableRow(String sysId, String name, String superId) {
+    return new ServiceNowCatalog.TableRow(sysId, name, name.toUpperCase(Locale.ROOT), superId,
+        ServiceNowCatalog.NO_PACKAGE);
   }
 
   @Test void listsTablesFromSysDbObject() throws Exception {
@@ -51,6 +84,67 @@ class CatalogTest {
       assertThat(load(server).tableNames(),
           contains("bad_table", "incident", "sys_user", "task"));
     }
+  }
+
+  @Test void eachTableIsLabelledAndThemedByItsPackage() throws Exception {
+    try (FixtureServer server = new FixtureServer()) {
+      final Map<String, String> themes = new HashMap<>();
+      final Map<String, String> labels = new HashMap<>();
+      for (ServiceNowCatalog.TableRow t : load(server).tables()) {
+        themes.put(t.name, t.theme);
+        labels.put(t.name, t.label);
+      }
+      assertThat(themes.get("incident"), is("Incident"));
+      assertThat(themes.get("task"), is("Task table schema"));
+      // No package delivers sys_user; bad_table's package has an empty name
+      assertThat(themes.get("sys_user"), is("(no package)"));
+      assertThat(themes.get("bad_table"),
+          is("(unnamed package 00000000000000000000000000000p03)"));
+      assertThat(labels.get("incident"), is("Incident"));
+    }
+  }
+
+  @Test void listingTablesReadsSysDbObjectOnly() throws Exception {
+    try (FixtureServer server = new FixtureServer()) {
+      load(server).tables();
+      for (FixtureServer.Seen seen : server.requests()) {
+        assertThat(seen.table, is("sys_db_object"));
+        // The package's name is its display value; sys_package itself is not read
+        assertThat(seen.params.get("sysparm_display_value"), is("all"));
+      }
+      assertThat(server.requests().isEmpty(), is(false));
+    }
+  }
+
+  @Test void aTableReadsTheDictionaryOfItselfAndItsAncestorsOnly() throws Exception {
+    try (FixtureServer server = new FixtureServer()) {
+      load(server).table("incident");
+      final List<FixtureServer.Seen> dictionary = server.requests("sys_dictionary");
+      assertThat(dictionary.isEmpty(), is(false));
+      for (FixtureServer.Seen seen : dictionary) {
+        assertThat(seen.params.get("sysparm_query"), containsString("nameINincident,task"));
+      }
+    }
+  }
+
+  @Test void aDictionaryRowOfAnotherTableIsAnError() {
+    final ServiceNowCatalog.Snapshot snapshot = new ServiceNowCatalog.Snapshot(
+        Arrays.asList(tableRow("1", "t", "")));
+    final ServiceNowCatalog.Metadata ignoresTheFilter = new ServiceNowCatalog.Metadata() {
+      @Override public List<ServiceNowCatalog.DictionaryRow> dictionary(List<String> tables) {
+        return Arrays.asList(
+            new ServiceNowCatalog.DictionaryRow("t", "sys_id", "GUID", 32, true),
+            new ServiceNowCatalog.DictionaryRow("other", "a", "string", 10, true));
+      }
+
+      @Override public Map<String, String> glideTypes() {
+        return Collections.emptyMap();
+      }
+    };
+    final ServiceNowException e = assertThrows(ServiceNowException.class,
+        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet(), ignoresTheFilter)
+            .table("t"));
+    assertThat(e.getMessage(), containsString("returned a row of table 'other'"));
   }
 
   @Test void inheritedColumnsComeFromAncestors() throws Exception {
@@ -99,9 +193,7 @@ class CatalogTest {
 
   @Test void excludedTypesAreLeftOutOnlyWhenConfigured() throws Exception {
     try (FixtureServer server = new FixtureServer()) {
-      final ServiceNowCatalog catalog = new ServiceNowCatalog(
-          ServiceNowCatalog.load(TableApiClientTest.connection(server), 2),
-          Collections.singleton("Mystery_Type"));
+      final ServiceNowCatalog catalog = load(server, Collections.singleton("Mystery_Type"));
       assertThat(columnNames(catalog.table("bad_table")), contains("sys_id"));
     }
   }
@@ -112,8 +204,9 @@ class CatalogTest {
           ? FixtureServer.error(403, "User Not Authorized", "Access to table denied")
               .withStatus(403)
           : null);
-      final ServiceNowException e = assertThrows(ServiceNowException.class,
-          () -> ServiceNowCatalog.load(TableApiClientTest.connection(server), 2));
+      final ServiceNowCatalog catalog = load(server);
+      final ServiceNowException e =
+          assertThrows(ServiceNowException.class, () -> catalog.table("incident"));
       assertThat(e.getMessage(), containsString("cannot read the metadata table sys_dictionary"));
       assertThat(e.getMessage(), containsString("does not guess columns"));
       assertThat(e.getStatus(), is(403));
@@ -178,36 +271,32 @@ class CatalogTest {
 
   @Test void tablesWithoutSysIdAreRejected() {
     final ServiceNowCatalog.Snapshot snapshot = new ServiceNowCatalog.Snapshot(
-        java.util.Arrays.asList(new ServiceNowCatalog.TableRow("1", "t", "T", "")),
-        java.util.Arrays.asList(
-            new ServiceNowCatalog.DictionaryRow("t", "a", "string", 10, true)),
-        Collections.<String, String>emptyMap());
+        Arrays.asList(tableRow("1", "t", "")));
     final ServiceNowException e = assertThrows(ServiceNowException.class,
-        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet()).table("t"));
+        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet(),
+            metadata(new ServiceNowCatalog.DictionaryRow("t", "a", "string", 10, true)))
+            .table("t"));
     assertThat(e.getMessage(), containsString("no sys_id column"));
   }
 
   @Test void circularInheritanceIsRejected() {
     final ServiceNowCatalog.Snapshot snapshot = new ServiceNowCatalog.Snapshot(
-        java.util.Arrays.asList(new ServiceNowCatalog.TableRow("1", "a", "A", "2"),
-            new ServiceNowCatalog.TableRow("2", "b", "B", "1")),
-        Collections.<ServiceNowCatalog.DictionaryRow>emptyList(),
-        Collections.<String, String>emptyMap());
+        Arrays.asList(tableRow("1", "a", "2"), tableRow("2", "b", "1")));
     final ServiceNowException e = assertThrows(ServiceNowException.class,
-        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet()).table("a"));
+        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet(), metadata())
+            .table("a"));
     assertThat(e.getMessage(), containsString("circular"));
   }
 
   @Test void aDisplayColumnNameClashIsRejected() {
     final ServiceNowCatalog.Snapshot snapshot = new ServiceNowCatalog.Snapshot(
-        java.util.Arrays.asList(new ServiceNowCatalog.TableRow("1", "t", "T", "")),
-        java.util.Arrays.asList(
-            new ServiceNowCatalog.DictionaryRow("t", "sys_id", "GUID", 32, true),
-            new ServiceNowCatalog.DictionaryRow("t", "owner", "reference", 32, true),
-            new ServiceNowCatalog.DictionaryRow("t", "owner__display", "string", 32, true)),
-        Collections.<String, String>emptyMap());
+        Arrays.asList(tableRow("1", "t", "")));
     final ServiceNowException e = assertThrows(ServiceNowException.class,
-        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet()).table("t"));
+        () -> new ServiceNowCatalog(snapshot, Collections.<String>emptySet(),
+            metadata(new ServiceNowCatalog.DictionaryRow("t", "sys_id", "GUID", 32, true),
+                new ServiceNowCatalog.DictionaryRow("t", "owner", "reference", 32, true),
+                new ServiceNowCatalog.DictionaryRow("t", "owner__display", "string", 32, true)))
+            .table("t"));
     assertThat(e.getMessage(), containsString("owner__display"));
   }
 }
