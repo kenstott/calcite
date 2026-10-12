@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_feus_economic_impacts, noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement
+-- Tables: noaa_feus_economic_impacts, noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement, stock_smart_assessments
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -792,6 +792,96 @@ SELECT 'fisheries', 'noaa_feus_economic_impacts', 'T8_pk_duplicates',
 FROM (SELECT COUNT(*) AS n FROM (SELECT industry, geography, sector, impact_type, imports_basis
                                  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/noaa_feus_economic_impacts', allow_moved_paths := true)
                                  GROUP BY 1, 2, 3, 4, 5 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- stock_smart_assessments
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Table exists and is readable'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T2_row_count',
+  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END, n, 3000, 'Row count (Stock SMART export held 3,542 assessments)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL stock_id, stock_name, is_fssi, assessment_id or assessment_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true)
+      WHERE stock_id IS NULL OR stock_name IS NULL OR is_fssi IS NULL
+         OR assessment_id IS NULL OR assessment_year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T7_year_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'assessment_year outside 1990-2030, or last_data_year more than a year after assessment_year (source has an assessment year 1993 and a 2004 assessment with 2005 data)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true)
+      WHERE assessment_year NOT BETWEEN 1990 AND 2030 OR last_data_year > assessment_year + 1);
+
+-- Both ratios and their inputs are present on enough rows to be usable
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T7_ratios_populated',
+  CASE WHEN b >= 1500 AND f >= 1500 THEN 'pass' ELSE 'fail' END, LEAST(b, f), 1500,
+  'Rows with b_bmsy_ratio: ' || b || ', with f_fmsy_ratio: ' || f
+FROM (SELECT COUNT(*) FILTER (WHERE b_bmsy_ratio IS NOT NULL) AS b,
+             COUNT(*) FILTER (WHERE f_fmsy_ratio IS NOT NULL) AS f FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true));
+
+-- Where F, Fmsy and F/Fmsy are all reported, the ratio is F / Fmsy (5% tolerance for rounding).
+-- The source itself reports ~40-50 of ~2,000 such rows with a ratio computed from other inputs
+-- (shark and tuna assessments); more than 80 means the columns have shifted.
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T7_f_ratio_consistent',
+  CASE WHEN bad <= 80 THEN 'pass' ELSE 'fail' END, bad, 80,
+  'Rows where f_fmsy_ratio differs from estimated_f / fmsy by more than 5%'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true)
+      WHERE estimated_f IS NOT NULL AND fmsy > 0 AND f_fmsy_ratio IS NOT NULL
+        AND ABS(f_fmsy_ratio - estimated_f / fmsy) > 0.05 * (estimated_f / fmsy));
+
+-- Known fact (source export): North Atlantic albacore, 2007 assessment: F/Fmsy 1.5, B/Bmsy 0.81
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T7_albacore_2007',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1,
+  'North Atlantic albacore 2007 assessment rows with F/Fmsy 1.5 and B/Bmsy 0.81'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true)
+      WHERE stock_name = 'Albacore - North Atlantic' AND assessment_year = 2007
+        AND ROUND(f_fmsy_ratio, 2) = 1.5 AND ROUND(b_bmsy_ratio, 2) = 0.81);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'stock_smart_assessments', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate assessment_id keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT assessment_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/stock_smart_assessments', allow_moved_paths := true) GROUP BY 1 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

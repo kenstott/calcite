@@ -30,6 +30,8 @@
 #     value-added impacts of the commercial seafood and recreational fishing industries by state
 #     https://www.fisheries.noaa.gov/data-tools/fisheries-economics-united-states-data-and-visualizations
 #     (keyless JavaScript data files on www.st.nmfs.noaa.gov; file names carry a date stamp)
+#   - NOAA Stock SMART assessment summaries (F/Fmsy, B/Bmsy by stock and assessment year),
+#     https://apps-st.fisheries.noaa.gov/stocksmart/ (keyless sis_servlet + data-export-servlet)
 #   - Cross-references geo.state_ref via state_abbr
 # ============================================================================
 
@@ -37,7 +39,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Tables: noaa_feus_economic_impacts (jobs, sales, income and value added of commercial and recreational fishing by state), wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: noaa_feus_economic_impacts (jobs, sales, income and value added of commercial and recreational fishing by state), wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) stock_smart_assessments (NOAA stock assessment F/Fmsy and B/Bmsy by stock), noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -1031,6 +1033,198 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: esa_salmonid_listings
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # STOCK_SMART_ASSESSMENTS — NOAA Stock SMART assessment reference points by stock
+  # ---------------------------------------------------------------------------
+  - name: stock_smart_assessments
+    freshness:
+      type: hash
+    pattern: "type=stock_smart_assessments/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      NOAA Fisheries Stock SMART assessment summaries for federally managed stocks: one row
+      per stock assessment (about 3,500 assessments of ~430 stocks, assessment years 2005 to
+      the latest), carrying the assessment's fishing mortality and biomass against the MSY
+      reference points. f_fmsy_ratio above 1 means the assessed fishing rate exceeded Fmsy;
+      b_bmsy_ratio below 1 means biomass was below Bmsy. A stock has several rows, one per
+      assessment_year, so for current condition take each stock_id's latest assessment_year
+      (or latest assessment_id); do not average across assessments. f_fmsy_ratio and
+      b_bmsy_ratio are null where the assessment did not report an MSY proxy (many index-based
+      and data-limited stocks), and f_unit / b_unit say what estimated_f and estimated_b are
+      measured in (they are not comparable across stocks). is_fssi marks the Fish Stock
+      Sustainability Index stocks. This is NOT the official Status of Stocks determination:
+      NOAA publishes the overfished and overfishing flags only in PDF report tables, and they
+      use per-stock thresholds (MSST, MFMT) that this table does not carry, so those flags are
+      not here and must not be inferred from the ratios. Joins to noaa_commercial_landings on
+      tsn (ITIS taxonomic serial number; null for some complexes) or scientific_name. Stocks
+      span waters, not states: stock_area names the area (e.g. 'Gulf of Maine / Georges
+      Bank') and jurisdiction the managing council or commission, so there is no state_abbr
+      and a by-state rollup would double count; use region_name from the landings table to
+      relate areas.
+
+    dimensions:
+      type:
+        - stock_smart_assessments
+
+    columns:
+      - name: stock_id
+        type: long
+        nullable: false
+        comment: Stock SMART stock identifier
+      - name: stock_name
+        type: string
+        nullable: false
+        comment: Stock name with its area, e.g. 'Acadian redfish - Gulf of Maine / Georges Bank'
+      - name: jurisdiction
+        type: string
+        nullable: true
+        comment: Managing council or commission (e.g. NEFMC, PFMC, ASMFC, Atlantic HMS)
+      - name: fmp
+        type: string
+        nullable: true
+        comment: Fishery management plan the stock falls under
+      - name: science_center
+        type: string
+        nullable: true
+        comment: NOAA Fisheries Science Center that assesses the stock (may list several, '/'-separated)
+      - name: regional_ecosystem
+        type: string
+        nullable: true
+        comment: NOAA regional ecosystem of the stock (may list several, '/'-separated)
+      - name: is_fssi
+        type: boolean
+        nullable: false
+        comment: true when the stock is part of the Fish Stock Sustainability Index
+      - name: tsn
+        type: long
+        nullable: true
+        comment: ITIS taxonomic serial number of the species; null for multi-species complexes. Joins to noaa_commercial_landings.tsn
+      - name: scientific_name
+        type: string
+        nullable: true
+        comment: Scientific name; null or a genus/group for complexes
+      - name: common_name
+        type: string
+        nullable: true
+        comment: Common name of the species or complex
+      - name: stock_area
+        type: string
+        nullable: true
+        comment: Geographic area of the stock (e.g. 'Gulf of Maine / Georges Bank', 'Bering Sea / Aleutian Islands')
+      - name: assessment_id
+        type: long
+        nullable: false
+        comment: Stock SMART assessment identifier; unique per row
+      - name: assessment_year
+        type: integer
+        nullable: false
+        comment: Year the assessment was completed
+      - name: assessment_month
+        type: integer
+        nullable: true
+        comment: Month the assessment was completed (1-12)
+      - name: last_data_year
+        type: integer
+        nullable: true
+        comment: Last year of data used in the assessment
+      - name: update_type
+        type: string
+        nullable: true
+        comment: Assessment type (e.g. Benchmark, Full Update, Operational); null where the source leaves it blank
+      - name: review_result
+        type: string
+        nullable: true
+        comment: Peer review outcome (e.g. Full acceptance)
+      - name: assessment_model
+        type: string
+        nullable: true
+        comment: Stock assessment model used (e.g. BAM, SS3, ASAP)
+      - name: f_year
+        type: integer
+        nullable: true
+        comment: Year the estimated fishing mortality refers to
+      - name: estimated_f
+        type: double
+        nullable: true
+        comment: Estimated fishing mortality in f_unit
+      - name: f_unit
+        type: string
+        nullable: true
+        comment: What estimated_f measures (e.g. Average F, Fully-selected F, Apical F, Exploitation rate)
+      - name: fmsy
+        type: double
+        nullable: true
+        comment: Fishing mortality reference point at maximum sustainable yield, in f_unit
+      - name: f_fmsy_ratio
+        type: double
+        nullable: true
+        comment: Estimated F divided by Fmsy; above 1 means the fishing rate exceeded the MSY level
+      - name: b_year
+        type: integer
+        nullable: true
+        comment: Year the estimated biomass refers to
+      - name: estimated_b
+        type: double
+        nullable: true
+        comment: Estimated stock biomass (or abundance) in b_unit
+      - name: b_unit
+        type: string
+        nullable: true
+        comment: What estimated_b measures and its unit (e.g. Metric Tons, Billion Eggs)
+      - name: bmsy
+        type: double
+        nullable: true
+        comment: Biomass reference point at maximum sustainable yield, in b_unit
+      - name: b_bmsy_ratio
+        type: double
+        nullable: true
+        comment: Estimated B divided by Bmsy; below 1 means biomass was under the MSY level
+      - name: msy
+        type: double
+        nullable: true
+        comment: Maximum sustainable yield estimate, in msy_unit
+      - name: msy_unit
+        type: string
+        nullable: true
+        comment: Unit of msy; null where the source leaves it blank
+
+    source:
+      type: http
+      # The searchEntities call is only the stock list; FisheriesStockSmartTransformer takes the
+      # ids from it and downloads the Assessment Summary xlsx from data-export-servlet itself.
+      # The jsonParam is URL-encoded inline: its literal braces would otherwise be read as
+      # {variable} placeholders.
+      url: "https://apps-st.fisheries.noaa.gov/stocksmart/sis_servlet?jsonParam=%7B%22method%22%3A%22searchEntities%22%2C%22entName%22%3A%22%25%22%2C%22scId%22%3A%22%25%22%2C%22jurId%22%3A%22%25%22%2C%22fmpId%22%3A%22%25%22%2C%22ecoId%22%3A%22%25%22%7D"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer needs the live stock-list envelope, not a replay of post-transform rows.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesStockSmartTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=stock_smart_assessments/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: stock_smart_assessments
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
