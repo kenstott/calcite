@@ -39,7 +39,7 @@ for plugin in calcite cloudops file salesforce sharepoint splunk; do
   required+=("trino-${plugin}-plugin.zip")
 done
 # The pg-wire server bundles the engine and Provisa download and run, each with its checksum.
-for adapter in calcite cloudops file govdata salesforce sharepoint splunk; do
+for adapter in calcite cloudops file govdata salesforce servicenow sharepoint splunk; do
   for variant in linux-x86_64 macos-arm64 windows-x86_64; do
     required+=("pgwire-${adapter}-${version}-${variant}.tar.gz")
     required+=("pgwire-${adapter}-${version}-${variant}.tar.gz.sha256")
