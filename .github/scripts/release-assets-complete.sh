@@ -38,8 +38,19 @@ required=(
 for plugin in calcite cloudops file salesforce sharepoint splunk; do
   required+=("trino-${plugin}-plugin.zip")
 done
-# The pg-wire server bundles the engine and Provisa download and run, each with its checksum.
-for adapter in calcite cloudops file govdata salesforce servicenow sharepoint splunk; do
+# The pg-wire server bundles the engine and Provisa download and run, each with its checksum:
+# the pgwire-calcite server and every adapter in packaging/adapters.json, an adapter from the
+# release its "since" names on (no "since": every release).
+adapters="$(python3 - "$(dirname "$0")/../../pgwire-calcite/packaging/adapters.json" "$version" <<'PY'
+import json, sys
+def key(v):
+    return tuple(int(p) for p in v.split("."))
+for a in json.load(open(sys.argv[1])):
+    if "since" not in a or key(sys.argv[2]) >= key(a["since"]):
+        print(a["name"])
+PY
+)"
+for adapter in calcite $adapters; do
   for variant in linux-x86_64 macos-arm64 windows-x86_64; do
     required+=("pgwire-${adapter}-${version}-${variant}.tar.gz")
     required+=("pgwire-${adapter}-${version}-${variant}.tar.gz.sha256")
