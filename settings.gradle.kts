@@ -101,6 +101,7 @@ include(
     "trino-cloudops",
     "trino-file",
     "trino-salesforce",
+    "trino-servicenow",
     "trino-sharepoint",
     "trino-splunk"
 )

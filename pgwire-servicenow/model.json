@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "defaultSchema": "servicenow",
+  "schemas": [
+    {
+      "name": "servicenow",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.servicenow.ServiceNowSchemaFactory",
+      "operand": {
+        "instanceUrl": "https://YOUR-INSTANCE.service-now.com",
+        "authType": "basic",
+        "username": "YOUR_INTEGRATION_USER",
+        "password": "YOUR_INTEGRATION_USER_PASSWORD",
+        "tables": "incident,task,sys_user,sys_user_group,change_request,problem,cmdb_ci"
+      }
+    }
+  ]
+}
