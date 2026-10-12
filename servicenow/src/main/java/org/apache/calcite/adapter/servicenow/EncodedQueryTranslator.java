@@ -376,7 +376,7 @@ final class EncodedQueryTranslator implements PredicatePushdown {
       bounds.add(new Cmp(range.upperBoundType() == BoundType.CLOSED ? Op.LE : Op.LT, column,
           Collections.<Comparable>singletonList(range.upperEndpoint())));
     }
-    return bounds;
+    return Collections.unmodifiableList(bounds);
   }
 
   private static List<Cmp> like(RexCall call) {
