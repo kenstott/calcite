@@ -2,7 +2,7 @@
 
 A pre-packaged [pgwire-calcite](../pgwire-calcite) server that exposes a **ServiceNow** instance's
 tables (`ServiceNowSchemaFactory`) over the PostgreSQL wire protocol. Query ServiceNow from `psql`
-or any PostgreSQL client. **Read-only.**
+or any PostgreSQL client, and write registered tables with `INSERT`, `UPDATE` and `DELETE`.
 
 **Status: not tested against a ServiceNow instance.** The adapter's unit tests run against a local
 server that plays the documented Table API; no live instance was available when this bundle was
@@ -72,5 +72,7 @@ is NULL, for strings too.
 
 ## Writes
 
-There are none: `INSERT`, `UPDATE` and `DELETE` are not supported, and the launcher is started
-without `--allow-writes`.
+`INSERT`, `UPDATE` and `DELETE` on registered tables, as the [adapter README](../servicenow/README.md)
+describes, including inserts through an import set (`importSet` in `model.json`). The server
+accepts writes only when started with `--allow-writes`; this bundle is not yet in the release
+workflow, so its launcher's flags are still to be set there.

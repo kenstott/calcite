@@ -40,6 +40,22 @@ class TestServiceNowClientModule
     }
 
     @Test
+    void anImportSetBindingReachesTheDriver()
+    {
+        ServiceNowConfig config = new ServiceNowConfig()
+                .setInstanceUrl("https://dev12345.service-now.com")
+                .setUsername("svc")
+                .setPassword("pw")
+                .setTables("incident")
+                .setImportSet("incident:imp_notification");
+        assertEquals(
+                "jdbc:servicenow:instanceUrl=https%3A%2F%2Fdev12345.service-now.com;authType=basic;"
+                        + "username=svc;password=pw;tables=incident;"
+                        + "importSet=incident%3Aimp_notification",
+                ServiceNowClientModule.buildConnectionUrl(config));
+    }
+
+    @Test
     void tablesAndCacheSettingsReachTheDriver()
     {
         ServiceNowConfig config = new ServiceNowConfig()

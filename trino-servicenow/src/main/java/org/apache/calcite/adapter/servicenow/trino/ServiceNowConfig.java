@@ -38,6 +38,7 @@ public class ServiceNowConfig
     private String username;
     private String password;
     private String tables;
+    private String importSet;
     private String excludeColumnTypes;
     private String schema;
     private String pushdownVerification;
@@ -111,10 +112,25 @@ public class ServiceNowConfig
 
     @Config("tables")
     @ConfigDescription("Comma-separated names of the registered tables, the only ServiceNow "
-            + "tables exposed (without it, only _servicenow_tables and _servicenow_columns)")
+            + "tables exposed (without it, only the listing tables _servicenow_tables, "
+            + "_servicenow_columns and _servicenow_transform_maps)")
     public ServiceNowConfig setTables(String tables)
     {
         this.tables = tables;
+        return this;
+    }
+
+    public String getImportSet()
+    {
+        return importSet;
+    }
+
+    @Config("import-set")
+    @ConfigDescription("Registered tables whose INSERTs go through an import set, as "
+            + "<table>:<staging table>,...; each table must also be in tables")
+    public ServiceNowConfig setImportSet(String importSet)
+    {
+        this.importSet = importSet;
         return this;
     }
 

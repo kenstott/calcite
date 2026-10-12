@@ -28,13 +28,15 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
 /**
- * The two tables that describe the instance without exposing its tables: what a steward picks
- * from when registering a table.
+ * The tables that describe the instance without exposing its tables: what a steward picks from
+ * when registering a table.
  *
  * <ul>
  *   <li>{@value #TABLES}{@code (name, label, theme)}: every table the instance lists, from the one
@@ -44,6 +46,10 @@ import java.util.List;
  *   {@code sys_dictionary} rows. A scan must name the table with {@code table_name = '<name>'};
  *   without it the scan is refused, because answering it would read the dictionary of every
  *   table.
+ *   <li>{@value #TRANSFORM_MAPS}{@code (name, source_table, target_table, active)}: the instance's
+ *   transform maps, from {@code sys_transform_map}, for binding a registered table's INSERTs to
+ *   an import set (the map's {@code source_table} is the staging table). A condition
+ *   {@code target_table = '<table>'} is sent to the instance.
  * </ul>
  *
  * <p>{@code data_type} is the PostgreSQL name the pgwire server reports for the column in
@@ -53,6 +59,7 @@ final class ListingTables {
 
   static final String TABLES = "_servicenow_tables";
   static final String COLUMNS = "_servicenow_columns";
+  static final String TRANSFORM_MAPS = "_servicenow_transform_maps";
 
   private ListingTables() {}
 
@@ -101,7 +108,7 @@ final class ListingTables {
     }
 
     @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
-      final String table = tableName(filters);
+      final String table = literal(filters, 0, false);
       if (table == null) {
         throw new ServiceNowException(COLUMNS + " lists the columns of one table and must be "
             + "queried with table_name = '<table>'; without it, it would read the column "
@@ -119,44 +126,76 @@ final class ListingTables {
       }
       return Linq4j.asEnumerable(rows);
     }
+  }
 
-    /**
-     * The literal of the {@code table_name = '<literal>'} condition among the filters, or null if
-     * there is none. Calcite may pass several conditions as one AND, so each filter's conjuncts
-     * are searched. The filters are left as they are for Calcite to evaluate: every row this
-     * table returns has that table_name, so the condition holds for all of them.
-     */
-    private static String tableName(List<RexNode> filters) {
-      for (RexNode filter : filters) {
-        for (RexNode condition : RelOptUtil.conjunctions(filter)) {
-          final String name = tableNameOf(condition);
-          if (name != null) {
-            return name;
+  /** {@value #TRANSFORM_MAPS}: the instance's transform maps, optionally of one target table. */
+  static final class TransformMaps extends AbstractTable implements FilterableTable {
+    private final ServiceNowSchema schema;
+
+    TransformMaps(ServiceNowSchema schema) {
+      this.schema = schema;
+    }
+
+    @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+      return typeFactory.builder()
+          .add("name", SqlTypeName.VARCHAR)
+          .add("source_table", SqlTypeName.VARCHAR)
+          .add("target_table", SqlTypeName.VARCHAR)
+          .add("active", SqlTypeName.BOOLEAN)
+          .build();
+    }
+
+    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
+      // A target table that is a valid name is sent as a query term (a metadata condition, like
+      // the dictionary's per-table read); any other filter stays for Calcite
+      final String target = literal(filters, 2, true);
+      final List<Object[]> rows = new ArrayList<>();
+      for (JsonNode map : ServiceNowCatalog.readAll(schema.connection(), "sys_transform_map",
+          schema.metadataPageSize(), false, target == null ? "" : "target_table=" + target,
+          "sys_id", "name", "source_table", "target_table", "active")) {
+        final String mapTarget = Rows.text(map, "target_table", "sys_transform_map", false);
+        if (target != null && !target.equals(mapTarget)) {
+          throw new ServiceNowException("sys_transform_map returned a map of '" + mapTarget
+              + "' when asked for the maps of '" + target + "' only");
+        }
+        rows.add(new Object[] {Rows.text(map, "name", "sys_transform_map", false),
+            Rows.text(map, "source_table", "sys_transform_map", false), mapTarget,
+            "true".equals(Rows.text(map, "active", "sys_transform_map", true))});
+      }
+      return Linq4j.asEnumerable(rows);
+    }
+  }
+
+  /**
+   * The literal of a {@code <column> = '<literal>'} condition among the filters, or null if there
+   * is none. Calcite may pass several conditions as one AND, so each filter's conjuncts are
+   * searched. The filters are left as they are for Calcite to evaluate: every row these tables
+   * return for the literal satisfies the condition. With {@code nameOnly}, a literal that is not
+   * a ServiceNow name is not used.
+   */
+  private static String literal(List<RexNode> filters, int columnIndex, boolean nameOnly) {
+    for (RexNode filter : filters) {
+      for (RexNode condition : RelOptUtil.conjunctions(filter)) {
+        if (condition.getKind() != SqlKind.EQUALS) {
+          continue;
+        }
+        final List<RexNode> operands = ((RexCall) condition).getOperands();
+        for (int side = 0; side < 2; side++) {
+          final RexNode column = operands.get(side);
+          final RexNode value = operands.get(1 - side);
+          if (column instanceof RexInputRef
+              && ((RexInputRef) column).getIndex() == columnIndex
+              && value instanceof RexLiteral) {
+            final String text = ((RexLiteral) value).getValueAs(String.class);
+            if (text != null
+                && (!nameOnly || ServiceNowCatalog.NAME.matcher(text).matches())) {
+              return text;
+            }
           }
         }
       }
-      return null;
     }
-
-    /** The literal of a {@code table_name = '<literal>'} condition, or null. */
-    private static String tableNameOf(RexNode condition) {
-      if (condition.getKind() != SqlKind.EQUALS) {
-        return null;
-      }
-      final List<RexNode> operands = ((RexCall) condition).getOperands();
-      for (int side = 0; side < 2; side++) {
-        final RexNode column = operands.get(side);
-        final RexNode value = operands.get(1 - side);
-        if (column instanceof RexInputRef && ((RexInputRef) column).getIndex() == 0
-            && value instanceof RexLiteral) {
-          final String name = ((RexLiteral) value).getValueAs(String.class);
-          if (name != null) {
-            return name;
-          }
-        }
-      }
-      return null;
-    }
+    return null;
   }
 
   /**

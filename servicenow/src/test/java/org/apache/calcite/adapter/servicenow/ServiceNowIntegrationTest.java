@@ -127,7 +127,7 @@ class ServiceNowIntegrationTest {
         }
       }
       assertThat(tables, equalTo(new HashSet<>(java.util.Arrays.asList("incident", "sys_user",
-          ListingTables.TABLES, ListingTables.COLUMNS))));
+          ListingTables.TABLES, ListingTables.COLUMNS, ListingTables.TRANSFORM_MAPS))));
     }
   }
 
