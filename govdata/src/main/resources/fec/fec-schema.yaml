@@ -511,7 +511,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 65902
-      checkedAt: "2026-10-11T07:33:37Z"
+      checkedAt: "2026-10-12T08:14:41Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -672,7 +672,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 157041
-      checkedAt: "2026-10-11T07:33:39Z"
+      checkedAt: "2026-10-12T08:14:44Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -826,7 +826,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 62704
-      checkedAt: "2026-10-11T07:33:39Z"
+      checkedAt: "2026-10-12T08:14:48Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -922,7 +922,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 273781456
-      checkedAt: "2026-10-11T07:33:53Z"
+      checkedAt: "2026-10-12T08:15:03Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1131,7 +1131,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 4494649
-      checkedAt: "2026-10-11T07:33:54Z"
+      checkedAt: "2026-10-12T08:15:06Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1321,7 +1321,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2022, 2024, 2026]
       rowCount: 57906887
-      checkedAt: "2026-10-11T07:33:57Z"
+      checkedAt: "2026-10-12T08:15:10Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1506,7 +1506,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2022, 2024, 2026]
       rowCount: 15990837
-      checkedAt: "2026-10-11T07:34:00Z"
+      checkedAt: "2026-10-12T08:15:13Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1704,8 +1704,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 689564
-      checkedAt: "2026-10-11T07:34:04Z"
+      rowCount: 689983
+      checkedAt: "2026-10-12T08:15:18Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1913,7 +1913,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 1711
-      checkedAt: "2026-10-11T07:34:06Z"
+      checkedAt: "2026-10-12T08:15:21Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2072,7 +2072,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 25716
-      checkedAt: "2026-10-11T07:34:08Z"
+      checkedAt: "2026-10-12T08:15:24Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2223,7 +2223,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
       rowCount: 37508
-      checkedAt: "2026-10-11T07:34:11Z"
+      checkedAt: "2026-10-12T08:15:26Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2430,8 +2430,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 110248
-      checkedAt: "2026-10-11T07:34:13Z"
+      rowCount: 110253
+      checkedAt: "2026-10-12T08:15:29Z"
     partitions:
       style: hive
       columnDefinitions:
