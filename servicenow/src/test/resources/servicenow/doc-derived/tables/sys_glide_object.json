@@ -1,0 +1,19 @@
+{
+  "result": [
+    {
+      "sys_id": "00000000000000000000000000002001",
+      "name": "string",
+      "scalar_type": "string"
+    },
+    {
+      "sys_id": "00000000000000000000000000002002",
+      "name": "x_custom_type",
+      "scalar_type": "string"
+    },
+    {
+      "sys_id": "00000000000000000000000000002003",
+      "name": "glide_date_time",
+      "scalar_type": "datetime"
+    }
+  ]
+}

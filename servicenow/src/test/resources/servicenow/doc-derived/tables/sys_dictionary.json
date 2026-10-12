@@ -1,0 +1,164 @@
+{
+  "result": [
+    {
+      "sys_id": "00000000000000000000000000001001",
+      "name": "task",
+      "element": "",
+      "internal_type": "collection",
+      "max_length": "",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001002",
+      "name": "task",
+      "element": "sys_id",
+      "internal_type": "GUID",
+      "max_length": "32",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001003",
+      "name": "task",
+      "element": "short_description",
+      "internal_type": "string",
+      "max_length": "160",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001004",
+      "name": "task",
+      "element": "priority",
+      "internal_type": "integer",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001005",
+      "name": "task",
+      "element": "active",
+      "internal_type": "boolean",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001006",
+      "name": "task",
+      "element": "opened_at",
+      "internal_type": "glide_date_time",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001007",
+      "name": "task",
+      "element": "start_date",
+      "internal_type": "glide_date",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001008",
+      "name": "task",
+      "element": "assigned_to",
+      "internal_type": "reference",
+      "max_length": "32",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001009",
+      "name": "incident",
+      "element": "",
+      "internal_type": "collection",
+      "max_length": "",
+      "active": "true"
+    },
+    {
+      "sys_id": "0000000000000000000000000000100a",
+      "name": "incident",
+      "element": "number",
+      "internal_type": "string",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "0000000000000000000000000000100b",
+      "name": "incident",
+      "element": "caller_id",
+      "internal_type": "reference",
+      "max_length": "32",
+      "active": "true"
+    },
+    {
+      "sys_id": "0000000000000000000000000000100c",
+      "name": "incident",
+      "element": "closed_at",
+      "internal_type": "glide_date_time",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "0000000000000000000000000000100d",
+      "name": "incident",
+      "element": "u_widget",
+      "internal_type": "x_custom_type",
+      "max_length": "40",
+      "active": "true"
+    },
+    {
+      "sys_id": "0000000000000000000000000000100e",
+      "name": "incident",
+      "element": "u_retired",
+      "internal_type": "string",
+      "max_length": "40",
+      "active": "false"
+    },
+    {
+      "sys_id": "0000000000000000000000000000100f",
+      "name": "sys_user",
+      "element": "",
+      "internal_type": "collection",
+      "max_length": "",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001010",
+      "name": "sys_user",
+      "element": "sys_id",
+      "internal_type": "GUID",
+      "max_length": "32",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001011",
+      "name": "sys_user",
+      "element": "name",
+      "internal_type": "string",
+      "max_length": "100",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001012",
+      "name": "bad_table",
+      "element": "",
+      "internal_type": "collection",
+      "max_length": "",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001013",
+      "name": "bad_table",
+      "element": "sys_id",
+      "internal_type": "GUID",
+      "max_length": "32",
+      "active": "true"
+    },
+    {
+      "sys_id": "00000000000000000000000000001014",
+      "name": "bad_table",
+      "element": "u_mystery",
+      "internal_type": "mystery_type",
+      "max_length": "40",
+      "active": "true"
+    }
+  ]
+}
