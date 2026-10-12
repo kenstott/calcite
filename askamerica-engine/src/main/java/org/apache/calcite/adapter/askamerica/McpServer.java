@@ -819,7 +819,7 @@ public class McpServer {
 
     // ── MCP handlers ─────────────────────────────────────────────────────────
 
-    private static ObjectNode handleInitialize(JsonNode id) {
+    static ObjectNode handleInitialize(JsonNode id) {
         ObjectNode serverInfo = MAPPER.createObjectNode();
         serverInfo.put("name", "AskAmerica");
         serverInfo.put("version", "1.0.0");
@@ -1301,6 +1301,27 @@ public class McpServer {
             + "table's DECLARED coverage window — an empty result outside it means the period "
             + "is not published yet, not zero; say so rather than substituting an outside "
             + "figure (suggest_external_sources lists keyless endpoints for genuine gaps).\n"
+            + "- **Whenever you conclude askamerica does not have the data, ALWAYS file a "
+            + "data request and tell the user.** That means search_catalog/describe_table/"
+            + "data_coverage show no table covers the measure, or the loaded coverage does not "
+            + "reach the period or geography asked about. Call report_issue with type "
+            + "'sourcing' (one per distinct missing dataset in the conversation) BEFORE you "
+            + "write the answer, then say plainly in the answer that a data request was sent "
+            + "and that a new data series typically takes 24-48 hours to become available, so "
+            + "the user should check back then. Say it only if report_issue confirmed the "
+            + "request was recorded; if it reports that nothing was filed, tell the user the "
+            + "request could not be sent. Do this even when you can still give a partial "
+            + "answer from a proxy.\n"
+            + "- **Whenever you suspect a data defect, ALWAYS file a defect report and tell the "
+            + "user.** That means a table EXISTS and returned a value that looks wrong: an "
+            + "implausible magnitude or sign, a share outside 0-100%, two fields that should "
+            + "reconcile but do not, or a year-over-year jump no real-world event explains. "
+            + "Call report_issue with type 'defect' (one per distinct suspect value) BEFORE you "
+            + "write the answer, then say plainly in the answer that the value looks wrong, "
+            + "that a data-quality report was sent for review, and that the figure should be "
+            + "treated as unverified until it has been checked. Say the report was sent only if "
+            + "report_issue confirmed it was recorded; if it reports that nothing was filed, "
+            + "tell the user it could not be sent. Do not present the suspect value as fact.\n"
             + "- **A confirmed missing table is a redirect, not a stop condition.** After "
             + "logging the gap via report_issue, build the best PARTIAL answer from the "
             + "nearest proxy or coarser table available and flag the substitution — 'this "
@@ -3198,7 +3219,14 @@ public class McpServer {
             "Record a data quality issue, query error, or missing data to a local issue log. "
             + "Use this when a query fails unexpectedly after retrying, data appears incorrect, "
             + "or a schema/table is missing. Do not use for routine SQL errors the user can "
-            + "correct. Every report MUST be classified via `type` (defect or sourcing) — an "
+            + "correct. ALWAYS call it with type 'sourcing' whenever you conclude askamerica "
+            + "does not have the data the user asked for, even if you go on to give a partial "
+            + "answer, and then relay the confirmation text it returns (a data request was "
+            + "sent; new series typically take 24-48 hours; check back then). Likewise ALWAYS "
+            + "call it with type 'defect' whenever a value looks implausible or inconsistent, "
+            + "and relay the confirmation text it returns (a data-quality report was sent; "
+            + "treat the figure as unverified until checked). Every report "
+            + "MUST be classified via `type` (defect or sourcing) — an "
             + "unclassified report cannot be routed and is effectively invisible to whichever "
             + "team should act on it.",
             schema(reportProps, new String[]{"type", "subject", "body"})));
@@ -14244,7 +14272,18 @@ public class McpServer {
      * a report; telling them it was filed when it was not is worse than telling them to
      * retry.
      */
-    private static String reportIssue(String type, String subject, String body) {
+    /** Relayed to the user after a sourcing report is recorded. */
+    private static final String DATA_REQUEST_NOTICE =
+        "Tell the user: this data is not currently in askamerica, and a request for it has "
+            + "been sent. A new data series typically takes 24-48 hours to become available, "
+            + "so they should check back then.";
+
+    /** Relayed to the user after a defect report is recorded. */
+    private static final String DEFECT_REPORT_NOTICE =
+        "Tell the user: this value looks wrong, and a data-quality report has been sent for "
+            + "review. They should treat the figure as unverified until it has been checked.";
+
+    static String reportIssue(String type, String subject, String body) {
         HttpURLConnection c = null;
         try {
             String payload = "{"
@@ -14280,7 +14319,11 @@ public class McpServer {
             int code = c.getResponseCode();
             if (code >= 200 && code < 300) {
                 log.println("[askamerica-mcp] report_issue filed (HTTP " + code + ")");
-                return "Issue recorded. Subject: " + subject;
+                if ("sourcing".equals(type)) {
+                    return "Data request sent. Subject: " + subject + "\n" + DATA_REQUEST_NOTICE;
+                }
+                return "Data-quality report sent. Subject: " + subject + "\n"
+                    + DEFECT_REPORT_NOTICE;
             }
             log.println("[askamerica-mcp] report_issue rejected: HTTP " + code);
             return "Could not record the issue (HTTP " + code
