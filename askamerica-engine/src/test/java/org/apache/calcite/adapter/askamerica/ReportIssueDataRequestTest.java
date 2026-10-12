@@ -15,6 +15,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -35,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * endpoint actually accepted it.
  */
 @Tag("unit")
+@ResourceLock("askamerica.api.url")
 class ReportIssueDataRequestTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -95,6 +97,7 @@ class ReportIssueDataRequestTest {
     assertTrue(instructions.contains("check back"), instructions);
     assertTrue(instructions.contains("ALWAYS file a defect report"), instructions);
     assertTrue(instructions.contains("report_issue with type 'defect'"), instructions);
+    assertTrue(instructions.contains("fixes typically take 24-48 hours"), instructions);
     assertTrue(instructions.contains("unverified"), instructions);
   }
 
@@ -131,7 +134,8 @@ class ReportIssueDataRequestTest {
     String text = McpServer.reportIssue("defect", "Implausible total", "body");
     assertTrue(text.startsWith("Data-quality report sent."), text);
     assertTrue(text.contains("unverified"), text);
-    assertFalse(text.contains("24-48 hours"), text);
+    assertTrue(text.contains("24-48 hours"), text);
+    assertTrue(text.contains("check back"), text);
     assertEquals("defect", MAPPER.readTree(receivedBody.get()).path("type").asText());
   }
 

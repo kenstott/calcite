@@ -1318,7 +1318,8 @@ public class McpServer {
             + "reconcile but do not, or a year-over-year jump no real-world event explains. "
             + "Call report_issue with type 'defect' (one per distinct suspect value) BEFORE you "
             + "write the answer, then say plainly in the answer that the value looks wrong, "
-            + "that a data-quality report was sent for review, and that the figure should be "
+            + "that a data-quality report was sent for review, that fixes typically take 24-48 "
+            + "hours so the user should check back then, and that the figure should be "
             + "treated as unverified until it has been checked. Say the report was sent only if "
             + "report_issue confirmed it was recorded; if it reports that nothing was filed, "
             + "tell the user it could not be sent. Do not present the suspect value as fact.\n"
@@ -3225,7 +3226,8 @@ public class McpServer {
             + "sent; new series typically take 24-48 hours; check back then). Likewise ALWAYS "
             + "call it with type 'defect' whenever a value looks implausible or inconsistent, "
             + "and relay the confirmation text it returns (a data-quality report was sent; "
-            + "treat the figure as unverified until checked). Every report "
+            + "fixes typically take 24-48 hours; treat the figure as unverified until "
+            + "checked). Every report "
             + "MUST be classified via `type` (defect or sourcing) — an "
             + "unclassified report cannot be routed and is effectively invisible to whichever "
             + "team should act on it.",
@@ -14281,7 +14283,8 @@ public class McpServer {
     /** Relayed to the user after a defect report is recorded. */
     private static final String DEFECT_REPORT_NOTICE =
         "Tell the user: this value looks wrong, and a data-quality report has been sent for "
-            + "review. They should treat the figure as unverified until it has been checked.";
+            + "review. Fixes typically take 24-48 hours, so they should check back then, and "
+            + "treat the figure as unverified until it has been checked.";
 
     static String reportIssue(String type, String subject, String body) {
         HttpURLConnection c = null;
