@@ -1,7 +1,7 @@
 -- dq-lookback: 1
 -- Fisheries Data Quality Checks
 -- Schema: fisheries
--- Tables: noaa_commercial_landings, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement
+-- Tables: noaa_commercial_landings, mrip_recreational_catch, mrip_recreational_effort, dart_adult_counts, adfg_fish_counts, cdfw_grandtab_escapement, esa_salmonid_listings, wdfw_salmonid_escapement
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition column 'year' and the constant partition column 'type'.
 -- No PK check: NOAA publishes several source rows per state + species + source + collection
@@ -526,6 +526,157 @@ SELECT 'fisheries', 'wdfw_salmonid_escapement', 'T8_pk_duplicates',
 FROM (SELECT COUNT(*) AS n FROM (SELECT stock_number, data_series_num, year, data_type, sub_population_name
                                  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/wdfw_salmonid_escapement', allow_moved_paths := true)
                                  GROUP BY 1, 2, 3, 4, 5 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- MRIP recreational catch and effort
+-- ─────────────────────────────────────────────────────────────
+
+-- mrip_recreational_catch
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T2_row_count',
+  CASE WHEN n >= 20000 THEN 'pass' ELSE 'fail' END, n, 20000, 'Expected at least 20000 rows across the DQ years'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('year', 'type'))
+);
+
+-- alt_flag is 0 for every standard estimate; status is FINAL for every complete year, so single-valued in a DQ scope of finished years
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true))
+        WHERE approx_unique <= 1 AND column_name NOT IN ('year', 'type', 'alt_flag', 'status'))
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL in catch_year, wave, status, state_fips, state_abbr, species_code, species_name'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true)
+      WHERE catch_year IS NULL OR wave IS NULL OR status IS NULL OR state_fips IS NULL OR state_abbr IS NULL OR species_code IS NULL OR species_name IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate catch_year, wave, state_fips, sub_region_code, mode_code, area_code, species_code keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT catch_year, wave, state_fips, sub_region_code, mode_code, area_code, species_code FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T7_year_matches_catch_year',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where partition year <> catch_year'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true) WHERE year <> catch_year);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T7_wave_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with wave outside 1-6'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true) WHERE wave NOT BETWEEN 1 AND 6);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T7_total_catch_identity',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where landings_fish + released_fish differs from total_catch_fish by > 2 fish'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true)
+      WHERE landings_fish IS NOT NULL AND released_fish IS NOT NULL AND total_catch_fish IS NOT NULL
+        AND ABS(landings_fish + released_fish - total_catch_fish) > 2);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T7_nonneg_measures',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with a negative harvest, released, total catch or pounds estimate'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true)
+      WHERE landings_fish < 0 OR released_fish < 0 OR total_catch_fish < 0 OR landings_pounds < 0);
+
+-- Striped bass, Atlantic coast, the best loaded year: released fish (~20M in 2022) far exceed harvest (~0.5M)
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T7_striped_bass_magnitude',
+  CASE WHEN rel BETWEEN 2e6 AND 1e8 AND harv BETWEEN 1e5 AND 2e7 AND rel > harv THEN 'pass' ELSE 'fail' END,
+  rel, 2e6, 'Max single-year striped bass released (expect 2M-100M) and harvested (expect 100K-20M), released > harvested'
+FROM (SELECT MAX(r) AS rel, MAX(h) AS harv FROM (
+        SELECT catch_year, SUM(released_fish) AS r, SUM(landings_fish) AS h FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true)
+        WHERE species_name = 'STRIPED BASS' GROUP BY catch_year));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_catch', 'T7_coastal_states_loaded',
+  CASE WHEN n >= 12 THEN 'pass' ELSE 'fail' END, n, 12, 'Distinct state_abbr (expect >= 12 Atlantic/Gulf states)'
+FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_catch', allow_moved_paths := true));
+
+-- mrip_recreational_effort
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T2_row_count',
+  CASE WHEN n >= 300 THEN 'pass' ELSE 'fail' END, n, 300, 'Expected at least 300 rows across the DQ years'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true))
+        WHERE null_percentage = 100.0 AND column_name NOT IN ('year', 'type'))
+);
+
+-- status is FINAL for every complete year, so single-valued in a DQ scope of finished years
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true))
+        WHERE approx_unique <= 1 AND column_name NOT IN ('year', 'type', 'status'))
+);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL in catch_year, wave, status, state_fips, state_abbr'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true)
+      WHERE catch_year IS NULL OR wave IS NULL OR status IS NULL OR state_fips IS NULL OR state_abbr IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate catch_year, wave, state_fips, sub_region_code, mode_code, area_code keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT catch_year, wave, state_fips, sub_region_code, mode_code, area_code FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T7_year_matches_catch_year',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where partition year <> catch_year'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) WHERE year <> catch_year);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T7_wave_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with wave outside 1-6'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) WHERE wave NOT BETWEEN 1 AND 6);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T7_nonneg_trips',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with negative angler_trips'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) WHERE angler_trips < 0);
+
+INSERT INTO dq_results
+SELECT 'fisheries', 'mrip_recreational_effort', 'T7_florida_trips_magnitude',
+  CASE WHEN t BETWEEN 5e6 AND 2e8 THEN 'pass' ELSE 'fail' END, t, 5e6, 'Max single-year Florida angler trips (expect 5M-200M)'
+FROM (SELECT MAX(s) AS t FROM (SELECT catch_year, SUM(angler_trips) AS s FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fisheries/mrip_recreational_effort', allow_moved_paths := true) WHERE state_abbr = 'FL' GROUP BY catch_year));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results

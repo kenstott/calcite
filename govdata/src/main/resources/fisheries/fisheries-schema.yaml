@@ -6,12 +6,17 @@
 #     https://apps-st.fisheries.noaa.gov/ods/foss/landings/ (keyless JSON)
 #     Metadata: https://apps-st.fisheries.noaa.gov/ods/foss/metadata-catalog/landings/
 #
+#   - NOAA Fisheries MRIP (Marine Recreational Information Program) wave-level catch and effort
+#     https://www.st.nmfs.noaa.gov/st1/recreational/MRIP_Estimate_Data/CSV/ (keyless CSV/zip)
+#
 #   - Columbia Basin Research (Univ. of Washington) DART adult fish passage annual counts
 #     https://www.cbr.washington.edu/dart/query/adult_annual_sum (keyless CSV, USACE/PUD counts)
 #
 # Features:
 #   - Commercial landings (pounds, dollars) and recreational catch (MRIP fish counts)
 #     by state, species and year, 1950 onward
+#   - MRIP recreational catch (harvest, released, weight) and effort (angler trips) by year, wave,
+#     state, fishing mode, area fished and species, 1981 onward (Atlantic and Gulf coasts plus Hawaii)
 #   - Salmon flagged and split by species; Great Lakes stocked salmon marked non-native
 #   - Alaska Dept. of Fish and Game Sport Fish Division daily fish counts (weirs, towers, sonar)
 #     https://www.adfg.alaska.gov/sf/FishCounts/ (keyless JSON export)
@@ -28,7 +33,7 @@ schemaName: "${SCHEMA_NAME:fisheries}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >
-  U.S. fisheries data from NOAA Fisheries. Tables: wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) and noaa_commercial_landings, annual
+  U.S. fisheries data from NOAA Fisheries. Tables: wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) noaa_commercial_landings, annual
   commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
   and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
   pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
@@ -98,6 +103,15 @@ dimension_values:
     type: list
     values: ["BON","TDA","JDA","MCN","IHR","LMN","LGS","LWG","PRD","WAN","RIS","RRH","WEL",
              "WFF","PRO","ROZ","TUM"]
+
+  # MRIP publishes calendar year Y in the latest bulk files once it is final or preliminary;
+  # 2025 is the newest as of Oct 2026, so dataLag: 1. The default start is 1982 so
+  # effective_year begins at 1981, the first MRIP year.
+  mrip_years: &mrip_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1982}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
 
   # dataLag: 2 — FOSS carries data through current-2 (2024 is the newest year as of Oct 2026;
   # 2025 returns an empty page). The URL templates {effective_year}. The default start is
@@ -252,6 +266,346 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: noaa_commercial_landings
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # MRIP_RECREATIONAL_CATCH / MRIP_RECREATIONAL_EFFORT — NOAA MRIP wave-level estimates
+  # ---------------------------------------------------------------------------
+  - name: mrip_recreational_catch
+    # NOAA revises recent years (preliminary to final); 2 re-fetches the two newest years.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=mrip_catch/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NOAA Fisheries MRIP (Marine Recreational Information Program) recreational catch by
+      year x wave x state x fishing mode x area fished x species, 1981 to the latest published
+      year. Measures: harvest in fish (landings_fish = claimed + reported), fish released alive
+      (released_fish), total catch (total_catch_fish) and harvest weight (landings_pounds,
+      landings_kg), each with a standard error and percent standard error. Companion to
+      noaa_commercial_landings, whose collection = 'Recreational' rows carry only an annual
+      state x species fish_count and pounds; this table adds wave, mode, area, the
+      harvest-versus-released split and the uncertainty. Coverage is the Atlantic and Gulf
+      coasts from Maine to Mississippi plus Hawaii (17 states in 2022); Louisiana, Texas, the
+      Pacific coast and Alaska are surveyed by state agencies and are absent from recent years,
+      so use noaa_commercial_landings for them. Florida appears under two sub-regions (South
+      Atlantic and Gulf of America), so state_abbr alone does not identify a row. species_code is MRIP's 10-digit species code and species_name its common name in
+      upper case; it does not carry the ITIS tsn used in noaa_commercial_landings, so match
+      species by name (approximate). Estimates are survey-based: check *_pse (above 50 = unreliable)
+      and never treat a null as zero. One row per wave x state x mode x area x species; sum
+      landings_fish or total_catch_fish across waves/modes/areas for annual totals (standard
+      errors do not add). Source files are replaced in place when estimates are revised.
+      Cross-references geo.state_ref via state_abbr.
+    dimensions:
+      type:
+        - mrip_catch
+      year: *mrip_years
+
+    columns:
+      - name: catch_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the estimate
+      - name: wave
+        type: integer
+        nullable: false
+        comment: MRIP wave (two-month period) 1 = Jan-Feb, 2 = Mar-Apr, 3 = May-Jun, 4 = Jul-Aug, 5 = Sep-Oct, 6 = Nov-Dec
+      - name: status
+        type: string
+        nullable: false
+        comment: "FINAL or PRELIMINARY; recent years are revised, so the newest year is typically PRELIMINARY"
+      - name: sub_region_code
+        type: string
+        nullable: true
+        comment: MRIP sub-region code (4 North Atlantic, 5 Mid-Atlantic, 6 South Atlantic, 7 Gulf of America, 8 Hawaiian Islands)
+      - name: sub_region_name
+        type: string
+        nullable: true
+        comment: MRIP sub-region name
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS code; join to geo.state_ref
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state abbreviation; join to geo.state_ref
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name in upper case as published by MRIP
+      - name: mode_code
+        type: string
+        nullable: true
+        comment: Fishing mode code (3 shore, 4 party boat, 5 charter boat, 7 private/rental boat; older years may also carry combined-mode codes)
+      - name: mode_name
+        type: string
+        nullable: true
+        comment: Fishing mode name (SHORE, PARTY BOAT, CHARTER BOAT, PRIVATE/RENTAL BOAT)
+      - name: area_code
+        type: string
+        nullable: true
+        comment: Area fished code (1 ocean <= 3 mi, 2 ocean > 3 mi, 3 ocean <= 10 mi, 4 ocean > 10 mi, 5 inland)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: Area fished (OCEAN (<= 3 MI), OCEAN (> 3 MI), OCEAN (<= 10 MI), OCEAN (> 10 MI), INLAND)
+      - name: alt_flag
+        type: integer
+        nullable: true
+        comment: MRIP alternate-estimate flag (0 for standard estimates)
+      - name: species_code
+        type: string
+        nullable: false
+        comment: MRIP 10-digit species code (1000000000 = unidentified fish)
+      - name: species_name
+        type: string
+        nullable: false
+        comment: MRIP common name in upper case (e.g. STRIPED BASS, RED SNAPPER); grouped categories end in GENUS or SPECIES
+      - name: claimed_harvest_fish
+        type: double
+        nullable: true
+        comment: "Type A claim: fish harvested and seen/identified by an interviewer (MRIP ESTCLAIM); null when the estimate is not available"
+      - name: claimed_harvest_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of claimed_harvest_fish, sqrt of the published variance
+      - name: claimed_harvest_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of claimed_harvest_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: reported_harvest_fish
+        type: double
+        nullable: true
+        comment: "Type B1: fish harvested but not seen by an interviewer, as reported by the angler (MRIP ESTHARV); null when the estimate is not available"
+      - name: reported_harvest_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of reported_harvest_fish, sqrt of the published variance
+      - name: reported_harvest_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of reported_harvest_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: landings_fish
+        type: double
+        nullable: true
+        comment: Total harvested fish, A + B1 (MRIP LANDING); the recreational harvest number; null when the estimate is not available
+      - name: landings_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of landings_fish, sqrt of the published variance
+      - name: landings_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of landings_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: released_fish
+        type: double
+        nullable: true
+        comment: "Type B2: fish caught and released alive (MRIP ESTREL); null when the estimate is not available"
+      - name: released_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of released_fish, sqrt of the published variance
+      - name: released_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of released_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: total_catch_fish
+        type: double
+        nullable: true
+        comment: "Total catch: harvested plus released fish (MRIP TOT_CAT); null when the estimate is not available"
+      - name: total_catch_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of total_catch_fish, sqrt of the published variance
+      - name: total_catch_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of total_catch_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: landings_pounds
+        type: double
+        nullable: true
+        comment: Harvest weight in pounds, A + B1 (MRIP LBS_AB1); null when the estimate is not available
+      - name: landings_pounds_std_err
+        type: double
+        nullable: true
+        comment: Standard error of landings_pounds, sqrt of the published variance
+      - name: landings_pounds_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of landings_pounds (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: landings_kg
+        type: double
+        nullable: true
+        comment: Harvest weight in kilograms, A + B1 (MRIP WGT_AB1); null when the estimate is not available
+      - name: landings_kg_std_err
+        type: double
+        nullable: true
+        comment: Standard error of landings_kg, sqrt of the published variance
+      - name: landings_kg_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of landings_kg (100 x SE / estimate); above 50 the estimate is unreliable
+
+    source:
+      type: http
+      # The URL names the per-year file. 2020 onward is a plain CSV at this URL; 1981-2019 is
+      # published only inside decade zip bundles, which FisheriesMripTransformer resolves from
+      # this URL and reads itself (so response.format is ignored).
+      url: "https://www.st.nmfs.noaa.gov/st1/recreational/MRIP_Estimate_Data/CSV/Wave%20Level%20Estimate%20Downloads/mrip_catch_bywave_{effective_year}.csv"
+      method: GET
+      response:
+        format: json  # ignored: FisheriesMripTransformer streams the CSV/zip itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # Disabled by design: recent years are revised in place at the same URL, and the
+      # transformer reads the file directly rather than through the raw cache.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesMripTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=mrip_catch/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: mrip_recreational_catch
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: mrip_recreational_effort
+    # NOAA revises recent years (preliminary to final); 2 re-fetches the two newest years.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=mrip_effort/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NOAA Fisheries MRIP recreational fishing effort, in angler trips, by year x wave x state x
+      fishing mode x area fished, 1981 to the latest published year, with standard error and
+      percent standard error. One trip is one angler fishing for one day. Pair with
+      mrip_recreational_catch (same keys) to compute catch per trip. Atlantic and Gulf coasts
+      from Maine to Mississippi plus Hawaii; Louisiana, Texas, the Pacific coast and Alaska are
+      absent from recent years. Florida appears under two sub-regions (South Atlantic and Gulf of
+      America). A null angler_trips is an estimate MRIP did not produce for that cell, not zero
+      trips. Standard errors do not add across rows. Cross-references geo.state_ref via
+      state_abbr.
+    dimensions:
+      type:
+        - mrip_effort
+      year: *mrip_years
+
+    columns:
+      - name: catch_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the estimate
+      - name: wave
+        type: integer
+        nullable: false
+        comment: MRIP wave (two-month period) 1 = Jan-Feb, 2 = Mar-Apr, 3 = May-Jun, 4 = Jul-Aug, 5 = Sep-Oct, 6 = Nov-Dec
+      - name: status
+        type: string
+        nullable: false
+        comment: "FINAL or PRELIMINARY; recent years are revised, so the newest year is typically PRELIMINARY"
+      - name: sub_region_code
+        type: string
+        nullable: true
+        comment: MRIP sub-region code (4 North Atlantic, 5 Mid-Atlantic, 6 South Atlantic, 7 Gulf of America, 8 Hawaiian Islands)
+      - name: sub_region_name
+        type: string
+        nullable: true
+        comment: MRIP sub-region name
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS code; join to geo.state_ref
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state abbreviation; join to geo.state_ref
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name in upper case as published by MRIP
+      - name: mode_code
+        type: string
+        nullable: true
+        comment: Fishing mode code (3 shore, 4 party boat, 5 charter boat, 7 private/rental boat; older years may also carry combined-mode codes)
+      - name: mode_name
+        type: string
+        nullable: true
+        comment: Fishing mode name (SHORE, PARTY BOAT, CHARTER BOAT, PRIVATE/RENTAL BOAT)
+      - name: area_code
+        type: string
+        nullable: true
+        comment: Area fished code (1 ocean <= 3 mi, 2 ocean > 3 mi, 3 ocean <= 10 mi, 4 ocean > 10 mi, 5 inland)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: Area fished (OCEAN (<= 3 MI), OCEAN (> 3 MI), OCEAN (<= 10 MI), OCEAN (> 10 MI), INLAND)
+      - name: angler_trips
+        type: double
+        nullable: true
+        comment: Estimated angler trips (MRIP ESTRIPS); null when the estimate is not available
+      - name: angler_trips_std_err
+        type: double
+        nullable: true
+        comment: Standard error of angler_trips, sqrt of the published variance
+      - name: angler_trips_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of angler_trips; above 50 the estimate is unreliable
+
+    source:
+      type: http
+      # The URL names the per-year file. 2020 onward is a plain CSV at this URL; 1981-2019 is
+      # published only inside decade zip bundles, which FisheriesMripTransformer resolves from
+      # this URL and reads itself (so response.format is ignored).
+      url: "https://www.st.nmfs.noaa.gov/st1/recreational/MRIP_Estimate_Data/CSV/Wave%20Level%20Estimate%20Downloads/mrip_effort_bywave_{effective_year}.csv"
+      method: GET
+      response:
+        format: json  # ignored: FisheriesMripTransformer streams the CSV/zip itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # Disabled by design: recent years are revised in place at the same URL, and the
+      # transformer reads the file directly rather than through the raw cache.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesMripTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=mrip_effort/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: mrip_recreational_effort
         overwritePartitions: true
         runMaintenance: true
         snapshotRetentionDays: 7
