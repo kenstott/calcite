@@ -492,7 +492,8 @@ class ServiceNowProbe {
 
   private TableDef loadTable() {
     final ServiceNowCatalog catalog = new ServiceNowCatalog(
-        ServiceNowCatalog.load(connection, 1000), Collections.<String>emptySet());
+        ServiceNowCatalog.load(connection, 1000), Collections.<String>emptySet(),
+        ServiceNowCatalog.metadata(connection, 1000));
     return catalog.table(PROBE_TABLE);
   }
 

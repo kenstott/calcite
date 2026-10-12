@@ -22,12 +22,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Schema holding one table per ServiceNow table.
+ * Schema holding the instance's listing tables and the ServiceNow tables registered for use.
  *
- * <p>The table set comes from the instance's {@code sys_db_object}; an optional include list
- * narrows it. All tables are in this one SQL schema. Putting each application scope in its own
- * SQL schema would be a change here and in the catalog (a scope column on the table rows), not in
- * how tables are read.
+ * <p>{@link ListingTables#TABLES} and {@link ListingTables#COLUMNS} are always present: they list
+ * every table the instance has and the columns of any one of them. Only the tables named in the
+ * {@code tables} operand (the registered ones) are SQL tables; with no operand there are none. An
+ * instance has thousands of tables, and a host such as the pgwire server reads the columns of
+ * every SQL table when it starts, so exposing them all would read the column metadata of every
+ * one (SNOW-010 as amended 2026-10-12).
  */
 public class ServiceNowSchema extends AbstractSchema {
 
@@ -49,7 +51,7 @@ public class ServiceNowSchema extends AbstractSchema {
    * @param metadataPageSize    rows per request when reading the metadata tables
    * @param catalogCacheDirectory where the catalog snapshot is kept between runs
    * @param catalogCacheTimeToLive how long a snapshot on disk is used for; zero keeps nothing
-   * @param includeTables       names of the only tables to expose, or empty for all of them
+   * @param includeTables       names of the registered tables, the only ones exposed
    * @param excludedColumnTypes field types whose columns are left out
    * @param capabilities        the pushdown entries that may be used
    * @param observer            told what each scan pushed, or null
@@ -77,23 +79,27 @@ public class ServiceNowSchema extends AbstractSchema {
     return pageSize;
   }
 
-  /** The catalog, loaded from the cache or the instance on first use. */
+  /** The catalog, its table list loaded from the cache or the instance on first use. */
   synchronized ServiceNowCatalog catalog() {
     if (catalog == null) {
       catalog = new ServiceNowCatalog(
           catalogCache.get(() -> ServiceNowCatalog.load(connection, metadataPageSize)),
-          excludedColumnTypes);
+          excludedColumnTypes, ServiceNowCatalog.metadata(connection, metadataPageSize));
     }
     return catalog;
   }
 
   @Override protected synchronized Map<String, Table> getTableMap() {
     if (tableMap == null) {
-      final ServiceNowCatalog catalog = catalog();
       final ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
-      final List<String> names = includeTables.isEmpty() ? catalog.tableNames() : includeTables;
-      for (String name : names) {
-        if (!catalog.hasTable(name)) {
+      builder.put(ListingTables.TABLES, new ListingTables.Tables(this));
+      builder.put(ListingTables.COLUMNS, new ListingTables.Columns(this));
+      for (String name : includeTables) {
+        if (name.equals(ListingTables.TABLES) || name.equals(ListingTables.COLUMNS)) {
+          throw new ServiceNowException("The 'tables' operand names '" + name + "', which is "
+              + "the adapter's own listing table");
+        }
+        if (!catalog().hasTable(name)) {
           throw new ServiceNowException("The 'tables' operand names '" + name + "', which is not "
               + "in sys_db_object (or not readable by the integration user)");
         }

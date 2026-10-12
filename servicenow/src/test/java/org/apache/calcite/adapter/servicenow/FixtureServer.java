@@ -46,9 +46,10 @@ import java.util.function.Function;
  *   <li>HTTP Basic authentication;
  *   <li>{@code sysparm_fields}, {@code sysparm_limit}, {@code sysparm_display_value} false and
  *   all, {@code sysparm_exclude_reference_link};
- *   <li>{@code sysparm_query} made only of {@code sys_id><key>} and {@code ORDERBYsys_id}. Any
- *   other term is answered with HTTP 400, so a filter that starts being pushed down fails the
- *   tests instead of being silently accepted.
+ *   <li>{@code sysparm_query} made only of {@code sys_id><key>}, {@code ORDERBYsys_id} and, on
+ *   {@code sys_dictionary}, {@code nameIN<a>,<b>} (the adapter's per-table column read; checked on
+ *   dev453859 2026-10-12). Any other term is answered with HTTP 400, so a filter that starts being
+ *   pushed down fails the tests instead of being silently accepted.
  * </ul>
  * A test can take over any request with {@link #override}.
  */
@@ -199,10 +200,13 @@ final class FixtureServer implements AutoCloseable {
       return error(400, "Invalid table " + seen.table, "");
     }
     String after = null;
+    Set<String> names = null;
     final String query = seen.params.getOrDefault("sysparm_query", "");
     for (String term : query.isEmpty() ? new String[0] : query.split("\\^")) {
       if (term.startsWith("sys_id>")) {
         after = term.substring("sys_id>".length());
+      } else if (term.startsWith("nameIN") && seen.table.equals("sys_dictionary")) {
+        names = new HashSet<>(Arrays.asList(term.substring("nameIN".length()).split(",")));
       } else if (!term.equals("ORDERBYsys_id") && !lenientTerms) {
         return error(400, "FixtureServer does not accept the query term '" + term + "'", "");
       }
@@ -220,6 +224,9 @@ final class FixtureServer implements AutoCloseable {
     final ArrayNode result = MAPPER.createArrayNode();
     for (JsonNode row : sorted) {
       if (after != null && row.get("sys_id").asText().compareTo(after) <= 0) {
+        continue;
+      }
+      if (names != null && !names.contains(row.get("name").asText())) {
         continue;
       }
       if (result.size() == limit) {

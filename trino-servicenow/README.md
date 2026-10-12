@@ -18,7 +18,7 @@ connector.name=servicenow
 instance-url=https://dev12345.service-now.com
 username=svc_trino
 password=...
-# optional: only these tables (default: every table in sys_db_object, thousands)
+# the registered tables; without it only _servicenow_tables and _servicenow_columns exist
 tables=incident,task,sys_user
 ```
 
@@ -27,7 +27,7 @@ tables=incident,task,sys_user
 | `instance-url` | Instance URL | yes |
 | `auth-type` | only `basic` is implemented (default) | no |
 | `username`, `password` | Integration user | yes |
-| `tables` | Comma-separated tables to expose | no |
+| `tables` | Comma-separated registered tables, the only ServiceNow tables exposed. Without it, only the listing tables `_servicenow_tables` and `_servicenow_columns` | no |
 | `exclude-column-types` | Field types whose columns are left out | no |
 | `schema` | Schema name (default `servicenow`) | no |
 | `page-size`, `max-concurrent-requests`, `max-retries`, `max-retry-wait-seconds` | Request tuning | no |

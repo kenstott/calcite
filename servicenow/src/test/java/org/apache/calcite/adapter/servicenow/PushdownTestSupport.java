@@ -77,6 +77,8 @@ final class PushdownTestSupport {
     operand.put("authType", "basic");
     operand.put("username", FixtureServer.USER);
     operand.put("password", FixtureServer.PASSWORD);
+    // The table the cases query is registered unless the caller registers its own
+    operand.put("tables", "incident");
     operand.putAll(extra);
     if (!trusted.isEmpty()) {
       operand.put("trustPushdown", new ArrayList<>(trusted));

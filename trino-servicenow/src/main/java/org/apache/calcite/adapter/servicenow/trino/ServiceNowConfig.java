@@ -110,8 +110,8 @@ public class ServiceNowConfig
     }
 
     @Config("tables")
-    @ConfigDescription("Comma-separated names of the only tables to expose "
-            + "(default: every table in sys_db_object)")
+    @ConfigDescription("Comma-separated names of the registered tables, the only ServiceNow "
+            + "tables exposed (without it, only _servicenow_tables and _servicenow_columns)")
     public ServiceNowConfig setTables(String tables)
     {
         this.tables = tables;

@@ -41,11 +41,10 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Integration test against a live ServiceNow instance.
  *
- * <p>NEVER RUN so far: no instance was available when it was written. It is skipped unless
- * {@code govdata/.env.prod} holds SN_INSTANCE_URL, SN_USERNAME and SN_PASSWORD, and it runs only
- * with {@code -PincludeTags=integration}. Expect to fix assumptions in it the first time it runs
- * against a real instance; the list of what the adapter assumes is in
- * {@code src/test/resources/servicenow/doc-derived/README.md}.
+ * <p>First run against a live instance on 2026-10-12 (dev453859, a developer instance): all
+ * tests pass. It is skipped unless {@code govdata/.env.prod} holds SN_INSTANCE_URL, SN_USERNAME
+ * and SN_PASSWORD, and it runs only with {@code -PincludeTags=integration}. What the adapter
+ * assumes about responses is in {@code src/test/resources/servicenow/doc-derived/README.md}.
  *
  * <p>It needs the instance's usual demo data: more than 7 rows in {@code incident}, and
  * incidents with a caller.
@@ -64,8 +63,16 @@ class ServiceNowIntegrationTest {
         "no ServiceNow instance configured: SN_INSTANCE_URL, SN_USERNAME, SN_PASSWORD");
   }
 
+  /** Connects with incident and sys_user registered. */
   private static Connection connect(int pageSize) throws SQLException {
+    return connect(pageSize, "incident,sys_user");
+  }
+
+  private static Connection connect(int pageSize, String tables) throws SQLException {
     final Properties info = new Properties();
+    if (!tables.isEmpty()) {
+      info.setProperty("tables", tables);
+    }
     info.setProperty("instanceUrl", credentials.instanceUrl);
     info.setProperty("authType", "basic");
     info.setProperty("username", credentials.username);
@@ -84,6 +91,25 @@ class ServiceNowIntegrationTest {
     return DriverManager.getConnection(url.toString());
   }
 
+  /**
+   * The number of sys_db_object rows the user can read, from one unpaged Table API request rather
+   * than the adapter's paging. Not the Aggregate API's count: on dev453859 that counts 37 rows
+   * (6,591) that no Table API request returns to this user (6,554).
+   */
+  private static long tableCount() throws Exception {
+    final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(
+            java.net.URI.create(credentials.instanceUrl.replaceAll("/$", "")
+                + "/api/now/table/sys_db_object?sysparm_limit=100000&sysparm_fields=sys_id"))
+        .header("Accept", "application/json")
+        .header("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString(
+            (credentials.username + ":" + credentials.password)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+        .build();
+    final String body = java.net.http.HttpClient.newHttpClient()
+        .send(request, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
+    return new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).path("result").size();
+  }
+
   private static long count(Connection conn, String sql) throws SQLException {
     try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
       rs.next();
@@ -100,7 +126,46 @@ class ServiceNowIntegrationTest {
           tables.add(rs.getString("TABLE_NAME"));
         }
       }
-      assertThat(tables, hasItems("incident", "task", "sys_user", "sys_db_object"));
+      assertThat(tables, equalTo(new HashSet<>(java.util.Arrays.asList("incident", "sys_user",
+          ListingTables.TABLES, ListingTables.COLUMNS))));
+    }
+  }
+
+  @Test void everyTableIsListedWithItsLabelAndTheme() throws Exception {
+    try (Connection conn = connect(1000, "")) {
+      final java.util.Map<String, String> themes = new java.util.HashMap<>();
+      final java.util.Map<String, String> labels = new java.util.HashMap<>();
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery("SELECT name, label, theme FROM _servicenow_tables")) {
+        while (rs.next()) {
+          themes.put(rs.getString(1), rs.getString(3));
+          labels.put(rs.getString(1), rs.getString(2));
+        }
+      }
+      // A developer instance has thousands of tables; the listing must not lose any to paging
+      assertThat((long) themes.size(), is(tableCount()));
+      assertThat(themes.get("incident"), equalTo("Incident"));
+      assertThat(labels.get("incident"), equalTo("Incident"));
+      assertThat(themes.get("change_request"), equalTo("Change Request"));
+      assertThat(themes.get("cmdb_ci"), equalTo("Configuration Management (CMDB)"));
+    }
+  }
+
+  @Test void theColumnsOfOneTableComeFromItsDictionaryChain() throws SQLException {
+    try (Connection conn = connect(1000, "");
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery("SELECT column_name, data_type FROM _servicenow_columns "
+             + "WHERE table_name = 'incident'")) {
+      final java.util.Map<String, String> types = new java.util.HashMap<>();
+      while (rs.next()) {
+        types.put(rs.getString(1), rs.getString(2));
+      }
+      // number is incident's own; short_description and caller_id's sibling assigned_to are task's
+      assertThat(types.get("sys_id"), equalTo("character varying"));
+      assertThat(types.get("number"), equalTo("character varying"));
+      assertThat(types.get("short_description"), equalTo("character varying"));
+      assertThat(types.get("opened_at"), equalTo("timestamp"));
+      assertThat(types.get("caller_id__display"), equalTo("character varying"));
     }
   }
 
