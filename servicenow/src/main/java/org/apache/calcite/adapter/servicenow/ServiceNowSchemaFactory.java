@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +40,10 @@ import java.util.Set;
  *   <li>{@code username}, {@code password}: for {@code basic}.
  *   <li>{@code tables}: names of the registered tables, the only ServiceNow tables exposed, as a
  *   list or comma-separated text. Without it the schema holds only the listing tables.
+ *   <li>{@code importSet}: the registered tables whose INSERTs go through an import set, each
+ *   with the staging table of its transform map: an object {@code {"<table>": "<staging>"}} or
+ *   the text {@code <table>:<staging>,...}. A bound table must be in {@code tables}. An INSERT on
+ *   any other table, and every UPDATE and DELETE, is written to the table directly.
  *   <li>{@code excludeColumnTypes}: field types whose columns are left out, as a list or
  *   comma-separated text. A column of a type the adapter cannot map is otherwise an error.
  *   <li>{@code pageSize}: rows per request when reading a table; default 1000.
@@ -88,6 +93,13 @@ public class ServiceNowSchemaFactory implements SchemaFactory {
         throw new IllegalArgumentException("Not a ServiceNow table name in 'tables': " + table);
       }
     }
+    final Map<String, String> importSets = importSets(operand.get("importSet"));
+    for (Map.Entry<String, String> binding : importSets.entrySet()) {
+      if (!tables.contains(binding.getKey())) {
+        throw new IllegalArgumentException("'importSet' binds table '" + binding.getKey()
+            + "', which is not among the registered tables in 'tables'");
+      }
+    }
     final Object recordFile = operand.get("pushdownVerification");
     final PushdownCapabilities capabilities = new PushdownCapabilities(
         PushdownVerification.resolve(
@@ -99,8 +111,46 @@ public class ServiceNowSchemaFactory implements SchemaFactory {
           + observer.getClass());
     }
     return new ServiceNowSchema(connection, pageSize, metadataPageSize, cacheDirectory,
-        cacheTtl, tables, names(operand, "excludeColumnTypes"), capabilities,
+        cacheTtl, tables, importSets, names(operand, "excludeColumnTypes"), capabilities,
         (PushdownObserver) observer);
+  }
+
+  /** Table to staging table, from an object or from {@code <table>:<staging>,...} text. */
+  private static Map<String, String> importSets(Object value) {
+    final Map<String, String> bindings = new LinkedHashMap<>();
+    if (value == null) {
+      return bindings;
+    }
+    if (value instanceof Map) {
+      for (Map.Entry<?, ?> e : ((Map<?, ?>) value).entrySet()) {
+        bind(bindings, e.getKey().toString().trim(), String.valueOf(e.getValue()).trim());
+      }
+      return bindings;
+    }
+    for (String pair : value.toString().split(",")) {
+      if (pair.trim().isEmpty()) {
+        continue;
+      }
+      final int colon = pair.indexOf(':');
+      if (colon < 0) {
+        throw new IllegalArgumentException("'importSet' entry '" + pair.trim()
+            + "' is not <table>:<staging table>");
+      }
+      bind(bindings, pair.substring(0, colon).trim(), pair.substring(colon + 1).trim());
+    }
+    return bindings;
+  }
+
+  private static void bind(Map<String, String> bindings, String table, String staging) {
+    for (String name : new String[] {table, staging}) {
+      if (!ServiceNowCatalog.NAME.matcher(name).matches()) {
+        throw new IllegalArgumentException("Not a ServiceNow table name in 'importSet': '"
+            + name + "'");
+      }
+    }
+    if (bindings.put(table, staging) != null) {
+      throw new IllegalArgumentException("'importSet' binds table '" + table + "' twice");
+    }
   }
 
   private static ServiceNowAuth auth(Map<String, Object> operand) {

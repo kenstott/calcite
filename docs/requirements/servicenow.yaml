@@ -23,9 +23,14 @@
   priority: MUST
   type: constraint
   description: >
+    [SUPERSEDED by SNOW-060..SNOW-066, 2026-10-12 -- the owner approved table writes. Kept here
+    for history; do not implement against it.]
     The first release is read-only: the adapter offers no INSERT, UPDATE or DELETE and never
     writes to the instance.
-  source: owner decision 2026-10-07; branch feat/servicenow-adapter (servicenow/README.md)
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-12, writes approved:) The adapter writes to registered tables with INSERT,
+    UPDATE and DELETE as SNOW-060 to SNOW-066 describe; it writes nothing else.
+  source: owner decisions 2026-10-07 and 2026-10-12; branch feat/servicenow-adapter (servicenow/README.md)
   tests: []
 
 - id: SNOW-002
@@ -395,8 +400,11 @@
   type: constraint
   description: >
     The rows the live harness needs are written by the harness itself with direct REST calls,
-    under a prefix that marks them as its own, and deleted when it finishes. The adapter stays
-    read-only.
+    under a prefix that marks them as its own, and deleted when it finishes.
+    [SUPERSEDED by SNOW-001 as amended, 2026-10-12 -- the adapter now writes. Kept here for
+    history; do not implement against it.]
+    The adapter stays read-only.
+    [END SUPERSEDED BLOCK]
   source: "branch feat/servicenow-adapter (PushdownHarnessLiveTest, rows prefixed ZZ_HARNESS_ in incident); not run"
   tests: []
 
@@ -414,4 +422,117 @@
     derived from ServiceNow's documentation, and every response-shape assumption that only a live
     instance can confirm is listed beside them.
   source: branch feat/servicenow-adapter (servicenow/src/test/resources/servicenow/doc-derived/README.md, 19 assumptions)
+  tests: []
+
+# ===================================== write ===================================================
+
+- id: SNOW-060
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Insert
+  priority: MUST
+  type: behavioral
+  description: >
+    An INSERT on a registered table that is not bound to an import set is one POST per row to
+    /api/now/table/<table>, carrying the columns the statement sets (a column it leaves out is not
+    sent, and ServiceNow defaults it). The sys_id the instance assigns is the row's key:
+    INSERT ... RETURNING reads the written record back by it.
+  source: "owner decision 2026-10-12; probed on dev453859 2026-10-12 (201 with the record); branch feat/servicenow-adapter (ServiceNowWriteTest)"
+  tests: []
+
+- id: SNOW-061
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Import set insert
+  priority: MUST
+  type: behavioral
+  description: >
+    A registered table can be bound to an import set by the importSet operand
+    ({"<table>": "<staging table>"}; Trino import-set=<table>:<staging>,...), which a host sets
+    from the steward's choice; a bound table must be registered. An INSERT on a bound table is one
+    POST per row to /api/now/import/<staging table>, and the instance transforms the row at once.
+    Each inserted column is sent under the source field of the bound transform map's entry whose
+    target is that column. A column the map has no entry for, or whose entry is computed by a
+    script, is refused by name before anything is sent. The map is the one from the staging table
+    to the table; if there are two, the binding is an error naming both, and an inactive map is
+    an error.
+  source: "owner decisions 2026-10-12 (insert through the Import Set API when bound; translate through the map's field entries); dev453859: map Notification, imp_notification -> incident; branch feat/servicenow-adapter (ImportBinding, ServiceNowWriteTest)"
+  tests: []
+
+- id: SNOW-062
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Import set result
+  priority: MUST
+  type: behavioral
+  description: >
+    Each imported row's transform result decides its outcome. "inserted" is a written row, and so
+    is "updated" (a coalesce matched an existing record): its key is the target record's sys_id
+    from the result, and RETURNING gives that record as written. "ignored" and "skipped" write
+    nothing and are logged naming the row. "error" is a refusal naming the row and carrying the
+    instance's message.
+  source: "owner decisions 2026-10-12; result shape probed on dev453859 2026-10-12 (inserted, then updated by coalesce on correlation_id); branch feat/servicenow-adapter (ServiceNowWriteTest)"
+  tests: []
+
+- id: SNOW-063
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Update and delete
+  priority: MUST
+  type: behavioral
+  description: >
+    UPDATE and DELETE are always written to the table directly, never through an import set. The
+    rows are found through the read path (a verified filter is pushed as for a query), then each
+    is one PATCH or DELETE of /api/now/table/<table>/<sys_id>. SQL NULL is written as the empty
+    value.
+  source: "owner decision 2026-10-12; probed on dev453859 2026-10-12 (PATCH 200, DELETE 204); branch feat/servicenow-adapter (ServiceNowWriteTest)"
+  tests: []
+
+- id: SNOW-064
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Writable columns
+  priority: MUST
+  type: constraint
+  description: >
+    Columns whose name starts with sys_ are the instance's own and are never written; a statement
+    that sets one is refused naming it (the instance itself would accept some). A reference field
+    is written through its sys_id column; its __display column is never written.
+  source: "owner decision 2026-10-12; dev453859 accepted a sys_updated_on in a POST (2026-10-12), so the refusal is the adapter's; branch feat/servicenow-adapter (ServiceNowWriteTest)"
+  tests: []
+
+- id: SNOW-065
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Failure
+  priority: MUST
+  type: constraint
+  description: >
+    There are no transactions. A statement that fails part way leaves the rows written before the
+    failing one written; the error names the failing row (and its sys_id for UPDATE and DELETE)
+    and how many rows were written. A refusal by the instance (HTTP 403, a role or ACL) names the
+    table. A 429 is handled as for a read (SNOW-021).
+  source: owner decision 2026-10-12; branch feat/servicenow-adapter (ServiceNowWriteTest)
+  tests: []
+
+- id: SNOW-066
+  module: servicenow
+  status: in-progress
+  group: write
+  category: Transform maps
+  priority: MUST
+  type: structural
+  description: >
+    The schema always holds _servicenow_transform_maps(name, source_table, target_table, active),
+    the instance's transform maps from sys_transform_map, so that a steward can choose a map for a
+    table; a map's source_table is the staging table to bind. A condition target_table =
+    '<table>' is sent to the instance as a metadata term, and a returned map of another table is
+    an error.
+  source: "owner decision 2026-10-12; dev453859 has 14 maps (incident 1, sys_user 7); branch feat/servicenow-adapter (ServiceNowWriteTest)"
   tests: []

@@ -38,6 +38,7 @@ public class ServiceNowSchema extends AbstractSchema {
   private final int metadataPageSize;
   private final CatalogCache catalogCache;
   private final List<String> includeTables;
+  private final Map<String, String> importSets;
   private final Set<String> excludedColumnTypes;
   private final PushdownCapabilities capabilities;
   private final PushdownObserver observer;
@@ -52,13 +53,14 @@ public class ServiceNowSchema extends AbstractSchema {
    * @param catalogCacheDirectory where the catalog snapshot is kept between runs
    * @param catalogCacheTimeToLive how long a snapshot on disk is used for; zero keeps nothing
    * @param includeTables       names of the registered tables, the only ones exposed
+   * @param importSets          registered table to the staging table its INSERTs go through
    * @param excludedColumnTypes field types whose columns are left out
    * @param capabilities        the pushdown entries that may be used
    * @param observer            told what each scan pushed, or null
    */
   ServiceNowSchema(ServiceNowConnection connection, int pageSize, int metadataPageSize,
       Path catalogCacheDirectory, Duration catalogCacheTimeToLive, List<String> includeTables,
-      Set<String> excludedColumnTypes, PushdownCapabilities capabilities,
+      Map<String, String> importSets, Set<String> excludedColumnTypes, PushdownCapabilities capabilities,
       PushdownObserver observer) {
     this.connection = connection;
     this.pageSize = pageSize;
@@ -66,6 +68,7 @@ public class ServiceNowSchema extends AbstractSchema {
     this.catalogCache =
         new CatalogCache(catalogCacheDirectory, connection.scope(), catalogCacheTimeToLive);
     this.includeTables = includeTables;
+    this.importSets = importSets;
     this.excludedColumnTypes = excludedColumnTypes;
     this.capabilities = capabilities;
     this.observer = observer;
@@ -77,6 +80,10 @@ public class ServiceNowSchema extends AbstractSchema {
 
   int pageSize() {
     return pageSize;
+  }
+
+  int metadataPageSize() {
+    return metadataPageSize;
   }
 
   /** The catalog, its table list loaded from the cache or the instance on first use. */
@@ -94,8 +101,10 @@ public class ServiceNowSchema extends AbstractSchema {
       final ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
       builder.put(ListingTables.TABLES, new ListingTables.Tables(this));
       builder.put(ListingTables.COLUMNS, new ListingTables.Columns(this));
+      builder.put(ListingTables.TRANSFORM_MAPS, new ListingTables.TransformMaps(this));
       for (String name : includeTables) {
-        if (name.equals(ListingTables.TABLES) || name.equals(ListingTables.COLUMNS)) {
+        if (name.equals(ListingTables.TABLES) || name.equals(ListingTables.COLUMNS)
+            || name.equals(ListingTables.TRANSFORM_MAPS)) {
           throw new ServiceNowException("The 'tables' operand names '" + name + "', which is "
               + "the adapter's own listing table");
         }
@@ -104,7 +113,7 @@ public class ServiceNowSchema extends AbstractSchema {
               + "in sys_db_object (or not readable by the integration user)");
         }
         builder.put(name, new ServiceNowTable(this, name,
-            new EncodedQueryTranslator(capabilities), observer));
+            new EncodedQueryTranslator(capabilities), observer, importSets.get(name)));
       }
       tableMap = builder.build();
     }

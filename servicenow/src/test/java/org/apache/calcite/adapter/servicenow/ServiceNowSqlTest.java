@@ -211,7 +211,7 @@ class ServiceNowSqlTest {
       }
       // Only the registered tables, beside the two listing tables that are always there
       assertThat(tables, containsInAnyOrder("incident", "sys_user", "_servicenow_tables",
-          "_servicenow_columns"));
+          "_servicenow_columns", "_servicenow_transform_maps"));
     }
   }
 
@@ -226,7 +226,8 @@ class ServiceNowSqlTest {
           tables.add(rs.getString("TABLE_NAME"));
         }
       }
-      assertThat(tables, containsInAnyOrder("_servicenow_tables", "_servicenow_columns"));
+      assertThat(tables, containsInAnyOrder("_servicenow_tables", "_servicenow_columns",
+          "_servicenow_transform_maps"));
       // Listing every table reads sys_db_object and no column metadata
       final List<String> listed = new ArrayList<>();
       try (Statement stmt = conn.createStatement();

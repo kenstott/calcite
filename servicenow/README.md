@@ -1,11 +1,12 @@
 # ServiceNow adapter
 
-Reads a ServiceNow instance's tables through the Table API (`/api/now/table`) as SQL tables.
-**Read-only**: there is no INSERT, UPDATE or DELETE.
+Reads a ServiceNow instance's tables through the Table API (`/api/now/table`) as SQL tables, and
+writes them with INSERT, UPDATE and DELETE (see "Writes").
 
-## Status: nothing here has run against a ServiceNow instance
+## Status
 
-No live instance was available when this was written. What that means in practice:
+First run against a live developer instance (dev453859) on 2026-10-12: `ServiceNowIntegrationTest`
+passes, and the write requests were checked there by hand. Before that no instance was available:
 
 - The unit tests (`./gradlew :servicenow:test`) run the real client code against a local HTTP
   server that plays the documented Table API over hand-written fixtures. The fixtures are derived
@@ -13,8 +14,9 @@ No live instance was available when this was written. What that means in practic
   (`src/test/resources/servicenow/doc-derived/README.md`) lists 19 response-shape assumptions that
   only a live instance can confirm. When reality differs, the adapter fails with a message naming
   the table, field and value; it does not adapt.
-- The live tests (`ServiceNowIntegrationTest`, `ServiceNowProbe`, `PushdownHarnessLiveTest`) are
-  written and compile, and skip themselves without credentials. They have never been run.
+- The live tests (`ServiceNowIntegrationTest`, `ServiceNowProbe`, `PushdownHarnessLiveTest`) skip
+  themselves without credentials. `ServiceNowProbe` and `PushdownHarnessLiveTest` have not been
+  run yet.
 - **No filter is pushed to ServiceNow, because no pushdown entry is verified** (see below).
 
 ## What works (against the local stub)
@@ -179,9 +181,31 @@ developer instance (it writes). Reports and the record land in `servicenow/build
 Review `pushdown-harness.md` before copying the record: a MATCH on a table with few rows is weak
 evidence.
 
+## Writes
+
+Only on registered tables, one record per request, and with no transactions: a statement that
+fails part way leaves the rows before the failing one written, and the error names the failing
+row and how many were written. An HTTP 403 from the instance names the table.
+
+- `INSERT` on a table with no import set binding: a POST to `/api/now/table/<table>` per row. The
+  sys_id ServiceNow assigns is the key `INSERT ... RETURNING` reads the record back by
+  (`getKeyColumn()` / `takeInsertedKeys()`).
+- `INSERT` on a table bound with `importSet` (`{"<table>": "<staging table>"}`): a POST to
+  `/api/now/import/<staging table>` per row, each column sent under the staging field of the
+  transform map's entry for it. A column the map does not carry, or computes with a script, is
+  refused before anything is sent. The row's transform result decides: `inserted`, or `updated`
+  when a coalesce matched an existing record, is a written row keyed by the target record;
+  `ignored` and `skipped` write nothing and are logged; `error` is a refusal naming the row.
+  `_servicenow_transform_maps` lists the maps to choose from.
+- `UPDATE` and `DELETE`: always on the table directly. The rows are found by the read path, then
+  each is a PATCH or DELETE of `/api/now/table/<table>/<sys_id>`. NULL is written as the empty
+  value.
+- `sys_*` columns and `<field>__display` columns are never written; a reference field is written
+  through its sys_id column.
+
 ## Not done
 
-Writes; OAuth (only the seam); aggregate pushdown (the Aggregate API); `ORDER BY` / `LIMIT`
+OAuth (only the seam); aggregate pushdown (the Aggregate API); `ORDER BY` / `LIMIT`
 pushdown; joins; Batch API; choice labels; CMDB routing; attachments. Journal fields read as NULL
 (their entries live in `sys_journal_field`).
 

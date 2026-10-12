@@ -115,6 +115,7 @@ public class ServiceNowClientModule
         addParam(params, "username", config.getUsername());
         addParam(params, "password", config.getPassword());
         addParam(params, "tables", config.getTables());
+        addParam(params, "importSet", config.getImportSet());
         addParam(params, "excludeColumnTypes", config.getExcludeColumnTypes());
         addParam(params, "schema", config.getSchema());
         addParam(params, "pushdownVerification", config.getPushdownVerification());

@@ -444,7 +444,7 @@ final class ServiceNowCatalog {
         + "'");
   }
 
-  private static List<JsonNode> readAll(ServiceNowConnection connection, String table,
+  static List<JsonNode> readAll(ServiceNowConnection connection, String table,
       int pageSize, boolean displayValues, String query, String... fields) {
     final List<JsonNode> rows = new ArrayList<>();
     try {
@@ -456,11 +456,11 @@ final class ServiceNowCatalog {
     } catch (ServiceNowException e) {
       if (e.getStatus() == 401 || e.getStatus() == 403) {
         throw new ServiceNowException(e.getStatus(), "The integration user cannot read the "
-            + "metadata table " + table + ", which the adapter needs to discover tables and "
-            + "columns. Grant it read access to sys_db_object, sys_dictionary and "
-            + "sys_glide_object (for example the personalize_dictionary role, or read ACLs on "
-            + "those tables and their fields). The adapter does not guess columns from sample "
-            + "rows. " + e.getMessage(), e);
+            + "metadata table " + table + ". Discovering tables and columns needs read access "
+            + "to sys_db_object, sys_dictionary and sys_glide_object (for example the "
+            + "personalize_dictionary role, or read ACLs on those tables and their fields); an "
+            + "import set binding also needs sys_transform_map and sys_transform_entry. The "
+            + "adapter does not guess columns from sample rows. " + e.getMessage(), e);
       }
       throw e;
     }

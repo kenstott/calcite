@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.servicenow;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -95,6 +96,46 @@ final class ValueConverter {
       throw new ServiceNowException("Cannot read " + table + "." + column.field + " of record "
           + sysId + " as " + column.kind + " (field type " + column.glideType + "): value '"
           + text + "' is not valid: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Converts a value Calcite holds for the column into the text ServiceNow stores, the inverse of
+   * {@link #convert}. NULL is the empty string, which is how ServiceNow stores an empty value.
+   *
+   * @param table table name, for the error message
+   */
+  static String toText(ServiceNowColumn column, Object value, String table) {
+    if (value == null) {
+      return "";
+    }
+    switch (column.kind) {
+    case GUID:
+    case TEXT:
+    case REFERENCE:
+      return value.toString();
+    case INTEGER:
+    case LONG:
+    case DOUBLE:
+      return value.toString();
+    case DECIMAL:
+    case CURRENCY:
+      return value instanceof BigDecimal
+          ? ((BigDecimal) value).toPlainString() : value.toString();
+    case BOOLEAN:
+      return ((Boolean) value) ? "true" : "false";
+    case TIMESTAMP:
+      return DATE_TIME.format(
+          LocalDateTime.ofInstant(Instant.ofEpochMilli(((Number) value).longValue()),
+              ZoneOffset.UTC));
+    case DATE:
+      return DATE.format(LocalDate.ofEpochDay(((Number) value).longValue()));
+    case TIME:
+      return TIME_DAY_PREFIX + TIME.format(
+          LocalTime.ofNanoOfDay(((Number) value).longValue() * 1_000_000L));
+    default:
+      throw new ServiceNowException("Cannot write " + table + "." + column.field
+          + " of kind " + column.kind);
     }
   }
 }
