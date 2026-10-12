@@ -70,6 +70,10 @@ column_templates:
     name: state_fips
     type: VARCHAR
 
+  partition_station_id: &partition_station_id
+    name: station_id
+    type: VARCHAR
+
   partition_month: &partition_month
     name: month
     type: VARCHAR
@@ -85,6 +89,17 @@ column_templates:
     columnDefinitions:
       - *partition_type
       - *partition_state_fips
+
+  type_only_partitions: &type_only_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
+  coops_datum_partitions: &coops_datum_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_station_id
 
   standard_partitions: &standard_partitions
     style: hive
@@ -122,6 +137,13 @@ column_templates:
 # ============================================================================
 
 dimension_values:
+
+  # NOAA CO-OPS tidal water-level stations (Metadata API stations.json?type=waterlevels,
+  # tidal=true; 238 of 302 listed, the rest are Great Lakes / non-tidal). The NWLON network is
+  # stable; re-pull the list if coops_stations gains a station that is missing here.
+  coops_station_ids: &coops_station_ids
+    type: list
+    values: ["1611400", "1612340", "1612401", "1612480", "1615680", "1617433", "1617760", "1619910", "1630000", "1631428", "1770000", "1820000", "1890000", "2695535", "2695540", "8410140", "8411060", "8413320", "8418150", "8419870", "8443970", "8447386", "8447435", "8447636", "8447930", "8449130", "8452660", "8452944", "8454000", "8461490", "8465705", "8467150", "8510560", "8516945", "8518750", "8518962", "8518979", "8531680", "8534720", "8536110", "8537121", "8539094", "8540433", "8545240", "8546252", "8548989", "8551762", "8551910", "8555889", "8557380", "8570283", "8571421", "8571892", "8573364", "8573927", "8574680", "8575512", "8577330", "8594900", "8631044", "8632200", "8635027", "8635750", "8636580", "8637689", "8638610", "8638901", "8639348", "8651370", "8652587", "8654467", "8656483", "8658120", "8658163", "8661070", "8665530", "8670870", "8679598", "8720030", "8720218", "8720219", "8720226", "8720357", "8721604", "8722670", "8722956", "8723214", "8723970", "8724580", "8725114", "8725520", "8726384", "8726520", "8726607", "8726674", "8726724", "8727520", "8728690", "8729108", "8729210", "8729840", "8735180", "8735391", "8735523", "8736897", "8737048", "8737138", "8738043", "8739803", "8741533", "8747437", "8760721", "8760922", "8761305", "8761724", "8761927", "8762075", "8764044", "8764227", "8764314", "8766072", "8767816", "8767961", "8768094", "8770475", "8770520", "8770613", "8770777", "8770808", "8770822", "8770971", "8771013", "8771341", "8771367", "8771450", "8771486", "8771972", "8772471", "8772985", "8773037", "8773146", "8773259", "8773701", "8773767", "8774230", "8774513", "8774770", "8775132", "8775222", "8775237", "8775241", "8775283", "8775296", "8775792", "8779280", "8779748", "8779749", "8779770", "9410170", "9410230", "9410660", "9410678", "9410840", "9411340", "9412110", "9413450", "9414290", "9414523", "9414750", "9414863", "9415020", "9415102", "9415144", "9416131", "9416841", "9418767", "9419750", "9431647", "9432780", "9435380", "9437540", "9439040", "9439099", "9439201", "9440083", "9440357", "9440422", "9440569", "9440581", "9440910", "9441102", "9442396", "9443090", "9444090", "9444900", "9445958", "9446484", "9447130", "9449424", "9449880", "9450460", "9451054", "9451600", "9452210", "9452400", "9452634", "9453220", "9454050", "9454240", "9455090", "9455500", "9455760", "9455920", "9457292", "9457804", "9459450", "9459881", "9461380", "9461710", "9462450", "9462620", "9463502", "9464212", "9468333", "9468756", "9491094", "9497645", "9751364", "9751381", "9751401", "9751639", "9752235", "9752695", "9753216", "9755371", "9759110", "9759394", "9759938"]
 
   # All 50 states + DC (2-letter postal abbreviations for NWS)
   all_state_abbrs: &all_state_abbrs
@@ -1519,6 +1541,397 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: coops_stations
+    freshness:
+      type: hash
+    pattern: "type=coops_station/*.parquet"
+    partitions: *type_only_partitions
+    comment: >
+      NOAA CO-OPS tide gauges that report water level and tides: 238 tidal stations (NWLON
+      and others) on US coasts, territories and a few foreign/Pacific sites, from the CO-OPS
+      Metadata API (api.tidesandcurrents.noaa.gov/mdapi, keyless, public domain). One row per
+      station with name, state, coordinates, tide type (semidiurnal, mixed, diurnal) and
+      time zone. state is as CO-OPS publishes it; state_abbr and state_fips are populated
+      only for the 50 states, DC, PR, VI and American Samoa (null for Guam, Midway, Wake,
+      Kwajalein and Bermuda). Great Lakes stations are excluded. Joins geo.state_ref via
+      state_abbr or state_fips; coops_station_datums, coops_high_low and
+      coops_tide_predictions join on station_id.
+
+    dimensions:
+      type:
+        - coops_station
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "CO-OPS station id (7 digits, e.g., '8518750' The Battery, NY)"
+      - name: station_name
+        type: string
+        nullable: false
+        comment: Station name
+      - name: state
+        type: string
+        nullable: true
+        comment: "State as published by CO-OPS: 2-letter code for states and most territories, otherwise a country or area name"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "2-letter abbreviation (50 states, DC, PR, VI, AS); null where CO-OPS gives no US state"
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: "2-digit state FIPS code; null where state_abbr is null"
+      - name: latitude
+        type: double
+        nullable: false
+        comment: Station latitude (decimal degrees)
+      - name: longitude
+        type: double
+        nullable: false
+        comment: Station longitude (decimal degrees, negative west)
+      - name: affiliations
+        type: string
+        nullable: true
+        comment: "Network affiliations (e.g., 'NWLON', 'NWLON,PORTS')"
+      - name: tide_type
+        type: string
+        nullable: true
+        comment: "Tide regime as published: Semidiurnal, Mixed, Mixed Diurnal or Diurnal"
+      - name: timezone
+        type: string
+        nullable: true
+        comment: "Local time zone abbreviation (e.g., 'EST')"
+      - name: timezone_offset_hours
+        type: integer
+        nullable: false
+        comment: "Standard-time offset from UTC in hours"
+      - name: observes_dst
+        type: boolean
+        nullable: false
+        comment: "Whether local time observes daylight saving"
+      - name: storm_surge_forecast
+        type: boolean
+        nullable: false
+        comment: "Whether CO-OPS publishes a storm surge forecast for the station"
+
+    source:
+      type: http
+      url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=waterlevels"
+      method: GET
+      response:
+        format: json
+      # api.tidesandcurrents.noaa.gov answers bursts with a gateway 403 {"message":"Forbidden"}
+      # (seen at ~4 req/s across two ETL threads); it clears on its own, so 403 is retried.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [403, 429, 503]
+        maxRetries: 5
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.CoopsTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=coops_station/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: coops_stations
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: coops_station_datums
+    freshness:
+      type: hash
+    pattern: "type=coops_station_datums/station_id=*/*.parquet"
+    partitions: *coops_datum_partitions
+    comment: >
+      Tidal datum elevations per CO-OPS tide gauge, in meters above station datum (STND),
+      from the Metadata API datums.json. One row per station. Water levels in coops_high_low
+      and coops_tide_predictions are meters above MLLW, so mllw_m converts them to station
+      datum and navd88_m (when published) ties them to NAVD88. Columns hold the current
+      published epoch (epoch, e.g. '1983-2001'): MHHW, MHW, MTL, MSL, MLW, MLLW, NAVD88, plus
+      LAT/HAT where published. A datum a station does not publish is null.
+
+    dimensions:
+      type:
+        - coops_station_datums
+      station_id: *coops_station_ids
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "CO-OPS station id (joins coops_stations.station_id)"
+      - name: epoch
+        type: string
+        nullable: true
+        comment: "National Tidal Datum Epoch the datums are computed over (e.g., '1983-2001')"
+      - name: orthometric_datum
+        type: string
+        nullable: true
+        comment: "Orthometric datum the station is tied to (e.g., 'NAVD88')"
+      - name: datums_accepted
+        type: string
+        nullable: true
+        comment: "Date the current datums were accepted (as published, e.g., 'Nov 19 2012')"
+      - name: stnd_m
+        type: double
+        nullable: true
+        comment: "Station datum elevation, meters (reference 0)"
+      - name: mhhw_m
+        type: double
+        nullable: true
+        comment: "Mean Higher-High Water, meters above station datum"
+      - name: mhw_m
+        type: double
+        nullable: true
+        comment: "Mean High Water, meters above station datum"
+      - name: mtl_m
+        type: double
+        nullable: true
+        comment: "Mean Tide Level, meters above station datum"
+      - name: msl_m
+        type: double
+        nullable: true
+        comment: "Mean Sea Level, meters above station datum"
+      - name: mlw_m
+        type: double
+        nullable: true
+        comment: "Mean Low Water, meters above station datum"
+      - name: mllw_m
+        type: double
+        nullable: true
+        comment: "Mean Lower-Low Water, meters above station datum (the reference for coops_high_low and coops_tide_predictions)"
+      - name: navd88_m
+        type: double
+        nullable: true
+        comment: "North American Vertical Datum 1988, meters above station datum; null when not tied"
+      - name: lat_m
+        type: double
+        nullable: true
+        comment: "Lowest Astronomical Tide, meters above station datum; null when not published"
+      - name: hat_m
+        type: double
+        nullable: true
+        comment: "Highest Astronomical Tide, meters above station datum; null when not published"
+
+    source:
+      type: http
+      url: "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station_id}/datums.json?units=metric"
+      method: GET
+      response:
+        format: json
+      # api.tidesandcurrents.noaa.gov answers bursts with a gateway 403 {"message":"Forbidden"}
+      # (seen at ~4 req/s across two ETL threads); it clears on its own, so 403 is retried.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [403, 429, 503]
+        maxRetries: 5
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.CoopsTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=coops_station_datums/station_id=*/"
+      partition:
+        columns: [type, station_id]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: coops_station_datums
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: coops_high_low
+    pattern: "type=coops_high_low/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Observed high and low water events (tide extremes) from NOAA CO-OPS NWLON tide gauges,
+      one row per event per station: roughly 2 to 4 per station per day (H/L semidiurnal,
+      HH/LL on mixed tides). Source is the CO-OPS Data API (product=high_low,
+      api.tidesandcurrents.noaa.gov, keyless, public domain; requests are limited to 365 days,
+      so the ETL pulls one station-year per call). Heights are meters above MLLW (current tidal
+      epoch) in UTC time, as verified (preliminary for recent months). Stations
+      inactive in a year return no rows. Pair with coops_tide_predictions: observed minus
+      predicted extreme is the storm-surge / anomaly signal, precomputed in the
+      coops_daily_surge view. Join coops_stations on station_id for state_fips, latitude and
+      longitude, and to geo.state_ref; coastal flooding in the disasters schema joins on state.
+      Great Lakes stations are excluded (no tides); currents are not included.
+
+    dimensions:
+      type:
+        - coops_high_low
+      year: *ghcnd_year_range
+      station_id: *coops_station_ids
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "CO-OPS station id (joins coops_stations.station_id)"
+      - name: event_time_utc
+        type: string
+        nullable: false
+        comment: "Time of the high or low water event in UTC, 'YYYY-MM-DD HH:MM'"
+      - name: event_date
+        type: string
+        nullable: false
+        comment: "UTC calendar date of the event (YYYY-MM-DD)"
+      - <<: *year_column
+      - name: water_level_m
+        type: double
+        nullable: true
+        comment: "Observed water level of the high/low event in meters above MLLW (Mean Lower-Low Water, the station's current tidal epoch). Comparable across stations only via coops_station_datums"
+      - name: event_type
+        type: string
+        nullable: false
+        comment: "H = high water, L = low water, HH = higher high water, LL = lower low water (HH/LL appear on mixed and diurnal tide stations)"
+      - name: quality_flags
+        type: string
+        nullable: true
+        comment: "CO-OPS data flags 'inferred,exceedsMax/Min,rateOfChange,limits' as 0/1 (e.g. '0,0')"
+
+    source:
+      type: http
+      url: "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=high_low&station={station_id}&begin_date={year}0101&end_date={year}1231&datum=MLLW&time_zone=gmt&units=metric&format=json&application=calcite-govdata"
+      method: GET
+      response:
+        format: json
+      # api.tidesandcurrents.noaa.gov answers bursts with a gateway 403 {"message":"Forbidden"}
+      # (seen at ~4 req/s across two ETL threads); it clears on its own, so 403 is retried.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [403, 429, 503]
+        maxRetries: 5
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.CoopsTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=coops_high_low/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: coops_high_low
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  - name: coops_tide_predictions
+    pattern: "type=coops_tide_predictions/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Predicted high and low tide times and heights from NOAA CO-OPS harmonic prediction
+      (product=predictions&interval=hilo), one row per predicted extreme per tidal station.
+      Predictions are astronomical only (no weather), so water_level_m from coops_high_low
+      minus the matching prediction isolates storm surge and other non-tidal anomaly; see the
+      coops_daily_surge view. Heights are meters above MLLW (current tidal epoch), time in UTC.
+      Source: api.tidesandcurrents.noaa.gov Data API, keyless, public domain, 365 days per call
+      so the ETL pulls one station-year per call. Join coops_stations on station_id for state
+      and coordinates. Currents predictions are not included.
+
+    dimensions:
+      type:
+        - coops_tide_predictions
+      year: *ghcnd_year_range
+      station_id: *coops_station_ids
+
+    columns:
+      - name: station_id
+        type: string
+        nullable: false
+        comment: "CO-OPS station id (joins coops_stations.station_id)"
+      - name: event_time_utc
+        type: string
+        nullable: false
+        comment: "Time of the high or low water event in UTC, 'YYYY-MM-DD HH:MM'"
+      - name: event_date
+        type: string
+        nullable: false
+        comment: "UTC calendar date of the event (YYYY-MM-DD)"
+      - <<: *year_column
+      - name: water_level_m
+        type: double
+        nullable: true
+        comment: "Predicted tide height of the high/low event in meters above MLLW (Mean Lower-Low Water, the station's current tidal epoch). Comparable across stations only via coops_station_datums"
+      - name: event_type
+        type: string
+        nullable: false
+        comment: "H = high water, L = low water, HH = higher high water, LL = lower low water (HH/LL appear on mixed and diurnal tide stations)"
+
+    source:
+      type: http
+      url: "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&interval=hilo&station={station_id}&begin_date={year}0101&end_date={year}1231&datum=MLLW&time_zone=gmt&units=metric&format=json&application=calcite-govdata"
+      method: GET
+      response:
+        format: json
+      # api.tidesandcurrents.noaa.gov answers bursts with a gateway 403 {"message":"Forbidden"}
+      # (seen at ~4 req/s across two ETL threads); it clears on its own, so 403 is retried.
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [403, 429, 503]
+        maxRetries: 5
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.CoopsTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=coops_tide_predictions/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: coops_tide_predictions
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -1553,11 +1966,80 @@ tables:
       join on county_fips + date to correlate with SEC filings, BLS wages, FEC
       contributions, census demographics, and health data.
 
+  # ---------------------------------------------------------------------------
+  # COOPS DAILY SURGE - Observed vs predicted daily extremes per tide gauge
+  # ---------------------------------------------------------------------------
+  - name: coops_daily_surge
+    type: view
+    sql: >
+      SELECT
+        o.station_id,
+        o.event_date,
+        o.year,
+        o.observed_high_m,
+        p.predicted_high_m,
+        o.observed_high_m - p.predicted_high_m AS high_anomaly_m,
+        o.observed_low_m,
+        p.predicted_low_m,
+        o.observed_low_m - p.predicted_low_m AS low_anomaly_m
+      FROM (
+        SELECT station_id, event_date, year,
+               MAX(water_level_m) AS observed_high_m,
+               MIN(water_level_m) AS observed_low_m
+        FROM weather.coops_high_low
+        GROUP BY station_id, event_date, year
+      ) o
+      JOIN (
+        SELECT station_id, event_date,
+               MAX(water_level_m) AS predicted_high_m,
+               MIN(water_level_m) AS predicted_low_m
+        FROM weather.coops_tide_predictions
+        GROUP BY station_id, event_date
+      ) p
+        ON o.station_id = p.station_id AND o.event_date = p.event_date
+    comment: >
+      Daily storm-surge / anomaly signal per NOAA CO-OPS tide gauge: the highest and lowest
+      observed water level of the UTC day (coops_high_low) beside the highest and lowest
+      predicted tide (coops_tide_predictions), and their difference in meters. Predictions are
+      astronomical only, so a persistently positive high_anomaly_m marks storm surge,
+      sea-level anomaly or river-flood setup at that gauge; values near 0 are normal. Both
+      measures are meters above MLLW. One row per station per UTC day present in both
+      tables. Join coops_stations on station_id for state_fips and coordinates.
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
 
 constraints:
+  coops_stations:
+    primaryKey: [station_id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+
+  coops_station_datums:
+    primaryKey: [station_id]
+    foreignKeys:
+      - columns: [station_id]
+        targetTable: coops_stations
+        targetColumns: [station_id]
+
+  coops_high_low:
+    primaryKey: [station_id, event_time_utc, event_type]
+    foreignKeys:
+      - columns: [station_id]
+        targetTable: coops_stations
+        targetColumns: [station_id]
+
+  coops_tide_predictions:
+    primaryKey: [station_id, event_time_utc, event_type]
+    foreignKeys:
+      - columns: [station_id]
+        targetTable: coops_stations
+        targetColumns: [station_id]
+
   nws_stations:
     primaryKey: [station_id]
     foreignKeys:
