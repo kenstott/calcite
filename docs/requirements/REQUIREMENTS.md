@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**327 requirements across 7 adapters.**
+**328 requirements across 7 adapters.**
 
 
-## askamerica  (7: 6 accepted, 1 proposed)
+## askamerica  (8: 6 accepted, 1 complete, 1 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -16,6 +16,7 @@
 | [ ] | ASKAM-005 | MUST | constraint | installer / Small installer | The installer is small and has a step to download its assets. No installer (.msi, .deb, .pkg) carries the eng… | — |
 | [ ] | ASKAM-006 | MUST | behavioral | semantic-search / Semantic search | Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing set by the user, the … | — |
 | [ ] | ASKAM-010 | MUST | constraint | data-server / Key sign-in | Every connection to the pgwire-govdata server passes its AskAmerica API key as the PostgreSQL password, and t… | pgwire-calcite/tests/unit/test_key_sign_in.py, askamerica-e… |
+| [x] | ASKAM-011 | MUST | behavioral | data-server / Key sign-in | With no API key, the engine neither connects to nor starts a data server: the caller is told at once that no … | askamerica-engine/src/test/java/org/apache/calcite/adapter/… |
 
 ## file  (190: 160 complete, 12 in-progress, 15 proposed, 3 rejected)
 

@@ -46,4 +46,11 @@ class PgwireGovDataConnectorSignInTest {
     assertNull(PgwireGovDataConnector.signInRefusal("XX000"));
     assertNull(PgwireGovDataConnector.signInRefusal(null));
   }
+
+  @Test void aCallerWithNoKeyIsToldHowToSupplyOne() {
+    String message = PgwireGovDataConnector.noApiKeyMessage();
+    assertTrue(message.startsWith("No AskAmerica API key: set ASKAMERICA_API_KEY."), message);
+    assertTrue(message.contains("AskAmerica MCP application"), message);
+    assertTrue(message.contains("https://askamerica.ai/#signup"), message);
+  }
 }

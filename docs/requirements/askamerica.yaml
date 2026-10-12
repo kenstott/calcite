@@ -287,3 +287,26 @@
   tests:
     - pgwire-calcite/tests/unit/test_key_sign_in.py
     - askamerica-engine/src/test/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnectorSignInTest.java
+
+- id: ASKAM-011
+  module: askamerica
+  status: complete
+  group: data-server
+  category: Key sign-in
+  priority: MUST
+  type: behavioral
+  description: >
+    With no API key, the engine neither connects to nor starts a data server: the caller is
+    told at once that no key is set, and how to supply one - the AskAmerica MCP application's
+    setup window, which writes it into Claude Desktop's configuration, or the
+    ASKAMERICA_API_KEY environment variable - and where a free key is obtained, the address
+    the setup window links to.
+  source: >
+    askamerica-engine/src/main/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnector.java
+    (connect, requireApiKey, noApiKeyMessage)
+  tests:
+    - askamerica-engine/src/test/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnectorSignInTest.java
+  notes: "Owner decision 2026-10-11 (issue 510). Before it, a keyless call was answered
+    correctly but a data server was still started, to stop at the object store for want of
+    credentials."
+  since: 2026-10
