@@ -131,7 +131,7 @@ refile.
 ### `schema:` — one per govdata schema
 
 `ag banking census cftc crime cyber_threat cyber_vuln disasters econ econ_reference edu energy
-environment fec fedregister fiscal geo health housing lands officials patents ref research sec
+environment fec fedregister fiscal fisheries geo health housing lands officials patents ref research sec
 transport weather`
 
 A `kind:core` defect that spans schemas takes no `schema:` label, or several if the blast radius

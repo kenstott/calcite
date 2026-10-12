@@ -341,7 +341,7 @@ public class McpServer {
     static final String DEFAULT_SCHEMAS =
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,law,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
-        + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking";
+        + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking,fisheries";
 
     // Connections keyed by comma-joined source set. The all-schemas set is warmed at
     // startup and backs every tool; narrower sets exist only for legacy callers.
@@ -6526,7 +6526,7 @@ public class McpServer {
             "sec", "geo", "econ", "census", "crime", "weather", "ref", "fec", "fedregister",
             "cyber_vuln", "cyber_threat", "energy", "health", "edu", "econ_reference", "cftc",
             "patents", "fiscal", "disasters", "housing", "transport", "environment",
-            "officials", "research", "lands", "ag", "banking"));
+            "officials", "research", "lands", "ag", "banking", "fisheries"));
 
     private static final java.util.regex.Pattern SQL_SCHEMA_TABLE_PAT =
         java.util.regex.Pattern.compile(
