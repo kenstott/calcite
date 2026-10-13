@@ -35,6 +35,15 @@ on:
   release:
     types: [created]
 
+# One run per release at a time (queued, never cancelled). Two runs for one release (a manual
+# dispatch beside the automatic one, engine-v0.110.0; a tag pushed twice, engine-v0.110.1) uploaded
+# the same assets with --clobber concurrently, and each lost an upload to the other's delete
+# (HTTP 404). Queued, the second run re-uploads after the first instead of racing it; cancelling
+# could kill a half-finished upload.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || format('engine-v{0}', inputs.version) }}
+  cancel-in-progress: false
+
 # The attach step updates the engine-v<version> release; on workflow_dispatch the default
 # GITHUB_TOKEN is read-only, so grant it explicitly. id-token/attestations: these tarballs are
 # fetched and RUN directly on end-user machines at runtime (provisa's runtime_deps/

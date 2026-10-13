@@ -511,3 +511,19 @@
     names are mixed case and Trino lower-cases identifiers.
   source: trino-salesforce/README.md (Configure a catalog)
   tests: []
+
+- id: SF-053
+  module: salesforce
+  status: complete
+  group: catalog
+  category: Discovery
+  priority: MUST
+  type: behavioral
+  description: >
+    information_schema.tables and .columns list a Salesforce schema's sObjects and their fields.
+    The schema factory registers no information_schema; pgwire-calcite adds Calcite's to a
+    connection root that has none.
+  source: "issue 518; pgwire-calcite calcite_backend._ensure_information_schema"
+  tests:
+    - salesforce/InformationSchemaTest
+  since: 2026-10

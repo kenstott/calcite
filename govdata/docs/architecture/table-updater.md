@@ -67,7 +67,7 @@ issues `CREATE OR REPLACE`. There is no self-healing. This plan adds that trigge
 
 - `information_schema` and `pg_catalog` are Calcite-side schemas; columns are
   built by walking the Calcite schema tree and calling `Table.getRowType`
-  ([InformationSchema.java:319-333](../../../file/src/main/java/org/apache/calcite/adapter/file/metadata/InformationSchema.java#L319),
+  ([InformationSchema.java](../../../core/src/main/java/org/apache/calcite/schema/impl/InformationSchema.java),
   [PostgresMetadataSchema.java:62-70](../../../file/src/main/java/org/apache/calcite/adapter/file/metadata/PostgresMetadataSchema.java#L62)).
   DuckDB's native metadata is not the authority.
 - For Iceberg tables the row type comes from `IcebergTable.getRowType`

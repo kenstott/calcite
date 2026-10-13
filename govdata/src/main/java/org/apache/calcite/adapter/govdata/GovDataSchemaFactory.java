@@ -153,7 +153,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     try {
       if (parentSchema.subSchemas().get("information_schema") == null) {
         parentSchema.add("information_schema",
-            new org.apache.calcite.adapter.file.metadata.InformationSchema(parentSchema, "CALCITE"));
+            new org.apache.calcite.schema.impl.InformationSchema(parentSchema, "CALCITE"));
       }
       if (parentSchema.subSchemas().get("pg_catalog") == null) {
         parentSchema.add("pg_catalog",

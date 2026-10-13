@@ -10,13 +10,17 @@
  */
 package org.apache.calcite.adapter.servicenow;
 
+import org.apache.calcite.schema.ListingSchema;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.AbstractSchema;
 
 import com.google.common.collect.ImmutableMap;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,7 +35,7 @@ import java.util.Set;
  * every SQL table when it starts, so exposing them all would read the column metadata of every
  * one (SNOW-010 as amended 2026-10-12).
  */
-public class ServiceNowSchema extends AbstractSchema {
+public class ServiceNowSchema extends AbstractSchema implements ListingSchema {
 
   private final ServiceNowConnection connection;
   private final int pageSize;
@@ -118,5 +122,27 @@ public class ServiceNowSchema extends AbstractSchema {
       tableMap = builder.build();
     }
     return tableMap;
+  }
+
+  /** Every table on the instance, from the catalog listing; information_schema lists them all. */
+  @Override public Set<String> listedTableNames() {
+    return new LinkedHashSet<>(catalog().tableNames());
+  }
+
+  /**
+   * A table on the instance, for information_schema.columns: the registered table when it is
+   * one, otherwise a table built only to describe its columns (its dictionary chain is read
+   * when asked). Only registered tables are in the table map, so only they can be queried.
+   */
+  @Override public @Nullable Table listedTable(String name) {
+    final Table registered = getTableMap().get(name);
+    if (registered != null) {
+      return registered;
+    }
+    if (!catalog().hasTable(name)) {
+      return null;
+    }
+    return new ServiceNowTable(this, name, new EncodedQueryTranslator(capabilities), observer,
+        null);
   }
 }

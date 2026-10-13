@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.servicenow;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaFactory;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.impl.InformationSchema;
 
 import java.net.URI;
 import java.nio.file.Path;
@@ -110,9 +111,26 @@ public class ServiceNowSchemaFactory implements SchemaFactory {
       throw new IllegalArgumentException("'pushdownObserver' must be a PushdownObserver: "
           + observer.getClass());
     }
+    registerInformationSchema(parentSchema);
     return new ServiceNowSchema(connection, pageSize, metadataPageSize, cacheDirectory,
         cacheTtl, tables, importSets, names(operand, "excludeColumnTypes"), capabilities,
         (PushdownObserver) observer);
+  }
+
+  /**
+   * Gives the connection's root an {@code information_schema} unless something registered one
+   * already (#518). It lists every table on the instance, since {@link ServiceNowSchema} is a
+   * {@link org.apache.calcite.schema.ListingSchema}; pgwire-calcite still scopes what a role
+   * sees to the tables granted to it.
+   */
+  private static void registerInformationSchema(SchemaPlus parentSchema) {
+    SchemaPlus root = parentSchema;
+    while (root.getParentSchema() != null) {
+      root = root.getParentSchema();
+    }
+    if (root.subSchemas().get("information_schema") == null) {
+      root.add("information_schema", new InformationSchema(root, "CALCITE"));
+    }
   }
 
   /** Table to staging table, from an object or from {@code <table>:<staging>,...} text. */

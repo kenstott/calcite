@@ -2,7 +2,7 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**336 requirements across 7 adapters.**
+**338 requirements across 7 adapters.**
 
 
 ## askamerica  (8: 6 accepted, 1 complete, 1 proposed)
@@ -293,7 +293,7 @@
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
 
-## salesforce  (29: 19 accepted, 6 complete, 4 proposed)
+## salesforce  (30: 19 accepted, 7 complete, 4 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -326,8 +326,9 @@
 | [x] | SF-050 | MUST | constraint | trino / Catalog properties | The Trino connector builds the adapter's connection from catalog properties. Exactly one complete credential … | trino-salesforce/TestSalesforceClientModule#clientCredentia… |
 | [ ] | SF-051 | MUST | behavioral | trino / Queries | Through Trino the org's sObjects are listed and described as tables, and filters, aggregates and joins over t… | trino-salesforce/TestSalesforceConnector#testShowTables, tr… |
 | [.] | SF-052 | MUST | constraint | trino / Name matching | The connector fails at startup unless case-insensitive-name-matching is true, because sObject names are mixed… | — |
+| [x] | SF-053 | MUST | behavioral | catalog / Discovery | information_schema.tables and .columns list a Salesforce schema's sObjects and their fields. The schema facto… | salesforce/InformationSchemaTest |
 
-## servicenow  (34: 9 accepted, 25 in-progress)
+## servicenow  (35: 9 accepted, 1 complete, 25 in-progress)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -365,3 +366,4 @@
 | [~] | SNOW-064 | MUST | constraint | write / Writable columns | Columns whose name starts with sys_ are the instance's own and are never written; a statement that sets one i… | — |
 | [~] | SNOW-065 | MUST | constraint | write / Failure | There are no transactions. A statement that fails part way leaves the rows written before the failing one wri… | — |
 | [~] | SNOW-066 | MUST | structural | write / Transform maps | The schema always holds _servicenow_transform_maps(name, source_table, target_table, active), the instance's … | — |
+| [x] | SNOW-067 | MUST | behavioral | catalog / Discovery | A ServiceNow connection has an information_schema. information_schema.tables lists every table on the instanc… | servicenow/InformationSchemaTest |

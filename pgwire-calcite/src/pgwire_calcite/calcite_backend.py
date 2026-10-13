@@ -478,7 +478,24 @@ class CalciteBackend:
         self._conn = DriverManager.getConnection("jdbc:calcite:", props)
         # The model's schema is shared across connections, so this open is cheap.
         self._probe_conn = DriverManager.getConnection("jdbc:calcite:", props)
+        for conn in (self._conn, self._probe_conn):
+            self._ensure_information_schema(JClass, conn)
         log.info("[CALCITE] connected (model=%s, lex=%s)", self._model_path, self._lex)
+
+    @staticmethod
+    def _ensure_information_schema(JClass, conn) -> None:
+        """Give the connection's root an ``information_schema`` when the model's schema factory
+        did not register one (#518). info_schema.py rewrites PG clients' information_schema
+        reads over it; without it every such read fails with "Object 'INFORMATION_SCHEMA' not
+        found". A factory that registers its own (file, govdata, splunk, sharepoint, cloud-ops)
+        keeps it."""
+        calcite = conn.unwrap(JClass("org.apache.calcite.jdbc.CalciteConnection"))
+        root = calcite.getRootSchema()
+        if root.subSchemas().get("information_schema") is not None:
+            return
+        info = JClass("org.apache.calcite.schema.impl.InformationSchema")(root, "CALCITE")
+        root.add("information_schema", info)
+        log.info("[CALCITE] the model registers no information_schema; added Calcite's")
 
     @staticmethod
     def _resolve_stats_rewriter(JClass):
