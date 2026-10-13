@@ -46,6 +46,12 @@ each other, which is the failure mode the artifact workflow spent most of its ru
 Replaces a Remediation Ledger row. **Filed as a sub-issue of the defect it serves**, so the
 Register→Ledger relationship is a real link rather than a name match across two documents.
 
+**One waiting job per table.** A remediation job for a table that already has one in
+`status:ready-to-run` or `status:on-hold` is folded into that job (its command and body are widened
+to cover the new fix) instead of being filed separately, so the table is reprocessed once for every
+fix waiting on it. A job that is `status:running` is not modified. #897 is the worked example: three
+sec_secondary fixes held in one job.
+
 Title is `<slot>:<year-range> <tables> — <what it fixes>`. Body:
 
 ```markdown
