@@ -407,9 +407,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     if (ephemeralCache) {
       // A fresh directory for this schema instance, still under the base directory
       baseConfigDirectory = new File(configuredBase, "ephemeral-" + UUID.randomUUID());
-      if (!baseConfigDirectory.mkdirs()) {
+      // createDirectories: the shared parent may be made concurrently by another schema
+      try {
+        java.nio.file.Files.createDirectories(baseConfigDirectory.toPath());
+      } catch (java.io.IOException e) {
         throw new IllegalStateException("Cannot create the ephemeral cache directory "
-            + baseConfigDirectory + " for file schema '" + name + "'");
+            + baseConfigDirectory + " for file schema '" + name + "'", e);
       }
       LOGGER.info("Using ephemeral cache directory for schema '{}': {}",
           name, baseConfigDirectory.getAbsolutePath());

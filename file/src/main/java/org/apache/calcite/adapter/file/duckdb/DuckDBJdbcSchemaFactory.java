@@ -570,10 +570,10 @@ public class DuckDBJdbcSchemaFactory {
       setupConn.createStatement().execute("SET memory_limit = '" + duckdbMemoryLimit + "'");  // Prevent OOM
       setupConn.createStatement().execute("SET max_memory = '" + duckdbMemoryLimit + "'");  // Hard limit
       // Spill location: under the base directory, never the JVM temp directory (REQ-1992)
-      final File spillDir = new File(new File(aperioDir, ".duckdb"), "spill");
-      if (!spillDir.isDirectory() && !spillDir.mkdirs()) {
-        throw new IllegalStateException("Cannot create the DuckDB spill directory " + spillDir);
-      }
+      // createDirectories, not mkdirs: schemas of one base directory are created concurrently
+      // (a Trino catalog), and mkdirs reports failure when another thread made it first
+      final File spillDir = java.nio.file.Files.createDirectories(
+          new File(new File(aperioDir, ".duckdb"), "spill").toPath()).toFile();
       setupConn.createStatement().execute("SET temp_directory = '"
           + spillDir.getAbsolutePath().replace("'", "''") + "'");
       setupConn.createStatement().execute("SET preserve_insertion_order = false");  // Better performance
