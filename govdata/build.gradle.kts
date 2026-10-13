@@ -144,7 +144,7 @@ dependencies {
     testImplementation(project(":testkit"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")
-    implementation("org.apache.iceberg:iceberg-core:1.4.0")
+    implementation("org.apache.iceberg:iceberg-core:1.5.2")
     // hadoop-aws 3.4.x puts S3AFileSystem on AWS SDK v2; 3.3.x pulled the 296MB SDK v1
     // uber-bundle and was the sole reason v1 was on the classpath. Its v2 bundle is bigger
     // still, so it is excluded here in favour of the modular jars declared below.
