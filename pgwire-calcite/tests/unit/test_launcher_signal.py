@@ -162,3 +162,32 @@ def test_close_server_forces_exit_when_a_request_thread_is_wedged():
         assert not srv.closed
     finally:
         release.set()
+
+
+class _Exited(Exception):
+    pass
+
+
+def test_a_server_that_fails_to_start_logs_why(monkeypatch, caplog):
+    # os._exit leaves no traceback, so the log line is the operator's only record of the cause
+    import pgwire_calcite.launcher as launcher
+
+    def refuse(**_kwargs):
+        raise PermissionError(13, "Permission denied", "/root-owned/state")
+
+    def exit_now(code):
+        raise _Exited(code)
+
+    monkeypatch.setattr(launcher, "serve", refuse)
+    monkeypatch.setattr(launcher.os, "_exit", exit_now)
+    with caplog.at_level("ERROR"):
+        try:
+            launcher.main(["--backend", "stub", "--port", "0"])
+        except _Exited as exited:
+            assert exited.args == (1,)
+        else:
+            raise AssertionError("main() returned instead of exiting")
+    record = next(r for r in caplog.records if "unexpected failure starting" in r.getMessage())
+    assert "Permission denied" in record.getMessage()
+    assert "/root-owned/state" in record.getMessage()
+    assert record.exc_info is not None and isinstance(record.exc_info[1], PermissionError)

@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.servicenow;
 
+import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.schema.SchemaPlus;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -33,11 +35,11 @@ class ServiceNowSchemaFactoryTest {
 
   private static String failure(Map<String, Object> operand) {
     return assertThrows(IllegalArgumentException.class,
-        () -> ServiceNowSchemaFactory.INSTANCE.create(null, "sn", operand)).getMessage();
+        () -> ServiceNowSchemaFactory.INSTANCE.create(root(), "sn", operand)).getMessage();
   }
 
   @Test void validOperandsCreateASchemaWithoutContactingTheInstance() {
-    ServiceNowSchemaFactory.INSTANCE.create(null, "sn", operand());
+    ServiceNowSchemaFactory.INSTANCE.create(root(), "sn", operand());
   }
 
   @Test void requiredOperandsAreNamed() {
@@ -61,7 +63,7 @@ class ServiceNowSchemaFactoryTest {
     operand.put("instanceUrl", "http://dev12345.service-now.com");
     assertThat(failure(operand), containsString("must be https"));
     operand.put("instanceUrl", "http://localhost:8080");
-    ServiceNowSchemaFactory.INSTANCE.create(null, "sn", operand);
+    ServiceNowSchemaFactory.INSTANCE.create(root(), "sn", operand);
   }
 
   @Test void numbersAreValidated() {
@@ -76,5 +78,10 @@ class ServiceNowSchemaFactoryTest {
     final Map<String, Object> operand = operand();
     operand.put("tables", "incident,bad name");
     assertThat(failure(operand), containsString("bad name"));
+  }
+
+  /** A connection root, as Calcite hands the factory its parent schema. */
+  private static SchemaPlus root() {
+    return CalciteSchema.createRootSchema(false).plus();
   }
 }

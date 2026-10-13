@@ -18,6 +18,7 @@ import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.schema.impl.InformationSchema;
 
 import com.google.common.collect.ImmutableMap;
 

@@ -536,3 +536,24 @@
     an error.
   source: "owner decision 2026-10-12; dev453859 has 14 maps (incident 1, sys_user 7); branch feat/servicenow-adapter (ServiceNowWriteTest)"
   tests: []
+
+- id: SNOW-067
+  module: servicenow
+  status: complete
+  group: catalog
+  category: Discovery
+  priority: MUST
+  type: behavioral
+  description: >
+    A ServiceNow connection has an information_schema. information_schema.tables lists every table
+    on the instance, registered or not, from the catalog listing alone, reading no column
+    metadata. information_schema.columns answers a table filtered by its name by reading that
+    table's dictionary chain only; a scan of every table's columns is allowed and reads every
+    dictionary. A listed table that is not registered cannot be queried. Over pgwire-calcite a
+    role sees only the tables granted to it (its information_schema rewrite), so there only the
+    registered tables appear.
+  source: "owner decisions 2026-10-12 and 2026-10-13 (issue 518): every instance table on the
+    embedded JDBC path only; pgwire keeps its role scoping"
+  tests:
+    - servicenow/InformationSchemaTest
+  since: 2026-10

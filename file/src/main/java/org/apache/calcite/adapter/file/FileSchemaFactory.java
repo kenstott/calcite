@@ -16,7 +16,7 @@ import org.apache.calcite.adapter.file.clickhouse.ClickHouseJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
-import org.apache.calcite.adapter.file.metadata.InformationSchema;
+import org.apache.calcite.schema.impl.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
