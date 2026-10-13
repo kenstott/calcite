@@ -4117,166 +4117,210 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Streaming filter that replaces HTML named entities (e.g. {@code &nbsp;}) with their numeric
-   * XML equivalents on the fly. Processes the stream with O(1) memory — no full-file buffering.
+   * Streaming filter that makes EDGAR's XML parseable without changing its text: HTML named
+   * entities (e.g. {@code &nbsp;}) become numeric references, and a bare {@code &} that starts
+   * no valid reference becomes {@code &amp;}. O(1) memory, no full-file buffering.
    *
-   * <p>The five predefined XML entities ({@code &amp; &lt; &gt; &quot; &apos;}) pass through
-   * unchanged. Unknown HTML entities have their {@code &} escaped to {@code &amp;}.
-   * Bare {@code &} characters (not followed by a valid entity name and {@code ;}) are also
-   * escaped to {@code &amp;}.
+   * <p>Left exactly as they are:
+   * <ul>
+   *   <li>the five predefined XML entities ({@code &amp; &lt; &gt; &quot; &apos;});
+   *   <li>numeric references to a legal XML character ({@code &#38;}, {@code &#x26;}), which
+   *       the parser then resolves; a reference to an illegal character such as {@code &#0;} is
+   *       escaped like a bare {@code &} so it survives as text instead of failing the parse;
+   *   <li>everything inside a {@code <![CDATA[ ... ]]>} section, where {@code &} is already
+   *       literal text. Escaping there would store {@code LEGGETT &amp; PLATT} for a name the
+   *       filer wrote as {@code LEGGETT & PLATT}.
+   * </ul>
+   *
+   * <p>Decisions are made byte by byte, so they cannot depend on where the caller's read
+   * boundaries fall. An earlier bulk-read fast path dropped the {@code &} of any reference that
+   * began a chunk, leaving {@code amp;} in the text.
    */
-  private static final class HtmlEntityFilterStream extends InputStream {
+  static final class HtmlEntityFilterStream extends InputStream {
     private static final int MAX_ENTITY_NAME = 20;
-    private static final int BUF_SIZE = 8192;
+    private static final int MAX_NUMERIC_DIGITS = 8;
+    private static final byte[] CDATA_OPEN = "![CDATA[".getBytes(StandardCharsets.US_ASCII);
 
-    // BufferedInputStream ensures large reads from source; PushbackInputStream
-    // is only used to push back single bytes (entity name chars on mismatch).
+    // Large enough for the longest lookahead: '&' + '#' + 'x' + digits + ';' or "![CDATA[".
     private final java.io.PushbackInputStream in;
 
-    // Pending output bytes: replacement text waiting to be consumed by read()
-    private final byte[] pending = new byte[MAX_ENTITY_NAME + 8];
+    // Replacement bytes waiting to be returned before the next source byte.
+    private final byte[] pending = new byte[MAX_ENTITY_NAME + 16];
     private int pendingStart = 0;
     private int pendingEnd = 0;
 
-    // Overflow: tail of a bulk-read chunk saved here instead of pushed back to
-    // the inner stream. The pushback buffer (22 bytes) is too small for a full
-    // SAX read chunk (typically 4-8 KB), so we keep excess bytes here.
-    private byte[] overflow = null;
-    private int overflowPos = 0;
-
-    private final byte[] nameBuf = new byte[MAX_ENTITY_NAME];
+    private boolean inCdata = false;
+    // Consecutive ']' just seen inside a CDATA section, capped at 2, to spot "]]>".
+    private int cdataBrackets = 0;
 
     HtmlEntityFilterStream(InputStream source) {
       this.in = new java.io.PushbackInputStream(
-          new java.io.BufferedInputStream(source, BUF_SIZE),
-          MAX_ENTITY_NAME + 2);
+          new java.io.BufferedInputStream(source, 8192), MAX_ENTITY_NAME + 16);
     }
 
     @Override public int read() throws IOException {
-      if (pendingStart < pendingEnd) return pending[pendingStart++] & 0xFF;
+      if (pendingStart < pendingEnd) {
+        return pending[pendingStart++] & 0xFF;
+      }
       pendingStart = pendingEnd = 0;
 
-      int b = nextByte();
-      if (b == -1 || b != '&') return b;
-
-      int nameLen = 0;
-      boolean foundSemi = false;
-      while (nameLen < MAX_ENTITY_NAME) {
-        int c = nextByte();
-        if (c == -1) break;
-        if (c == ';') { foundSemi = true; break; }
-        boolean valid = nameLen == 0
-            ? ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-            : ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'));
-        if (!valid) { pushOneByte((byte) c); break; }
-        nameBuf[nameLen++] = (byte) c;
+      int b = in.read();
+      if (b == -1) {
+        return -1;
       }
-
-      if (nameLen > 0 && foundSemi) {
-        byte[] repl = resolveEntity(new String(nameBuf, 0, nameLen, StandardCharsets.US_ASCII))
-            .getBytes(StandardCharsets.UTF_8);
-        System.arraycopy(repl, 1, pending, 0, repl.length - 1);
-        pendingEnd = repl.length - 1;
-        return repl[0] & 0xFF;
+      if (inCdata) {
+        if (b == ']') {
+          cdataBrackets = Math.min(cdataBrackets + 1, 2);
+        } else {
+          if (b == '>' && cdataBrackets >= 2) {
+            inCdata = false;
+          }
+          cdataBrackets = 0;
+        }
+        return b;
       }
-
-      // Not a complete/known entity — push name bytes back and emit &amp;
-      for (int i = nameLen - 1; i >= 0; i--) pushOneByte(nameBuf[i]);
-      pending[0] = 'a'; pending[1] = 'm'; pending[2] = 'p'; pending[3] = ';';
-      pendingEnd = 4;
-      return '&';
+      if (b == '<' && startsCdata()) {
+        inCdata = true;
+        cdataBrackets = 0;
+        return b;
+      }
+      if (b != '&') {
+        return b;
+      }
+      return readReference();
     }
 
     @Override public int read(byte[] buf, int off, int len) throws IOException {
-      if (len == 0) return 0;
-
-      // Drain pending replacement bytes first
-      if (pendingStart < pendingEnd) {
-        int n = Math.min(pendingEnd - pendingStart, len);
-        System.arraycopy(pending, pendingStart, buf, off, n);
-        pendingStart += n;
-        return n;
+      if (len == 0) {
+        return 0;
       }
-      pendingStart = pendingEnd = 0;
-
-      // Drain overflow from a previous bulk read
-      if (overflow != null) {
-        int avail = overflow.length - overflowPos;
-        // Scan for '&' in the available slice (up to len bytes)
-        int scan = Math.min(avail, len);
-        for (int i = 0; i < scan; i++) {
-          if (overflow[overflowPos + i] == '&') {
-            if (i > 0) {
-              System.arraycopy(overflow, overflowPos, buf, off, i);
-              overflowPos += i;
-              return i;
-            }
-            // '&' at start of overflow — fall through to single-byte path below
-            break;
-          }
-        }
-        if (overflow[overflowPos] != '&') {
-          // No '&' in window — copy and advance
-          System.arraycopy(overflow, overflowPos, buf, off, scan);
-          overflowPos += scan;
-          if (overflowPos >= overflow.length) overflow = null;
-          return scan;
-        }
-        // '&' is at overflow[overflowPos] — handle via single-byte read()
+      int first = read();
+      if (first == -1) {
+        return -1;
+      }
+      buf[off] = (byte) first;
+      int n = 1;
+      while (n < len && (pendingStart < pendingEnd || in.available() > 0)) {
         int b = read();
-        if (b == -1) return -1;
-        buf[off] = (byte) b;
-        return 1;
-      }
-
-      // Fast path: read a chunk from the buffered inner stream
-      int n = in.read(buf, off, len);
-      if (n <= 0) return n;
-
-      for (int i = 0; i < n; i++) {
-        if (buf[off + i] == '&') {
-          if (i > 0) {
-            // Save tail starting at '&' as overflow; return clean prefix
-            overflow = java.util.Arrays.copyOfRange(buf, off + i, off + n);
-            overflowPos = 0;
-            return i;
-          }
-          // '&' at position 0: save everything after it as overflow, process '&'
-          if (n > 1) {
-            overflow = java.util.Arrays.copyOfRange(buf, off + 1, off + n);
-            overflowPos = 0;
-          }
-          int b = read();
-          if (b == -1) return -1;
-          buf[off] = (byte) b;
-          return 1;
+        if (b == -1) {
+          break;
         }
+        buf[off + n++] = (byte) b;
       }
       return n;
     }
 
-    /** Returns next byte from overflow (if any) then from the pushback stream. */
-    private int nextByte() throws IOException {
-      if (overflow != null && overflowPos < overflow.length) {
-        int b = overflow[overflowPos++] & 0xFF;
-        if (overflowPos >= overflow.length) overflow = null;
-        return b;
+    /** True when the bytes after an already-read '&lt;' are {@code ![CDATA[}; consumes nothing. */
+    private boolean startsCdata() throws IOException {
+      byte[] seen = new byte[CDATA_OPEN.length];
+      int got = 0;
+      while (got < seen.length) {
+        int c = in.read();
+        if (c == -1) {
+          break;
+        }
+        seen[got++] = (byte) c;
       }
-      return in.read();
+      boolean match = got == seen.length && java.util.Arrays.equals(seen, CDATA_OPEN);
+      in.unread(seen, 0, got);
+      return match;
     }
 
-    /** Pushes a single byte so it is returned by the next nextByte() call. */
-    private void pushOneByte(byte b) throws IOException {
-      if (overflow != null) {
-        // Prepend to overflow rather than using the small pushback buffer
-        byte[] ext = new byte[overflow.length - overflowPos + 1];
-        ext[0] = b;
-        System.arraycopy(overflow, overflowPos, ext, 1, overflow.length - overflowPos);
-        overflow = ext;
-        overflowPos = 0;
-      } else {
-        in.unread(b); // single byte — always fits in pushback buffer
+    /** Called after a '&' was read: emits it plus whatever must follow, as one decision. */
+    private int readReference() throws IOException {
+      byte[] consumed = new byte[MAX_ENTITY_NAME + 4];
+      int n = 0;
+      int c = in.read();
+      if (c == '#') {
+        consumed[n++] = (byte) c;
+        boolean hex = false;
+        int digits = 0;
+        int code = 0;
+        boolean closed = false;
+        int d = in.read();
+        if (d == 'x' || d == 'X') {
+          consumed[n++] = (byte) d;
+          hex = true;
+          d = in.read();
+        }
+        while (d != -1 && digits < MAX_NUMERIC_DIGITS) {
+          int v = Character.digit(d, hex ? 16 : 10);
+          if (v < 0) {
+            break;
+          }
+          consumed[n++] = (byte) d;
+          code = code * (hex ? 16 : 10) + v;
+          digits++;
+          d = in.read();
+        }
+        if (d == ';' && digits > 0) {
+          consumed[n++] = (byte) d;
+          closed = true;
+        } else if (d != -1) {
+          in.unread(d);
+        }
+        if (closed && isXmlChar(code)) {
+          return emitReference(consumed, n, '&');
+        }
+        return emitBareAmpersand(consumed, n);
       }
+      if (isNameStart(c)) {
+        while (c != -1 && n < MAX_ENTITY_NAME && isNameChar(c)) {
+          consumed[n++] = (byte) c;
+          c = in.read();
+        }
+        if (c == ';' && n > 0) {
+          String repl = resolveEntity(new String(consumed, 0, n, StandardCharsets.US_ASCII));
+          byte[] bytes = repl.getBytes(StandardCharsets.UTF_8);
+          System.arraycopy(bytes, 1, pending, 0, bytes.length - 1);
+          pendingEnd = bytes.length - 1;
+          return bytes[0] & 0xFF;
+        }
+        if (c != -1) {
+          in.unread(c);
+        }
+        return emitBareAmpersand(consumed, n);
+      }
+      if (c != -1) {
+        in.unread(c);
+      }
+      return emitBareAmpersand(consumed, 0);
+    }
+
+    /** Emits '&' followed by the consumed bytes unchanged (a reference left as written). */
+    private int emitReference(byte[] consumed, int n, int first) {
+      System.arraycopy(consumed, 0, pending, 0, n);
+      pendingEnd = n;
+      return first;
+    }
+
+    /** Emits {@code &amp;} and gives the consumed bytes back to be read as ordinary text. */
+    private int emitBareAmpersand(byte[] consumed, int n) throws IOException {
+      if (n > 0) {
+        in.unread(consumed, 0, n);
+      }
+      pending[0] = 'a';
+      pending[1] = 'm';
+      pending[2] = 'p';
+      pending[3] = ';';
+      pendingEnd = 4;
+      return '&';
+    }
+
+    private static boolean isNameStart(int c) {
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+
+    private static boolean isNameChar(int c) {
+      return isNameStart(c) || (c >= '0' && c <= '9');
+    }
+
+    /** XML 1.0 Char production: the only code points a numeric reference may name. */
+    private static boolean isXmlChar(int cp) {
+      return cp == 0x9 || cp == 0xA || cp == 0xD
+          || (cp >= 0x20 && cp <= 0xD7FF)
+          || (cp >= 0xE000 && cp <= 0xFFFD)
+          || (cp >= 0x10000 && cp <= 0x10FFFF);
     }
 
     @Override public void close() throws IOException {
