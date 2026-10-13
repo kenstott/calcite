@@ -75,16 +75,19 @@ public class DotNotationSchemaTest {
       // Try dot notation in schema names
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       salesOperand.put("ephemeralCache", true);
       rootSchema.add("COMPANY.SALES", FileSchemaFactory.INSTANCE.create(rootSchema, "COMPANY.SALES", salesOperand));
 
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
       hrOperand.put("ephemeralCache", true);
       rootSchema.add("COMPANY.HR", FileSchemaFactory.INSTANCE.create(rootSchema, "COMPANY.HR", hrOperand));
 
       Map<String, Object> financeOperand = new HashMap<>();
       financeOperand.put("directory", financeDir.getAbsolutePath());
+      financeOperand.put("baseDirectory", financeDir.getAbsolutePath());
       financeOperand.put("ephemeralCache", true);
       rootSchema.add("COMPANY.FINANCE", FileSchemaFactory.INSTANCE.create(rootSchema, "COMPANY.FINANCE", financeOperand));
 
@@ -153,10 +156,12 @@ public class DotNotationSchemaTest {
       // Compare different naming strategies
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       salesOperand.put("ephemeralCache", true);
 
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
       hrOperand.put("ephemeralCache", true);
 
       // Strategy 1: Dot notation
@@ -218,14 +223,17 @@ public class DotNotationSchemaTest {
       // Create hierarchical-looking schema names
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       salesOperand.put("ephemeralCache", true);
 
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
       hrOperand.put("ephemeralCache", true);
 
       Map<String, Object> financeOperand = new HashMap<>();
       financeOperand.put("directory", financeDir.getAbsolutePath());
+      financeOperand.put("baseDirectory", financeDir.getAbsolutePath());
       financeOperand.put("ephemeralCache", true);
 
       // Simulate nested hierarchy with dot notation

@@ -132,14 +132,14 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // -----------------------------------------------------------------------
 
   private FileSchema createSchemaSimple(File sourceDir) {
-    return new FileSchema(mockParentSchema, uniqueSchemaName(),
-        sourceDir, null, defaultEngineConfig);
+    return new FileSchema(mockParentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null, defaultEngineConfig,
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
   }
 
   private FileSchema createSchemaWithTables(File sourceDir,
       List<Map<String, Object>> tables) {
-    return new FileSchema(mockParentSchema, uniqueSchemaName(),
-        sourceDir, tables, defaultEngineConfig);
+    return new FileSchema(mockParentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, tables, defaultEngineConfig,
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
   }
 
   private Object invokePrivate(Object target, String methodName,
@@ -774,7 +774,9 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testGetFilesInDirRecursive() throws Exception {
     // Create schema with recursive=true
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, defaultEngineConfig, true);
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, true, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
 
     File subdir = new File(tempDir.toFile(), "subdir");
     subdir.mkdirs();
@@ -884,7 +886,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote/path", null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "/remote/path", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -901,7 +903,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote/path", null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "/remote/path", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -938,7 +940,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote", null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "/remote", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -973,7 +975,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote", null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "/remote", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1001,7 +1003,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/remote", null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "/remote", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1082,7 +1084,9 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     tables.add(table);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tables);
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, tables,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
     assertNotNull(schema);
     assertNotNull(schema.getBaseDirectory());
     assertNotNull(schema.getOperatingCacheDirectory());
@@ -1090,13 +1094,15 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testConstructorWithRecursiveTrue() {
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, defaultEngineConfig, true);
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, true, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
     assertNotNull(schema);
   }
 
   @Test void testConstructorWithAllFeaturesNoComment() {
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "UPPER", "LOWER",
         null, null, null, null, true);
@@ -1106,7 +1112,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testConstructorWithAllFeaturesAndComment() {
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, true, "Test schema comment");
@@ -1117,7 +1123,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testConstructorWithDirectoryPath() {
     String dirPath = tempDir.toFile().getAbsolutePath();
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), null, null, dirPath, null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), null, tempDir.toFile(), dirPath, null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "local", null, null, null, false, null);
@@ -1325,7 +1331,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testHasRefreshableTablesTrue() {
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         "5 minutes", "SMART_CASING", "SMART_CASING",
         null, null, null, null, false);
@@ -1334,7 +1340,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testHasRefreshableTablesFalse() {
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false);
@@ -1347,7 +1353,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testGetCommentReturnsValue() {
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false, "My schema");
@@ -1415,7 +1421,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     config.put("_storageProvider", mock(StorageProvider.class));
 
     FileSchema schema =
-        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), null, "/bucket", null,
+        new FileSchema(mockParentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "/bucket", null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", config, null, null, false, null);
@@ -1775,6 +1781,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithColumnNameCasingSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("column_name_casing", "UPPER");
 
@@ -1786,6 +1793,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithColumnNameCasingCamelCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("columnNameCasing", "LOWER");
 
@@ -1797,6 +1805,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithTableNameCasingSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("table_name_casing", "LOWER");
 
@@ -1808,6 +1817,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithCsvTypeInference() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     Map<String, Object> csvTypeInference = new HashMap<>();
     csvTypeInference.put("enabled", true);
@@ -1822,6 +1832,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithDuckdbConfig() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     Map<String, Object> duckdbConfig = new HashMap<>();
     duckdbConfig.put("memory_limit", "512MB");
@@ -1835,6 +1846,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithParquetCacheDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("parquetCacheDirectory", tempDir.resolve("parquet-cache").toString());
 
@@ -1846,6 +1858,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithPartitionedTables() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     List<Map<String, Object>> partitionedTables = new ArrayList<>();
     Map<String, Object> pt = new HashMap<>();
@@ -1862,6 +1875,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithMaterializations() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     List<Map<String, Object>> materializations = new ArrayList<>();
     Map<String, Object> mv = new HashMap<>();
@@ -1878,6 +1892,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithViewDefinitions() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     List<Map<String, Object>> views = new ArrayList<>();
     Map<String, Object> view = new HashMap<>();
@@ -1894,6 +1909,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithFlattenTrue() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("flatten", Boolean.TRUE);
 
@@ -1910,6 +1926,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     }
 
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -1926,6 +1943,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithTablesIncludingViewSkipped() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
 
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -1944,6 +1962,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithConstraintsInOperand() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     Map<String, Map<String, Object>> constraints = new HashMap<>();
     Map<String, Object> tableConstraint = new HashMap<>();
@@ -1959,6 +1978,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithBatchSizeNumber() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("batchSize", 500);
     operand.put("memoryThreshold", 1024L * 1024);
@@ -1971,6 +1991,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithEphemeralCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("ephemeral_cache", "true");
 
@@ -1982,6 +2003,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithBaseDirectoryAsFile() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.toFile());
 
@@ -1993,6 +2015,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithBaseDirectoryAsString() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
 
@@ -2004,6 +2027,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithRelativeBaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", "relative-dir");
     operand.put("baseDirectory_", tempDir.toFile());
@@ -2016,6 +2040,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithModelBaseDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory_", tempDir.toFile());
 
@@ -2026,6 +2051,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCreateNoDirectoryUsesWorkingDir() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
 
     Schema schema =
@@ -2035,7 +2061,8 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCreateAutoDetectHdfsStorage() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "hdfs://namenode:8020/data");
+    operand.put("baseDirectory", tempDir.toString());
+    operand.put("directory",  "hdfs://namenode:8020/data");
 
     // HDFS auto-detect should create schema (it auto-sets storageType to "hdfs")
     Schema schema =
@@ -2045,7 +2072,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCreateAutoDetectHttpsStorage() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "https://api.example.com/data");
+    operand.put("directory",  "https://api.example.com/data");
 
     // HTTP storage auto-detect should work but schema creation may fail due to connectivity
     try {
@@ -2074,7 +2101,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCreateS3WithCredentialsPasses() throws Exception {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("directory",  "s3://my-bucket/data");
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("accessKeyId", "AKIAIOSFODNN7EXAMPLE");
     storageConfig.put("secretAccessKey", "secret123");
@@ -2093,6 +2120,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     StorageProvider mockProvider = mock(StorageProvider.class);
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("_storageProvider", mockProvider);
     operand.put("storageType", "local");
 
@@ -2104,6 +2132,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithDeclaredSchemaNameDifferent() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("declaredSchemaName", "econ");
 
@@ -2115,6 +2144,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithCanonicalSchemaName() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("canonicalSchemaName", "econ");
 
@@ -2125,6 +2155,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCreateWithNullStorageTypeAndTablesAutoDetects() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
     table.put("name", "t1");
@@ -2145,6 +2176,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithRecursiveAndDirectoryPattern() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("recursive", Boolean.TRUE);
     operand.put("directoryPattern", "**/*.csv");
@@ -2157,6 +2189,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithGlobAlias() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("glob", "*.json");
 
@@ -2168,6 +2201,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithRefreshInterval() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("refreshInterval", "10 minutes");
 
@@ -2179,6 +2213,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithPrimeCacheFalse() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
@@ -2190,6 +2225,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithPrimeCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("prime_cache", Boolean.FALSE);
 
@@ -2201,6 +2237,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithComment() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("comment", "Test schema for unit tests");
 
@@ -2211,6 +2248,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testCreateNoStorageTypeNoDirectoryThrows() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     // No directory, no tables, no storageType => throws
     assertThrows(IllegalStateException.class, () ->
         FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand));
@@ -2219,6 +2257,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testCreateWithSourceDirectoryAlias() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
 
     Schema schema =
@@ -2262,10 +2301,11 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   @Test void testWriteDebugModelCreatesFile() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
 
     invokePrivateStatic(FileSchemaFactory.class, "writeDebugModel",
-        new Class<?>[]{String.class, Map.class, String.class},
-        "testschema", operand, "root");
+        new Class<?>[]{File.class, String.class, Map.class, String.class},
+        tempDir.toFile(), "testschema", operand, "root");
 
     File aperioDir = new File(System.getProperty("user.dir"), ".aperio");
     File debugFile = new File(aperioDir, "debug-model-testschema.json");
@@ -2274,12 +2314,12 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
   @Test void testWriteDebugModelNullParentName() throws Exception {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/tmp/test");
+    operand.put("directory",  "/tmp/test");
 
     // Should not throw with null parentSchemaName
     invokePrivateStatic(FileSchemaFactory.class, "writeDebugModel",
-        new Class<?>[]{String.class, Map.class, String.class},
-        "testschema", operand, null);
+        new Class<?>[]{File.class, String.class, Map.class, String.class},
+        tempDir.toFile(), "testschema", operand, null);
   }
 
   // =======================================================================
@@ -2579,6 +2619,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
     // Use the factory to ensure proper schema setup like production use
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
@@ -2604,6 +2645,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
@@ -2631,6 +2673,7 @@ public class FileSchemaFactoryDeepCoverageTest4 {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 

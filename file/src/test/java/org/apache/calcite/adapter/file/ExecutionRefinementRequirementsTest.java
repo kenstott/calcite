@@ -528,6 +528,7 @@ public class ExecutionRefinementRequirementsTest {
 
     Map<String, Object> flatOperand = new LinkedHashMap<>();
     flatOperand.put("directory", flatDir.toString());
+    flatOperand.put("baseDirectory", flatDir.toString());
     flatOperand.put("executionEngine", "parquet");
     flatOperand.put("ephemeralCache", true);
     flatOperand.put("partitionedTables", flatPartitionedTables);
@@ -549,6 +550,7 @@ public class ExecutionRefinementRequirementsTest {
 
     Map<String, Object> hiveOperand = new LinkedHashMap<>();
     hiveOperand.put("directory", hiveDir.toString());
+    hiveOperand.put("baseDirectory", hiveDir.toString());
     hiveOperand.put("executionEngine", "parquet");
     hiveOperand.put("ephemeralCache", true);
     hiveOperand.put("partitionedTables", partitionedTables);

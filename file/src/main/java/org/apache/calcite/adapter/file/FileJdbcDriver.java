@@ -124,11 +124,12 @@ public class FileJdbcDriver extends Driver {
 
       // Create file schema
       File dataDirectory = new File(schemaConfig.getDataPath());
+      // The storage path is the schema's base directory: every file it writes goes there
+      // (REQ-1992)
       FileSchema schema =
-          new FileSchema(rootSchema, schemaConfig.getName(),
-          dataDirectory,
-          null,
-          engineConfig);
+          new FileSchema(rootSchema, schemaConfig.getName(), dataDirectory,
+          new File(schemaConfig.getStoragePath()), null, null, engineConfig, false, null, null,
+          null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
       // Register schema
       rootSchema.add(schemaConfig.getName(), schema);
@@ -201,11 +202,6 @@ public class FileJdbcDriver extends Driver {
     engineType = info.getProperty("materialized_view.engine", engineType);
 
     // Set defaults if not specified
-    if (storagePath == null) {
-      storagePath = LocalPaths.join(System.getProperty("java.io.tmpdir"), "calcite_file_storage");
-      LOGGER.info("Using default storage path: " + storagePath);
-    }
-
     if (dataPath == null) {
       dataPath = LocalPaths.join(System.getProperty("user.dir"), "data");
       LOGGER.info("Using default data path: " + dataPath);
@@ -213,6 +209,12 @@ public class FileJdbcDriver extends Driver {
 
     // Create schema config
     if ("file".equals(schemaType)) {
+      if (storagePath == null) {
+        // REQ-1992: no default location for the files the adapter writes
+        throw new IllegalArgumentException("The storage_path connection property is required: "
+            + "every file the adapter writes for the schema goes under it, and there is no "
+            + "default location");
+      }
       SchemaConfig schemaConfig =
           new SchemaConfig("files",  // schema name
           dataPath,

@@ -58,7 +58,8 @@ class TestFileClientModule
     void testLocalGlobModel()
             throws Exception
     {
-        FileConfig config = new FileConfig().setGlob("/mnt/data/*.csv");
+        FileConfig config = new FileConfig().setGlob("/mnt/data/*.csv")
+                .setBaseDirectory("/var/lib/provisa/org-1/files");
         String json = FileClientModule.buildModelJson(config, NO_ENV);
 
         Map<String, Object> model = MAPPER.readValue(json, Map.class);
@@ -66,6 +67,8 @@ class TestFileClientModule
 
         Map<String, Object> operand = firstSchemaOperand(json);
         assertEquals("/mnt/data", operand.get("directory"));
+        // REQ-1992: every file the adapter writes for the catalog goes under it
+        assertEquals("/var/lib/provisa/org-1/files", operand.get("baseDirectory"));
         assertEquals("*.csv", operand.get("glob"));
         assertEquals("DUCKDB", operand.get("executionEngine"));
         assertEquals(Boolean.TRUE, operand.get("recursive"));

@@ -130,6 +130,7 @@ public class ArrowFileTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true,\n"
         + "        executionEngine: 'arrow',\n"
         + "        tableNameCasing: 'LOWER',\n"
@@ -199,6 +200,7 @@ public class ArrowFileTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         // No ephemeralCache here: it redirects the parquet cache to a throwaway temp directory and
         // so overrides the parquetCacheDirectory below, leaving the path this test inspects empty.
         // Isolation is already provided by parquetCacheDirectory living under this test's @TempDir.
@@ -261,6 +263,7 @@ public class ArrowFileTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true,\n"
         + "        glob: '*.arrow',\n"
         + "        executionEngine: 'arrow',\n"
@@ -297,6 +300,7 @@ public class ArrowFileTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true,\n"
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER'\n"

@@ -152,8 +152,9 @@ class ParquetMetadataWriterTest {
     metadata.put("key", "value");
 
     try {
+      // The temp file is made beside the file it replaces (REQ-1992), so the directory has to exist.
       ParquetMetadataWriter.addMetadataToFile(
-          "/nonexistent/path/file.parquet", metadata);
+          tempDir.resolve("missing.parquet").toString(), metadata);
     } catch (IOException e) {
       assertTrue(e.getMessage().contains("Failed to add metadata"));
     }

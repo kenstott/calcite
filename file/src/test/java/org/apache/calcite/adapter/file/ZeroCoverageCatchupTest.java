@@ -57,6 +57,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @Tag("unit")
 class ZeroCoverageCatchupTest {
 
+  /** Where the crawler stages its downloads: a directory the test owns (REQ-1992). */
+  @TempDir File crawlerWorkDir;
+
   // ===================================================================
   // FileSource tests
   // ===================================================================
@@ -996,7 +999,7 @@ class ZeroCoverageCatchupTest {
 
   @Test void testHtmlCrawlerGetFileName() throws Exception {
     CrawlerConfiguration config = new CrawlerConfiguration();
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       Method getFileName = HtmlCrawler.class.getDeclaredMethod("getFileName", String.class);
@@ -1022,7 +1025,7 @@ class ZeroCoverageCatchupTest {
 
   @Test void testHtmlCrawlerGetFileExtension() throws Exception {
     CrawlerConfiguration config = new CrawlerConfiguration();
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       Method getFileExtension = HtmlCrawler.class.getDeclaredMethod(
@@ -1048,7 +1051,7 @@ class ZeroCoverageCatchupTest {
 
   @Test void testHtmlCrawlerComputeFileHash(@TempDir Path tempDir) throws Exception {
     CrawlerConfiguration config = new CrawlerConfiguration();
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       File testFile = tempDir.resolve("test.txt").toFile();
@@ -1069,7 +1072,7 @@ class ZeroCoverageCatchupTest {
 
   @Test void testHtmlCrawlerCleanup() throws IOException {
     CrawlerConfiguration config = new CrawlerConfiguration();
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     assertNotNull(crawler.getLinkCache());
 
     // Calling cleanup should not throw
@@ -1085,7 +1088,7 @@ class ZeroCoverageCatchupTest {
     // Since there is no real HTTP server, this will fail on the
     // network call inside processSinglePage -> linkCache.getLinks().
     // We verify the CrawlResult is returned (even if exception wrapped).
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     try {
       // Using a file:// URL that does not exist will cause an IOException
       // in getLinks, which is caught in crawl

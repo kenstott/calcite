@@ -172,13 +172,16 @@ class CoverageAndExternalSourcesTest {
     // The first ask must return immediately with nothing observed — the whole point of
     // the lazy probe is that describe_table never waits on a scan. The second ask
     // reports a status rather than silently re-running the probe on every call.
+    // A table name no other test asks about: the probes are JVM-wide, and another test that
+    // describes census.acs_population first would make this ask the second, not the first.
+    String table = "acs_population_first_ask_" + System.nanoTime();
     long started = System.currentTimeMillis();
-    ObjectNode first = IngestedYears.observed("census", "acs_population", "year");
+    ObjectNode first = IngestedYears.observed("census", table, "year");
     long elapsed = System.currentTimeMillis() - started;
     assertNull(first, "the first ask must not wait for the probe");
     assertTrue(elapsed < 1000, "scheduling must be non-blocking, took " + elapsed + "ms");
 
-    ObjectNode second = IngestedYears.observed("census", "acs_population", "year");
+    ObjectNode second = IngestedYears.observed("census", table, "year");
     assertNotNull(second, "once scheduled, the state must be reportable");
     String status = second.path("status").asText();
     assertTrue("measuring".equals(status) || "measured".equals(status)

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import json
 import logging
 import re
 import os
@@ -431,6 +432,65 @@ class CalciteBackend:
         "-Dcalcite.bindable.cache.maxSize=1000",
     )
 
+    _FILE_SCHEMA_FACTORY = "org.apache.calcite.adapter.file.FileSchemaFactory"
+
+    def _connection_model_path(self) -> str:
+        """The model the connection opens. The file adapter writes only under a schema's base
+        directory and has no default one (REQ-1992); a file schema that names none (a bundle's
+        model, whose install tree may be read-only) gets one under this server's state
+        directory, through a copy of the model written there. Its relative ``directory`` is made
+        absolute against the original model's directory, which the copy no longer sits in.
+        Without a state directory the model is used as it is, and the adapter refuses such a
+        schema, naming it."""
+        assert self._model_path is not None
+        from pgwire_calcite.catalog_populate import STATE_DIR_ENV
+
+        with open(self._model_path, encoding="utf-8") as f:
+            model = json.load(f)
+        unset = [
+            schema
+            for schema in model.get("schemas") or []
+            if schema.get("factory") == self._FILE_SCHEMA_FACTORY
+            and not {"baseDirectory", "operatingDirectory"} & set(schema.get("operand") or {})
+        ]
+        state_dir = os.environ.get(STATE_DIR_ENV)
+        if not unset or not state_dir:
+            return self._model_path
+        state_dir = os.path.abspath(state_dir)
+        model_dir = os.path.dirname(os.path.abspath(self._model_path))
+        for schema in unset:
+            operand = schema.setdefault("operand", {})
+            directory = operand.get("directory")
+            if directory and "://" not in directory and not os.path.isabs(directory):
+                operand["directory"] = os.path.join(model_dir, directory)
+            operand["baseDirectory"] = os.path.join(state_dir, "file-base", schema["name"])
+        os.makedirs(state_dir, exist_ok=True)
+        path = os.path.join(state_dir, "connection-model.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(model, f, indent=2)
+        log.info("[CALCITE] file schemas %s write under %s", [s["name"] for s in unset], state_dir)
+        return path
+
+    _ICEBERG_SCHEMA_CACHE = "-Diceberg.metadata.cache.directory="
+
+    def _iceberg_schema_cache_arg(self, args: List[str]) -> Optional[str]:
+        """The file adapter's Iceberg schema cache directory, which it requires (REQ-1992): under
+        this server's state directory, where the catalog cache goes too (catalog_populate), or
+        None when a JVM argument already names one or the server has neither a state directory
+        nor a model (the cache then refuses when first used)."""
+        if any(a.startswith(self._ICEBERG_SCHEMA_CACHE) for a in args):
+            return None
+        from pgwire_calcite.catalog_populate import STATE_DIR_ENV
+
+        state_dir = os.environ.get(STATE_DIR_ENV)
+        if not state_dir and self._model_path:
+            state_dir = os.path.dirname(os.path.abspath(self._model_path))
+        if not state_dir:
+            return None
+        return self._ICEBERG_SCHEMA_CACHE + os.path.join(
+            os.path.abspath(state_dir), "iceberg-schema-cache"
+        )
+
     def _start_jvm(self) -> None:
         import jpype
 
@@ -442,6 +502,9 @@ class CalciteBackend:
                 key = prop.split("=", 1)[0]
                 if not any(a.startswith(key) for a in args):
                     args.append(prop)
+            schema_cache = self._iceberg_schema_cache_arg(args)
+            if schema_cache is not None:
+                args.append(schema_cache)
             jvm_path = bundled_jvm_path()
             log.info("[CALCITE] JVM library: %s", jvm_path or "found by JPype on the host")
             if jvm_path is None:
@@ -465,7 +528,7 @@ class CalciteBackend:
         props.setProperty("fun", self._fun)
         props.setProperty("caseSensitive", "false")
         if self._model_path:
-            props.setProperty("model", self._model_path)
+            props.setProperty("model", self._connection_model_path())
         if self._default_schema:
             props.setProperty("schema", self._default_schema)
         # Arbitrary JDBC connection properties, mirroring what the Calcite/Avatica

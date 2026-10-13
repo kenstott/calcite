@@ -24,6 +24,8 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.io.TempDir;
+import java.io.File;
 
 /**
  * Tests for HTML crawler functionality.
@@ -31,6 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 public class HtmlCrawlerTest {
+
+  /** Where the crawler stages its downloads: a directory the test owns (REQ-1992). */
+  @TempDir File crawlerWorkDir;
 
   /**
    * Test crawling Wikipedia tables.
@@ -48,7 +53,7 @@ public class HtmlCrawlerTest {
     // Only follow links to other Wikipedia articles
     config.setLinkPattern(Pattern.compile(".*wikipedia\\.org/wiki/.*"));
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       // Start with a page that has tables and links to other pages with tables
@@ -99,7 +104,7 @@ public class HtmlCrawlerTest {
     config.setSizeLimitForExtension("csv", 50L * 1024 * 1024); // 50MB
     config.setSizeLimitForExtension("xlsx", 25L * 1024 * 1024); // 25MB
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       // Start with a page that has links to data files
@@ -145,7 +150,7 @@ public class HtmlCrawlerTest {
     // Look for download links
     config.setLinkPattern(Pattern.compile(".*\\.(csv|xls|xlsx)(\\?.*)?$"));
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       // Start with indicators page
@@ -190,7 +195,7 @@ public class HtmlCrawlerTest {
     // Shorter delay for FRED (they have good infrastructure)
     config.setRequestDelay(Duration.ofMillis(500));
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       // Popular economic indicators page
@@ -223,7 +228,7 @@ public class HtmlCrawlerTest {
     config.setMaxHtmlSize(1024 * 1024); // 1MB limit
     config.setMaxDataFileSize(5 * 1024 * 1024); // 5MB limit
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       // This should only process the single page
@@ -253,7 +258,7 @@ public class HtmlCrawlerTest {
     // Only follow links containing "data" or "statistics"
     config.setLinkPattern(Pattern.compile(".*(data|statistics).*", Pattern.CASE_INSENSITIVE));
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
 
     try {
       CrawlResult result = crawler.crawl("https://www.data.gov/");

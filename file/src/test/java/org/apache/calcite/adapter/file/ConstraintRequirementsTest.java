@@ -320,7 +320,7 @@ public class ConstraintRequirementsTest {
         + "  \"type\":\"custom\","
         + "  \"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "  \"operand\":{"
-        + "    \"directory\":\"" + dir + "\","
+        + "    \"directory\":\"" + dir + "\",\"baseDirectory\":\"" + dir + "\","
         + "    \"ephemeralCache\":true,"
         + "    \"tableConstraints\":{"
         + "      \"orders\":{"

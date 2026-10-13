@@ -478,7 +478,7 @@ public class FileConversionEndToEndTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(info.getProperty("directory").replace("\\", "\\\\")).append("\",\n");
+    model.append("        \"directory\": \"").append(info.getProperty("directory").replace("\\", "\\\\")).append("\",\n        \"baseDirectory\": \"").append(info.getProperty("directory").replace("\\", "\\\\")).append("\",\n");
 
     if (info.containsKey("engine")) {
       model.append("        \"engine\": \"").append(info.getProperty("engine")).append("\",\n");

@@ -64,6 +64,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -82,6 +83,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String opDir = tempDir.resolve("operating").toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -101,6 +103,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String opDir = tempDir.resolve("new_operating_dir").toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -118,10 +121,12 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand1 = new HashMap<String, Object>();
     operand1.put("directory", dir);
+    operand1.put("baseDirectory", dir);
     operand1.put("ephemeralCache", Boolean.TRUE);
 
     Map<String, Object> operand2 = new HashMap<String, Object>();
     operand2.put("directory", dir);
+    operand2.put("baseDirectory", dir);
     operand2.put("ephemeralCache", Boolean.TRUE);
 
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -140,6 +145,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     final boolean[] hookCalled = {false};
@@ -158,6 +164,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -175,6 +182,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     // No operatingDirectory set
@@ -193,6 +201,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String schemaOpDir = tempDir.resolve("schema_op_dir").toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("operatingDirectory", schemaOpDir);
 
@@ -234,6 +243,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", dir);
+    operand.put("baseDirectory", dir);
     operand.put("ephemeralCache", Boolean.TRUE);
 
     ModelLifecycleProcessor processor = ModelLifecycleProcessor.builder()
@@ -257,6 +267,7 @@ public class ModelLifecycleProcessorDeepCoverageTest {
               Map<String, Object> operand) {
             // Add directory at hook time since operand was null
             builder.operand("directory", dir);
+            builder.operand("baseDirectory", dir);
             builder.operand("ephemeralCache", Boolean.TRUE);
           }
           @Override public boolean shouldAutoDownload(Map<String, Object> operand) {
@@ -273,10 +284,12 @@ public class ModelLifecycleProcessorDeepCoverageTest {
     String dir = tempDir.toString();
     Map<String, Object> operand1 = new HashMap<String, Object>();
     operand1.put("directory", dir);
+    operand1.put("baseDirectory", dir);
     operand1.put("ephemeralCache", Boolean.TRUE);
 
     Map<String, Object> operand2 = new HashMap<String, Object>();
     operand2.put("directory", dir);
+    operand2.put("baseDirectory", dir);
     operand2.put("ephemeralCache", Boolean.TRUE);
 
     // First schema added with NOOP tracker, then change tracker, add second schema

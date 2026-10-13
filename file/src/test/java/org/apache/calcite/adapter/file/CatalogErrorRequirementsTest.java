@@ -82,7 +82,7 @@ public class CatalogErrorRequirementsTest {
    */
   private static String model(Path dir, String recursiveLiteral) {
     StringBuilder operand = new StringBuilder();
-    operand.append("      \"directory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n");
+    operand.append("      \"directory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n      \"baseDirectory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n");
     operand.append("      \"ephemeralCache\": true,\n");
     operand.append("      \"executionEngine\": \"linq4j\",\n");
     operand.append("      \"tableNameCasing\": \"LOWER\",\n");

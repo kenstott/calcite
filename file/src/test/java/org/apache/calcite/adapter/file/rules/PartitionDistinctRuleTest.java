@@ -210,6 +210,7 @@ public class PartitionDistinctRuleTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", executionEngine);
     operand.put("ephemeralCache", true);  // Use temp cache directory for test isolation
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));

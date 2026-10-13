@@ -176,6 +176,7 @@ public class MaterializationTest {
       // Configure file schema with materializations
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("executionEngine", "parquet");  // Use Parquet engine for MV storage
       operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
       operand.put("materializations", materializations);
@@ -325,6 +326,7 @@ public class MaterializationTest {
       // Configure with Parquet engine
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("executionEngine", "parquet");
       operand.put("materializations", materializations);
 

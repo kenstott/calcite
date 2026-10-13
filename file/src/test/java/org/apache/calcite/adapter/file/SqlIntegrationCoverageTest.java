@@ -96,6 +96,8 @@ public class SqlIntegrationCoverageTest {
     sb.append("\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\",");
     sb.append("\"operand\":{\"directory\":\"");
     sb.append(dir.replace("\\", "\\\\"));
+    sb.append("\",\"baseDirectory\":\"");
+    sb.append(dir.replace("\\", "\\\\"));
     sb.append("\",\"ephemeralCache\":true");
     for (Map.Entry<String, Object> e : extra.entrySet()) {
       sb.append(",\"").append(e.getKey()).append("\":");
@@ -123,6 +125,8 @@ public class SqlIntegrationCoverageTest {
     sb.append("\"name\":\"FILES\",\"type\":\"custom\",");
     sb.append("\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\",");
     sb.append("\"operand\":{\"directory\":\"");
+    sb.append(dir.replace("\\", "\\\\"));
+    sb.append("\",\"baseDirectory\":\"");
     sb.append(dir.replace("\\", "\\\\"));
     sb.append("\",\"ephemeralCache\":true");
     sb.append(",\"views\":[");

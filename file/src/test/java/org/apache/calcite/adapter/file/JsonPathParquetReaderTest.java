@@ -179,6 +179,7 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
     // Force the parquet execution engine so column types come from the file schema, not inference.
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", dir.toString());
+    operand.put("baseDirectory", dir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
 
@@ -190,7 +191,7 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
         + "\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\"operand\":{"
-        + "\"directory\":\"" + dir.toString().replace("\\", "\\\\") + "\","
+        + "\"directory\":\"" + dir.toString().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir.toString().replace("\\", "\\\\") + "\","
         + "\"executionEngine\":\"parquet\","
         + "\"ephemeralCache\":true"
         + "}}]}";

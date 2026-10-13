@@ -9,6 +9,7 @@
       "operand": {
         "directory": "widedata",
         "ephemeralCache": true,
+        "baseDirectory": "../../build/test-base",
         "executionEngine": "linq4j"
       }
     },

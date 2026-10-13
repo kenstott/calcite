@@ -69,6 +69,7 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
+      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath() + "\",\n");
       writer.write("        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n");
       writer.write("        \"ephemeralCache\": true\n");
       writer.write("      }\n");

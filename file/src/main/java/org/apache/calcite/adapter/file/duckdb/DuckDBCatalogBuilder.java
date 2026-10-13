@@ -46,20 +46,42 @@ import java.util.Set;
  */
 public class DuckDBCatalogBuilder {
 
-  @SuppressWarnings("deprecation")
+  /** The command line: builds the catalog, or prints why it could not and exits with 1. */
   public static void main(String[] args) {
-    if (args.length < 2) {
-      System.err.println("Usage: DuckDBCatalogBuilder <model.json> <output.duckdb>");
-      System.err.println();
-      System.err.println("Example:");
-      System.err.println("  DuckDBCatalogBuilder model.json catalog.duckdb");
-      System.err.println();
-      System.err.println("Environment variables (optional):");
-      System.err.println("  GOVDATA_CACHE_DIR      - Cache directory for raw downloads");
-      System.err.println("  GOVDATA_PARQUET_DIR    - Directory for parquet files");
-      System.err.println("  AWS_ACCESS_KEY_ID      - AWS credentials for S3");
-      System.err.println("  AWS_SECRET_ACCESS_KEY  - AWS credentials for S3");
+    try {
+      run(args);
+    } catch (IllegalArgumentException e) {
+      System.err.println(e.getMessage());
       System.exit(1);
+    } catch (Exception e) {
+      System.err.println();
+      System.err.println("=========================================");
+      System.err.println("ERROR: Failed to build catalog");
+      System.err.println("=========================================");
+      e.printStackTrace();
+      System.err.println("=========================================");
+      System.exit(1);
+    }
+  }
+
+  /**
+   * Builds the catalog {@code args} name (model file, catalog file). Throws rather than exits,
+   * so a caller in the same JVM (a test) sees why it failed: IllegalArgumentException for bad
+   * arguments, the connection's exception for a model that cannot be loaded.
+   */
+  @SuppressWarnings("deprecation")
+  public static void run(String[] args) throws Exception {
+    if (args.length < 2) {
+      throw new IllegalArgumentException("Usage: DuckDBCatalogBuilder <model.json> <output.duckdb>\n"
+          + "\n"
+          + "Example:\n"
+          + "  DuckDBCatalogBuilder model.json catalog.duckdb\n"
+          + "\n"
+          + "Environment variables (optional):\n"
+          + "  GOVDATA_CACHE_DIR      - Cache directory for raw downloads\n"
+          + "  GOVDATA_PARQUET_DIR    - Directory for parquet files\n"
+          + "  AWS_ACCESS_KEY_ID      - AWS credentials for S3\n"
+          + "  AWS_SECRET_ACCESS_KEY  - AWS credentials for S3");
     }
 
     String modelPath = new File(args[0]).getAbsolutePath();
@@ -76,8 +98,7 @@ public class DuckDBCatalogBuilder {
     // Validate model file exists
     File modelFile = new File(modelPath);
     if (!modelFile.exists()) {
-      System.err.println("Error: Model file not found: " + modelPath);
-      System.exit(1);
+      throw new IllegalArgumentException("Error: Model file not found: " + modelPath);
     }
 
     // Remove existing catalog if present
@@ -100,7 +121,7 @@ public class DuckDBCatalogBuilder {
     System.out.println("JDBC URL: " + jdbcUrl);
     System.out.println();
 
-    try {
+    {
       // Load Calcite driver
       Class.forName("org.apache.calcite.jdbc.Driver");
 
@@ -179,15 +200,6 @@ public class DuckDBCatalogBuilder {
         System.out.println("=========================================");
 
       }
-
-    } catch (Exception e) {
-      System.err.println();
-      System.err.println("=========================================");
-      System.err.println("ERROR: Failed to build catalog");
-      System.err.println("=========================================");
-      e.printStackTrace();
-      System.err.println("=========================================");
-      System.exit(1);
     }
   }
 }

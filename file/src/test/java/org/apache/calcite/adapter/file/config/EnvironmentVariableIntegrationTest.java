@@ -248,6 +248,7 @@ public class EnvironmentVariableIntegrationTest extends BaseFileTest {
         + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "    \"operand\": {"
         + "      \"directory\": \"${INLINE_DIR}\","
+        + "      \"baseDirectory\": \"${INLINE_DIR}\","
         + "      \"executionEngine\": \"${INLINE_ENGINE:LINQ4J}\","
         + "      \"ephemeralCache\": true"
         + "    }"

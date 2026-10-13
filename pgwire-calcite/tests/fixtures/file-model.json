@@ -9,6 +9,7 @@
       "operand": {
         "directory": "filedata",
         "ephemeralCache": true,
+        "baseDirectory": "../../build/test-base",
         "executionEngine": "linq4j"
       }
     }

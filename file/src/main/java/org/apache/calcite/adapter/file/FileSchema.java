@@ -251,49 +251,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
   /**
    * Creates a file schema with all features including storage provider support.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param directoryPattern Directory pattern for file discovery, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param storageType     Storage type (e.g., "local", "s3", "sharepoint"), or null
-   * @param storageConfig   Storage-specific configuration, or null
-   * @param flatten         Whether to flatten JSON/YAML structures, or null
-   * @param csvTypeInference CSV type inference configuration, or null
-   * @param primeCache      Whether to prime statistics cache on initialization (default true)
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval,
-      String tableNameCasing,
-      String columnNameCasing,
-      @Nullable String storageType,
-      @Nullable Map<String, Object> storageConfig,
-      @Nullable Boolean flatten,
-      @Nullable Map<String, Object> csvTypeInference,
-      boolean primeCache) {
-    this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
-        recursive, materializations, views, partitionedTables, refreshInterval,
-        tableNameCasing, columnNameCasing, storageType, storageConfig, flatten,
-        csvTypeInference, primeCache, null);
-  }
-
-  /**
-   * Creates a file schema with all features including storage provider support.
    * This constructor accepts both sourceDirectory and userConfiguredBaseDirectory.
    *
    * @param parentSchema    Parent schema
@@ -503,24 +460,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Determine operating cache directory - ALWAYS local filesystem for .conversions.json and file locks
     // This is separate from the parquet output directory which may be remote (S3, etc.)
-    File operatingCacheRoot;
-    if (userConfiguredBaseDirectory != null) {
-      // Caller explicitly provided a base directory — use it for the .aperio root.
-      // This covers both temp dirs (ephemeral tests) and stable product dirs (e.g. ~/.askamerica/data/ref).
-      operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
-      LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
-    } else {
-      // No explicit base directory — fall back to working directory.
-      String userDir = System.getProperty("user.dir");
-
-      // Safety check: if user.dir is root, use temp directory instead
-      if ("/".equals(userDir) || userDir == null || userDir.isEmpty()) {
-        LOGGER.warn("Working directory is root or invalid ('{}'), falling back to temp directory", userDir);
-        userDir = System.getProperty("java.io.tmpdir");
-      }
-      operatingCacheRoot = new File(userDir).getAbsoluteFile();
-      LOGGER.debug("Using working directory for operating cache: {}", operatingCacheRoot);
+    // Every file the schema writes goes under its base directory (REQ-1992); there is no default
+    // location, so a schema without one refuses to start rather than write beside the process.
+    if (userConfiguredBaseDirectory == null) {
+      throw new IllegalArgumentException("File schema '" + name + "' has no baseDirectory "
+          + "(or operatingDirectory) operand. Every file the adapter writes for the schema goes "
+          + "under that directory; set it to the directory the schema may write to.");
     }
+    File operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
+    LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
 
     // Operating cache is ALWAYS .aperio/<schema> on local filesystem for metadata and locks
     // Use canonicalSchemaName if provided (for consistent paths like .aperio/econ regardless of user name ECON)
@@ -781,137 +729,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     primingThread.start();
   }
 
-  /**
-   * Creates a file schema with all features including partitioned tables, refresh support,
-   * and configurable identifier casing.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param directoryPattern Directory pattern for file discovery, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval,
-      String tableNameCasing,
-      String columnNameCasing) {
-    this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
-        recursive, materializations, views, partitionedTables, refreshInterval,
-        tableNameCasing, columnNameCasing, null, null, null, null, true);
-  }
-
-
-  /**
-   * Creates a file schema with all features including partitioned tables and refresh support.
-   * Uses default casing (SMART_CASING for both tables and columns).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for relative files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval) {
-    this(parentSchema, name, sourceDirectory, directoryPattern, tables, engineConfig, recursive,
-        materializations, views, partitionedTables, refreshInterval, "SMART_CASING", "SMART_CASING");
-  }
-
-  /**
-   * Creates a file schema with execution engine support, recursive directory scanning,
-   * multi-table Excel support, multi-table HTML support, and materialized views.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for relative files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, recursive,
-        materializations, views, null, null);
-  }
 
   private final SchemaPlus parentSchema;
   private final String name;
-
-  /**
-   * Creates a file schema with execution engine support and recursive directory scanning.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, recursive, null,
-        null, null, null);
-  }
-
-  /**
-   * Creates a file schema with execution engine support (non-recursive).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, false, null, null,
-        null, null);
-  }
-
-  /**
-   * Creates a file schema with default execution engine (for backward compatibility).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables) {
-    this(parentSchema, name, sourceDirectory, null, tables, new ExecutionEngineConfig(), false,
-        null, null, null, null);
-  }
 
   /**
    * Applies the configured casing transformation and sanitization to an identifier.
@@ -2774,9 +2594,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       Duration refreshDuration = RefreshInterval.parse(refreshInterval);
 
       // Get cache directory for glob results
-      File cacheDir = baseDirectory != null
-          ? new File(operatingCacheDirectory, ".glob_cache")
-          : new File(System.getProperty("java.io.tmpdir"), "calcite_glob_cache");
+      File cacheDir = new File(operatingCacheDirectory, ".glob_cache");
 
       // REQ-788: an opt-in column carrying each row's source file path.
       String sourceFileColumn = (String) tableDef.get("sourceFileColumn");
