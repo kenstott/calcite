@@ -104,6 +104,11 @@ public class GovDataDriver extends Driver {
         System.setProperty("duckdb.cache_httpfs.directory",
             resolveOperatingDirBase(home) + "/.duckdb_httpfs_cache");
       }
+      // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+      if (System.getProperty("iceberg.metadata.cache.directory") == null) {
+        System.setProperty("iceberg.metadata.cache.directory",
+            resolveOperatingDirBase(home) + "/.iceberg_metadata_cache");
+      }
     }
 
     // Apply GovData-specific defaults

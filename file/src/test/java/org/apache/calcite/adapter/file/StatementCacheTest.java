@@ -72,6 +72,7 @@ public class StatementCacheTest extends BaseFileTest {
             // Create a simple test schema
             Map<String, Object> operand = new LinkedHashMap<>();
             operand.put("directory", tempDir.toString());
+            operand.put("baseDirectory", tempDir.toString());
             operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
             String engine = getExecutionEngine();
             if (engine != null && !engine.isEmpty()) {

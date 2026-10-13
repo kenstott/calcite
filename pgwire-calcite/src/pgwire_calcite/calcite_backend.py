@@ -431,6 +431,26 @@ class CalciteBackend:
         "-Dcalcite.bindable.cache.maxSize=1000",
     )
 
+    _ICEBERG_SCHEMA_CACHE = "-Diceberg.metadata.cache.directory="
+
+    def _iceberg_schema_cache_arg(self, args: List[str]) -> Optional[str]:
+        """The file adapter's Iceberg schema cache directory, which it requires (REQ-1992): under
+        this server's state directory, where the catalog cache goes too (catalog_populate), or
+        None when a JVM argument already names one or the server has neither a state directory
+        nor a model (the cache then refuses when first used)."""
+        if any(a.startswith(self._ICEBERG_SCHEMA_CACHE) for a in args):
+            return None
+        from pgwire_calcite.catalog_populate import STATE_DIR_ENV
+
+        state_dir = os.environ.get(STATE_DIR_ENV)
+        if not state_dir and self._model_path:
+            state_dir = os.path.dirname(os.path.abspath(self._model_path))
+        if not state_dir:
+            return None
+        return self._ICEBERG_SCHEMA_CACHE + os.path.join(
+            os.path.abspath(state_dir), "iceberg-schema-cache"
+        )
+
     def _start_jvm(self) -> None:
         import jpype
 
@@ -442,6 +462,9 @@ class CalciteBackend:
                 key = prop.split("=", 1)[0]
                 if not any(a.startswith(key) for a in args):
                     args.append(prop)
+            schema_cache = self._iceberg_schema_cache_arg(args)
+            if schema_cache is not None:
+                args.append(schema_cache)
             jvm_path = bundled_jvm_path()
             log.info("[CALCITE] JVM library: %s", jvm_path or "found by JPype on the host")
             if jvm_path is None:

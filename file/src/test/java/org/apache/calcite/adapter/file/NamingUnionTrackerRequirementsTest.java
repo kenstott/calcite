@@ -124,7 +124,7 @@ public class NamingUnionTrackerRequirementsTest {
         + "    \"type\": \"custom\",\n"
         + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "    \"operand\": {\n"
-        + "      \"directory\": \"" + d + "\",\n"
+        + "      \"directory\": \"" + d + "\",\"baseDirectory\":\"" + d + "\",\n"
         + "      \"ephemeralCache\": true,\n"
         + "      \"executionEngine\": \"linq4j\",\n"
         // LOWER pins the derived name to a pure sanitize + toLowerCase; SMART_CASING would

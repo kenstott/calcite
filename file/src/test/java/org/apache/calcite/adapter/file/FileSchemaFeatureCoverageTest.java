@@ -101,6 +101,7 @@ public class FileSchemaFeatureCoverageTest {
   static Map<String, Object> baseOperand(Path tempDir) {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("ephemeralCache", true);
     return operand;
   }
@@ -1417,8 +1418,8 @@ public class FileSchemaFeatureCoverageTest {
 
     @Test void testNonExistentBaseDirectory() {
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory",
-          tempDir.resolve("nonexistent").toString());
+      operand.put("directory", tempDir.resolve("nonexistent").toString());
+      operand.put("baseDirectory", tempDir.resolve("nonexistent").toString());
       operand.put("ephemeralCache", true);
       operand.put("primeCache", false);
 
@@ -1592,6 +1593,7 @@ public class FileSchemaFeatureCoverageTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", false);
       operand.put("primeCache", false);
 

@@ -17,6 +17,7 @@ import org.apache.calcite.util.TestUtil;
 import org.jsoup.select.Elements;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -57,6 +59,9 @@ import static java.util.Objects.requireNonNull;
 @ExtendWith(RequiresNetworkExtension.class)
 @SuppressWarnings("deprecation")
 class FileReaderTest {
+
+  /** Base directory for the schemas the tests create (REQ-1992). */
+  @TempDir File schemaBaseDir;
 
   /**
    * These pages are served by a local HTTP server started in {@link #startFixtureServer()} rather
@@ -257,6 +262,8 @@ class FileReaderTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"directory\": " + TestUtil.escapeString(path) + ",\n"
+        + "        \"baseDirectory\": "
+        + TestUtil.escapeString(schemaBaseDir.getAbsolutePath()) + ",\n"
         + "        \"ephemeralCache\": true\n"
         + "      }\n"
         + "    }\n"
@@ -299,6 +306,8 @@ class FileReaderTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"directory\": " + TestUtil.escapeString(path) + ",\n"
+        + "        \"baseDirectory\": "
+        + TestUtil.escapeString(schemaBaseDir.getAbsolutePath()) + ",\n"
         + "        \"ephemeralCache\": true\n"
         + "      }\n"
         + "    }\n"
@@ -341,6 +350,8 @@ class FileReaderTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"directory\": " + TestUtil.escapeString(path) + ",\n"
+        + "        \"baseDirectory\": "
+        + TestUtil.escapeString(schemaBaseDir.getAbsolutePath()) + ",\n"
         + "        \"ephemeralCache\": true\n"
         + "      }\n"
         + "    }\n"

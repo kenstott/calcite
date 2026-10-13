@@ -122,6 +122,7 @@ public class FileSchemaIntegrationCoverageTest {
   private Map<String, Object> baseOperand(File dir) {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", dir.getAbsolutePath());
+    operand.put("baseDirectory", dir.getAbsolutePath());
     return operand;
   }
 
@@ -548,6 +549,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     Schema schema = createSchema("srcdir_op_t", operand);
     assertNotNull(schema);
   }
@@ -562,6 +564,7 @@ public class FileSchemaIntegrationCoverageTest {
     Map<String, Object> ptDef = new HashMap<>();
     ptDef.put("name", "partitioned_sales");
     ptDef.put("directory", sourceDir.getAbsolutePath());
+    ptDef.put("baseDirectory", sourceDir.getAbsolutePath());
     ptDef.put("partitionColumn", "dt");
     partitionedTables.add(ptDef);
 
@@ -647,7 +650,8 @@ public class FileSchemaIntegrationCoverageTest {
   @Test @DisplayName("Factory: S3 storage auto-detection fails fast without credentials")
   void testFactoryS3AutoDetectRequiresCredentials() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "s3://my-bucket/path");
+    operand.put("directory",  "s3://my-bucket/path");
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
 
     try {
       createSchema("s3_no_creds", operand);
@@ -742,8 +746,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "null_src", null, null,
-        new ExecutionEngineConfig(), false);
+        new FileSchema(mock, "null_src", null, tempDir.toFile(), null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
 
     assertNotNull(fs);
     assertNotNull(fs.getBaseDirectory());
@@ -757,7 +762,8 @@ public class FileSchemaIntegrationCoverageTest {
     File dir = tempDir.resolve("minimal").toFile();
     dir.mkdirs();
 
-    FileSchema fs = new FileSchema(mock, "minimal_schema", dir, null);
+    FileSchema fs = new FileSchema(mock, "minimal_schema", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs);
     assertNotNull(fs.getTableMap());
   }
@@ -771,7 +777,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 5000, 1024L * 1024L, null, null, null);
-    FileSchema fs = new FileSchema(mock, "eng_cfg_schema", dir, null, config);
+    FileSchema fs = new FileSchema(mock, "eng_cfg_schema", dir, dir, null, null, config, false, null, null, null, null,
+        "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs);
   }
 
@@ -787,7 +794,8 @@ public class FileSchemaIntegrationCoverageTest {
     List<Map<String, Object>> views = new ArrayList<>();
 
     FileSchema fs =
-        new FileSchema(mock, "rec_mat_schema", dir, null, new ExecutionEngineConfig(), true, mats, views);
+        new FileSchema(mock, "rec_mat_schema", dir, dir, null, null, new ExecutionEngineConfig(), true, mats, views,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs);
   }
 
@@ -800,8 +808,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "casing_schema", dir, "**/*.csv", null, new ExecutionEngineConfig(), false,
-        null, null, null, null, "UPPER", "LOWER");
+        new FileSchema(mock, "casing_schema", dir, dir, "**/*.csv", null, new ExecutionEngineConfig(), false, null,
+        null, null, null, "UPPER", "LOWER", null, null, null, null, true);
     assertNotNull(fs);
   }
 
@@ -814,7 +822,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "storage_schema", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "storage_schema", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     assertNotNull(fs);
@@ -830,7 +838,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "comment_schema", dir, null, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "comment_schema", dir, dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false, "Schema with a comment");
     assertNotNull(fs);
@@ -846,7 +854,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "MYSCHEMA", dir, null, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "MYSCHEMA", dir, dir, null, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false, "comment", "my_canonical");
     assertNotNull(fs);
@@ -913,7 +921,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     // Use storageType="local" to enable file scanning
     FileSchema fs =
-        new FileSchema(mock, "tablemap_csv_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "tablemap_csv_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     Map<String, Table> tableMap = fs.getTableMap();
@@ -935,7 +943,8 @@ public class FileSchemaIntegrationCoverageTest {
     createJsonFile(dir, "items.json",
         "[{\"id\":1,\"name\":\"alpha\"},{\"id\":2,\"name\":\"beta\"}]");
 
-    FileSchema fs = new FileSchema(mock, "tablemap_json_s", dir, null);
+    FileSchema fs = new FileSchema(mock, "tablemap_json_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     Map<String, Table> tableMap = fs.getTableMap();
     assertNotNull(tableMap);
   }
@@ -949,7 +958,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
     createCsvFile(dir, "t.csv", "v\n1\n");
 
-    FileSchema fs = new FileSchema(mock, "clear_cache_s", dir, null);
+    FileSchema fs = new FileSchema(mock, "clear_cache_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     fs.getTableMap(); // populate cache
     fs.clearTableCache();
 
@@ -967,9 +977,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "basedir_get_s", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, null, "LOWER", "LOWER",
-        "local", null, null, null, false);
+        new FileSchema(mock, "basedir_get_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "LOWER", "LOWER", "local", null, null, null, false);
     assertNotNull(fs.getBaseDirectory());
   }
 
@@ -979,7 +988,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "no_storage_cfg", tempDir.resolve("no_sc").toFile(), null);
+        new FileSchema(mock, "no_storage_cfg", tempDir.resolve("no_sc").toFile(), tempDir.resolve("no_sc").toFile(),
+        null, null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     assertNull(fs.getStorageConfig());
   }
 
@@ -989,7 +1000,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "opcache_dir", tempDir.resolve("opc").toFile(), null);
+        new FileSchema(mock, "opcache_dir", tempDir.resolve("opc").toFile(), tempDir.resolve("opc").toFile(), null,
+        null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     File cacheDir = fs.getOperatingCacheDirectory();
     assertNotNull(cacheDir);
     assertTrue(cacheDir.getPath().contains("opcache_dir"));
@@ -1001,7 +1014,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "alt_part_reg", tempDir.resolve("apr").toFile(), null);
+        new FileSchema(mock, "alt_part_reg", tempDir.resolve("apr").toFile(), tempDir.resolve("apr").toFile(), null,
+        null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs.getAlternatePartitionRegistry());
   }
 
@@ -1015,14 +1030,14 @@ public class FileSchemaIntegrationCoverageTest {
 
     // Without refresh interval
     FileSchema fsNoRefresh =
-        new FileSchema(mock, "no_refresh", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, null);
+        new FileSchema(mock, "no_refresh", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null, null,
+        null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertFalse(fsNoRefresh.hasRefreshableTables());
 
     // With refresh interval
     FileSchema fsWithRefresh =
-        new FileSchema(mock, "with_refresh", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, "5 minutes");
+        new FileSchema(mock, "with_refresh", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, "5 minutes", "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertTrue(fsWithRefresh.hasRefreshableTables());
   }
 
@@ -1035,8 +1050,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "listeners_s", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, null);
+        new FileSchema(mock, "listeners_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     final List<String> notifications = new ArrayList<>();
     TableRefreshListener listener = new TableRefreshListener() {
@@ -1061,8 +1076,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "pattern_notify_s", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, null);
+        new FileSchema(mock, "pattern_notify_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     // Add a non-pattern-aware listener - should not crash
     fs.addRefreshListener(new TableRefreshListener() {
@@ -1082,8 +1097,8 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "iceberg_notify_s", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, null);
+        new FileSchema(mock, "iceberg_notify_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     // Should not crash even with no listeners
     fs.notifyIcebergTableRefreshed("ice_tbl", "s3://bucket/warehouse/ice_tbl");
@@ -1106,7 +1121,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "storage_ops_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "storage_ops_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1134,7 +1149,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "stream_write_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "stream_write_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1154,7 +1169,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     // Without storage provider - uses local filesystem via operatingCacheDirectory
     FileSchema fsNoProvider =
-        new FileSchema(mock, "create_dirs_np", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "create_dirs_np", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         null, null, null, null, false);
 
@@ -1166,7 +1181,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     // With local storage provider - delegates to provider
     FileSchema fsWithProvider =
-        new FileSchema(mock, "create_dirs_wp", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "create_dirs_wp", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     // This exercises the storageProvider.createDirectories path
@@ -1183,7 +1198,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "conv_meta_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "conv_meta_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1200,7 +1215,7 @@ public class FileSchemaIntegrationCoverageTest {
     createCsvFile(dir, "data.csv", "id\n1\n");
 
     FileSchema fs =
-        new FileSchema(mock, "all_records_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "all_records_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1218,7 +1233,7 @@ public class FileSchemaIntegrationCoverageTest {
     createCsvFile(dir, "orders.csv", "order_id,total\n1,100\n");
 
     FileSchema fs =
-        new FileSchema(mock, "constraint_md_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "constraint_md_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1248,7 +1263,7 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     FileSchema fs =
-        new FileSchema(mock, "conv_records_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "conv_records_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
 
@@ -1271,7 +1286,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "conv_empty_s", tempDir.resolve("conv_empty").toFile(), null);
+        new FileSchema(mock, "conv_empty_s", tempDir.resolve("conv_empty").toFile(),
+        tempDir.resolve("conv_empty").toFile(), null, null, new ExecutionEngineConfig(), false, null,
+        null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     fs.setConversionRecords(null);
     fs.setConversionRecords(Collections.<String, ConversionMetadata.ConversionRecord>emptyMap());
@@ -1283,7 +1300,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "baseline_null_s", tempDir.resolve("bl_null").toFile(), null);
+        new FileSchema(mock, "baseline_null_s", tempDir.resolve("bl_null").toFile(),
+        tempDir.resolve("bl_null").toFile(), null, null, new ExecutionEngineConfig(), false, null,
+        null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     ConversionMetadata.PartitionBaseline baseline = fs.getTableBaseline("nonexistent");
     assertNull(baseline);
@@ -1295,7 +1314,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "baseline_upd_s", tempDir.resolve("bl_upd").toFile(), null);
+        new FileSchema(mock, "baseline_upd_s", tempDir.resolve("bl_upd").toFile(), tempDir.resolve("bl_upd").toFile(),
+        null, null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
 
     ConversionMetadata.PartitionBaseline baseline = new ConversionMetadata.PartitionBaseline();
     fs.updateTableBaseline("nonexistent", baseline);
@@ -1308,7 +1329,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "raw_conv_s", tempDir.resolve("raw_conv").toFile(), null);
+        new FileSchema(mock, "raw_conv_s", tempDir.resolve("raw_conv").toFile(), tempDir.resolve("raw_conv").toFile(),
+        null, null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
 
     org.apache.calcite.adapter.file.converters.RawToParquetConverter converter =
         new org.apache.calcite.adapter.file.converters.RawToParquetConverter() {
@@ -1332,7 +1355,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "func_map_s", tempDir.resolve("func_map").toFile(), null);
+        new FileSchema(mock, "func_map_s", tempDir.resolve("func_map").toFile(), tempDir.resolve("func_map").toFile(),
+        null, null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
 
     com.google.common.collect.ImmutableMultimap<String, org.apache.calcite.schema.Function> empty =
         com.google.common.collect.ImmutableMultimap.of();
@@ -1346,7 +1371,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "no_comment_s", tempDir.resolve("no_comment").toFile(), null);
+        new FileSchema(mock, "no_comment_s", tempDir.resolve("no_comment").toFile(),
+        tempDir.resolve("no_comment").toFile(), null, null, new ExecutionEngineConfig(), false, null,
+        null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNull(fs.getComment());
   }
 
@@ -1558,8 +1585,8 @@ public class FileSchemaIntegrationCoverageTest {
     views.add(view);
 
     FileSchema fs =
-        new FileSchema(mock, "view_map_s", dir, null, null, new ExecutionEngineConfig(), false,
-        null, views, null, null);
+        new FileSchema(mock, "view_map_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, views,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     Map<String, Table> tableMap = fs.getTableMap();
     assertNotNull(tableMap);
@@ -1584,8 +1611,9 @@ public class FileSchemaIntegrationCoverageTest {
 
     // LINQ4J engine - materializations should be logged as error but not crash
     FileSchema fs =
-        new FileSchema(mock, "mat_nonpq_s", dir, null, null, new ExecutionEngineConfig("LINQ4J", 1000, 1024L * 1024L, null, null, null), false,
-        mats, null, null, null);
+        new FileSchema(mock, "mat_nonpq_s", dir, dir, null, null,
+        new ExecutionEngineConfig("LINQ4J", 1000, 1024L * 1024L, null, null, null), false, mats, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     Map<String, Table> tableMap = fs.getTableMap();
     assertNotNull(tableMap);
@@ -1609,7 +1637,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     // Use storageType="local" to enable file scanning
     FileSchema fs =
-        new FileSchema(mock, "tsv_discover_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "tsv_discover_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     Map<String, Table> tableMap = fs.getTableMap();
@@ -1633,7 +1661,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     // Use storageType="local" to enable file scanning
     FileSchema fs =
-        new FileSchema(mock, "dup_names_s", dir, null, null, null, new ExecutionEngineConfig(), false,
+        new FileSchema(mock, "dup_names_s", dir, dir, null, null, new ExecutionEngineConfig(), false,
         null, null, null, null, "LOWER", "LOWER",
         "local", null, null, null, false);
     Map<String, Table> tableMap = fs.getTableMap();
@@ -1657,7 +1685,8 @@ public class FileSchemaIntegrationCoverageTest {
     createCsvFile(dir, "~temp.csv", "x\n2\n");
     createCsvFile(dir, "valid.csv", "x\n3\n");
 
-    FileSchema fs = new FileSchema(mock, "skip_files_s", dir, null);
+    FileSchema fs = new FileSchema(mock, "skip_files_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     Map<String, Table> tableMap = fs.getTableMap();
     assertNotNull(tableMap);
     // Only valid.csv should appear
@@ -1674,7 +1703,7 @@ public class FileSchemaIntegrationCoverageTest {
   void testFactoryHttpDirectoryAutoDetect() {
     // This will fail (no http server) but exercises the auto-detection code
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "https://example.com/data/");
+    operand.put("directory",  "https://example.com/data/");
 
     try {
       createSchema("http_auto", operand);
@@ -1730,6 +1759,7 @@ public class FileSchemaIntegrationCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
 
     try {
       FileSchemaFactory.INSTANCE.create(dupParent, "dup_schema", operand);
@@ -1816,7 +1846,9 @@ public class FileSchemaIntegrationCoverageTest {
     when(mock.getName()).thenReturn("mock_root");
 
     FileSchema fs =
-        new FileSchema(mock, "no_sp", tempDir.resolve("no_sp").toFile(), null);
+        new FileSchema(mock, "no_sp", tempDir.resolve("no_sp").toFile(), tempDir.resolve("no_sp").toFile(), null,
+        null, new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     assertNull(fs.getStorageProvider());
   }
 
@@ -1891,24 +1923,26 @@ public class FileSchemaIntegrationCoverageTest {
     dir.mkdirs();
 
     // 2-param constructor
-    FileSchema fs1 = new FileSchema(mock, "chain1", dir, null);
+    FileSchema fs1 = new FileSchema(mock, "chain1", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null, null,
+        null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs1);
 
     // 3-param constructor with engine
     FileSchema fs2 =
-        new FileSchema(mock, "chain2", dir, null, new ExecutionEngineConfig());
+        new FileSchema(mock, "chain2", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null, null,
+        null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs2);
 
     // 4-param constructor with recursive
     FileSchema fs3 =
-        new FileSchema(mock, "chain3", dir, null, new ExecutionEngineConfig(), true);
+        new FileSchema(mock, "chain3", dir, dir, null, null, new ExecutionEngineConfig(), true, null, null, null,
+        null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(fs3);
 
     // Full constructor
     FileSchema fs4 =
-        new FileSchema(mock, "chain4", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, null, "LOWER", "LOWER",
-        null, null, null, null, false);
+        new FileSchema(mock, "chain4", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null, null,
+        null, "LOWER", "LOWER", null, null, null, null, false);
     assertNotNull(fs4);
   }
 
@@ -1923,7 +1957,8 @@ public class FileSchemaIntegrationCoverageTest {
     File parquetFile = new File(dir, "sample.parquet");
     Files.write(parquetFile.toPath(), "FAKE_PARQUET_DATA".getBytes(StandardCharsets.UTF_8));
 
-    FileSchema fs = new FileSchema(mock, "pq_scan_s", dir, null);
+    FileSchema fs = new FileSchema(mock, "pq_scan_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null, null,
+        null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     Map<String, Table> tableMap = fs.getTableMap();
     assertNotNull(tableMap);
     // The parquet file should be found even if not valid - it creates a ParquetTranslatableTable
@@ -1939,8 +1974,8 @@ public class FileSchemaIntegrationCoverageTest {
     createJsonFile(dir, "streaming.json", "[{\"ts\":1,\"val\":42}]");
 
     FileSchema fs =
-        new FileSchema(mock, "schema_refresh_s", dir, null, null, new ExecutionEngineConfig(), false,
-        null, null, null, "2 minutes");
+        new FileSchema(mock, "schema_refresh_s", dir, dir, null, null, new ExecutionEngineConfig(), false, null, null,
+        null, "2 minutes", "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     assertTrue(fs.hasRefreshableTables());
     Map<String, Table> tableMap = fs.getTableMap();

@@ -424,6 +424,7 @@ public class RefreshableTableTest extends BaseFileTest {
     // Configure schema with partitioned table and refresh
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("refreshInterval", "1 second");
     operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
 

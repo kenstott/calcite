@@ -221,6 +221,9 @@ tasks.named("compileJava") {
 }
 
 tasks.test {
+    // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+    systemProperty("iceberg.metadata.cache.directory",
+        layout.buildDirectory.dir("iceberg-schema-cache").get().asFile.absolutePath)
     dependsOn("cleanMacResourceForks", "cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 

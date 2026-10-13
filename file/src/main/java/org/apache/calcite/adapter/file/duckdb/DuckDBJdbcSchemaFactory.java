@@ -417,6 +417,13 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={}, databaseFilename={})",
                 directoryPath, schemaName, recursive, fileSchema != null, databaseFilename);
 
+    // Every file DuckDB writes for the schema (catalog, spill) goes under the schema's base
+    // directory, <base>/.aperio, the parent of its operating cache directory (REQ-1992)
+    if (fileSchema == null || fileSchema.getOperatingCacheDirectory() == null) {
+      throw new IllegalStateException(
+          "FileSchema with operatingCacheDirectory is required for DuckDB catalog storage");
+    }
+    final File aperioDir = fileSchema.getOperatingCacheDirectory().getAbsoluteFile().getParentFile();
     try {
       Class.forName("org.duckdb.DuckDBDriver");
 
@@ -426,10 +433,8 @@ public class DuckDBJdbcSchemaFactory {
         // Resolve database_filename path
         File dbFile = new File(databaseFilename);
         if (!dbFile.isAbsolute()) {
-          // Relative path - resolve against working directory's .aperio/.duckdb/ directory
-          // This ensures all schemas can find the same shared database file
-          File workingDir = new File(System.getProperty("user.dir"));
-          File aperioDir = new File(workingDir, ".aperio");
+          // Relative path - resolve against the base directory's .aperio/.duckdb/ directory, so
+          // the schemas of one model (which share a base directory) find the same database file
           File duckdbDir = new File(aperioDir, ".duckdb");
 
           // Ensure the .duckdb directory exists
@@ -451,10 +456,6 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.info("Using configured database filename: {} (resolved to: {})", databaseFilename, catalogPath);
       } else {
         // Use FileSchema's operating cache directory for catalog storage (always local filesystem)
-        if (fileSchema == null || fileSchema.getOperatingCacheDirectory() == null) {
-          throw new IllegalStateException(
-              "FileSchema with operatingCacheDirectory is required for DuckDB catalog storage");
-        }
         String baseDirForCatalog = fileSchema.getOperatingCacheDirectory().getAbsolutePath();
         catalogPath = determineCatalogPath(schemaName, baseDirForCatalog);
       }
@@ -568,7 +569,13 @@ public class DuckDBJdbcSchemaFactory {
       setupConn.createStatement().execute("SET threads TO " + duckdbThreads);
       setupConn.createStatement().execute("SET memory_limit = '" + duckdbMemoryLimit + "'");  // Prevent OOM
       setupConn.createStatement().execute("SET max_memory = '" + duckdbMemoryLimit + "'");  // Hard limit
-      setupConn.createStatement().execute("SET temp_directory = '" + System.getProperty("java.io.tmpdir") + "'");  // Spill location
+      // Spill location: under the base directory, never the JVM temp directory (REQ-1992)
+      final File spillDir = new File(new File(aperioDir, ".duckdb"), "spill");
+      if (!spillDir.isDirectory() && !spillDir.mkdirs()) {
+        throw new IllegalStateException("Cannot create the DuckDB spill directory " + spillDir);
+      }
+      setupConn.createStatement().execute("SET temp_directory = '"
+          + spillDir.getAbsolutePath().replace("'", "''") + "'");
       setupConn.createStatement().execute("SET preserve_insertion_order = false");  // Better performance
       setupConn.createStatement().execute("SET enable_progress_bar = false");  // Cleaner output
 
@@ -697,7 +704,7 @@ public class DuckDBJdbcSchemaFactory {
           finalUseSSL != null && finalUseSSL);
 
       // Load query-time extensions for optimization (vss, fts)
-      loadQueryExtensions(setupConn);
+      loadQueryExtensions(setupConn, aperioDir);
 
       // Create a schema matching the FileSchema name
       // ALWAYS quote the schema name to preserve casing as-is
@@ -1503,7 +1510,7 @@ public class DuckDBJdbcSchemaFactory {
    *
    * @param conn DuckDB connection to load extensions into
    */
-  private static void loadQueryExtensions(Connection conn) {
+  private static void loadQueryExtensions(Connection conn, File aperioDir) {
     List<String[]> extList = new ArrayList<>();
     extList.add(new String[]{"spatial", ""});   // Geospatial: ST_Point, ST_Contains, ST_Intersects
     extList.add(new String[]{"vss", ""});       // Vector Similarity Search: HNSW approximate nearest neighbor
@@ -1536,7 +1543,7 @@ public class DuckDBJdbcSchemaFactory {
       }
     }
 
-    configureCacheHttpfs(conn);
+    configureCacheHttpfs(conn, aperioDir);
 
     LOGGER.info("Query extension loading complete");
   }
@@ -1547,7 +1554,7 @@ public class DuckDBJdbcSchemaFactory {
    *
    * Cache directory priority:
    * 1. System property {@code duckdb.cache_httpfs.directory}
-   * 2. {@code {user.home}/.aperio/.duckdb_httpfs_cache}
+   * 2. {@code <base directory>/.aperio/.duckdb_httpfs_cache}, the schema's own (REQ-1992)
    */
   /**
    * True when {@code cache_httpfs} should not be loaded: on Windows (unsupported there), or when
@@ -1562,15 +1569,15 @@ public class DuckDBJdbcSchemaFactory {
         || Boolean.getBoolean("duckdb.cache_httpfs.disable");
   }
 
-  private static void configureCacheHttpfs(Connection conn) {
+  private static void configureCacheHttpfs(Connection conn, File aperioDir) {
     if (isCacheHttpfsDisabled()) {
       return;
     }
 
     String cacheDir = System.getProperty("duckdb.cache_httpfs.directory");
     if (cacheDir == null || cacheDir.isEmpty()) {
-      cacheDir = System.getProperty("user.home") + File.separator
-          + ".aperio" + File.separator + ".duckdb_httpfs_cache";
+      // The cache holds the source's remote file content, so it is the schema's (REQ-1992)
+      cacheDir = new File(aperioDir, ".duckdb_httpfs_cache").getAbsolutePath();
     }
 
     // Always create the directory first — harmless if the extension didn't load

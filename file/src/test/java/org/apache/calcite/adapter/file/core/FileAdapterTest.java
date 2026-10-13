@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableMap;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -72,6 +73,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(RequiresNetworkExtension.class)
 @Isolated  // Required due to engine-specific behavior and shared state
 public class FileAdapterTest {
+
+  /** Base directory for the schemas the tests create (REQ-1992). */
+  @TempDir File baseDir;
 
   @org.junit.jupiter.api.BeforeEach
   void setUp() {
@@ -430,6 +434,7 @@ public class FileAdapterTest {
             + "       factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
             + "       operand: {\n"
             + "         directory: '/does/not/exist',\n"
+            + "         baseDirectory: '" + baseDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
             + "         ephemeralCache: true\n"
             + "       }\n"
             + "     }\n"
@@ -1198,7 +1203,8 @@ public class FileAdapterTest {
           FileSchemaFactory.INSTANCE
               .create(calciteConnection.getRootSchema(), "x",
                   ImmutableMap.of("directory",
-                      FileAdapterTests.resourcePath("sales-csv"), "flavor", "scannable"));
+                      FileAdapterTests.resourcePath("sales-csv"), "flavor", "scannable",
+                      "baseDirectory", baseDir.getAbsolutePath()));
       calciteConnection.getRootSchema().add("TEST", schema);
       final String sql = "select * from \"TEST\".\"depts\" where \"name\" = ?";
       final PreparedStatement statement2 =

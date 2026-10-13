@@ -115,6 +115,7 @@ class FileSchemaDeepLineCoverageTest2 {
   private Map<String, Object> baseOperand(File directory) {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", directory.getAbsolutePath());
+    operand.put("baseDirectory", directory.getAbsolutePath());
     operand.put("ephemeralCache", true);
     return operand;
   }

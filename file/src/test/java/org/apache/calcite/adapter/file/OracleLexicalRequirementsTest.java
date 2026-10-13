@@ -57,7 +57,7 @@ public class OracleLexicalRequirementsTest {
         + "    \"type\": \"custom\",\n"
         + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "    \"operand\": {\n"
-        + "      \"directory\": \"" + dir.toString().replace("\\", "\\\\") + "\",\n"
+        + "      \"directory\": \"" + dir.toString().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir.toString().replace("\\", "\\\\") + "\",\n"
         + "      \"ephemeralCache\": true,\n"
         + "      \"executionEngine\": \"linq4j\",\n"
         + "      \"tableNameCasing\": \"" + tableCasing + "\",\n"

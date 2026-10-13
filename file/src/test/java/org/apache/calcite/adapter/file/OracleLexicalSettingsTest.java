@@ -12,7 +12,9 @@ package org.apache.calcite.adapter.file;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -28,6 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class OracleLexicalSettingsTest {
+
+  /** Base directory for the schemas the tests create (REQ-1992). */
+  @TempDir File schemaBaseDir;
 
   @Test void testOracleLexicalSettings() throws SQLException {
     Properties info = new Properties();
@@ -45,6 +50,7 @@ public class OracleLexicalSettingsTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + FileAdapterTests.resourcePath("sales").replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + schemaBaseDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        table_name_casing: 'UPPER',\n"
         + "        column_name_casing: 'LOWER',\n"
         + "        ephemeralCache: true\n"
@@ -121,6 +127,7 @@ public class OracleLexicalSettingsTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + FileAdapterTests.resourcePath("sales").replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + schemaBaseDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        table_name_casing: 'UPPER',\n"
         + "        column_name_casing: 'LOWER',\n"
         + "        ephemeralCache: true\n"

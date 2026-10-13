@@ -608,7 +608,7 @@ public class HtmlToJsonConverter {
     }
 
     // Perform crawl
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, baseDirectory);
     CrawlResult crawlResult = crawler.crawl(startUrl);
 
     try {
