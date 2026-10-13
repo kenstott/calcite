@@ -109,6 +109,15 @@ public class XbrlToParquetConverter implements FileConverter {
     this.enabledTables = enabledTables;
   }
 
+  /** The local SEC 13F data set to read information tables from, or null to fetch them. */
+  private Sec13fBulkData bulk13f;
+
+  /** Reads 13F information tables from {@code data} when it holds the filing; returns this. */
+  XbrlToParquetConverter withBulk13f(Sec13fBulkData data) {
+    this.bulk13f = data;
+    return this;
+  }
+
   /** True when {@code tableName} should be written this run — unrestricted (null/empty
    * enabledTables) always writes everything, matching every other schema's convention that an
    * absent enabledTables means "no scope restriction." */
@@ -7208,7 +7217,10 @@ public class XbrlToParquetConverter implements FileConverter {
       // The primary_doc.xml is just the cover page — the actual holdings are in
       // a separate XML file (typically InformationTableOutput.xml or infotable.xml).
       // We need to download it from EDGAR.
-      Document infoTableDoc = download13FInfoTable(cik, accession);
+      // A filing in the local SEC data set needs no information-table fetch (two of its three
+      // sec.gov requests); one that is not there is fetched exactly as before.
+      List<Sec13fBulkData.Row> bulkRows = bulk13f == null ? null : bulk13f.rows(accession);
+      Document infoTableDoc = bulkRows == null ? download13FInfoTable(cik, accession) : null;
 
       // Extract report period from cover page (primary_doc.xml has it; info table does not)
       String coverReportPeriod = getElementText(primaryDoc, "reportCalendarOrQuarter");
@@ -7244,8 +7256,12 @@ public class XbrlToParquetConverter implements FileConverter {
       coverReportPeriod = normalizeDateToIso(coverReportPeriod);
 
       List<Map<String, Object>> holdings;
-      if (infoTableDoc != null) {
-        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year, coverReportPeriod);
+      if (bulkRows != null || infoTableDoc != null) {
+        holdings = bulkRows != null
+            ? holdingsFromBulk(bulkRows, cik, filingType, filingDate, accession, year,
+                coverReportPeriod)
+            : extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year,
+                coverReportPeriod);
         // Extract manager name from primary doc if not in info table
         if (!holdings.isEmpty()) {
           String managerName = getElementText(primaryDoc, "filingManager", "name");
@@ -7526,6 +7542,56 @@ public class XbrlToParquetConverter implements FileConverter {
   private static final String THIRTEENF_VALUE_IN_DOLLARS_FROM = "2023-01-03";
 
   /**
+   * One institutional_holdings row. The XML information table and the bulk data set both build
+   * their rows here, so the two sources cannot drift apart in column names, the dollars-to-thousands
+   * rule, or number parsing.
+   */
+  private Map<String, Object> newHolding(String cik, String accession, String filingDate, int year,
+      String filingType, String managerName, String managerCik, String reportPeriod,
+      String issuer, String titleOfClass, String cusip, String valueText, String shares,
+      String sharesType, String discretion, String otherManager, String votingSole,
+      String votingShared, String votingNone, String putCall) {
+    boolean valueInDollars = filingDate.compareTo(THIRTEENF_VALUE_IN_DOLLARS_FROM) >= 0;
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_date", filingDate);
+    data.put("year", year);
+    data.put("filing_type", filingType);
+    data.put("manager_name", managerName);
+    data.put("manager_cik", managerCik);
+    data.put("report_period", reportPeriod);
+    data.put("issuer_name", issuer);
+    data.put("title_of_class", titleOfClass);
+    data.put("cusip", cusip);
+    Double value = parseDoubleOrNull(valueText);
+    data.put("value_thousands",
+        value != null && valueInDollars ? Double.valueOf(value / 1000.0) : value);
+    data.put("shares_or_principal", parseDoubleOrNull(shares));
+    data.put("shares_or_principal_type", sharesType);
+    data.put("investment_discretion", discretion);
+    data.put("other_manager", otherManager);
+    data.put("voting_authority_sole", parseDoubleOrNull(votingSole));
+    data.put("voting_authority_shared", parseDoubleOrNull(votingShared));
+    data.put("voting_authority_none", parseDoubleOrNull(votingNone));
+    data.put("put_call", putCall);
+    return data;
+  }
+
+  /** Holdings of one filing from the local SEC Form 13F data set; see {@link Sec13fBulkData}. */
+  List<Map<String, Object>> holdingsFromBulk(List<Sec13fBulkData.Row> rows, String cik,
+      String filingType, String filingDate, String accession, int year, String reportPeriod) {
+    List<Map<String, Object>> out = new ArrayList<>(rows.size());
+    for (Sec13fBulkData.Row r : rows) {
+      out.add(newHolding(cik, accession, filingDate, year, filingType, null, cik, reportPeriod,
+          r.issuer, r.titleOfClass, r.cusip, r.value, r.sharesOrPrincipal,
+          r.sharesOrPrincipalType, r.investmentDiscretion, r.otherManager, r.votingSole,
+          r.votingShared, r.votingNone, r.putCall));
+    }
+    return out;
+  }
+
+  /**
    * Extract holdings from a 13F-HR XML informationTable.
    *
    * <p>13F XML structure:
@@ -7569,48 +7635,18 @@ public class XbrlToParquetConverter implements FileConverter {
     for (int i = 0; i < entries.getLength(); i++) {
       Element entry = (Element) entries.item(i);
 
-      Map<String, Object> data = new HashMap<>();
-      data.put("cik", cik);
-      data.put("accession_number", accession);
-      data.put("filing_date", filingDate);
-      data.put("year", year);
-      data.put("filing_type", filingType);
-      data.put("manager_name", managerName);
-      data.put("manager_cik", managerCik);
-      data.put("report_period", reportPeriod);
-
-      data.put("issuer_name", localText(entry, "nameOfIssuer"));
-      data.put("title_of_class", localText(entry, "titleOfClass"));
-      data.put("cusip", localText(entry, "cusip"));
-
-      Double value = parseDoubleOrNull(localText(entry, "value"));
-      data.put("value_thousands", value != null && valueInDollars ? Double.valueOf(value / 1000.0) : value);
-
-      // Shares or principal amount
-      data.put("shares_or_principal",
-          parseDoubleOrNull(localText(entry, "sshPrnamt")));
-      data.put("shares_or_principal_type",
-          localText(entry, "sshPrnamtType"));
-
-      data.put("investment_discretion",
-          localText(entry, "investmentDiscretion"));
-      data.put("other_manager", localText(entry, "otherManager"));
-
-      // Voting authority
       NodeList votingAuth = entry.getElementsByTagNameNS("*", "votingAuthority");
-      if (votingAuth.getLength() > 0) {
-        Element va = (Element) votingAuth.item(0);
-        data.put("voting_authority_sole", parseDoubleOrNull(localText(va, "Sole")));
-        data.put("voting_authority_shared", parseDoubleOrNull(localText(va, "Shared")));
-        data.put("voting_authority_none", parseDoubleOrNull(localText(va, "None")));
-      } else {
-        data.put("voting_authority_sole", null);
-        data.put("voting_authority_shared", null);
-        data.put("voting_authority_none", null);
-      }
-
-      data.put("put_call", localText(entry, "putCall"));
-
+      Element va = votingAuth.getLength() > 0 ? (Element) votingAuth.item(0) : null;
+      Map<String, Object> data = newHolding(cik, accession, filingDate, year, filingType,
+          managerName, managerCik, reportPeriod,
+          localText(entry, "nameOfIssuer"), localText(entry, "titleOfClass"),
+          localText(entry, "cusip"), localText(entry, "value"),
+          localText(entry, "sshPrnamt"), localText(entry, "sshPrnamtType"),
+          localText(entry, "investmentDiscretion"), localText(entry, "otherManager"),
+          va == null ? null : localText(va, "Sole"),
+          va == null ? null : localText(va, "Shared"),
+          va == null ? null : localText(va, "None"),
+          localText(entry, "putCall"));
       dataList.add(data);
     }
 

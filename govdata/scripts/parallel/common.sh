@@ -1342,6 +1342,17 @@ build_inline_model() {
     fi
   fi
 
+  # SEC_BULK_13F_DIR -> bulk13fDir, sec only: a local copy of SEC's Form 13F data sets (made by
+  # scripts/fetch-13f-bulk.sh). The SEC ETL runs inside schema creation, before the schema YAML's
+  # own operands are merged in, so a YAML-only default never reaches it; like forceReprocessTables
+  # above, it has to arrive through the inline model.
+  if [ "$schema_name" = "sec" ] && [ -n "${SEC_BULK_13F_DIR:-}" ]; then
+    case "$SEC_BULK_13F_DIR" in
+      *\"*|*\\*) echo "SEC_BULK_13F_DIR must not contain quotes or backslashes: $SEC_BULK_13F_DIR" >&2; return 1 ;;
+    esac
+    user_tables_json="${user_tables_json},\"bulk13fDir\":\"${SEC_BULK_13F_DIR}\""
+  fi
+
   printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s%s}}]}' \
     "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }

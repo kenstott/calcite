@@ -2303,6 +2303,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand,
       StorageProvider converterStorageProvider) {
+    FileConverter converter = createXbrlConverter(operand, converterStorageProvider);
+    if (converter instanceof XbrlToParquetConverter) {
+      ((XbrlToParquetConverter) converter).withBulk13f(bulk13fData(operand));
+    }
+    return converter;
+  }
+
+  private FileConverter createXbrlConverter(Map<String, Object> operand,
+      StorageProvider converterStorageProvider) {
     try {
       Class<?> clazz = Class.forName(
           "org.apache.calcite.adapter.govdata.sec.XbrlToParquetConverter");
@@ -3589,7 +3598,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Always false: SEC no longer generates its own vectorized chunks.
             boolean enableVectorization = false;
 
-            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
+            XbrlToParquetConverter converter =
+                new XbrlToParquetConverter(this.storageProvider, enableVectorization)
+                    .withBulk13f(bulk13fData(currentOperand));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("INLINE CONVERSION: About to convert fileToConvert={} secParquetDirPath={} enableVectorization={}",
@@ -4504,6 +4515,26 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "S-3", "S3",             // Registration statements
         "S-4", "S4",             // Business combination registration
         "S-8", "S8");              // Employee benefit plan registration
+  }
+
+  private Sec13fBulkData bulk13f;
+  private boolean bulk13fResolved;
+
+  /**
+   * The local SEC Form 13F data set named by the {@code bulk13fDir} operand (schema YAML:
+   * ${SEC_BULK_13F_DIR:}), opened once per run; null when none is configured.
+   */
+  private synchronized Sec13fBulkData bulk13fData(Map<String, Object> operand) {
+    if (!bulk13fResolved) {
+      Object v = operand != null ? operand.get("bulk13fDir") : null;
+      String dir = v == null ? null : String.valueOf(v);
+      if (dir != null && dir.contains("${")) {
+        dir = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(dir);
+      }
+      bulk13f = Sec13fBulkData.forDirectory(dir);
+      bulk13fResolved = true;
+    }
+    return bulk13f;
   }
 
   /**

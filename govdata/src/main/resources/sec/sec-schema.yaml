@@ -40,6 +40,12 @@ alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
 # escalating IP block (a burst → minutes of blanket 429s). Matches the file DocumentSource default.
 edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:125}"
 cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
+# Local directory of SEC Form 13F data set files (infotable_*.parquet, made by
+# govdata/scripts/fetch-13f-bulk.sh). A 13F filing found there needs only its cover document
+# from sec.gov instead of three requests; anything not there is fetched as before. Empty = off.
+# The ETL runs before this file's operands are merged in, so the launch scripts also pass
+# SEC_BULK_13F_DIR through the inline model (build_inline_model in common.sh).
+bulk13fDir: "${SEC_BULK_13F_DIR:}"
 # Periodic table commit: flush + materialize to Iceberg every N accessions so a worker
 # killed mid-run (large years have ~293k accessions) still leaves queryable tables.
 # <= 0 disables periodic commit (single final commit at end of run).
