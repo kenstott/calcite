@@ -1276,7 +1276,10 @@ partitionedTables:
       - name: value_thousands
         type: double
         nullable: true
-        comment: Market value in thousands of USD
+        comment: >
+          Market value in thousands of USD. Filings made from 2023-01-03 report whole dollars
+          on the form; those values are divided by 1000 here so the column is in thousands
+          for every period.
       - name: shares_or_principal
         type: double
         nullable: true
@@ -1292,6 +1295,14 @@ partitionedTables:
         nullable: true
         comment: Investment discretion (SOLE, DFND, OTR)
         source: investmentDiscretion
+      - name: other_manager
+        type: string
+        nullable: true
+        comment: >
+          Sequence number of the other included manager that shares investment discretion for
+          this position (null when the filer alone exercises it). Two positions that differ only
+          here are distinct holdings, not duplicates.
+        source: otherManager
       - name: voting_authority_sole
         type: double
         nullable: true

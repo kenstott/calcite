@@ -7464,6 +7464,24 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * First descendant of {@code parent} whose local name is {@code localName}, trimmed, or null.
+   *
+   * <p>Matches on local name rather than the qualified name, because filers differ in whether the
+   * information-table elements carry a namespace prefix ({@code <ns1:nameOfIssuer>}) or sit in a
+   * default namespace ({@code <nameOfIssuer>}); {@code getElementsByTagName} only sees the latter.
+   */
+  private static String localText(Element parent, String localName) {
+    NodeList found = parent.getElementsByTagNameNS("*", localName);
+    return found.getLength() > 0 ? found.item(0).getTextContent().trim() : null;
+  }
+
+  /**
+   * Form 13F VALUE is reported in whole dollars on filings made on or after this date, and in
+   * thousands of dollars before it (SEC Form 13F data sets readme, "Market value").
+   */
+  private static final String THIRTEENF_VALUE_IN_DOLLARS_FROM = "2023-01-03";
+
+  /**
    * Extract holdings from a 13F-HR XML informationTable.
    *
    * <p>13F XML structure:
@@ -7489,7 +7507,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * </informationTable>
    * }</pre>
    */
-  private List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
+  List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
       String filingType, String filingDate, String accession, int year, String reportPeriod) {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
@@ -7500,11 +7518,9 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     String managerCik = cik;
 
-    // Find infoTable entries (handles both namespaced and non-namespaced)
-    NodeList entries = doc.getElementsByTagName("infoTable");
-    if (entries.getLength() == 0) {
-      entries = doc.getElementsByTagNameNS("*", "infoTable");
-    }
+    boolean valueInDollars = filingDate.compareTo(THIRTEENF_VALUE_IN_DOLLARS_FROM) >= 0;
+
+    NodeList entries = doc.getElementsByTagNameNS("*", "infoTable");
 
     for (int i = 0; i < entries.getLength(); i++) {
       Element entry = (Element) entries.item(i);
@@ -7519,39 +7535,37 @@ public class XbrlToParquetConverter implements FileConverter {
       data.put("manager_cik", managerCik);
       data.put("report_period", reportPeriod);
 
-      data.put("issuer_name", getElementText(entry, "nameOfIssuer"));
-      data.put("title_of_class", getElementText(entry, "titleOfClass"));
-      data.put("cusip", getElementText(entry, "cusip"));
+      data.put("issuer_name", localText(entry, "nameOfIssuer"));
+      data.put("title_of_class", localText(entry, "titleOfClass"));
+      data.put("cusip", localText(entry, "cusip"));
 
-      String value = getElementText(entry, "value");
-      data.put("value_thousands", parseDoubleOrNull(value));
+      Double value = parseDoubleOrNull(localText(entry, "value"));
+      data.put("value_thousands", value != null && valueInDollars ? Double.valueOf(value / 1000.0) : value);
 
       // Shares or principal amount
       data.put("shares_or_principal",
-          parseDoubleOrNull(getElementText(entry, "sshPrnamt")));
+          parseDoubleOrNull(localText(entry, "sshPrnamt")));
       data.put("shares_or_principal_type",
-          getElementText(entry, "sshPrnamtType"));
+          localText(entry, "sshPrnamtType"));
 
       data.put("investment_discretion",
-          getElementText(entry, "investmentDiscretion"));
+          localText(entry, "investmentDiscretion"));
+      data.put("other_manager", localText(entry, "otherManager"));
 
       // Voting authority
-      NodeList votingAuth = entry.getElementsByTagName("votingAuthority");
-      if (votingAuth.getLength() == 0) {
-        votingAuth = entry.getElementsByTagNameNS("*", "votingAuthority");
-      }
+      NodeList votingAuth = entry.getElementsByTagNameNS("*", "votingAuthority");
       if (votingAuth.getLength() > 0) {
         Element va = (Element) votingAuth.item(0);
-        data.put("voting_authority_sole", parseDoubleOrNull(getElementText(va, "Sole")));
-        data.put("voting_authority_shared", parseDoubleOrNull(getElementText(va, "Shared")));
-        data.put("voting_authority_none", parseDoubleOrNull(getElementText(va, "None")));
+        data.put("voting_authority_sole", parseDoubleOrNull(localText(va, "Sole")));
+        data.put("voting_authority_shared", parseDoubleOrNull(localText(va, "Shared")));
+        data.put("voting_authority_none", parseDoubleOrNull(localText(va, "None")));
       } else {
         data.put("voting_authority_sole", null);
         data.put("voting_authority_shared", null);
         data.put("voting_authority_none", null);
       }
 
-      data.put("put_call", getElementText(entry, "putCall"));
+      data.put("put_call", localText(entry, "putCall"));
 
       dataList.add(data);
     }
