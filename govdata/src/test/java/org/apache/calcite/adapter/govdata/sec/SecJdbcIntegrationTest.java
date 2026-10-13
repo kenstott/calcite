@@ -205,6 +205,7 @@ public class SecJdbcIntegrationTest {
             + "\"type\":\"custom\","
             + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
             + "\"operand\":{"
+            + "\"baseDirectory\":\".\","
             + "\"directory\":\"" + testDataDir + "\","
             + "\"smart\":true"
             + "}"

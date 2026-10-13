@@ -155,6 +155,8 @@ public class GraphQLIntegrationTest {
   +
         "      \"operand\": {\n"
   +
+        "        \"baseDirectory\": \".\",\n"
+  +
         "        \"columnNameCasing\": \"UNCHANGED\",\n"
   +
         "        \"executionEngine\": \"LINQ4J\",\n"
@@ -288,6 +290,8 @@ public class GraphQLIntegrationTest {
   +
         "      \"operand\": {\n"
   +
+        "        \"baseDirectory\": \".\",\n"
+  +
         "        \"executionEngine\": \"LINQ4J\",\n"
   +
         "        \"ephemeralCache\": true,\n"
@@ -418,6 +422,8 @@ public class GraphQLIntegrationTest {
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
   +
         "      \"operand\": {\n"
+  +
+        "        \"baseDirectory\": \".\",\n"
   +
         "        \"executionEngine\": \"LINQ4J\",\n"
   +

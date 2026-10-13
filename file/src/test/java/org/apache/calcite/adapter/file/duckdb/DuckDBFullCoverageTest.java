@@ -271,6 +271,7 @@ public class DuckDBFullCoverageTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "duckdb");
     operand.put("ephemeralCache", true);
 
@@ -622,6 +623,7 @@ public class DuckDBFullCoverageTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "duckdb");
     operand.put("ephemeralCache", true);
 
@@ -717,6 +719,7 @@ public class DuckDBFullCoverageTest {
   private Connection createDuckDBConnection() throws Exception {
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "duckdb");
     operand.put("ephemeralCache", true);
 

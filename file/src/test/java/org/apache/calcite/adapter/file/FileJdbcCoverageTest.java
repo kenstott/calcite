@@ -123,6 +123,7 @@ public class FileJdbcCoverageTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
+        + "        \"baseDirectory\": \"" + dir + "\",\n"
         + "        \"directory\": \"" + dir + "\"\n"
         + "      }\n"
         + "    }\n"

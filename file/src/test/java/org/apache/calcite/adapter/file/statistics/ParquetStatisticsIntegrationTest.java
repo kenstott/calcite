@@ -262,6 +262,8 @@ import static org.junit.jupiter.api.Assertions.*;
   +
         "      \"operand\": {\n"
   +
+        "        \"baseDirectory\": \"%s\",\n"
+  +
         "        \"directory\": \"%s\",\n"
   +
         "        \"ephemeralCache\": true\n"
@@ -272,7 +274,8 @@ import static org.junit.jupiter.api.Assertions.*;
   +
         "  ]\n"
   +
-        "}", testParquet.getParentFile().getAbsolutePath());
+        "}", testParquet.getParentFile().getAbsolutePath(),
+        testParquet.getParentFile().getAbsolutePath());
 
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:inline:" + modelJson);
          Statement stmt = conn.createStatement()) {

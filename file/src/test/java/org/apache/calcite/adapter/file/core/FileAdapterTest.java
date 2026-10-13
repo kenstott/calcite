@@ -199,13 +199,15 @@ public class FileAdapterTest {
     server.start();
     try {
       String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/states";
-      File model = File.createTempFile("wiki-local-", ".json");
+      File modelDir = java.nio.file.Files.createTempDirectory("wiki-local-").toFile();
+      modelDir.deleteOnExit();
+      File model = new File(modelDir, "wiki-local.json");
       model.deleteOnExit();
       try (java.io.PrintWriter w = new java.io.PrintWriter(model, "UTF-8")) {
         w.print("{\"version\":\"1.0\",\"defaultSchema\":\"wiki\",\"schemas\":[{"
             + "\"name\":\"wiki\",\"type\":\"custom\","
             + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
-            + "\"operand\":{\"ephemeralCache\":true,\"tables\":[{"
+            + "\"operand\":{\"baseDirectory\":\".\",\"ephemeralCache\":true,\"tables\":[{"
             + "\"name\":\"states_as_of\",\"url\":\"" + url + "\","
             + "\"selector\":\"#mw-content-text table.wikitable.sortable\",\"index\":0,"
             + "\"fields\":["
