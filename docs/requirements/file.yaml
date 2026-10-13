@@ -3639,3 +3639,25 @@
   tests:
     - file/AperioDriverConformanceTest
   since: 2026-09
+
+- id: FILE-191
+  module: file
+  status: complete
+  group: iceberg
+  category: commit locking
+  priority: MUST
+  type: constraint
+  mode: write
+  seam: execution
+  description: >
+    Iceberg is at 1.5.2 or later. Commits to different Iceberg tables from several threads of one
+    JVM must not fail in the release of Iceberg's default in-memory lock. In 1.4.x that release
+    threw a NullPointerException about once in ten thousand lock cycles on two threads, after the
+    commit had taken effect; 1.5.0 tolerates the lost heartbeat entry behind it.
+  source: file/build.gradle.kts, govdata/build.gradle.kts (org.apache.iceberg 1.5.2)
+  tests:
+    - file/IcebergLockReleaseConcurrencyTest
+  notes: "Owner decision 2026-10-10 (issue 476): upgrade, and no lock manager of our own. What
+    remains in every Iceberg release to date: the heartbeat map is still a static unsynchronised
+    HashMap, so a lost entry leaves its heartbeat task scheduled after the lock is released."
+  since: 2026-10
