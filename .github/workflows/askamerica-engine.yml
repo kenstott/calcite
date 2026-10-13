@@ -11,6 +11,15 @@ on:
         required: true
         default: '0.1.0'
 
+# One run per release at a time (queued, never cancelled). Two runs for one release (a manual
+# dispatch beside the automatic one, engine-v0.110.0; a tag pushed twice, engine-v0.110.1) uploaded
+# the same assets with --clobber concurrently, and each lost an upload to the other's delete
+# (HTTP 404). Queued, the second run re-uploads after the first instead of racing it; cancelling
+# could kill a half-finished upload.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version && format('engine-v{0}', inputs.version) || github.ref_name }}
+  cancel-in-progress: false
+
 # actions: write is needed by the installer job's "Ensure pgwire-govdata bundle" step,
 # which dispatches the separate "pgwire-adapters release" workflow (its `release: types:
 # [created]` trigger does not fire reliably — confirmed live, every prior run this
