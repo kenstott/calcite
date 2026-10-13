@@ -31,6 +31,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.FilterableTable;
+import org.apache.calcite.schema.ListingSchema;
 import org.apache.calcite.schema.ScannableTable;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -401,7 +402,7 @@ public class InformationSchema extends AbstractSchema {
         }
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
-          for (String tableName : schema.tables().getNames(LikePattern.any())) {
+          for (String tableName : tableNames(schema)) {
             if (!retained(onlyTables, tableName)) {
               continue;
             }
@@ -523,7 +524,7 @@ public class InformationSchema extends AbstractSchema {
         }
         SchemaPlus schema = rootSchema.subSchemas().get(schemaName);
         if (schema != null) {
-          for (String tableName : schema.tables().getNames(LikePattern.any())) {
+          for (String tableName : tableNames(schema)) {
             if (!retained(onlyTables, tableName)) {
               continue;
             }
@@ -610,13 +611,34 @@ public class InformationSchema extends AbstractSchema {
    * {@code getTable} comes first, so a schema that wraps its tables (the file adapter's, for
    * comments) hands over the wrapper; a table the model declares explicitly is not in the
    * implementation's table map but in the {@link SchemaPlus}, so that is asked when the
-   * implementation has no such table.
+   * implementation has no such table, and a {@link ListingSchema} last, for a table its source
+   * lists but the schema does not expose.
    */
   @SuppressWarnings("deprecation")
   private static @Nullable Table lookUp(SchemaPlus schema, String tableName) {
     final Schema implementation = CalciteSchema.from(schema).schema;
     final Table own = implementation.getTable(tableName);
-    return own != null ? own : schema.tables().get(tableName);
+    if (own != null) {
+      return own;
+    }
+    final Table declared = schema.tables().get(tableName);
+    if (declared != null || !(implementation instanceof ListingSchema)) {
+      return declared;
+    }
+    return ((ListingSchema) implementation).listedTable(tableName);
+  }
+
+  /**
+   * The names of the tables of {@code schema}: those it exposes and, for a
+   * {@link ListingSchema}, every other table its source lists.
+   */
+  private static Set<String> tableNames(SchemaPlus schema) {
+    final Set<String> names = new LinkedHashSet<>(schema.tables().getNames(LikePattern.any()));
+    final Schema implementation = CalciteSchema.from(schema).schema;
+    if (implementation instanceof ListingSchema) {
+      names.addAll(((ListingSchema) implementation).listedTableNames());
+    }
+    return names;
   }
 
   /** TABLE_CONSTRAINTS: primary keys and foreign keys from each table's statistics. */
