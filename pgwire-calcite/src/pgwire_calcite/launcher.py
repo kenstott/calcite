@@ -527,7 +527,7 @@ def main(argv: list | None = None) -> int:
             allow_writes=args.allow_writes,
             sock=listen_sock,
         )
-    except OSError:
+    except OSError as exc:
         # No bind can fail here anymore — claim_listen_socket() already holds the real
         # listening socket, and CalciteServer adopts it rather than rebinding (see its
         # __init__). This is a last-resort safety net for a genuinely unexpected failure,
@@ -540,8 +540,11 @@ def main(argv: list | None = None) -> int:
         # exception to be enough.
         log.error(
             "[PGWIRE] unexpected failure starting the server on %s:%d after the listen "
-            "socket was already claimed — forcing immediate exit rather than lingering.",
-            args.host, args.port,
+            "socket was already claimed — forcing immediate exit rather than lingering: %s",
+            args.host, args.port, exc,
+            # The cause (a PermissionError on the state directory, say) is the only thing the
+            # operator has to go on; os._exit leaves no traceback of its own.
+            exc_info=exc,
         )
         os._exit(1)
     log.info(
