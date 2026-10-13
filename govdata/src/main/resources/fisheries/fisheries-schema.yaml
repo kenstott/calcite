@@ -1,0 +1,1769 @@
+# ============================================================================
+# U.S. Fisheries Schema (FISHERIES)
+# ============================================================================
+# Data Source:
+#   - NOAA Fisheries FOSS (Fisheries One Stop Shop) landings, ODS REST API
+#     https://apps-st.fisheries.noaa.gov/ods/foss/landings/ (keyless JSON)
+#     Metadata: https://apps-st.fisheries.noaa.gov/ods/foss/metadata-catalog/landings/
+#
+#   - NOAA Fisheries MRIP (Marine Recreational Information Program) wave-level catch and effort
+#     https://www.st.nmfs.noaa.gov/st1/recreational/MRIP_Estimate_Data/CSV/ (keyless CSV/zip)
+#
+#   - Columbia Basin Research (Univ. of Washington) DART adult fish passage annual counts
+#     https://www.cbr.washington.edu/dart/query/adult_annual_sum (keyless CSV, USACE/PUD counts)
+#
+# Features:
+#   - Commercial landings (pounds, dollars) and recreational catch (MRIP fish counts)
+#     by state, species and year, 1950 onward
+#   - MRIP recreational catch (harvest, released, weight) and effort (angler trips) by year, wave,
+#     state, fishing mode, area fished and species, 1981 onward (Atlantic and Gulf coasts plus Hawaii)
+#   - Salmon flagged and split by species; Great Lakes stocked salmon marked non-native
+#   - Alaska Dept. of Fish and Game Sport Fish Division daily fish counts (weirs, towers, sonar)
+#     https://www.adfg.alaska.gov/sf/FishCounts/ (keyless JSON export)
+#   - CDFW GrandTab Central Valley Chinook escapement, via SacPAS (Columbia Basin Research)
+#     https://www.cbr.washington.edu/sacramento/data/query_adult_grandtab.html (keyless CSV)
+#   - WDFW Salmonid Population Indicators (SPI) escapement, data.wa.gov dataset fgyz-n3uk
+#     https://data.wa.gov/resource/fgyz-n3uk.json (keyless Socrata JSON)
+#   - USFWS ECOS species report (ESA listing status of salmon/steelhead ESUs/DPSs)
+#     https://ecos.fws.gov/ecp/pullreports/ (keyless JSON)
+#   - NOAA Fisheries Economics of the United States (FEUS) data tool: jobs, sales, income and
+#     value-added impacts of the commercial seafood and recreational fishing industries by state
+#     https://www.fisheries.noaa.gov/data-tools/fisheries-economics-united-states-data-and-visualizations
+#     (keyless JavaScript data files on www.st.nmfs.noaa.gov; file names carry a date stamp)
+#   - NOAA Stock SMART assessment summaries (F/Fmsy, B/Bmsy by stock and assessment year),
+#     https://apps-st.fisheries.noaa.gov/stocksmart/ (keyless sis_servlet + data-export-servlet)
+#   - RMIS (Regional Mark Processing Center, PSMFC) release groups and locations, PSC format v5.0
+#     https://www.rmpc.org/pub/data/ (keyless CSV bulk files)
+#   - Cross-references geo.state_ref via state_abbr
+# ============================================================================
+
+schemaName: "${SCHEMA_NAME:fisheries}"
+materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
+
+comment: >
+  U.S. fisheries data from NOAA Fisheries. Tables: rmis_releases and rmis_locations (RMIS hatchery/wild salmon and steelhead release groups and the location lookup), noaa_feus_economic_impacts (jobs, sales, income and value added of commercial and recreational fishing by state), wdfw_salmonid_escapement (Washington stock-level escapement), esa_salmonid_listings (ESA status of salmon/steelhead ESUs and DPSs), cdfw_grandtab_escapement (California Central Valley Chinook escapement), adfg_fish_counts (Alaska site counts), dart_adult_counts (adult salmon/steelhead dam passage counts, WA/OR) stock_smart_assessments (NOAA stock assessment F/Fmsy and B/Bmsy by stock), noaa_commercial_landings, annual
+  commercial landings (pounds and dollar value) and recreational catch (number of fish) by state
+  and species, including Pacific and Atlantic salmon by species (chinook, coho, sockeye, chum,
+  pink, atlantic). Landings are harvest, not population: use them as the state-level signal for
+  salmon abundance trends, with the caveat that harvest also reflects regulation and effort.
+  Joins to geo.state_ref via state_abbr.
+
+# ============================================================================
+# COLUMN TEMPLATES
+# ============================================================================
+
+column_templates:
+
+  partition_type: &partition_type
+    name: type
+    type: VARCHAR
+
+  partition_year: &partition_year
+    name: year
+    type: INTEGER
+
+  standard_partitions: &standard_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_year
+
+  iceberg_common: &iceberg_common
+    warehousePath: "${GOVDATA_PARQUET_DIR}/fisheries"
+    catalogType: hadoop
+    runCompaction: true
+    compactionTargetFileSizeBytes: 134217728
+    compactionMinFiles: 5
+
+# ============================================================================
+# DIMENSION VALUES
+# ============================================================================
+
+dimension_values:
+
+  # ADF&G Sport Fish count locations that report salmon/steelhead (countLocationID), found by
+  # scanning IDs 1-80 against every salmon species ID.
+  adfg_locations: &adfg_locations
+    type: list
+    values: ["5","6","7","8","9","10","13","15","16","17","21","23","24","25","26","27","28",
+             "29","30","31","32","33","34","35","37","38","39","40","41","51","59","60","62",
+             "68","70","72","73","74","75","76","77","78","79"]
+
+  # ADF&G speciesID: 410 Chinook, 411/412 Chinook early/late run, 420 Sockeye, 421/422 Sockeye
+  # early/late run, 430 Coho, 540 Steelhead. A location/species pair it does not count returns
+  # an empty export.
+  adfg_species: &adfg_species
+    type: list
+    values: ["410","411","412","420","421","422","430","540"]
+
+  # CDFW GrandTab Chinook runs and origins (the SacPAS query values). 'All' origin and the
+  # 'All' run are sums of these and are not fetched.
+  grandtab_runs: &grandtab_runs
+    type: list
+    values: ["Winter","Spring","Fall","Late-Fall"]
+
+  grandtab_origins: &grandtab_origins
+    type: list
+    values: ["In-River","Hatchery"]
+
+  # RMIS reporting agencies that have a per-agency release file (RL050_<agency>_FULLSET.csv)
+  rmis_agencies: &rmis_agencies
+    type: list
+    values: ["ADFG","CCT","CDFO","CDFW","CRITFC","CTUIR","IDFG","NMFS","NPT","NWIFC","ODFW","QDNR","RMPC","STIL","USFWS","WDFW","YAKA"]
+
+  # Dams/counting projects with adult passage counts in DART (code used as proj=).
+  dart_projects: &dart_projects
+    type: list
+    values: ["BON","TDA","JDA","MCN","IHR","LMN","LGS","LWG","PRD","WAN","RIS","RRH","WEL",
+             "WFF","PRO","ROZ","TUM"]
+
+  # MRIP publishes calendar year Y in the latest bulk files once it is final or preliminary;
+  # 2025 is the newest as of Oct 2026, so dataLag: 1. The default start is 1982 so
+  # effective_year begins at 1981, the first MRIP year.
+  mrip_years: &mrip_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1982}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+
+  # FEUS data-tool files: Comm (commercial seafood industry) and Rec (marine recreational
+  # fishing). The URL embeds the publication date (03_27_25); a refresh moves it, and the
+  # table then fails on the 404 until this value is updated.
+  feus_files: &feus_files
+    type: list
+    values: ["Comm","Rec"]
+
+  # dataLag: 2 — FOSS carries data through current-2 (2024 is the newest year as of Oct 2026;
+  # 2025 returns an empty page). The URL templates {effective_year}. The default start is
+  # 1952 so effective_year begins at 1950, the first year FOSS has any rows.
+  foss_years: &foss_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1952}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 2
+
+# ============================================================================
+# PARTITIONED TABLES
+# ============================================================================
+
+partitionedTables:
+
+  # ---------------------------------------------------------------------------
+  # NOAA_COMMERCIAL_LANDINGS — FOSS landings by state x species x year
+  # ---------------------------------------------------------------------------
+  - name: noaa_commercial_landings
+    # NOAA revises recent years as state agencies finalize; 2 re-fetches the two newest years.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=noaa_landings/year=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 1950
+      maxYear: 2024
+      distinctYears: 75
+      contiguous: true
+      rowCount: 229828
+      checkedAt: "2026-10-12T08:17:19Z"
+    partitions: *standard_partitions
+    comment: >
+      NOAA Fisheries FOSS annual landings by state and species, 1950 to current-2. Two
+      collections: 'Commercial' (pounds, dollars; ~3,200 rows/year in recent years) and
+      'Recreational' (MRIP estimates; fish_count, and pounds where estimated; from 1981).
+      Salmon rows are flagged is_salmon = true with salmon_species (chinook, coho, sockeye,
+      chum, pink, atlantic, pacific_unspecified) and salmon_origin ('coastal' for Alaska,
+      Pacific Coast, New England etc.; 'great_lakes_stocked' for the Great Lakes region, where
+      salmon are stocked non-native fish) — filter salmon_origin = 'coastal' for wild-stock
+      states. Alaska dominates (2022: ~381M lb sockeye, ~216M lb pink, ~82M lb chum); CA, OR,
+      WA also report every year. This is harvest, not run size or escapement: it tracks
+      population trends only loosely, since regulation, closures and market affect it. For
+      Columbia River adult counts see the planned dart_adult_counts table.
+      NOAA publishes several source rows per state + species + source + collection (MRIP and
+      confidential-species rows are split), so there is no primary key: always SUM(pounds),
+      SUM(dollars) or SUM(fish_count) grouped by the keys you need. state_name
+      'PROCESS AT SEA' (2008+) is landings processed offshore: state_abbr is null and
+      is_state = false, so exclude it from by-state rollups. FLORIDA-EAST and FLORIDA-WEST both
+      map to state_abbr 'FL'. Cross-references geo.state_ref via state_abbr.
+
+    dimensions:
+      type:
+        - noaa_landings
+      year: *foss_years
+
+    columns:
+      - name: landing_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the landings
+      - name: collection
+        type: string
+        nullable: false
+        comment: "'Commercial' (pounds, dollars) or 'Recreational' (MRIP catch estimates)"
+      - name: source
+        type: string
+        nullable: false
+        comment: Originating NOAA data system (e.g. AKFIN, PACFIN, MRIP, GLAKES, PIFSC)
+      - name: state_name
+        type: string
+        nullable: false
+        comment: NOAA state name in upper case, including FLORIDA-EAST/FLORIDA-WEST and PROCESS AT SEA
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter state/territory abbreviation; null for PROCESS AT SEA
+      - name: is_state
+        type: boolean
+        nullable: false
+        comment: false for the PROCESS AT SEA pseudo-state, true otherwise; filter on it for by-state rollups
+      - name: region_name
+        type: string
+        nullable: true
+        comment: NOAA region (Alaska, Pacific Coast, New England, Great Lakes, Gulf, ...); null on some recreational rows
+      - name: tsn
+        type: string
+        nullable: true
+        comment: ITIS taxonomic serial number of the species (0 = withheld for confidentiality)
+      - name: species_name
+        type: string
+        nullable: true
+        comment: NOAA/AFS common name in upper case (e.g. 'SALMON, SOCKEYE'); trailing ** marks a grouped category
+      - name: scientific_name
+        type: string
+        nullable: true
+        comment: Scientific name; null for most recreational rows
+      - name: pounds
+        type: double
+        nullable: true
+        comment: Landed weight in pounds
+      - name: dollars
+        type: double
+        nullable: true
+        comment: Ex-vessel value in nominal dollars; null for recreational rows
+      - name: fish_count
+        type: double
+        nullable: true
+        comment: Estimated number of fish caught (MRIP recreational rows only)
+      - name: is_salmon
+        type: boolean
+        nullable: false
+        comment: true when species_name starts with 'SALMON, '
+      - name: salmon_species
+        type: string
+        nullable: true
+        comment: "Lower-case salmon species (chinook, coho, sockeye, chum, pink, atlantic, pacific); null for non-salmon. 'pacific' is NOAA's unspecified Pacific salmon group"
+      - name: salmon_origin
+        type: string
+        nullable: true
+        comment: "'coastal' or 'great_lakes_stocked' (non-native, stocked salmon in the Great Lakes region); null for non-salmon"
+
+    source:
+      type: http
+      # The q filter is URL-encoded inline: its literal braces would otherwise be read as
+      # {variable} placeholders.
+      url: "https://apps-st.fisheries.noaa.gov/ods/foss/landings/?q=%7B%22year%22%3A{effective_year}%7D"
+      method: GET
+      response:
+        format: json
+        dataPath: "items"
+        pagination:
+          type: OFFSET
+          limitParam: "limit"
+          offsetParam: "offset"
+          pageSize: 10000
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # Disabled by design: a paginated source's raw cache replays as a {"results":[...]}
+      # envelope, which FisheriesLandingsTransformer (reading the live {"items":[...]} page)
+      # would reject. A year is ~1.7 MB, so refetching costs nothing.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesLandingsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=noaa_landings/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: noaa_commercial_landings
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # MRIP_RECREATIONAL_CATCH / MRIP_RECREATIONAL_EFFORT — NOAA MRIP wave-level estimates
+  # ---------------------------------------------------------------------------
+  - name: mrip_recreational_catch
+    # NOAA revises recent years (preliminary to final); 2 re-fetches the two newest years.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=mrip_catch/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NOAA Fisheries MRIP (Marine Recreational Information Program) recreational catch by
+      year x wave x state x fishing mode x area fished x species, 1981 to the latest published
+      year. Measures: harvest in fish (landings_fish = claimed + reported), fish released alive
+      (released_fish), total catch (total_catch_fish) and harvest weight (landings_pounds,
+      landings_kg), each with a standard error and percent standard error. Companion to
+      noaa_commercial_landings, whose collection = 'Recreational' rows carry only an annual
+      state x species fish_count and pounds; this table adds wave, mode, area, the
+      harvest-versus-released split and the uncertainty. Coverage is the Atlantic and Gulf
+      coasts from Maine to Mississippi plus Hawaii (17 states in 2022); Louisiana, Texas, the
+      Pacific coast and Alaska are surveyed by state agencies and are absent from recent years,
+      so use noaa_commercial_landings for them. Florida appears under two sub-regions (South
+      Atlantic and Gulf of America), so state_abbr alone does not identify a row. species_code is MRIP's 10-digit species code and species_name its common name in
+      upper case; it does not carry the ITIS tsn used in noaa_commercial_landings, so match
+      species by name (approximate). Estimates are survey-based: check *_pse (above 50 = unreliable)
+      and never treat a null as zero. One row per wave x state x mode x area x species; sum
+      landings_fish or total_catch_fish across waves/modes/areas for annual totals (standard
+      errors do not add). Source files are replaced in place when estimates are revised.
+      Cross-references geo.state_ref via state_abbr.
+    dimensions:
+      type:
+        - mrip_catch
+      year: *mrip_years
+
+    columns:
+      - name: catch_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the estimate
+      - name: wave
+        type: integer
+        nullable: false
+        comment: MRIP wave (two-month period) 1 = Jan-Feb, 2 = Mar-Apr, 3 = May-Jun, 4 = Jul-Aug, 5 = Sep-Oct, 6 = Nov-Dec
+      - name: status
+        type: string
+        nullable: false
+        comment: "FINAL or PRELIMINARY; recent years are revised, so the newest year is typically PRELIMINARY"
+      - name: sub_region_code
+        type: string
+        nullable: true
+        comment: MRIP sub-region code (4 North Atlantic, 5 Mid-Atlantic, 6 South Atlantic, 7 Gulf of America, 8 Hawaiian Islands)
+      - name: sub_region_name
+        type: string
+        nullable: true
+        comment: MRIP sub-region name
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS code; join to geo.state_ref
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state abbreviation; join to geo.state_ref
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name in upper case as published by MRIP
+      - name: mode_code
+        type: string
+        nullable: true
+        comment: Fishing mode code (3 shore, 4 party boat, 5 charter boat, 7 private/rental boat; older years may also carry combined-mode codes)
+      - name: mode_name
+        type: string
+        nullable: true
+        comment: Fishing mode name (SHORE, PARTY BOAT, CHARTER BOAT, PRIVATE/RENTAL BOAT)
+      - name: area_code
+        type: string
+        nullable: true
+        comment: Area fished code (1 ocean <= 3 mi, 2 ocean > 3 mi, 3 ocean <= 10 mi, 4 ocean > 10 mi, 5 inland)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: Area fished (OCEAN (<= 3 MI), OCEAN (> 3 MI), OCEAN (<= 10 MI), OCEAN (> 10 MI), INLAND)
+      - name: alt_flag
+        type: integer
+        nullable: true
+        comment: MRIP alternate-estimate flag (0 for standard estimates)
+      - name: species_code
+        type: string
+        nullable: false
+        comment: MRIP 10-digit species code (1000000000 = unidentified fish)
+      - name: species_name
+        type: string
+        nullable: false
+        comment: MRIP common name in upper case (e.g. STRIPED BASS, RED SNAPPER); grouped categories end in GENUS or SPECIES
+      - name: claimed_harvest_fish
+        type: double
+        nullable: true
+        comment: "Type A claim: fish harvested and seen/identified by an interviewer (MRIP ESTCLAIM); null when the estimate is not available"
+      - name: claimed_harvest_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of claimed_harvest_fish, sqrt of the published variance
+      - name: claimed_harvest_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of claimed_harvest_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: reported_harvest_fish
+        type: double
+        nullable: true
+        comment: "Type B1: fish harvested but not seen by an interviewer, as reported by the angler (MRIP ESTHARV); null when the estimate is not available"
+      - name: reported_harvest_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of reported_harvest_fish, sqrt of the published variance
+      - name: reported_harvest_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of reported_harvest_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: landings_fish
+        type: double
+        nullable: true
+        comment: Total harvested fish, A + B1 (MRIP LANDING); the recreational harvest number; null when the estimate is not available
+      - name: landings_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of landings_fish, sqrt of the published variance
+      - name: landings_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of landings_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: released_fish
+        type: double
+        nullable: true
+        comment: "Type B2: fish caught and released alive (MRIP ESTREL); null when the estimate is not available"
+      - name: released_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of released_fish, sqrt of the published variance
+      - name: released_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of released_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: total_catch_fish
+        type: double
+        nullable: true
+        comment: "Total catch: harvested plus released fish (MRIP TOT_CAT); null when the estimate is not available"
+      - name: total_catch_fish_std_err
+        type: double
+        nullable: true
+        comment: Standard error of total_catch_fish, sqrt of the published variance
+      - name: total_catch_fish_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of total_catch_fish (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: landings_pounds
+        type: double
+        nullable: true
+        comment: Harvest weight in pounds, A + B1 (MRIP LBS_AB1); null when the estimate is not available
+      - name: landings_pounds_std_err
+        type: double
+        nullable: true
+        comment: Standard error of landings_pounds, sqrt of the published variance
+      - name: landings_pounds_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of landings_pounds (100 x SE / estimate); above 50 the estimate is unreliable
+      - name: landings_kg
+        type: double
+        nullable: true
+        comment: Harvest weight in kilograms, A + B1 (MRIP WGT_AB1); null when the estimate is not available
+      - name: landings_kg_std_err
+        type: double
+        nullable: true
+        comment: Standard error of landings_kg, sqrt of the published variance
+      - name: landings_kg_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of landings_kg (100 x SE / estimate); above 50 the estimate is unreliable
+
+    source:
+      type: http
+      # The URL names the per-year file. 2020 onward is a plain CSV at this URL; 1981-2019 is
+      # published only inside decade zip bundles, which FisheriesMripTransformer resolves from
+      # this URL and reads itself (so response.format is ignored).
+      url: "https://www.st.nmfs.noaa.gov/st1/recreational/MRIP_Estimate_Data/CSV/Wave%20Level%20Estimate%20Downloads/mrip_catch_bywave_{effective_year}.csv"
+      method: GET
+      response:
+        format: json  # ignored: FisheriesMripTransformer streams the CSV/zip itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # Disabled by design: recent years are revised in place at the same URL, and the
+      # transformer reads the file directly rather than through the raw cache.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesMripTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=mrip_catch/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: mrip_recreational_catch
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: mrip_recreational_effort
+    # NOAA revises recent years (preliminary to final); 2 re-fetches the two newest years.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=mrip_effort/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      NOAA Fisheries MRIP recreational fishing effort, in angler trips, by year x wave x state x
+      fishing mode x area fished, 1981 to the latest published year, with standard error and
+      percent standard error. One trip is one angler fishing for one day. Pair with
+      mrip_recreational_catch (same keys) to compute catch per trip. Atlantic and Gulf coasts
+      from Maine to Mississippi plus Hawaii; Louisiana, Texas, the Pacific coast and Alaska are
+      absent from recent years. Florida appears under two sub-regions (South Atlantic and Gulf of
+      America). A null angler_trips is an estimate MRIP did not produce for that cell, not zero
+      trips. Standard errors do not add across rows. Cross-references geo.state_ref via
+      state_abbr.
+    dimensions:
+      type:
+        - mrip_effort
+      year: *mrip_years
+
+    columns:
+      - name: catch_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the estimate
+      - name: wave
+        type: integer
+        nullable: false
+        comment: MRIP wave (two-month period) 1 = Jan-Feb, 2 = Mar-Apr, 3 = May-Jun, 4 = Jul-Aug, 5 = Sep-Oct, 6 = Nov-Dec
+      - name: status
+        type: string
+        nullable: false
+        comment: "FINAL or PRELIMINARY; recent years are revised, so the newest year is typically PRELIMINARY"
+      - name: sub_region_code
+        type: string
+        nullable: true
+        comment: MRIP sub-region code (4 North Atlantic, 5 Mid-Atlantic, 6 South Atlantic, 7 Gulf of America, 8 Hawaiian Islands)
+      - name: sub_region_name
+        type: string
+        nullable: true
+        comment: MRIP sub-region name
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS code; join to geo.state_ref
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter state abbreviation; join to geo.state_ref
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name in upper case as published by MRIP
+      - name: mode_code
+        type: string
+        nullable: true
+        comment: Fishing mode code (3 shore, 4 party boat, 5 charter boat, 7 private/rental boat; older years may also carry combined-mode codes)
+      - name: mode_name
+        type: string
+        nullable: true
+        comment: Fishing mode name (SHORE, PARTY BOAT, CHARTER BOAT, PRIVATE/RENTAL BOAT)
+      - name: area_code
+        type: string
+        nullable: true
+        comment: Area fished code (1 ocean <= 3 mi, 2 ocean > 3 mi, 3 ocean <= 10 mi, 4 ocean > 10 mi, 5 inland)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: Area fished (OCEAN (<= 3 MI), OCEAN (> 3 MI), OCEAN (<= 10 MI), OCEAN (> 10 MI), INLAND)
+      - name: angler_trips
+        type: double
+        nullable: true
+        comment: Estimated angler trips (MRIP ESTRIPS); null when the estimate is not available
+      - name: angler_trips_std_err
+        type: double
+        nullable: true
+        comment: Standard error of angler_trips, sqrt of the published variance
+      - name: angler_trips_pse
+        type: double
+        nullable: true
+        comment: Percent standard error of angler_trips; above 50 the estimate is unreliable
+
+    source:
+      type: http
+      # The URL names the per-year file. 2020 onward is a plain CSV at this URL; 1981-2019 is
+      # published only inside decade zip bundles, which FisheriesMripTransformer resolves from
+      # this URL and reads itself (so response.format is ignored).
+      url: "https://www.st.nmfs.noaa.gov/st1/recreational/MRIP_Estimate_Data/CSV/Wave%20Level%20Estimate%20Downloads/mrip_effort_bywave_{effective_year}.csv"
+      method: GET
+      response:
+        format: json  # ignored: FisheriesMripTransformer streams the CSV/zip itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # Disabled by design: recent years are revised in place at the same URL, and the
+      # transformer reads the file directly rather than through the raw cache.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesMripTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=mrip_effort/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: mrip_recreational_effort
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # DART_ADULT_COUNTS — adult salmon/steelhead passage counts at dams (WA/OR)
+  # ---------------------------------------------------------------------------
+  - name: dart_adult_counts
+    freshness:
+      type: hash
+    pattern: "type=dart_adult_counts/project=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: project
+          type: VARCHAR
+    comment: >
+      Annual adult fish passage counts at Columbia basin dams and fishways (Columbia Basin
+      Research DART, from USACE and public utility district counts): Chinook, Jack Chinook,
+      Steelhead, Wild Steelhead, Sockeye, Coho, Jack Coho, Chum, Pink, plus Shad, Lamprey
+      and Bull Trout, one row per project x year x species. 17 projects on the Columbia,
+      Snake, Yakima, Wenatchee and Willamette rivers; Bonneville back to 1938. This is the
+      closest keyless run-size signal for WA and OR salmon (Bonneville is the first dam up the
+      Columbia, so its Chinook/Steelhead/Sockeye counts approximate the total Columbia
+      return); it is a passage count at a dam, not a per-stock escapement estimate. Adults
+      counted at Lower Granite and the other Snake dams are headed to Idaho spawning grounds
+      but the dams are in Washington, so state_abbrs gives the dam's location, and
+      spans_states = true marks Columbia dams on the WA/OR border (BON, TDA, JDA, MCN): do not
+      add those to a by-state sum. Counts are not additive across dams in the same river
+      (the same fish is counted at each). Hatchery fish are included except where the species
+      column says Wild.
+
+    dimensions:
+      type:
+        - dart_adult_counts
+      project: *dart_projects
+
+    columns:
+      - name: project_code
+        type: string
+        nullable: false
+        comment: DART project code (BON, TDA, JDA, MCN, IHR, LMN, LGS, LWG, PRD, WAN, RIS, RRH, WEL, WFF, PRO, ROZ, TUM)
+      - name: project_name
+        type: string
+        nullable: false
+        comment: Dam or counting station name, e.g. Bonneville, Lower Granite, Willamette Falls
+      - name: river
+        type: string
+        nullable: false
+        comment: River the project sits on (Columbia, Snake, Yakima, Wenatchee, Willamette)
+      - name: state_abbrs
+        type: string
+        nullable: false
+        comment: Comma-separated 2-letter state(s) the dam sits in, e.g. 'WA' or 'OR,WA' for border dams; join to geo.state_ref
+      - name: spans_states
+        type: boolean
+        nullable: false
+        comment: true for Columbia dams on the Oregon/Washington border
+      - name: count_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the count
+      - name: species
+        type: string
+        nullable: false
+        comment: DART species/category, e.g. Chinook, Jack Chinook, Steelhead, Wild Steelhead, Sockeye, Coho, Jack Coho, Chum, Pink, Shad, Bull Trout, Lamprey (daytime)
+      - name: adult_count
+        type: bigint
+        nullable: false
+        comment: Net fish counted passing the project that year (fallbacks are subtracted, so a few rare years show -1 to -4); species with no count that year are absent, not zero-filled. The current calendar year is partial
+
+    source:
+      type: http
+      url: "https://www.cbr.washington.edu/dart/cs/php/rpt/adult_annual.php?sc=1&outputFormat=csv&year=2023&proj={project}&span=no&startdate=1%2F1&enddate=12%2F31&run="
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The CSV carries footnotes that FisheriesDartCountsTransformer strips; a raw-cache
+      # replay would hand it the post-transform envelope instead.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesDartCountsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=dart_adult_counts/project=*/"
+      partition:
+        columns: [type, project]
+      iceberg:
+        <<: *iceberg_common
+        tableName: dart_adult_counts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # ADFG_FISH_COUNTS — Alaska Sport Fish Division annual salmon/steelhead counts by site
+  # ---------------------------------------------------------------------------
+  - name: adfg_fish_counts
+    freshness:
+      type: hash
+    pattern: "type=adfg_fish_counts/location_id=*/species_id=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: location_id
+          type: VARCHAR
+        - name: species_id
+          type: VARCHAR
+    comment: >
+      Alaska Department of Fish and Game, Sport Fish Division escapement and run counts of
+      adult Chinook, Sockeye (incl. early/late run), Coho and Steelhead at ~40 weirs, towers
+      and sonar sites (Kenai, Kasilof, Russian, Anchor, Ninilchik, Situk, Gulkana, Copper,
+      Chena, Salcha, Karluk, Ayakulik, Buskin, Nushagak, Deshka, Little Susitna and more),
+      one row per count site x species x year, summed from the daily counts, 1960s onward
+      (start year varies by site). state_abbr is always AK. This is the Alaska counterpart to
+      dart_adult_counts: the Division's own in-river counts at monitored sites, not a
+      statewide run-size estimate (Bristol Bay, Yukon and Kuskokwim commercial-area escapement
+      belong to the Commercial Fisheries Division and are not in this table), and a site's
+      count is only comparable to the same site's other years. Counts for a year are only the
+      days the site operated (days_counted, first/last_count_date); the current year is
+      partial. Use noaa_commercial_landings for statewide harvest.
+
+    dimensions:
+      type:
+        - adfg_fish_counts
+      location_id: *adfg_locations
+      species_id: *adfg_species
+
+    columns:
+      - name: adfg_location_id
+        type: bigint
+        nullable: false
+        comment: ADF&G countLocationID of the weir/tower/sonar site
+      - name: location_name
+        type: string
+        nullable: false
+        comment: Count site name as ADF&G publishes it, e.g. 'Kenai River (Chinook)', 'Situk River'
+      - name: adfg_species_id
+        type: bigint
+        nullable: false
+        comment: ADF&G speciesID (410 Chinook, 411/412 Chinook early/late, 420 Sockeye, 421/422 Sockeye early/late, 430 Coho, 540 Steelhead)
+      - name: species_name
+        type: string
+        nullable: false
+        comment: Species label, e.g. Chinook, Sockeye - Early Run, Coho, Steelhead
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: Always AK; join to geo.state_ref
+      - name: count_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the counts
+      - name: total_count
+        type: bigint
+        nullable: false
+        comment: Sum of the daily fish counts for the year at this site (days the site did not operate are absent, not zero)
+      - name: days_counted
+        type: integer
+        nullable: false
+        comment: Number of days with a reported count that year
+      - name: peak_daily_count
+        type: bigint
+        nullable: false
+        comment: Largest single-day count that year
+      - name: first_count_date
+        type: string
+        nullable: false
+        comment: First day with a reported count (yyyy-MM-dd)
+      - name: last_count_date
+        type: string
+        nullable: false
+        comment: Last day with a reported count (yyyy-MM-dd)
+
+    source:
+      type: http
+      # year= is a list covering every year the Division has published (its picker starts at
+      # 1960); the export drops years it has no data for. Without year= it returns only the
+      # last five years, and the source rejects lists reaching 2100, so this runs to 2040 and
+      # must be extended before then.
+      url: "https://www.adfg.alaska.gov/sf/FishCounts/index.cfm?ADFG=export.JSON&countLocationID={location_id}&speciesID={species_id}&year=2040,2039,2038,2037,2036,2035,2034,2033,2032,2031,2030,2029,2028,2027,2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016,2015,2014,2013,2012,2011,2010,2009,2008,2007,2006,2005,2004,2003,2002,2001,2000,1999,1998,1997,1996,1995,1994,1993,1992,1991,1990,1989,1988,1987,1986,1985,1984,1983,1982,1981,1980,1979,1978,1977,1976,1975,1974,1973,1972,1971,1970,1968,1967,1966,1965,1964,1963,1962,1961,1960"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesAdfgCountsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=adfg_fish_counts/location_id=*/species_id=*/"
+      partition:
+        columns: [type, location_id, species_id]
+      iceberg:
+        <<: *iceberg_common
+        tableName: adfg_fish_counts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # CDFW_GRANDTAB_ESCAPEMENT — California Central Valley Chinook escapement by run and origin
+  # ---------------------------------------------------------------------------
+  - name: cdfw_grandtab_escapement
+    freshness:
+      type: hash
+    pattern: "type=cdfw_grandtab_escapement/run=*/origin=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: run
+          type: VARCHAR
+        - name: origin
+          type: VARCHAR
+    comment: >
+      California Department of Fish and Wildlife GrandTab adult Chinook salmon escapement for
+      the Central Valley (Sacramento River system), served by SacPAS (Columbia Basin Research):
+      annual escapement, i.e. adult fish that returned from the ocean to spawning areas or
+      hatcheries, for the four runs (Winter, Spring, Fall, Late-Fall) split by origin
+      (In-River natural spawning vs Hatchery), one row per run x origin x year with an estimate, 1952 onward (years with no estimate are absent, not zero).
+      state_abbr is always CA. This is the California run-size series for Chinook; add
+      In-River and Hatchery for a run total, and sum the four runs for the Central Valley total
+      (the SacPAS 'All' selections are those sums and are not stored again). Values for the
+      latest years are preliminary (is_preliminary = true) and are revised. Sacramento system
+      only: San Joaquin tributaries and per-stream breakdowns are not in this table, and the
+      Klamath and Smith basins are not covered by GrandTab. Estimates mix methods (carcass
+      mark-recapture, video weirs, redd expansion, hatchery counts), so year-to-year jumps can
+      partly reflect method changes.
+
+    dimensions:
+      type:
+        - cdfw_grandtab_escapement
+      run: *grandtab_runs
+      origin: *grandtab_origins
+
+    columns:
+      - name: run_name
+        type: string
+        nullable: false
+        comment: Chinook run - Winter, Spring, Fall or Late-Fall
+      - name: origin_type
+        type: string
+        nullable: false
+        comment: In-River (natural spawning areas) or Hatchery
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: Always CA; join to geo.state_ref
+      - name: count_year
+        type: integer
+        nullable: false
+        comment: End year of the monitoring period (return year)
+      - name: escapement
+        type: bigint
+        nullable: false
+        comment: Estimated adult Chinook returning (escapement) for the run, origin and year, Sacramento River system
+      - name: is_preliminary
+        type: boolean
+        nullable: false
+        comment: true when CDFW marks the year's estimate as preliminary (not final)
+      - name: rolling_3yr_geomean
+        type: bigint
+        nullable: true
+        comment: 3-year rolling geometric mean of escapement as SacPAS computes it (this and the two previous years); null when SacPAS leaves it blank because an estimate is missing
+
+    source:
+      type: http
+      url: "https://www.cbr.washington.edu/sacramento/data/php/rpt/grandtab_graph.php?outputFormat=csv&species=Chinook:{run}&type={origin}&locType=location&location=SacPAS%20Sacramento%20River%20System:All:All&rolling=1"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The CSV carries notes and a citation that FisheriesGrandTabTransformer strips.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesGrandTabTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=cdfw_grandtab_escapement/run=*/origin=*/"
+      partition:
+        columns: [type, run, origin]
+      iceberg:
+        <<: *iceberg_common
+        tableName: cdfw_grandtab_escapement
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # ESA_SALMONID_LISTINGS — ESA status of salmon / steelhead ESUs and DPSs
+  # ---------------------------------------------------------------------------
+  - name: esa_salmonid_listings
+    freshness:
+      type: hash
+    pattern: "type=esa_salmonid_listings/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Endangered Species Act status of every Pacific salmon, steelhead and Atlantic salmon
+      listing entity from the U.S. Fish and Wildlife Service ECOS species report (NOAA
+      Fisheries is the lead agency for these): one row per Evolutionarily Significant Unit
+      (salmon) or Distinct Population Segment (steelhead, Atlantic salmon), covering Chinook,
+      coho, chum, sockeye, pink, steelhead and Atlantic salmon. esa_status gives the
+      designation (Threatened, Endangered, Experimental Population Non-Essential, Under
+      Review, Resolved Taxon, Species of Concern, ...), status_category the listed / not
+      listed / delisted bucket, and listing_date when the unit was first listed. Use it to read
+      population trends against recovery status, e.g. which states have listed salmon:
+      state_abbrs is the comma-separated states each ESU/DPS spans (ECOS has no state column,
+      so this is derived from the ESU name; null where ECOS gives no geography). A snapshot of
+      current status, not a history of listing changes. Pink salmon and landlocked sockeye
+      (kokanee) have no listed units. Join to geo.state_ref by splitting state_abbrs.
+
+    dimensions:
+      type:
+        - esa_salmonid_listings
+
+    columns:
+      - name: common_name
+        type: string
+        nullable: false
+        comment: ECOS common name - Chinook salmon, Coho salmon, Chum salmon, Sockeye salmon, Pink Salmon, Steelhead (Rainbow Trout) or Atlantic salmon
+      - name: scientific_name
+        type: string
+        nullable: false
+        comment: Scientific name as ECOS records it, e.g. Oncorhynchus (=Salmo) tshawytscha
+      - name: species_group
+        type: string
+        nullable: false
+        comment: Normalised species - chinook, coho, chum, sockeye, pink, steelhead or atlantic; matches salmon_species in noaa_commercial_landings except steelhead
+      - name: population_name
+        type: string
+        nullable: true
+        comment: ESU or DPS name, e.g. Snake River spring/summer-run ESU, Puget Sound DPS; null where ECOS gives none
+      - name: esa_status
+        type: string
+        nullable: false
+        comment: ECOS ESA listing status - Threatened, Endangered, Experimental Population Non-Essential, Under Review, Resolved Taxon, Species of Concern, Status Undefined or Not Listed
+      - name: status_category
+        type: string
+        nullable: true
+        comment: ECOS listing status category - Listed, Not Listed, Delisted or Petitioned for Listing Under Review; null where ECOS leaves it blank
+      - name: cfr_citation
+        type: string
+        nullable: true
+        comment: 50 CFR section that lists the unit (223.102 threatened, 224.101 endangered); null where the entity name carries none
+      - name: listing_date
+        type: string
+        nullable: true
+        comment: Date the unit was listed (yyyy-MM-dd); null for experimental populations and never-listed units
+      - name: lead_agency
+        type: string
+        nullable: false
+        comment: Federal agency responsible - NMFS, FWS or FWS and NMFS
+      - name: state_abbrs
+        type: string
+        nullable: true
+        comment: Comma-separated 2-letter states the ESU/DPS spans (e.g. 'ID,OR,WA' for Snake River units); derived from the ESU name; null where ECOS gives no geography
+
+    source:
+      type: http
+      url: "https://ecos.fws.gov/ecp/pullreports/catalog/species/report/species/export?format=json&columns=%2Fspecies%40cn%2Csn%2Cstatus%2Cstatus_category%2Cdesc%2Clisting_date%2Cagency&filter=%2Fspecies%40sn%20like%20%27Oncorhynchus%25%27%20or%20%2Fspecies%40sn%20like%20%27Salmo%20salar%25%27&sort=%2Fspecies%40cn%20asc"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # FisheriesEsaListingsTransformer expects the ECOS envelope, so a raw-cache replay of the
+      # post-transform rows would not parse.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesEsaListingsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=esa_salmonid_listings/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: esa_salmonid_listings
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # STOCK_SMART_ASSESSMENTS — NOAA Stock SMART assessment reference points by stock
+  # ---------------------------------------------------------------------------
+  - name: stock_smart_assessments
+    freshness:
+      type: hash
+    pattern: "type=stock_smart_assessments/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      NOAA Fisheries Stock SMART assessment summaries for federally managed stocks: one row
+      per stock assessment (about 3,500 assessments of ~430 stocks, assessment years 2005 to
+      the latest), carrying the assessment's fishing mortality and biomass against the MSY
+      reference points. f_fmsy_ratio above 1 means the assessed fishing rate exceeded Fmsy;
+      b_bmsy_ratio below 1 means biomass was below Bmsy. A stock has several rows, one per
+      assessment_year, so for current condition take each stock_id's latest assessment_year
+      (or latest assessment_id); do not average across assessments. f_fmsy_ratio and
+      b_bmsy_ratio are null where the assessment did not report an MSY proxy (many index-based
+      and data-limited stocks), and f_unit / b_unit say what estimated_f and estimated_b are
+      measured in (they are not comparable across stocks). is_fssi marks the Fish Stock
+      Sustainability Index stocks. This is NOT the official Status of Stocks determination:
+      NOAA publishes the overfished and overfishing flags only in PDF report tables, and they
+      use per-stock thresholds (MSST, MFMT) that this table does not carry, so those flags are
+      not here and must not be inferred from the ratios. Joins to noaa_commercial_landings on
+      tsn (ITIS taxonomic serial number; null for some complexes) or scientific_name. Stocks
+      span waters, not states: stock_area names the area (e.g. 'Gulf of Maine / Georges
+      Bank') and jurisdiction the managing council or commission, so there is no state_abbr
+      and a by-state rollup would double count; use region_name from the landings table to
+      relate areas.
+
+    dimensions:
+      type:
+        - stock_smart_assessments
+
+    columns:
+      - name: stock_id
+        type: long
+        nullable: false
+        comment: Stock SMART stock identifier
+      - name: stock_name
+        type: string
+        nullable: false
+        comment: Stock name with its area, e.g. 'Acadian redfish - Gulf of Maine / Georges Bank'
+      - name: jurisdiction
+        type: string
+        nullable: true
+        comment: Managing council or commission (e.g. NEFMC, PFMC, ASMFC, Atlantic HMS)
+      - name: fmp
+        type: string
+        nullable: true
+        comment: Fishery management plan the stock falls under
+      - name: science_center
+        type: string
+        nullable: true
+        comment: NOAA Fisheries Science Center that assesses the stock (may list several, '/'-separated)
+      - name: regional_ecosystem
+        type: string
+        nullable: true
+        comment: NOAA regional ecosystem of the stock (may list several, '/'-separated)
+      - name: is_fssi
+        type: boolean
+        nullable: false
+        comment: true when the stock is part of the Fish Stock Sustainability Index
+      - name: tsn
+        type: long
+        nullable: true
+        comment: ITIS taxonomic serial number of the species; null for multi-species complexes. Joins to noaa_commercial_landings.tsn
+      - name: scientific_name
+        type: string
+        nullable: true
+        comment: Scientific name; null or a genus/group for complexes
+      - name: common_name
+        type: string
+        nullable: true
+        comment: Common name of the species or complex
+      - name: stock_area
+        type: string
+        nullable: true
+        comment: Geographic area of the stock (e.g. 'Gulf of Maine / Georges Bank', 'Bering Sea / Aleutian Islands')
+      - name: assessment_id
+        type: long
+        nullable: false
+        comment: Stock SMART assessment identifier; unique per row
+      - name: assessment_year
+        type: integer
+        nullable: false
+        comment: Year the assessment was completed
+      - name: assessment_month
+        type: integer
+        nullable: true
+        comment: Month the assessment was completed (1-12)
+      - name: last_data_year
+        type: integer
+        nullable: true
+        comment: Last year of data used in the assessment
+      - name: update_type
+        type: string
+        nullable: true
+        comment: Assessment type (e.g. Benchmark, Full Update, Operational); null where the source leaves it blank
+      - name: review_result
+        type: string
+        nullable: true
+        comment: Peer review outcome (e.g. Full acceptance)
+      - name: assessment_model
+        type: string
+        nullable: true
+        comment: Stock assessment model used (e.g. BAM, SS3, ASAP)
+      - name: f_year
+        type: integer
+        nullable: true
+        comment: Year the estimated fishing mortality refers to
+      - name: estimated_f
+        type: double
+        nullable: true
+        comment: Estimated fishing mortality in f_unit
+      - name: f_unit
+        type: string
+        nullable: true
+        comment: What estimated_f measures (e.g. Average F, Fully-selected F, Apical F, Exploitation rate)
+      - name: fmsy
+        type: double
+        nullable: true
+        comment: Fishing mortality reference point at maximum sustainable yield, in f_unit
+      - name: f_fmsy_ratio
+        type: double
+        nullable: true
+        comment: Estimated F divided by Fmsy; above 1 means the fishing rate exceeded the MSY level
+      - name: b_year
+        type: integer
+        nullable: true
+        comment: Year the estimated biomass refers to
+      - name: estimated_b
+        type: double
+        nullable: true
+        comment: Estimated stock biomass (or abundance) in b_unit
+      - name: b_unit
+        type: string
+        nullable: true
+        comment: What estimated_b measures and its unit (e.g. Metric Tons, Billion Eggs)
+      - name: bmsy
+        type: double
+        nullable: true
+        comment: Biomass reference point at maximum sustainable yield, in b_unit
+      - name: b_bmsy_ratio
+        type: double
+        nullable: true
+        comment: Estimated B divided by Bmsy; below 1 means biomass was under the MSY level
+      - name: msy
+        type: double
+        nullable: true
+        comment: Maximum sustainable yield estimate, in msy_unit
+      - name: msy_unit
+        type: string
+        nullable: true
+        comment: Unit of msy; null where the source leaves it blank
+
+    source:
+      type: http
+      # The searchEntities call is only the stock list; FisheriesStockSmartTransformer takes the
+      # ids from it and downloads the Assessment Summary xlsx from data-export-servlet itself.
+      # The jsonParam is URL-encoded inline: its literal braces would otherwise be read as
+      # {variable} placeholders.
+      url: "https://apps-st.fisheries.noaa.gov/stocksmart/sis_servlet?jsonParam=%7B%22method%22%3A%22searchEntities%22%2C%22entName%22%3A%22%25%22%2C%22scId%22%3A%22%25%22%2C%22jurId%22%3A%22%25%22%2C%22fmpId%22%3A%22%25%22%2C%22ecoId%22%3A%22%25%22%7D"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer needs the live stock-list envelope, not a replay of post-transform rows.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesStockSmartTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=stock_smart_assessments/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: stock_smart_assessments
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # WDFW_SALMONID_ESCAPEMENT — Washington stock-level spawner / escapement series
+  # ---------------------------------------------------------------------------
+  - name: wdfw_salmonid_escapement
+    freshness:
+      type: hash
+    pattern: "type=wdfw_salmonid_escapement/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Washington Department of Fish and Wildlife Salmonid Population Indicators (SPI, the
+      SCoRE / State of Our Salmon data): annual adult spawner and escapement estimates for
+      wild and hatchery salmon, steelhead, bull trout and cutthroat stocks across Washington
+      (Puget Sound, coast, Columbia basin), one row per stock x data series x year x data_type,
+      1938 to the latest completed return year. Species are Chinook, Coho, Chum, Pink,
+      Sockeye, Steelhead, Bull Trout and Cutthroat. abundance_qty is a count of fish (or redds
+      where data_type is 'Spawner Redds'); data_type says what is counted (Spawner Fish,
+      Escapement Fish, Spawner Redds, or the SPI codes NOSAEJ natural-origin spawners, HOSAEJ
+      hatchery-origin spawners, TSAEJ total spawners; IJ variants include jacks, EJ exclude
+      them), production_type is Natural / Hatchery / Composite and calculation_type is
+      Expanded / Unexpanded. A stock can appear under several data_types and series, so filter
+      to one data_type (and production_type) before summing or comparing years; do not add
+      across data_types. The state is always WA (state_abbr); this is the stock-level
+      counterpart to dart_adult_counts (dam passage) and adfg_fish_counts (Alaska). Years
+      with no estimate are absent, not zero (zero-fish estimates are kept). The source itself
+      repeats 13 stock x series x year x data_type keys with slightly different values.
+
+    dimensions:
+      type:
+        - wdfw_salmonid_escapement
+
+    columns:
+      - name: stock_number
+        type: bigint
+        nullable: false
+        comment: WDFW SPI stock identifier (e.g. 3273 Discovery Bay Coho)
+      - name: population_name
+        type: string
+        nullable: false
+        comment: Stock name including species, e.g. 'Skagit River Summer/Fall Chinook'
+      - name: sub_population_name
+        type: string
+        nullable: true
+        comment: Sub-population within the stock where the series is split; null when the stock is not subdivided
+      - name: data_series_num
+        type: bigint
+        nullable: false
+        comment: Series number within the stock; a stock may carry several series (methods or eras)
+      - name: species
+        type: string
+        nullable: false
+        comment: Chinook, Coho, Chum, Pink, Sockeye, Steelhead, Bull Trout or Cutthroat
+      - name: year
+        type: bigint
+        nullable: false
+        comment: Return / spawning year of the estimate
+      - name: abundance_qty
+        type: double
+        nullable: false
+        comment: Estimated count of fish (redds when data_type is 'Spawner Redds'); zero is a real estimate
+      - name: data_type
+        type: string
+        nullable: false
+        comment: What is counted - Spawner Fish, Escapement Fish, Spawner Redds, or SPI codes such as NOSAEJ, HOSAEJ, TSAEJ, NOSAIJ, HOSAIJ, TSAIJ, NOBroodStockRemoved
+      - name: production_type
+        type: string
+        nullable: false
+        comment: Natural, Hatchery, Composite, Unknown or NA - origin of the fish counted
+      - name: calculation_type
+        type: string
+        nullable: false
+        comment: Expanded (extrapolated from index surveys to the whole stock), Unexpanded, Unknown or NA
+      - name: escapement_methodology
+        type: string
+        nullable: false
+        comment: How the count was made, e.g. Trap Count, Total Natural Spawners, or the SPI data_type code
+      - name: report_types
+        type: string
+        nullable: true
+        comment: WDFW report the series feeds - SCoRE or 'SOS, SCoRE' (State of Our Salmon); null where WDFW lists no report (about 11% of rows)
+      - name: last_update
+        type: string
+        nullable: true
+        comment: Timestamp WDFW last updated the row (ISO 8601, no zone)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: Always WA; joins to geo.state_ref
+
+    source:
+      type: http
+      url: "https://data.wa.gov/resource/fgyz-n3uk.json?$select=stock_number,population_name,sub_population_name,data_series_num,species,year,abundance_qty,data_type,production_type,calculation_type,escapement_methodology,report_types,last_update&$order=stock_number,data_series_num,year,data_type&$limit=100000"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer drops estimate-less series rows, so a raw-cache replay of the
+      # post-transform rows would not parse.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesWdfwEscapementTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=wdfw_salmonid_escapement/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: wdfw_salmonid_escapement
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # NOAA_FEUS_ECONOMIC_IMPACTS — jobs, sales, income, value added by state and sector
+  # ---------------------------------------------------------------------------
+  - name: noaa_feus_economic_impacts
+    freshness:
+      type: hash
+    pattern: "type=noaa_feus_economic_impacts/feus_file=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: feus_file
+          type: VARCHAR
+    comment: >
+      NOAA Fisheries Economics of the United States (FEUS): the economic footprint of fishing
+      by state, one row per geography x sector x impact measure (x imports basis for the
+      commercial industry). industry is commercial (the seafood industry: commercial
+      harvesters, seafood processors and dealers, seafood wholesalers and distributors, retail
+      and importers) or recreational (marine recreational fishing expenditures: for-hire,
+      private boat and shore trips, plus durable-goods expenditures). impact_type is jobs
+      (unit jobs), or sales, income or value_added (unit thousand_usd, thousands of dollars),
+      all modelled economic impacts including multiplier effects rather than direct landings
+      revenue: use noaa_commercial_landings for pounds and dollars landed. Commercial rows
+      come in two bases, imports_basis with_imports (counts the importer sector and the
+      activity it supports) and without_imports; the two must not be added together, and a
+      recreational row has no imports_basis. row_level separates the components from the
+      rollups so nothing is double counted: for a state, the component rows (sectors, or for
+      recreational the three trip modes) sum to the total row (sector 'Total Impacts'
+      commercial, 'Total State Economic Impacts' recreational) within rounding. Recreational
+      durable-goods spending is published only for the United States, where the national total
+      ('Total United States Economic Impacts') equals the trip modes plus durable_expenditures;
+      state durable_expenditures values are confidential (null) and a state total excludes
+      them. Sum the components or read the total, not both. Geography is 23
+      coastal states plus the United States (geo_level national, state_abbr null); recreational
+      reports East and West Florida separately and commercial reports Florida as a whole.
+      noaa_region is the NOAA region of the state (null for the national rows and commercial
+      Florida). impact_value is null where NOAA withholds a confidential value (about 22% of
+      recreational rows, chiefly state durable expenditures). data_year is the
+      year NOAA states for that geography (2021, except 2020 for commercial Florida); this is the latest-year
+      snapshot published in the data tool, not a time series. Inland states and non-coastal
+      territories are not covered. Join to geo.state_ref via state_abbr.
+
+    dimensions:
+      type:
+        - noaa_feus_economic_impacts
+      feus_file: *feus_files
+
+    columns:
+      - name: industry
+        type: string
+        nullable: false
+        comment: commercial (seafood industry) or recreational (marine recreational fishing); never mix their jobs or dollars into one total, they overlap in the economy
+      - name: geography
+        type: string
+        nullable: false
+        comment: Geography as NOAA names it - a state, East Florida or West Florida (recreational only), or United States
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: state or national
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter state code; East and West Florida are both FL; null for the national rows; joins to geo.state_ref
+      - name: noaa_region
+        type: string
+        nullable: true
+        comment: NOAA region of the state (North Pacific, Pacific, Western Pacific, Gulf of America, South Atlantic, Mid-Atlantic, New England); null for national rows and commercial Florida, which spans two regions
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Year of the estimates for this geography as stated in NOAA's table title (2021; 2020 for commercial Florida)
+      - name: sector
+        type: string
+        nullable: false
+        comment: Commercial - Commercial Harvesters, Seafood Processors & Dealers, Seafood Wholesalers & Distributors, Retail, Importers, Total Impacts; recreational - For-Hire, Private Boat, Shore, Total Durable Expenditures, Total State Economic Impacts, Total United States Economic Impacts
+      - name: row_level
+        type: string
+        nullable: false
+        comment: component (a sector or trip mode), total (the rollup of the components) or durable_expenditures (recreational equipment spending, published nationally only, part of the national total); add components or read the total, not both
+      - name: impact_type
+        type: string
+        nullable: false
+        comment: jobs, sales, income or value_added
+      - name: unit
+        type: string
+        nullable: false
+        comment: jobs for impact_type jobs, thousand_usd (thousands of dollars) for the other three
+      - name: imports_basis
+        type: string
+        nullable: true
+        comment: with_imports or without_imports for commercial rows (do not add the two); null for recreational rows
+      - name: impact_value
+        type: double
+        nullable: true
+        comment: Impact in jobs or thousands of dollars per unit; null where NOAA withholds a confidential value
+
+    source:
+      type: http
+      url: "https://www.st.nmfs.noaa.gov/data-and-tools/FEUS/datatablesStrings_{feus_file}_03_27_25.js"
+      method: GET
+      response:
+        format: TEXT   # the body is JavaScript, not JSON; FisheriesFeusImpactsTransformer emits the JSON rows
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The response is JavaScript, not JSON, and FisheriesFeusImpactsTransformer reshapes it, so
+      # a raw-cache replay of the post-transform rows would not parse.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesFeusImpactsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=noaa_feus_economic_impacts/feus_file=*/"
+      partition:
+        columns: [type, feus_file]
+      iceberg:
+        <<: *iceberg_common
+        tableName: noaa_feus_economic_impacts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # RMIS_RELEASES — hatchery and wild salmon/steelhead release groups (RMIS)
+  # ---------------------------------------------------------------------------
+  - name: rmis_releases
+    freshness:
+      type: hash
+    pattern: "type=rmis_releases/agency=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: agency
+          type: VARCHAR
+    comment: >
+      Hatchery and wild salmon, steelhead and trout release groups recorded in the Regional Mark
+      Information System (RMIS, Regional Mark Processing Center / PSMFC, PSC format v5.0), one
+      row per coded-wire-tag release group (tagged) or untagged release group, brood years 1950
+      onward, about 190,000 records from 17 reporting agencies (WDFW, CDFO, ADFG, ODFW, NWIFC,
+      USFWS, CDFW, IDFG, NMFS and tribes) across Alaska, British Columbia, Washington, Idaho,
+      Oregon and California. Gives how many fish were released (total_released, cwt_tagged_count,
+      non-CWT mark counts), species, brood year and release dates, release stage, rearing type,
+      broodstock origin, average weight and length, and the release / hatchery / stock location
+      codes (join to rmis_locations for site name, basin, region and coordinates). Use it to set
+      hatchery stocking against the adult returns in dart_adult_counts, adfg_fish_counts,
+      cdfw_grandtab_escapement and wdfw_salmonid_escapement. Counts are as submitted by each
+      agency: tagged groups carry both tagged and untagged-fish counts, so total_released is the
+      group size, not the CWT count alone. Canadian (CDFO, state_abbr BC) releases are included.
+      Mark counts are null when the agency did not report them. RMPC refreshes the files as
+      agencies submit validated data.
+
+    dimensions:
+      type:
+        - rmis_releases
+      agency: *rmis_agencies
+
+    columns:
+      - name: record_type
+        type: string
+        nullable: false
+        comment: "tagged (coded-wire-tag release group, T record) or untagged (release group with marks only, N record)"
+      - name: reporting_agency
+        type: string
+        nullable: false
+        comment: "Agency that submitted the record to RMIS (WDFW, CDFO, ADFG, ODFW, NWIFC, USFWS, CDFW, IDFG, NMFS, tribes)"
+      - name: release_agency
+        type: string
+        nullable: false
+        comment: "Agency that made the release"
+      - name: tag_code_or_release_id
+        type: string
+        nullable: false
+        comment: "CWT tag code for tagged records, or the agency release identifier for untagged records"
+      - name: species_code
+        type: string
+        nullable: false
+        comment: "PSC species code 1-9"
+      - name: species
+        type: string
+        nullable: false
+        comment: "Chinook, Coho, Steelhead, Sockeye, Chum, Pink, Masu, Cutthroat or Atlantic Salmon"
+      - name: run_code
+        type: string
+        nullable: true
+        comment: "PSC run code as submitted (numeric code, see PSC format v5.0 run table); null when the agency left it blank"
+      - name: brood_year
+        type: integer
+        nullable: true
+        comment: "Brood year of the release group"
+      - name: first_release_date
+        type: date
+        nullable: true
+        comment: "First release date"
+      - name: last_release_date
+        type: date
+        nullable: true
+        comment: "Last release date"
+      - name: release_year
+        type: integer
+        nullable: true
+        comment: "Calendar year of last_release_date"
+      - name: release_location_code
+        type: string
+        nullable: true
+        comment: "RMIS release location code; join to rmis_locations.location_code for site name, basin and region"
+      - name: hatchery_location_code
+        type: string
+        nullable: true
+        comment: "RMIS location code of the rearing hatchery; join to rmis_locations.location_code"
+      - name: stock_location_code
+        type: string
+        nullable: true
+        comment: "RMIS location code of the stock of origin"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "State/province of the release location from the first character of its code: AK, BC, WA, ID, OR, CA, or HS for high-seas locations (BC is Canada and HS is not a state; neither joins to geo.state_ref); null when no release location. Join to geo.state_ref for US states"
+      - name: release_stage_code
+        type: string
+        nullable: true
+        comment: "PSC release stage letter as submitted"
+      - name: release_stage
+        type: string
+        nullable: true
+        comment: "Zygote, Emergent fry, Fed fry, Fingerling, Advanced fingerling, Yearling, Pre-smolt, Smolt, Adult or Multiple"
+      - name: rearing_type
+        type: string
+        nullable: true
+        comment: "Hatchery, Wild, Mixed or Unknown rearing method"
+      - name: broodstock_origin_type
+        type: string
+        nullable: true
+        comment: "PSC broodstock origin letter (H hatchery, W wild, M mixed, N natural, C captive, O other, U unknown)"
+      - name: release_strategy
+        type: string
+        nullable: true
+        comment: "FR forced, VO volitional, MX mixed, NP net pen, BG barge; null when not reported"
+      - name: avg_weight_g
+        type: double
+        nullable: true
+        comment: "Average weight at release in grams"
+      - name: avg_length_mm
+        type: double
+        nullable: true
+        comment: "Average fork length at release in millimeters"
+      - name: cwt_1st_mark
+        type: string
+        nullable: true
+        comment: "Mark code applied to the coded-wire-tagged fish (for example an adipose clip)"
+      - name: cwt_tagged_count
+        type: bigint
+        nullable: true
+        comment: "Number of fish released with a coded-wire tag (both CWT mark groups); null when not reported"
+      - name: non_cwt_1st_mark
+        type: string
+        nullable: true
+        comment: "Mark code of the first group of released fish without a CWT"
+      - name: non_cwt_1st_mark_count
+        type: bigint
+        nullable: true
+        comment: "Fish released without a CWT in the first mark group"
+      - name: non_cwt_2nd_mark_count
+        type: bigint
+        nullable: true
+        comment: "Fish released without a CWT in the second mark group (commonly the unmarked fish)"
+      - name: total_released
+        type: bigint
+        nullable: true
+        comment: "Sum of the reported CWT and non-CWT counts for the release group; null when none is reported"
+
+    source:
+      type: http
+      url: "https://www.rmpc.org/pub/data/RL050_{agency}_FULLSET.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer reshapes the PSC-format CSV; a raw-cache replay would hand it the
+      # post-transform rows instead.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesRmisTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rmis_releases/agency=*/"
+      partition:
+        columns: [type, agency]
+      iceberg:
+        <<: *iceberg_common
+        tableName: rmis_releases
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # RMIS_LOCATIONS — RMIS location lookup (site, basin, region)
+  # ---------------------------------------------------------------------------
+  - name: rmis_locations
+    freshness:
+      type: hash
+    pattern: "type=rmis_locations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      RMIS location lookup (RMPC/PSMFC, PSC format v5.0): about 38,800 rows of release, recovery,
+      catch, hatchery and stock locations with name, latitude/longitude, PSC basin and PSC
+      region, as defined by each reporting agency. Join rmis_releases.release_location_code,
+      hatchery_location_code or stock_location_code to location_code (and filter location_type =
+      1 release, 4 hatchery or 5 stock to get one row per code).
+
+    dimensions:
+      type:
+        - rmis_locations
+
+    columns:
+      - name: location_code
+        type: string
+        nullable: false
+        comment: "RMIS location code; the first character gives the state (1 AK, 2 BC, 3 WA, 4 ID, 5 OR, 6 CA, 7 HS high seas)"
+      - name: location_type
+        type: string
+        nullable: false
+        comment: "PSC location type: 1 release, 2 recovery, 3 catch, 4 hatchery or 5 stock location"
+      - name: reporting_agency
+        type: string
+        nullable: false
+        comment: "Agency that defined the location"
+      - name: name
+        type: string
+        nullable: true
+        comment: "Location name, for example a stream, hatchery or fishery"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "State/province from the code prefix: AK, BC, WA, ID, OR, CA, or HS for high-seas locations"
+      - name: latitude
+        type: double
+        nullable: true
+        comment: "Latitude, decimal degrees"
+      - name: longitude
+        type: double
+        nullable: true
+        comment: "Longitude, decimal degrees"
+      - name: psc_basin
+        type: string
+        nullable: true
+        comment: "PSC basin code (for example SMIT, SNAK, LOCR)"
+      - name: psc_region
+        type: string
+        nullable: true
+        comment: "PSC region code (for example NOCA, UPCR, SEAK)"
+      - name: description
+        type: string
+        nullable: true
+        comment: "Free-text location description"
+
+    source:
+      type: http
+      url: "https://www.rmpc.org/pub/data/LC050_ALL_FULLSET.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 503, 504]
+        maxRetries: 5
+      # The transformer reshapes the PSC-format CSV; a raw-cache replay would hand it the
+      # post-transform rows instead.
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fisheries.FisheriesRmisTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=rmis_locations/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *iceberg_common
+        tableName: rmis_locations
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7

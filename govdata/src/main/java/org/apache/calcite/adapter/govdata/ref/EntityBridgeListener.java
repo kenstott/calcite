@@ -1109,6 +1109,29 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "strip_legal_suffix_once(strip_legal_suffix_once(regexp_replace(regexp_replace("
         + "regexp_replace(lower(trim(x)), '&', ' and ', 'g'), '[.,]', '', 'g'), "
         + "'^(the|a|an) +', '', 'i')))), '\\s+', ' ', 'g')))");
+    // Narrower sibling of strip_legal_suffix_once/norm_org_name, used only by
+    // stageGleifCikMapping's CIK enrichment join. That join asserts a specific CIK value, not
+    // just a blocking/fuzzy candidate, so it cannot afford norm_org_name's full suffix list:
+    // "holdings|partners|fund|trust|group|management" mark a genuinely different kind of legal
+    // vehicle from the operating company itself (e.g. "Oracle Trust" and "Oracle Partners, L.P."
+    // are not Oracle Corporation, even though they normalize to the same "oracle" under
+    // norm_org_name). Stripping only the generic corporate-form tokens keeps those vehicles
+    // distinguishable from the entity that actually holds the CIK. Includes the spelled-out
+    // "incorporated" alongside "inc" — sec.filing_metadata.company_name and gleif_entities.
+    // legal_name pick different forms for the same real company (confirmed live: QUALCOMM's
+    // GLEIF legal_name is "QUALCOMM INCORPORATED", its SEC company_name is "QUALCOMM INC/DE";
+    // only the abbreviation was covered here, so this join produced no CIK for it at all).
+    execute(conn,
+        "CREATE OR REPLACE MACRO strip_generic_corp_suffix_once(x) AS (trim(regexp_replace(x, "
+        + "'\\s+(inc|incorporated|llc|corp|corporation|co|company|ltd|llp|lp|plc|pc|pa|na|n a|"
+        + "partnership)\\.?\\s*$', '', 'i')))");
+    execute(conn,
+        "CREATE OR REPLACE MACRO sec_cik_norm_name(x) AS (trim(regexp_replace("
+        + "strip_generic_corp_suffix_once(strip_generic_corp_suffix_once("
+        + "strip_generic_corp_suffix_once(regexp_replace(regexp_replace(regexp_replace("
+        + "regexp_replace(lower(trim(x)), '\\s*/[a-z]{2}\\s*$', ''), "
+        + "'&', ' and ', 'g'), '[.,]', '', 'g'), '^(the|a|an) +', '', 'i')))), "
+        + "'\\s+', ' ', 'g')))");
     execute(conn,
         "CREATE OR REPLACE MACRO org_block_key(x) AS (split_part(norm_org_name(x), ' ', 1))");
     // Every fuzzy candidate pair already shares block_key (the first normalized token) by
@@ -1210,20 +1233,34 @@ public class EntityBridgeListener implements TableLifecycleListener {
     // gleif_cik_mapping (GLEIF's own RegistrationAuthorityID='RA000665' data) covers only a
     // small subset of SEC filers — mega-caps like Apple, Microsoft, Alphabet have LEIs in
     // gleif_entities but no CIK linkage recorded via that authority mechanism. Enrich the
-    // lookup by joining gleif_entities.legal_name to sec.filing_metadata.company_name (both
-    // normalized) — the SEC filing metadata authoritatively links CIKs to filer names, and
-    // GLEIF's own legal_name for the same entity typically normalizes to the same value.
-    // QUALIFY keeps at most one (lei, cik) pair per LEI so downstream LEFT JOINs on lei do
-    // not multiply matched-name rows. Only inserts LEIs not already present in gleif_cik.
+    // lookup by joining gleif_entities.legal_name to sec.filing_metadata.company_name — the SEC
+    // filing metadata authoritatively links CIKs to filer names, and GLEIF's own legal_name for
+    // the same entity typically normalizes to the same value. QUALIFY keeps at most one
+    // (lei, cik) pair per LEI so downstream LEFT JOINs on lei do not multiply matched-name rows.
+    // Only inserts LEIs not already present in gleif_cik.
+    //
+    // Uses sec_cik_norm_name, not the shared norm_org_name/blocking macro: norm_org_name strips
+    // "trust"/"partners"/"fund"/"holdings"/"group"/"management" as if they were generic
+    // corporate-form noise (inc/corp/ltd/...), which is fine for blocking a fuzzy search but
+    // wrong for asserting a specific CIK — it let unrelated legal vehicles sharing an operating
+    // company's base name inherit that company's real CIK. Confirmed live before this fix:
+    // "Oracle Trust" and "Oracle Partners, L.P." both carried CIK 1341439 (the actual Oracle
+    // Corporation's), and "Apple Trust"/"THE APPLE TRUST"/"Apple Management Corp." /
+    // "APPLE MANAGEMENT INC." all carried Apple Inc.'s CIK 320193. sec_cik_norm_name strips only
+    // the generic corporate-form tokens, so those vehicles no longer collide with the operating
+    // company's own normalized name and correctly get no CIK via this join instead. This does not
+    // resolve every name collision (e.g. an unrelated "X Ltd" still collides with "X Inc" here,
+    // same as it does in norm_org_name) — that residual class needs an actual authority
+    // cross-reference, not a normalization tweak, and is out of scope for this fix.
     execute(conn,
         "INSERT INTO gleif_cik "
         + "SELECT lei, cik FROM ("
         + "  SELECT ge.lei, LPAD(fm.cik, 10, '0') AS cik "
-        + "  FROM (SELECT lei, norm_org_name(legal_name) AS norm_name "
+        + "  FROM (SELECT lei, sec_cik_norm_name(legal_name) AS norm_name "
         + "        FROM iceberg_scan('" + loc(base, "ref", "gleif_entities")
         + "', allow_moved_paths=true) "
         + "        WHERE lei IS NOT NULL AND legal_name IS NOT NULL) ge "
-        + "  JOIN (SELECT DISTINCT cik, norm_org_name(company_name) AS norm_name "
+        + "  JOIN (SELECT DISTINCT cik, sec_cik_norm_name(company_name) AS norm_name "
         + "        FROM iceberg_scan('" + loc(base, "sec", "filing_metadata")
         + "', allow_moved_paths=true) "
         + "        WHERE cik IS NOT NULL AND company_name IS NOT NULL) fm "

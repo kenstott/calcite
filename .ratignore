@@ -7,6 +7,7 @@
 **/.gitattributes
 .github/workflows
 .github/ci-images
+.github/scripts
 .ratignore
 **/META-INF/services/java.sql.Driver
 **/src/test/resources/**/*.csv
@@ -58,6 +59,7 @@ site/favicon.ico
 # BSL-licensed modules — not Apache-licensed, RAT does not apply
 govdata/**
 salesforce/**
+servicenow/**
 sharepoint-list/**
 splunk/**
 cloud-ops/**
@@ -72,6 +74,7 @@ pgwire-cloudops/**
 pgwire-file/**
 pgwire-govdata/**
 pgwire-salesforce/**
+pgwire-servicenow/**
 pgwire-sharepoint/**
 pgwire-splunk/**
 trino-calcite/**
@@ -79,6 +82,7 @@ trino-calcite-base/**
 trino-cloudops/**
 trino-file/**
 trino-salesforce/**
+trino-servicenow/**
 trino-sharepoint/**
 trino-splunk/**
 

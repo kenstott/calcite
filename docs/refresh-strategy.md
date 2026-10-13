@@ -364,6 +364,23 @@ table above; `—` = none.
 | eia_refinery_operations | year,month | — | T2 period |
 | eia_coal_mines | year | — | T2 period |
 
+### fisheries
+
+| Table | Period | Freshness | Tier |
+|---|---|---|---|
+| noaa_commercial_landings | year | hash | T3 hash |
+| mrip_recreational_catch | year | hash | T3 hash |
+| mrip_recreational_effort | year | hash | T3 hash |
+| dart_adult_counts | — | hash | T3 hash |
+| adfg_fish_counts | — | hash | T3 hash |
+| cdfw_grandtab_escapement | — | hash | T3 hash |
+| esa_salmonid_listings | — | hash | T3 hash |
+| stock_smart_assessments | — | hash | T3 hash |
+| wdfw_salmonid_escapement | — | hash | T3 hash |
+| noaa_feus_economic_impacts | — | hash | T3 hash |
+| rmis_releases | — | hash | T3 hash |
+| rmis_locations | — | hash | T3 hash |
+
 
 ## Tier-3 action list (hash tables)
 

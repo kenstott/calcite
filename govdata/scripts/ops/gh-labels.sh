@@ -49,7 +49,7 @@ LABELS=(
 
 SCHEMAS=(
   ag banking census cftc crime cyber_threat cyber_vuln disasters econ econ_reference
-  edu energy environment fec fedregister fiscal geo health housing lands officials
+  edu energy environment fec fedregister fiscal fisheries geo health housing lands officials
   patents ref research sec transport weather
 )
 for s in "${SCHEMAS[@]}"; do

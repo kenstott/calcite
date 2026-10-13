@@ -68,6 +68,7 @@ jdbc:askamerica:source=fec,crime,weather
 | `fiscal` | Federal revenue and outlays: IRS SOI income/tax by ZIP and county, USAspending obligations, SBA loans, SSA |
 | `ref` | Shared reference tables (NAICS, SIC, state codes) |
 | `banking` | FDIC institutions/branches/failures/deposits/financials, CFPB consumer complaints |
+| `fisheries` | NOAA commercial landings and recreational catch (MRIP), Stock SMART assessments, salmon/steelhead escapement and hatchery releases, ESA listings, fisheries economics |
 
 ## DBeaver setup
 

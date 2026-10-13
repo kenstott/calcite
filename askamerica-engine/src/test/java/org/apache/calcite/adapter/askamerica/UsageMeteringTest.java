@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * connection is wrapped.
  */
 @Execution(ExecutionMode.SAME_THREAD)  // shares global system properties (stub URL) — must not run in parallel
+@ResourceLock("askamerica.api.url")
 class UsageMeteringTest {
 
   private final BlockingQueue<String> bodies = new LinkedBlockingQueue<String>();

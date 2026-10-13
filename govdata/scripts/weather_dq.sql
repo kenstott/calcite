@@ -760,6 +760,155 @@ FROM (
 );
 
 -- ============================================================
+-- NOAA CO-OPS (coops_*) tables: T1 existence, T2 row count, T3 sample, T4 all-null,
+-- T5 all-same, T6 PK nulls, T7 value ranges, T8 PK duplicates
+-- ============================================================
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'row_count', CASE WHEN n >= 200 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '200', 'rows in DQ bucket'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true));
+
+SELECT 'coops_stations' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true) LIMIT 1;
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+-- Excluded: partition/dimension columns that are constant when the DQ sample covers one station-year.
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'pk_nulls', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with a NULL primary-key column (station_id)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true) WHERE station_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'pk_duplicates', CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END, CAST(dups AS VARCHAR), '0', 'duplicate station_id'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT station_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true) GROUP BY station_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'row_count', CASE WHEN n >= 200 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '200', 'rows in DQ bucket'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true));
+
+SELECT 'coops_station_datums' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true) LIMIT 1;
+
+-- lat_m / hat_m (LAT / HAT) are published only for some stations; entirely null in a small DQ sample is expected.
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'lat_m', 'hat_m');
+
+-- Excluded: stnd_m is 0 by definition (station datum is the reference).
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'stnd_m', 'orthometric_datum', 'epoch', 'lat_m', 'hat_m', 'datums_accepted');
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'pk_nulls', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with a NULL primary-key column (station_id)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true) WHERE station_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'pk_duplicates', CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END, CAST(dups AS VARCHAR), '0', 'duplicate station_id'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT station_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true) GROUP BY station_id HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'row_count', CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1000', 'rows in DQ bucket'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true));
+
+SELECT 'coops_high_low' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true) LIMIT 1;
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+-- Excluded: partition/dimension columns that are constant when the DQ sample covers one station-year.
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'year', 'station_id');
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'pk_nulls', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with a NULL primary-key column (station_id, event_time_utc, event_type)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true) WHERE station_id IS NULL OR event_time_utc IS NULL OR event_type IS NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'pk_duplicates', CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END, CAST(dups AS VARCHAR), '0', 'duplicate station_id/event_time_utc/event_type'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT station_id, event_time_utc, event_type FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true) GROUP BY station_id, event_time_utc, event_type HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'row_count', CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1000', 'rows in DQ bucket'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true));
+
+SELECT 'coops_tide_predictions' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true) LIMIT 1;
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+-- Excluded: partition/dimension columns that are constant when the DQ sample covers one station-year.
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'year', 'station_id');
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'pk_nulls', CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', 'rows with a NULL primary-key column (station_id, event_time_utc, event_type)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true) WHERE station_id IS NULL OR event_time_utc IS NULL OR event_type IS NULL);
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'pk_duplicates', CASE WHEN dups > 0 THEN 'fail' ELSE 'pass' END, CAST(dups AS VARCHAR), '0', 'duplicate station_id/event_time_utc/event_type'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT station_id, event_time_utc, event_type FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true) GROUP BY station_id, event_time_utc, event_type HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_stations', 'value_ranges', CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END, CAST(bad AS VARCHAR), '0', 'coordinates in range, tide_type known, 7-digit station_id'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_stations', allow_moved_paths=true) WHERE NOT (latitude BETWEEN -15 AND 72 AND longitude BETWEEN -180 AND 180 AND tide_type IN ('Semidiurnal','Mixed','Diurnal','Mixed Diurnal') AND LENGTH(station_id) = 7));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_station_datums', 'value_ranges', CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END, CAST(bad AS VARCHAR), '0', 'MHHW >= MHW >= MSL >= MLLW (1 cm rounding tolerance: Packery Channel publishes MHHW 1 mm below MHW), plausible meters'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_station_datums', allow_moved_paths=true) WHERE NOT (mhhw_m >= mhw_m - 0.01 AND mhw_m >= msl_m AND msl_m >= mllw_m AND mllw_m > -5 AND mhhw_m < 100));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_high_low', 'value_ranges', CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END, CAST(bad AS VARCHAR), '0', 'water level in plausible meters above MLLW, event_type known, date/year consistent'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true) WHERE NOT (water_level_m BETWEEN -15 AND 20 AND event_type IN ('H','L','HH','LL') AND event_date = SUBSTR(event_time_utc,1,10) AND year = CAST(SUBSTR(event_date,1,4) AS INTEGER)));
+
+INSERT INTO dq_results
+SELECT 'weather', 'coops_tide_predictions', 'value_ranges', CASE WHEN bad > 0 THEN 'fail' ELSE 'pass' END, CAST(bad AS VARCHAR), '0', 'predicted level in plausible meters above MLLW, event_type known, date/year consistent'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true) WHERE NOT (water_level_m BETWEEN -15 AND 20 AND event_type IN ('H','L') AND event_date = SUBSTR(event_time_utc,1,10) AND year = CAST(SUBSTR(event_date,1,4) AS INTEGER)));
+
+-- coops_daily_surge view logic: the observed-minus-predicted daily high anomaly stays within +/-5 m
+-- (the largest recorded US surge, Hurricane Katrina at Pass Christian, was about 8 m but is not a CO-OPS NWLON gauge).
+INSERT INTO dq_results
+SELECT 'weather', 'coops_daily_surge', 'anomaly_range', CASE WHEN joined = 0 THEN 'fail' WHEN bad > 0 THEN 'fail' ELSE 'pass' END, CAST(bad AS VARCHAR), '0', 'joined station-days: ' || joined
+FROM (
+  SELECT COUNT(*) AS joined, SUM(CASE WHEN ABS(o.hi - p.hi) > 5 THEN 1 ELSE 0 END) AS bad
+  FROM (SELECT station_id, event_date, MAX(water_level_m) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_high_low', allow_moved_paths=true) GROUP BY 1, 2) o
+  JOIN (SELECT station_id, event_date, MAX(water_level_m) AS hi FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/coops_tide_predictions', allow_moved_paths=true) GROUP BY 1, 2) p
+    ON o.station_id = p.station_id AND o.event_date = p.event_date
+);
+
+-- ============================================================
 -- ALL RESULTS
 -- ============================================================
 SELECT '=== ALL DQ RESULTS ===' AS section;

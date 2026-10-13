@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**328 requirements across 7 adapters.**
+**336 requirements across 7 adapters.**
 
 
-## askamerica  (7: 6 accepted, 1 proposed)
+## askamerica  (8: 6 accepted, 1 complete, 1 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -16,6 +16,7 @@
 | [ ] | ASKAM-005 | MUST | constraint | installer / Small installer | The installer is small and has a step to download its assets. No installer (.msi, .deb, .pkg) carries the eng… | — |
 | [ ] | ASKAM-006 | MUST | behavioral | semantic-search / Semantic search | Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing set by the user, the … | — |
 | [ ] | ASKAM-010 | MUST | constraint | data-server / Key sign-in | Every connection to the pgwire-govdata server passes its AskAmerica API key as the PostgreSQL password, and t… | pgwire-calcite/tests/unit/test_key_sign_in.py, askamerica-e… |
+| [x] | ASKAM-011 | MUST | behavioral | data-server / Key sign-in | With no API key, the engine neither connects to nor starts a data server: the caller is told at once that no … | askamerica-engine/src/test/java/org/apache/calcite/adapter/… |
 
 ## file  (191: 161 complete, 12 in-progress, 15 proposed, 3 rejected)
 
@@ -326,11 +327,11 @@
 | [ ] | SF-051 | MUST | behavioral | trino / Queries | Through Trino the org's sObjects are listed and described as tables, and filters, aggregates and joins over t… | trino-salesforce/TestSalesforceConnector#testShowTables, tr… |
 | [.] | SF-052 | MUST | constraint | trino / Name matching | The connector fails at startup unless case-insensitive-name-matching is true, because sObject names are mixed… | — |
 
-## servicenow  (27: 9 accepted, 18 in-progress)
+## servicenow  (34: 9 accepted, 25 in-progress)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
-| [~] | SNOW-001 | MUST | constraint | scope / Read-only | The first release is read-only: the adapter offers no INSERT, UPDATE or DELETE and never writes to the instan… | — |
+| [~] | SNOW-001 | MUST | constraint | scope / Read-only | [SUPERSEDED by SNOW-060..SNOW-066, 2026-10-12 -- the owner approved table writes. Kept here for history; do n… | — |
 | [~] | SNOW-002 | MUST | infrastructure | scope / Packaging | The adapter ships in both packagings in its first release: a pgwire bundle (pgwire-servicenow) and a Trino co… | — |
 | [~] | SNOW-003 | MUST | behavioral | scope / Authentication | The adapter authenticates with basic authentication (user and password). Another method named in the configur… | — |
 | [~] | SNOW-010 | MUST | structural | catalog / Discovery | Tables and columns come from the instance's own metadata (sys_db_object, sys_dictionary, sys_glide_object), w… | — |
@@ -357,3 +358,10 @@
 | [ ] | SNOW-047 | MUST | behavioral | harness / Escaping | The harness tests values containing ^, =, a comma inside an IN list and other operator text, and a value that… | — |
 | [ ] | SNOW-048 | MUST | constraint | harness / Live seeding | The rows the live harness needs are written by the harness itself with direct REST calls, under a prefix that… | — |
 | [~] | SNOW-050 | MUST | constraint | fixtures / Provenance | Until responses have been captured from an instance, the unit-test fixtures are labelled as derived from Serv… | — |
+| [~] | SNOW-060 | MUST | behavioral | write / Insert | An INSERT on a registered table that is not bound to an import set is one POST per row to /api/now/table/<tab… | — |
+| [~] | SNOW-061 | MUST | behavioral | write / Import set insert | A registered table can be bound to an import set by the importSet operand ({"<table>": "<staging table>"}; Tr… | — |
+| [~] | SNOW-062 | MUST | behavioral | write / Import set result | Each imported row's transform result decides its outcome. "inserted" is a written row, and so is "updated" (a… | — |
+| [~] | SNOW-063 | MUST | behavioral | write / Update and delete | UPDATE and DELETE are always written to the table directly, never through an import set. The rows are found t… | — |
+| [~] | SNOW-064 | MUST | constraint | write / Writable columns | Columns whose name starts with sys_ are the instance's own and are never written; a statement that sets one i… | — |
+| [~] | SNOW-065 | MUST | constraint | write / Failure | There are no transactions. A statement that fails part way leaves the rows written before the failing one wri… | — |
+| [~] | SNOW-066 | MUST | structural | write / Transform maps | The schema always holds _servicenow_transform_maps(name, source_table, target_table, active), the instance's … | — |

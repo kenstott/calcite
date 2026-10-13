@@ -30,6 +30,7 @@ import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.fedregister.FedRegisterSchemaFactory;
 import org.apache.calcite.adapter.govdata.fiscal.FiscalSchemaFactory;
+import org.apache.calcite.adapter.govdata.fisheries.FisheriesSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.edu.EduSchemaFactory;
 import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
@@ -90,6 +91,7 @@ import org.apache.calcite.adapter.file.etl.VariableResolver;
  *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
  *   <li>fec - Federal Election Commission campaign finance data</li>
  *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
+ *   <li>fisheries - NOAA Fisheries landings (commercial/recreational, salmon by state)</li>
  *   <li>law - The legal corpus; currently the U.S. Code (codified federal statutes) from OLRC
  *       USLM XML release points</li>
  *   <li>officials - Federal elected/appointed officeholders (Congress.gov members and
@@ -369,6 +371,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "fr":
         return new FedRegisterSchemaFactory();
 
+      case "fisheries":
+      case "noaa_fisheries":
+        return new FisheriesSchemaFactory();
+
       case "law":
         return new LawSchemaFactory();
 
@@ -457,7 +463,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
             + " fedregister, law, officials, cyber_vuln, cyber_threat, health, energy, edu, patents, lands,"
-            + " cftc, ag, housing, transport, environment, research, fiscal, banking");
+            + " cftc, ag, housing, transport, environment, research, fiscal, banking, fisheries");
     }
   }
 

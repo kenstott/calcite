@@ -84,6 +84,7 @@ include(
     "plus",
     "openapi",
     "salesforce",
+    "servicenow",
     "graphql",
     "redis",
     "server",
@@ -100,6 +101,7 @@ include(
     "trino-cloudops",
     "trino-file",
     "trino-salesforce",
+    "trino-servicenow",
     "trino-sharepoint",
     "trino-splunk"
 )

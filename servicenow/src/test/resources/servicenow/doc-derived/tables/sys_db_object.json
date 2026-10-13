@@ -1,0 +1,44 @@
+{
+  "result": [
+    {
+      "sys_id": "000000000000000000000000000000a1",
+      "name": "task",
+      "label": "Task",
+      "super_class": "",
+      "sys_package": {
+        "value": "00000000000000000000000000000p01",
+        "display_value": "Task table schema"
+      }
+    },
+    {
+      "sys_id": "000000000000000000000000000000a2",
+      "name": "incident",
+      "label": "Incident",
+      "super_class": "000000000000000000000000000000a1",
+      "sys_package": {
+        "value": "00000000000000000000000000000p02",
+        "display_value": "Incident"
+      }
+    },
+    {
+      "sys_id": "000000000000000000000000000000a3",
+      "name": "sys_user",
+      "label": "User",
+      "super_class": "",
+      "sys_package": {
+        "value": "",
+        "display_value": ""
+      }
+    },
+    {
+      "sys_id": "000000000000000000000000000000a4",
+      "name": "bad_table",
+      "label": "Bad table",
+      "super_class": "",
+      "sys_package": {
+        "value": "00000000000000000000000000000p03",
+        "display_value": ""
+      }
+    }
+  ]
+}

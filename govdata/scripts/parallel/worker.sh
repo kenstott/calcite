@@ -31,6 +31,7 @@
 #   ref           <daily|historical> — GLEIF + FIGI reference (year-agnostic)
 #   fec           <historical|daily>
 #   fedregister   <historical|daily>
+#   fisheries     <historical|daily|YYYY|YYYY-YYYY>
 #   econ_reference <daily>          — BLS area/industry codes (year-agnostic)
 #   law           <daily|historical|year|range> — legal corpus: U.S. Code (year-agnostic snapshot), congressional bills, Supreme Court opinions, lobbying disclosures (by Congress)
 #   officials     <historical|daily|year|range> — Congress.gov members/nominations, FJC judges
@@ -64,7 +65,7 @@ if [ -z "$SCHEMA" ] || [ -z "$MODE" ]; then
   echo "  Schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
   echo "           weather, ref, fec, fedregister, law, officials, econ_reference, research," >&2
   echo "           cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-  echo "           housing, transport, environment, disasters, fiscal, banking" >&2
+  echo "           housing, transport, environment, disasters, fiscal, banking, fisheries" >&2
   exit 1
 fi
 
@@ -532,6 +533,27 @@ case "$SCHEMA" in
     run_etl_inline "$(build_inline_model fedregister "$EXTRA")" "$WORKER_ID"
     ;;
 
+  # ── NOAA Fisheries landings ───────────────────────────────────────────────
+
+  fisheries)
+    case "$MODE" in
+      historical)
+        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-1952}"
+        export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
+        ;;
+      daily)
+        export GOVDATA_START_YEAR="$INCREMENTAL_YEAR"
+        export GOVDATA_END_YEAR=""
+        ;;
+      [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9])
+        export GOVDATA_START_YEAR="${MODE%-*}"
+        export GOVDATA_END_YEAR="${MODE#*-}"
+        ;;
+      *) echo "fisheries: unknown mode '$MODE'. Valid modes: historical, daily, a year (2025), or a range (2020-2023)" >&2; exit 1 ;;
+    esac
+    run_etl_inline "$(build_inline_model fisheries)" "$WORKER_ID"
+    ;;
+
   # ── BLS area/industry reference codes — year-agnostic ─────────────────────
 
   econ_reference)
@@ -739,7 +761,7 @@ PY
     echo "Valid schemas: sec, sec_primary, sec_secondary, sec_13f, sec_prices, econ, census, geo, crime," >&2
     echo "               weather, ref, fec, fedregister, law, officials, econ_reference, research," >&2
     echo "               cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag," >&2
-    echo "               housing, transport, environment, disasters, fiscal, banking" >&2
+    echo "               housing, transport, environment, disasters, fiscal, banking, fisheries" >&2
     exit 1
     ;;
 esac
