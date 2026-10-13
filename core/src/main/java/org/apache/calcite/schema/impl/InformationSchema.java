@@ -45,6 +45,7 @@ import org.apache.calcite.util.mapping.IntPair;
 
 import com.google.common.collect.ImmutableMap;
 
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,10 +97,10 @@ public class InformationSchema extends AbstractSchema {
    * and costs a full scan, and one it reads too broadly still yields correct rows. It can prune
    * work; it cannot change the answer.
    */
-  private static Set<String> restrictedValues(List<RexNode> filters, int fieldIndex) {
-    Set<String> values = null;
+  private static @Nullable Set<String> restrictedValues(List<RexNode> filters, int fieldIndex) {
+    @Nullable Set<String> values = null;
     for (RexNode filter : filters) {
-      Set<String> fromThis = equalityValues(filter, fieldIndex);
+      @Nullable Set<String> fromThis = equalityValues(filter, fieldIndex);
       if (fromThis == null) {
         continue;
       }
@@ -114,7 +115,7 @@ public class InformationSchema extends AbstractSchema {
   }
 
   /** Values a single conjunct pins field {@code fieldIndex} to, or null if it does not. */
-  private static Set<String> equalityValues(RexNode filter, int fieldIndex) {
+  private static @Nullable Set<String> equalityValues(RexNode filter, int fieldIndex) {
     if (!(filter instanceof RexCall)) {
       return null;
     }
@@ -137,9 +138,9 @@ public class InformationSchema extends AbstractSchema {
       // misreading a range as an equality. A full scan is slow, never wrong.
       return null;
     case AND: {
-      Set<String> values = null;
+      @Nullable Set<String> values = null;
       for (RexNode operand : call.getOperands()) {
-        Set<String> nested = equalityValues(operand, fieldIndex);
+        @Nullable Set<String> nested = equalityValues(operand, fieldIndex);
         if (nested == null) {
           continue;
         }
@@ -185,7 +186,7 @@ public class InformationSchema extends AbstractSchema {
   }
 
   /** Single-element, lower-cased, mutable set holding a string literal's value. */
-  private static Set<String> literalSet(RexNode literal) {
+  private static @Nullable Set<String> literalSet(RexNode literal) {
     Comparable<?> value = RexLiteral.value((RexLiteral) literal);
     if (value == null) {
       return null;
@@ -199,7 +200,7 @@ public class InformationSchema extends AbstractSchema {
   }
 
   /** True when {@code name} survives a restriction set (null meaning "no restriction"). */
-  private static boolean retained(Set<String> restriction, String name) {
+  private static boolean retained(@Nullable Set<String> restriction, String name) {
     return restriction == null || restriction.contains(name.toLowerCase(Locale.ROOT));
   }
 
@@ -232,10 +233,17 @@ public class InformationSchema extends AbstractSchema {
                 rootSchema.subSchemas().getNames(LikePattern.any()));
   }
 
-  private final Map<String, Table> tableMap = createCaseInsensitiveTableMap();
+  private @MonotonicNonNull Map<String, Table> tableMap;
 
   @Override protected Map<String, Table> getTableMap() {
-    return tableMap;
+    // Built on first use, not in a field initializer: the tables are inner classes of this
+    // schema, so building them while it is still being constructed would leak "this"
+    Map<String, Table> tables = tableMap;
+    if (tables == null) {
+      tables = createCaseInsensitiveTableMap();
+      tableMap = tables;
+    }
+    return tables;
   }
 
 
@@ -291,8 +299,8 @@ public class InformationSchema extends AbstractSchema {
       return builder.build();
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root) {
-      List<Object[]> rows = new ArrayList<>();
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
+      List<@Nullable Object[]> rows = new ArrayList<>();
 
       LOGGER.debug("========== SchemataTable.scan START ==========");
       LOGGER.debug("rootSchema class: {}", rootSchema.getClass().getName());
@@ -387,12 +395,12 @@ public class InformationSchema extends AbstractSchema {
       return builder.build();
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root) {
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
       return scan(root, new ArrayList<RexNode>());
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
-      List<Object[]> rows = new ArrayList<>();
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root, List<RexNode> filters) {
+      List<@Nullable Object[]> rows = new ArrayList<>();
       Set<String> onlySchemas = restrictedValues(filters, IDX_TABLE_SCHEMA);
       Set<String> onlyTables = restrictedValues(filters, IDX_TABLE_NAME);
 
@@ -506,12 +514,12 @@ public class InformationSchema extends AbstractSchema {
       return builder.build();
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root) {
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
       return scan(root, new ArrayList<RexNode>());
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
-      List<Object[]> rows = new ArrayList<>();
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root, List<RexNode> filters) {
+      List<@Nullable Object[]> rows = new ArrayList<>();
       Set<String> onlySchemas = restrictedValues(filters, IDX_TABLE_SCHEMA);
       Set<String> onlyTables = restrictedValues(filters, IDX_TABLE_NAME);
 
@@ -658,12 +666,12 @@ public class InformationSchema extends AbstractSchema {
           .build();
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root) {
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
       return scan(root, new ArrayList<RexNode>());
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
-      List<Object[]> rows = new ArrayList<>();
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root, List<RexNode> filters) {
+      List<@Nullable Object[]> rows = new ArrayList<>();
       Set<String> onlySchemas = restrictedValues(filters, IDX_CONSTRAINT_TABLE_SCHEMA);
       Set<String> onlyTables = restrictedValues(filters, IDX_CONSTRAINT_TABLE_NAME);
 
@@ -703,12 +711,15 @@ public class InformationSchema extends AbstractSchema {
                           tableName, schemaName, table.getClass().getSimpleName());
               // Get table statistics which contain constraint information
               Statistic statistic = table.getStatistic();
-              LOGGER.debug("  - statistic: {}, keys: {}, referentialConstraints: {}",
-                          statistic != null ? statistic.getClass().getSimpleName() : "null",
-                          statistic != null && statistic.getKeys() != null
-                              ? statistic.getKeys().size() : "null",
-                          statistic != null && statistic.getReferentialConstraints() != null
-                              ? statistic.getReferentialConstraints().size() : "null");
+              if (LOGGER.isDebugEnabled()) {
+                List<ImmutableBitSet> loggedKeys = statistic != null ? statistic.getKeys() : null;
+                List<RelReferentialConstraint> loggedFks =
+                    statistic != null ? statistic.getReferentialConstraints() : null;
+                LOGGER.debug("  - statistic: {}, keys: {}, referentialConstraints: {}",
+                    statistic != null ? statistic.getClass().getSimpleName() : "null",
+                    loggedKeys != null ? loggedKeys.size() : "null",
+                    loggedFks != null ? loggedFks.size() : "null");
+              }
               if (statistic != null) {
                 // Extract primary keys
                 List<ImmutableBitSet> keys = statistic.getKeys();
@@ -790,12 +801,12 @@ public class InformationSchema extends AbstractSchema {
       return builder.build();
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root) {
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
       return scan(root, new ArrayList<RexNode>());
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters) {
-      List<Object[]> rows = new ArrayList<>();
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root, List<RexNode> filters) {
+      List<@Nullable Object[]> rows = new ArrayList<>();
       Set<String> onlySchemas = restrictedValues(filters, IDX_CONSTRAINT_TABLE_SCHEMA);
       Set<String> onlyTables = restrictedValues(filters, IDX_CONSTRAINT_TABLE_NAME);
 
@@ -941,8 +952,8 @@ public class InformationSchema extends AbstractSchema {
           .build();
     }
 
-    @Override public Enumerable<Object[]> scan(DataContext root) {
-      List<Object[]> rows = new ArrayList<>();
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
+      List<@Nullable Object[]> rows = new ArrayList<>();
 
       // Iterate through all schemas
       for (String schemaName : rootSchema.subSchemas().getNames(LikePattern.any())) {
@@ -1211,7 +1222,7 @@ public class InformationSchema extends AbstractSchema {
   // Base class for empty tables
   /** A table with no rows. */
   private abstract static class EmptyTable extends AbstractTable implements ScannableTable {
-    @Override public Enumerable<Object[]> scan(DataContext root) {
+    @Override public Enumerable<@Nullable Object[]> scan(DataContext root) {
       return Linq4j.asEnumerable(new ArrayList<Object[]>());
     }
 
@@ -1257,7 +1268,7 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private Integer getCharMaxLength(RelDataType type) {
+  private @Nullable Integer getCharMaxLength(RelDataType type) {
     if (type.getSqlTypeName() == SqlTypeName.CHAR
         || type.getSqlTypeName() == SqlTypeName.VARCHAR) {
       return type.getPrecision() > 0 ? type.getPrecision() : null;
@@ -1265,12 +1276,12 @@ public class InformationSchema extends AbstractSchema {
     return null;
   }
 
-  private Integer getCharOctetLength(RelDataType type) {
+  private @Nullable Integer getCharOctetLength(RelDataType type) {
     Integer charMax = getCharMaxLength(type);
     return charMax != null ? charMax * 4 : null; // UTF-8 max 4 bytes per char
   }
 
-  private Integer getNumericPrecision(RelDataType type) {
+  private @Nullable Integer getNumericPrecision(RelDataType type) {
     switch (type.getSqlTypeName()) {
     case TINYINT:
       return 3;
@@ -1292,7 +1303,7 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private Integer getNumericPrecisionRadix(RelDataType type) {
+  private @Nullable Integer getNumericPrecisionRadix(RelDataType type) {
     switch (type.getSqlTypeName()) {
     case TINYINT:
     case SMALLINT:
@@ -1308,14 +1319,14 @@ public class InformationSchema extends AbstractSchema {
     }
   }
 
-  private Integer getNumericScale(RelDataType type) {
+  private @Nullable Integer getNumericScale(RelDataType type) {
     if (type.getSqlTypeName() == SqlTypeName.DECIMAL) {
       return type.getScale();
     }
     return null;
   }
 
-  private Integer getDatetimePrecision(RelDataType type) {
+  private @Nullable Integer getDatetimePrecision(RelDataType type) {
     switch (type.getSqlTypeName()) {
     case TIME:
     case TIMESTAMP:
