@@ -46,11 +46,20 @@ import java.util.function.Function;
  *   <li>HTTP Basic authentication;
  *   <li>{@code sysparm_fields}, {@code sysparm_limit}, {@code sysparm_display_value} false and
  *   all, {@code sysparm_exclude_reference_link};
- *   <li>{@code sysparm_query} made only of {@code sys_id><key>} and {@code ORDERBYsys_id}. Any
- *   other term is answered with HTTP 400, so a filter that starts being pushed down fails the
- *   tests instead of being silently accepted.
+ *   <li>{@code sysparm_query} made only of {@code sys_id><key>}, {@code ORDERBYsys_id} and, on
+ *   {@code sys_dictionary}, {@code nameIN<a>,<b>} (the adapter's per-table column read; checked on
+ *   dev453859 2026-10-12), and on {@code sys_transform_map} / {@code sys_transform_entry},
+ *   {@code <field>=<value>} terms (the import binding's lookups). Any other term is answered
+ *   with HTTP 400, so a filter that starts being pushed down fails the tests instead of being
+ *   silently accepted.
  * </ul>
- * A test can take over any request with {@link #override}.
+ * Writes: POST to {@code /api/now/table/<table>} adds a row with a new sys_id (201), PATCH and
+ * DELETE of {@code /api/now/table/<table>/<sys_id>} change or remove it (200, 204; 404 if there is
+ * none). Every write is recorded with its method and JSON body. The Import Set API
+ * ({@code /api/now/import/<staging>}) has no default answer: a test supplies it with
+ * {@link #override}.
+ *
+ * <p>A test can take over any request with {@link #override}.
  */
 final class FixtureServer implements AutoCloseable {
 
@@ -89,18 +98,31 @@ final class FixtureServer implements AutoCloseable {
 
   /** A request as the server saw it. */
   static final class Seen {
+    final String method;
+    /** "table" or "import". */
+    final String api;
     final String table;
+    /** The record's sys_id for a PATCH or DELETE; null otherwise. */
+    final String sysId;
     final Map<String, String> params;
     final String authorization;
+    /** The request's JSON body, or null. */
+    final JsonNode body;
 
-    Seen(String table, Map<String, String> params, String authorization) {
+    Seen(String method, String api, String table, String sysId, Map<String, String> params,
+        String authorization, JsonNode body) {
+      this.method = method;
+      this.api = api;
       this.table = table;
+      this.sysId = sysId;
       this.params = params;
       this.authorization = authorization;
+      this.body = body;
     }
 
     @Override public String toString() {
-      return table + " " + params;
+      return method + " " + api + " " + table + (sysId == null ? "" : "/" + sysId) + " "
+          + params + (body == null ? "" : " " + body);
     }
   }
 
@@ -109,6 +131,7 @@ final class FixtureServer implements AutoCloseable {
   private final List<Seen> requests = new CopyOnWriteArrayList<>();
   private volatile Function<Seen, Reply> override = seen -> null;
   private volatile boolean lenientTerms;
+  private int written;
 
   FixtureServer() throws IOException {
     for (String table : new String[] {"sys_db_object", "sys_dictionary", "sys_glide_object",
@@ -123,6 +146,7 @@ final class FixtureServer implements AutoCloseable {
     }
     server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
     server.createContext("/api/now/table/", this::handle);
+    server.createContext("/api/now/import/", this::handle);
     server.start();
   }
 
@@ -146,6 +170,28 @@ final class FixtureServer implements AutoCloseable {
     return result;
   }
 
+  /** Write requests (anything but GET), in order. */
+  List<Seen> writes() {
+    final List<Seen> result = new ArrayList<>();
+    for (Seen seen : requests) {
+      if (!seen.method.equals("GET")) {
+        result.add(seen);
+      }
+    }
+    return result;
+  }
+
+  /** Adds rows to a table, creating it if the fixtures have none. */
+  void addRows(String table, String json) throws IOException {
+    final ArrayNode rows = tables.computeIfAbsent(table, t -> MAPPER.createArrayNode());
+    rows.addAll((ArrayNode) MAPPER.readTree(json));
+  }
+
+  /** The rows a table holds now. */
+  ArrayNode rows(String table) {
+    return tables.get(table);
+  }
+
   /**
    * Makes the server ignore query terms it does not understand instead of answering 400. For tests
    * of the translator's output text and of plumbing only: the rows returned are then NOT filtered
@@ -166,10 +212,17 @@ final class FixtureServer implements AutoCloseable {
 
   private void handle(HttpExchange exchange) throws IOException {
     final String path = exchange.getRequestURI().getPath();
-    final String table = path.substring("/api/now/table/".length());
+    final String api = path.startsWith("/api/now/import/") ? "import" : "table";
+    final String rest = path.substring(("/api/now/" + api + "/").length());
+    final int slash = rest.indexOf('/');
+    final String table = slash < 0 ? rest : rest.substring(0, slash);
+    final String sysId = slash < 0 ? null : rest.substring(slash + 1);
     final Map<String, String> params = parseQuery(exchange.getRequestURI().getRawQuery());
     final String authorization = exchange.getRequestHeaders().getFirst("Authorization");
-    final Seen seen = new Seen(table, params, authorization);
+    final String method = exchange.getRequestMethod();
+    final byte[] in = exchange.getRequestBody().readAllBytes();
+    final JsonNode body = in.length == 0 ? null : MAPPER.readTree(in);
+    final Seen seen = new Seen(method, api, table, sysId, params, authorization, body);
     requests.add(seen);
 
     Reply reply = override.apply(seen);
@@ -194,15 +247,29 @@ final class FixtureServer implements AutoCloseable {
     if (!expected.equals(seen.authorization)) {
       return error(401, "User Not Authenticated", "Required to provide Auth information");
     }
+    if (seen.api.equals("import")) {
+      return error(400, "FixtureServer has no default answer for the Import Set API; "
+          + "the test must override it", "");
+    }
     final ArrayNode rows = tables.get(seen.table);
     if (rows == null) {
       return error(400, "Invalid table " + seen.table, "");
     }
+    if (!seen.method.equals("GET")) {
+      return write(seen, rows);
+    }
     String after = null;
+    Set<String> names = null;
+    final Map<String, String> conditions = new LinkedHashMap<>();
     final String query = seen.params.getOrDefault("sysparm_query", "");
     for (String term : query.isEmpty() ? new String[0] : query.split("\\^")) {
       if (term.startsWith("sys_id>")) {
         after = term.substring("sys_id>".length());
+      } else if (term.startsWith("nameIN") && seen.table.equals("sys_dictionary")) {
+        names = new HashSet<>(Arrays.asList(term.substring("nameIN".length()).split(",")));
+      } else if (seen.table.startsWith("sys_transform_") && term.contains("=")) {
+        // The import binding's metadata conditions: field=value, applied below
+        conditions.put(term.substring(0, term.indexOf('=')), term.substring(term.indexOf('=') + 1));
       } else if (!term.equals("ORDERBYsys_id") && !lenientTerms) {
         return error(400, "FixtureServer does not accept the query term '" + term + "'", "");
       }
@@ -220,6 +287,12 @@ final class FixtureServer implements AutoCloseable {
     final ArrayNode result = MAPPER.createArrayNode();
     for (JsonNode row : sorted) {
       if (after != null && row.get("sys_id").asText().compareTo(after) <= 0) {
+        continue;
+      }
+      if (names != null && !names.contains(row.get("name").asText())) {
+        continue;
+      }
+      if (!matches(row, conditions)) {
         continue;
       }
       if (result.size() == limit) {
@@ -244,6 +317,49 @@ final class FixtureServer implements AutoCloseable {
     final ObjectNode body = MAPPER.createObjectNode();
     body.set("result", result);
     return Reply.json(body.toString());
+  }
+
+  private Reply write(Seen seen, ArrayNode rows) {
+    switch (seen.method) {
+    case "POST": {
+      final ObjectNode row = ((ObjectNode) seen.body).deepCopy();
+      row.put("sys_id", String.format(java.util.Locale.ROOT, "%032d", ++written));
+      rows.add(row);
+      final ObjectNode reply = MAPPER.createObjectNode();
+      reply.set("result", row);
+      return Reply.json(reply.toString()).withStatus(201);
+    }
+    case "PATCH":
+    case "DELETE":
+      for (int i = 0; i < rows.size(); i++) {
+        if (rows.get(i).path("sys_id").asText().equals(seen.sysId)) {
+          if (seen.method.equals("DELETE")) {
+            rows.remove(i);
+            return new Reply(204, "application/json", "");
+          }
+          final ObjectNode row = (ObjectNode) rows.get(i);
+          row.setAll((ObjectNode) seen.body);
+          final ObjectNode reply = MAPPER.createObjectNode();
+          reply.set("result", row);
+          return Reply.json(reply.toString());
+        }
+      }
+      return error(404, "No Record found", "Record doesn't exist or ACL restricts the record "
+          + "retrieval");
+    default:
+      return error(405, "Method not allowed", seen.method);
+    }
+  }
+
+  private static boolean matches(JsonNode row, Map<String, String> conditions) {
+    for (Map.Entry<String, String> c : conditions.entrySet()) {
+      final JsonNode value = row.path(c.getKey());
+      final String stored = value.isObject() ? value.path("value").asText() : value.asText();
+      if (!stored.equals(c.getValue())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static Reply error(int status, String message, String detail) {

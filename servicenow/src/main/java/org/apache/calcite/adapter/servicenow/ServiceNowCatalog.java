@@ -38,7 +38,8 @@ import java.util.regex.Pattern;
  * Table API.
  *
  * <ul>
- *   <li>{@code sys_db_object}: one row per table, with its parent ({@code super_class}).
+ *   <li>{@code sys_db_object}: one row per table, with its label, its parent ({@code super_class})
+ *   and the package that delivers it ({@code sys_package}), whose name is the table's theme.
  *   <li>{@code sys_dictionary}: one row per column, on the table that declares it. A table's own
  *   rows list only the columns it declares; the rest are on its ancestors' rows, so columns are
  *   resolved by walking {@code super_class} up to the root ({@code incident} extends {@code task}).
@@ -46,13 +47,12 @@ import java.util.regex.Pattern;
  *   adapter does not know by name.
  * </ul>
  *
- * <p>The metadata is ordinary table data, so the whole catalog is a bulk read of three tables,
- * not a call per table. Columns are never inferred from sample rows: if the user cannot read the
- * metadata tables, loading fails and says which table and what access is missing.
- *
- * <p>The raw rows ({@link Snapshot}) are what the on-disk cache stores; resolution into
- * {@link TableDef}s happens on demand, one table at a time, so a column of an unmapped type fails
- * only the table it is on.
+ * <p>The table list is one read of {@code sys_db_object} ({@link Snapshot}, what the on-disk cache
+ * stores). An instance has thousands of tables and its dictionary over a hundred thousand rows, so
+ * a table's columns are read only when that table is resolved: its own and its ancestors'
+ * {@code sys_dictionary} rows, nothing else. Columns are never inferred from sample rows: if the
+ * user cannot read the metadata tables, the read fails and says which table and what access is
+ * missing. A column of an unmapped type fails only the table it is on.
  */
 final class ServiceNowCatalog {
 
@@ -61,7 +61,10 @@ final class ServiceNowCatalog {
   /** Table and field names that may appear in a URL path or a {@code sysparm_fields} list. */
   static final Pattern NAME = Pattern.compile("[A-Za-z0-9_$]+");
 
-  private static final int SNAPSHOT_VERSION = 1;
+  private static final int SNAPSHOT_VERSION = 2;
+
+  /** Theme of a table that no package delivers. */
+  static final String NO_PACKAGE = "(no package)";
 
   /** A row of {@code sys_db_object}. */
   static final class TableRow {
@@ -70,13 +73,38 @@ final class ServiceNowCatalog {
     final String label;
     /** sys_id of the parent table's row, or empty for a root table. */
     final String superClassId;
+    /** The name of the package that delivers the table; see {@link #theme(String, String)}. */
+    final String theme;
 
-    TableRow(String sysId, String name, String label, String superClassId) {
+    TableRow(String sysId, String name, String label, String superClassId, String theme) {
       this.sysId = sysId;
       this.name = name;
       this.label = label;
       this.superClassId = superClassId;
+      this.theme = theme;
     }
+  }
+
+  /**
+   * A table's theme: the name of the package that delivers it. A table no package delivers is
+   * {@link #NO_PACKAGE}. A package whose name is empty is named by its sys_id, one group per
+   * package, so that tables of different unnamed packages are not merged (the owner's decision of
+   * 2026-10-12).
+   */
+  static String theme(String packageId, String packageName) {
+    if (packageId.isEmpty()) {
+      return NO_PACKAGE;
+    }
+    return packageName.isEmpty() ? "(unnamed package " + packageId + ")" : packageName;
+  }
+
+  /** Where a table's column metadata is read from, one table at a time. */
+  interface Metadata {
+    /** The {@code sys_dictionary} rows of the named tables and of no other. */
+    List<DictionaryRow> dictionary(List<String> tables);
+
+    /** Field type name to scalar type name, from {@code sys_glide_object}. */
+    Map<String, String> glideTypes();
   }
 
   /** A row of {@code sys_dictionary}. */
@@ -98,18 +126,12 @@ final class ServiceNowCatalog {
     }
   }
 
-  /** The raw metadata rows, as stored in the cache. */
+  /** The instance's table list, as stored in the cache. */
   static final class Snapshot {
     final List<TableRow> tables;
-    final List<DictionaryRow> dictionary;
-    /** Field type name to scalar type name, from {@code sys_glide_object}. */
-    final Map<String, String> glideTypes;
 
-    Snapshot(List<TableRow> tables, List<DictionaryRow> dictionary,
-        Map<String, String> glideTypes) {
+    Snapshot(List<TableRow> tables) {
       this.tables = tables;
-      this.dictionary = dictionary;
-      this.glideTypes = glideTypes;
     }
 
     String toJson() {
@@ -118,16 +140,8 @@ final class ServiceNowCatalog {
       final ArrayNode tableNodes = root.putArray("tables");
       for (TableRow t : tables) {
         tableNodes.addObject().put("sysId", t.sysId).put("name", t.name).put("label", t.label)
-            .put("superClassId", t.superClassId);
+            .put("superClassId", t.superClassId).put("theme", t.theme);
       }
-      final ArrayNode dictionaryNodes = root.putArray("dictionary");
-      for (DictionaryRow d : dictionary) {
-        dictionaryNodes.addObject().put("table", d.table).put("element", d.element)
-            .put("internalType", d.internalType).put("maxLength", d.maxLength)
-            .put("active", d.active);
-      }
-      final ObjectNode types = root.putObject("glideTypes");
-      glideTypes.forEach(types::put);
       return root.toString();
     }
 
@@ -142,22 +156,9 @@ final class ServiceNowCatalog {
         for (JsonNode t : array(root, "tables")) {
           tables.add(
               new TableRow(string(t, "sysId"), string(t, "name"), string(t, "label"),
-                  string(t, "superClassId")));
+                  string(t, "superClassId"), string(t, "theme")));
         }
-        final List<DictionaryRow> dictionary = new ArrayList<>();
-        for (JsonNode d : array(root, "dictionary")) {
-          dictionary.add(
-              new DictionaryRow(string(d, "table"), string(d, "element"),
-                  string(d, "internalType"), d.path("maxLength").intValue(),
-                  d.path("active").booleanValue()));
-        }
-        final Map<String, String> glideTypes = new LinkedHashMap<>();
-        final JsonNode types = root.path("glideTypes");
-        if (!types.isObject()) {
-          throw new ServiceNowException("Catalog cache has no 'glideTypes' object");
-        }
-        types.fields().forEachRemaining(e -> glideTypes.put(e.getKey(), e.getValue().asText()));
-        return new Snapshot(tables, dictionary, glideTypes);
+        return new Snapshot(tables);
       } catch (IOException e) {
         throw new ServiceNowException("Catalog cache is not valid JSON", e);
       }
@@ -195,15 +196,17 @@ final class ServiceNowCatalog {
   }
 
   private final Snapshot snapshot;
+  private final Metadata metadata;
   /** Field types whose columns are left out, by explicit configuration. */
   private final Set<String> excludedTypes;
   private final Map<String, TableRow> tablesByName = new TreeMap<>();
   private final Map<String, TableRow> tablesById = new HashMap<>();
-  private final Map<String, List<DictionaryRow>> dictionaryByTable = new HashMap<>();
   private final Map<String, TableDef> resolved = new ConcurrentHashMap<>();
+  private Map<String, String> glideTypes;
 
-  ServiceNowCatalog(Snapshot snapshot, Set<String> excludedTypes) {
+  ServiceNowCatalog(Snapshot snapshot, Set<String> excludedTypes, Metadata metadata) {
     this.snapshot = snapshot;
+    this.metadata = metadata;
     this.excludedTypes = new HashSet<>();
     for (String type : excludedTypes) {
       this.excludedTypes.add(type.toLowerCase(Locale.ROOT));
@@ -214,9 +217,6 @@ final class ServiceNowCatalog {
       }
       tablesById.put(t.sysId, t);
     }
-    for (DictionaryRow d : snapshot.dictionary) {
-      dictionaryByTable.computeIfAbsent(d.table, k -> new ArrayList<>()).add(d);
-    }
   }
 
   Snapshot snapshot() {
@@ -226,6 +226,11 @@ final class ServiceNowCatalog {
   /** Names of all tables the instance lists, sorted. */
   List<String> tableNames() {
     return new ArrayList<>(tablesByName.keySet());
+  }
+
+  /** Every table the instance lists, sorted by name. Reads no column metadata. */
+  List<TableRow> tables() {
+    return new ArrayList<>(tablesByName.values());
   }
 
   boolean hasTable(String name) {
@@ -248,20 +253,12 @@ final class ServiceNowCatalog {
     if (row == null) {
       throw new ServiceNowException("Table '" + name + "' is not in sys_db_object");
     }
-    // The table's own columns win over an ancestor's of the same name
-    final Map<String, DictionaryRow> elements = new TreeMap<>();
+    // The table and its ancestors, nearest first
     final Set<String> seen = new LinkedHashSet<>();
     TableRow current = row;
     while (current != null) {
       if (!seen.add(current.name)) {
         throw new ServiceNowException("Table inheritance of '" + name + "' is circular: " + seen);
-      }
-      for (DictionaryRow d : dictionaryByTable.getOrDefault(current.name,
-          Collections.<DictionaryRow>emptyList())) {
-        // The row with an empty element describes the table, not a column
-        if (!d.element.isEmpty() && d.active) {
-          elements.putIfAbsent(d.element, d);
-        }
       }
       if (current.superClassId.isEmpty()) {
         current = null;
@@ -272,6 +269,27 @@ final class ServiceNowCatalog {
               + "row " + current.superClassId + ", which is not in the catalog");
         }
         current = parent;
+      }
+    }
+    final Map<String, List<DictionaryRow>> dictionaryByTable = new HashMap<>();
+    for (DictionaryRow d : metadata.dictionary(new ArrayList<>(seen))) {
+      if (!seen.contains(d.table)) {
+        // The request named only these tables; a row of another means the instance ignored the
+        // filter, and the columns cannot be told apart
+        throw new ServiceNowException("sys_dictionary returned a row of table '" + d.table
+            + "' when asked for the rows of " + seen + " only");
+      }
+      dictionaryByTable.computeIfAbsent(d.table, k -> new ArrayList<>()).add(d);
+    }
+    // The table's own columns win over an ancestor's of the same name
+    final Map<String, DictionaryRow> elements = new TreeMap<>();
+    for (String table : seen) {
+      for (DictionaryRow d : dictionaryByTable.getOrDefault(table,
+          Collections.<DictionaryRow>emptyList())) {
+        // The row with an empty element describes the table, not a column
+        if (!d.element.isEmpty() && d.active) {
+          elements.putIfAbsent(d.element, d);
+        }
       }
     }
     if (!elements.containsKey("sys_id")) {
@@ -307,10 +325,18 @@ final class ServiceNowCatalog {
     return new TableDef(name, row.label, columns);
   }
 
+  /** The field types of {@code sys_glide_object}, read once, when a type is not documented. */
+  private synchronized Map<String, String> glideTypes() {
+    if (glideTypes == null) {
+      glideTypes = metadata.glideTypes();
+    }
+    return glideTypes;
+  }
+
   private ServiceNowColumn column(String table, DictionaryRow d) {
     Kind kind = GlideTypes.known(d.internalType);
     if (kind == null) {
-      final String scalar = snapshot.glideTypes.get(d.internalType);
+      final String scalar = glideTypes().get(d.internalType);
       if (scalar != null) {
         kind = GlideTypes.scalar(scalar);
       }
@@ -318,8 +344,8 @@ final class ServiceNowCatalog {
     if (kind == null) {
       throw new ServiceNowException("Column " + table + "." + d.element + " has field type '"
           + d.internalType + "', which the adapter cannot map: it is not a documented type and "
-          + (snapshot.glideTypes.containsKey(d.internalType)
-              ? "its sys_glide_object scalar type '" + snapshot.glideTypes.get(d.internalType)
+          + (glideTypes().containsKey(d.internalType)
+              ? "its sys_glide_object scalar type '" + glideTypes().get(d.internalType)
                   + "' is not one the adapter maps"
               : "sys_glide_object has no row for it")
           + ". Leave the type out explicitly with the excludeColumnTypes operand, or restrict "
@@ -330,11 +356,15 @@ final class ServiceNowCatalog {
 
   // ---- loading from the instance --------------------------------------------------------
 
-  /** Reads the three metadata tables. */
+  /**
+   * Reads the table list: {@code sys_db_object} only. The package's name comes from the
+   * reference's display value, because the integration user need not be able to read
+   * {@code sys_package} itself.
+   */
   static Snapshot load(ServiceNowConnection connection, int pageSize) {
     final List<TableRow> tables = new ArrayList<>();
-    for (JsonNode row : readAll(connection, "sys_db_object", pageSize,
-        "sys_id", "name", "label", "super_class")) {
+    for (JsonNode row : readAll(connection, "sys_db_object", pageSize, true, "",
+        "sys_id", "name", "label", "super_class", "sys_package")) {
       final String name = Rows.text(row, "name", "sys_db_object", true);
       if (!NAME.matcher(name).matches()) {
         throw new ServiceNowException("sys_db_object has a table name that cannot be used in "
@@ -343,33 +373,50 @@ final class ServiceNowCatalog {
       tables.add(
           new TableRow(Rows.text(row, "sys_id", "sys_db_object", true), name,
               Rows.text(row, "label", "sys_db_object", false),
-              Rows.text(row, "super_class", "sys_db_object", false)));
+              Rows.text(row, "super_class", "sys_db_object", false),
+              theme(Rows.text(row, "sys_package", "sys_db_object", false),
+                  Rows.displayText(row, "sys_package", "sys_db_object"))));
     }
-    final List<DictionaryRow> dictionary = new ArrayList<>();
-    for (JsonNode row : readAll(connection, "sys_dictionary", pageSize,
-        "sys_id", "name", "element", "internal_type", "max_length", "active")) {
-      final String element = Rows.text(row, "element", "sys_dictionary", false);
-      final String internalType = Rows.text(row, "internal_type", "sys_dictionary", false);
-      if (element.isEmpty()) {
-        // The row that describes the table itself; it declares no column
-        continue;
+    return new Snapshot(tables);
+  }
+
+  /** Column metadata read from the instance, one table and its ancestors per request. */
+  static Metadata metadata(ServiceNowConnection connection, int pageSize) {
+    return new Metadata() {
+      @Override public List<DictionaryRow> dictionary(List<String> tables) {
+        final List<DictionaryRow> dictionary = new ArrayList<>();
+        // Table names match NAME, so they cannot break out of the IN list
+        for (JsonNode row : readAll(connection, "sys_dictionary", pageSize, false,
+            "nameIN" + String.join(",", tables),
+            "sys_id", "name", "element", "internal_type", "max_length", "active")) {
+          final String element = Rows.text(row, "element", "sys_dictionary", false);
+          final String internalType = Rows.text(row, "internal_type", "sys_dictionary", false);
+          if (element.isEmpty()) {
+            // The row that describes the table itself; it declares no column
+            continue;
+          }
+          if (internalType.isEmpty()) {
+            throw new ServiceNowException("sys_dictionary row for "
+                + Rows.text(row, "name", "sys_dictionary", true) + "." + element
+                + " has an empty internal_type");
+          }
+          dictionary.add(
+              new DictionaryRow(Rows.text(row, "name", "sys_dictionary", true), element,
+                  internalType, maxLength(row), activeFlag(row)));
+        }
+        return dictionary;
       }
-      if (internalType.isEmpty()) {
-        throw new ServiceNowException("sys_dictionary row for "
-            + Rows.text(row, "name", "sys_dictionary", true) + "." + element
-            + " has an empty internal_type");
+
+      @Override public Map<String, String> glideTypes() {
+        final Map<String, String> glideTypes = new LinkedHashMap<>();
+        for (JsonNode row : readAll(connection, "sys_glide_object", pageSize, false, "",
+            "sys_id", "name", "scalar_type")) {
+          glideTypes.put(Rows.text(row, "name", "sys_glide_object", true),
+              Rows.text(row, "scalar_type", "sys_glide_object", false));
+        }
+        return glideTypes;
       }
-      dictionary.add(
-          new DictionaryRow(Rows.text(row, "name", "sys_dictionary", true), element, internalType,
-              maxLength(row), activeFlag(row)));
-    }
-    final Map<String, String> glideTypes = new LinkedHashMap<>();
-    for (JsonNode row : readAll(connection, "sys_glide_object", pageSize,
-        "sys_id", "name", "scalar_type")) {
-      glideTypes.put(Rows.text(row, "name", "sys_glide_object", true),
-          Rows.text(row, "scalar_type", "sys_glide_object", false));
-    }
-    return new Snapshot(tables, dictionary, glideTypes);
+    };
   }
 
   private static int maxLength(JsonNode row) {
@@ -397,23 +444,23 @@ final class ServiceNowCatalog {
         + "'");
   }
 
-  private static List<JsonNode> readAll(ServiceNowConnection connection, String table,
-      int pageSize, String... fields) {
+  static List<JsonNode> readAll(ServiceNowConnection connection, String table,
+      int pageSize, boolean displayValues, String query, String... fields) {
     final List<JsonNode> rows = new ArrayList<>();
     try {
       final TableReader reader =
-          new TableReader(connection, table, Arrays.asList(fields), false, pageSize, "");
+          new TableReader(connection, table, Arrays.asList(fields), displayValues, pageSize, query);
       while (reader.hasNext()) {
         rows.add(reader.next());
       }
     } catch (ServiceNowException e) {
       if (e.getStatus() == 401 || e.getStatus() == 403) {
         throw new ServiceNowException(e.getStatus(), "The integration user cannot read the "
-            + "metadata table " + table + ", which the adapter needs to discover tables and "
-            + "columns. Grant it read access to sys_db_object, sys_dictionary and "
-            + "sys_glide_object (for example the personalize_dictionary role, or read ACLs on "
-            + "those tables and their fields). The adapter does not guess columns from sample "
-            + "rows. " + e.getMessage(), e);
+            + "metadata table " + table + ". Discovering tables and columns needs read access "
+            + "to sys_db_object, sys_dictionary and sys_glide_object (for example the "
+            + "personalize_dictionary role, or read ACLs on those tables and their fields); an "
+            + "import set binding also needs sys_transform_map and sys_transform_entry. The "
+            + "adapter does not guess columns from sample rows. " + e.getMessage(), e);
       }
       throw e;
     }

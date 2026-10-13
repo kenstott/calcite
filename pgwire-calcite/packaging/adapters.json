@@ -1,0 +1,9 @@
+[
+  {"name": "file", "module": "file", "flags": ""},
+  {"name": "sharepoint", "module": "sharepoint-list", "flags": "--allow-writes"},
+  {"name": "splunk", "module": "splunk", "flags": ""},
+  {"name": "salesforce", "module": "salesforce", "flags": "--allow-writes"},
+  {"name": "servicenow", "module": "servicenow", "flags": "--allow-writes", "since": "0.109.7"},
+  {"name": "cloudops", "module": "cloud-ops", "flags": ""},
+  {"name": "govdata", "module": "govdata", "flags": "--auth askamerica-key"}
+]

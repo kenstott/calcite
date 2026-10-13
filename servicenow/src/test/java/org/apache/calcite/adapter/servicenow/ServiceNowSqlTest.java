@@ -46,10 +46,13 @@ class ServiceNowSqlTest {
 
   @TempDir Path cache;
 
+  /** Connects with the fixture's tables registered, unless {@code extra} names its own. */
   private Connection connect(FixtureServer server, String extra) throws SQLException {
+    final String tables =
+        extra.contains(";tables=") ? "" : ";tables=incident,task,sys_user,bad_table";
     return DriverManager.getConnection("jdbc:servicenow:instanceUrl=" + server.url()
         + ";authType=basic;username=" + FixtureServer.USER + ";password=" + FixtureServer.PASSWORD
-        + ";catalogCacheDirectory=" + cache + ";pageSize=2" + extra);
+        + ";catalogCacheDirectory=" + cache + ";pageSize=2" + tables + extra);
   }
 
   private static List<String> strings(Connection conn, String sql) throws SQLException {
@@ -206,7 +209,79 @@ class ServiceNowSqlTest {
           tables.add(rs.getString("TABLE_NAME"));
         }
       }
-      assertThat(tables, containsInAnyOrder("incident", "sys_user"));
+      // Only the registered tables, beside the two listing tables that are always there
+      assertThat(tables, containsInAnyOrder("incident", "sys_user", "_servicenow_tables",
+          "_servicenow_columns", "_servicenow_transform_maps"));
+    }
+  }
+
+  @Test void withNoTablesOperandOnlyTheListingTablesExistAndNoColumnIsRead() throws Exception {
+    try (FixtureServer server = new FixtureServer();
+         Connection conn = DriverManager.getConnection("jdbc:servicenow:instanceUrl="
+             + server.url() + ";authType=basic;username=" + FixtureServer.USER + ";password="
+             + FixtureServer.PASSWORD + ";catalogCacheDirectory=" + cache)) {
+      final List<String> tables = new ArrayList<>();
+      try (ResultSet rs = conn.getMetaData().getTables(null, "servicenow", null, null)) {
+        while (rs.next()) {
+          tables.add(rs.getString("TABLE_NAME"));
+        }
+      }
+      assertThat(tables, containsInAnyOrder("_servicenow_tables", "_servicenow_columns",
+          "_servicenow_transform_maps"));
+      // Listing every table reads sys_db_object and no column metadata
+      final List<String> listed = new ArrayList<>();
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery(
+               "SELECT name, label, theme FROM _servicenow_tables")) {
+        while (rs.next()) {
+          listed.add(rs.getString(1) + "|" + rs.getString(2) + "|" + rs.getString(3));
+        }
+      }
+      assertThat(listed, containsInAnyOrder("incident|Incident|Incident",
+          "task|Task|Task table schema", "sys_user|User|(no package)",
+          "bad_table|Bad table|(unnamed package 00000000000000000000000000000p03)"));
+      assertThat(server.requests("sys_dictionary").isEmpty(), is(true));
+    }
+  }
+
+  @Test void theColumnsOfOneTableAreListedWithTheirPostgresTypes() throws Exception {
+    try (FixtureServer server = new FixtureServer(); Connection conn = connect(server, "")) {
+      final List<String> columns = new ArrayList<>();
+      try (Statement stmt = conn.createStatement();
+           ResultSet rs = stmt.executeQuery("SELECT column_name, data_type, ordinal_position "
+               + "FROM _servicenow_columns WHERE table_name = 'incident' "
+               + "ORDER BY ordinal_position")) {
+        while (rs.next()) {
+          columns.add(rs.getInt(3) + " " + rs.getString(1) + " " + rs.getString(2));
+        }
+      }
+      assertThat(columns.get(0), is("1 sys_id character varying"));
+      assertThat(columns, hasItems("2 active boolean", "4 assigned_to__display character varying",
+          "9 opened_at timestamp", "10 priority integer", "12 start_date date"));
+      // Only incident and its ancestor task were read from the dictionary
+      for (FixtureServer.Seen seen : server.requests("sys_dictionary")) {
+        assertThat(seen.params.get("sysparm_query"), containsString("nameINincident,task"));
+      }
+    }
+  }
+
+  @Test void theColumnsOfOneTableCanBeFilteredFurther() throws Exception {
+    try (FixtureServer server = new FixtureServer(); Connection conn = connect(server, "")) {
+      // Calcite passes the two conditions to the table as one AND
+      assertThat(strings(conn, "SELECT data_type FROM _servicenow_columns "
+          + "WHERE table_name = 'incident' AND column_name = 'priority'"), contains("integer"));
+      assertThat(strings(conn, "SELECT column_name FROM _servicenow_columns "
+          + "WHERE column_name IN ('number', 'priority') AND table_name = 'incident' "
+          + "ORDER BY column_name"), contains("number", "priority"));
+    }
+  }
+
+  @Test void theColumnsTableRefusesAScanThatNamesNoTable() throws Exception {
+    try (FixtureServer server = new FixtureServer(); Connection conn = connect(server, "")) {
+      final SQLException e = assertThrows(SQLException.class,
+          () -> strings(conn, "SELECT column_name FROM _servicenow_columns"));
+      assertThat(rootMessage(e), containsString("table_name = '<table>'"));
+      assertThat(server.requests("sys_dictionary").isEmpty(), is(true));
     }
   }
 

@@ -1,5 +1,5 @@
 # pgwire-<adapter> releases — airgapped per-OS bundles that expose a single Calcite adapter
-# (file / sharepoint / splunk / salesforce / cloudops / govdata) over the PostgreSQL wire protocol. Each is the generic
+# (file / sharepoint / splunk / salesforce / servicenow / cloudops / govdata) over the PostgreSQL wire protocol. Each is the generic
 # pgwire-calcite server (shared) bundled with that adapter's runtime jars + its model.json + a
 # launcher that starts the calcite backend against that model. Mirrors pgwire-calcite-release.yml.
 name: pgwire-adapters release
@@ -65,6 +65,9 @@ jobs:
       smoke_os: ${{ steps.plan.outputs.smoke_os }}
       smoke_windows: ${{ steps.plan.outputs.smoke_windows }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: pgwire-calcite/packaging
       - id: plan
         env:
           SCOPE: ${{ inputs.scope || 'all' }}
@@ -73,19 +76,13 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
           scope = os.environ["SCOPE"]
-          adapters = [
-              {"name": "file", "module": "file", "flags": ""},
-              {"name": "sharepoint", "module": "sharepoint-list", "flags": "--allow-writes"},
-              {"name": "splunk", "module": "splunk", "flags": ""},
-              {"name": "salesforce", "module": "salesforce", "flags": "--allow-writes"},
-              {"name": "cloudops", "module": "cloud-ops", "flags": ""},
-              # govdata: every connection signs in with its AskAmerica API key as the
-              # password (owner rule 2026-10-10, ASKAM-010). On by default, baked into the
-              # launcher, so nothing can start an open govdata server by omission. The
-              # caller's arguments follow these, so only an explicit `--auth none` argument
-              # turns it off - a test's choice; no environment variable does.
-              {"name": "govdata", "module": "govdata", "flags": "--auth askamerica-key"},
-          ]
+          # The adapters and their launcher flags, from the one table build-bundle.sh also reads.
+          # govdata's "--auth askamerica-key": every connection signs in with its AskAmerica API
+          # key as the password (owner rule 2026-10-10, ASKAM-010). On by default, baked into
+          # the launcher, so nothing can start an open govdata server by omission. The caller's
+          # arguments follow these, so only an explicit `--auth none` argument turns it off - a
+          # test's choice; no environment variable does.
+          adapters = json.load(open("pgwire-calcite/packaging/adapters.json"))
           platforms = [
               {"runner": "ubuntu-latest", "variant": "linux-x86_64"},
               {"runner": "macos-14", "variant": "macos-arm64"},

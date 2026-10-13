@@ -1,11 +1,12 @@
 # ServiceNow adapter
 
-Reads a ServiceNow instance's tables through the Table API (`/api/now/table`) as SQL tables.
-**Read-only**: there is no INSERT, UPDATE or DELETE.
+Reads a ServiceNow instance's tables through the Table API (`/api/now/table`) as SQL tables, and
+writes them with INSERT, UPDATE and DELETE (see "Writes").
 
-## Status: nothing here has run against a ServiceNow instance
+## Status
 
-No live instance was available when this was written. What that means in practice:
+First run against a live developer instance (dev453859) on 2026-10-12: `ServiceNowIntegrationTest`
+passes, and the write requests were checked there by hand. Before that no instance was available:
 
 - The unit tests (`./gradlew :servicenow:test`) run the real client code against a local HTTP
   server that plays the documented Table API over hand-written fixtures. The fixtures are derived
@@ -13,16 +14,28 @@ No live instance was available when this was written. What that means in practic
   (`src/test/resources/servicenow/doc-derived/README.md`) lists 19 response-shape assumptions that
   only a live instance can confirm. When reality differs, the adapter fails with a message naming
   the table, field and value; it does not adapt.
-- The live tests (`ServiceNowIntegrationTest`, `ServiceNowProbe`, `PushdownHarnessLiveTest`) are
-  written and compile, and skip themselves without credentials. They have never been run.
+- The live tests (`ServiceNowIntegrationTest`, `ServiceNowProbe`, `PushdownHarnessLiveTest`) skip
+  themselves without credentials. `ServiceNowProbe` and `PushdownHarnessLiveTest` have not been
+  run yet.
 - **No filter is pushed to ServiceNow, because no pushdown entry is verified** (see below).
 
 ## What works (against the local stub)
 
 - Table and column discovery from the instance's metadata tables `sys_db_object`, `sys_dictionary`
-  and `sys_glide_object`, with inherited columns (`incident` extends `task`), cached on disk per
-  instance and user. If the user cannot read the metadata tables, startup fails and says which
-  table; columns are never guessed from sample rows.
+  and `sys_glide_object`, with inherited columns (`incident` extends `task`). If the user cannot
+  read a metadata table, the read fails and says which table; columns are never guessed from
+  sample rows.
+- Two listing tables, always in the schema:
+  - `_servicenow_tables(name, label, theme)`: every table on the instance, from one read of
+    `sys_db_object` (the table list is cached on disk per instance and user). The theme is the
+    name of the package that delivers the table, `(no package)` when none does, and
+    `(unnamed package <sys_id>)` when the package's name is empty. It reads no column metadata.
+  - `_servicenow_columns(table_name, column_name, data_type, ordinal_position)`: the columns of
+    the one table named with `table_name = '<table>'`, read from that table's and its ancestors'
+    `sys_dictionary` rows only. `data_type` is the PostgreSQL name the pgwire server reports. A
+    query without `table_name = '<table>'` is refused.
+- Only the registered tables, named in the `tables` operand, are SQL tables. A table's columns
+  are read when it is first queried, not at startup.
 - Keyset paging on `sys_id`; a scan ends only on an empty page; a page that does not advance is an
   error (see "Paging").
 - Projection pushdown (`sysparm_fields`; `sys_id` is always added for paging).
@@ -41,7 +54,7 @@ pgwire `model.json` operand and the Trino catalog properties):
 | `instanceUrl` (required) | `https://<instance>.service-now.com`; plain http only for localhost |
 | `authType` (required) | `basic`. `oauth_client_credentials` is recognised and rejected as not implemented; the seam is `ServiceNowAuth` |
 | `username`, `password` | for `basic`; use a dedicated least-privilege integration user |
-| `tables` | only these tables (list or comma-separated); default: every table in `sys_db_object`. The table set always comes from discovery; keeping one SQL schema per application scope is a change in `ServiceNowSchema` and the catalog, not in the scan |
+| `tables` | the registered tables (list or comma-separated), the only ServiceNow tables exposed as SQL tables; each must be in `sys_db_object`. Without it the schema holds only `_servicenow_tables` and `_servicenow_columns` |
 | `excludeColumnTypes` | field types whose columns are left out; a column of a type the adapter cannot map is otherwise an error on the table it belongs to |
 | `pageSize` / `metadataPageSize` | rows per request, default 1000 |
 | `maxConcurrentRequests` | default 2: REST traffic shares a small thread pool with the customer's other integrations |
@@ -168,9 +181,31 @@ developer instance (it writes). Reports and the record land in `servicenow/build
 Review `pushdown-harness.md` before copying the record: a MATCH on a table with few rows is weak
 evidence.
 
+## Writes
+
+Only on registered tables, one record per request, and with no transactions: a statement that
+fails part way leaves the rows before the failing one written, and the error names the failing
+row and how many were written. An HTTP 403 from the instance names the table.
+
+- `INSERT` on a table with no import set binding: a POST to `/api/now/table/<table>` per row. The
+  sys_id ServiceNow assigns is the key `INSERT ... RETURNING` reads the record back by
+  (`getKeyColumn()` / `takeInsertedKeys()`).
+- `INSERT` on a table bound with `importSet` (`{"<table>": "<staging table>"}`): a POST to
+  `/api/now/import/<staging table>` per row, each column sent under the staging field of the
+  transform map's entry for it. A column the map does not carry, or computes with a script, is
+  refused before anything is sent. The row's transform result decides: `inserted`, or `updated`
+  when a coalesce matched an existing record, is a written row keyed by the target record;
+  `ignored` and `skipped` write nothing and are logged; `error` is a refusal naming the row.
+  `_servicenow_transform_maps` lists the maps to choose from.
+- `UPDATE` and `DELETE`: always on the table directly. The rows are found by the read path, then
+  each is a PATCH or DELETE of `/api/now/table/<table>/<sys_id>`. NULL is written as the empty
+  value.
+- `sys_*` columns and `<field>__display` columns are never written; a reference field is written
+  through its sys_id column.
+
 ## Not done
 
-Writes; OAuth (only the seam); aggregate pushdown (the Aggregate API); `ORDER BY` / `LIMIT`
+OAuth (only the seam); aggregate pushdown (the Aggregate API); `ORDER BY` / `LIMIT`
 pushdown; joins; Batch API; choice labels; CMDB routing; attachments. Journal fields read as NULL
 (their entries live in `sys_journal_field`).
 

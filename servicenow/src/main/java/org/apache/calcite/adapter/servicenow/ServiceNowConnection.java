@@ -31,10 +31,11 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 /**
- * HTTP client for one ServiceNow instance's Table API.
+ * HTTP client for one ServiceNow instance's Table API and Import Set API.
  *
- * <p>Every call is a GET. Concurrency is capped per instance, because REST traffic shares a small
- * integration thread pool with every other integration on the customer's instance. A 429 is
+ * <p>Reads are GETs; writes are a POST (insert, or a row of an import set), a PATCH (update) or a
+ * DELETE, one record per request. Concurrency is capped per instance, because REST traffic shares
+ * a small integration thread pool with every other integration on the customer's instance. A 429 is
  * retried only as far as the server's {@code Retry-After} allows and only within a bounded
  * budget (attempts and total wait); after that it is an error carrying the server's message, never
  * a silent wait.
@@ -46,6 +47,12 @@ public class ServiceNowConnection {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final String TABLE_API = "/api/now/table/";
+
+  private static final String IMPORT_API = "/api/now/import/";
+
+  /** Stored values in and out of a write, with reference links left out. */
+  private static final String WRITE_PARAMS =
+      "?sysparm_display_value=false&sysparm_exclude_reference_link=true";
 
   /** Pauses between retries; replaced in tests so that they need not wait. */
   interface Sleeper {
@@ -128,15 +135,55 @@ public class ServiceNowConnection {
       query.append(encode(param.getKey())).append('=').append(encode(param.getValue()));
     }
     final String pathAndQuery = TABLE_API + table + (query.length() > 0 ? "?" + query : "");
-    final URI uri = URI.create(trimTrailingSlash(instanceUrl.toString()) + pathAndQuery);
-    return get(uri, "GET " + TABLE_API + table);
+    return execute("GET", pathAndQuery, null, 200, "GET " + TABLE_API + table);
   }
 
-  private Response get(URI uri, String what) {
+  /** POSTs a new record to {@code /api/now/table/<table>}; the body's {@code result} is it. */
+  public Response insertRecord(String table, JsonNode fields) {
+    return execute("POST", TABLE_API + table + WRITE_PARAMS, fields, 201,
+        "POST " + TABLE_API + table);
+  }
+
+  /** PATCHes the record; the body's {@code result} is the record as written. */
+  public Response updateRecord(String table, String sysId, JsonNode fields) {
+    return execute("PATCH", TABLE_API + table + "/" + sysId + WRITE_PARAMS, fields, 200,
+        "PATCH " + TABLE_API + table + "/" + sysId);
+  }
+
+  /** DELETEs the record. */
+  public void deleteRecord(String table, String sysId) {
+    execute("DELETE", TABLE_API + table + "/" + sysId, null, 204,
+        "DELETE " + TABLE_API + table + "/" + sysId);
+  }
+
+  /**
+   * POSTs one row to the import set whose staging table is {@code stagingTable}; the instance
+   * transforms it at once. The body's {@code result} lists what each transform map did with it.
+   */
+  public Response importRow(String stagingTable, JsonNode fields) {
+    return execute("POST", IMPORT_API + stagingTable, fields, 201,
+        "POST " + IMPORT_API + stagingTable);
+  }
+
+  /**
+   * Sends one request, retrying a 429 as {@code Retry-After} allows within the budget.
+   *
+   * @param body     JSON body, or null for none
+   * @param expected the status of success; 204 has no body and yields a null response
+   */
+  private Response execute(String method, String pathAndQuery, JsonNode body, int expected,
+      String what) {
+    final URI uri = URI.create(trimTrailingSlash(instanceUrl.toString()) + pathAndQuery);
     final HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
         .timeout(requestTimeout)
-        .header("Accept", "application/json")
-        .GET();
+        .header("Accept", "application/json");
+    if (body == null) {
+      builder.method(method, HttpRequest.BodyPublishers.noBody());
+    } else {
+      builder.header("Content-Type", "application/json")
+          .method(method, HttpRequest.BodyPublishers.ofString(body.toString(),
+              StandardCharsets.UTF_8));
+    }
     auth.authorize(builder);
     final HttpRequest request = builder.build();
 
@@ -144,7 +191,7 @@ public class ServiceNowConnection {
     for (int attempt = 0;; attempt++) {
       final HttpResponse<String> response = send(request, what);
       if (response.statusCode() != 429) {
-        return interpret(response, what);
+        return interpret(response, expected, what);
       }
       final String retryAfter = response.headers().firstValue("Retry-After").orElse(null);
       final String serverMessage = errorMessage(response.body());
@@ -212,24 +259,31 @@ public class ServiceNowConnection {
     }
   }
 
-  private Response interpret(HttpResponse<String> response, String what) {
+  private Response interpret(HttpResponse<String> response, int expected, String what) {
     final int status = response.statusCode();
-    if (status != 200) {
+    if (status != expected) {
       throw new ServiceNowException(status, what + " failed with HTTP " + status
           + (status == 401 ? " (authentication was rejected for " + auth.identity() + ")" : "")
+          + (status == 403 ? " (the instance refused it: the integration user's roles or ACLs do "
+              + "not allow it)" : "")
           + ". Server message: " + errorMessage(response.body()));
+    }
+    if (status == 204) {
+      return null;
     }
     final String contentType = response.headers().firstValue("Content-Type").orElse("");
     if (!contentType.toLowerCase(Locale.ROOT).contains("application/json")) {
       // A hibernating developer instance and a login redirect page both answer 200 with HTML
-      throw new ServiceNowException(status, what + " answered HTTP 200 with Content-Type '"
+      throw new ServiceNowException(status, what + " answered HTTP " + status
+          + " with Content-Type '"
           + contentType + "' instead of JSON. The instance may be asleep or the URL may not be "
           + "a ServiceNow instance. Body starts: " + snippet(response.body()));
     }
     try {
       return new Response(response.headers(), MAPPER.readTree(response.body()));
     } catch (JsonProcessingException e) {
-      throw new ServiceNowException(status, what + " answered HTTP 200 with a body that is not "
+      throw new ServiceNowException(status, what + " answered HTTP " + status
+          + " with a body that is not "
           + "valid JSON (" + response.body().length() + " characters; a response cut short by "
           + "a transaction quota looks like this): " + e.getOriginalMessage(), e);
     }

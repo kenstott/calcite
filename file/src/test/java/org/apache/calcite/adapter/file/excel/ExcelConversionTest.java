@@ -15,6 +15,10 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.util.Sources;
 
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -23,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +37,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -195,39 +203,63 @@ public class ExcelConversionTest extends BaseFileTest {
     }
   }
 
+  /**
+   * A workbook converted once in a session is not converted again, even when its JSON looks
+   * stale. The JSON is back-dated below the workbook's own time, so only the session cache keeps
+   * the second call from converting; a conversion would rewrite the JSON and move its time. A
+   * failed conversion is not remembered (it is retried, FILE-133), so the workbook here is valid.
+   */
   @Test public void testConversionCaching() throws IOException {
-    System.out.println("\n=== Test: Conversion Caching ===");
-
-    File excelFile = new File(tempDir.toFile(), "Cached.xlsx");
-    excelFile.createNewFile();
-
-    // First conversion attempt - will fail with empty file but should cache the failure
-    try {
-      SafeExcelToJsonConverter.convertIfNeeded(excelFile, tempDir.toFile(), true, "SMART_CASING", "SMART_CASING", tempDir.toFile());
-    } catch (Exception e) {
-      // Expected - empty Excel file
-      System.out.println("Expected error for empty Excel: " + e.getMessage());
+    // Lower case, so the JSON is named as SafeExcelToJsonConverter looks for it (the converter
+    // applies SMART_CASING to the name; a mixed-case name is a separate defect)
+    final File excelFile = new File(tempDir.toFile(), "cached.xlsx");
+    try (XSSFWorkbook wb = new XSSFWorkbook();
+         OutputStream out = Files.newOutputStream(excelFile.toPath())) {
+      final Sheet sheet = wb.createSheet("people");
+      final Row header = sheet.createRow(0);
+      header.createCell(0).setCellValue("id");
+      header.createCell(1).setCellValue("name");
+      final Row row = sheet.createRow(1);
+      row.createCell(0).setCellValue(1);
+      row.createCell(1).setCellValue("alice");
+      wb.write(out);
     }
 
-    // Second conversion attempt - should be cached
-    long startTime = System.currentTimeMillis();
-    try {
-      SafeExcelToJsonConverter.convertIfNeeded(excelFile, tempDir.toFile(), true, "SMART_CASING", "SMART_CASING", tempDir.toFile());
-    } catch (Exception e) {
-      // Expected - empty Excel file
+    convert(excelFile);
+    final File[] json = convertedJson();
+    assertTrue(json.length > 0, "the workbook was converted to JSON");
+
+    // Older than the workbook: by its timestamps alone the JSON needs re-converting
+    final long backdated = excelFile.lastModified() - 3_600_000L;
+    for (File f : json) {
+      assertTrue(f.setLastModified(backdated), "could not back-date " + f);
     }
-    long elapsed = System.currentTimeMillis() - startTime;
 
-    // Second attempt should be very fast due to caching
-    assertTrue(elapsed < 100, "Cached conversion should be instant");
+    convert(excelFile);
+    for (File f : convertedJson()) {
+      assertEquals(backdated, f.lastModified(),
+          "converted again although this session already converted it: " + f.getName());
+    }
 
-    // Clear cache and try again
+    // Without the session cache the same call converts, which rewrites the JSON
     SafeExcelToJsonConverter.clearCache();
-    try {
-      SafeExcelToJsonConverter.convertIfNeeded(excelFile, tempDir.toFile(), true, "SMART_CASING", "SMART_CASING", tempDir.toFile());
-    } catch (Exception e) {
-      // Expected - empty Excel file
+    convert(excelFile);
+    for (File f : convertedJson()) {
+      assertNotEquals(backdated, f.lastModified(),
+          "not converted although the cache was cleared: " + f.getName());
     }
+  }
+
+  private void convert(File excelFile) throws IOException {
+    SafeExcelToJsonConverter.convertIfNeeded(excelFile, tempDir.toFile(), true, "SMART_CASING",
+        "SMART_CASING", tempDir.toFile());
+  }
+
+  private File[] convertedJson() {
+    final File[] files = tempDir.toFile().listFiles((dir, name) ->
+        name.startsWith("cached__") && name.endsWith(".json"));
+    assertNotNull(files, "cannot list " + tempDir);
+    return files;
   }
 
   @Test public void testTimestampBasedConversion() throws IOException, InterruptedException {

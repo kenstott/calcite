@@ -16,7 +16,8 @@ API over them. Rows are stored once and rendered per request:
 - with `sysparm_display_value=all` it renders every field as `{"value": ..., "display_value": ...}`.
 
 The server accepts only `sysparm_query` terms of the form `sys_id><key>` and `ORDERBYsys_id`, and
-answers anything else with HTTP 400, so a filter that begins to be pushed down fails the tests.
+on `sys_dictionary` `nameIN<a>,<b>`; it answers anything else with HTTP 400, so a filter that
+begins to be pushed down fails the tests.
 
 ## Response-shape assumptions that need a live instance
 
@@ -25,14 +26,22 @@ instance confirms it. The adapter fails with a message naming the offending tabl
 when reality differs; it does not adapt.
 
 Metadata tables
-1. `sys_db_object` returns `sys_id`, `name`, `label`, `super_class`; `super_class` is the sys_id of
-   the parent table's `sys_db_object` row (not its name), and empty for a root table.
+1. `sys_db_object` returns `sys_id`, `name`, `label`, `super_class`, `sys_package`; `super_class` is
+   the sys_id of the parent table's `sys_db_object` row (not its name), and empty for a root table.
+   With `sysparm_display_value=all`, `sys_package` is `{value: <sys_id>, display_value: <package
+   name>}`, both empty when no package delivers the table. Seen on dev453859 (2026-10-12): 6,554
+   tables readable by the integration user (the Aggregate API and X-Total-Count say 6,591; no Table
+   API request returns the other 37), 351 with no package, 7 whose package's name is empty; the integration user could not
+   read `sys_package` itself (403), so the name is taken from the display value.
 2. `sys_dictionary` returns `name` (table), `element` (column), `internal_type`, `max_length`,
    `active`. With display values off, `internal_type` is the type's name (`GUID`, `string`,
    `glide_date_time`), not a sys_id. `active` is `"true"` or `"false"`; `max_length` is a number
    as text or empty.
 3. A table's own dictionary rows list only the columns it declares; inherited columns are on
    ancestor tables' rows. The row with an empty `element` describes the table and declares no column.
+   `nameIN<table>,<ancestor>,...` returns the rows of those tables only (checked on dev453859,
+   2026-10-12: `nameINincident,task` gave 94 rows of 157,895, 23 incident and 71 task); the
+   adapter checks every row it gets is of a table it asked for.
 4. Every table has a `sys_id` column in the dictionary of itself or an ancestor.
 5. `sys_glide_object` returns `name` and `scalar_type`; the scalar vocabulary the adapter maps is
    `string`, `integer`, `longint`, `decimal`, `float`, `boolean`, `GUID`, `reference`, `datetime`,
