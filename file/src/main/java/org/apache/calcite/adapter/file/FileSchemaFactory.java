@@ -340,15 +340,21 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     @SuppressWarnings("unchecked") List<Map<String, Object>> tables =
         (List) operand.get("tables");
 
-    // Model file location (automatically set by Calcite's ModelHandler)
-    // This can be null for inline models (model provided as a string)
-    // Convert to string immediately - avoid File object usage
+    // Model file location, which relative paths resolve against: the directory of the model
+    // file Calcite's ModelHandler loaded (its modelUri), or null for an inline model. Not the
+    // baseDirectory operand: ModelHandler fills that key with the model's directory only when
+    // the model does not set it, and a model that sets it names where files are written.
     String modelFileDirPath = null;
-    Object baseDirectoryObj = operand.get(ModelHandler.ExtraOperand.BASE_DIRECTORY.camelName);
-    if (baseDirectoryObj instanceof File) {
-      modelFileDirPath = ((File) baseDirectoryObj).getAbsolutePath();
-    } else if (baseDirectoryObj instanceof String) {
-      modelFileDirPath = new File((String) baseDirectoryObj).getAbsolutePath();
+    Object modelUri = operand.get(ModelHandler.ExtraOperand.MODEL_URI.camelName);
+    if (modelUri instanceof String && !((String) modelUri).startsWith("inline:")) {
+      File modelDir = new File((String) modelUri).getAbsoluteFile().getParentFile();
+      modelFileDirPath = modelDir == null ? null : modelDir.getPath();
+    } else {
+      Object baseDirectoryObj = operand.get(ModelHandler.ExtraOperand.BASE_DIRECTORY.camelName);
+      if (baseDirectoryObj instanceof File) {
+        // A caller building the operand itself (no modelUri) passes the model directory here
+        modelFileDirPath = ((File) baseDirectoryObj).getAbsolutePath();
+      }
     }
 
     // Get ephemeralCache option (default to false for backward compatibility)
@@ -367,8 +373,16 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // baseDirectory, or operatingDirectory (set by GovDataSchemaFactory from
     // govdata.operating.dir.base): the directory every file the adapter writes for the schema goes
     // under (REQ-1992). A relative path resolves against the model file's directory.
-    final Object baseDirObj = operand.get("baseDirectory") != null
-        ? operand.get("baseDirectory")
+    // ModelHandler fills baseDirectory with the model file's directory (a File, beside the
+    // modelUri it also adds) when the model does not set it; that is not a configured location
+    // (owner ruling 2026-10-13), so only a value the model or caller actually set counts.
+    Object explicitBase = operand.get("baseDirectory");
+    if (explicitBase instanceof File
+        && operand.containsKey(ModelHandler.ExtraOperand.MODEL_URI.camelName)) {
+      explicitBase = null;
+    }
+    final Object baseDirObj = explicitBase != null
+        ? explicitBase
         : operand.get("operatingDirectory");
     final String baseDirConfig;
     if (baseDirObj instanceof String) {
