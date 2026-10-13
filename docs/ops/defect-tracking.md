@@ -103,6 +103,7 @@ touches every schema sharing the affected code path.
 | `status:pending-etl` | Expected to resolve on a future scheduled run; no explicit job | nobody — recheck later |
 | `status:blocked` | Viable but stuck on something outside the role — usually a credential with no self-service registration | whoever can unblock it |
 | `status:watch` | Possible issue, no fix made, kept visible in case it recurs | nobody — recheck later |
+| `status:on-hold` | Planned and validated, but production work is held until the owner releases it; no daemon query reads it, so no runner touches it | the owner — release by moving it to `status:ready-to-run` |
 
 `status:blocked` is not the same as closing something as not viable: the work is known to be
 possible, and the issue stays open naming what would unblock it. Blocked items are the cheapest

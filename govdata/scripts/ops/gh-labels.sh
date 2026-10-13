@@ -38,6 +38,7 @@ LABELS=(
   "status:pending-etl|C2E0C6|Expected to resolve on a future scheduled ETL run"
   "status:blocked|5B6472|Viable but stuck on something outside this role — say what would unblock it"
   "status:watch|EDE6F7|Possible issue, no fix made, kept visible in case it recurs"
+  "status:on-hold|F9D0C4|Planned and validated; production work held until the owner releases it — no runner picks it up"
 
   # resolution — applied when closing
   "resolution:fixed|2E7D4A|Fixed and verified; original request fully addressed"
