@@ -1822,6 +1822,8 @@
     Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) reports
     SQLStates 42S02 (table not found), 22018 (type conversion), 08001 (storage connect), HY000 (file access),
     42000 (config syntax). Clear errors, never silent.
+    (Amended 2026-10-14, NOT-FOUND SQLSTATE:) The JDBC SQLException for an unknown schema or table, whether the
+    statement is executed or prepared, carries SQLState 42S02 (C-11).
   source: file/docs/troubleshooting.md; file/docs/api-reference.md
   tests:
     - file/CatalogErrorRequirementsTest
@@ -2926,16 +2928,22 @@
   module: file
   status: complete
   group: error-handling
-  category: FileReaderException has no SQLState
+  category: FileReaderException SQLStates
   priority: MUST
   type: structural
   seam: bytes
   description: >
+    [SUPERSEDED by C-11, 2026-10-14 -- FileReaderException is a SQLException carrying a SQLState. Kept here for history; do not implement against it.]
     FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor
     code; FileReader throws it for missing file, null source, IOException, no-match selector, non-<table> element,
     ambiguous selection, and "no tables found". Documented SQLStates originate in the Calcite/Avatica layer, not here.
-  source: file/src/main/java/.../FileReaderException.java 16-23; FileReader.java 62-185
-  notes: "RESOLVED C-11 (code-wrong): make FileReaderException a SQLException carrying the documented SQLStates."
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-14, SQLSTATES:) FileReaderException extends SQLException and carries the SQLState of its
+    failure mode: 42S02 when the document has no table or the selector/index matches none; 42000 when the
+    selector matches several elements or a non-<table> element; HY000 when the file is missing or cannot be
+    read; 08001 when an S3 or HTTP source has no URL.
+  source: file/src/main/java/.../FileReaderException.java; FileReader.java; FileReaderV2.java
+  notes: "RESOLVED C-11 (code-wrong): FileReaderException is a SQLException carrying the documented SQLStates."
   tests:
     - file/JsonPathParquetReaderTest
   since: 2026-06
