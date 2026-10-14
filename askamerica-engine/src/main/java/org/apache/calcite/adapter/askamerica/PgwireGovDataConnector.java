@@ -722,20 +722,15 @@ final class PgwireGovDataConnector {
   private static Process spawnIfPossible() {
     File launcher = resolveLauncher();
     if (launcher == null) {
-      // No operator override and no installer-bundled copy: use the lazy-download cache, which
-      // ensureLauncher installs on first use; thereafter it returns the installed bundle at
-      // once and brings it to this engine's release in the background.
-      // Returns null ONLY when there's genuinely nothing published for this OS; any real
-      // failure (bad download, bad sha256, bad extraction) throws InstallFailedException
-      // deliberately uncaught here, so it propagates straight through connect() instead of
-      // being swallowed into a meaningless downstream timeout — confirmed live that a swallowed
-      // sha256 mismatch cost hours to trace precisely because it looked like a generic hang.
-      launcher = PgwireGovDataInstaller.ensureLauncher();
+      // No operator override and no installer-bundled copy: use the installed bundle in the
+      // shared cache. The server never downloads it (about a gigabyte inside a tool call that
+      // has seconds); an older bundle still runs and results carry an "out of date" notice
+      // (PgwireGovDataInstaller.outOfDateNotice, added by McpServer).
+      launcher = PgwireGovDataInstaller.installedLauncher();
     }
     if (launcher == null) {
-      throw new IllegalStateException("pgwire-govdata, the data server, is not installed and "
-          + "could not be: it is not bundled with this install, and this engine's release has "
-          + "no pgwire-govdata bundle published for this operating system.");
+      throw new IllegalStateException("pgwire-govdata, the data server, is not installed. "
+          + "Update AskAmerica from https://askamerica.ai.");
     }
     try {
       ProcessBuilder pb = new ProcessBuilder(launchCommand(launcher, isWindows()));

@@ -5514,6 +5514,19 @@ public class McpServer {
             content.add(noticeBlock);
         }
 
+        // The data server is older than this engine: say so, plainly, on every result. It still
+        // runs, so this is a nag and never an error.
+        String outOfDate = PgwireGovDataInstaller.outOfDateNotice();
+        if (outOfDate != null) {
+            ObjectNode updateBlock = MAPPER.createObjectNode();
+            updateBlock.put("type", "text");
+            updateBlock.put("text", outOfDate);
+            ObjectNode updateAnnotations = MAPPER.createObjectNode();
+            updateAnnotations.putArray("audience").add("user").add("assistant");
+            updateBlock.set("annotations", updateAnnotations);
+            content.add(updateBlock);
+        }
+
         ObjectNode body = MAPPER.createObjectNode();
         body.set("content", content);
         body.put("isError", false);

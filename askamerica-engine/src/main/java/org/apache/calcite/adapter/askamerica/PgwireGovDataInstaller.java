@@ -124,6 +124,41 @@ final class PgwireGovDataInstaller {
         return ensureLauncher(cacheDir(), ownEngineVersion(), PgwireGovDataInstaller::startDaemon);
     }
 
+    /**
+     * The installed bundle's launcher, or null when none is installed. Never downloads: the MCP
+     * server starts inside a tool call that has seconds, and the bundle is about a gigabyte, so
+     * a download there is killed with the process and restarted by the next call. Keeping the
+     * bundle current is the installer's job; the server only says when it is not
+     * ({@link #outOfDateNotice()}).
+     */
+    static File installedLauncher() {
+        File launcher = launcherPath(cacheDir());
+        return launcher.isFile() ? launcher : null;
+    }
+
+    /** {@link #outOfDateNotice(Path, String)} for the shared bundle and this engine's release. */
+    static String outOfDateNotice() {
+        return outOfDateNotice(cacheDir(), ownEngineVersion());
+    }
+
+    /**
+     * A one-line notice when the installed bundle is older than the engine ({@code own}), else
+     * null: "AskAmerica 0.102.0 is out of date." A bundle with no release stamp predates stamped
+     * installs and is out of date by definition. A local build has no release of its own, so
+     * there is nothing to compare against.
+     */
+    static String outOfDateNotice(Path dir, String own) {
+        if (own == null || !launcherPath(dir).isFile()) {
+            return null;
+        }
+        String installed = readMarker(dir);
+        if (installed == null) {
+            return "AskAmerica (installed version unknown) is out of date.";
+        }
+        return compareVersions(installed, own) < 0
+            ? "AskAmerica " + installed + " is out of date." : null;
+    }
+
     /** {@link #ensureLauncher()} over an explicit bundle directory and engine release, with the
      *  executor that runs a background update, so a test can observe one being scheduled
      *  without it reaching the network. */
