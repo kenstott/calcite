@@ -1707,12 +1707,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           source = Sources.of(file);
         }
         Source sourceSansGz = source.trim(".gz");
-        Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+        Source sourceSansJson = trimExtension(sourceSansGz, ".json");
         if (sourceSansJson == null) {
-          sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+          sourceSansJson = trimExtension(sourceSansGz, ".yaml");
         }
         if (sourceSansJson == null) {
-          sourceSansJson = sourceSansGz.trimOrNull(".yml");
+          sourceSansJson = trimExtension(sourceSansGz, ".yml");
         }
         if (sourceSansJson != null) {
           LOGGER.debug("=== PROCESSING JSON FILE IN BULK CONVERSION ===");
@@ -1942,7 +1942,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             }
           }
         }
-        final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+        final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
         if (sourceSansCsv != null) {
           LOGGER.debug("Processing CSV file: {}", source.path());
           String baseName =
@@ -1963,7 +1963,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             registeredTableNames.add(tableName);
           }
         }
-        final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+        final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
         if (sourceSansTsv != null) {
           String baseName =
               applyCasing(
@@ -1983,7 +1983,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
         }
         final Source sourceSansParquet =
-            sourceSansGz.trimOrNull(".parquet");
+            trimExtension(sourceSansGz, ".parquet");
         if (sourceSansParquet != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansParquet.relative(baseSource).path()
@@ -1996,7 +1996,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           builder.put(tableName, table);
           recordTableMetadata(tableName, table, source, null);
         }
-        final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+        final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
         if (sourceSansArrow != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansArrow.relative(baseSource).path()
@@ -3312,12 +3312,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Default extension-based detection
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+    Source sourceSansJson = trimExtension(sourceSansGz, ".json");
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yaml");
     }
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yml");
     }
     if (sourceSansJson != null) {
       String jsonAutoRefreshInterval = tableDef != null ? (String) tableDef.get("refreshInterval") : null;
@@ -3341,7 +3341,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           tableNameCasing), table);
       return true;
     }
-    final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+    final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
     if (sourceSansCsv != null) {
       // For PARQUET engine, CSV files should have been converted above - don't create fallback CSV tables
       if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
@@ -3353,14 +3353,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       builder.put(tableNameKey, table);
       return true;
     }
-    final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+    final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
     if (sourceSansTsv != null) {
       String tsvAutoRefreshInterval = tableDef != null ? (String) tableDef.get("refreshInterval") : null;
       final Table table = createEnhancedCsvTable(source, null, tableName, tsvAutoRefreshInterval);
       builder.put(getTableName(tableName, sourceSansTsv.path(), tableNameCasing), table);
       return true;
     }
-    final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+    final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
     if (sourceSansArrow != null) {
       try {
         final Table table = createArrowTable(new java.io.File(source.path()));
@@ -3373,7 +3373,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.warn("Warning: Failed to create Arrow table for {}: {}", source.path(), e.getMessage());
       }
     }
-    final Source sourceSansParquet = sourceSansGz.trimOrNull(".parquet");
+    final Source sourceSansParquet = trimExtension(sourceSansGz, ".parquet");
     if (sourceSansParquet != null) {
       try {
         // DuckDB engine will be handled same as PARQUET for initial setup
@@ -3389,9 +3389,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.warn("Warning: Failed to create Parquet table for {}: {}", source.path(), e.getMessage());
       }
     }
-    Source sourceSansXlsx = sourceSansGz.trimOrNull(".xlsx");
+    Source sourceSansXlsx = trimExtension(sourceSansGz, ".xlsx");
     if (sourceSansXlsx == null) {
-      sourceSansXlsx = sourceSansGz.trimOrNull(".xls");
+      sourceSansXlsx = trimExtension(sourceSansGz, ".xls");
     }
     if (sourceSansXlsx != null) {
       // Only throw error if this is from an explicit table definition
@@ -3405,9 +3405,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Check for HTML files
-    Source sourceSansHtml = sourceSansGz.trimOrNull(".html");
+    Source sourceSansHtml = trimExtension(sourceSansGz, ".html");
     if (sourceSansHtml == null) {
-      sourceSansHtml = sourceSansGz.trimOrNull(".htm");
+      sourceSansHtml = trimExtension(sourceSansGz, ".htm");
     }
     if (sourceSansHtml != null) {
       // For directory discovery mode, skip individual processing
@@ -3729,12 +3729,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Default extension-based detection
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+    Source sourceSansJson = trimExtension(sourceSansGz, ".json");
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yaml");
     }
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yml");
     }
     if (sourceSansJson != null) {
       // Use simple table for conversion to avoid Arrow issues
@@ -3747,13 +3747,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       return new JsonScannableTable(source, options, columnNameCasing);
     }
 
-    final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+    final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
     if (sourceSansCsv != null) {
       // Use simple table for conversion to avoid Arrow issues
       return new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
     }
 
-    final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+    final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
     if (sourceSansTsv != null) {
       // Use simple table for conversion to avoid Arrow issues
       return new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
@@ -5356,12 +5356,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           Source sourceSansGz = source.trim(".gz");
 
           // Check for JSON/YAML files
-          Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+          Source sourceSansJson = trimExtension(sourceSansGz, ".json");
           if (sourceSansJson == null) {
-            sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+            sourceSansJson = trimExtension(sourceSansGz, ".yaml");
           }
           if (sourceSansJson == null) {
-            sourceSansJson = sourceSansGz.trimOrNull(".yml");
+            sourceSansJson = trimExtension(sourceSansGz, ".yml");
           }
           if (sourceSansJson != null) {
             String baseName =
@@ -5401,7 +5401,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for CSV files
-          final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+          final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
           if (sourceSansCsv != null) {
             String baseName =
                 applyCasing(
@@ -5423,7 +5423,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for TSV files
-          final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+          final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
           if (sourceSansTsv != null) {
             String baseName =
                 applyCasing(
@@ -5445,7 +5445,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for Parquet files
-          final Source sourceSansParquet = sourceSansGz.trimOrNull(".parquet");
+          final Source sourceSansParquet = trimExtension(sourceSansGz, ".parquet");
           if (sourceSansParquet != null) {
             String tableName =
                 applyCasing(
@@ -5492,7 +5492,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for Arrow files
-          final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+          final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
           if (sourceSansArrow != null) {
             String tableName =
                 applyCasing(
@@ -5586,12 +5586,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         source = Sources.of(file);
       }
       Source sourceSansGz = source.trim(".gz");
-      Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+      Source sourceSansJson = trimExtension(sourceSansGz, ".json");
       if (sourceSansJson == null) {
-        sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+        sourceSansJson = trimExtension(sourceSansGz, ".yaml");
       }
       if (sourceSansJson == null) {
-        sourceSansJson = sourceSansGz.trimOrNull(".yml");
+        sourceSansJson = trimExtension(sourceSansGz, ".yml");
       }
       if (sourceSansJson != null) {
         // Use just the filename as the table name (already includes casing from conversion)
@@ -6609,5 +6609,23 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     LOGGER.debug("Target schema '{}' not yet registered when validating FK to table '{}' — "
         + "keeping FK (cannot confirm absence)", schemaName, tableName);
     return true;
+  }
+
+  /**
+   * {@code source} without the file extension {@code extension} (lower case, with its dot),
+   * matched regardless of case: FILE-061 documents {@code PRODUCTS.JSON} as a table named
+   * {@code products} (C-28). Null when the source has another extension.
+   */
+  static @Nullable Source trimExtension(Source source, String extension) {
+    Source trimmed = source.trimOrNull(extension);
+    if (trimmed != null) {
+      return trimmed;
+    }
+    String path = source.path();
+    int start = path.length() - extension.length();
+    if (start < 0 || !path.regionMatches(true, start, extension, 0, extension.length())) {
+      return null;
+    }
+    return source.trimOrNull(path.substring(start));
   }
 }
