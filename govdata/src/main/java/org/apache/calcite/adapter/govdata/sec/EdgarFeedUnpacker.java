@@ -177,6 +177,17 @@ public final class EdgarFeedUnpacker {
     return s.replace("\\", "\\\\").replace("\"", "\\\"");
   }
 
+  /** True when a 403 carries the object store's {@code AccessDenied} error, i.e. the key is absent. */
+  private static boolean isMissingKey(HttpURLConnection conn) throws IOException {
+    try (InputStream err = conn.getErrorStream()) {
+      if (err == null) {
+        return false;
+      }
+      byte[] body = readEntry(err, 1024);
+      return new String(body, StandardCharsets.UTF_8).contains("<Code>AccessDenied</Code>");
+    }
+  }
+
   public static void main(String[] args) throws Exception {
     if (args.length < 2) {
       System.err.println("Usage: EdgarFeedUnpacker <feed_dir> <day_file_or_url>...");
@@ -194,9 +205,11 @@ public final class EdgarFeedUnpacker {
         conn.setConnectTimeout(30000);
         conn.setReadTimeout(120000);
         int status = conn.getResponseCode();
-        if (status == 404) {
-          // a holiday or weekend has no feed file; a day not yet published has none either
-          System.out.println("[edgar-feed] " + src + ": no file (HTTP 404), skipped");
+        if (status == 404 || (status == 403 && isMissingKey(conn))) {
+          // a holiday or weekend has no feed file; a day not yet published has none either. The
+          // feed bucket answers a missing key with 403 AccessDenied rather than 404; any other
+          // 403 (a rate-limit or block page) is a real failure and falls through to the throw.
+          System.out.println("[edgar-feed] " + src + ": no file (HTTP " + status + "), skipped");
           continue;
         }
         if (status != 200) {
