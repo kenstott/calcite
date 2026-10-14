@@ -124,7 +124,7 @@ public final class EdgarFeedUnpacker {
       index.append("{\"name\":\"").append(json(d.filename)).append("\",\"type\":\"")
           .append(json(d.type == null ? "" : d.type)).append("\",\"size\":\"")
           .append(d.content == null ? 0 : d.content.length).append("\"}");
-      if (d.content != null && !isRenderingOnly(d.filename)) {
+      if (d.content != null && !isRenderingOnly(d.filename) && isRead(d.type)) {
         File target = new File(accDir, d.filename);
         Files.createDirectories(target.getParentFile().toPath());
         Files.write(target.toPath(), d.content);
@@ -154,6 +154,23 @@ public final class EdgarFeedUnpacker {
   private static boolean isRenderingOnly(String filename) {
     return filename.matches("R\\d+\\.htm") || "Show.js".equals(filename)
         || "report.css".equals(filename) || "MetaLinks.json".equals(filename);
+  }
+
+  /**
+   * Whether the converter ever reads a document of this type: the filing's own documents (type =
+   * the form), 8-K earnings exhibits (EX-99.x), the XBRL instance and the presentation, calculation
+   * and definition linkbases, the 13F information table, and untyped XML such as FilingSummary.xml.
+   * The label linkbase and schema (EX-101.LAB, EX-101.SCH, which the converter only filters out when
+   * looking for the instance) and every other exhibit (contracts, certifications, subsidiaries) are
+   * listed in index.json but not written. A request for one that is not held is fetched from
+   * sec.gov, so skipping a document can cost a request but never a wrong answer.
+   */
+  private static boolean isRead(String type) {
+    if (type == null || !type.startsWith("EX-")) {
+      return true;
+    }
+    return type.startsWith("EX-99") || "EX-101.INS".equals(type) || "EX-101.PRE".equals(type)
+        || "EX-101.CAL".equals(type) || "EX-101.DEF".equals(type);
   }
 
   private static String json(String s) {
