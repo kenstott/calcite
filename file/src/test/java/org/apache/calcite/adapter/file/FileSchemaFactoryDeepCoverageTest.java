@@ -80,6 +80,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithMinimalOperand() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_schema", operand);
     assertNotNull(schema);
@@ -91,6 +92,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithSourceDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_srcdir", operand);
     assertNotNull(schema);
@@ -101,6 +103,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithEphemeralCache() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("ephemeralCache", true);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_ephemeral", operand);
@@ -110,6 +113,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithEphemeralCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("ephemeral_cache", true);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_ephemeral2", operand);
@@ -135,6 +139,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithRecursive() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("recursive", Boolean.TRUE);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_recursive", operand);
@@ -146,6 +151,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithExecutionEngineLinq4j() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "LINQ4J");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_linq4j", operand);
@@ -155,6 +161,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithExecutionEngineParquet() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_parquet", operand);
@@ -179,6 +186,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     operand.put("tables", tables);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_tables", operand);
@@ -196,6 +204,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("materializations", materializations);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_mat", operand);
@@ -213,6 +222,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("views", views);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_views", operand);
@@ -224,6 +234,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithComment() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("comment", "This is a test schema");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_comment", operand);
@@ -238,6 +249,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithFlatten() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("flatten", true);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_flatten", operand);
@@ -249,6 +261,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithDirectoryPattern() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("directoryPattern", "**/*.csv");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_pattern", operand);
@@ -258,6 +271,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithGlob() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("glob", "*.json");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_glob", operand);
@@ -269,6 +283,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithBatchSizeAndMemoryThreshold() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("batchSize", 5000);
     operand.put("memoryThreshold", 1024L * 1024L * 512L);
 
@@ -281,6 +296,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithRefreshInterval() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("refreshInterval", "5 minutes");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_refresh", operand);
@@ -292,6 +308,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithTableNameCasing() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("tableNameCasing", "UPPER");
     operand.put("columnNameCasing", "LOWER");
 
@@ -304,6 +321,7 @@ public class FileSchemaFactoryDeepCoverageTest {
   @Test void testCreateWithPrimeCacheDisabled() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("primeCache", false);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_nocache", operand);
@@ -317,7 +335,7 @@ public class FileSchemaFactoryDeepCoverageTest {
     method.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/data");
+    operand.put("directory",  "/data");
     operand.put("password", "secret123");
     operand.put("secretKey", "supersecret");
     operand.put("normalKey", "normalValue");
@@ -432,6 +450,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("partitionedTables", partitioned);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_partitioned", operand);
@@ -447,6 +466,7 @@ public class FileSchemaFactoryDeepCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("csvTypeInference", csvTypeInference);
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_csv_inference", operand);

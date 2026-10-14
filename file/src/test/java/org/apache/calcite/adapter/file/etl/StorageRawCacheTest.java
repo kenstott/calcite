@@ -100,7 +100,7 @@ public class StorageRawCacheTest {
     Path cacheRoot = tmp.resolve("raw");
 
     RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp,
-        cacheRoot.toString() + "/shapes", false);
+        cacheRoot.toString() + "/shapes", false, tmp.toFile());
     assertTrue(cache.isEnabled());
 
     byte[] got = drain(cache.openStream(origin.toURI().toString()));
@@ -118,11 +118,11 @@ public class StorageRawCacheTest {
     String base = tmp.resolve("raw").toString() + "/shapes";
     String url = origin.toURI().toString();
 
-    drain(StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false).openStream(url));
+    drain(StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false, tmp.toFile()).openStream(url));
     assertTrue(origin.delete(), "origin removed so a second fetch cannot succeed over the wire");
 
     byte[] second = drain(
-        StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false).openStream(url));
+        StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false, tmp.toFile()).openStream(url));
     assertArrayEquals(payload, second, "second read must come from the cache");
   }
 
@@ -135,9 +135,9 @@ public class StorageRawCacheTest {
     StorageProvider sp = new LocalFileStorageProvider();
     String base = tmp.resolve("raw").toString() + "/shapes";
 
-    drain(StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false)
+    drain(StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false, tmp.toFile())
         .openStream(a.toURI().toString()));
-    byte[] got = drain(StorageRawCache.forBatch(config(true), batch("2025"), sp, base, false)
+    byte[] got = drain(StorageRawCache.forBatch(config(true), batch("2025"), sp, base, false, tmp.toFile())
         .openStream(b.toURI().toString()));
 
     assertEquals("BBBB", new String(got, StandardCharsets.UTF_8),
@@ -156,10 +156,10 @@ public class StorageRawCacheTest {
     String base = tmp.resolve("raw").toString() + "/shapes";
     String url = origin.toURI().toString();
 
-    drain(StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false).openStream(url));
+    drain(StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false, tmp.toFile()).openStream(url));
     Files.write(origin.toPath(), "second".getBytes(StandardCharsets.UTF_8));
 
-    RawCache bypassing = StorageRawCache.forBatch(config(true), batch("2024"), sp, base, true);
+    RawCache bypassing = StorageRawCache.forBatch(config(true), batch("2024"), sp, base, true, tmp.toFile());
     assertFalse(bypassing.isEnabled());
     assertEquals("second", new String(drain(bypassing.openStream(url)), StandardCharsets.UTF_8),
         "a bypassing run must see the current bytes, not the cached ones");
@@ -177,14 +177,14 @@ public class StorageRawCacheTest {
     String base = tmp.resolve("raw").toString() + "/shapes";
     String url = origin.toURI().toString();
 
-    drain(StorageRawCache.forBatch(config(true), batch("2031"), sp, base, false).openStream(url));
+    drain(StorageRawCache.forBatch(config(true), batch("2031"), sp, base, false, tmp.toFile()).openStream(url));
     Files.write(origin.toPath(), "current".getBytes(StandardCharsets.UTF_8));
 
-    drain(StorageRawCache.forBatch(config(true), batch("2031"), sp, base, true).openStream(url));
+    drain(StorageRawCache.forBatch(config(true), batch("2031"), sp, base, true, tmp.toFile()).openStream(url));
     assertTrue(origin.delete(), "origin removed so a second download cannot succeed");
 
     byte[] second = drain(
-        StorageRawCache.forBatch(config(true), batch("2031"), sp, base, true).openStream(url));
+        StorageRawCache.forBatch(config(true), batch("2031"), sp, base, true, tmp.toFile()).openStream(url));
     assertEquals("current", new String(second, StandardCharsets.UTF_8),
         "the second bypassing read must be served from the entry the first one just wrote");
   }
@@ -197,7 +197,7 @@ public class StorageRawCacheTest {
     Path cacheRoot = tmp.resolve("raw");
 
     RawCache cache = StorageRawCache.forBatch(config(false), batch("2024"), sp,
-        cacheRoot.toString() + "/shapes", false);
+        cacheRoot.toString() + "/shapes", false, tmp.toFile());
     assertFalse(cache.isEnabled());
 
     assertEquals("payload",
@@ -237,7 +237,7 @@ public class StorageRawCacheTest {
     assertTrue(caching instanceof DataProvider, "must still satisfy the plain contract");
     StorageProvider sp = new LocalFileStorageProvider();
     RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp,
-        tmp.resolve("raw").toString() + "/shapes", false);
+        tmp.resolve("raw").toString() + "/shapes", false, tmp.toFile());
 
     assertEquals("rows",
         caching.fetch(config(true), batch("2024"), cache).next().get("body"));
@@ -251,7 +251,7 @@ public class StorageRawCacheTest {
   @Test void severalUrlsInOneBatchDoNotCollide(@TempDir Path tmp) throws Exception {
     StorageProvider sp = new LocalFileStorageProvider();
     String base = tmp.resolve("raw").toString() + "/shards";
-    RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false);
+    RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp, base, false, tmp.toFile());
 
     String[] names = {"eo1.csv", "eo2.csv", "eo3.csv", "eo4.csv"};
     for (int i = 0; i < names.length; i++) {
@@ -279,7 +279,7 @@ public class StorageRawCacheTest {
     Files.write(b.resolve("data.csv"), "BBBB".getBytes(StandardCharsets.UTF_8));
 
     RawCache cache = StorageRawCache.forBatch(config(true), batch("2024"), sp,
-        tmp.resolve("raw").toString() + "/shards", false);
+        tmp.resolve("raw").toString() + "/shards", false, tmp.toFile());
     drain(cache.openStream(a.resolve("data.csv").toUri().toString()));
 
     assertEquals("BBBB", new String(

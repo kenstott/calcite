@@ -120,6 +120,8 @@ public class SharePointRecursiveTest {
 
         Map<String, Object> operand = new HashMap<>();
         operand.put("directory", startPath);
+        operand.put("baseDirectory", java.nio.file.Files.createTempDirectory("base").toString());
+        operand.put("directory", startPath);
         operand.put("storageType", "sharepoint");
         operand.put("recursive", true);  // This should find files in any subdirectory
         operand.put("executionEngine", "linq4j");

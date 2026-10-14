@@ -102,6 +102,7 @@ class FileSchemaLineCoverageTest {
   private Map<String, Object> baseOperand(File directory) {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", directory.getAbsolutePath());
+    operand.put("baseDirectory", directory.getAbsolutePath());
     operand.put("ephemeralCache", true);
     operand.put("executionEngine", "PARQUET");
     return operand;
@@ -124,8 +125,8 @@ class FileSchemaLineCoverageTest {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig engineConfig = new ExecutionEngineConfig("PARQUET", 1024);
     FileSchema schema =
-        new FileSchema(parent, schemaName, sourceDir, null, null, engineConfig, recursive, materializations, views, null, null,
-        "LOWER", "LOWER", null, null, flatten, null, false);
+        new FileSchema(parent, schemaName, sourceDir, sourceDir, null, null, engineConfig, recursive,
+        materializations, views, null, null, "LOWER", "LOWER", null, null, flatten, null, false);
     schemasToClose.add(schema);
     return schema;
   }
@@ -304,8 +305,8 @@ class FileSchemaLineCoverageTest {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig engineConfig = new ExecutionEngineConfig("PARQUET", 1024);
     FileSchema schema =
-        new FileSchema(parent, "close_refresh_test", d, null, null, engineConfig, false, null, null, null, "30 seconds",
-        "LOWER", "LOWER", null, null, null, null, false);
+        new FileSchema(parent, "close_refresh_test", d, d, null, null, engineConfig, false, null, null, null,
+        "30 seconds", "LOWER", "LOWER", null, null, null, null, false);
     schemasToClose.add(schema);
 
     schema.close();
@@ -580,7 +581,7 @@ class FileSchemaLineCoverageTest {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig engineConfig = new ExecutionEngineConfig("PARQUET", 1024);
     FileSchema schemaWithRefresh =
-        new FileSchema(parent, "withrefresh", d, null, null, engineConfig, false, null, null, null, "5 minutes",
+        new FileSchema(parent, "withrefresh", d, d, null, null, engineConfig, false, null, null, null, "5 minutes",
         "LOWER", "LOWER", null, null, null, null, false);
     schemasToClose.add(schemaWithRefresh);
     assertTrue(schemaWithRefresh.hasRefreshableTables());
@@ -932,7 +933,8 @@ class FileSchemaLineCoverageTest {
     writeCsv(d, "data.csv", "id\n1\n");
 
     SchemaPlus parent = rootSchema();
-    FileSchema schema = new FileSchema(parent, "minimal", d, null);
+    FileSchema schema = new FileSchema(parent, "minimal", d, d, null, null, new ExecutionEngineConfig(), false, null, null, null,
+        null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     schemasToClose.add(schema);
     assertNotNull(schema);
     assertNotNull(schema.getTableMap());
@@ -944,7 +946,8 @@ class FileSchemaLineCoverageTest {
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "engine_test", d, null, config);
+    FileSchema schema = new FileSchema(parent, "engine_test", d, d, null, null, config, false, null, null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     schemasToClose.add(schema);
     assertNotNull(schema.getTableMap());
   }
@@ -955,7 +958,8 @@ class FileSchemaLineCoverageTest {
 
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
-    FileSchema schema = new FileSchema(parent, "recursive_test", d, null, config, true);
+    FileSchema schema = new FileSchema(parent, "recursive_test", d, d, null, null, config, true, null, null, null, null,
+        "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     schemasToClose.add(schema);
     assertNotNull(schema.getTableMap());
   }
@@ -974,7 +978,8 @@ class FileSchemaLineCoverageTest {
     views.add(view);
 
     FileSchema schema =
-        new FileSchema(parent, "views_ctor_test", d, null, config, false, null, views);
+        new FileSchema(parent, "views_ctor_test", d, d, null, null, config, false, null, views, null, null,
+        "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     schemasToClose.add(schema);
     Map<String, Table> tableMap = schema.getTableMap();
     assertTrue(tableMap.containsKey("v1"),
@@ -987,7 +992,8 @@ class FileSchemaLineCoverageTest {
 
   @Test void testSchemaWithNullSourceDirectory() throws Exception {
     SchemaPlus parent = rootSchema();
-    FileSchema schema = new FileSchema(parent, "null_src_test", (File) null, null);
+    FileSchema schema = new FileSchema(parent, "null_src_test", (File) null, tempDir.toFile(), null, null, new ExecutionEngineConfig(),
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     schemasToClose.add(schema);
     assertNotNull(schema);
     assertNotNull(schema.getTableMap());
@@ -1046,6 +1052,7 @@ class FileSchemaLineCoverageTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", d.getAbsolutePath());
+    operand.put("baseDirectory", d.getAbsolutePath());
     operand.put("ephemeralCache", false);
     operand.put("executionEngine", "PARQUET");
 
@@ -1138,7 +1145,7 @@ class FileSchemaLineCoverageTest {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
     FileSchema schema =
-        new FileSchema(parent, "USER_NAME", d, null, null, null, null, config, false, null, null, null, null,
+        new FileSchema(parent, "USER_NAME", d, d, null, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false, null, "canonical_name");
     schemasToClose.add(schema);
 
@@ -1222,6 +1229,7 @@ class FileSchemaLineCoverageTest {
     Map<String, Object> partition = new HashMap<>();
     partition.put("name", "partitioned_data");
     partition.put("directory", d.getAbsolutePath());
+    partition.put("baseDirectory", d.getAbsolutePath());
     partition.put("format", "csv");
     partitions.add(partition);
     operand.put("partitionedTables", partitions);
@@ -1332,7 +1340,7 @@ class FileSchemaLineCoverageTest {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
     FileSchema schema =
-        new FileSchema(parent, "full_test", d, null, null, null, null, config, false, null, null, null, null,
+        new FileSchema(parent, "full_test", d, d, null, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false, "Test comment");
     schemasToClose.add(schema);
 
@@ -1523,7 +1531,7 @@ class FileSchemaLineCoverageTest {
     SchemaPlus parent = rootSchema();
     ExecutionEngineConfig config = new ExecutionEngineConfig("PARQUET", 1024);
     FileSchema schema =
-        new FileSchema(parent, "noprime_test", d, null, null, null, config, false, null, null, null, null,
+        new FileSchema(parent, "noprime_test", d, d, null, null, config, false, null, null, null, null,
         "LOWER", "LOWER", null, null, null, null, false);
     schemasToClose.add(schema);
 

@@ -131,7 +131,7 @@ class HttpSourceDeepCoverageTest3 {
         .url("http://localhost/test")
         .build();
     return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
-        null, null);
+        null, tempDir.toString());
   }
 
   @Test void testParseDelimitedResponseWithFilter() throws Exception {
@@ -895,7 +895,7 @@ class HttpSourceDeepCoverageTest3 {
 
   @Test void testCacheResponseStringS3() throws Exception {
     StorageProvider sp = mock(StorageProvider.class);
-    HttpSource source = createSourceWithRawCache(sp, "s3://b/.raw", null);
+    HttpSource source = createSourceWithRawCache(sp, "s3://b/.raw", tempDir.toString());
     try {
       Field fld = HttpSource.class.getDeclaredField("storageProvider");
       fld.setAccessible(true);

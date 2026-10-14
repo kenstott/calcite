@@ -72,8 +72,10 @@ final class SenateEfdSession {
    * forever; a listing is cached only for a year that has ended. Every table of a year reads the
    * same pages, so without this each of the ten tables would crawl the site again.
    */
-  private static final File CACHE_DIR =
-      new File(System.getProperty("java.io.tmpdir"), "govdata-senate-efd");
+  private static File cacheDir() {
+    // In the run's staging directory (REQ-1992), never the JVM temp directory
+    return new File(org.apache.calcite.adapter.file.StagingDirectory.get(), "govdata-senate-efd");
+  }
   private static final String UNAVAILABLE_MARKER = "UNAVAILABLE";
 
   private final HttpClient client;
@@ -110,7 +112,7 @@ final class SenateEfdSession {
 
   /** POSTs the DataTables listing query and returns the JSON body. */
   synchronized String listing(Map<String, String> params, boolean cacheable) throws IOException {
-    File cached = new File(CACHE_DIR, "list-" + sha256(params.toString()) + ".json");
+    File cached = new File(cacheDir(), "list-" + sha256(params.toString()) + ".json");
     if (cacheable && cached.isFile()) {
       return new String(Files.readAllBytes(cached.toPath()), StandardCharsets.UTF_8);
     }
@@ -129,7 +131,7 @@ final class SenateEfdSession {
 
   /** GETs a report view path such as {@code /search/view/annual/{uuid}/}. */
   synchronized View getView(String path) throws IOException {
-    File cached = new File(CACHE_DIR, path.replaceAll("[^A-Za-z0-9]+", "_") + ".html");
+    File cached = new File(cacheDir(), path.replaceAll("[^A-Za-z0-9]+", "_") + ".html");
     if (cached.isFile()) {
       String body = new String(Files.readAllBytes(cached.toPath()), StandardCharsets.UTF_8);
       return body.equals(UNAVAILABLE_MARKER) ? new View(null, true) : new View(body, false);
@@ -164,8 +166,8 @@ final class SenateEfdSession {
   }
 
   private static void store(File target, String body) throws IOException {
-    Files.createDirectories(CACHE_DIR.toPath());
-    File tmp = File.createTempFile("efd-", ".tmp", CACHE_DIR);
+    Files.createDirectories(cacheDir().toPath());
+    File tmp = File.createTempFile("efd-", ".tmp", cacheDir());
     Files.write(tmp.toPath(), body.getBytes(StandardCharsets.UTF_8));
     Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
   }

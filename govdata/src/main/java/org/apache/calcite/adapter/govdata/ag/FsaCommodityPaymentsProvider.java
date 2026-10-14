@@ -253,7 +253,7 @@ public class FsaCommodityPaymentsProvider implements CachingDataProvider {
     // FSA sheet XML compresses very highly; disable POI's zip-bomb inflate-ratio guard (precedent:
     // NsfFederalRdTransformer, NsfNationalRdTransformer). Streaming avoids the byte[] size cap.
     ZipSecureFile.setMinInflateRatio(0.0);
-    File tmp = File.createTempFile("fsa-", ".xlsx");
+    File tmp = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("fsa-", ".xlsx");
     OPCPackage pkg = null;
     try {
       final Map<String, String> dlHeaders = new HashMap<String, String>();
@@ -266,7 +266,7 @@ public class FsaCommodityPaymentsProvider implements CachingDataProvider {
       // only a completed one is handed back. POI needs a File, so the entry is streamed to tmp.
       final String fileUrl = xlsxUrl;
       try (InputStream cached = rawCache.openStream(fileUrl, () -> {
-            File staging = File.createTempFile("fsa-dl-", ".xlsx");
+            File staging = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("fsa-dl-", ".xlsx");
             try {
               ZipDownloadUtils.downloadToFile(fileUrl, dlHeaders, staging);
               return new DeleteOnCloseFileInputStream(staging);

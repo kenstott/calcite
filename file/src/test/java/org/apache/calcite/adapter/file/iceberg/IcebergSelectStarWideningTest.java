@@ -135,6 +135,7 @@ public class IcebergSelectStarWideningTest extends BaseFileTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
+        + "        \"baseDirectory\": \"" + json(tempDir.resolve("base")) + "\",\n"
         + "        \"ephemeralCache\": true,\n"
         + "        \"executionEngine\": \"duckdb\",\n"
         + "        \"tables\": [\n"

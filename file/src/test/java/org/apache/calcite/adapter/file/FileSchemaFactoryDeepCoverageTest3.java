@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -266,7 +267,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
     Method method = FileSchemaFactory.class.getDeclaredMethod("sanitizeOperand", Map.class);
     method.setAccessible(true);
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/tmp/data");
+    operand.put("directory",  "/tmp/data");
     operand.put("recursive", Boolean.TRUE);
     operand.put("batchSize", 2048);
 
@@ -650,7 +651,8 @@ public class FileSchemaFactoryDeepCoverageTest3 {
   @Test void testCreateSchemaS3WithoutCredentialsFails() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("storageType", "s3");
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("directory",  "s3://my-bucket/data");
+    operand.put("baseDirectory", tempDir.toString());
 
     try {
       FileSchemaFactory.INSTANCE.create(mockParentSchema, "test_schema", operand);
@@ -664,6 +666,7 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   @Test void testCreateSchemaNoStorageTypeFails() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
 
     try {
       FileSchemaFactory.INSTANCE.create(mockParentSchema, "test_schema", operand);
@@ -677,12 +680,12 @@ public class FileSchemaFactoryDeepCoverageTest3 {
 
   @Test void testWriteDebugModel() throws Exception {
     Method method =
-        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", File.class, String.class, Map.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/tmp/test");
+    operand.put("directory",  "/tmp/test");
 
-    method.invoke(null, "test", operand, "root");
+    method.invoke(null, tempDir.toFile(), "test", operand, "root");
   }
 }

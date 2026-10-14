@@ -558,15 +558,6 @@ public class EtlPipelineIntegrationCoverageTest {
     assertNotNull(pipeline);
   }
 
-  @Test void testPipelineConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = httpConfig("ctor_opdir", rangeDimension("y", 2020, 2020));
-    StorageProvider sp = localStorage();
-    String opDir = tempDir.resolve("opdir").toString();
-    EtlPipeline pipeline =
-        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, opDir);
-    assertNotNull(pipeline);
-  }
-
   // =========================================================================
   // EtlPipeline.execute() with custom DataProvider + DataWriter
   // =========================================================================

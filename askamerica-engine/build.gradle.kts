@@ -125,6 +125,12 @@ dependencies {
 }
 
 tasks.test {
+    // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+    systemProperty("iceberg.metadata.cache.directory",
+        layout.buildDirectory.dir("iceberg-schema-cache").get().asFile.absolutePath)
+    // Nor do temporary files no schema owns (REQ-1992)
+    systemProperty("calcite.file.staging.directory",
+        layout.buildDirectory.dir("test-staging").get().asFile.absolutePath)
     useJUnitPlatform {
         // The tests tagged "integration" need the warehouse, a pgwire server or a network
         // service, so an ordinary build leaves them out; -PincludeTags=integration runs them.

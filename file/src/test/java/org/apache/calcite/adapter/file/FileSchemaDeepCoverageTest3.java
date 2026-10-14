@@ -94,8 +94,8 @@ public class FileSchemaDeepCoverageTest3 {
    * Helper: create a FileSchema with source directory.
    */
   private FileSchema createSchema(File sourceDir) {
-    return new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, defaultEngineConfig);
+    return new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null, defaultEngineConfig, false,
+        null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
   }
 
   /**
@@ -103,8 +103,8 @@ public class FileSchemaDeepCoverageTest3 {
    */
   private FileSchema createSchemaWithTables(File sourceDir,
       List<Map<String, Object>> tables) {
-    return new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, tables, defaultEngineConfig);
+    return new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, tables, defaultEngineConfig,
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
   }
 
   /**
@@ -1378,7 +1378,7 @@ public class FileSchemaDeepCoverageTest3 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null, defaultEngineConfig,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null, defaultEngineConfig,
         false, null, null, null, null,
         "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1395,7 +1395,7 @@ public class FileSchemaDeepCoverageTest3 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null, defaultEngineConfig,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null, defaultEngineConfig,
         false, null, null, null, null,
         "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1412,7 +1412,7 @@ public class FileSchemaDeepCoverageTest3 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null, defaultEngineConfig,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null, defaultEngineConfig,
         false, null, null, null, null,
         "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1428,7 +1428,7 @@ public class FileSchemaDeepCoverageTest3 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null, defaultEngineConfig,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null, defaultEngineConfig,
         false, null, null, null, null,
         "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1509,7 +1509,7 @@ public class FileSchemaDeepCoverageTest3 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, "s3://bucket/data", null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), "s3://bucket/data", null,
         null, defaultEngineConfig, false,
         null, null, null, null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1528,7 +1528,7 @@ public class FileSchemaDeepCoverageTest3 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         null, defaultEngineConfig, false,
         null, null, null, null, "SMART_CASING", "SMART_CASING",
         "local", storageConfig, null, null, false, null);
@@ -1551,17 +1551,16 @@ public class FileSchemaDeepCoverageTest3 {
     assertEquals(userBase.getAbsolutePath(), schema.getBaseDirectory());
   }
 
-  @Test void testConstructorDefaultBaseDirectory() {
-    // No storageType, no userConfiguredBaseDirectory -> should default to operating cache dir
-    FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null, defaultEngineConfig,
-        false, null, null, null, null,
-        "SMART_CASING", "SMART_CASING",
-        null, null, null, null, false, null);
-
-    // baseDirectory should be the operatingCacheDirectory
-    assertEquals(schema.getOperatingCacheDirectory().getAbsolutePath(),
-        schema.getBaseDirectory());
+  @Test void testConstructorWithoutBaseDirectoryIsRefused() {
+    // REQ-1992: there is no default base directory; a schema without one refuses to start,
+    // naming itself, instead of writing beside the process
+    String name = uniqueSchemaName();
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> new FileSchema(parentSchema, name, tempDir.toFile(), null, null, null,
+            defaultEngineConfig, false, null, null, null, null,
+            "SMART_CASING", "SMART_CASING",
+            null, null, null, null, false, null));
+    assertTrue(e.getMessage().contains("'" + name + "' has no baseDirectory"), e.getMessage());
   }
 
   // -----------------------------------------------------------------------
@@ -1593,8 +1592,9 @@ public class FileSchemaDeepCoverageTest3 {
     views.add(noSqlView);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, views, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, views, null, null, "SMART_CASING", "SMART_CASING", null,
+        null, null, null, true);
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
     // Neither view should be created
@@ -1617,8 +1617,9 @@ public class FileSchemaDeepCoverageTest3 {
     ExecutionEngineConfig linq4jConfig =
         new ExecutionEngineConfig("LINQ4J", ExecutionEngineConfig.DEFAULT_BATCH_SIZE);
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, linq4jConfig, false,
-        materializations, null, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null, linq4jConfig,
+        false, materializations, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null,
+        null, true);
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
     // MVs should not be created with non-PARQUET engine
@@ -1695,8 +1696,9 @@ public class FileSchemaDeepCoverageTest3 {
 
   @Test void testConstructorWithRefreshIntervalStartsRefresh() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, null, null, "5 minutes");
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, null, null, "5 minutes", "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
     assertNotNull(schema);
     assertTrue(schema.hasRefreshableTables());
   }
@@ -1708,8 +1710,9 @@ public class FileSchemaDeepCoverageTest3 {
   @Test void testConstructorWithInvalidRefreshInterval() {
     // Invalid interval should log warning but not crash
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, null, null, "not_a_valid_interval");
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, null, null, "not_a_valid_interval", "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     assertNotNull(schema);
     assertTrue(schema.hasRefreshableTables()); // refreshInterval is not null, just invalid
   }
@@ -1862,7 +1865,7 @@ public class FileSchemaDeepCoverageTest3 {
     tableDefs.add(tableDef);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, null, tableDefs, defaultEngineConfig, false,
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, tableDefs, defaultEngineConfig, false,
         null, null, null, null, "SMART_CASING", "SMART_CASING",
         null, null, true, null, false);
 

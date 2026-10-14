@@ -195,7 +195,7 @@ public class UniqueFileJoinTest extends BaseFileTest {
   +
            "      \"operand\": {\n"
   +
-           "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
+           "        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
   +
            engineLine +
            "        \"flavor\": \"TRANSLATABLE\"\n"

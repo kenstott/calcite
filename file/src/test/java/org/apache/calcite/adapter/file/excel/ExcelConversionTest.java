@@ -105,6 +105,7 @@ public class ExcelConversionTest extends BaseFileTest {
       // Create operand map with ephemeralCache for test isolation
       Map<String, Object> operand = new LinkedHashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       // Create schema with ephemeral cache
@@ -177,6 +178,7 @@ public class ExcelConversionTest extends BaseFileTest {
       // Create operand map with ephemeralCache for test isolation
       Map<String, Object> operand = new LinkedHashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       // Create schema with ephemeral cache

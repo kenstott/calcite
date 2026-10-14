@@ -1203,9 +1203,9 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest {
 
   private void invokeLoadQueryExtensions(Connection c) throws Exception {
     Method method =
-        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class, java.io.File.class);
     method.setAccessible(true);
-    method.invoke(null, c);
+    method.invoke(null, c, tempDir.toFile());
   }
 
   private Object invokeCreateDuckDBDialect() throws Exception {

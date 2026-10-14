@@ -55,7 +55,7 @@ public final class ZipDownloadUtils {
    */
   public static File downloadZipToTempDir(String url, Map<String, String> headers, String prefix)
       throws IOException {
-    File tempZip = File.createTempFile(prefix + "-", ".zip");
+    File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile(prefix + "-", ".zip");
     File tempDir = null;
     try {
       // Download BEFORE creating the extract dir: partitions that legitimately 404
@@ -63,7 +63,7 @@ public final class ZipDownloadUtils {
       // created up front would leak — the caller never receives it, so its cleanup
       // path has nothing to delete.
       downloadToFile(url, headers, tempZip);
-      tempDir = java.nio.file.Files.createTempDirectory(prefix + "-").toFile();
+      tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory(prefix + "-").toFile();
       try (ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip))) {
         ZipEntry entry;
         while ((entry = zis.getNextEntry()) != null) {
@@ -267,7 +267,7 @@ public final class ZipDownloadUtils {
       List<StorageProvider.FileEntry> cached = sp.listFiles(cacheDir, true);
       if (!cached.isEmpty()) {
         LOGGER.info("Cache hit: {} ({} files) — restoring to temp dir", cachePath, cached.size());
-        File tempDir = java.nio.file.Files.createTempDirectory(prefix + "-cached-").toFile();
+        File tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory(prefix + "-cached-").toFile();
         for (StorageProvider.FileEntry entry : cached) {
           if (entry.isDirectory()) continue;
           String entryPath = entry.getPath();
@@ -323,7 +323,7 @@ public final class ZipDownloadUtils {
     }
 
     // Download
-    File tempFile = File.createTempFile("text-download-", ".tmp");
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("text-download-", ".tmp");
     try {
       downloadToFile(url, headers, tempFile);
       byte[] data = java.nio.file.Files.readAllBytes(tempFile.toPath());

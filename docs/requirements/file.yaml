@@ -2109,10 +2109,15 @@
   topology: walking
   seam: catalog
   description: >
+    [SUPERSEDED by C-01, 2026-10-13 -- the default is now true and a string "true" enables recursion. Kept here for history; do not implement against it.]
     FileSchemaFactory reads recursive as operand.get("recursive") == Boolean.TRUE, so the default is
     FALSE and a JSON string "true" does NOT enable recursion (only a real boolean does).
-  source: file/src/main/java/.../FileSchemaFactory.java 463-464
-  notes: "RESOLVED C-01 (code-wrong): default recursive=true AND accept string 'true'. Issue staged."
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-13, RECURSIVE BY DEFAULT:) A file schema walks its directory recursively
+    unless the model sets recursive to false. The operand is read as a boolean whether the model
+    gives it as a boolean or as the string "true"/"false" (a JDBC URL gives strings).
+  source: file/src/main/java/.../FileSchemaFactory.java (recursive operand)
+  notes: "RESOLVED C-01 (code-wrong), fixed in #532: default recursive=true AND accept string 'true'."
   tests:
     - file/CatalogErrorRequirementsTest
   since: 2026-06
@@ -2827,6 +2832,10 @@
     snake_case params (schema, storage_path, engine, data_path, batch_size; defaults engine=parquet, batchSize=2048,
     storagePath=${java.io.tmpdir}/calcite_file_storage, dataPath=${user.dir}/data) — distinct from AperioDriver's
     jdbc:aperio: camelCase params.
+    [SUPERSEDED by REQ-1992 (Provisa), 2026-10-13 -- storage_path has no default. Kept here for history; do not implement against the storagePath default above.]
+    (Amended 2026-10-13, STORAGE PATH REQUIRED:) storage_path is the file schema's base directory,
+    where every file it writes goes, and is required: a schema=file URL without it is refused,
+    naming the property. There is no ${java.io.tmpdir} default.
   source: file/src/main/java/.../FileJdbcDriver.java parseConfiguration 151-276
   supersedes: [ FileJdbcDriverDeepCoverageTest#testSchemaNameFromUrlIsFiles ]
   notes: "RECODE: full snake_case param set each maps to its field, the injected defaults

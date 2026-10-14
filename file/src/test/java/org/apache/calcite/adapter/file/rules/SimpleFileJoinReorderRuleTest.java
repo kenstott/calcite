@@ -211,6 +211,7 @@ public class SimpleFileJoinReorderRuleTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
 

@@ -139,10 +139,16 @@ public class ClickHouseJdbcSchemaFactory {
         // Embedded mode: start clickhouse-local subprocess
         String dataDir = config.getDataDir();
         if (dataDir == null) {
-          // Default data directory
-          File workingDir = new File(System.getProperty("user.dir"));
-          dataDir =
-              new File(new File(workingDir, ".aperio"), ".clickhouse" + File.separator + schemaName).getAbsolutePath();
+          // Default data directory: under the schema's base directory, <base>/.aperio, the parent
+          // of its operating cache directory (REQ-1992)
+          if (fileSchema == null || fileSchema.getOperatingCacheDirectory() == null) {
+            throw new IllegalStateException("ClickHouse local mode for schema '" + schemaName
+                + "' needs a dataDir or a FileSchema with an operating cache directory");
+          }
+          File aperioDir =
+              fileSchema.getOperatingCacheDirectory().getAbsoluteFile().getParentFile();
+          dataDir = new File(aperioDir, ".clickhouse" + File.separator + schemaName)
+              .getAbsolutePath();
         }
         poolKey = dataDir;
 

@@ -25,6 +25,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "storageType": "ftp",
         "directory": "ftp://speedtest.tele2.net/",
         "ephemeralCache": true,

@@ -298,7 +298,7 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
         ZipEntry entry;
         while ((entry = zis.getNextEntry()) != null) {
           if (entry.getName().toLowerCase().endsWith(".mdb")) {
-            File mdb = Files.createTempFile("ntsb-avall-", ".mdb").toFile();
+            File mdb = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("ntsb-avall-", ".mdb").toPath().toFile();
             OutputStream out = Files.newOutputStream(mdb.toPath());
             try {
               byte[] buf = new byte[1 << 20];
@@ -333,7 +333,7 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
     if (status != 200) {
       throw new IOException("ntsb_aviation_accidents: HTTP " + status + " from " + url);
     }
-    File tmp = Files.createTempFile("ntsb-avall-", ".zip").toFile();
+    File tmp = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("ntsb-avall-", ".zip").toPath().toFile();
     InputStream in = conn.getInputStream();
     try {
       OutputStream out = Files.newOutputStream(tmp.toPath());

@@ -6,6 +6,7 @@
     "type": "custom",
     "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
     "operand": {
+      "baseDirectory": ".",
       "tables": [{
         "name": "djia_constituents",
         "url": "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average",

@@ -155,7 +155,7 @@ public class HouseStockTransactionsProvider implements DataProvider {
   private static void readFiling(String year, HouseFinancialDisclosureIndex.Entry entry,
       Deque<Map<String, Object>> out) throws IOException {
     String url = SITE + "/ptr-pdfs/" + year + "/" + entry.docId + ".pdf";
-    File pdf = File.createTempFile("house-ptr-", ".pdf");
+    File pdf = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("house-ptr-", ".pdf");
     try {
       ZipDownloadUtils.downloadToFile(url, null, pdf);
       final List<String> pages = new ArrayList<String>();

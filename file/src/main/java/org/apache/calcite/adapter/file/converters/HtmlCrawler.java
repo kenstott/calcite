@@ -126,11 +126,16 @@ public class HtmlCrawler {
   private final Map<String, ResourceMetadata> processedDataFiles;
   private final File tempDir;
 
-  public HtmlCrawler(CrawlerConfiguration config) throws IOException {
+  /**
+   * Creates a crawler whose downloads go to a temporary directory under {@code baseDirectory}, the
+   * schema's base directory (REQ-1992).
+   */
+  public HtmlCrawler(CrawlerConfiguration config, File baseDirectory) throws IOException {
     this.config = config;
     this.linkCache = new HtmlLinkCache(config);
     this.processedDataFiles = new ConcurrentHashMap<>();
-    this.tempDir = Files.createTempDirectory("html-crawler-").toFile();
+    this.tempDir = org.apache.calcite.adapter.file.WorkFiles
+        .newTempDirectory(baseDirectory, "html-crawler-").toFile();
     this.tempDir.deleteOnExit();
   }
 

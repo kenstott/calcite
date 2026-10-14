@@ -110,18 +110,11 @@ public class EtlPipelineDeepCoverageTest2 {
     assertNotNull(pipeline);
   }
 
-  @Test void testConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = buildMinimalConfig();
-    EtlPipeline pipeline =
-        new EtlPipeline(config, storageProvider, null, tempDir.toString(), null, incrementalTracker, null, null, tempDir.toString());
-    assertNotNull(pipeline);
-  }
-
   @Test void testConstructorNullSourceStorageProviderFallsBack() {
     EtlPipelineConfig config = buildMinimalConfig();
     // sourceStorageProvider is null, should fall back to storageProvider
     EtlPipeline pipeline =
-        new EtlPipeline(config, storageProvider, null, tempDir.toString(), null, null, null, null, null);
+        new EtlPipeline(config, storageProvider, null, tempDir.toString(), null, null, null, null);
     assertNotNull(pipeline);
   }
 

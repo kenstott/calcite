@@ -251,49 +251,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
   /**
    * Creates a file schema with all features including storage provider support.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param directoryPattern Directory pattern for file discovery, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param storageType     Storage type (e.g., "local", "s3", "sharepoint"), or null
-   * @param storageConfig   Storage-specific configuration, or null
-   * @param flatten         Whether to flatten JSON/YAML structures, or null
-   * @param csvTypeInference CSV type inference configuration, or null
-   * @param primeCache      Whether to prime statistics cache on initialization (default true)
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval,
-      String tableNameCasing,
-      String columnNameCasing,
-      @Nullable String storageType,
-      @Nullable Map<String, Object> storageConfig,
-      @Nullable Boolean flatten,
-      @Nullable Map<String, Object> csvTypeInference,
-      boolean primeCache) {
-    this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
-        recursive, materializations, views, partitionedTables, refreshInterval,
-        tableNameCasing, columnNameCasing, storageType, storageConfig, flatten,
-        csvTypeInference, primeCache, null);
-  }
-
-  /**
-   * Creates a file schema with all features including storage provider support.
    * This constructor accepts both sourceDirectory and userConfiguredBaseDirectory.
    *
    * @param parentSchema    Parent schema
@@ -503,24 +460,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Determine operating cache directory - ALWAYS local filesystem for .conversions.json and file locks
     // This is separate from the parquet output directory which may be remote (S3, etc.)
-    File operatingCacheRoot;
-    if (userConfiguredBaseDirectory != null) {
-      // Caller explicitly provided a base directory — use it for the .aperio root.
-      // This covers both temp dirs (ephemeral tests) and stable product dirs (e.g. ~/.askamerica/data/ref).
-      operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
-      LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
-    } else {
-      // No explicit base directory — fall back to working directory.
-      String userDir = System.getProperty("user.dir");
-
-      // Safety check: if user.dir is root, use temp directory instead
-      if ("/".equals(userDir) || userDir == null || userDir.isEmpty()) {
-        LOGGER.warn("Working directory is root or invalid ('{}'), falling back to temp directory", userDir);
-        userDir = System.getProperty("java.io.tmpdir");
-      }
-      operatingCacheRoot = new File(userDir).getAbsoluteFile();
-      LOGGER.debug("Using working directory for operating cache: {}", operatingCacheRoot);
+    // Every file the schema writes goes under its base directory (REQ-1992); there is no default
+    // location, so a schema without one refuses to start rather than write beside the process.
+    if (userConfiguredBaseDirectory == null) {
+      throw new IllegalArgumentException("File schema '" + name + "' has no baseDirectory "
+          + "(or operatingDirectory) operand. Every file the adapter writes for the schema goes "
+          + "under that directory; set it to the directory the schema may write to.");
     }
+    File operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
+    LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
 
     // Operating cache is ALWAYS .aperio/<schema> on local filesystem for metadata and locks
     // Use canonicalSchemaName if provided (for consistent paths like .aperio/econ regardless of user name ECON)
@@ -781,137 +729,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     primingThread.start();
   }
 
-  /**
-   * Creates a file schema with all features including partitioned tables, refresh support,
-   * and configurable identifier casing.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param directoryPattern Directory pattern for file discovery, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval,
-      String tableNameCasing,
-      String columnNameCasing) {
-    this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
-        recursive, materializations, views, partitionedTables, refreshInterval,
-        tableNameCasing, columnNameCasing, null, null, null, null, true);
-  }
-
-
-  /**
-   * Creates a file schema with all features including partitioned tables and refresh support.
-   * Uses default casing (SMART_CASING for both tables and columns).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for relative files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval) {
-    this(parentSchema, name, sourceDirectory, directoryPattern, tables, engineConfig, recursive,
-        materializations, views, partitionedTables, refreshInterval, "SMART_CASING", "SMART_CASING");
-  }
-
-  /**
-   * Creates a file schema with execution engine support, recursive directory scanning,
-   * multi-table Excel support, multi-table HTML support, and materialized views.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for relative files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, recursive,
-        materializations, views, null, null);
-  }
 
   private final SchemaPlus parentSchema;
   private final String name;
-
-  /**
-   * Creates a file schema with execution engine support and recursive directory scanning.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, recursive, null,
-        null, null, null);
-  }
-
-  /**
-   * Creates a file schema with execution engine support (non-recursive).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, false, null, null,
-        null, null);
-  }
-
-  /**
-   * Creates a file schema with default execution engine (for backward compatibility).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables) {
-    this(parentSchema, name, sourceDirectory, null, tables, new ExecutionEngineConfig(), false,
-        null, null, null, null);
-  }
 
   /**
    * Applies the configured casing transformation and sanitization to an identifier.
@@ -1887,12 +1707,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           source = Sources.of(file);
         }
         Source sourceSansGz = source.trim(".gz");
-        Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+        Source sourceSansJson = trimExtension(sourceSansGz, ".json");
         if (sourceSansJson == null) {
-          sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+          sourceSansJson = trimExtension(sourceSansGz, ".yaml");
         }
         if (sourceSansJson == null) {
-          sourceSansJson = sourceSansGz.trimOrNull(".yml");
+          sourceSansJson = trimExtension(sourceSansGz, ".yml");
         }
         if (sourceSansJson != null) {
           LOGGER.debug("=== PROCESSING JSON FILE IN BULK CONVERSION ===");
@@ -2122,7 +1942,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             }
           }
         }
-        final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+        final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
         if (sourceSansCsv != null) {
           LOGGER.debug("Processing CSV file: {}", source.path());
           String baseName =
@@ -2143,7 +1963,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             registeredTableNames.add(tableName);
           }
         }
-        final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+        final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
         if (sourceSansTsv != null) {
           String baseName =
               applyCasing(
@@ -2163,7 +1983,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
         }
         final Source sourceSansParquet =
-            sourceSansGz.trimOrNull(".parquet");
+            trimExtension(sourceSansGz, ".parquet");
         if (sourceSansParquet != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansParquet.relative(baseSource).path()
@@ -2176,7 +1996,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           builder.put(tableName, table);
           recordTableMetadata(tableName, table, source, null);
         }
-        final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+        final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
         if (sourceSansArrow != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansArrow.relative(baseSource).path()
@@ -2682,7 +2502,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             .build();
     org.apache.calcite.adapter.file.etl.MaterializationWriter writer =
         org.apache.calcite.adapter.file.etl.MaterializationWriterFactory.create(
-            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath);
+            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath,
+            operatingCacheDirectory);
     try {
       writer.initialize(cfg);
       writer.writeBatch(scanTableAsMaps(sourceTable), java.util.Collections.<String, String>emptyMap());
@@ -2774,9 +2595,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       Duration refreshDuration = RefreshInterval.parse(refreshInterval);
 
       // Get cache directory for glob results
-      File cacheDir = baseDirectory != null
-          ? new File(operatingCacheDirectory, ".glob_cache")
-          : new File(System.getProperty("java.io.tmpdir"), "calcite_glob_cache");
+      File cacheDir = new File(operatingCacheDirectory, ".glob_cache");
 
       // REQ-788: an opt-in column carrying each row's source file path.
       String sourceFileColumn = (String) tableDef.get("sourceFileColumn");
@@ -3494,12 +3313,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Default extension-based detection
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+    Source sourceSansJson = trimExtension(sourceSansGz, ".json");
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yaml");
     }
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yml");
     }
     if (sourceSansJson != null) {
       String jsonAutoRefreshInterval = tableDef != null ? (String) tableDef.get("refreshInterval") : null;
@@ -3523,7 +3342,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           tableNameCasing), table);
       return true;
     }
-    final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+    final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
     if (sourceSansCsv != null) {
       // For PARQUET engine, CSV files should have been converted above - don't create fallback CSV tables
       if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
@@ -3535,14 +3354,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       builder.put(tableNameKey, table);
       return true;
     }
-    final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+    final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
     if (sourceSansTsv != null) {
       String tsvAutoRefreshInterval = tableDef != null ? (String) tableDef.get("refreshInterval") : null;
       final Table table = createEnhancedCsvTable(source, null, tableName, tsvAutoRefreshInterval);
       builder.put(getTableName(tableName, sourceSansTsv.path(), tableNameCasing), table);
       return true;
     }
-    final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+    final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
     if (sourceSansArrow != null) {
       try {
         final Table table = createArrowTable(new java.io.File(source.path()));
@@ -3555,7 +3374,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.warn("Warning: Failed to create Arrow table for {}: {}", source.path(), e.getMessage());
       }
     }
-    final Source sourceSansParquet = sourceSansGz.trimOrNull(".parquet");
+    final Source sourceSansParquet = trimExtension(sourceSansGz, ".parquet");
     if (sourceSansParquet != null) {
       try {
         // DuckDB engine will be handled same as PARQUET for initial setup
@@ -3571,9 +3390,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.warn("Warning: Failed to create Parquet table for {}: {}", source.path(), e.getMessage());
       }
     }
-    Source sourceSansXlsx = sourceSansGz.trimOrNull(".xlsx");
+    Source sourceSansXlsx = trimExtension(sourceSansGz, ".xlsx");
     if (sourceSansXlsx == null) {
-      sourceSansXlsx = sourceSansGz.trimOrNull(".xls");
+      sourceSansXlsx = trimExtension(sourceSansGz, ".xls");
     }
     if (sourceSansXlsx != null) {
       // Only throw error if this is from an explicit table definition
@@ -3587,9 +3406,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Check for HTML files
-    Source sourceSansHtml = sourceSansGz.trimOrNull(".html");
+    Source sourceSansHtml = trimExtension(sourceSansGz, ".html");
     if (sourceSansHtml == null) {
-      sourceSansHtml = sourceSansGz.trimOrNull(".htm");
+      sourceSansHtml = trimExtension(sourceSansGz, ".htm");
     }
     if (sourceSansHtml != null) {
       // For directory discovery mode, skip individual processing
@@ -3911,12 +3730,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Default extension-based detection
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+    Source sourceSansJson = trimExtension(sourceSansGz, ".json");
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yaml");
     }
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yml");
     }
     if (sourceSansJson != null) {
       // Use simple table for conversion to avoid Arrow issues
@@ -3929,13 +3748,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       return new JsonScannableTable(source, options, columnNameCasing);
     }
 
-    final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+    final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
     if (sourceSansCsv != null) {
       // Use simple table for conversion to avoid Arrow issues
       return new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
     }
 
-    final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+    final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
     if (sourceSansTsv != null) {
       // Use simple table for conversion to avoid Arrow issues
       return new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
@@ -5538,12 +5357,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           Source sourceSansGz = source.trim(".gz");
 
           // Check for JSON/YAML files
-          Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+          Source sourceSansJson = trimExtension(sourceSansGz, ".json");
           if (sourceSansJson == null) {
-            sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+            sourceSansJson = trimExtension(sourceSansGz, ".yaml");
           }
           if (sourceSansJson == null) {
-            sourceSansJson = sourceSansGz.trimOrNull(".yml");
+            sourceSansJson = trimExtension(sourceSansGz, ".yml");
           }
           if (sourceSansJson != null) {
             String baseName =
@@ -5583,7 +5402,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for CSV files
-          final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+          final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
           if (sourceSansCsv != null) {
             String baseName =
                 applyCasing(
@@ -5605,7 +5424,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for TSV files
-          final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+          final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
           if (sourceSansTsv != null) {
             String baseName =
                 applyCasing(
@@ -5627,7 +5446,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for Parquet files
-          final Source sourceSansParquet = sourceSansGz.trimOrNull(".parquet");
+          final Source sourceSansParquet = trimExtension(sourceSansGz, ".parquet");
           if (sourceSansParquet != null) {
             String tableName =
                 applyCasing(
@@ -5674,7 +5493,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for Arrow files
-          final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+          final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
           if (sourceSansArrow != null) {
             String tableName =
                 applyCasing(
@@ -5768,12 +5587,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         source = Sources.of(file);
       }
       Source sourceSansGz = source.trim(".gz");
-      Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+      Source sourceSansJson = trimExtension(sourceSansGz, ".json");
       if (sourceSansJson == null) {
-        sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+        sourceSansJson = trimExtension(sourceSansGz, ".yaml");
       }
       if (sourceSansJson == null) {
-        sourceSansJson = sourceSansGz.trimOrNull(".yml");
+        sourceSansJson = trimExtension(sourceSansGz, ".yml");
       }
       if (sourceSansJson != null) {
         // Use just the filename as the table name (already includes casing from conversion)
@@ -6791,5 +6610,23 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     LOGGER.debug("Target schema '{}' not yet registered when validating FK to table '{}' — "
         + "keeping FK (cannot confirm absence)", schemaName, tableName);
     return true;
+  }
+
+  /**
+   * {@code source} without the file extension {@code extension} (lower case, with its dot),
+   * matched regardless of case: FILE-061 documents {@code PRODUCTS.JSON} as a table named
+   * {@code products} (C-28). Null when the source has another extension.
+   */
+  static @Nullable Source trimExtension(Source source, String extension) {
+    Source trimmed = source.trimOrNull(extension);
+    if (trimmed != null) {
+      return trimmed;
+    }
+    String path = source.path();
+    int start = path.length() - extension.length();
+    if (start < 0 || !path.regionMatches(true, start, extension, 0, extension.length())) {
+      return null;
+    }
+    return source.trimOrNull(path.substring(start));
   }
 }

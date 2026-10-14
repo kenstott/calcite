@@ -99,6 +99,9 @@ GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
 mkdir -p "$GOVDATA_TMPDIR"
 export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
 GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djava.io.tmpdir=$GOVDATA_TMPDIR"
+# The file adapter and the ETL never read java.io.tmpdir for their own temporary files; they
+# stage in the directory this property names, which they require (REQ-1992).
+GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Dcalcite.file.staging.directory=$GOVDATA_TMPDIR"
 
 # Load base credentials from govdata/.env.prod, then parallel overrides.
 # Caller-exported variables take precedence: if GOVDATA_START_YEAR or

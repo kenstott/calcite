@@ -109,6 +109,7 @@ public class RedisIntegrationTest {
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
+        + "        baseDirectory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        directory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true,\n"
         + "        executionEngine: 'parquet',\n"

@@ -153,7 +153,7 @@ public class CsvTypeInferenceTest {
         + "    \"type\": \"custom\",\n"
         + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "    \"operand\": {\n"
-        + "      \"directory\": \"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\n"
+        + "      \"directory\": \"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\n"
         + "      \"ephemeralCache\": true\n"
         + "    }\n"
         + "  }]\n"
@@ -567,7 +567,7 @@ public class CsvTypeInferenceTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(resourceDir).append("\"");
+    model.append("        \"directory\": \"").append(resourceDir).append("\",\n        \"baseDirectory\": \"").append(resourceDir).append("\"");
     model.append(",\n        \"ephemeralCache\": true");
     model.append(",\n        \"csvTypeInference\": {\n");
     model.append("          \"enabled\": true,\n");
@@ -590,7 +590,7 @@ public class CsvTypeInferenceTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(resourceDir).append("\",\n");
+    model.append("        \"directory\": \"").append(resourceDir).append("\",\n        \"baseDirectory\": \"").append(resourceDir).append("\",\n");
     model.append("        \"ephemeralCache\": true,\n");
     model.append("        \"csvTypeInference\": {\n");
     model.append("          \"enabled\": false\n");
@@ -618,7 +618,7 @@ public class CsvTypeInferenceTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(resourceDir).append("\",\n");
+    model.append("        \"directory\": \"").append(resourceDir).append("\",\n        \"baseDirectory\": \"").append(resourceDir).append("\",\n");
     model.append("        \"ephemeralCache\": true");
     if (inferenceEnabled) {
       model.append(",\n        \"csvTypeInference\": {\n");

@@ -7,6 +7,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "storageType": "sharepoint",
         "storageConfig": {
           "siteUrl": "${SHAREPOINT_SITE_URL}",

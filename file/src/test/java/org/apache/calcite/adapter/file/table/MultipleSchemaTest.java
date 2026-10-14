@@ -81,6 +81,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Add first DATA schema pointing to sales directory
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       salesOperand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
       String engine = getExecutionEngine();
       if (engine != null && !engine.isEmpty()) {
@@ -91,6 +92,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Try to add second DATA schema pointing to hr directory - this should throw an exception
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
       hrOperand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
       if (engine != null && !engine.isEmpty()) {
         hrOperand.put("executionEngine", engine.toLowerCase());
@@ -128,6 +130,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Add SALES schema
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       salesOperand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
       String engine = getExecutionEngine();
       if (engine != null && !engine.isEmpty()) {
@@ -138,6 +141,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Add HR schema
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
       hrOperand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
       if (engine != null && !engine.isEmpty()) {
         hrOperand.put("executionEngine", engine.toLowerCase());
@@ -180,6 +184,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Add initial schema
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       rootSchema.add("test", FileSchemaFactory.INSTANCE.create(rootSchema, "test", salesOperand));
 
       // Verify sales tables are accessible
@@ -194,6 +199,7 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Attempt to replace with hr schema - this should now throw an exception
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
 
       IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
         FileSchemaFactory.INSTANCE.create(rootSchema, "test", hrOperand);
@@ -231,15 +237,17 @@ public class MultipleSchemaTest extends org.apache.calcite.adapter.file.BaseFile
       // Add multiple schemas first
       Map<String, Object> salesOperand = new HashMap<>();
       salesOperand.put("directory", salesDir.getAbsolutePath());
+      salesOperand.put("baseDirectory", salesDir.getAbsolutePath());
       rootSchema.add("sales", FileSchemaFactory.INSTANCE.create(rootSchema, "sales", salesOperand));
 
       Map<String, Object> hrOperand = new HashMap<>();
       hrOperand.put("directory", hrDir.getAbsolutePath());
+      hrOperand.put("baseDirectory", hrDir.getAbsolutePath());
       rootSchema.add("hr", FileSchemaFactory.INSTANCE.create(rootSchema, "hr", hrOperand));
 
       // Try to add a duplicate of the 'sales' schema
       Map<String, Object> duplicateOperand = new HashMap<>();
-      duplicateOperand.put("directory", "/some/other/path");
+      duplicateOperand.put("directory",  "/some/other/path");
 
       IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
         FileSchemaFactory.INSTANCE.create(rootSchema, "sales", duplicateOperand);

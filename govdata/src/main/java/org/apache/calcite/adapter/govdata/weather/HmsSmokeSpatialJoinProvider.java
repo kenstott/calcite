@@ -220,7 +220,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
 
       Path tempDir = null;
       try {
-        tempDir = Files.createTempDirectory("hms_smoke_");
+        tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("hms_smoke_");
         File zipFile = new File(tempDir.toFile(), "hms_smoke.zip");
 
         if (!downloadFile(zipUrl, zipFile, rawCache)) {
@@ -377,7 +377,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
 
     Path tempDir = null;
     try {
-      tempDir = Files.createTempDirectory("tiger_counties_");
+      tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger_counties_");
       File zipFile = new File(tempDir.toFile(), "counties.zip");
 
       if (!downloadFile(url, zipFile, rawCache)) {

@@ -234,7 +234,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
   }
 
   static File downloadToTemp(String url) throws IOException {
-    File tmp = File.createTempFile("nces-zip-", ".zip");
+    File tmp = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("nces-zip-", ".zip");
     tmp.deleteOnExit();
     HttpURLConnection conn =
         (HttpURLConnection) URI.create(url).toURL().openConnection();

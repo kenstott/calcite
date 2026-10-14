@@ -325,6 +325,7 @@ public class DocxTableTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
+      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"ephemeralCache\": true\n");
       writer.write("      }\n");
@@ -369,6 +370,7 @@ public class DocxTableTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
+      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"ephemeralCache\": true\n");
       writer.write("      }\n");

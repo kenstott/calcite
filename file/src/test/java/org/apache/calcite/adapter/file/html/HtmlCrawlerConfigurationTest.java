@@ -37,6 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 public class HtmlCrawlerConfigurationTest {
 
+  /** Where the crawler stages its downloads: a directory the test owns (REQ-1992). */
+  @TempDir File crawlerWorkDir;
+
   @TempDir
   Path tempDir;
 
@@ -114,7 +117,7 @@ public class HtmlCrawlerConfigurationTest {
     config.setDataFilePattern(Pattern.compile(".*\\.csv$"));
     config.setGenerateTablesFromHtml(false);
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     CrawlResult result = crawler.crawl(fileUrl);
 
     // Should find only CSV file, no HTML tables
@@ -144,7 +147,7 @@ public class HtmlCrawlerConfigurationTest {
     config.getAllowedFileExtensions().clear(); // Clear extensions
     config.setGenerateTablesFromHtml(true);
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     CrawlResult result = crawler.crawl(fileUrl);
 
     // Should find HTML table but no data files
@@ -183,7 +186,7 @@ public class HtmlCrawlerConfigurationTest {
     config.setHtmlTableMinRows(3);
     config.setHtmlTableMaxRows(10);
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     CrawlResult result = crawler.crawl(fileUrl);
 
     // Should find only the medium table (5 rows)
@@ -208,7 +211,7 @@ public class HtmlCrawlerConfigurationTest {
     config.setDataFilePattern(Pattern.compile(".*\\.(csv|parquet)$"));
     config.setGenerateTablesFromHtml(true);
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     CrawlResult result = crawler.crawl(fileUrl);
 
     // Should find HTML table

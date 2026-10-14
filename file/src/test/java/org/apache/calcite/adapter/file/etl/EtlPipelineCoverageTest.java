@@ -74,7 +74,7 @@ public class EtlPipelineCoverageTest {
     factoryMock.when(
         () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
-        anyString(), any(IncrementalTracker.class)))
+        anyString(), any(IncrementalTracker.class), any(java.io.File.class)))
         .thenReturn(mockWriter);
   }
 
@@ -205,13 +205,6 @@ public class EtlPipelineCoverageTest {
     StorageProvider sourceStorage = mock(StorageProvider.class);
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, sourceStorage, "/base", null, mockTracker, null, null);
-    assertNotNull(pipeline);
-  }
-
-  @Test void testConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = buildConfig("test", null);
-    EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null, "/ops");
     assertNotNull(pipeline);
   }
 
@@ -1341,7 +1334,7 @@ public class EtlPipelineCoverageTest {
     factoryMock.when(
         () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
-        anyString(), any(IncrementalTracker.class)))
+        anyString(), any(IncrementalTracker.class), any(java.io.File.class)))
         .thenReturn(failingWriter);
     when(failingWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
     // Throw during initialize
@@ -2226,7 +2219,7 @@ public class EtlPipelineCoverageTest {
     EtlPipelineConfig config = buildConfig("source_default", null);
     // Pass null for sourceStorageProvider => should default to main storageProvider
     EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null, null);
+        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null);
     assertNotNull(pipeline);
   }
 

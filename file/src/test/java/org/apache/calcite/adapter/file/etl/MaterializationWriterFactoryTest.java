@@ -54,7 +54,7 @@ public class MaterializationWriterFactoryTest {
 
   @Test public void testCreateParquetWriter() {
     MaterializationWriter writer =
-        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory);
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof ParquetMaterializationWriter,
@@ -65,7 +65,7 @@ public class MaterializationWriterFactoryTest {
 
   @Test public void testCreateIcebergWriter() {
     MaterializationWriter writer =
-        MaterializationWriterFactory.create(MaterializeConfig.Format.ICEBERG, storageProvider, baseDirectory);
+        MaterializationWriterFactory.create(MaterializeConfig.Format.ICEBERG, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -76,35 +76,35 @@ public class MaterializationWriterFactoryTest {
 
   @Test public void testCreateWithNullFormatThrowsException() {
     assertThrows(IllegalArgumentException.class,
-        () -> MaterializationWriterFactory.create(null, storageProvider, baseDirectory),
+        () -> MaterializationWriterFactory.create(null, storageProvider, baseDirectory, tempDir),
         "Should throw IllegalArgumentException for null format");
   }
 
   @Test public void testCreateDeltaFormatThrowsUnsupported() {
     assertThrows(UnsupportedOperationException.class,
         () -> MaterializationWriterFactory.create(
-            MaterializeConfig.Format.DELTA, storageProvider, baseDirectory),
+            MaterializeConfig.Format.DELTA, storageProvider, baseDirectory, tempDir),
         "Delta format should throw UnsupportedOperationException");
   }
 
   @Test public void testCreateSnowflakeFormatThrowsUnsupported() {
     assertThrows(UnsupportedOperationException.class,
         () -> MaterializationWriterFactory.create(
-            MaterializeConfig.Format.SNOWFLAKE, storageProvider, baseDirectory),
+            MaterializeConfig.Format.SNOWFLAKE, storageProvider, baseDirectory, tempDir),
         "Snowflake format should throw UnsupportedOperationException");
   }
 
   @Test public void testCreateBigQueryFormatThrowsUnsupported() {
     assertThrows(UnsupportedOperationException.class,
         () -> MaterializationWriterFactory.create(
-            MaterializeConfig.Format.BIGQUERY, storageProvider, baseDirectory),
+            MaterializeConfig.Format.BIGQUERY, storageProvider, baseDirectory, tempDir),
         "BigQuery format should throw UnsupportedOperationException");
   }
 
   @Test public void testCreateDatabricksFormatThrowsUnsupported() {
     assertThrows(UnsupportedOperationException.class,
         () -> MaterializationWriterFactory.create(
-            MaterializeConfig.Format.DATABRICKS, storageProvider, baseDirectory),
+            MaterializeConfig.Format.DATABRICKS, storageProvider, baseDirectory, tempDir),
         "Databricks format should throw UnsupportedOperationException");
   }
 
@@ -118,7 +118,7 @@ public class MaterializationWriterFactoryTest {
         .build();
 
     MaterializationWriter writer =
-        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof ParquetMaterializationWriter,
@@ -133,7 +133,7 @@ public class MaterializationWriterFactoryTest {
         .build();
 
     MaterializationWriter writer =
-        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -148,7 +148,7 @@ public class MaterializationWriterFactoryTest {
         .build();
 
     MaterializationWriter writer =
-        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -158,7 +158,7 @@ public class MaterializationWriterFactoryTest {
   @Test public void testCreateFromConfigWithNullConfigThrows() {
     assertThrows(IllegalArgumentException.class,
         () -> MaterializationWriterFactory.createFromConfig(
-            null, storageProvider, baseDirectory),
+            null, storageProvider, baseDirectory, tempDir),
         "Should throw IllegalArgumentException for null config");
   }
 
@@ -175,7 +175,7 @@ public class MaterializationWriterFactoryTest {
         .build();
 
     MaterializationWriter writer =
-        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertTrue(writer instanceof IcebergMaterializationWriter,
@@ -196,7 +196,7 @@ public class MaterializationWriterFactoryTest {
         .build();
 
     MaterializationWriter writer =
-        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory);
+        MaterializationWriterFactory.createFromConfig(config, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer");
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat(),
@@ -211,7 +211,7 @@ public class MaterializationWriterFactoryTest {
 
   @Test public void testCreateWithOverloadedMethodIncludingTracker() {
     MaterializationWriter writer =
-        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory);
+        MaterializationWriterFactory.create(MaterializeConfig.Format.PARQUET, storageProvider, baseDirectory, tempDir);
 
     assertNotNull(writer, "Factory should return a non-null writer for overloaded method");
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat(),

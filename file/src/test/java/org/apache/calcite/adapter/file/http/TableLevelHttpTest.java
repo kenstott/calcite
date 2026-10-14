@@ -470,6 +470,7 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        "        \"baseDirectory\": \"" + tempDir.toFile().getAbsolutePath() + "\"," +
         "        \"directory\": \"" + tempDir.toFile().getAbsolutePath() + "\"," +
         "        \"ephemeralCache\": true," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +

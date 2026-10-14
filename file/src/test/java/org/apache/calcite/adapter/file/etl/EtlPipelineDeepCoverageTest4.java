@@ -890,15 +890,6 @@ public class EtlPipelineDeepCoverageTest4 {
     assertEquals(IncrementalTracker.NOOP, actual);
   }
 
-  @Test void testConstructor_operatingDirectory() throws Exception {
-    StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("tbl", singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline =
-        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op/dir");
-    String opDir = getField(pipeline, "operatingDirectory");
-    assertEquals("/op/dir", opDir);
-  }
-
   @Test void testConstructor_baseDirectoryStored() throws Exception {
     StorageProvider sp = mockStorage();
     EtlPipelineConfig config = createHttpConfig("tbl", singleRangeDimension("y", 2020, 2020));

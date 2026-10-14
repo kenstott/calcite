@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -158,7 +159,7 @@ class FileJdbcDriverCoverageTest {
         + "    \"name\": \"testschema\",\n"
         + "    \"type\": \"custom\",\n"
         + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
-        + "    \"operand\": { \"directory\": \"" + dirPath + "\", \"ephemeralCache\": true }\n"
+        + "    \"operand\": { \"directory\": \"" + dirPath + "\",\"baseDirectory\":\"" + dirPath + "\", \"ephemeralCache\": true }\n"
         + "  }]\n"
         + "}\n";
     FileWriter modelWriter = new FileWriter(modelFile.toFile());
@@ -311,20 +312,21 @@ class FileJdbcDriverCoverageTest {
     assertEquals("linq4j", invokeGetter(schemas.get(0), "getEngineType"));
   }
 
-  @Test void testParseConfigurationDefaultStoragePath() throws Exception {
+  @Test void testParseConfigurationWithoutStoragePathIsRefused() throws Exception {
+    // REQ-1992: a file schema's storage path is its base directory, and there is no default
     FileJdbcDriver driver = new FileJdbcDriver();
-    Object config =
-        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties());
-    List<?> schemas = invokeGetSchemas(config);
-    assertEquals(1, schemas.size());
-    assertEquals(LocalPaths.join(System.getProperty("java.io.tmpdir"), "calcite_file_storage"),
-        invokeGetter(schemas.get(0), "getStoragePath"));
+    Exception e = assertThrows(Exception.class,
+        () -> invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties()));
+    Throwable cause = e instanceof java.lang.reflect.InvocationTargetException ? e.getCause() : e;
+    assertTrue(cause instanceof IllegalArgumentException, String.valueOf(cause));
+    assertTrue(cause.getMessage().contains("storage_path"), cause.getMessage());
   }
 
   @Test void testParseConfigurationDefaultDataPath() throws Exception {
     FileJdbcDriver driver = new FileJdbcDriver();
     Object config =
-        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties());
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;storage_path=/s",
+            new Properties());
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
     assertEquals(LocalPaths.join(System.getProperty("user.dir"), "data"),

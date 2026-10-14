@@ -160,16 +160,19 @@ public final class IcebergSchemaCache {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Resolves the cache directory: the system property {@code iceberg.metadata.cache.directory} when
-   * set, else {@code {user.home}/.aperio/.iceberg_metadata_cache}. The directory name still says
-   * "metadata" for backward compatibility with existing on-disk artifacts.
+   * Resolves the cache directory: the system property {@code iceberg.metadata.cache.directory},
+   * which is required. There is no default (REQ-1992): the process that hosts the adapter names a
+   * directory it owns, since the cache holds the schemas of the tables it reads. The directory
+   * name still says "metadata" for backward compatibility with existing on-disk artifacts.
    */
   static File cacheDir() {
     String configured = System.getProperty("iceberg.metadata.cache.directory");
-    File dir = (configured != null && !configured.isEmpty())
-        ? new File(configured)
-        : new File(System.getProperty("user.home")
-            + File.separator + ".aperio" + File.separator + ".iceberg_metadata_cache");
+    if (configured == null || configured.isEmpty()) {
+      throw new IllegalStateException("The system property iceberg.metadata.cache.directory is "
+          + "not set: the Iceberg schema cache has no default directory. Set it to a directory "
+          + "this process owns.");
+    }
+    File dir = new File(configured);
     if (!dir.exists()) {
       dir.mkdirs();
     }

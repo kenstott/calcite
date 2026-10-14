@@ -71,12 +71,14 @@ public final class HtmlCrawlStage {
   }
 
   /**
-   * Runs the crawl {@code operand} declares into {@code directoryPath}.
+   * Runs the crawl {@code operand} declares into {@code directoryPath}. Its downloads are staged
+   * under {@code baseDirectory}, the schema's base directory (REQ-1992).
    *
    * @return the files the crawl holds in the directory, by the URL each came from
    */
   public static Map<String, List<String>> run(String schemaName, Map<String, Object> operand,
-      String directoryPath, String storageType, String columnNameCasing) throws IOException {
+      String directoryPath, String storageType, String columnNameCasing, File baseDirectory)
+      throws IOException {
     if (!"local".equals(storageType)) {
       throw new IllegalArgumentException("Schema '" + schemaName + "' declares a crawl with "
           + "storageType '" + storageType + "': a crawl lands its files in a local directory");
@@ -103,7 +105,7 @@ public final class HtmlCrawlStage {
     Set<String> before = manifestFile.isFile() ? filesOf(manifestFile) : new HashSet<String>();
     Map<String, List<String>> written = new LinkedHashMap<>();
     Set<String> names = new HashSet<>();
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, baseDirectory);
     try {
       HtmlCrawler.CrawlResult result = crawler.crawl(startUrls);
       for (String startUrl : startUrls) {

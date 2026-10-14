@@ -255,7 +255,7 @@ public class TigerDataProvider implements StorageAwareDataProvider {
         return null;
       }
       LOGGER.info("Cache hit for {} year={} state={} — restoring from {}", tableName, year, stateFips, cachePath);
-      File tempDir = Files.createTempDirectory("tiger-" + tableName + "-cached-").toFile();
+      File tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger-" + tableName + "-cached-").toFile();
       for (StorageProvider.FileEntry entry : files) {
         if (entry.isDirectory()) continue;
         String relative = entry.getPath().substring(cachePath.length());

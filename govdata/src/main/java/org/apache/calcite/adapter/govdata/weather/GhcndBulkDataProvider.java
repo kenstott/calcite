@@ -199,7 +199,7 @@ public class GhcndBulkDataProvider implements DataProvider {
       // not cached — fall through to download
     }
     LOGGER.info("GHCND Bulk: downloading {} -> {}", url, storagePath);
-    File tempFile = File.createTempFile("ghcnd-", ".tmp");
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("ghcnd-", ".tmp");
     try {
       ZipDownloadUtils.downloadToFile(url, null, tempFile);
       try (InputStream in = new java.io.FileInputStream(tempFile)) {
@@ -222,7 +222,7 @@ public class GhcndBulkDataProvider implements DataProvider {
    * {@code station,date,element,value,m_flag,} — the field layout {@link BulkIterator} expects.
    */
   private Iterator<String> streamSortedFilteredLines(String gzPath, String year) throws IOException {
-    File tempFile = File.createTempFile("ghcnd-sorted-" + year + "-", ".tsv");
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("ghcnd-sorted-" + year + "-", ".tsv");
     String strideClause = "";
     if (isDqSampleMode()) {
       // Keep ~DQ_TARGET_STATIONS stations spread across the sorted station range: every Kth
@@ -260,7 +260,8 @@ public class GhcndBulkDataProvider implements DataProvider {
         try (Statement stmt = conn.createStatement()) {
           stmt.execute("SET preserve_insertion_order=false");
           stmt.execute("SET memory_limit='2GB'");
-          stmt.execute("SET temp_directory='" + System.getProperty("java.io.tmpdir") + "'");
+          stmt.execute("SET temp_directory='"
+              + org.apache.calcite.adapter.file.StagingDirectory.get().getPath().replace("'", "''") + "'");
           stmt.execute(sql);
         } finally {
           conn.close();

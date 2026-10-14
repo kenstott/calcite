@@ -96,6 +96,15 @@ public class AskAmericaDriver extends BaseDriverWrapper {
         if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
             System.setProperty("duckdb.cache_httpfs.directory", dataDir + "/.duckdb_httpfs_cache");
         }
+        // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+        if (System.getProperty("iceberg.metadata.cache.directory") == null) {
+            System.setProperty("iceberg.metadata.cache.directory",
+                dataDir + "/.iceberg_metadata_cache");
+        }
+        // Nor do temporary files no schema owns: named here, under the data directory (REQ-1992)
+        if (System.getProperty("calcite.file.staging.directory") == null) {
+            System.setProperty("calcite.file.staging.directory", dataDir + "/.staging");
+        }
         // Where SEMANTIC_SEARCH keeps its local copy of the embedding codes. Pinning it here is
         // what makes semantic search read local storage instead of re-reading the whole codes
         // dataset out of the bucket on every question; the file is loaded on first search and

@@ -5295,7 +5295,7 @@ public abstract class AbstractGovDataDownloader {
    */
   protected void downloadZipEntry(String url, Map<String, String> headers,
       String destPath, String... extensions) throws IOException {
-    File tempZip = File.createTempFile("zip-entry-", ".zip");
+    File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("zip-entry-", ".zip");
     try {
       ZipDownloadUtils.downloadToFile(url, headers, tempZip);
       try (ZipInputStream zis = new ZipInputStream(new FileInputStream(tempZip))) {

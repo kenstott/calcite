@@ -125,6 +125,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     sb.append("\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\",");
     sb.append("\"operand\":{\"directory\":\"");
     sb.append(dir.replace("\\", "\\\\"));
+    sb.append("\",\"baseDirectory\":\"");
+    sb.append(dir.replace("\\", "\\\\"));
     sb.append("\",\"ephemeralCache\":true,\"executionEngine\":\"duckdb\"");
     for (Map.Entry<String, Object> e : extra.entrySet()) {
       sb.append(",\"").append(e.getKey()).append("\":");
@@ -152,6 +154,8 @@ public class DuckDBEngineIntegrationCoverageTest {
     sb.append("\"name\":\"test\",\"type\":\"custom\",");
     sb.append("\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\",");
     sb.append("\"operand\":{\"directory\":\"");
+    sb.append(dir.replace("\\", "\\\\"));
+    sb.append("\",\"baseDirectory\":\"");
     sb.append(dir.replace("\\", "\\\\"));
     sb.append("\",\"ephemeralCache\":true,\"executionEngine\":\"duckdb\"");
     sb.append(",\"tables\":[");

@@ -143,6 +143,7 @@ public class IcebergNonEmptyTableTest extends BaseFileTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
+        + "        \"baseDirectory\": \"" + json(tempDir.resolve("base")) + "\",\n"
         + "        \"ephemeralCache\": true,\n"
         + "        \"tables\": [\n"
         + "          {\n"

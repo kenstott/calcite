@@ -251,6 +251,7 @@ public class OptimizationRulesTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", engine);
     operand.put("ephemeralCache", true);
     operand.put("tableNameCasing", "LOWER");
