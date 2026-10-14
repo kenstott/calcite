@@ -345,6 +345,10 @@ jobs:
                 exit 1
               fi
             done
+            if [ "${{ matrix.adapter.name }}" = "govdata" ]; then
+              PYTHONPATH=pgwire-calcite/src python3 pgwire-calcite/scripts/check_catalog_cache_coverage.py \
+                "$expected" govdata/src/main/resources/*/*-schema.yaml
+            fi
             cp "$expected" "bundle/model/$(basename "$expected")"
           fi
           # Adapter-specific entry: starts the calcite backend against this adapter's model.

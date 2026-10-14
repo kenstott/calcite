@@ -174,6 +174,10 @@ print('embedder model cached')
         exit 1
       fi
     done
+    if [ "$ADAPTER" = "govdata" ]; then
+      PYTHONPATH=pgwire-calcite/src python3 pgwire-calcite/scripts/check_catalog_cache_coverage.py \
+        "$expected" govdata/src/main/resources/*/*-schema.yaml
+    fi
     cp "$expected" "$bundle/model/$(basename "$expected")"
   fi
 
