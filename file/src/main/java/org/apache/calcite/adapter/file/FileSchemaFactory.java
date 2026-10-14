@@ -484,7 +484,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         new ExecutionEngineConfig(executionEngine, batchSize, memoryThreshold, null, duckdbConfig, parquetCacheDirectory);
 
     // Get recursive parameter (default to false for backward compatibility)
-    final boolean recursive = operand.get("recursive") == Boolean.TRUE;
+    // recursive defaults to true and accepts the string "true" as a model or JDBC URL gives it
+    // (FILE-110, C-01, #532)
+    final Boolean recursiveOperand = parseBooleanValue(operand.get("recursive"));
+    final boolean recursive = recursiveOperand == null || recursiveOperand;
 
     // Get directory pattern for glob-based file discovery
     // Support both "directoryPattern" and "glob" for backward compatibility
@@ -784,7 +787,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // SQL views from the YAML are registered directly in DuckDB via DuckDBPendingViews,
       // not as ViewTable entries in FileSchema (ViewTable has null protoRowType → NPE).
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, isPrimeCacheEnabled(operand, true), comment,
           canonicalSchemaName);
@@ -914,7 +917,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("ClickHouse: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
@@ -1012,7 +1015,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Trino: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
@@ -1110,7 +1113,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Spark: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
 
@@ -1718,4 +1721,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     return rewritten;
   }
 
+  /**
+   * The source directory of the Parquet FileSchema an engine (DuckDB, ClickHouse, Trino, Spark)
+   * builds internally: the schema's own directory. It was passed as null, so the FileSchema fell
+   * back to the working directory and its JSON flattening walked that tree (seen once recursion
+   * became the default, #532).
+   */
+  private static File engineSourceDirectory(String directoryPath) {
+    return new File(directoryPath);
+  }
 }
