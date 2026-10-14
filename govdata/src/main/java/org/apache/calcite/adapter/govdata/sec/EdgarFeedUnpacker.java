@@ -44,6 +44,7 @@ public final class EdgarFeedUnpacker {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EdgarFeedUnpacker.class);
   private static final String USER_AGENT = "Apache Calcite SEC Adapter apache-calcite@apache.org";
+  private static final int MAX_429_ATTEMPTS = 8;
   private static final long MAX_ENTRY_BYTES = 200L * 1024 * 1024;
 
   /** What one pass wrote. */
@@ -200,11 +201,24 @@ public final class EdgarFeedUnpacker {
       long t0 = System.currentTimeMillis();
       Stats stats;
       if (src.startsWith("http")) {
-        HttpURLConnection conn = (HttpURLConnection) new URL(src).openConnection();
-        conn.setRequestProperty("User-Agent", USER_AGENT);
-        conn.setConnectTimeout(30000);
-        conn.setReadTimeout(120000);
-        int status = conn.getResponseCode();
+        HttpURLConnection conn;
+        int status;
+        // SEC answers HTTP 429 when too many day files are in flight; it clears within a minute or
+        // two. Wait and ask again (each wait is printed), then fail so a rerun retries the day.
+        for (int attempt = 1; ; attempt++) {
+          conn = (HttpURLConnection) new URL(src).openConnection();
+          conn.setRequestProperty("User-Agent", USER_AGENT);
+          conn.setConnectTimeout(30000);
+          conn.setReadTimeout(120000);
+          status = conn.getResponseCode();
+          if (status != 429 || attempt >= MAX_429_ATTEMPTS) {
+            break;
+          }
+          long waitSec = 30L * attempt + (long) (Math.random() * 30);
+          System.out.println("[edgar-feed] " + src + ": HTTP 429 (attempt " + attempt + "), waiting "
+              + waitSec + "s");
+          Thread.sleep(waitSec * 1000);
+        }
         if (status == 404 || (status == 403 && isMissingKey(conn))) {
           // a holiday or weekend has no feed file; a day not yet published has none either. The
           // feed bucket answers a missing key with 403 AccessDenied rather than 404; any other
