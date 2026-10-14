@@ -11,6 +11,11 @@
 package org.apache.calcite.adapter.file.duckdb;
 
 import org.apache.calcite.adapter.file.BaseFileTest;
+import org.apache.calcite.adapter.file.FileSchema;
+import org.apache.calcite.adapter.file.refresh.RefreshablePartitionedParquetTable;
+import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Table;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -155,18 +160,20 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
   }
 
   @Test public void testInitialScanSkipped() throws Exception {
-    // Load the DuckDB driver first: the bound below measures the schema's start, which skips the
-    // initial file scan, not the JVM's one-time native-library load (seen at ~2.5s on its own)
-    DriverManager.getConnection("jdbc:duckdb:").close();
-
-    long startTime = System.currentTimeMillis();
-
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
-      long connectionTime = System.currentTimeMillis() - startTime;
-
-      // Connection should be fast (< 2 seconds) because initial scan is skipped
-      assertTrue(connectionTime < 2000,
-          "Connection should be fast with skipped initial scan, took: " + connectionTime + "ms");
+      // The table says whether it skipped the initial file scan; a wall-clock bound on the
+      // connection measured the runner's speed instead. With DuckDB the schema serves JDBC
+      // views, and the file table is in the FileSchema behind them.
+      SchemaPlus schema =
+          connection.unwrap(CalciteConnection.class).getRootSchema().subSchemas().get("TEST");
+      assertNotNull(schema, "TEST schema");
+      FileSchema fileSchema = schema.unwrap(DuckDBJdbcSchema.class).getFileSchema();
+      assertNotNull(fileSchema, "the DuckDB schema's FileSchema");
+      Table sales = fileSchema.getDeclaredTable("sales");
+      assertTrue(sales instanceof RefreshablePartitionedParquetTable,
+          "sales is a partitioned table, was " + sales);
+      assertTrue(((RefreshablePartitionedParquetTable) sales).usedLazyInitialization(),
+          "DuckDB + Hive partitions skip the initial file scan");
 
       try (Statement stmt = connection.createStatement()) {
         // Query the table - this will trigger lazy initialization

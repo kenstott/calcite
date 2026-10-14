@@ -63,8 +63,8 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
-      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath() + "\",\n");
-      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n");
+      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
+      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"ephemeralCache\": true,\n");
       // The engine is the schema's operand: this test is about DuckDB's CAST pushdown, so it
       // always runs on DuckDB rather than waiting for a CALCITE_FILE_ENGINE_TYPE no lane sets
