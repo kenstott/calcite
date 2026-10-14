@@ -20,7 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Date;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -79,7 +79,7 @@ final class SecSubmissionsBulk implements DocumentSource.LocalContentResolver, A
         }
       }, "submissions-bulk-summary"));
       LOGGER.info("submissions bulk file: using {} ({} bytes, last modified {})", file,
-          file.length(), new Date(file.lastModified()));
+          file.length(), Instant.ofEpochMilli(file.lastModified()));
     } catch (IOException e) {
       throw new IllegalStateException(
           "bulkSubmissionsZip " + zipPath + " is configured but could not be opened", e);
