@@ -1864,10 +1864,15 @@
   seam: catalog
   description: >
     Integer-pattern values fitting [Integer.MIN,MAX] → INTEGER, outside → BIGINT; INTEGER_PATTERN is
-    tried before BOOLEAN so "0"/"1" are INTEGER not BOOLEAN. FLOAT_PATTERN requires a literal decimal
+    tried before BOOLEAN so "0"/"1" are INTEGER not BOOLEAN.
+    [SUPERSEDED by C-09, 2026-10-14 -- dot-less scientific notation is now DOUBLE. Kept here for history; do not implement against it.]
+    FLOAT_PATTERN requires a literal decimal
     point, so "1e5" (no dot) is NOT numeric → VARCHAR; matched floats are always DOUBLE.
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-14, SCIENTIFIC NOTATION:) A value with a decimal point, an exponent, or both
+    ("1.5", "1e5", "2.5E-3") is DOUBLE.
   source: file/src/main/java/.../format/csv/CsvTypeInferrer.java analyzeValue 368-398
-  notes: "RESOLVED C-09 (code-wrong): infer dot-less scientific notation (1e5) as DOUBLE; document yes/y/no/n booleans. INT/BIGINT + 0/1 tested; 1e5-DOUBLE target @Disabled."
+  notes: "RESOLVED C-09 (code-wrong): infer dot-less scientific notation (1e5) as DOUBLE; document yes/y/no/n booleans. INT/BIGINT + 0/1 and 1e5-DOUBLE tested."
   tests:
     - file/CsvInferenceRequirementsTest#numericPromotion
     - file/CsvInferenceRequirementsTest#zeroOneAreIntegerNotBoolean
