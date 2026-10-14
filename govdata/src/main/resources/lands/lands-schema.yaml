@@ -97,7 +97,8 @@ dimension_values:
 
   nps_visit_year_range: &nps_visit_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
+    # IRMA Stats monthly visitation begins in 1979 (1978 and earlier return an empty set).
+    start: "${GOVDATA_START_YEAR:1979}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
