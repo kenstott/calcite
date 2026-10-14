@@ -44,7 +44,7 @@ for arg in "$@"; do
     *) echo "bad day '$arg' (want YYYYMMDD or YYYYMMDD..YYYYMMDD)" >&2; exit 1 ;;
   esac
 done
-# One day at a time, so a stopped run resumes where it left off: a day is marked done only after its
+# Days are marked done individually, so a stopped run resumes where it left off: a day is marked done only after its
 # whole file was read, and a marked day is skipped. The download is network-bound (about 7 MB/s on
 # one stream) and uses a small share of one core, so it runs niced with a small heap and does not
 # draw on the request budget the ETL shares (it is one request per day, outside EdgarRateLimiter).
@@ -55,15 +55,28 @@ flock -n 9 || { echo "another fetch-edgar-feed.sh is already using $FEED_DIR" >&
 runner=()
 command -v nice >/dev/null && runner+=(nice -n 19)
 command -v ionice >/dev/null && runner+=(ionice -c3)
-for day in "${days[@]}"; do
+# PARALLEL=N runs N days at once (default 1). Days are independent (an accession belongs to one
+# day) and each has its own done marker. A failed day (e.g. HTTP 429/403) is reported and left
+# unmarked so a rerun retries it; the other days continue.
+PARALLEL="${PARALLEL:-1}"
+export FEED_DIR JAR
+export RUNNER="${runner[*]:-}"
+fetch_day() {
+  local day="$1"
   if [ -f "$FEED_DIR/.done/$day" ]; then
     echo "[edgar-feed] $day: already unpacked, skipped"
-    continue
+    return 0
   fi
-  y="${day:0:4}"; m="${day:4:2}"
+  local y="${day:0:4}" m="${day:4:2}" q
   q=$(( (10#$m - 1) / 3 + 1 ))
-  url="https://www.sec.gov/Archives/edgar/Feed/$y/QTR$q/$day.nc.tar.gz"
-  "${runner[@]}" java -Xmx1g -cp "$JAR" org.apache.calcite.adapter.govdata.sec.EdgarFeedUnpacker \
-      "$FEED_DIR" "$url"
-  touch "$FEED_DIR/.done/$day"
-done
+  local url="https://www.sec.gov/Archives/edgar/Feed/$y/QTR$q/$day.nc.tar.gz"
+  if $RUNNER java -Xmx1g -cp "$JAR" org.apache.calcite.adapter.govdata.sec.EdgarFeedUnpacker \
+      "$FEED_DIR" "$url"; then
+    touch "$FEED_DIR/.done/$day"
+  else
+    echo "[edgar-feed] $day: FAILED (left unmarked, rerun retries it)" >&2
+    return 1
+  fi
+}
+export -f fetch_day
+printf '%s\n' "${days[@]}" | xargs -P "$PARALLEL" -I{} bash -c 'fetch_day {}'
