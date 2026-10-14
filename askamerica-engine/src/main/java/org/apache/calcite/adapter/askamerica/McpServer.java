@@ -5826,8 +5826,8 @@ public class McpServer {
         String s = safeIdent(schema);
         Connection c = getCatalogConnection();
         ArrayNode arr = MAPPER.createArrayNode();
-        try (Statement st = c.createStatement();
-             ResultSet rs = st.executeQuery(
+        Statement st = c.createStatement();
+        try (ResultSet rs = executeMetaQuery(st,
                  "SELECT table_name, table_type, remarks FROM information_schema.tables "
                  + "WHERE lower(table_schema) = '" + s + "' ORDER BY table_name")) {
             while (rs.next()) {
@@ -5845,6 +5845,9 @@ public class McpServer {
                 }
                 arr.add(o);
             }
+        } finally {
+            ACTIVE_STATEMENTS.remove(st);
+            st.close();
         }
         return arr.toString();
     }
