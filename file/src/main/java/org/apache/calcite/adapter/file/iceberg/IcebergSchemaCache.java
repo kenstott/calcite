@@ -418,6 +418,9 @@ public final class IcebergSchemaCache {
     }
   }
 
+  /** System property that makes seed generation ignore any published cache. */
+  public static final String IGNORE_PUBLISHED_PROPERTY = "iceberg.schema.cache.ignorePublished";
+
   /** Number of entries currently held — used by seed generation to report what it materialized. */
   public static int size() {
     ensureLoaded();
@@ -472,6 +475,13 @@ public final class IcebergSchemaCache {
         return;
       }
       syncAttempted = true;
+      if (Boolean.getBoolean(IGNORE_PUBLISHED_PROPERTY)) {
+        // A rebuild creates the cache again from the live tables: nothing from an earlier cache,
+        // which may hold tables that have since gone or schemas that have since changed.
+        LOGGER.info("Iceberg schema cache: {} is set, ignoring any published cache — reading "
+            + "schemas live", IGNORE_PUBLISHED_PROPERTY);
+        return;
+      }
       String root = bucketRoot(tablePath);
       if (root == null || s3Config == null || s3Config.isEmpty()) {
         LOGGER.debug("Iceberg schema cache not synced (no object-store root for {}) — "
