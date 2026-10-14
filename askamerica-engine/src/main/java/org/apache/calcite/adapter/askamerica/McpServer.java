@@ -13019,34 +13019,36 @@ public class McpServer {
     }
 
     /**
-     * Whether this SQL has the shape the find_recipe mandate names — a multi-step comparison
-     * rather than a lookup.
+     * Whether this SQL has the shape the find_recipe mandate names -- a rate, ratio, trend or
+     * cross-domain comparison rather than a lookup or a descriptive aggregate.
      *
-     * <p>Deliberately conservative. A warning that fires on every trivial SELECT becomes
-     * wallpaper and stops being read, which is the failure mode that makes an always-on notice
-     * worse than none. Three shapes qualify, all of which mean the caller is aggregating or
-     * relating rather than fetching:
+     * <p>Deliberately conservative. A warning that fires on every plain COUNT/SUM/MIN/MAX/AVG
+     * becomes wallpaper and teaches callers to ignore high-severity warnings, which is worse
+     * than none. Four shapes qualify:
      *
      * <ul>
-     *   <li>GROUP BY — any grouping is a comparison across the grouped dimension.
-     *   <li>a JOIN between two DIFFERENT schemas — a cross-domain join.
-     *   <li>an aggregate together with ORDER BY — a ranking.
+     *   <li>a JOIN between two DIFFERENT schemas -- a cross-domain join.
+     *   <li>a division -- a rate, share or ratio is being computed.
+     *   <li>CORR, STDDEV or REGR_* -- a statistic that implies a relationship or dispersion.
+     *   <li>GROUP BY a time column -- a trend across periods.
      * </ul>
      *
-     * <p>A plain filtered SELECT, a describe-style probe, or a single-row lookup does not fire.
+     * <p>A plain filtered SELECT, a single-table or single-schema aggregate or ranking, a
+     * describe-style probe, or a single-row lookup does not fire.
      */
-    private static boolean isMultiStepShape(String sql) {
+    static boolean isMultiStepShape(String sql) {
         if (sql == null) {
             return false;
         }
         String s = sql.toUpperCase(java.util.Locale.ROOT);
-        if (s.contains("GROUP BY")) {
+        if (s.contains("CORR(") || s.contains("STDDEV") || s.contains("REGR_")) {
             return true;
         }
-        boolean hasAggregate = s.contains("SUM(") || s.contains("AVG(")
-            || s.contains("COUNT(") || s.contains("MIN(") || s.contains("MAX(")
-            || s.contains("STDDEV") || s.contains("CORR(");
-        if (hasAggregate && s.contains("ORDER BY")) {
+        if (DIVISION.matcher(s).find()) {
+            return true;
+        }
+        java.util.regex.Matcher g = GROUP_BY_CLAUSE.matcher(s);
+        if (g.find() && TIME_COLUMN.matcher(g.group(1)).find()) {
             return true;
         }
         if (s.contains("JOIN")) {
@@ -13062,6 +13064,20 @@ public class McpServer {
         }
         return false;
     }
+
+    /** A division operator between two operands, ignoring the {@code *} of {@code COUNT(*)}. */
+    private static final java.util.regex.Pattern DIVISION =
+        java.util.regex.Pattern.compile("[A-Z0-9_)\\]'\"]\\s*/\\s*[A-Z0-9_(.'\"]");
+
+    /** The column list of a GROUP BY, up to the next clause. */
+    private static final java.util.regex.Pattern GROUP_BY_CLAUSE =
+        java.util.regex.Pattern.compile("GROUP\\s+BY\\s+(.*?)(?:\\bHAVING\\b|\\bORDER\\s+BY\\b"
+            + "|\\bLIMIT\\b|\\)|$)", java.util.regex.Pattern.DOTALL);
+
+    /** A grouping expression that is a period: year, quarter, month, date, fiscal period. */
+    private static final java.util.regex.Pattern TIME_COLUMN =
+        java.util.regex.Pattern.compile("YEAR|QUARTER|MONTH|DATE|PERIOD|FISCAL|VINTAGE|\\bFY\\b"
+            + "|DATE_TRUNC");
 
     /** Matches a {@code schema.table} qualifier in an uppercased statement. */
     private static final java.util.regex.Pattern SCHEMA_QUALIFIER =
@@ -13092,12 +13108,12 @@ public class McpServer {
         ObjectNode w = MAPPER.createObjectNode();
         w.put("type", "recipe_not_consulted");
         w.put("severity", "high");
-        w.put("note", "This query aggregates, ranks, or joins across schemas, and find_recipe "
+        w.put("note", "This query computes a rate, ratio, trend, or cross-schema join, and find_recipe "
             + "has not been called in this session. Call find_recipe now with a plain-words "
             + "topic for what you are computing, read what it returns, and re-run this query if "
             + "the recipe names a different method. An empty result means the catalog does not "
             + "cover this yet, not that the plan is sound. This warning repeats on every "
-            + "aggregate query until find_recipe is called once.");
+            + "such query until find_recipe is called once.");
         warnings.add(w);
     }
 
