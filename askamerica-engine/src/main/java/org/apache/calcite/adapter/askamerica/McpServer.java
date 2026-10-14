@@ -3208,6 +3208,18 @@ public class McpServer {
                 + "team, not just the wrong label.");
         reportTypeProp.putArray("enum").add("defect").add("sourcing");
         reportProps.set("type", reportTypeProp);
+        ObjectNode reportCategoryProp = prop(
+            "string",
+            "Required when type is 'defect', omitted for 'sourcing'. What the defect is about, "
+                + "because the confirmation relayed to the user depends on it: 'data_value' — a "
+                + "returned figure looks wrong; 'metadata_coverage' — list_tables, "
+                + "search_catalog, describe_table or a coverage window is empty, missing or "
+                + "wrong; 'diagnostics' — a warning, severity, grain inference or other "
+                + "guidance askamerica generated misfired while the figures themselves are not "
+                + "in question; 'tooling' — a tool timed out, errored or was unavailable.");
+        reportCategoryProp.putArray("enum")
+            .add("data_value").add("metadata_coverage").add("diagnostics").add("tooling");
+        reportProps.set("category", reportCategoryProp);
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
             "body",
@@ -3225,9 +3237,7 @@ public class McpServer {
             + "answer, and then relay the confirmation text it returns (a data request was "
             + "sent; new series typically take 24-48 hours; check back then). Likewise ALWAYS "
             + "call it with type 'defect' whenever a value looks implausible or inconsistent, "
-            + "and relay the confirmation text it returns (a data-quality report was sent; "
-            + "fixes typically take 24-48 hours; treat the figure as unverified until "
-            + "checked). Every report "
+            + "with the matching category and relay the confirmation text it returns. Every report "
             + "MUST be classified via `type` (defect or sourcing) — an "
             + "unclassified report cannot be routed and is effectively invisible to whichever "
             + "team should act on it.",
@@ -4094,11 +4104,24 @@ public class McpServer {
                                 + "value; see the tool's own description for how to tell them "
                                 + "apart.");
                     }
+                    String category = args.path("category").asText("");
+                    if ("defect".equals(issueType) && !DEFECT_NOTICES.containsKey(category)) {
+                        return errorResponse(id, -32602,
+                            "report_issue with type \"defect\" requires \"category\" to be one "
+                                + "of " + DEFECT_NOTICES.keySet() + ", got " + jsonStr(category)
+                                + " — pick the one that describes what is wrong; see the tool's "
+                                + "own description for how to tell them apart.");
+                    }
+                    if ("sourcing".equals(issueType) && !category.isEmpty()) {
+                        return errorResponse(id, -32602,
+                            "report_issue \"category\" applies only to type \"defect\", got "
+                                + jsonStr(category) + " with type \"sourcing\".");
+                    }
                     String subject = args.path("subject").asText();
                     String issueBody = args.path("body").asText();
                     log.println("[askamerica-mcp] tool=report_issue type=" + issueType
-                        + " subject=" + subject);
-                    text = reportIssue(issueType, subject, issueBody);
+                        + " category=" + category + " subject=" + subject);
+                    text = reportIssue(issueType, category, subject, issueBody);
                     break;
                 }
                 case "deliver_report": {
@@ -14280,13 +14303,32 @@ public class McpServer {
             + "been sent. A new data series typically takes 24-48 hours to become available, "
             + "so they should check back then.";
 
-    /** Relayed to the user after a defect report is recorded. */
-    private static final String DEFECT_REPORT_NOTICE =
-        "Tell the user: this value looks wrong, and a data-quality report has been sent for "
-            + "review. Fixes typically take 24-48 hours, so they should check back then, and "
-            + "treat the figure as unverified until it has been checked.";
+    /** Relayed to the user after a defect report is recorded, keyed by report category. */
+    private static final Map<String, String> DEFECT_NOTICES = defectNotices();
 
-    static String reportIssue(String type, String subject, String body) {
+    private static Map<String, String> defectNotices() {
+        Map<String, String> m = new LinkedHashMap<String, String>();
+        m.put("data_value",
+            "Tell the user: this value looks wrong, and a data-quality report has been sent for "
+                + "review. Fixes typically take 24-48 hours, so they should check back then, and "
+                + "treat the figure as unverified until it has been checked.");
+        m.put("metadata_coverage",
+            "Tell the user: the catalog or coverage information askamerica returned looks "
+                + "incomplete or wrong, and a report has been sent for review. Fixes typically "
+                + "take 24-48 hours, so they should check back then. This concerns what "
+                + "askamerica lists, not the accuracy of any figure already given.");
+        m.put("diagnostics",
+            "Tell the user: a warning or guidance message askamerica produced looks wrong, and a "
+                + "report has been sent for review. No figure is in question; fixes typically "
+                + "take 24-48 hours.");
+        m.put("tooling",
+            "Tell the user: an askamerica tool failed or was unavailable, and a report has been "
+                + "sent for review. No figure is in question; they can retry, and fixes "
+                + "typically take 24-48 hours.");
+        return java.util.Collections.unmodifiableMap(m);
+    }
+
+    static String reportIssue(String type, String category, String subject, String body) {
         HttpURLConnection c = null;
         try {
             String payload = "{"
@@ -14295,6 +14337,7 @@ public class McpServer {
                 + "\"session_id\":" + jsonStr(SESSION_ID) + ","
                 + "\"reported_at\":" + jsonStr(java.time.Instant.now().toString()) + ","
                 + "\"type\":" + jsonStr(type) + ","
+                + ("defect".equals(type) ? "\"category\":" + jsonStr(category) + "," : "")
                 + "\"subject\":" + jsonStr(subject) + ","
                 + "\"body\":" + jsonStr(body)
                 + "}";
@@ -14326,7 +14369,7 @@ public class McpServer {
                     return "Data request sent. Subject: " + subject + "\n" + DATA_REQUEST_NOTICE;
                 }
                 return "Data-quality report sent. Subject: " + subject + "\n"
-                    + DEFECT_REPORT_NOTICE;
+                    + DEFECT_NOTICES.get(category);
             }
             log.println("[askamerica-mcp] report_issue rejected: HTTP " + code);
             return "Could not record the issue (HTTP " + code
