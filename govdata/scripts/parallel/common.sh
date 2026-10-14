@@ -1353,6 +1353,16 @@ build_inline_model() {
     user_tables_json="${user_tables_json},\"bulk13fDir\":\"${SEC_BULK_13F_DIR}\""
   fi
 
+  # SEC_BULK_SUBMISSIONS_ZIP -> bulkSubmissionsZip, sec only: SEC's nightly submissions.zip
+  # (made by scripts/fetch-submissions-bulk.sh) answers the per-filer submissions JSON fetches.
+  # Passed through the inline model for the same reason as bulk13fDir above.
+  if [ "$schema_name" = "sec" ] && [ -n "${SEC_BULK_SUBMISSIONS_ZIP:-}" ]; then
+    case "$SEC_BULK_SUBMISSIONS_ZIP" in
+      *\"*|*\\*) echo "SEC_BULK_SUBMISSIONS_ZIP must not contain quotes or backslashes" >&2; return 1 ;;
+    esac
+    user_tables_json="${user_tables_json},\"bulkSubmissionsZip\":\"${SEC_BULK_SUBMISSIONS_ZIP}\""
+  fi
+
   printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s%s}}]}' \
     "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }

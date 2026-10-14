@@ -195,6 +195,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for SEC schema");
 
+    // SEC's nightly submissions.zip answers the per-filer submissions JSON fetches. Read from the
+    // factory's own operand: it arrives through the inline model, which is all the ETL sees.
+    installSubmissionsBulk(operand);
+
     // Initialize storage provider from operand if available
     StorageProvider sp = (StorageProvider) operand.get("_storageProvider");
     if (sp != null && this.storageProvider == null) {
@@ -4515,6 +4519,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "S-3", "S3",             // Registration statements
         "S-4", "S4",             // Business combination registration
         "S-8", "S8");              // Employee benefit plan registration
+  }
+
+  private boolean submissionsBulkInstalled;
+
+  private synchronized void installSubmissionsBulk(Map<String, Object> operand) {
+    if (submissionsBulkInstalled) {
+      return;
+    }
+    Object v = operand != null ? operand.get("bulkSubmissionsZip") : null;
+    String path = v == null ? null : String.valueOf(v);
+    if (path != null && path.contains("${")) {
+      path = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(path);
+    }
+    SecSubmissionsBulk.install(path);
+    submissionsBulkInstalled = true;
   }
 
   private Sec13fBulkData bulk13f;

@@ -470,7 +470,62 @@ public class DocumentSource {
    * @throws IOException If fetch fails after retries
    */
   public String fetchUrlContent(String url) throws IOException {
+    LocalContentResolver resolver = localResolverFor(url);
+    if (resolver != null) {
+      String local = resolver.resolve(url);
+      if (local != null) {
+        return local;
+      }
+    }
     return fetchUrl(url);
+  }
+
+  /**
+   * Fetches {@code url} from the network even when a {@link LocalContentResolver} covers it.
+   * For a caller whose local answer turned out to be stale, such as a lookup that misses in a
+   * nightly bulk copy but may succeed against the live source.
+   */
+  public String fetchUrlContentLive(String url) throws IOException {
+    return fetchUrl(url);
+  }
+
+  /** True when a registered {@link LocalContentResolver} covers {@code url}. */
+  public boolean hasLocalContent(String url) {
+    return localResolverFor(url) != null;
+  }
+
+  /**
+   * Answers some URLs from a local copy so they are not fetched. {@link #resolve} returns the
+   * content, or null when the copy does not hold that URL (the caller then fetches it).
+   */
+  public interface LocalContentResolver {
+    String resolve(String url) throws IOException;
+  }
+
+  private static final Map<String, LocalContentResolver> LOCAL_RESOLVERS =
+      new java.util.concurrent.ConcurrentHashMap<String, LocalContentResolver>();
+
+  /** Registers {@code resolver} for every URL starting with {@code urlPrefix}. */
+  public static void registerLocalContentResolver(String urlPrefix,
+      LocalContentResolver resolver) {
+    LOCAL_RESOLVERS.put(urlPrefix, resolver);
+  }
+
+  /** Removes every registered resolver. */
+  public static void clearLocalContentResolvers() {
+    LOCAL_RESOLVERS.clear();
+  }
+
+  private static LocalContentResolver localResolverFor(String url) {
+    if (url == null || LOCAL_RESOLVERS.isEmpty()) {
+      return null;
+    }
+    for (Map.Entry<String, LocalContentResolver> e : LOCAL_RESOLVERS.entrySet()) {
+      if (url.startsWith(e.getKey())) {
+        return e.getValue();
+      }
+    }
+    return null;
   }
 
   /**

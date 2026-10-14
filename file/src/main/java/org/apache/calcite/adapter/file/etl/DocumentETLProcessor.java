@@ -108,10 +108,23 @@ public class DocumentETLProcessor {
      *  found" result for an accession on THIS cik is then inconclusive, not confirmed absent —
      *  see {@link #fetchPrimaryDocumentFromSubmissions}. Guarded the same way as overflowMerged. */
     boolean overflowFetchFailed;
+    /** True when this entry was answered by a local copy (a nightly bulk file), which can lag the
+     *  live source by up to a day; a miss against it is rechecked live before it counts. */
+    final boolean local;
+    /** True for the entry built by the live recheck of a stale local one: its overflow pages must
+     *  be fetched live too, bypassing the local copy. */
+    final boolean live;
 
     CikSubmissions(Map<String, String> byAccession, List<PaginationFileRef> overflowFiles) {
+      this(byAccession, overflowFiles, false, false);
+    }
+
+    CikSubmissions(Map<String, String> byAccession, List<PaginationFileRef> overflowFiles,
+        boolean local, boolean live) {
       this.byAccession = byAccession;
       this.overflowFiles = overflowFiles;
+      this.local = local;
+      this.live = live;
     }
   }
 
@@ -681,8 +694,8 @@ public class DocumentETLProcessor {
   private String fetchPrimaryDocumentFromSubmissions(
       DocumentSource documentSource, String cik, String accession) throws IOException {
     CikSubmissions submissions = cikSubmissionsCache.get(cik);
+    String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
     if (submissions == null) {
-      String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
       String submissionsJson = documentSource.fetchUrlContent(submissionsUrl);
       Map<String, String> map = parseAccessionToPrimaryDocument(submissionsJson);
       if (map.isEmpty() && submissionsParseDiagCount.get() < 5) {
@@ -693,19 +706,22 @@ public class DocumentETLProcessor {
             submissionsJson.length() > 200 ? submissionsJson.substring(0, 200) : submissionsJson);
       }
       List<PaginationFileRef> overflow = extractPaginationFiles(submissionsJson);
-      cikSubmissionsCache.putIfAbsent(cik, new CikSubmissions(map, overflow));
+      cikSubmissionsCache.putIfAbsent(cik, new CikSubmissions(map, overflow,
+          documentSource.hasLocalContent(submissionsUrl), false));
       submissions = cikSubmissionsCache.get(cik);
     }
 
-    String result = submissions.byAccession.get(accession);
-    if (result == null && !submissions.overflowFiles.isEmpty()) {
-      synchronized (submissions) {
-        if (!submissions.overflowMerged) {
-          mergeOverflowSubmissions(documentSource, cik, submissions);
-          submissions.overflowMerged = true;
-        }
-      }
-      result = submissions.byAccession.get(accession);
+    String result = lookupAccession(documentSource, cik, submissions, accession);
+    if (result == null && submissions.local) {
+      // The local copy is a nightly snapshot: an accession filed since is not in it. Only a miss
+      // against the live source is a real absence, so look once more, live, and keep that answer
+      // for this CIK from then on.
+      String liveJson = documentSource.fetchUrlContentLive(submissionsUrl);
+      CikSubmissions live = new CikSubmissions(parseAccessionToPrimaryDocument(liveJson),
+          extractPaginationFiles(liveJson), false, true);
+      cikSubmissionsCache.put(cik, live);
+      submissions = live;
+      result = lookupAccession(documentSource, cik, submissions, accession);
     }
 
     if (result == null && submissions.overflowFetchFailed) {
@@ -759,12 +775,29 @@ public class DocumentETLProcessor {
    * {@link CikSubmissions#overflowFetchFailed} so a subsequent miss for this CIK is treated as
    * inconclusive rather than a confirmed absence.
    */
+  private String lookupAccession(DocumentSource documentSource, String cik,
+      CikSubmissions submissions, String accession) {
+    String result = submissions.byAccession.get(accession);
+    if (result == null && !submissions.overflowFiles.isEmpty()) {
+      synchronized (submissions) {
+        if (!submissions.overflowMerged) {
+          mergeOverflowSubmissions(documentSource, cik, submissions);
+          submissions.overflowMerged = true;
+        }
+      }
+      result = submissions.byAccession.get(accession);
+    }
+    return result;
+  }
+
   private void mergeOverflowSubmissions(DocumentSource documentSource, String cik,
       CikSubmissions submissions) {
     for (PaginationFileRef ref : submissions.overflowFiles) {
       try {
-        String pageJson =
-            documentSource.fetchUrlContent("https://data.sec.gov/submissions/" + ref.name);
+        String pageUrl = "https://data.sec.gov/submissions/" + ref.name;
+        String pageJson = submissions.live
+            ? documentSource.fetchUrlContentLive(pageUrl)
+            : documentSource.fetchUrlContent(pageUrl);
         submissions.byAccession.putAll(parseAccessionToPrimaryDocument(pageJson));
       } catch (IOException e) {
         LOGGER.warn("Could not fetch overflow submissions page {} for CIK {}: {}",

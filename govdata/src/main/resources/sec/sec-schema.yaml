@@ -46,6 +46,10 @@ cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 # The ETL runs before this file's operands are merged in, so the launch scripts also pass
 # SEC_BULK_13F_DIR through the inline model (build_inline_model in common.sh).
 bulk13fDir: "${SEC_BULK_13F_DIR:}"
+# SEC's nightly submissions.zip (govdata/scripts/fetch-submissions-bulk.sh) answers the per-filer
+# data.sec.gov/submissions/CIK*.json fetches. It lags live by up to a day, so a lookup that misses
+# in it is rechecked live. Empty = off. Passed through the inline model like bulk13fDir.
+bulkSubmissionsZip: "${SEC_BULK_SUBMISSIONS_ZIP:}"
 # Periodic table commit: flush + materialize to Iceberg every N accessions so a worker
 # killed mid-run (large years have ~293k accessions) still leaves queryable tables.
 # <= 0 disables periodic commit (single final commit at end of run).
