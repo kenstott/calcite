@@ -786,20 +786,17 @@ final class PgwireGovDataConnector {
         log().println("[askamerica-mcp] R2 credential resolution for pgwire-govdata FAILED: "
             + e.getMessage() + " — the spawned server will likely fail to connect.");
       }
-      // Reuse the exact catalog file this engine's own embedded mode already seeds/maintains
-      // (~/.mcp_askamerica/.duckdb/govdata.duckdb by default — see McpServer's ASKAMERICA_DATA_DIR
-      // resolution) rather than letting the spawned server default to its own relative path and
-      // pay for a redundant seed extraction. A durable, shared singleton must not adopt a caller's
-      // ephemeral data dir for this, though: a path under the OS temp directory does not outlive
-      // the process that set it, so every later caller would be pinned to a catalog file that can
-      // vanish out from under the running server. Skipped rather than substituted — the server's
-      // own relative-path default is the correct fallback here, same as the "no data dir at all"
-      // case just below this check.
-      String dataDir = System.getProperty("ASKAMERICA_DATA_DIR");
-      if (dataDir != null && !dataDir.isEmpty() && !isUnderTempDir(dataDir)) {
-        pb.environment().put("GOVDATA_DUCKDB_CATALOG",
-            new File(new File(dataDir, ".duckdb"), "govdata.duckdb").getAbsolutePath());
-      }
+      // The shared server outlives whoever spawns it, and any caller can respawn it (expired
+      // credentials, a superseded bundle). Its catalog and working directory must therefore not
+      // depend on the caller: with GOVDATA_DUCKDB_CATALOG unset the server builds its catalog at
+      // a path relative to the inherited working directory, so a respawn from a test run or a
+      // developer worktree left the shared server cold-mounting every schema (minutes, 220 views
+      // at 3-5 s each) into a directory that was later deleted (observed 2026-10-14 and 10-03).
+      File dataDir = sharedCatalogDataDir(System.getProperty("ASKAMERICA_DATA_DIR"));
+      pb.environment().put("GOVDATA_DUCKDB_CATALOG",
+          new File(new File(dataDir, ".duckdb"), "govdata.duckdb").getAbsolutePath());
+      File serverDir = launcher.getParentFile().getParentFile();
+      pb.directory(serverDir);
       // NOT Redirect.DISCARD: a spawn that fails immediately (bad credentials, a missing env
       // var, a packaging defect) would otherwise leave zero diagnostic trail whatsoever — the
       // caller just sees a generic "did not start accepting connections" timeout minutes
@@ -1001,6 +998,25 @@ final class PgwireGovDataConnector {
         + "in reserve, so every query re-reads remote data. Free space there, or set "
         + "ASKAMERICA_HTTPFS_CACHE_DIR to a directory on a volume with room.",
         dir.getAbsolutePath(), usableBytes / 1e9, reserve / 1e9);
+  }
+
+  /**
+   * The data directory whose {@code .duckdb/govdata.duckdb} is the shared server's catalog:
+   * {@code configured} (the {@code ASKAMERICA_DATA_DIR} property McpServer sets) when it is a
+   * durable path, else the same default McpServer uses, {@code ~/.mcp_askamerica}. A path under
+   * the OS temp directory is not durable (a test's {@code @TempDir}), so it is replaced, and the
+   * replacement is logged.
+   */
+  static File sharedCatalogDataDir(String configured) {
+    if (configured != null && !configured.isEmpty()) {
+      if (!isUnderTempDir(configured)) {
+        return new File(configured);
+      }
+      log().println("[askamerica-mcp] ASKAMERICA_DATA_DIR " + configured + " is under the OS temp "
+          + "directory and will not outlive this process; the shared pgwire-govdata server uses "
+          + "the default data directory instead.");
+    }
+    return new File(System.getProperty("user.home", ""), ".mcp_askamerica");
   }
 
   /** True when {@code path} resolves under the JVM's own OS temp directory ({@code
