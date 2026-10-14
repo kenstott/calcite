@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.jdbc.CalciteConnection;
+import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.util.Sources;
 
@@ -22,11 +23,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -59,125 +60,65 @@ public class StatementCacheTest extends BaseFileTest {
         System.clearProperty("calcite.statement.cache.size");
     }
 
-    @Test public void testStatementCachePerformance() throws Exception {
+    @Test public void testStatementReusesCachedPlan() throws Exception {
         // Enable the cache
         System.setProperty("calcite.statement.cache.enabled", "true");
         System.setProperty("calcite.statement.cache.size", "100");
 
-        try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
-             CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
+        String query = "SELECT 1 + 1 AS sum_value";
+        try {
+            try (Connection connection = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
+                 CalciteConnection calciteConnection = connection.unwrap(CalciteConnection.class)) {
 
-            SchemaPlus rootSchema = calciteConnection.getRootSchema();
+                SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
-            // Create a simple test schema
-            Map<String, Object> operand = new LinkedHashMap<>();
-            operand.put("directory", tempDir.toString());
-            operand.put("baseDirectory", tempDir.toString());
-            operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
-            String engine = getExecutionEngine();
-            if (engine != null && !engine.isEmpty()) {
-                operand.put("executionEngine", engine.toLowerCase());
-            }
-
-            rootSchema.add("TEST",
-                FileSchemaFactory.INSTANCE.create(rootSchema, "TEST", operand));
-
-            String query = "SELECT 1 + 1 AS sum_value";
-
-            // First, measure PreparedStatement as baseline
-            long preparedTime;
-            try (PreparedStatement pstmt = connection.prepareStatement(query)) {
-                // Warm up
-                for (int i = 0; i < 10; i++) {
-                    try (ResultSet rs = pstmt.executeQuery()) {
-                        assertTrue(rs.next());
-                        assertEquals(2, rs.getInt(1));
-                    }
+                // Create a simple test schema
+                Map<String, Object> operand = new LinkedHashMap<>();
+                operand.put("directory", tempDir.toString());
+                operand.put("baseDirectory", tempDir.toString());
+                operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
+                String engine = getExecutionEngine();
+                if (engine != null && !engine.isEmpty()) {
+                    operand.put("executionEngine", engine.toLowerCase());
                 }
 
-                // Measure
-                long start = System.nanoTime();
-                for (int i = 0; i < 100; i++) {
-                    try (ResultSet rs = pstmt.executeQuery()) {
-                        assertTrue(rs.next());
-                        assertEquals(2, rs.getInt(1));
-                    }
-                }
-                preparedTime = (System.nanoTime() - start) / 100;
-            }
+                rootSchema.add("TEST",
+                    FileSchemaFactory.INSTANCE.create(rootSchema, "TEST", operand));
 
-            // Now measure regular Statement
-            long statementTime;
-            try (Statement stmt = connection.createStatement()) {
-                // Warm up - first execution will cache the plan
-                for (int i = 0; i < 10; i++) {
-                    try (ResultSet rs = stmt.executeQuery(query)) {
-                        assertTrue(rs.next());
-                        assertEquals(2, rs.getInt(1));
-                    }
-                }
-
-                // Measure - should use cached plan
-                long start = System.nanoTime();
-                for (int i = 0; i < 100; i++) {
-                    try (ResultSet rs = stmt.executeQuery(query)) {
-                        assertTrue(rs.next());
-                        assertEquals(2, rs.getInt(1));
-                    }
-                }
-                statementTime = (System.nanoTime() - start) / 100;
+                // A cached plan answers the repeated statement without parsing it again. A
+                // timing ratio against PreparedStatement measured the runner, not the cache.
+                assertEquals(1, parses(connection, query, 10),
+                    "with the cache on, a repeated statement is planned once");
             }
 
             // Now test with cache disabled
             System.setProperty("calcite.statement.cache.enabled", "false");
 
-            // Create new connection to pick up the setting
-            try (Connection conn2 = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
-                 Statement stmt2 = conn2.createStatement()) {
-
-                // Warm up
-                for (int i = 0; i < 10; i++) {
-                    try (ResultSet rs = stmt2.executeQuery(query)) {
-                        assertTrue(rs.next());
-                        assertEquals(2, rs.getInt(1));
-                    }
-                }
-
-                // Measure - should re-plan every time
-                long start = System.nanoTime();
-                for (int i = 0; i < 100; i++) {
-                    try (ResultSet rs = stmt2.executeQuery(query)) {
-                        assertTrue(rs.next());
-                        assertEquals(2, rs.getInt(1));
-                    }
-                }
-                long noCacheTime = (System.nanoTime() - start) / 100;
-
-                System.out.println("\n=== Statement Cache Performance ===");
-                System.out.println("PreparedStatement:      " + (preparedTime / 1000) + " μs");
-                System.out.println("Statement (cached):     " + (statementTime / 1000) + " μs");
-                System.out.println("Statement (no cache):   " + (noCacheTime / 1000) + " μs");
-                System.out.println("\nCached Statement vs PreparedStatement: " +
-                    String.format("%.1fx", (double) statementTime / preparedTime));
-                System.out.println("Cached vs Uncached Statement: " +
-                    String.format("%.1fx faster", (double) noCacheTime / statementTime));
-
-                // Cached statements should be faster than uncached
-                // Use more lenient assertion to account for system load variations
-                assertTrue(statementTime < noCacheTime * 0.8,
-                    "Cached statements should be at least 20% faster than uncached (was " +
-                    String.format("%.1fx", (double) noCacheTime / statementTime) + " faster)");
-
-                // Cached statements should be reasonably comparable to PreparedStatements
-                // Use more lenient factor to account for JIT compilation and system variations
-                // Increased to 60x to account for test environment variations and CI overhead
-                assertTrue(statementTime < preparedTime * 60,
-                    "Cached statements should be within 60x of PreparedStatement performance (was " +
-                    String.format("%.1fx", (double) statementTime / preparedTime) + ")");
+            try (Connection conn2 = DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER")) {
+                assertEquals(10, parses(conn2, query, 10),
+                    "with the cache off, every execution is planned");
             }
         } finally {
             System.clearProperty("calcite.statement.cache.enabled");
             System.clearProperty("calcite.statement.cache.size");
         }
+    }
+
+    /** Executes {@code query} {@code times} times on one Statement and returns how often it
+     * was parsed, which happens only when the statement is planned rather than taken from the
+     * plan cache. */
+    private static int parses(Connection connection, String query, int times) throws Exception {
+        AtomicInteger parses = new AtomicInteger();
+        try (Hook.Closeable ignored =
+                 Hook.PARSE_TREE.<Object[]>addThread(args -> parses.incrementAndGet());
+             Statement stmt = connection.createStatement()) {
+            for (int i = 0; i < times; i++) {
+                try (ResultSet rs = stmt.executeQuery(query)) {
+                    assertTrue(rs.next());
+                    assertEquals(2, rs.getInt(1));
+                }
+            }
+        }
+        return parses.get();
     }
 }
