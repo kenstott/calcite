@@ -1626,10 +1626,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // buildSelectSqlForFileList — the same fact would re-append with a new id on every run. Exclude
     // it from the dedup key for any table that carries it (currently financial_line_items).
     List<String> dedupIgnoreColumns = new ArrayList<>();
+    boolean keyedByAccession = false;
     for (IcebergCatalogManager.ColumnDef col : tableColumns) {
       if ("element_id".equals(col.getName())) {
         dedupIgnoreColumns.add("element_id");
-        break;
+      } else if ("accession_number".equals(col.getName())) {
+        keyedByAccession = true;
       }
     }
 
@@ -1710,7 +1712,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .fixedPartitionValues(fixedPartitionValues)
-        .forceAccessions(forceAccessions)
+        // Forced accessions delete rows by accession_number; tables with no such column (stock_prices)
+        // have nothing to force.
+        .forceAccessions(keyedByAccession ? forceAccessions : Collections.<String>emptySet())
         .description(tableName)
         .build();
   }
