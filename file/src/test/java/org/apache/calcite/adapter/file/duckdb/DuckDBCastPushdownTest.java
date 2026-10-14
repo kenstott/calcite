@@ -25,7 +25,6 @@ import java.sql.Statement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Test to verify CAST operations are properly pushed down to DuckDB.
@@ -38,11 +37,6 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
 
   @BeforeEach
   public void setUp() throws Exception {
-    // Skip test if not running with DuckDB engine
-    String engine = System.getenv("CALCITE_FILE_ENGINE_TYPE");
-    assumeTrue("DUCKDB".equalsIgnoreCase(engine),
-        "Skipping DuckDB-specific test for engine: " + engine);
-
     tempDir = new File(System.getProperty("java.io.tmpdir"), "duckdb-cast-test-" + System.currentTimeMillis());
     tempDir.mkdirs();
     tempDir.deleteOnExit();
@@ -69,9 +63,12 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
       writer.write("      \"type\": \"custom\",\n");
       writer.write("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
       writer.write("      \"operand\": {\n");
-      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath() + "\",\n");
-      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath() + "\",\n");
-      writer.write("        \"ephemeralCache\": true\n");
+      writer.write("        \"baseDirectory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
+      writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
+      writer.write("        \"ephemeralCache\": true,\n");
+      // The engine is the schema's operand: this test is about DuckDB's CAST pushdown, so it
+      // always runs on DuckDB rather than waiting for a CALCITE_FILE_ENGINE_TYPE no lane sets
+      writer.write("        \"executionEngine\": \"DUCKDB\"\n");
       writer.write("      }\n");
       writer.write("    }\n");
       writer.write("  ]\n");
@@ -80,9 +77,6 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
   }
 
   @Test public void testCastInWhereClause() throws Exception {
-    // Set to use DuckDB engine
-    System.setProperty("CALCITE_FILE_ENGINE_TYPE", "DUCKDB");
-
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
       try (Statement stmt = connection.createStatement()) {
         // This query uses CAST in WHERE clause
@@ -119,13 +113,11 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
         }
       }
     } finally {
-      System.clearProperty("CALCITE_FILE_ENGINE_TYPE");
       System.clearProperty("calcite.debug");
     }
   }
 
   @Test public void testCastWithArithmetic() throws Exception {
-    System.setProperty("CALCITE_FILE_ENGINE_TYPE", "DUCKDB");
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
       try (Statement stmt = connection.createStatement()) {
@@ -159,7 +151,6 @@ public class DuckDBCastPushdownTest extends BaseFileTest {
         }
       }
     } finally {
-      System.clearProperty("CALCITE_FILE_ENGINE_TYPE");
       System.clearProperty("calcite.debug");
     }
   }
