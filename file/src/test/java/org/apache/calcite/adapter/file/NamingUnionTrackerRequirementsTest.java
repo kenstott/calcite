@@ -186,11 +186,9 @@ public class NamingUnionTrackerRequirementsTest {
    * {@code PRODUCTS.JSON -> products}, i.e. an UPPERCASE file extension should be recognized. It is
    * not: {@code FileSchema.isJsonFile} lowercases the name, but the bulk-conversion discovery branch
    * gates on {@code source.trimOrNull(".json")} (FileSchema.java:1803), which is case-sensitive, so a
-   * {@code .JSON} (uppercase) extension is silently skipped and no table is registered. Staged
-   * @Disabled until the extension match is made case-insensitive (or the doc is corrected).
+   * {@code .JSON} (uppercase) extension was silently skipped and no table registered. Fixed: the
+   * extension match is case-insensitive (FileSchema.trimExtension, #536).
    */
-  @org.junit.jupiter.api.Disabled("C-28: uppercase .JSON extension not recognized (FileSchema:1803) "
-      + "— pending code fix or doc correction")
   @Test @Tag("FILE-061") void uppercaseJsonExtensionIsRecognized(@TempDir Path dir) throws Exception {
     write(dir.resolve("PRODUCTS.JSON"), "[{\"id\":1}]\n");
     assertEquals(set("products"), tables(dir),
