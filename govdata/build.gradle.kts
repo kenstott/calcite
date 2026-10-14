@@ -380,7 +380,6 @@ tasks.register("bundleGovdataSeed") {
 
         val catalog = file("$base/.duckdb/govdata.duckdb")
         val wal = file("$base/.duckdb/govdata.duckdb.wal")
-        val aperio = file("$base/.aperio")
 
         // Fail loudly on anything that would produce a broken or non-portable seed.
         if (!catalog.isFile) {
@@ -391,13 +390,13 @@ tasks.register("bundleGovdataSeed") {
             throw GradleException("Uncheckpointed WAL present ($wal) — CHECKPOINT/close the catalog "
                 + "before bundling so the seed is a clean single file.")
         }
-        val trackers = if (aperio.isDirectory) {
-            aperio.walk().filter { it.isFile && it.name == ".conversions.json" }.toList()
-        } else {
-            emptyList()
-        }
+        // A schema keeps its tracker under its own base directory: <base>/<schema>/.aperio/<schema>.
+        val trackers = (base.listFiles { d -> d.isDirectory && !d.name.startsWith(".") } ?: emptyArray())
+            .map { File(it, ".aperio/${it.name}/.conversions.json") }
+            .filter { it.isFile }
+            .sortedBy { it.path }
         if (trackers.isEmpty()) {
-            throw GradleException("No .aperio/*/.conversions.json trackers under $base — nothing to seed.")
+            throw GradleException("No <schema>/.aperio/<schema>/.conversions.json trackers under $base — nothing to seed.")
         }
 
         // Every declared schema must be represented. A partial seed installs and works, so a
@@ -474,6 +473,8 @@ tasks.register<JavaExec>("writeGovdataSeedSchema") {
     description = "Write the schema listing of the bundled govdata seed"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.apache.calcite.adapter.govdata.GovDataSeedSchema")
+    systemProperty("calcite.file.staging.directory",
+        layout.buildDirectory.dir("seed-schema-staging").get().asFile.absolutePath)
     args(
         file("src/main/resources/duckdb/seed/govdata-seed.zip").absolutePath,
         file("src/main/resources/duckdb/seed/govdata-seed.schema").absolutePath

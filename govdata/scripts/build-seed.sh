@@ -22,7 +22,7 @@
 # phases:
 #   1. GENERATE — connect every govdata schema against S3 (via model-verify.sh) into a CLEAN,
 #      dedicated staging operating directory, so GovDataDriver builds a pristine
-#      <staging>/.duckdb/govdata.duckdb (all schemas) + <staging>/.aperio/*/.conversions.json.
+#      <staging>/.duckdb/govdata.duckdb (all schemas) + <staging>/<schema>/.aperio/<schema>/.conversions.json.
 #   2. PACKAGE — ./gradlew :govdata:bundleGovdataSeed zips those into
 #      govdata/src/main/resources/duckdb/seed/{govdata-seed.zip,govdata-seed.version}.
 #

@@ -34,7 +34,8 @@ import java.util.zip.ZipInputStream;
  * <ul>
  *   <li>{@code .duckdb/govdata.duckdb} — the catalog (view DDL only, no data), built against
  *       {@code s3://} URIs so every view is machine-independent;</li>
- *   <li>{@code .aperio/<schema>/.conversions.json} — the per-schema conversion trackers.</li>
+ *   <li>{@code <schema>/.aperio/<schema>/.conversions.json} — the per-schema conversion trackers,
+ *       each under the schema's own base directory.</li>
  * </ul>
  * and, beside it, {@code /duckdb/seed/govdata-seed.schema}: the schema the seed declares (see
  * {@link GovDataSeedSchema}).
