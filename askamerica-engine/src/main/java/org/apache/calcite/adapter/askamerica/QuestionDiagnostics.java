@@ -1046,7 +1046,9 @@ final class QuestionDiagnostics {
                 + "that test exists to catch." : ""));
         w.set("predicates", predicates);
         w.put("recipe", "report-what-an-exclusion-changed-not-only-that-you-made-one");
-        ExclusionProbe.annotate(w, sql, originalRows, diffAliases, runner);
+        if (ExclusionProbe.annotate(w, sql, originalRows, diffAliases, runner)) {
+            return;
+        }
         warnings.add(w);
     }
 

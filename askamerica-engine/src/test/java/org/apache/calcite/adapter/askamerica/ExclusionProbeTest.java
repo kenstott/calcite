@@ -127,4 +127,25 @@ class ExclusionProbeTest {
     assertEquals(1, w.get("excluded_unit_count").asInt());
     assertEquals("Utah", w.get("excluded_units").get(0).asText());
   }
+
+  @Test void predicateThatRemovedNothingProducesNoWarning() {
+    final String sql = "SELECT state_name, v FROM t b WHERE b.min14 IS NOT NULL";
+    ObjectNode w = MAPPER.createObjectNode();
+    assertTrue(ExclusionProbe.annotate(w, sql, rows("Ohio", "Iowa"),
+        Collections.<String>emptySet(), s -> rows("Ohio", "Iowa")));
+    ObjectNode env = QuestionDiagnostics.forQuery(null, sql, rows("Ohio", "Iowa"), 500,
+        s -> rows("Ohio", "Iowa"));
+    for (com.fasterxml.jackson.databind.JsonNode x : env.get("diagnostics").get("warnings")) {
+      assertFalse("explicit_exclusion".equals(x.get("type").asText()));
+    }
+  }
+
+  @Test void aggregateWithUnchangedCountsProducesNoWarning() {
+    ArrayNode agg = MAPPER.createArrayNode();
+    agg.add(MAPPER.createObjectNode().put("river", "Ohio").put("locks", 20));
+    ObjectNode w = MAPPER.createObjectNode();
+    assertTrue(ExclusionProbe.annotate(w,
+        "SELECT river, COUNT(*) AS locks FROM t WHERE year_open IS NOT NULL GROUP BY river",
+        agg, Collections.<String>emptySet(), s -> agg));
+  }
 }
