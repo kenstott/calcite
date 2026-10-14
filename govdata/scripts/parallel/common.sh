@@ -675,6 +675,7 @@ generate_sec_reprocess_model() {
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/sec",
       $(tracker_operand_json),
+      $(_sec_bulk_operand_pairs | sed 's/$/,/')
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -1276,6 +1277,26 @@ get_timeout_config() {
   esac
 }
 
+# Echoes the "key":"value" operand pairs, one per line and without commas, for the SEC bulk-source
+# environment variables that are set: SEC_BULK_13F_DIR (bulk13fDir, SEC Form 13F data sets),
+# SEC_BULK_SUBMISSIONS_ZIP (bulkSubmissionsZip, the nightly submissions.zip) and SEC_FEED_DIR
+# (feedDir, documents unpacked from EDGAR's daily feed). Each is a local copy that lets the ETL
+# skip requests to sec.gov; see the matching fetch-*.sh scripts under govdata/scripts.
+_sec_bulk_operand_pairs() {
+  local pair var key val
+  for pair in "SEC_BULK_13F_DIR:bulk13fDir" "SEC_BULK_SUBMISSIONS_ZIP:bulkSubmissionsZip" \
+      "SEC_FEED_DIR:feedDir"; do
+    var="${pair%%:*}"
+    key="${pair##*:}"
+    val="${!var:-}"
+    [ -z "$val" ] && continue
+    case "$val" in
+      *\"*|*\\*) echo "$var must not contain quotes or backslashes: $val" >&2; return 1 ;;
+    esac
+    printf '"%s":"%s"\n' "$key" "$val"
+  done
+}
+
 # Build an inline Calcite model JSON string for a govdata schema.
 # All storage and credential config uses ${VAR} patterns resolved by Java's VariableResolver.
 # Integer fields (startYear, endYear) are resolved from env vars at call time.
@@ -1342,25 +1363,16 @@ build_inline_model() {
     fi
   fi
 
-  # SEC_BULK_13F_DIR -> bulk13fDir, sec only: a local copy of SEC's Form 13F data sets (made by
-  # scripts/fetch-13f-bulk.sh). The SEC ETL runs inside schema creation, before the schema YAML's
-  # own operands are merged in, so a YAML-only default never reaches it; like forceReprocessTables
-  # above, it has to arrive through the inline model.
-  if [ "$schema_name" = "sec" ] && [ -n "${SEC_BULK_13F_DIR:-}" ]; then
-    case "$SEC_BULK_13F_DIR" in
-      *\"*|*\\*) echo "SEC_BULK_13F_DIR must not contain quotes or backslashes: $SEC_BULK_13F_DIR" >&2; return 1 ;;
-    esac
-    user_tables_json="${user_tables_json},\"bulk13fDir\":\"${SEC_BULK_13F_DIR}\""
-  fi
-
-  # SEC_BULK_SUBMISSIONS_ZIP -> bulkSubmissionsZip, sec only: SEC's nightly submissions.zip
-  # (made by scripts/fetch-submissions-bulk.sh) answers the per-filer submissions JSON fetches.
-  # Passed through the inline model for the same reason as bulk13fDir above.
-  if [ "$schema_name" = "sec" ] && [ -n "${SEC_BULK_SUBMISSIONS_ZIP:-}" ]; then
-    case "$SEC_BULK_SUBMISSIONS_ZIP" in
-      *\"*|*\\*) echo "SEC_BULK_SUBMISSIONS_ZIP must not contain quotes or backslashes" >&2; return 1 ;;
-    esac
-    user_tables_json="${user_tables_json},\"bulkSubmissionsZip\":\"${SEC_BULK_SUBMISSIONS_ZIP}\""
+  # Local copies of SEC bulk sources (SEC_BULK_13F_DIR, SEC_BULK_SUBMISSIONS_ZIP, SEC_FEED_DIR), sec
+  # only. The SEC ETL runs inside schema creation, before the schema YAML's own operands are merged
+  # in, so a YAML-only default never reaches it; like forceReprocessTables above, they have to
+  # arrive through the inline model.
+  if [ "$schema_name" = "sec" ]; then
+    local _bulk_pairs
+    _bulk_pairs="$(_sec_bulk_operand_pairs | paste -sd, -)" || return 1
+    if [ -n "$_bulk_pairs" ]; then
+      user_tables_json="${user_tables_json},${_bulk_pairs}"
+    fi
   fi
 
   printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s%s}}]}' \

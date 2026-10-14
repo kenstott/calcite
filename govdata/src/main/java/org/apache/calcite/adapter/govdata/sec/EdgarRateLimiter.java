@@ -41,9 +41,30 @@ public final class EdgarRateLimiter {
   private EdgarRateLimiter() {
   }
 
+  private static final java.util.concurrent.atomic.AtomicLong ACQUIRED =
+      new java.util.concurrent.atomic.AtomicLong();
+  private static final java.util.concurrent.atomic.AtomicBoolean HOOKED =
+      new java.util.concurrent.atomic.AtomicBoolean();
+
   /** Blocks until the next slot in the host-wide sec.gov request budget. */
   public static void acquire() {
+    if (HOOKED.compareAndSet(false, true)) {
+      // One line per JVM saying how many sec.gov requests it made: the figure every
+      // request-saving change (bulk data sets, the daily feed) is measured against.
+      Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+        @Override public void run() {
+          org.slf4j.LoggerFactory.getLogger(EdgarRateLimiter.class).info(
+              "sec.gov requests paced by EdgarRateLimiter in this JVM: {}", ACQUIRED.get());
+        }
+      }, "edgar-request-count"));
+    }
+    ACQUIRED.incrementAndGet();
     long interval = ModelOperand.getLong("sec.edgarRateLimitMs", DEFAULT_INTERVAL_MS);
     CrossProcessRateLimiter.acquire(SEC_KEY, interval > 0 ? interval : DEFAULT_INTERVAL_MS);
+  }
+
+  /** Requests paced so far in this JVM. */
+  public static long acquired() {
+    return ACQUIRED.get();
   }
 }

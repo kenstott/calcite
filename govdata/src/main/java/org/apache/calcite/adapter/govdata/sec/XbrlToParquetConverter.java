@@ -4375,6 +4375,11 @@ public class XbrlToParquetConverter implements FileConverter {
    * Download file from URL with retry and exponential backoff for transient errors.
    */
   private String downloadFile(String urlString) {
+    // A document unpacked from the daily feed is read locally; anything else is fetched.
+    String held = SecFeedStore.textUnchecked(urlString);
+    if (held != null) {
+      return held;
+    }
     // Three attempts one and two seconds apart give a download three seconds to outlast a bad
     // patch. EDGAR's bad patches run for hours: one batch spent its afternoon against a 503ing
     // host and exhausted the budget 25 times, which cost six filings. Five attempts backing off to

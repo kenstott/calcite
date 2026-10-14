@@ -198,6 +198,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // SEC's nightly submissions.zip answers the per-filer submissions JSON fetches. Read from the
     // factory's own operand: it arrives through the inline model, which is all the ETL sees.
     installSubmissionsBulk(operand);
+    installFeedStore(operand);
 
     // Initialize storage provider from operand if available
     StorageProvider sp = (StorageProvider) operand.get("_storageProvider");
@@ -4519,6 +4520,22 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "S-3", "S3",             // Registration statements
         "S-4", "S4",             // Business combination registration
         "S-8", "S8");              // Employee benefit plan registration
+  }
+
+  private boolean feedStoreInstalled;
+
+  /** The unpacked EDGAR daily feed named by the {@code feedDir} operand, if one is set. */
+  private synchronized void installFeedStore(Map<String, Object> operand) {
+    if (feedStoreInstalled) {
+      return;
+    }
+    Object v = operand != null ? operand.get("feedDir") : null;
+    String dir = v == null ? null : String.valueOf(v);
+    if (dir != null && dir.contains("${")) {
+      dir = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(dir);
+    }
+    SecFeedStore.install(dir);
+    feedStoreInstalled = true;
   }
 
   private boolean submissionsBulkInstalled;

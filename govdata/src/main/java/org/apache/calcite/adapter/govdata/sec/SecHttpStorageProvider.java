@@ -101,6 +101,11 @@ public class SecHttpStorageProvider extends HttpStorageProvider {
   }
 
   @Override public InputStream openInputStream(String path) throws IOException {
+    // A document unpacked from the daily feed is read locally; anything else is fetched.
+    InputStream local = SecFeedStore.open(path);
+    if (local != null) {
+      return local;
+    }
     int maxRetries = 3;
     IOException lastException = null;
 
