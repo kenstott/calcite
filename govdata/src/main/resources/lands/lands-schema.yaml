@@ -1587,7 +1587,19 @@ partitionedTables:
       - name: state_abbr
         type: string
         nullable: true
-        comment: 2-character state abbreviation (e.g., 'CA', 'WY')
+        comment: >
+          2-character USPS code of the first state the unit lists (e.g., 'CA', 'WY'); for a
+          multi-state unit this is the primary state only, so it joins geo.state_ref to
+          exactly one state. Territory units carry GU, AS, or MP, which geo.state_ref does
+          not contain. See state_abbrs for every state the unit spans.
+      - name: state_abbrs
+        type: string
+        nullable: true
+        comment: >
+          Comma-separated 2-character USPS codes of every state the unit spans, in source
+          order (e.g., 'NC,VA' for Blue Ridge Parkway). A unit the source lists as a range
+          (Appalachian Trail, 'ME TO GA') carries only its two end states. Match with
+          state_abbrs LIKE '%VA%' or split on ','.
       - name: region
         type: string
         nullable: true
