@@ -131,6 +131,8 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
    * DataWeb is known to answer rather than paying {@link #QUERY_DEADLINE_MS} to rediscover each
    * split. Beside {@link #API_LOCK_FILE}, which is host-wide state for the same reason.
    */
+  // Host-wide coordination state, machine-wide by ruling (REQ-1992 amendment): the JVM temp
+  // directory is the one location every worker on the host shares
   private static final File SLICE_PLAN_FILE =
       new File(System.getProperty("java.io.tmpdir"), "usitc-slice-plan.json");
   /**
@@ -146,6 +148,7 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
    * DataWeb request runs at a time across all workers on the host, which keeps bursts under the rate
    * limit that was producing 429s and poll timeouts.
    */
+  // Host-wide coordination (a cross-process lock), machine-wide by ruling (REQ-1992 amendment)
   private static final File API_LOCK_FILE =
       new File(System.getProperty("java.io.tmpdir"), "usitc-dataweb-api.lock");
   /** In-JVM guard so two threads in one worker can't overlap-lock the same channel. */

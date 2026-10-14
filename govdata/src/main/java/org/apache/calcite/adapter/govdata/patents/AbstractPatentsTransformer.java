@@ -592,7 +592,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
 
   private void extractZipEntryToFileOnce(String url, Map<String, String> requestHeaders,
       String destPath, String... extensions) throws IOException {
-    File tempZip = File.createTempFile("patents-zip-", ".zip");
+    File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("patents-zip-", ".zip");
     try {
       // Phase 1: download the ZIP completely to a local temp file.
       //

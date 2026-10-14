@@ -1145,7 +1145,7 @@ public class HttpSourceDeepCoverageTest2 {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, null);
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, tempDir.toString());
 
     Method method = HttpSource.class.getDeclaredMethod("hasValidRawCache", String.class);
     method.setAccessible(true);
@@ -1178,7 +1178,7 @@ public class HttpSourceDeepCoverageTest2 {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, null);
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, tempDir.toString());
 
     Method method = HttpSource.class.getDeclaredMethod("readRawCache", String.class);
     method.setAccessible(true);
@@ -1213,7 +1213,7 @@ public class HttpSourceDeepCoverageTest2 {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, null);
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, tempDir.toString());
 
     Method method =
         HttpSource.class.getDeclaredMethod("writeRawCache", String.class, String.class);
@@ -1368,7 +1368,7 @@ public class HttpSourceDeepCoverageTest2 {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, null);
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, tempDir.toString());
 
     Method method =
         HttpSource.class.getDeclaredMethod("cacheResponseString", String.class, String.class);
@@ -1387,7 +1387,7 @@ public class HttpSourceDeepCoverageTest2 {
     HttpSourceConfig config = HttpSourceConfig.builder()
         .url("https://api.example.com/data")
         .build();
-    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, null);
+    HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(), null, tempDir.toString());
 
     Method method = HttpSource.class.getDeclaredMethod("readFromCache", String.class);
     method.setAccessible(true);

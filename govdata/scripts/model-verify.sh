@@ -209,6 +209,11 @@ case " $JVM_OPTS " in
     *" -Djava.io.tmpdir="*) : ;;                                   # caller already set it — leave it
     *) JVM_OPTS="$JVM_OPTS -Djava.io.tmpdir=$VERIFY_SPILL_DIR" ;;
 esac
+# The adapter's own temporary files go where this property says (REQ-1992); same spill directory
+case " $JVM_OPTS " in
+    *" -Dcalcite.file.staging.directory="*) : ;;
+    *) JVM_OPTS="$JVM_OPTS -Dcalcite.file.staging.directory=$VERIFY_SPILL_DIR" ;;
+esac
 LIBS="$GOVDATA_HOME/build/libs"
 if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then
     if [[ ! -f "$MODEL_VERIFY_JAR" ]]; then

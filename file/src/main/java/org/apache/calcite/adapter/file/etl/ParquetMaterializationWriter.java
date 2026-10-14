@@ -56,6 +56,8 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
 
   private final StorageProvider storageProvider;
   private final String baseDirectory;
+  /** A local directory the schema owns: batch files are staged here (REQ-1992). */
+  private final File workDirectory;
 
   private MaterializeConfig config;
   private String outputPath;
@@ -69,9 +71,11 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
    * @param storageProvider Storage provider for file operations
    * @param baseDirectory Base directory for output files
    */
-  public ParquetMaterializationWriter(StorageProvider storageProvider, String baseDirectory) {
+  public ParquetMaterializationWriter(StorageProvider storageProvider, String baseDirectory,
+      File workDirectory) {
     this.storageProvider = storageProvider;
     this.baseDirectory = baseDirectory;
+    this.workDirectory = workDirectory;
     this.totalRowsWritten = 0;
     this.totalFilesWritten = 0;
     this.initialized = false;
@@ -152,7 +156,8 @@ public class ParquetMaterializationWriter implements MaterializationWriter {
   private File createTempJsonFile(List<Map<String, Object>> rows) throws IOException {
     String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
         .format(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC));
-    File tempFile = File.createTempFile("etl_batch_" + timestamp + "_", ".json");
+    File tempFile = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "etl_batch_" + timestamp + "_", ".json");
 
     try (BufferedWriter writer = new BufferedWriter(
         new java.io.OutputStreamWriter(new java.io.FileOutputStream(tempFile),

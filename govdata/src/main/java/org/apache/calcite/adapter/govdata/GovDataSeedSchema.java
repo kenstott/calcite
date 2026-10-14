@@ -119,7 +119,7 @@ public final class GovDataSeedSchema {
     }
     File zip = new File(args[0]);
     File out = new File(args[1]);
-    Path work = Files.createTempDirectory("govdata-seed-schema");
+    Path work = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("govdata-seed-schema");
     File catalog = new File(work.toFile(), "govdata.duckdb");
     try {
       boolean found = false;

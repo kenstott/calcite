@@ -227,15 +227,13 @@ public class StorageProviderDefaultMethodsCoverageTest {
   class GetStagingDirectoryTests {
 
     @Test
-    @DisplayName("returns staging path based on system temp dir and purpose")
+    @DisplayName("returns staging path under the process staging directory and purpose")
     void testGetStagingDirectoryReturnsStagingPath() throws IOException {
       LocalTempStorageProvider provider = new LocalTempStorageProvider(tempDir);
-      // Override createDirectories to capture the call without actual system temp dir access
-      // Since getStagingDirectory uses System.getProperty("java.io.tmpdir"),
-      // we test that it returns the expected format
-      String tempDirProp = System.getProperty("java.io.tmpdir");
+      // getStagingDirectory is rooted at the staging directory (REQ-1992), never java.io.tmpdir
+      String stagingProp = System.getProperty("calcite.file.staging.directory");
       String result = provider.getStagingDirectory("iceberg");
-      String expectedPath = LocalPaths.join(tempDirProp, ".staging/iceberg");
+      String expectedPath = LocalPaths.join(stagingProp, ".staging/iceberg");
       assertEquals(expectedPath, result);
     }
 

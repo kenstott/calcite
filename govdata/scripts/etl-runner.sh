@@ -47,6 +47,7 @@ export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
 
 # Additional JVM flags for better GC and crash diagnostics
 JVM_FLAGS="-Djava.io.tmpdir=$GOVDATA_TMPDIR \
+           -Dcalcite.file.staging.directory=$GOVDATA_TMPDIR \
            -XX:+HeapDumpOnOutOfMemoryError \
            -XX:HeapDumpPath=$GOVDATA_HOME/runs/heapdump.hprof \
            -XX:ErrorFile=$GOVDATA_HOME/runs/hs_err_pid%p.log"

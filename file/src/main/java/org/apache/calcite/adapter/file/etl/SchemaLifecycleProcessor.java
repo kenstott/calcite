@@ -379,7 +379,6 @@ public class SchemaLifecycleProcessor {
         context.getIncrementalTracker(),
         dataProvider,
         dataWriter,
-        context.getSchemaContext().getOperatingDirectory(),
         context.getSchemaContext().isIgnoreReleaseWindow());
 
     return pipeline.execute();

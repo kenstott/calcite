@@ -32,13 +32,13 @@ import java.io.File;
  * <p>Handing an {@code s3://…} string to {@link File} or {@code Paths.get} does not
  * fail — it silently produces a relative path, creating a literal {@code s3:/…}
  * directory tree under the process working directory. This helper maps any
- * scheme-bearing URI to a deterministic location under the JVM temp directory
- * ({@code java.io.tmpdir}), preserving the path tail so caches remain stable across
+ * scheme-bearing URI to a deterministic location under the run's staging directory
+ * ({@code calcite.file.staging.directory}; REQ-1992), preserving the path tail so caches remain stable across
  * runs. Paths that are already local are returned unchanged.
  */
 public final class LocalCacheDirs {
 
-  /** Subdirectory under {@code java.io.tmpdir} that roots all derived local caches. */
+  /** Subdirectory of the run's staging directory (REQ-1992) that roots all derived local caches. */
   private static final String ROOT = "govdata-cache";
 
   private LocalCacheDirs() {
@@ -53,7 +53,7 @@ public final class LocalCacheDirs {
    * @return an absolute local path safe for {@link File}/{@code Paths.get}; never null
    */
   public static String toLocal(String cacheDir) {
-    File root = new File(System.getProperty("java.io.tmpdir"), ROOT);
+    File root = new File(org.apache.calcite.adapter.file.StagingDirectory.get(), ROOT);
     if (cacheDir == null || cacheDir.isEmpty()) {
       return root.getAbsolutePath();
     }

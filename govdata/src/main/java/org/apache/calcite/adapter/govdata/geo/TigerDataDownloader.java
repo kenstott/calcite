@@ -1294,7 +1294,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
    */
   private File downloadCacheToTemp(String cachePath, String tempPrefix) throws IOException {
     // Download all files to temp directory via storage provider
-    File tempDir = Files.createTempDirectory(tempPrefix + "-").toFile();
+    File tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory(tempPrefix + "-").toFile();
 
     // List all files in the cache path recursively and download them
     java.util.List<FileEntry> files = storageProvider.listFiles(cachePath, true);
@@ -1353,7 +1353,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   public File downloadCensusTractsForYear(int year) throws IOException {
     // Download census tracts for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    File tempDir = Files.createTempDirectory("tiger-census_tracts-" + year + "-").toFile();
+    File tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger-census_tracts-" + year + "-").toFile();
     boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {
@@ -1501,7 +1501,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   public File downloadBlockGroupsForYear(int year) throws IOException {
     // Download block groups for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    File tempDir = Files.createTempDirectory("tiger-block_groups-" + year + "-").toFile();
+    File tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger-block_groups-" + year + "-").toFile();
     boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {
@@ -1769,7 +1769,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
   public File downloadSchoolDistrictsForYear(int year, String outputPath) throws IOException {
     // Download school districts for selected states only
     String[] stateFips = {"06", "48", "36", "12"}; // CA, TX, NY, FL
-    File tempDir = Files.createTempDirectory("tiger-school_districts-" + year + "-").toFile();
+    File tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger-school_districts-" + year + "-").toFile();
     boolean hasAnyDownloads = false;
 
     for (String fips : stateFips) {

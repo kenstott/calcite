@@ -1018,8 +1018,9 @@ public class ChunkOrganizer {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=2");
       stmt.execute("SET memory_limit='2GB'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
-      stmt.execute("SET temp_directory='" + tempDir + "'");
+      // DuckDB spill in the run's staging directory (REQ-1992), never the JVM temp directory
+      String tempDir = new java.io.File(org.apache.calcite.adapter.file.StagingDirectory.get(), "chunk-organizer-duckdb").getPath();
+      stmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
       try {
         stmt.execute("INSTALL parquet");
         stmt.execute("LOAD parquet");

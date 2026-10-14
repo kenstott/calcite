@@ -1040,8 +1040,8 @@ public class S3StorageProvider implements StorageProvider {
    */
   @Override public String getStagingDirectory(String purpose) throws IOException {
     if (baseS3Path == null || baseS3Path.isEmpty()) {
-      // Fall back to default (system temp directory) if no S3 path configured
-      String tempDir = System.getProperty("java.io.tmpdir");
+      // No S3 path configured: stage in the process's staging directory (REQ-1992)
+      String tempDir = org.apache.calcite.adapter.file.StagingDirectory.get().getPath();
       String stagingPath = tempDir + "/.staging/" + purpose;
       createDirectories(stagingPath);
       return stagingPath;

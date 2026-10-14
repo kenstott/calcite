@@ -155,8 +155,8 @@ public class FilingMetadataPatchJob {
   /** Reads, applies DQ fixes, and rewrites a single metadata parquet file. */
   public PatchResult patchFile(String s3Path) throws IOException {
     filesScanned++;
-    File tempIn = File.createTempFile("patch_in_", ".parquet");
-    File tempOut = File.createTempFile("patch_out_", ".parquet");
+    File tempIn = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("patch_in_", ".parquet");
+    File tempOut = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("patch_out_", ".parquet");
     try {
       // Download
       try (InputStream in = storage.openInputStream(s3Path);

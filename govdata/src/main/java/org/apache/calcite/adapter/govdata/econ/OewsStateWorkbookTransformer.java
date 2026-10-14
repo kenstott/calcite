@@ -148,7 +148,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
     int year = Integer.parseInt(yearText);
     String url = context.getUrl();
 
-    Path zip = Files.createTempFile("oews-state-", ".zip");
+    Path zip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("oews-state-", ".zip").toPath();
     Path workbook = null;
     try {
       download(url, context.getHeaders(), zip);
@@ -156,7 +156,7 @@ public class OewsStateWorkbookTransformer implements StreamingResponseTransforme
         ZipEntry entry = findStateEntry(zf, url);
         String name = entry.getName().toLowerCase(Locale.ROOT);
         String ext = name.endsWith(".xlsx") ? ".xlsx" : ".xls";
-        workbook = Files.createTempFile("oews-state-", ext);
+        workbook = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("oews-state-", ext).toPath();
         try (InputStream in = zf.getInputStream(entry)) {
           Files.copy(in, workbook, StandardCopyOption.REPLACE_EXISTING);
         }

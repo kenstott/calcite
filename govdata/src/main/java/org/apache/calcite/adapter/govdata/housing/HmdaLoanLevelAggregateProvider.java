@@ -119,7 +119,7 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     String url = "https://ffiec.cfpb.gov/v2/data-browser-api/view/nationwide/csv?years=" + year
         + "&actions_taken=1,2,3,4,5,6,7,8";
 
-    File tempCsv = File.createTempFile("hmda-" + year + "-", ".csv");
+    File tempCsv = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hmda-" + year + "-", ".csv");
     try {
       LOGGER.info("HMDA loan-level aggregate {}: fetching {} (through raw cache)", year, url);
       copyThroughCache(rawCache, url, tempCsv);

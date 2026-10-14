@@ -109,6 +109,12 @@ public class GovDataDriver extends Driver {
         System.setProperty("iceberg.metadata.cache.directory",
             resolveOperatingDirBase(home) + "/.iceberg_metadata_cache");
       }
+      // Nor do temporary files no schema owns: this driver names the staging directory under
+      // its operating directory (REQ-1992)
+      if (System.getProperty("calcite.file.staging.directory") == null) {
+        System.setProperty("calcite.file.staging.directory",
+            resolveOperatingDirBase(home) + "/.staging");
+      }
     }
 
     // Apply GovData-specific defaults
@@ -284,8 +290,12 @@ public class GovDataDriver extends Driver {
     String base = System.getProperty("govdata.operating.dir.base");
     if (base == null || base.isEmpty()) {
       String home = System.getProperty("user.home");
-      base = resolveOperatingDirBase((home != null && !home.isEmpty())
-          ? home : System.getProperty("java.io.tmpdir"));
+      if (home == null || home.isEmpty()) {
+        // REQ-1992: no JVM temp directory fallback for the operating directory
+        throw new IllegalStateException("govdata.operating.dir.base is not set and there is no "
+            + "user.home to derive it from");
+      }
+      base = resolveOperatingDirBase(home);
     }
     return new File(base, ".duckdb/govdata.duckdb");
   }
@@ -495,7 +505,7 @@ public class GovDataDriver extends Driver {
     }
     File tempFile = modelDir != null
         ? File.createTempFile(prefix, ".json", modelDir)
-        : File.createTempFile(prefix, ".json");
+        : org.apache.calcite.adapter.file.StagingDirectory.newTempFile(prefix, ".json");
     tempFile.deleteOnExit();
     try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
         new java.io.FileOutputStream(tempFile), java.nio.charset.StandardCharsets.UTF_8)) {

@@ -57,8 +57,11 @@ public class EntityBridgeOrganizer {
       writeDir = parquetDir;
     }
 
+    // Where the writers' temporary files go: the run's staging directory (REQ-1992)
+    java.io.File workDirectory = org.apache.calcite.adapter.file.StagingDirectory.get();
+
     try (Connection pgConn = openPgConnection(jdbcUrl, user, password)) {
-      sweep(pgConn, parquetDir, writeDir);
+      sweep(pgConn, parquetDir, writeDir, workDirectory);
     }
   }
 
@@ -66,15 +69,17 @@ public class EntityBridgeOrganizer {
    * Builds entity bridges and canonical entities by delegating to EntityBridgeListener.
    * The listener's logic runs standalone here rather than as a schema lifecycle hook.
    */
-  public static void sweep(Connection pgConn, String parquetDir) throws Exception {
-    sweep(pgConn, parquetDir, parquetDir);
+  public static void sweep(Connection pgConn, String parquetDir, java.io.File workDirectory)
+      throws Exception {
+    sweep(pgConn, parquetDir, parquetDir, workDirectory);
   }
 
-  /** As {@link #sweep(Connection, String)}, reading and writing different directories. */
-  public static void sweep(Connection pgConn, String readDir, String writeDir) throws Exception {
+  /** As {@link #sweep(Connection, String, java.io.File)}, reading and writing different directories. */
+  public static void sweep(Connection pgConn, String readDir, String writeDir,
+      java.io.File workDirectory) throws Exception {
     LOGGER.info("[entity-bridge] sweeping entity resolution across all schemas");
     EntityBridgeListener listener = new EntityBridgeListener();
-    listener.buildBridges(pgConn, readDir, writeDir);
+    listener.buildBridges(pgConn, readDir, writeDir, workDirectory);
     LOGGER.info("[entity-bridge] entity resolution complete");
   }
 

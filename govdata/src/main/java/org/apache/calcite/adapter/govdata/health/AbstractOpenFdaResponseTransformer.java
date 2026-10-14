@@ -97,7 +97,7 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     // Stream the (often large) partition ZIP to a temp file rather than buffering it in a byte[],
     // then stream the single JSON entry's results[] through the parser. Only the flattened output
     // is held in memory (bounded by the responseTransformer's String return contract).
-    File tempZip = File.createTempFile("openfda-", ".zip");
+    File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("openfda-", ".zip");
     try {
       downloadToFile(url, tempZip);
       ArrayNode out = MAPPER.createArrayNode();
