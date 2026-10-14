@@ -208,13 +208,6 @@ public class EtlPipelineCoverageTest {
     assertNotNull(pipeline);
   }
 
-  @Test void testConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = buildConfig("test", null);
-    EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null, "/ops");
-    assertNotNull(pipeline);
-  }
-
   @Test void testStaticCreateMethod() {
     EtlPipelineConfig config = buildConfig("test", null);
     EtlPipeline pipeline = EtlPipeline.create(config, mockStorage, "/base");
@@ -2226,7 +2219,7 @@ public class EtlPipelineCoverageTest {
     EtlPipelineConfig config = buildConfig("source_default", null);
     // Pass null for sourceStorageProvider => should default to main storageProvider
     EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null, null);
+        new EtlPipeline(config, mockStorage, null, "/base", null, mockTracker, null, null);
     assertNotNull(pipeline);
   }
 

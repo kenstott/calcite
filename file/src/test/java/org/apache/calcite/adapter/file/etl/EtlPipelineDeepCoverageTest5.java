@@ -1177,7 +1177,7 @@ public class EtlPipelineDeepCoverageTest5 {
             .output(MaterializeOutputConfig.builder().build()).build())
         .build();
     EtlPipeline pipeline =
-        new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op/dir");
+        new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
     Method m =
         EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);

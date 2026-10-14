@@ -97,7 +97,6 @@ public class EtlPipeline {
   private final String baseDirectory;
   private final ProgressListener progressListener;
   private final IncrementalTracker incrementalTracker;
-  private final String operatingDirectory;
   private final DataProvider dataProvider;
   private final DataWriter dataWriter;
   private final boolean ignoreReleaseWindow;
@@ -236,7 +235,7 @@ public class EtlPipeline {
       String baseDirectory, ProgressListener progressListener,
       IncrementalTracker incrementalTracker, DataProvider dataProvider, DataWriter dataWriter) {
     this(config, storageProvider, null, baseDirectory, progressListener, incrementalTracker,
-        dataProvider, dataWriter, null);
+        dataProvider, dataWriter);
   }
 
   /**
@@ -256,28 +255,7 @@ public class EtlPipeline {
       ProgressListener progressListener, IncrementalTracker incrementalTracker,
       DataProvider dataProvider, DataWriter dataWriter) {
     this(config, storageProvider, sourceStorageProvider, baseDirectory, progressListener,
-        incrementalTracker, dataProvider, dataWriter, null);
-  }
-
-  /**
-   * Creates a new ETL pipeline with separate source storage provider and operating directory.
-   *
-   * @param config Pipeline configuration
-   * @param storageProvider Storage provider for materialized output (parquet)
-   * @param sourceStorageProvider Storage provider for raw cache; if null, uses storageProvider
-   * @param baseDirectory Base directory for output (parquet/materialized data)
-   * @param progressListener Listener for progress updates
-   * @param incrementalTracker Tracker for incremental processing
-   * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
-   * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
-   * @param operatingDirectory Operating directory for local caching; may be null
-   */
-  public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
-      StorageProvider sourceStorageProvider, String baseDirectory,
-      ProgressListener progressListener, IncrementalTracker incrementalTracker,
-      DataProvider dataProvider, DataWriter dataWriter, String operatingDirectory) {
-    this(config, storageProvider, sourceStorageProvider, baseDirectory, progressListener,
-        incrementalTracker, dataProvider, dataWriter, operatingDirectory, false);
+        incrementalTracker, dataProvider, dataWriter, false);
   }
 
   /**
@@ -292,7 +270,6 @@ public class EtlPipeline {
    * @param incrementalTracker Tracker for incremental processing
    * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
    * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
-   * @param operatingDirectory Operating directory for local caching; may be null
    * @param ignoreReleaseWindow When true, bypasses the table's {@code releaseWindow:} gate (see
    *     {@link EtlPipelineConfig#getReleaseWindow()}) for this run — the effect of the
    *     {@code ignoreReleaseWindow} schema operand, threaded through
@@ -301,8 +278,7 @@ public class EtlPipeline {
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       StorageProvider sourceStorageProvider, String baseDirectory,
       ProgressListener progressListener, IncrementalTracker incrementalTracker,
-      DataProvider dataProvider, DataWriter dataWriter, String operatingDirectory,
-      boolean ignoreReleaseWindow) {
+      DataProvider dataProvider, DataWriter dataWriter, boolean ignoreReleaseWindow) {
     this.config = config;
     this.storageProvider = storageProvider;
     // Default to main storageProvider if sourceStorageProvider not specified
@@ -310,7 +286,6 @@ public class EtlPipeline {
     this.baseDirectory = baseDirectory;
     this.progressListener = progressListener;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
-    this.operatingDirectory = operatingDirectory;
     this.dataProvider = dataProvider;
     this.dataWriter = dataWriter;
     this.ignoreReleaseWindow = ignoreReleaseWindow;

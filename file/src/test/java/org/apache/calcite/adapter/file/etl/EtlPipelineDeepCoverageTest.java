@@ -118,17 +118,6 @@ public class EtlPipelineDeepCoverageTest {
     assertNotNull(pipeline);
   }
 
-  @Test void testConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
-    StorageProvider sourceStorage = mock(StorageProvider.class);
-    DataProvider dataProvider = mock(DataProvider.class);
-    DataWriter dataWriter = mock(DataWriter.class);
-
-    EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage, sourceStorage, "/output", null, mockTracker, dataProvider, dataWriter, tempDir.toString());
-    assertNotNull(pipeline);
-  }
-
   // --- Execute with cached completion (fast-path skip) ---
 
   @Test void testExecuteCachedCompletionWithMatchingConfigHash() throws IOException {
