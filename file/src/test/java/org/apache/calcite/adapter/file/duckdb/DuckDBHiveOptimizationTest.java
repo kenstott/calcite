@@ -54,13 +54,8 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
 
   @BeforeEach
   public void setUp() throws Exception {
-    // Skip test if not running with parquet+duckdb engine
-    String engine = System.getenv("CALCITE_FILE_ENGINE_TYPE");
-    assumeTrue("parquet+duckdb".equalsIgnoreCase(engine),
-        "Skipping DuckDB+Hive optimization test for engine: " + engine);
-
-    tempDir = new File(System.getProperty("java.io.tmpdir"), "duckdb-hive-test-" + System.currentTimeMillis());
-    tempDir.mkdirs();
+    // A directory of this test's own: named by the millisecond, two tests of the class collided
+    tempDir = java.nio.file.Files.createTempDirectory("duckdb-hive-test-").toFile();
     tempDir.deleteOnExit();
 
     // Create Hive-partitioned directory structure: year=2023/month=01/
@@ -92,15 +87,15 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
       writer.write("        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
       writer.write("        \"ephemeralCache\": true,\n");
       writer.write("        \"refreshInterval\": \"5s\",\n");
-      writer.write("        \"engine\": {\n");
-      writer.write("          \"type\": \"parquet+duckdb\"\n");
-      writer.write("        },\n");
-      writer.write("        \"tables\": [\n");
+      // The engine is the schema's operand ("parquet+duckdb" was never an engine type, and the
+      // CALCITE_FILE_ENGINE_TYPE property these tests set is not what the factory reads)
+      writer.write("        \"executionEngine\": \"DUCKDB\",\n");
+      // A Hive-partitioned table is declared with the partitionedTables operand (the old
+      // "tables" entry of type partitioned_parquet is not read), as in PartitionIntegrationTest
+      writer.write("        \"partitionedTables\": [\n");
       writer.write("          {\n");
       writer.write("            \"name\": \"sales\",\n");
-      writer.write("            \"type\": \"partitioned_parquet\",\n");
-      writer.write("            \"directory\": \"" + dataDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n");
-      writer.write("            \"pattern\": \"**/*.parquet\",\n");
+      writer.write("            \"pattern\": \"sales/**/*.parquet\",\n");
       writer.write("            \"partitions\": {\n");
       writer.write("              \"style\": \"hive\"\n");
       writer.write("            }\n");
@@ -160,7 +155,9 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
   }
 
   @Test public void testInitialScanSkipped() throws Exception {
-    System.setProperty("CALCITE_FILE_ENGINE_TYPE", "parquet+duckdb");
+    // Load the DuckDB driver first: the bound below measures the schema's start, which skips the
+    // initial file scan, not the JVM's one-time native-library load (seen at ~2.5s on its own)
+    DriverManager.getConnection("jdbc:duckdb:").close();
 
     long startTime = System.currentTimeMillis();
 
@@ -195,12 +192,14 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
         }
       }
     } finally {
-      System.clearProperty("CALCITE_FILE_ENGINE_TYPE");
     }
   }
 
   @Test public void testBaselineCreatedAndPersisted() throws Exception {
-    System.setProperty("CALCITE_FILE_ENGINE_TYPE", "parquet+duckdb");
+    // Gated as before until the baseline-persistence defect is fixed (next PR)
+    String engine = System.getenv("CALCITE_FILE_ENGINE_TYPE");
+    assumeTrue("parquet+duckdb".equalsIgnoreCase(engine),
+        "Skipping DuckDB+Hive optimization test for engine: " + engine);
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
       try (Statement stmt = connection.createStatement()) {
@@ -213,8 +212,12 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
         // Wait a moment for baseline to be persisted
         Thread.sleep(500);
 
-        // Check that conversion metadata file was created
-        File cacheDir = new File(tempDir, ".aperio/TEST");
+        // Check that conversion metadata file was created. ephemeralCache makes a fresh
+        // ephemeral-<id> directory under the base directory, and the schema's cache is in it.
+        File[] ephemeral = tempDir.listFiles((dir, name) -> name.startsWith("ephemeral-"));
+        assertTrue(ephemeral != null && ephemeral.length == 1,
+            "One ephemeral cache directory under the base directory");
+        File cacheDir = new File(ephemeral[0], ".aperio/TEST");
         assertTrue(cacheDir.exists(), "Cache directory should exist");
 
         File metadataFile = new File(cacheDir, ".conversions.json");
@@ -226,12 +229,10 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
         assertTrue(metadataContent.contains("files"), "Baseline should contain files");
       }
     } finally {
-      System.clearProperty("CALCITE_FILE_ENGINE_TYPE");
     }
   }
 
   @Test public void testChangeDetectionWithNewFile() throws Exception {
-    System.setProperty("CALCITE_FILE_ENGINE_TYPE", "parquet+duckdb");
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
       try (Statement stmt = connection.createStatement()) {
@@ -257,12 +258,10 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
         }
       }
     } finally {
-      System.clearProperty("CALCITE_FILE_ENGINE_TYPE");
     }
   }
 
   @Test public void testPatternBasedViewCreation() throws Exception {
-    System.setProperty("CALCITE_FILE_ENGINE_TYPE", "parquet+duckdb");
 
     try (Connection connection = DriverManager.getConnection("jdbc:calcite:model=" + modelFile.getAbsolutePath())) {
       try (Statement stmt = connection.createStatement()) {
@@ -280,7 +279,6 @@ public class DuckDBHiveOptimizationTest extends BaseFileTest {
         }
       }
     } finally {
-      System.clearProperty("CALCITE_FILE_ENGINE_TYPE");
     }
   }
 }
