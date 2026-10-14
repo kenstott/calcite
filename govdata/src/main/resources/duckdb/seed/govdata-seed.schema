@@ -10009,6 +10009,7 @@ sec.institutional_holdings.investment_discretion:VARCHAR
 sec.institutional_holdings.issuer_name:VARCHAR
 sec.institutional_holdings.manager_cik:VARCHAR
 sec.institutional_holdings.manager_name:VARCHAR
+sec.institutional_holdings.other_manager:VARCHAR
 sec.institutional_holdings.put_call:VARCHAR
 sec.institutional_holdings.report_period:DATE
 sec.institutional_holdings.shares_or_principal:DOUBLE
