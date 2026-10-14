@@ -42,12 +42,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -286,33 +289,17 @@ public class HllRuleOperandDefaultsRequirementsTest {
    * constructing a schema through {@link FileSchemaFactory} with BOTH operands omitted.
    *
    * <p>{@code ephemeralCache} default is {@code false}: the factory resolves it to
-   * {@code Boolean.FALSE} ("Default to persistent cache"). With {@code ephemeralCache} omitted
-   * (false) and {@code baseDirectory} omitted, the factory does NOT create the ephemeral
-   * {@code java.io.tmpdir/<uuid>} cache directory — so no such directory exists for this
-   * schema. (We assert the schema builds and the documented default is the persistent path,
-   * i.e. ephemeral was not taken.)
+   * {@code Boolean.FALSE} ("Default to persistent cache"), so the schema's cache lives under its
+   * {@code baseDirectory}.
    *
-   * <p>RECURSIVE default — KNOWN DOC CONFLICT: README/driver doc says the default is
-   * {@code false} while config-reference says {@code true}. The ACTUAL code default is read
-   * here from the factory's resolution expression {@code operand.get("recursive") == Boolean.TRUE}:
-   * with the operand omitted ({@code null}), that evaluates to {@code false}. So the ACTUAL
-   * recursive default is {@code FALSE} (the README/driver value), and config-reference's
-   * {@code true} is the stale/incorrect doc. This test asserts that ACTUAL resolution.
+   * <p>{@code recursive} default is {@code true} (FILE-110, C-01): a file in a subdirectory of
+   * the schema's directory is a table.
    */
   @Test @Tag("integration") @Tag("FILE-047")
   public void file047BooleanDefaultsEphemeralAndRecursive(@TempDir Path dir) throws Exception {
-    // RECURSIVE: assert the ACTUAL code default by replicating the factory's exact resolution
-    // expression on an operand map that omits "recursive". Result: false.
-    Map<String, Object> noRecursiveOperand = new LinkedHashMap<>();
-    boolean recursiveDefault = noRecursiveOperand.get("recursive") == Boolean.TRUE;
-    assertFalse(recursiveDefault,
-        "FILE-047: ACTUAL recursive default is FALSE "
-            + "(operand.get(\"recursive\") == Boolean.TRUE with operand omitted); "
-            + "config-reference's 'true' is the stale doc");
-
     // EPHEMERAL: replicate the factory's exact resolution for an omitted operand: parse of a
     // null operand value yields null on both camelCase and snake_case, so the documented
-    // Boolean.FALSE default is taken (persistent cache, no java.io.tmpdir/<uuid> created).
+    // Boolean.FALSE default is taken (persistent cache under the base directory).
     Map<String, Object> noEphemeralOperand = new LinkedHashMap<>();
     Boolean ephemeralDefault =
         noEphemeralOperand.get("ephemeralCache") == null
@@ -321,10 +308,15 @@ public class HllRuleOperandDefaultsRequirementsTest {
     assertFalse(ephemeralDefault,
         "FILE-047: omitted ephemeralCache must default to false (persistent cache)");
 
+    // A file one level down: found only if the omitted recursive operand defaults to true
+    Path data = dir.resolve("data");
+    Files.createDirectories(data.resolve("nested"));
+    Files.write(data.resolve("nested").resolve("deep.csv"),
+        "id:int,name:string\n1,a\n".getBytes(StandardCharsets.UTF_8));
+
     // End-to-end: a schema built through the factory with BOTH operands omitted must succeed.
-    // We supply only a directory (required so storageType auto-detects "local") and force the
-    // PARQUET engine so the construction stays hermetic (no JDBC engine spin-up). The schema
-    // object proves the omitted-operand defaults are accepted by the real factory path.
+    // We supply a directory and the base directory the schema may write to, and force the
+    // PARQUET engine so the construction stays hermetic (no JDBC engine spin-up).
     Connection conn =
         DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     try {
@@ -332,14 +324,18 @@ public class HllRuleOperandDefaultsRequirementsTest {
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
       Map<String, Object> operand = new LinkedHashMap<>();
-      operand.put("directory", dir.toFile().getAbsolutePath());
+      operand.put("directory", data.toFile().getAbsolutePath());
+      operand.put("baseDirectory", dir.resolve("base").toFile().getAbsolutePath());
       operand.put("executionEngine", "parquet");
       // ephemeralCache and recursive deliberately OMITTED to exercise their defaults.
 
-      Object schema =
+      org.apache.calcite.schema.Schema schema =
           FileSchemaFactory.INSTANCE.create(rootSchema, "files047", operand);
       assertNotNull(schema,
           "FILE-047: factory must build a schema with ephemeralCache/recursive omitted");
+      Set<String> tables = rootSchema.add("files047", schema).getTableNames();
+      assertTrue(tables.stream().anyMatch(t -> t.endsWith("deep")),
+          "FILE-047: recursive defaults to true, so nested/deep.csv is a table: " + tables);
     } finally {
       conn.close();
     }

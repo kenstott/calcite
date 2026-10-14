@@ -211,6 +211,8 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        // The schema writes under the model file's directory (REQ-1992)
+        "        \"baseDirectory\": \".\"," +
         "        \"ephemeralCache\": true," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
@@ -268,6 +270,8 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        // The schema writes under the model file's directory (REQ-1992)
+        "        \"baseDirectory\": \".\"," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
         "          {" +
@@ -343,6 +347,8 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        // The schema writes under the model file's directory (REQ-1992)
+        "        \"baseDirectory\": \".\"," +
         "        \"ephemeralCache\": true," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
@@ -408,6 +414,8 @@ public class TableLevelHttpTest {
         "      \"type\": \"custom\"," +
         "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\"," +
         "      \"operand\": {" +
+        // The schema writes under the model file's directory (REQ-1992)
+        "        \"baseDirectory\": \".\"," +
         "        \"columnNameCasing\": \"UNCHANGED\"," +
         "        \"tables\": [" +
         "          {" +

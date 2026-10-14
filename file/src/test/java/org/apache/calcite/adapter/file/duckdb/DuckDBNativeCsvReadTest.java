@@ -181,6 +181,8 @@ public class DuckDBNativeCsvReadTest {
       operand.put("baseDirectory", baseDirectory.toString());
       operand.put("ephemeralCache", false);
     } else {
+      // An ephemeral cache still goes under the directory the schema may write to (REQ-1992)
+      operand.put("baseDirectory", new File(tempDir, "base").toString());
       operand.put("ephemeralCache", true);
     }
 
