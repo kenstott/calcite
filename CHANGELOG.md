@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.111.1](https://github.com/kenstott/calcite/compare/engine-v0.111.0...engine-v0.111.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **govdata:** seed packaging reads the per-schema tracker layout and the seed-schema task sets its staging directory ([4d5c1a3](https://github.com/kenstott/calcite/commit/4d5c1a33e3b37f77777cf3836a13572b8b87651d))
+* **govdata:** the seed build creates the schema cache from the live tables ([ebe246f](https://github.com/kenstott/calcite/commit/ebe246f8f92683156079eb5c34139d8511ecc5e5))
+
 ## [0.111.0](https://github.com/kenstott/calcite/compare/engine-v0.110.0...engine-v0.111.0) (2026-10-14)
 
 
