@@ -46,6 +46,9 @@ import static org.junit.jupiter.api.Assertions.*;
     System.setProperty("parquet.enable.vectorized.reader", "true");
 
     Properties props = new Properties();
+    // The adapter's lower-case table names, queried unquoted, as the other file tests do
+    props.put("lex", "ORACLE");
+    props.put("unquotedCasing", "TO_LOWER");
     props.put("model", "inline:"
         + "{\n"
         + "  version: '1.0',\n"
@@ -93,6 +96,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
     // Test with cache priming enabled (default)
     Properties props = new Properties();
+    // The adapter's lower-case table names, queried unquoted, as the other file tests do
+    props.put("lex", "ORACLE");
+    props.put("unquotedCasing", "TO_LOWER");
     props.put("model", "inline:"
         + "{\n"
         + "  version: '1.0',\n"
@@ -144,6 +150,9 @@ import static org.junit.jupiter.api.Assertions.*;
     System.setProperty("parquet.enable.vectorized.reader", "true");
 
     Properties props = new Properties();
+    // The adapter's lower-case table names, queried unquoted, as the other file tests do
+    props.put("lex", "ORACLE");
+    props.put("unquotedCasing", "TO_LOWER");
     props.put("model", "inline:"
         + "{\n"
         + "  version: '1.0',\n"
@@ -169,7 +178,7 @@ import static org.junit.jupiter.api.Assertions.*;
       Thread.sleep(500);
 
       // Run aggregation query - should benefit from both optimizations
-      String query = "SELECT category, COUNT(*), SUM(value) " +
+      String query = "SELECT category, COUNT(*), SUM(\"value\") " +
                     "FROM large_table " +
                     "GROUP BY category";
 
