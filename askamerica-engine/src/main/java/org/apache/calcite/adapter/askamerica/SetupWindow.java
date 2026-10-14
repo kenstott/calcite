@@ -329,23 +329,59 @@ public class SetupWindow {
                     : " (No cached engine found to clear.)";
             }
 
-            // Name the count, and the paths on hover: a bare "Done!" was reported after
-            // writing a config file Claude Desktop does not read, which is unfalsifiable
-            // from the wizard and looks identical to success.
-            setStatus("Done! Updated " + written.size()
-                + (written.size() == 1 ? " config file. " : " config files. ")
-                + "Restart Claude Desktop to activate." + repairNote + " Tip: try \"What "
-                + "can I do with AskAmerica?\", \"What questions can AskAmerica answer?\", "
-                + "or \"Pose a sample question to AskAmerica\" in a new chat any time to "
-                + "see what it can do.", true);
-            statusLabel.setToolTipText(written.toString());
-            configureBtn.setText("Configure again");
-            maybeOfferRelaunch();
+            installDataServerThenFinish(written, repairNote);
         } catch (Exception ex) {
             setStatus("Error: " + ex.getMessage(), false);
-        } finally {
             configureBtn.setEnabled(true);
         }
+    }
+
+    /**
+     * The installer's asset step for the data server (about a gigabyte): done here, with the
+     * download shown, so the MCP server never has to download anything inside a tool call.
+     * Runs off the event thread; the status line follows the download until it finishes.
+     */
+    private void installDataServerThenFinish(List<Path> written, String repairNote) {
+        setStatus("Installing the AskAmerica data server (about 1 GB, one time)…", null);
+        javax.swing.Timer poll = new javax.swing.Timer(500, ev -> {
+            String progress = PgwireGovDataInstaller.installProgress();
+            if (progress != null) {
+                setStatus("Installing the AskAmerica data server: " + progress, null);
+            }
+        });
+        poll.start();
+        Thread worker = new Thread(() -> {
+            String failure = null;
+            try {
+                PgwireGovDataInstaller.installOrUpdateBlocking();
+            } catch (RuntimeException e) {
+                failure = e.getMessage();
+            }
+            final String failed = failure;
+            SwingUtilities.invokeLater(() -> {
+                poll.stop();
+                if (failed != null) {
+                    setStatus("The data server could not be installed: " + failed
+                        + " Click Configure to try again.", false);
+                } else {
+                    // Name the count, and the paths on hover: a bare "Done!" was reported after
+                    // writing a config file Claude Desktop does not read, which is
+                    // unfalsifiable from the wizard and looks identical to success.
+                    setStatus("Done! Updated " + written.size()
+                        + (written.size() == 1 ? " config file. " : " config files. ")
+                        + "Restart Claude Desktop to activate." + repairNote + " Tip: try \"What "
+                        + "can I do with AskAmerica?\", \"What questions can AskAmerica "
+                        + "answer?\", or \"Pose a sample question to AskAmerica\" in a new chat "
+                        + "any time to see what it can do.", true);
+                    statusLabel.setToolTipText(written.toString());
+                    configureBtn.setText("Configure again");
+                    maybeOfferRelaunch();
+                }
+                configureBtn.setEnabled(true);
+            });
+        }, "askamerica-data-server-install");
+        worker.setDaemon(false);
+        worker.start();
     }
 
     /**

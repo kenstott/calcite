@@ -159,6 +159,47 @@ final class PgwireGovDataInstaller {
             ? "AskAmerica " + installed + " is out of date." : null;
     }
 
+    /**
+     * Installs or updates the bundle to this engine's release and returns its launcher, waiting
+     * for the download. This is the installer's asset step, run by the setup window where the
+     * user is watching ({@link #installProgress()}); the MCP server never calls it.
+     */
+    static File installOrUpdateBlocking() {
+        Path dir = cacheDir();
+        String own = ownEngineVersion();
+        String target;
+        try {
+            target = targetVersion(own);
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new InstallFailedException("Could not determine which pgwire-govdata release "
+                + "to install: " + e.getMessage(), e);
+        }
+        File existing = launcherPath(dir);
+        Action action = decide(existing.isFile(), existing.isFile() ? readMarker(dir) : null,
+            target);
+        if (action == Action.KEEP || action == Action.KEEP_NEWER) {
+            return existing;
+        }
+        if (action == Action.INSTALL) {
+            File installed = installUnderLock(dir, target);
+            if (installed == null) {
+                throw new InstallFailedException("Release engine-v" + target + " publishes no "
+                    + "pgwire-govdata bundle for this operating system.", null);
+            }
+            return installed;
+        }
+        updateInBackground(dir, target); // synchronous here: the caller waits on this thread
+        File adopted = adoptPrepared(dir, target);
+        if (adopted == null) {
+            throw new InstallFailedException("pgwire-govdata " + target + " could not be put in "
+                + "place; see the messages above.", null);
+        }
+        return adopted;
+    }
+
     /** {@link #ensureLauncher()} over an explicit bundle directory and engine release, with the
      *  executor that runs a background update, so a test can observe one being scheduled
      *  without it reaching the network. */
