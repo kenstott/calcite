@@ -298,14 +298,13 @@ final class PgwireGovDataInstaller {
         }
     }
 
-    /** The action for a bundle directory: install when there is none, update when the installed
-     *  release is older than {@code target} or unstamped, keep otherwise. Never downgrades. */
+    /** The action for a bundle directory: install when there is none or it is unstamped (a copy
+     *  from before stamping, or a half-written one, is not a release that can be trusted to
+     *  start), update when the installed release is older than {@code target}, keep otherwise.
+     *  Never downgrades. */
     static Action decide(boolean haveLauncher, String installed, String target) {
-        if (!haveLauncher) {
+        if (!haveLauncher || installed == null) {
             return Action.INSTALL;
-        }
-        if (installed == null) {
-            return Action.UPDATE;
         }
         int c = compareVersions(installed, target);
         if (c == 0) {
@@ -353,6 +352,20 @@ final class PgwireGovDataInstaller {
         report("This engine carries no version stamp (a local build) — matching pgwire-govdata "
             + "to the latest release, " + latest + ".");
         return latest;
+    }
+
+    /** What the download in progress has fetched so far, for the message a data call gets while
+     *  the bundle is installing; null when none is running. */
+    private static volatile String installProgress;
+
+    /** A human-readable line on the bundle download running in this process, or null. */
+    static String installProgress() {
+        return installProgress;
+    }
+
+    static String progressLine(String version, long fetched, long total) {
+        return "downloading pgwire-govdata " + version + ": " + (fetched / (1024 * 1024))
+            + (total > 0 ? " of " + (total / (1024 * 1024)) : "") + " MB";
     }
 
     private static volatile String ownVersionCache;
@@ -426,7 +439,7 @@ final class PgwireGovDataInstaller {
                      StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  FileLock ignored = ch.lock()) {
                 File now = launcherPath(dir);
-                if (now.isFile()) {
+                if (now.isFile() && readMarker(dir) != null) {
                     return now;
                 }
                 Path staging = prepareRelease(dir, version);
@@ -508,7 +521,12 @@ final class PgwireGovDataInstaller {
         try {
             removeOrphans(dir, version, part);
             // A failed download keeps the partial file so the next attempt resumes it.
-            download(assetUrl, part);
+            try {
+                download(assetUrl, part, (fetched, total) ->
+                    installProgress = progressLine(version, fetched, total));
+            } finally {
+                installProgress = null;
+            }
             try {
                 verifySha256(part, expectedSha256);
                 Files.createDirectories(staging);
@@ -693,13 +711,19 @@ final class PgwireGovDataInstaller {
         return m.find() ? m.group(1) : null;
     }
 
+    /** Receives the bytes of the asset fetched so far and its full size (0 when unknown). */
+    interface ProgressSink {
+        void update(long fetched, long total);
+    }
+
     /**
      * Downloads {@code url} into {@code part}, resuming from the bytes already there. A server
      * that ignores the range answers 200 with the whole asset, which overwrites the partial
      * file; 416 means the partial file already holds every byte, which the caller's sha256
      * check confirms or rejects.
      */
-    static void download(String url, Path part) throws IOException, InterruptedException {
+    static void download(String url, Path part, ProgressSink progress)
+            throws IOException, InterruptedException {
         long have = Files.isRegularFile(part) ? Files.size(part) : 0L;
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -718,12 +742,15 @@ final class PgwireGovDataInstaller {
             resp.body().close();
             return;
         }
+        long length = resp.headers().firstValueAsLong("Content-Length").orElse(0L);
         if (status != 200 && status != 206) {
             resp.body().close();
             throw new IOException("pgwire-govdata download failed: HTTP " + status
                 + " from " + url);
         }
         boolean resume = have > 0 && status == 206;
+        long total = length > 0 ? length + (resume ? have : 0L) : 0L;
+        long fetched = resume ? have : 0L;
         if (resume) {
             report("Resuming the pgwire-govdata download at " + (have / (1024 * 1024)) + " MB.");
         }
@@ -734,6 +761,8 @@ final class PgwireGovDataInstaller {
             int n;
             while ((n = in.read(buf)) != -1) {
                 out.write(buf, 0, n);
+                fetched += n;
+                progress.update(fetched, total);
             }
         }
     }

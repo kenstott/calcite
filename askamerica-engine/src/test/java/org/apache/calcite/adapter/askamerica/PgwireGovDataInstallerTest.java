@@ -58,9 +58,8 @@ class PgwireGovDataInstallerTest {
     assertEquals(Action.INSTALL, PgwireGovDataInstaller.decide(false, null, "0.99.2"));
   }
 
-  @Test void unstampedBundlePredatesStampingAndIsUpdated() {
-    // The bug this fixes: a bundle installed once, never stamped, kept forever.
-    assertEquals(Action.UPDATE, PgwireGovDataInstaller.decide(true, null, "0.99.2"));
+  @Test void unstampedBundleIsNotTrustedAndIsReinstalled() {
+    assertEquals(Action.INSTALL, PgwireGovDataInstaller.decide(true, null, "0.99.2"));
   }
 
   @Test void olderBundleIsUpdatedSameIsKept() {
@@ -303,7 +302,7 @@ class PgwireGovDataInstallerTest {
     List<String> seen = new ArrayList<>();
     HttpServer server = serve(body, true, seen);
     try {
-      PgwireGovDataInstaller.download(url(server), part);
+      PgwireGovDataInstaller.download(url(server), part, (f, t) -> { });
     } finally {
       server.stop(0);
     }
@@ -318,7 +317,7 @@ class PgwireGovDataInstallerTest {
     Files.write(part, new byte[60_000]);
     HttpServer server = serve(body, false, new ArrayList<>());
     try {
-      PgwireGovDataInstaller.download(url(server), part);
+      PgwireGovDataInstaller.download(url(server), part, (f, t) -> { });
     } finally {
       server.stop(0);
     }
@@ -333,10 +332,10 @@ class PgwireGovDataInstallerTest {
     List<String> seen = new ArrayList<>();
     HttpServer server = serve(body, true, seen);
     try {
-      PgwireGovDataInstaller.download(url(server), part);
+      PgwireGovDataInstaller.download(url(server), part, (f, t) -> { });
       assertArrayEquals(body, Files.readAllBytes(part));
       // Killed between download and extraction: the next attempt asks for nothing more.
-      PgwireGovDataInstaller.download(url(server), part);
+      PgwireGovDataInstaller.download(url(server), part, (f, t) -> { });
     } finally {
       server.stop(0);
     }

@@ -256,7 +256,21 @@ final class PgwireGovDataConnector {
     }
   }
 
+  /** Set while a call is waiting on a port holder that cannot be identified, so the answer says
+   *  the port is occupied rather than that this machine's own server is starting. */
+  private static volatile String unidentifiedHolder;
+
   static String stillStartingMessage(long secondsSoFar) {
+    String progress = PgwireGovDataInstaller.installProgress();
+    if (progress != null) {
+      return "pgwire-govdata, the data server, is being installed (" + progress + ", "
+          + secondsSoFar + "s so far). The install continues between calls and resumes if "
+          + "interrupted. Try this call again shortly.";
+    }
+    String holder = unidentifiedHolder;
+    if (holder != null) {
+      return holder;
+    }
     return "pgwire-govdata, the data server, is still starting on " + host() + ":" + port()
         + " (" + secondsSoFar + "s so far). A first start mounts every schema and can take "
         + "several minutes. Try this call again shortly.";
@@ -371,6 +385,14 @@ final class PgwireGovDataConnector {
         + "\nFull output: " + logFile;
   }
 
+  static String portHeldNotAnsweringMessage(String host, int port, String whyUnidentified) {
+    return host + ":" + port + " is open but nothing on it answers as pgwire-govdata, and its "
+        + "holder cannot be identified (" + whyUnidentified + "). It may be a server in another "
+        + "environment on this machine (WSL forwards its ports to Windows) or one still "
+        + "starting. If it is not yours, set ASKAMERICA_PGWIRE_PORT to a free port and restart "
+        + "Claude Desktop.";
+  }
+
   /** What holds the pgwire port when pgwire-govdata isn't answering on it. */
   enum OccupantState {
     /** A pgwire-govdata process younger than the spawn budget — still mounting; wait for it. */
@@ -405,7 +427,17 @@ final class PgwireGovDataConnector {
    */
   static Long portListenerPid(int port) throws IOException, InterruptedException {
     if (isWindows()) {
-      throw new IOException("identifying the process holding a port is not supported on Windows");
+      Process n = new ProcessBuilder("netstat", "-ano", "-p", "TCP")
+          .redirectErrorStream(true).start();
+      String listing;
+      try (java.io.InputStream in = n.getInputStream()) {
+        listing = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+      }
+      int status = n.waitFor();
+      if (status != 0) {
+        throw new IOException("netstat exited " + status + ": " + listing.trim());
+      }
+      return netstatListenerPid(listing, port);
     }
     Process p = new ProcessBuilder("lsof", "-nP", "-t", "-iTCP:" + port, "-sTCP:LISTEN")
         .redirectErrorStream(true).start();
@@ -422,6 +454,19 @@ final class PgwireGovDataConnector {
       throw new IOException("lsof exited " + exit + ": " + out);
     }
     return Long.parseLong(out.split("\\s+")[0]);
+  }
+
+  /** Pid of the LISTENING entry for {@code port} in {@code netstat -ano -p TCP} output; null when
+   *  none. Matches the port as the end of the local address, so 45433 never matches 145433. */
+  static Long netstatListenerPid(String listing, int port) {
+    for (String line : listing.split("\\R")) {
+      String[] f = line.trim().split("\\s+");
+      if (f.length >= 5 && f[0].equalsIgnoreCase("TCP") && f[3].equalsIgnoreCase("LISTENING")
+          && f[1].endsWith(":" + port)) {
+        return Long.parseLong(f[4]);
+      }
+    }
+    return null;
   }
 
   private static boolean portIsOpen() {
@@ -455,9 +500,11 @@ final class PgwireGovDataConnector {
       log().println("[askamerica-mcp] " + host() + ":" + port() + " is open but pgwire-govdata "
           + "isn't answering, and the holder can't be identified (" + e.getMessage()
           + ") — waiting for it to answer or to release the port.");
+      unidentifiedHolder = portHeldNotAnsweringMessage(host(), port(), e.getMessage());
       long deadline = System.currentTimeMillis() + SPAWN_TIMEOUT_MILLIS;
       while (portIsOpen()) {
         if (System.currentTimeMillis() >= deadline) {
+          unidentifiedHolder = null;
           throw new IllegalStateException(host() + ":" + port() + " is held by a process that "
               + "cannot be identified (" + e.getMessage() + ") and has not answered as "
               + "pgwire-govdata for " + (SPAWN_TIMEOUT_MILLIS / 1000) + "s. Free the port or "
@@ -466,11 +513,13 @@ final class PgwireGovDataConnector {
         Thread.sleep(STARTING_POLL_INTERVAL_MILLIS);
         Connection c = tryDirectConnect();
         if (c != null) {
+          unidentifiedHolder = null;
           log().println("[askamerica-mcp] Connected to pgwire-govdata once the process holding "
               + "the port finished starting.");
           return c;
         }
       }
+      unidentifiedHolder = null;
       return null;
     }
     if (pid == null) {
@@ -1168,6 +1217,18 @@ final class PgwireGovDataConnector {
     }
   }
 
+  /** Removes the files that describe a server which is no longer running, so they stop
+   *  triggering a replacement on every call. */
+  private static void clearServerStamps() {
+    for (File f : new File[] {pidFile(), credentialExpiryFile(), serverBundleVersionFile()}) {
+      try {
+        java.nio.file.Files.deleteIfExists(f.toPath());
+      } catch (java.io.IOException e) {
+        throw new IllegalStateException("Cannot remove the stale " + f + ": " + e.getMessage(), e);
+      }
+    }
+  }
+
   /** {@code pidFile()}'s current contents, or {@code null} if unreadable/absent. */
   private static Long readPidFile() {
     try {
@@ -1189,14 +1250,18 @@ final class PgwireGovDataConnector {
     java.util.Optional<ProcessHandle> ph = ProcessHandle.of(pid);
     if (!ph.isPresent()) {
       log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
-          + " is no longer running — nothing to kill.");
+          + " is no longer running — nothing to kill; clearing its pid, credential-expiry and "
+          + "bundle-version files.");
+      clearServerStamps();
       return;
     }
     // The pid file outlives the server (it idle-shuts-down after IDLE_SHUTDOWN_SECONDS), and
     // the OS reuses pids, so a pid that is still running is not necessarily ours to kill.
     if (!isPgwireGovDataProcess(ph.get())) {
       log().println("[askamerica-mcp] killAndRespawn(" + reason + "): pid " + pid
-          + " is running but is not a pgwire-govdata process — not killing it.");
+          + " is running but is not a pgwire-govdata process — not killing it; clearing the "
+          + "stale pid, credential-expiry and bundle-version files.");
+      clearServerStamps();
       return;
     }
     // The port and the expired credentials are held until the process is really gone; a
