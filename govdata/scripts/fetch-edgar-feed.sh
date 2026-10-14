@@ -13,7 +13,7 @@
 # transient: delete feed_dir when the run that used it is over. The feed publishes a day's file after
 # that day closes, so today's filings are not in it and are fetched from sec.gov as usual.
 #
-# Disk: the unpacked tree is about 15% of the bytes downloaded (one 450 GB year is about 65 GB), so
+# Disk: the unpacked tree is about 15-20% of the bytes downloaded (a 450 GB year is about 65-85 GB), so
 # unpack a half year or a quarter at a time if /var/tmp/govdata is short of space.
 #
 # Needs the govdata shadow jar: GOVDATA_JAR, else govdata/build/libs/sih-govdata.jar.
