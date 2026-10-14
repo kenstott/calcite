@@ -214,7 +214,7 @@ public final class EdgarFeedUnpacker {
           if (status != 429 || attempt >= MAX_429_ATTEMPTS) {
             break;
           }
-          long waitSec = 30L * attempt + (long) (Math.random() * 30);
+          long waitSec = 120L * attempt + (long) (Math.random() * 60);
           System.out.println("[edgar-feed] " + src + ": HTTP 429 (attempt " + attempt + "), waiting "
               + waitSec + "s");
           Thread.sleep(waitSec * 1000);
