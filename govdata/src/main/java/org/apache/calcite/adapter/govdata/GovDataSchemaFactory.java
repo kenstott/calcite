@@ -743,8 +743,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
               userHome);
           workingDir = userHome;
         } else {
-          LOGGER.warn("Working directory and home directory both invalid; falling back to temp directory");
-          workingDir = System.getProperty("java.io.tmpdir");
+          // REQ-1992: no JVM temp directory fallback for the operating directory
+          throw new IllegalStateException("govdata.operating.dir.base is not set, and neither the "
+              + "working directory nor the home directory can hold the operating directory");
         }
       }
       base = workingDir + "/.aperio";

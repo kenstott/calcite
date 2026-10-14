@@ -103,7 +103,7 @@ public class AlphaVantageDownloader {
     // rate-limit/API failures) needs its OWN gap tracked — the bulk date can't tell it apart from
     // a ticker that is fully current, which is exactly the "never completely tops up" symptom.
     Map<String, String> perTickerLastDate = queryPerTickerMaxDates(topupDir);
-    Path tmpCsv = Files.createTempFile("av_topup_", ".csv");
+    Path tmpCsv = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("av_topup_", ".csv").toPath();
     int fetched = 0;
     boolean dailyLimitReached = false;
     try {

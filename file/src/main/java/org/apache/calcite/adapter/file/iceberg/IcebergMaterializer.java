@@ -98,21 +98,18 @@ public class IcebergMaterializer {
       System.getenv("DUCKDB_MEMORY_LIMIT") != null
           ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
 
-  /** DuckDB spill directory - DUCKDB_TEMP_DIR env var, else TMP/TEMP/java.io.tmpdir + "/duckdb". */
-  private static final String DUCKDB_TEMP_DIR = resolveDuckDbTempDir();
-
-  private static String resolveDuckDbTempDir() {
+  /**
+   * DuckDB spill directory: the DUCKDB_TEMP_DIR environment variable when an operator set it,
+   * else {@code duckdb} in the process's staging directory (REQ-1992); never the JVM temp
+   * directory.
+   */
+  private static String duckDbTempDir() {
     String override = System.getenv("DUCKDB_TEMP_DIR");
     if (override != null && !override.isEmpty()) {
       return override;
     }
-    for (String var : new String[]{"TMP", "TEMP"}) {
-      String val = System.getenv(var);
-      if (val != null && !val.isEmpty()) {
-        return val + "/duckdb";
-      }
-    }
-    return System.getProperty("java.io.tmpdir") + "/duckdb";
+    return new java.io.File(org.apache.calcite.adapter.file.StagingDirectory.get(), "duckdb")
+        .getPath();
   }
 
   private final String warehousePath;
@@ -1565,7 +1562,7 @@ public class IcebergMaterializer {
       memStmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
       String tempDir = warehousePath != null
           ? warehousePath + "/.duckdb_tmp"
-          : System.getProperty("java.io.tmpdir");
+          : duckDbTempDir();
       memStmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
     }
 
@@ -3966,7 +3963,7 @@ public class IcebergMaterializer {
       stmt.execute("SET preserve_insertion_order=false");
       // Limit memory to avoid OOM on memory-constrained systems
       stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
-      stmt.execute("SET temp_directory='" + DUCKDB_TEMP_DIR + "'");
+      stmt.execute("SET temp_directory='" + duckDbTempDir().replace("'", "''") + "'");
 
       // Load extensions
       try {

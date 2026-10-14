@@ -196,6 +196,8 @@ public class HttpSource implements DataSource {
   private final VariableNormalizer variableNormalizer;
   private final StorageProvider storageProvider;
   private final String rawCachePath;
+  /** Where this source's temporary files go: the run's staging directory (REQ-1992). */
+  private final File operatingDirectory;
   /**
    * When true, {@link #hasValidRawCache} always reports a miss regardless of what's on disk —
    * forces a live fetch instead of reading a possibly-corrupted cached response (e.g. one
@@ -322,6 +324,7 @@ public class HttpSource implements DataSource {
     }
     this.storageProvider = storageProvider;
     this.rawCachePath = rawCachePath;
+    this.operatingDirectory = operatingDirectory == null ? null : new File(operatingDirectory);
     this.textualSourceKeys = textualSourceKeys(columns, config.getResponse().getRawFields());
     this.bypassRawCache = bypassRawCache;
   }
@@ -342,6 +345,8 @@ public class HttpSource implements DataSource {
     this.variableNormalizer = null;
     this.storageProvider = null;
     this.rawCachePath = null;
+    // No operating directory: a fetch that needs a temporary file refuses (REQ-1992)
+    this.operatingDirectory = null;
     this.textualSourceKeys = Collections.emptySet();
     this.bypassRawCache = false;
   }
@@ -1077,7 +1082,7 @@ public class HttpSource implements DataSource {
       }
       try {
         if (cacheGenerator == null) {
-          tempCacheFile = File.createTempFile("http-raw-cache-", ".json");
+          tempCacheFile = tempFile("http-raw-cache-", ".json");
           tempCacheFile.deleteOnExit();
           tempCacheStream = new FileOutputStream(tempCacheFile);
           cacheGenerator =
@@ -1233,7 +1238,7 @@ public class HttpSource implements DataSource {
     if (cs == null) {
       return false;
     }
-    File tempFile = File.createTempFile("http-csv-cache-", ".csv");
+    File tempFile = tempFile("http-csv-cache-", ".csv");
     tempFile.deleteOnExit();
     try {
       try (InputStream in = cs.stream; FileOutputStream out = new FileOutputStream(tempFile)) {
@@ -1876,7 +1881,7 @@ public class HttpSource implements DataSource {
     }
     String parentPath = parentOf(cachePath);
     storageProvider.createDirectories(parentPath);
-    File tmpCache = File.createTempFile("cache-str-", ".tmp");
+    File tmpCache = tempFile("cache-str-", ".tmp");
     try {
       try (java.io.Writer w = new java.io.BufferedWriter(
           new java.io.OutputStreamWriter(new FileOutputStream(tmpCache), StandardCharsets.UTF_8))) {
@@ -1991,7 +1996,7 @@ public class HttpSource implements DataSource {
 
     // Write ZIP to a temp file so we can scan twice (primary then fallback) without
     // buffering the entire archive in memory.
-    File tempZip = File.createTempFile("http-source-zip-", ".zip");
+    File tempZip = tempFile("http-source-zip-", ".zip");
     tempZip.deleteOnExit();
     try {
       byte[] tmp = new byte[65536];
@@ -2039,7 +2044,7 @@ public class HttpSource implements DataSource {
   private String writeZipEntry(ZipInputStream zis, String name, String cachePath)
       throws IOException {
     LOGGER.info("Extracting from ZIP: {}", name);
-    File tempFile = File.createTempFile("http-source-", ".tmp");
+    File tempFile = tempFile("http-source-", ".tmp");
     tempFile.deleteOnExit();
     long totalBytes = 0;
     try (FileOutputStream fos = new FileOutputStream(tempFile)) {
@@ -2096,7 +2101,7 @@ public class HttpSource implements DataSource {
         String name = entry.getName();
         if (zipEntryMatches(name, pattern)) {
           LOGGER.info("Extracting from ZIP: {}", name);
-          File part = File.createTempFile("http-source-part-", ".tmp");
+          File part = tempFile("http-source-part-", ".tmp");
           part.deleteOnExit();
           try (FileOutputStream pos = new FileOutputStream(part)) {
             copyZipEntry(zis, pos, false);
@@ -2111,7 +2116,7 @@ public class HttpSource implements DataSource {
       throw new IOException("No file matching pattern '" + pattern + "' found in ZIP");
     }
 
-    File tempFile = File.createTempFile("http-source-", ".tmp");
+    File tempFile = tempFile("http-source-", ".tmp");
     tempFile.deleteOnExit();
     try {
       mergeZipParts(parts, partNames, tempFile, csvFormat);
@@ -4300,5 +4305,14 @@ public class HttpSource implements DataSource {
     boolean isExpired() {
       return System.currentTimeMillis() > expiresAt;
     }
+  }
+
+  /**
+   * A new temporary file in the schema's operating directory, never the JVM temp directory
+   * (REQ-1992). A source built without one refuses here, naming the missing directory.
+   */
+  private File tempFile(String prefix, String suffix) throws IOException {
+    return org.apache.calcite.adapter.file.WorkFiles.newTempFile(operatingDirectory, prefix,
+        suffix);
   }
 }

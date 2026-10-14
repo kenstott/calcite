@@ -2502,7 +2502,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             .build();
     org.apache.calcite.adapter.file.etl.MaterializationWriter writer =
         org.apache.calcite.adapter.file.etl.MaterializationWriterFactory.create(
-            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath);
+            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath,
+            operatingCacheDirectory);
     try {
       writer.initialize(cfg);
       writer.writeBatch(scanTableAsMaps(sourceTable), java.util.Collections.<String, String>emptyMap());

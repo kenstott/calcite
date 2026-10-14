@@ -2273,7 +2273,7 @@ public class IcebergTableWriter {
     copyPartitionValues(partitionKey, partitionData, spec);
     int recordsPerFile = computeRecordsPerFile(totalBytes, totalRecords, targetFileSizeBytes);
 
-    java.io.File spillDir = java.nio.file.Files.createTempDirectory("iceberg-sort-").toFile();
+    java.io.File spillDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("iceberg-sort-").toFile();
     List<java.io.File> runs = new ArrayList<>();
     try {
       // Pass 1 — sorted runs.

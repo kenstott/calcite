@@ -81,7 +81,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testMapToIcebergTypeCoversAllBranches() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("mapToIcebergType", String.class);
     method.setAccessible(true);
@@ -106,7 +106,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testMapToDuckDBTypeCoversAllBranches() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("mapToDuckDBType", String.class);
     method.setAccessible(true);
@@ -132,7 +132,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testCastValueAllTypes() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("castValue", Object.class, String.class);
     method.setAccessible(true);
@@ -169,7 +169,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testEvaluateExpressionSrcFieldPattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -184,7 +184,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionBareFieldPattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -195,7 +195,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionCastPattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -208,7 +208,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionBareCastPattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -219,7 +219,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionReplacePattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -233,7 +233,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionCastReplacePattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -249,7 +249,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionSubstringPattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -264,7 +264,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionRightPattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -277,7 +277,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionCoalescePattern() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -295,7 +295,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testEvaluateExpressionUnrecognizedExpression() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("evaluateExpression", String.class, Map.class);
     method.setAccessible(true);
@@ -309,7 +309,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testGetValueCaseInsensitive() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("getValueCaseInsensitive", Map.class, String.class);
     method.setAccessible(true);
@@ -330,7 +330,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testConvertToS3aScheme() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("convertToS3aScheme", String.class);
     method.setAccessible(true);
@@ -345,7 +345,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testBuildPartitionKey() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("buildPartitionKey", Map.class);
     method.setAccessible(true);
@@ -368,7 +368,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testBuildHadoopS3ConfigAllFields() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("buildHadoopS3Config", Map.class);
     method.setAccessible(true);
@@ -391,7 +391,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testBuildHadoopS3ConfigMinimalFields() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("buildHadoopS3Config", Map.class);
     method.setAccessible(true);
@@ -424,7 +424,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testGetRemoteParentPath() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Method method =
         IcebergMaterializationWriter.class.getDeclaredMethod("getRemoteParentPath", String.class);
     method.setAccessible(true);
@@ -444,7 +444,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
 
   @Test void testConstructorWithNullTracker() {
     IcebergMaterializationWriter w =
-        new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+        new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     assertNotNull(w);
     assertEquals(MaterializeConfig.Format.ICEBERG, w.getFormat());
     assertEquals(0, w.getTotalRowsWritten());
@@ -452,12 +452,12 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testInitializeWithNullConfig() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     assertThrows(IllegalArgumentException.class, () -> writer.initialize(null));
   }
 
   @Test void testInitializeWithDisabledConfig() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     MaterializeConfig config = MaterializeConfig.builder()
         .enabled(false)
         .output(MaterializeOutputConfig.builder().build())
@@ -466,7 +466,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testInitializeWithWrongFormat() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     MaterializeConfig config = MaterializeConfig.builder()
         .enabled(true)
         .format(MaterializeConfig.Format.PARQUET)
@@ -476,7 +476,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testInitializeWithNoTargetTableId() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     MaterializeConfig config = MaterializeConfig.builder()
         .enabled(true)
         .format(MaterializeConfig.Format.ICEBERG)
@@ -490,7 +490,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testWriteBatchBeforeInitialize() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
     data.add(new HashMap<String, Object>());
     assertThrows(IllegalStateException.class,
@@ -515,12 +515,12 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   // ====================================================================
 
   @Test void testCommitBeforeInitialize() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     assertThrows(IllegalStateException.class, () -> writer.commit());
   }
 
   @Test void testGetTableLocationBeforeInitialize() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     assertNull(writer.getTableLocation());
   }
 
@@ -531,12 +531,12 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testGetEtlPropertyBeforeInitialize() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     assertNull(writer.getEtlProperty("etl.config-hash"));
   }
 
   @Test void testStoreEtlPropertiesBeforeInitialize() {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     writer.storeEtlProperties("hash", "sig", 100);
   }
 
@@ -549,7 +549,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testCloseWithoutInitialize() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     writer.close();
   }
 
@@ -578,7 +578,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   }
 
   @Test void testCleanupStagingDirectoryRemoteS3Skipped() throws Exception {
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
     Field stagingModeField = IcebergMaterializationWriter.class.getDeclaredField("stagingMode");
     stagingModeField.setAccessible(true);
     stagingModeField.set(writer, MaterializeOptionsConfig.StagingMode.REMOTE);
@@ -613,7 +613,7 @@ public class IcebergMaterializationWriterDeepCoverageTest3 {
   private IcebergMaterializationWriter createInitializedWriterWithStagingMode(
       String tableName, MaterializeOptionsConfig.StagingMode stagingMode) throws Exception {
     IcebergMaterializationWriter w =
-        new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+        new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
 
     List<ColumnConfig> columns = new ArrayList<ColumnConfig>();
     columns.add(ColumnConfig.builder().name("data_col").type("VARCHAR").build());

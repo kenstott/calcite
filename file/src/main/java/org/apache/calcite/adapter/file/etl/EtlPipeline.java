@@ -892,7 +892,8 @@ public class EtlPipeline {
         LOGGER.info("Materialization disabled for table {} - running without a writer", tableName);
       } else {
         writer =
-            MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, tableDirectory, incrementalTracker);
+            MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider,
+                tableDirectory, incrementalTracker, workDirectory());
         writer.initialize(materializeConfig);
         LOGGER.info("Initialized {} writer for table {}", format, tableName);
       }
@@ -2607,7 +2608,8 @@ public class EtlPipeline {
     // committed state must re-fetch rather than replay an entry whose existence is its only
     // validity check.
     boolean bypass = isTableForceDownloaded(config.getName()) || !freshnessSkipAllowed;
-    return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass);
+    return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass,
+        workDirectory());
   }
 
   private Iterator<Map<String, Object>> fetchDataChain(EtlPipelineConfig config,
@@ -3014,7 +3016,7 @@ public class EtlPipeline {
     // the live fetch that "reprocess" was supposed to guarantee.
     boolean bypassRawCache = isTableForceDownloaded(config.getName()) || forceReprocessAll;
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
-        operatingDirectory, config.getColumns(), bypassRawCache);
+        workDirectory().getPath(), config.getColumns(), bypassRawCache);
   }
 
   /**
@@ -4765,5 +4767,13 @@ public class EtlPipeline {
           granularity, variables, e.getMessage());
       return variables;
     }
+  }
+
+  /**
+   * Where the pipeline's temporary files go: the process's staging directory (REQ-1992), the
+   * disk-backed scratch the offline ETL run declares; never the operating directory.
+   */
+  private java.io.File workDirectory() {
+    return org.apache.calcite.adapter.file.StagingDirectory.get();
   }
 }

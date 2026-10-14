@@ -64,6 +64,8 @@ public final class CrossProcessRateLimiter {
 
   private static Path stateFile(String key) {
     String safe = key == null ? "default" : key.replaceAll("[^a-zA-Z0-9._-]", "_");
+    // Machine-wide coordination state by ruling (REQ-1992 amendment): every process on the host
+    // must share the slot, and the JVM temp directory is the location they all share
     return Paths.get(System.getProperty("java.io.tmpdir"), "calcite-ratelimit-" + safe + ".slot");
   }
 

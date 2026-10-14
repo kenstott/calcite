@@ -73,7 +73,7 @@ public class CommitPerPartitionMultiChunkTest {
     File warehouseDir = new File(tempDir, "warehouse_multichunk");
     warehouseDir.mkdirs();
     writer = new IcebergMaterializationWriter(storageProvider,
-        warehouseDir.getAbsolutePath(), null);
+        warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config(warehouseDir, "multi_chunk_table", true));
 
     // Two chunks of ONE fetch unit — same partition variables, as the pipeline delivers them.
@@ -92,7 +92,7 @@ public class CommitPerPartitionMultiChunkTest {
     File warehouseDir = new File(tempDir, "warehouse_manychunks");
     warehouseDir.mkdirs();
     writer = new IcebergMaterializationWriter(storageProvider,
-        warehouseDir.getAbsolutePath(), null);
+        warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config(warehouseDir, "many_chunk_table", true));
 
     Map<String, String> partition = partition("east");
@@ -109,7 +109,7 @@ public class CommitPerPartitionMultiChunkTest {
     File warehouseDir = new File(tempDir, "warehouse_twoparts");
     warehouseDir.mkdirs();
     writer = new IcebergMaterializationWriter(storageProvider,
-        warehouseDir.getAbsolutePath(), null);
+        warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config(warehouseDir, "two_part_table", true));
 
     writer.writeBatch(rows(1, 2), partition("east"));
@@ -125,7 +125,7 @@ public class CommitPerPartitionMultiChunkTest {
     File warehouseDir = new File(tempDir, "warehouse_off");
     warehouseDir.mkdirs();
     writer = new IcebergMaterializationWriter(storageProvider,
-        warehouseDir.getAbsolutePath(), null);
+        warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config(warehouseDir, "off_table", false));
 
     Map<String, String> partition = partition("east");
@@ -141,7 +141,7 @@ public class CommitPerPartitionMultiChunkTest {
     File warehouseDir = new File(tempDir, "warehouse_incremental");
     warehouseDir.mkdirs();
     writer = new IcebergMaterializationWriter(storageProvider,
-        warehouseDir.getAbsolutePath(), null);
+        warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config(warehouseDir, "incremental_table", true));
 
     writer.writeBatch(rows(1, 2), partition("east"));
@@ -163,7 +163,7 @@ public class CommitPerPartitionMultiChunkTest {
     File warehouseDir = new File(tempDir, "warehouse_replace_once");
     warehouseDir.mkdirs();
     writer = new IcebergMaterializationWriter(storageProvider,
-        warehouseDir.getAbsolutePath(), null);
+        warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config(warehouseDir, "replace_once_table", true));
 
     Map<String, String> partition = partition("east");

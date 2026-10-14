@@ -67,6 +67,10 @@ import java.util.NoSuchElementException;
  */
 public class EntityBridgeListener implements TableLifecycleListener {
 
+  /** Local directory for the writers' temporary files; set by buildBridges (REQ-1992). */
+  private java.io.File workDirectory;
+
+
   private static final Logger LOGGER = LoggerFactory.getLogger(EntityBridgeListener.class);
 
   /** The one table this listener is wired to in ref-schema.yaml; all others computed here too. */
@@ -464,14 +468,16 @@ public class EntityBridgeListener implements TableLifecycleListener {
    *
    * @param pgConn Postgres connection (closed by caller)
    * @param materializeDir Parquet materialization directory (e.g., s3://govdata-parquet-v1)
+   * @param workDirectory local directory for the writers' temporary files (REQ-1992)
    * @throws Exception on SQL, I/O, or configuration errors
    */
-  public void buildBridges(Connection pgConn, String materializeDir) throws Exception {
-    buildBridges(pgConn, materializeDir, materializeDir);
+  public void buildBridges(Connection pgConn, String materializeDir, java.io.File workDirectory)
+      throws Exception {
+    buildBridges(pgConn, materializeDir, materializeDir, workDirectory);
   }
 
   /**
-   * As {@link #buildBridges(Connection, String)}, but writes the four result tables somewhere
+   * As {@link #buildBridges(Connection, String, java.io.File)}, but writes the four result tables somewhere
    * other than where the sources were read.
    *
    * <p>Reads and writes shared one directory until now, which made this sweep impossible to
@@ -482,8 +488,15 @@ public class EntityBridgeListener implements TableLifecycleListener {
    *
    * @param readDir where source tables are read from
    * @param writeDir where entity_org_bridge / canonical_org_entity / the person pair are written
+   * @param workDirectory local directory for the writers' temporary files (REQ-1992)
    */
-  public void buildBridges(Connection pgConn, String readDir, String writeDir) throws Exception {
+  public void buildBridges(Connection pgConn, String readDir, String writeDir,
+      java.io.File workDirectory) throws Exception {
+    if (workDirectory == null) {
+      throw new IllegalArgumentException("EntityBridgeListener: no work directory for the "
+          + "writers' temporary files");
+    }
+    this.workDirectory = workDirectory;
     String runId = Instant.now().toString();
     LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}, read={}, "
         + "write={}", runId, readDir, writeDir);
@@ -1277,8 +1290,9 @@ public class EntityBridgeListener implements TableLifecycleListener {
       stmt.execute("SET threads=2");
       stmt.execute("SET preserve_insertion_order=false");
       stmt.execute("SET memory_limit='2GB'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
-      stmt.execute("SET temp_directory='" + tempDir + "'");
+      // DuckDB spill in the run's staging directory (REQ-1992), never the JVM temp directory
+      String tempDir = new java.io.File(org.apache.calcite.adapter.file.StagingDirectory.get(), "entity-bridge-duckdb").getPath();
+      stmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
       stmt.execute("PRAGMA max_temp_directory_size='30GB'");
       try {
         stmt.execute("INSTALL parquet");
@@ -1399,7 +1413,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     return StorageProviderFactory.createFromType("s3", s3Config);
   }
 
-  private static long writeTableBridges(String tableName, CloseableRowIterator rows,
+  private long writeTableBridges(String tableName, CloseableRowIterator rows,
       String materializeDir) throws IOException {
     if (materializeDir == null || materializeDir.isEmpty()) {
       throw new IOException("EntityBridgeListener: no write directory — cannot write ref."
@@ -1408,7 +1422,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     MaterializeConfig matConfig = standaloneMaterializeConfig(tableName);
     StorageProvider storageProvider = standaloneStorageProvider(materializeDir);
     MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        matConfig, storageProvider, materializeDir + "/ref");
+        matConfig, storageProvider, materializeDir + "/ref", workDirectory);
     writer.initialize(matConfig);
     try {
       writer.writeBatch(rows, Collections.<String, String>emptyMap());
@@ -1423,7 +1437,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
   }
 
   /** Standalone non-streaming write (for the {@link #buildBridges} orchestrator path). */
-  private static void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows,
+  private void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows,
       String materializeDir) throws IOException {
     writeTableBridges(tableName, new ListRowIterator(rows), materializeDir);
   }

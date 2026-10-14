@@ -119,6 +119,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   private final StorageProvider storageProvider;
   private final String warehousePath;
+  /** A local directory the schema owns: temporary and locally staged files go here (REQ-1992). */
+  private final File workDirectory;
   @SuppressWarnings("UnusedVariable")
   private final IncrementalTracker incrementalTracker;
 
@@ -248,9 +250,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * @param incrementalTracker Tracker for incremental processing
    */
   public IcebergMaterializationWriter(StorageProvider storageProvider, String warehousePath,
-      IncrementalTracker incrementalTracker) {
+      IncrementalTracker incrementalTracker, File workDirectory) {
     this.storageProvider = storageProvider;
     this.warehousePath = warehousePath;
+    this.workDirectory = workDirectory;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
     this.totalRowsWritten = 0;
     this.totalRecordsCommitted = 0;
@@ -1368,8 +1371,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
 
-    java.io.File tmpJson = java.io.File.createTempFile("iceberg-infer-", ".json");
-    java.io.File tmpParquet = java.io.File.createTempFile("iceberg-infer-", ".parquet");
+    java.io.File tmpJson = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "iceberg-infer-", ".json");
+    java.io.File tmpParquet = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "iceberg-infer-", ".parquet");
     tmpJson.deleteOnExit();
     tmpParquet.deleteOnExit();
     try {
@@ -2087,7 +2092,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Write rows to a temp file — read_json_auto treats string args as file paths,
     // not inline JSON, so passing content directly causes a glob-pattern error.
     String json = MAPPER.writeValueAsString(rows);
-    java.io.File tmpJson = java.io.File.createTempFile("dq-expr-src-", ".json");
+    java.io.File tmpJson = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "dq-expr-src-", ".json");
     tmpJson.deleteOnExit();
     try {
       java.nio.file.Files.write(tmpJson.toPath(), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -2565,9 +2571,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     String stagingPath;
     if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
-      // Use local temp directory for faster staging
-      java.io.File tempDir =
-          new File(System.getProperty("java.io.tmpdir"), "iceberg-staging/" + stagingSubpath);
+      // Stage locally for speed, under the schema's work directory (REQ-1992)
+      java.io.File tempDir = new File(
+          org.apache.calcite.adapter.file.WorkFiles.tempDirectory(workDirectory).toFile(),
+          "iceberg-staging/" + stagingSubpath);
       tempDir.mkdirs();
       stagingPath = tempDir.getAbsolutePath();
       LOGGER.debug("Created local staging path: {}", stagingPath);

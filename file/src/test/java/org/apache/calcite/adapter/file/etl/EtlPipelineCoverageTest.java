@@ -74,7 +74,7 @@ public class EtlPipelineCoverageTest {
     factoryMock.when(
         () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
-        anyString(), any(IncrementalTracker.class)))
+        anyString(), any(IncrementalTracker.class), any(java.io.File.class)))
         .thenReturn(mockWriter);
   }
 
@@ -1341,7 +1341,7 @@ public class EtlPipelineCoverageTest {
     factoryMock.when(
         () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
-        anyString(), any(IncrementalTracker.class)))
+        anyString(), any(IncrementalTracker.class), any(java.io.File.class)))
         .thenReturn(failingWriter);
     when(failingWriter.getFormat()).thenReturn(MaterializeConfig.Format.ICEBERG);
     // Throw during initialize

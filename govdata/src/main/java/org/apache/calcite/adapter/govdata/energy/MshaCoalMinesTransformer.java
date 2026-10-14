@@ -44,10 +44,14 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String MINES_ZIP_URL =
       "https://arlweb.msha.gov/OpenGovernmentData/DataSets/Mines.zip";
-  private static final String MINES_CACHE_FILE =
-      System.getProperty("java.io.tmpdir") + File.separator + "msha_mines_latest.csv";
+  /** The cached CSV, in the run's staging directory (REQ-1992). */
+  private static String minesCacheFile() {
+    return org.apache.calcite.adapter.file.StagingDirectory.get().getPath() + File.separator + "msha_mines_latest.csv";
+  }
   /** Sidecar recording the upstream {@code Last-Modified} the cached CSV was downloaded at. */
-  private static final String MINES_LASTMOD_SIDECAR = MINES_CACHE_FILE + ".lastmodified";
+  private static String minesLastModSidecar() {
+    return minesCacheFile() + ".lastmodified";
+  }
 
   @Override
   public String transform(String response, RequestContext context) {
@@ -198,7 +202,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
   }
 
   private Map<String, Map<String, String>> loadMinesReference() {
-    File cacheFile = new File(MINES_CACHE_FILE);
+    File cacheFile = new File(minesCacheFile());
     // Freshness by upstream Last-Modified, never a timer: reuse the cached CSV only when the MSHA
     // archive's Last-Modified matches what we recorded for it; a change (or first run) re-downloads.
     String upstreamLastModified = headLastModified(MINES_ZIP_URL);
@@ -385,7 +389,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
 
   /** Reads the cached upstream Last-Modified sidecar, or null if absent. */
   private String readLastModifiedSidecar() {
-    File sidecar = new File(MINES_LASTMOD_SIDECAR);
+    File sidecar = new File(minesLastModSidecar());
     if (!sidecar.exists()) {
       return null;
     }
@@ -413,7 +417,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
   /** Writes the upstream Last-Modified sidecar next to the cached CSV. */
   private void writeLastModifiedSidecar(String value) {
     try {
-      FileOutputStream out = new FileOutputStream(MINES_LASTMOD_SIDECAR);
+      FileOutputStream out = new FileOutputStream(minesLastModSidecar());
       try {
         out.write(value.getBytes("UTF-8"));
       } finally {

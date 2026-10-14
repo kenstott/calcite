@@ -319,12 +319,16 @@ public class StorageProviderFactory {
   }
 
   /**
-   * Returns the govdata cache root directory from {@code GOVDATA_CACHE_DIR}, falling back to
-   * the JVM temp directory when the variable is unset or empty.
+   * Returns the govdata cache root directory from {@code GOVDATA_CACHE_DIR}, which is required:
+   * there is no default location (REQ-1992), so an unset variable is refused, naming it.
    */
   public static String getGovDataCacheDir() {
     String dir = System.getenv("GOVDATA_CACHE_DIR");
-    return (dir != null && !dir.isEmpty()) ? dir : System.getProperty("java.io.tmpdir");
+    if (dir == null || dir.isEmpty()) {
+      throw new IllegalStateException("GOVDATA_CACHE_DIR is not set: the govdata raw cache has no "
+          + "default directory");
+    }
+    return dir;
   }
 
   /**

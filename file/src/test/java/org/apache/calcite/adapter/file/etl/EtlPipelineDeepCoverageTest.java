@@ -63,7 +63,7 @@ public class EtlPipelineDeepCoverageTest {
     factoryMock.when(
         () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
-        anyString(), any(IncrementalTracker.class)))
+        anyString(), any(IncrementalTracker.class), any(java.io.File.class)))
         .thenReturn(mockWriter);
   }
 

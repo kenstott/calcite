@@ -192,7 +192,8 @@ public class LocalStagingStorageProvider implements StorageProvider {
     if (env != null && !env.isEmpty()) {
       return new File(env, "sec/staging");
     }
-    return new File(System.getProperty("java.io.tmpdir"), "etl-sec-staging");
+    // In the run's staging directory (REQ-1992), never the JVM temp directory
+    return new File(org.apache.calcite.adapter.file.StagingDirectory.get(), "etl-sec-staging");
   }
 
   private static int resolveFlushThreshold() {

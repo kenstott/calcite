@@ -235,7 +235,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     JsonNode data = fetchHudData(url);
 
     // Write to temp file, then upload to cache
-    File tempFile = File.createTempFile("hud-zip-county-", ".csv");
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hud-zip-county-", ".csv");
     convertJsonToCsv(data, tempFile, "zip_county");
 
     // Upload to cache (stream the temp file rather than buffering it in a byte[])
@@ -251,7 +251,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
    * Downloads from cache storage to a local temp file for reading.
    */
   private File downloadCacheToTemp(String cachePath, String filename) throws IOException {
-    File tempFile = File.createTempFile("hud-cache-", "-" + filename);
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hud-cache-", "-" + filename);
     try (java.io.InputStream in = storageProvider.openInputStream(cachePath);
          java.io.OutputStream out = new java.io.FileOutputStream(tempFile)) {
       byte[] buffer = new byte[8192];
@@ -287,7 +287,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     JsonNode data = fetchHudData(url);
 
     // Write to temp file, then upload to cache
-    File tempFile = File.createTempFile("hud-zip-tract-", ".csv");
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hud-zip-tract-", ".csv");
     convertJsonToCsv(data, tempFile, "zip_tract");
 
     // Upload to cache (stream the temp file rather than buffering it in a byte[])
@@ -323,7 +323,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     JsonNode data = fetchHudData(url);
 
     // Write to temp file, then upload to cache
-    File tempFile = File.createTempFile("hud-zip-cbsa-", ".csv");
+    File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hud-zip-cbsa-", ".csv");
     convertJsonToCsv(data, tempFile, "zip_cbsa");
 
     // Upload to cache (stream the temp file rather than buffering it in a byte[])
@@ -399,7 +399,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
       JsonNode data = fetchHudData(url);
 
       // Write to temp file, then upload to cache
-      File tempFile = File.createTempFile("hud-zip-cd-", ".csv");
+      File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("hud-zip-cd-", ".csv");
       convertJsonToCsv(data, tempFile, "zip_cd");
 
       // Upload to cache (stream the temp file rather than buffering it in a byte[])

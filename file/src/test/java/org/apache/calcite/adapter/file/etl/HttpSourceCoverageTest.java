@@ -67,7 +67,7 @@ public class HttpSourceCoverageTest {
         .url("http://localhost/test")
         .build();
     return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
-        null, null);
+        null, tempDir.toString());
   }
 
   @Test void testConstructorWithResponseTransformer() {

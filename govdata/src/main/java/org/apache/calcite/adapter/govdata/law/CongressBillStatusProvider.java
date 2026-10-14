@@ -300,7 +300,7 @@ public class CongressBillStatusProvider implements StorageAwareDataProvider {
         "bill_status/congress=%s/bill_type=%s/refresh=%s/BILLSTATUS.zip",
         congress, billType, refresh));
 
-    File zipFile = File.createTempFile("billstatus-", ".zip");
+    File zipFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("billstatus-", ".zip");
     zipFile.deleteOnExit();
     try {
       if (sp.exists(cachePath)) {
