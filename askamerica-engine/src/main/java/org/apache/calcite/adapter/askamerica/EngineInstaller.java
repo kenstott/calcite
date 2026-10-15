@@ -153,7 +153,31 @@ final class EngineInstaller {
             return existing;
         }
         Files.createDirectories(dest.getParent());
-        return lockAndDownload(dest, url, serverMode);
+        try {
+            return lockAndDownload(dest, url, serverMode);
+        } catch (IOException e) {
+            // Windows will not replace a jar another process has open, and Claude Desktop's own
+            // MCP processes hold it open for as long as they run. Launching the wizard right
+            // after installing a new version therefore died with exit code 1 although the older
+            // jar in the cache works. Say so, and use that jar; the update lands on the next
+            // launch when nothing holds it. With no jar at all there is nothing to use.
+            if (existing != null && isFileInUse(e)) {
+                report("The engine update cannot replace " + dest + " while another AskAmerica "
+                    + "process (Claude Desktop's connector) is using it — continuing with the "
+                    + "installed engine " + describe(existing) + ". Quit Claude Desktop and "
+                    + "reopen AskAmerica to finish the update.");
+                return existing;
+            }
+            throw e;
+        }
+    }
+
+    /** Whether {@code e} is the operating system refusing to replace a file another process has
+     *  open (Windows: "being used by another process"). */
+    static boolean isFileInUse(IOException e) {
+        return e instanceof java.nio.file.FileSystemException
+            && String.valueOf(((java.nio.file.FileSystemException) e).getReason())
+                .toLowerCase(java.util.Locale.ROOT).contains("used by another process");
     }
 
     private static void startDaemon(Runnable task) {
@@ -479,10 +503,18 @@ final class EngineInstaller {
         }
         verifyDownloadedJar(tmp, url);
         try {
-            Files.move(tmp, dest,
-                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException atomicUnsupported) {
-            Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(tmp, dest,
+                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicUnsupported) {
+                Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            // The replace failed (on Windows: another process has the cached jar open). The
+            // downloaded copy is useless and was left behind as an orphaned .part each time.
+            Files.deleteIfExists(tmp);
+            progress.done();
+            throw e;
         }
         progress.done();
     }
