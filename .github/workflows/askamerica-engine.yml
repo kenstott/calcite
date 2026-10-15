@@ -20,8 +20,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ inputs.version && format('engine-v{0}', inputs.version) || github.ref_name }}
   cancel-in-progress: false
 
-# actions: write is needed by the installer job's "Ensure pgwire-govdata bundle" step,
-# which dispatches the separate "pgwire-adapters release" workflow (its `release: types:
+# actions: write is needed by the bundles job, which dispatches the separate
+# "pgwire-adapters release" workflow (its `release: types:
 # [created]` trigger does not fire reliably — confirmed live, every prior run this
 # project has ever had was a manual workflow_dispatch) when this version's bundle isn't
 # already published.
@@ -371,6 +371,96 @@ jobs:
           AWS_REGION:              auto
           GOVDATA_PARQUET_DIR:     ${{ secrets.GOVDATA_PARQUET_DIR }}
 
+  # ── Data-server bundles ───────────────────────────────────────────────────
+  # The release must not go public before the pgwire-govdata bundle of every platform is attached,
+  # and the workflow that builds them (pgwire-adapters release) has to be started: its
+  # `release: created` trigger does not fire reliably. This job starts it when no run for this
+  # version is in flight, waits for the three tarballs, and checks each against its published
+  # sha256. One light Linux runner holds the wait; the installers do not wait at all.
+  # BUNDLE_MAX_WAIT_MINUTES and BUNDLE_POLL_SECONDS exist so the logic can be tested quickly.
+  bundles:
+    name: Data-server bundles
+    runs-on: ubuntu-latest
+    needs: [jar]
+    timeout-minutes: 340
+    steps:
+      - name: Start the bundle build if none is running, then wait for the three bundles
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_MAX_WAIT_MINUTES: "300"
+          BUNDLE_POLL_SECONDS: "30"
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          TAG="engine-v${VERSION}"
+          ASSETS=("pgwire-govdata-${VERSION}-windows-x86_64.tar.gz" \
+                  "pgwire-govdata-${VERSION}-macos-arm64.tar.gz" \
+                  "pgwire-govdata-${VERSION}-linux-x86_64.tar.gz")
+
+          # Assets not on the release yet. A failed lookup counts as "all missing", so a
+          # transient error keeps the wait going and never reads as "published".
+          missing() {
+            local names
+            names=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' 2>/dev/null) || names=""
+            for a in "${ASSETS[@]}"; do grep -qx "$a" <<<"$names" || echo "$a"; done
+          }
+
+          if [ -n "$(missing)" ]; then
+            echo "Not yet on $TAG: $(missing | tr '\n' ' ')"
+            # Dispatch once, not once per leg: skip when a run for THIS version is in flight,
+            # filtered by displayTitle (see pgwire-adapters-release.yml's run-name). A leftover run
+            # of a different version produces assets tagged for that version, never for $TAG
+            # (three releases in quick succession each hung 45 minutes on one, 2026-09-18).
+            IN_FLIGHT=$(gh run list --repo "$REPO" --workflow "pgwire-adapters release" \
+              --json status,displayTitle \
+              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
+            if [ "${IN_FLIGHT:-0}" = "0" ]; then
+              echo "Dispatching pgwire-adapters release for $VERSION"
+              gh workflow run "pgwire-adapters release" --repo "$REPO" -f version="$VERSION" -f publish=true
+            else
+              echo "A pgwire-adapters release run for $VERSION is already in flight; waiting on it."
+            fi
+            deadline=$(( $(date +%s) + BUNDLE_MAX_WAIT_MINUTES * 60 ))
+            last=""
+            while [ -n "$(missing)" ]; do
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::still missing on $TAG after ${BUNDLE_MAX_WAIT_MINUTES} minutes: $(missing | tr '\n' ' ')"
+                exit 1
+              fi
+              now="$(missing | tr '\n' ' ')"
+              [ "$now" = "$last" ] || { echo "$(date -u +%H:%M) waiting for: $now"; last="$now"; }
+              sleep "$BUNDLE_POLL_SECONDS"
+            done
+          fi
+          echo "All three bundles are on $TAG; verifying their sha256."
+
+          # An authenticated gh download, not the public URL: the release is still a draft, and a
+          # draft's public asset URL answers "NotFound" (engine-v0.100.1). Retried: transient HTTP/2
+          # stream errors against the release CDN have aborted this before.
+          for ASSET in "${ASSETS[@]}"; do
+            WORKDIR=$(mktemp -d)
+            ok=0
+            for attempt in 1 2 3 4; do
+              if gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --pattern "${ASSET}.sha256" \
+                   --dir "$WORKDIR" --clobber; then ok=1; break; fi
+              echo "gh release download of $ASSET, attempt $attempt failed; retrying"
+              sleep $((attempt * 5))
+            done
+            [ "$ok" = "1" ] || { echo "::error::could not download $ASSET from $TAG"; exit 1; }
+            EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/${ASSET}.sha256" | cut -c1-64)
+            ACTUAL=$(sha256sum "$WORKDIR/$ASSET" | awk '{print $1}')
+            if [ "$EXPECTED" != "$ACTUAL" ]; then
+              echo "::error::$ASSET sha256 mismatch: expected $EXPECTED got $ACTUAL"
+              exit 1
+            fi
+            echo "$ASSET matches its published sha256."
+            rm -rf "$WORKDIR"
+          done
+
   # ── Native installers (per-platform, bundled JRE) ─────────────────────────
   installer:
     name: Build installer — ${{ matrix.os }}
@@ -413,122 +503,16 @@ jobs:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
-      # The installer is small and has a step to download its assets. It does NOT carry the
-      # pgwire-govdata bundle (about a gigabyte): the installed engine downloads the bundle of
-      # its own version on first use and verifies its sha256 (PgwireGovDataInstaller), on every
-      # platform, as it downloads the engine jar. From 0.91.0 to 0.109.1 the .msi and the .deb
-      # did carry it and were about 920 MB and 1,220 MB; the "Installer stays small" step below
-      # fails the build if that returns.
+      # The installer is small and has a step to download its assets: it does NOT carry the
+      # pgwire-govdata bundle (about a gigabyte); the installed engine downloads the bundle of its
+      # own version on first use and verifies its sha256 (PgwireGovDataInstaller). From 0.91.0 to
+      # 0.109.1 the .msi and the .deb did carry it and were about 920 MB and 1,220 MB; the
+      # "Installer stays small" step below fails the build if that returns.
       #
-      # What this step still does is make sure that download will succeed: the bundle for this
-      # version must be published before the installer that will ask for it. The bundle's own
-      # workflow's `release: types: [created]` trigger does not fire reliably (confirmed live:
-      # every prior run this project has had was a manual workflow_dispatch), so this step
-      # dispatches that workflow itself if this version's bundle is not yet published, waits
-      # for it, and checks the published tarball against its published sha256.
-      #
-      # Not on macOS, as before: that leg has never run this step (it was excluded when the
-      # bundle was taken out of the .pkg for notarization). The macOS bundle is built by the
-      # same dispatched workflow.
-      - name: Ensure pgwire-govdata bundle for this version
-        if: matrix.os != 'macos-latest'
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          VERSION="${{ github.event.inputs.version || github.ref_name }}"
-          VERSION="${VERSION#engine-v}"
-          TAG="engine-v${VERSION}"
-          case "${{ matrix.os }}" in
-            windows-latest) VARIANT=windows-x86_64 ;;
-            macos-latest)   VARIANT=macos-arm64 ;;
-            ubuntu-latest)  VARIANT=linux-x86_64 ;;
-            *) echo "unknown matrix.os ${{ matrix.os }}"; exit 1 ;;
-          esac
-          ASSET="pgwire-govdata-${VERSION}-${VARIANT}.tar.gz"
-
-          have_asset() {
-            gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
-              --jq ".assets[].name" 2>/dev/null | grep -qx "$ASSET"
-          }
-
-          if ! have_asset; then
-            echo "No $ASSET on $TAG yet."
-            # Avoid dispatching 3x (once per OS in this matrix) if a run for THIS version is
-            # already in flight from another leg or a prior manual trigger -- filtered by
-            # displayTitle (see pgwire-adapters-release.yml's run-name), not just "any run",
-            # since an in-flight run left over from a DIFFERENT version satisfies neither this
-            # check nor the wait loop below it: the asset it produces is tagged for its own
-            # version, never for $TAG. Confirmed live (2026-09-18): three releases cut in quick
-            # succession each saw a stale older-version run in flight, skipped dispatching, and
-            # then hung the full 45-minute wait below for an asset nothing was ever building.
-            IN_FLIGHT=$(gh run list --repo "${{ github.repository }}" \
-              --workflow "pgwire-adapters release" \
-              --json status,displayTitle \
-              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
-            if [ "${IN_FLIGHT:-0}" = "0" ]; then
-              echo "Dispatching pgwire-adapters release for $VERSION"
-              gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
-                -f version="$VERSION" -f publish=true
-            else
-              echo "A pgwire-adapters release run for $VERSION is already in flight -- waiting on it."
-            fi
-            echo "Waiting for $ASSET to appear on $TAG (up to 45 min)..."
-            found=0
-            for i in $(seq 1 90); do
-              sleep 30
-              if have_asset; then found=1; break; fi
-            done
-            if [ "$found" != "1" ]; then
-              echo "::error::$ASSET never appeared on $TAG after 45 minutes"
-              exit 1
-            fi
-          fi
-          echo "Found $ASSET"
-
-          # A dedicated mktemp -d, not /tmp directly, for the extraction destination --
-          # confirmed live this matters: macOS's /tmp is a symlink to /private/tmp, and
-          # `find /tmp -maxdepth 1 -type d -name "pgwire-govdata-*"` matched NOTHING through
-          # it (silently -- no error, just an empty result), which made $EXTRACTED empty and
-          # `cp -R "$EXTRACTED"/.` become `cp -R /.` -- copying the ENTIRE root filesystem
-          # into the staging dir until the runner's disk filled. A dedicated scratch dir
-          # side-steps the symlink question entirely, and the explicit empty-check below
-          # means a similar failure fails loudly instead of silently substituting "/".
-          WORKDIR=$(mktemp -d)
-          # Authenticated gh download, not the public releases/download URL: release-please
-          # creates the release as a draft (published only once the jar is attached), and a
-          # draft's public asset URL answers "NotFound" -- which curl -sL saved as the file
-          # and the sha256 check then reported as "expected NotFound" (engine-v0.100.1).
-          # Retried because transient HTTP/2 stream errors against GitHub's release CDN
-          # have aborted this step before.
-          downloaded=0
-          for attempt in 1 2 3 4; do
-            if gh release download "$TAG" --repo "${{ github.repository }}" \
-                 --pattern "$ASSET" --pattern "${ASSET}.sha256" --dir "$WORKDIR" --clobber; then
-              downloaded=1; break
-            fi
-            echo "gh release download attempt $attempt failed; retrying"
-            sleep $((attempt * 5))
-          done
-          if [ "$downloaded" != "1" ]; then
-            echo "::error::could not download $ASSET from $TAG"
-            exit 1
-          fi
-          mv "$WORKDIR/$ASSET" "$WORKDIR/pgwire-govdata.tar.gz"
-          mv "$WORKDIR/${ASSET}.sha256" "$WORKDIR/pgwire-govdata.tar.gz.sha256"
-          EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/pgwire-govdata.tar.gz.sha256" | cut -c1-64)
-          if command -v sha256sum >/dev/null 2>&1; then
-            ACTUAL=$(sha256sum "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
-          else
-            ACTUAL=$(shasum -a 256 "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
-          fi
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::error::pgwire-govdata sha256 mismatch: expected $EXPECTED got $ACTUAL"
-            exit 1
-          fi
-          rm -rf "$WORKDIR"
-          echo "$ASSET is published on $TAG and matches its sha256; it is not put into the installer."
+      # That the bundles are published is waited for in the `bundles` job, not here: this job
+      # used to wait up to 45 minutes on a Windows and an Ubuntu runner and failed whenever
+      # GitHub's runner queue held the bundle build back longer (engine-v0.112.0 and v0.112.1 each
+      # had both installers rerun by hand).
 
       - name: Import Apple signing certificate (macOS only)
         if: matrix.os == 'macos-latest'
@@ -1042,7 +1026,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [jar, govdata-jar, trino-plugins, browser-extension, installer, publish, publish-python]
+    needs: [jar, govdata-jar, trino-plugins, browser-extension, installer, bundles, publish, publish-python]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
