@@ -77,8 +77,8 @@ final class PgwireGovDataInstaller {
 
     private static final String LATEST_API =
         "https://api.github.com/repos/kenstott/calcite/releases/latest";
-    private static final String RELEASE_BY_TAG =
-        "https://api.github.com/repos/kenstott/calcite/releases/tags/";
+    private static final String RELEASE_DOWNLOAD =
+        "https://github.com/kenstott/calcite/releases/download/";
 
     static Path cacheDir() {
         return Paths.get(System.getProperty("user.home"), ".askamerica", "pgwire-govdata");
@@ -574,22 +574,18 @@ final class PgwireGovDataInstaller {
      */
     private static Path prepareRelease(Path dir, String version) {
         String variant = osVariant();
-        String json;
+        String assetUrl = bundleUrl(version, variant);
+        String expectedSha256;
         try {
-            json = fetchText(RELEASE_BY_TAG + "engine-v" + version, "application/vnd.github+json");
-        } catch (Exception e) {
-            throw new InstallFailedException("Could not look up release engine-v" + version
-                + " on GitHub: " + e.getMessage(), e);
+            expectedSha256 = requiredChecksum(assetUrl + ".sha256", url -> fetchText(url));
+        } catch (InstallFailedException e) {
+            if (isAssetMissing(e)) {
+                report("Release engine-v" + version + " publishes no pgwire-govdata-" + version
+                    + "-" + variant + ".tar.gz — nothing to install.");
+                return null;
+            }
+            throw e;
         }
-        String assetUrl = firstMatch(json,
-            "\"browser_download_url\"\\s*:\\s*\"([^\"]*pgwire-govdata-[^\"]*-"
-            + Pattern.quote(variant) + "\\.tar\\.gz)\"");
-        if (assetUrl == null) {
-            report("No pgwire-govdata-*-" + variant + ".tar.gz asset in release engine-v"
-                + version + " — nothing to install.");
-            return null;
-        }
-        String expectedSha256 = requiredChecksum(assetUrl + ".sha256", url -> fetchText(url));
         report("Downloading pgwire-govdata " + version + " (" + variant + ") from " + assetUrl);
         Path staging = dir.resolveSibling(dir.getFileName() + ".staging-"
             + ProcessHandle.current().pid());
@@ -738,6 +734,40 @@ final class PgwireGovDataInstaller {
      * (see .github/workflows/pgwire-adapters-release.yml): {@code linux-x86_64},
      * {@code macos-arm64}, {@code windows-x86_64}. Intel Macs are not published yet.
      */
+    /**
+     * The bundle of release {@code engine-v<version>} for {@code variant}, at its fixed download
+     * address. Looking the asset up through the GitHub API instead meant a 250 KB release
+     * listing fetched under a ten-second limit and GitHub's 60 requests an hour for an
+     * unauthenticated address, and the install failed with "Could not look up release" whenever
+     * that one call did (a Windows install, 2026-10-15).
+     */
+    static String bundleUrl(String version, String variant) {
+        return RELEASE_DOWNLOAD + "engine-v" + version + "/pgwire-govdata-" + version + "-"
+            + variant + ".tar.gz";
+    }
+
+    /** A non-200 answer; the status is kept so a caller can tell "not published" (404) from a fault. */
+    static final class HttpStatusException extends IOException {
+        final int status;
+
+        HttpStatusException(int status, String url) {
+            super("HTTP " + status + " from " + url);
+            this.status = status;
+        }
+    }
+
+    /** True when {@code e} says the address does not exist: this release publishes no such file. */
+    static boolean isAssetMissing(Throwable e) {
+        Throwable c = e;
+        while (c != null) {
+            if (c instanceof HttpStatusException && ((HttpStatusException) c).status == 404) {
+                return true;
+            }
+            c = c.getCause();
+        }
+        return false;
+    }
+
     private static String osVariant() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
@@ -777,7 +807,7 @@ final class PgwireGovDataInstaller {
         }
         HttpResponse<String> resp = client.send(b.build(), HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() != 200) {
-            throw new IOException("HTTP " + resp.statusCode() + " from " + url);
+            throw new HttpStatusException(resp.statusCode(), url);
         }
         return resp.body();
     }
