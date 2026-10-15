@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.113.0](https://github.com/kenstott/calcite/compare/engine-v0.112.1...engine-v0.113.0) (2026-10-15)
+
+
+### Features
+
+* **govdata/ops:** private jars are deleted once nothing uses them; the pinned-jar cleanup works again ([e29b5fb](https://github.com/kenstott/calcite/commit/e29b5fbc456ec539326ba9bdf3d80a12e2e7355c))
+
+
+### Bug Fixes
+
+* **askamerica:** the tool-call history survives an engine restart ([449ddd9](https://github.com/kenstott/calcite/commit/449ddd9a0709e614c924d426528db2e8c0bb5427))
+
 ## [0.112.1](https://github.com/kenstott/calcite/compare/engine-v0.112.0...engine-v0.112.1) (2026-10-15)
 
 
