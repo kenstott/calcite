@@ -5986,7 +5986,7 @@ partitionedTables:
       per-state bulk CSV rather than the per-quarter API: one file carries that state's whole
       history, so a release costs 51 fetches instead of ~4,700, and every published measure and
       suppression flag is retained rather than a five-variable projection. Payroll is entirely
-      NULL (sPayroll=5) in every row as of R2021Q4 onward -- Census permanently suppressed QWI
+      NULL (s_payroll=5) in every row as of R2021Q4 onward -- Census permanently suppressed QWI
       Total Payroll measures for privacy protection and redirects users to BLS QCEW instead; this
       is a source-side omission, not an ingestion gap.
     dimensions:
@@ -6031,70 +6031,70 @@ partitionedTables:
       - {name: year, type: int}
       - {name: quarter, type: int}
       - {name: agg_level, type: varchar}
-      - {name: Emp, type: bigint}
-      - {name: EmpEnd, type: bigint}
-      - {name: EmpS, type: bigint}
-      - {name: EmpTotal, type: bigint}
-      - {name: EmpSpv, type: bigint}
-      - {name: HirA, type: bigint}
-      - {name: HirN, type: bigint}
-      - {name: HirR, type: bigint}
-      - {name: Sep, type: bigint}
-      - {name: HirAEnd, type: bigint}
-      - {name: SepBeg, type: bigint}
-      - {name: HirAEndRepl, type: bigint}
-      - {name: HirAEndR, type: double}
-      - {name: SepBegR, type: double}
-      - {name: HirAEndReplR, type: double}
-      - {name: HirAS, type: bigint}
-      - {name: HirNS, type: bigint}
-      - {name: SepS, type: bigint}
-      - {name: SepSnx, type: bigint}
-      - {name: TurnOvrS, type: double}
-      - {name: FrmJbGn, type: bigint}
-      - {name: FrmJbLs, type: bigint}
-      - {name: FrmJbC, type: bigint}
-      - {name: FrmJbGnS, type: bigint}
-      - {name: FrmJbLsS, type: bigint}
-      - {name: FrmJbCS, type: bigint}
-      - {name: EarnS, type: bigint}
-      - {name: EarnBeg, type: bigint}
-      - {name: EarnHirAS, type: bigint}
-      - {name: EarnHirNS, type: bigint}
-      - {name: EarnSepS, type: bigint}
-      - {name: Payroll, type: bigint}
-      - {name: sEmp, type: int}
-      - {name: sEmpEnd, type: int}
-      - {name: sEmpS, type: int}
-      - {name: sEmpTotal, type: int}
-      - {name: sEmpSpv, type: int}
-      - {name: sHirA, type: int}
-      - {name: sHirN, type: int}
-      - {name: sHirR, type: int}
-      - {name: sSep, type: int}
-      - {name: sHirAEnd, type: int}
-      - {name: sSepBeg, type: int}
-      - {name: sHirAEndRepl, type: int}
-      - {name: sHirAEndR, type: int}
-      - {name: sSepBegR, type: int}
-      - {name: sHirAEndReplR, type: int}
-      - {name: sHirAS, type: int}
-      - {name: sHirNS, type: int}
-      - {name: sSepS, type: int}
-      - {name: sSepSnx, type: int}
-      - {name: sTurnOvrS, type: int}
-      - {name: sFrmJbGn, type: int}
-      - {name: sFrmJbLs, type: int}
-      - {name: sFrmJbC, type: int}
-      - {name: sFrmJbGnS, type: int}
-      - {name: sFrmJbLsS, type: int}
-      - {name: sFrmJbCS, type: int}
-      - {name: sEarnS, type: int}
-      - {name: sEarnBeg, type: int}
-      - {name: sEarnHirAS, type: int}
-      - {name: sEarnHirNS, type: int}
-      - {name: sEarnSepS, type: int}
-      - {name: sPayroll, type: int}
+      - {name: emp, type: bigint, source: Emp}
+      - {name: emp_end, type: bigint, source: EmpEnd}
+      - {name: emp_s, type: bigint, source: EmpS}
+      - {name: emp_total, type: bigint, source: EmpTotal}
+      - {name: emp_spv, type: bigint, source: EmpSpv}
+      - {name: hir_a, type: bigint, source: HirA}
+      - {name: hir_n, type: bigint, source: HirN}
+      - {name: hir_r, type: bigint, source: HirR}
+      - {name: sep, type: bigint, source: Sep}
+      - {name: hir_aend, type: bigint, source: HirAEnd}
+      - {name: sep_beg, type: bigint, source: SepBeg}
+      - {name: hir_aend_repl, type: bigint, source: HirAEndRepl}
+      - {name: hir_aend_r, type: double, source: HirAEndR}
+      - {name: sep_beg_r, type: double, source: SepBegR}
+      - {name: hir_aend_repl_r, type: double, source: HirAEndReplR}
+      - {name: hir_as, type: bigint, source: HirAS}
+      - {name: hir_ns, type: bigint, source: HirNS}
+      - {name: sep_s, type: bigint, source: SepS}
+      - {name: sep_snx, type: bigint, source: SepSnx}
+      - {name: turn_ovr_s, type: double, source: TurnOvrS}
+      - {name: frm_jb_gn, type: bigint, source: FrmJbGn}
+      - {name: frm_jb_ls, type: bigint, source: FrmJbLs}
+      - {name: frm_jb_c, type: bigint, source: FrmJbC}
+      - {name: frm_jb_gn_s, type: bigint, source: FrmJbGnS}
+      - {name: frm_jb_ls_s, type: bigint, source: FrmJbLsS}
+      - {name: frm_jb_cs, type: bigint, source: FrmJbCS}
+      - {name: earn_s, type: bigint, source: EarnS}
+      - {name: earn_beg, type: bigint, source: EarnBeg}
+      - {name: earn_hir_as, type: bigint, source: EarnHirAS}
+      - {name: earn_hir_ns, type: bigint, source: EarnHirNS}
+      - {name: earn_sep_s, type: bigint, source: EarnSepS}
+      - {name: payroll, type: bigint, source: Payroll}
+      - {name: s_emp, type: int, source: sEmp}
+      - {name: s_emp_end, type: int, source: sEmpEnd}
+      - {name: s_emp_s, type: int, source: sEmpS}
+      - {name: s_emp_total, type: int, source: sEmpTotal}
+      - {name: s_emp_spv, type: int, source: sEmpSpv}
+      - {name: s_hir_a, type: int, source: sHirA}
+      - {name: s_hir_n, type: int, source: sHirN}
+      - {name: s_hir_r, type: int, source: sHirR}
+      - {name: s_sep, type: int, source: sSep}
+      - {name: s_hir_aend, type: int, source: sHirAEnd}
+      - {name: s_sep_beg, type: int, source: sSepBeg}
+      - {name: s_hir_aend_repl, type: int, source: sHirAEndRepl}
+      - {name: s_hir_aend_r, type: int, source: sHirAEndR}
+      - {name: s_sep_beg_r, type: int, source: sSepBegR}
+      - {name: s_hir_aend_repl_r, type: int, source: sHirAEndReplR}
+      - {name: s_hir_as, type: int, source: sHirAS}
+      - {name: s_hir_ns, type: int, source: sHirNS}
+      - {name: s_sep_s, type: int, source: sSepS}
+      - {name: s_sep_snx, type: int, source: sSepSnx}
+      - {name: s_turn_ovr_s, type: int, source: sTurnOvrS}
+      - {name: s_frm_jb_gn, type: int, source: sFrmJbGn}
+      - {name: s_frm_jb_ls, type: int, source: sFrmJbLs}
+      - {name: s_frm_jb_c, type: int, source: sFrmJbC}
+      - {name: s_frm_jb_gn_s, type: int, source: sFrmJbGnS}
+      - {name: s_frm_jb_ls_s, type: int, source: sFrmJbLsS}
+      - {name: s_frm_jb_cs, type: int, source: sFrmJbCS}
+      - {name: s_earn_s, type: int, source: sEarnS}
+      - {name: s_earn_beg, type: int, source: sEarnBeg}
+      - {name: s_earn_hir_as, type: int, source: sEarnHirAS}
+      - {name: s_earn_hir_ns, type: int, source: sEarnHirNS}
+      - {name: s_earn_sep_s, type: int, source: sEarnSepS}
+      - {name: s_payroll, type: int, source: sPayroll}
     materialize:
       enabled: true
       format: iceberg

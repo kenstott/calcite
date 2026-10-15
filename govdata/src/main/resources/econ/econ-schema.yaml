@@ -623,8 +623,9 @@ partitionedTables:
         type: string
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly, Q01-Q04 for quarterly)
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name (e.g., 'January', 'February')
       - name: value
@@ -879,8 +880,9 @@ partitionedTables:
         type: string
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly)
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name (e.g., 'January', 'February')
       - name: value
@@ -1049,7 +1051,7 @@ partitionedTables:
           the four Census regions: CUUR0100SA0 Northeast, CUUR0200SA0 Midwest, CUUR0300SA0 South,
           CUUR0400SA0 West. Series ID format is CUUR{area}SA0, so the embedded 4 characters are the
           Census region code. As with metro_cpi, BlsResponseTransformer emits only series, year,
-          period, periodName, value, latest and footnotes — the area_code and area_name columns are
+          period, period_name, value, latest and footnotes — the area_code and area_name columns are
           not populated by the current ingest. Index levels (1982-84=100), not rates.
       - name: area_code
         type: string
@@ -1203,7 +1205,7 @@ partitionedTables:
         comment: >
           BLS series identifier, format CUUR{area}SA0 — the embedded 4 characters are the BLS CPI
           area code. Filter on series: BlsResponseTransformer emits only series, year, period,
-          periodName, value, latest and footnotes, so the area_code and area_name columns are not
+          period_name, value, latest and footnotes, so the area_code and area_name columns are not
           populated by the current ingest (SUBSTRING(series, 5, 4) recovers the area code).
           This table is long-format, one row per (series, period). All 20 series are CPI-U all items, not seasonally adjusted
           (index, base period = 100), one per metro area: CUURS12ASA0 New York-Newark-Jersey City
@@ -1409,8 +1411,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
@@ -1528,8 +1531,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
@@ -1639,7 +1643,7 @@ partitionedTables:
           the four Census regions: CUUR0100SAF11 Northeast, CUUR0200SAF11 Midwest, CUUR0300SAF11
           South, CUUR0400SAF11 West. Series ID format is CUUR{area}SAF11, so the embedded 4
           characters are the Census region code. BlsResponseTransformer emits only series, year,
-          period, periodName, value, latest and footnotes — the area_code and area_name columns are
+          period, period_name, value, latest and footnotes — the area_code and area_name columns are
           not populated by the current ingest. Index levels (1982-84=100), not rates.
       - name: area_code
         type: string
@@ -1793,7 +1797,7 @@ partitionedTables:
         comment: >
           BLS series identifier, format CUUR{area}SAF11 — the embedded 4 characters are the BLS
           CPI area code. Filter on series: BlsResponseTransformer emits only series, year, period,
-          periodName, value, latest and footnotes, so the area_code and area_name columns are not
+          period_name, value, latest and footnotes, so the area_code and area_name columns are not
           populated by the current ingest (SUBSTRING(series, 5, 4) recovers the area code). This
           table is long-format, one row per (series, period). All 20 series are CPI-U Food at Home,
           not seasonally adjusted (index, base period = 100), one per metro area — the identical
@@ -1957,8 +1961,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
@@ -2076,8 +2081,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
@@ -2196,8 +2202,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 for monthly)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' ELSE period END"
@@ -2326,8 +2333,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 monthly, M13 annual average)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE period END"
@@ -3204,8 +3212,9 @@ partitionedTables:
         nullable: true
         comment: BLS period identifier (M01-M12 monthly, M13 annual average)
         source: period
-      - name: periodName
+      - name: period_name
         type: string
+        source: periodName
         nullable: true
         comment: Human-readable period name derived from period
         expression: "CASE period WHEN 'M01' THEN 'January' WHEN 'M02' THEN 'February' WHEN 'M03' THEN 'March' WHEN 'M04' THEN 'April' WHEN 'M05' THEN 'May' WHEN 'M06' THEN 'June' WHEN 'M07' THEN 'July' WHEN 'M08' THEN 'August' WHEN 'M09' THEN 'September' WHEN 'M10' THEN 'October' WHEN 'M11' THEN 'November' WHEN 'M12' THEN 'December' WHEN 'M13' THEN 'Annual' ELSE period END"
