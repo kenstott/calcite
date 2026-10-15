@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.112.0](https://github.com/kenstott/calcite/compare/engine-v0.111.2...engine-v0.112.0) (2026-10-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **askamerica:** a thin engine with one mode - no govdata, no in-process engine (ASKAM-008, ASKAM-009)
+
+### Features
+
+* **askamerica:** a thin engine with one mode - no govdata, no in-process engine (ASKAM-008, ASKAM-009) ([59a30e4](https://github.com/kenstott/calcite/commit/59a30e42f44fa3e15ee331a3c48ccfb511184aec))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** the pgwire-govdata server's state directory is under ~/.askamerica ([1cae5df](https://github.com/kenstott/calcite/commit/1cae5df8cd3a3fc127c0056aa57743eadaf8deb7))
+* **askamerica:** the engine jar carries no embedder (ASKAM-007) ([55f8569](https://github.com/kenstott/calcite/commit/55f8569021ff154977e7befb1e601b98bfeb02e5))
+* **pgwire-calcite:** unquoted identifiers fold to lower in normalize.py, dialect.py and the Calcite connection ([#946](https://github.com/kenstott/calcite/issues/946)) ([db70f2c](https://github.com/kenstott/calcite/commit/db70f2c4f5267778e45dac50dea55a2fa4042d9d))
+
 ## [0.111.2](https://github.com/kenstott/calcite/compare/engine-v0.111.1...engine-v0.111.2) (2026-10-15)
 
 
