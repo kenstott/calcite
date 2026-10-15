@@ -65,6 +65,12 @@ configurations.all {
     exclude(group = "org.slf4j", module = "slf4j-reload4j")
 }
 
+// :core carries the AWS S3 SDK for its S3Reader, which the engine never calls (it uses Calcite's
+// parser only); the jar must carry no AWS (ASKAM-009).
+configurations.matching { it.name == "runtimeClasspath" || it.name == "compileClasspath" }.configureEach {
+    exclude(group = "software.amazon.awssdk")
+}
+
 dependencies {
     // The engine is the MCP server and the setup wizard: protocol, tools, a pg-wire client.
     // Everything that touches data lives in the data server (owner rules 2026-10-10, ASKAM-008
@@ -153,6 +159,8 @@ val sharedSources by tasks.registering(Sync::class) {
     }
     from("../file/src/main/java") {
         include("org/apache/calcite/adapter/file/etl/VariableResolver.java")
+        // VariableResolver renders period formats through it; JDK-only.
+        include("org/apache/calcite/adapter/file/etl/PeriodFormat.java")
     }
     into(layout.buildDirectory.dir("shared-sources"))
 }
@@ -439,7 +447,9 @@ tasks.shadowJar {
                     name.endsWith(".onnx") ||
                         forbidden.any { prefix -> name.startsWith(prefix) } ||
                         (name.startsWith("org/apache/calcite/adapter/file/") &&
-                            !name.startsWith("org/apache/calcite/adapter/file/etl/VariableResolver")) ||
+                            name.endsWith(".class") &&
+                            !name.startsWith("org/apache/calcite/adapter/file/etl/VariableResolver") &&
+                            !name.startsWith("org/apache/calcite/adapter/file/etl/PeriodFormat")) ||
                         (name.startsWith("org/apache/calcite/adapter/govdata/") &&
                             name.endsWith(".class") &&
                             sharedGovdata.none { shared ->
