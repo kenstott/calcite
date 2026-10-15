@@ -24,15 +24,15 @@ from pgwire_calcite.dialect import UnsupportedConstruct, transpile_pg_to_calcite
 
 # --- normalize.py -------------------------------------------------------------
 
-def test_unquoted_identifier_folds_upper():
-    assert normalize.fold_unquoted("customer") == "CUSTOMER"
-    assert normalize.canonical_identifier("customer", was_quoted=False) == "CUSTOMER"
+def test_unquoted_identifier_folds_lower():
+    assert normalize.fold_unquoted("CUSTOMER") == "customer"
+    assert normalize.canonical_identifier("Customer", was_quoted=False) == "customer"
 
 
 def test_quoted_identifier_preserved():
     assert normalize.canonical_identifier("Customer", was_quoted=True) == "Customer"
     assert normalize.needs_quoting("Customer") is True
-    assert normalize.needs_quoting("CUSTOMER") is False
+    assert normalize.needs_quoting("customer") is False
 
 
 def test_type_mapping_oids_are_stable_and_consistent():

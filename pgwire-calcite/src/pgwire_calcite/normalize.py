@@ -15,9 +15,11 @@ discovery population (Phase 2, via catalog.py), so discover-then-query clients
 (DuckDB/DataGrip) cannot drift — consistency is guaranteed by construction, not
 by two code paths agreeing.
 
-Calcite's default lexer is ``Lex.ORACLE``: unquoted identifiers fold to UPPER,
-double-quoted identifiers are case-sensitive, and the quote char is ``"``. That
-is the behaviour encoded here and asserted against in dialect tests. If a
+The Calcite connection runs ``Lex.ORACLE`` with ``unquotedCasing=TO_LOWER`` and
+``caseSensitive=false`` (the embedded GovDataDriver's setting): unquoted
+identifiers fold to lower, double-quoted identifiers keep their case, and the
+quote char is ``"``. That is the behaviour encoded here and asserted against in
+dialect tests. If a
 deployment overrides ``lex``/``fun`` on the Calcite connection, the override must
 be reflected here (single source of truth) rather than patched at either caller.
 """
@@ -28,14 +30,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-# --- Identifier normalization (Calcite Lex.ORACLE) ---------------------------
+# --- Identifier normalization (Lex.ORACLE, unquotedCasing=TO_LOWER) ---------------------------
 
 _UNQUOTED_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 
 
 def fold_unquoted(identifier: str) -> str:
-    """Fold an *unquoted* identifier the way Calcite's Oracle lexer does: UPPER."""
-    return identifier.upper()
+    """Fold an *unquoted* identifier the way the connection does: lower."""
+    return identifier.lower()
 
 
 def needs_quoting(identifier: str) -> bool:
@@ -57,7 +59,7 @@ def quote_identifier(identifier: str) -> str:
 def canonical_identifier(identifier: str, was_quoted: bool) -> str:
     """The canonical stored form of an identifier as Calcite would resolve it.
 
-    Unquoted -> folded to UPPER; quoted -> preserved verbatim. This is the form
+    Unquoted -> folded to lower; quoted -> preserved verbatim. This is the form
     the catalog stores so that a later query referencing the same identifier
     resolves to the same object.
     """

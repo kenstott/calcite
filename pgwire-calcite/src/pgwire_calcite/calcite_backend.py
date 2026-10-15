@@ -546,6 +546,7 @@ class CalciteBackend:
         props.setProperty("lex", self._lex)
         props.setProperty("fun", self._fun)
         props.setProperty("caseSensitive", "false")
+        props.setProperty("unquotedCasing", "TO_LOWER")
         if self._model_path:
             props.setProperty("model", self._connection_model_path())
         if self._default_schema:

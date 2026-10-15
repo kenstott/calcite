@@ -9,9 +9,10 @@
 
 """Bidirectional sqlglot Calcite dialect (PGW-017).
 
-Derives from sqlglot's Oracle dialect — Calcite's default lexer is ``Lex.ORACLE``
-(unquoted identifiers fold to UPPER, double-quote quoting, case-sensitive when
-quoted), which is the §7 evidence for the base choice. Oracle's *type* rendering
+Derives from sqlglot's Oracle dialect — the connection's lexer is ``Lex.ORACLE``
+(double-quote quoting, case-sensitive when quoted) with ``unquotedCasing=TO_LOWER``,
+which is the §7 evidence for the base choice. Identifier text is passed through
+unfolded; Calcite folds unquoted names on parse. Oracle's *type* rendering
 (NUMBER/VARCHAR2/CLOB) is NOT what Calcite wants, so the Generator's TYPE_MAPPING
 is overridden back to standard-SQL/Calcite names.
 
@@ -33,7 +34,7 @@ UnsupportedConstruct = transforms.UnsupportedConstruct
 
 
 class Calcite(Oracle):
-    """sqlglot dialect for Apache Calcite (Lex.ORACLE, standard-SQL types)."""
+    """sqlglot dialect for Apache Calcite (Lex.ORACLE with lower-case unquoted folding, standard-SQL types)."""
 
     class Generator(Oracle.Generator):
         def array_sql(self, expression) -> str:
