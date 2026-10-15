@@ -414,6 +414,7 @@ public class McpServer {
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting... build=" + BUILD_ID);
+        enableCallLogPersistence();
         // Name the active SLF4J binding. Two bindings ship in the shaded jar and whichever one
         // wins decides whether adapter logs appear at all: bound to reload4j, which nothing
         // configures, every govdata and file log statement is discarded and the server looks hung
@@ -6757,6 +6758,71 @@ public class McpServer {
             }
             CALL_LOG.add(e);
         }
+        CallLogStore store = callLogStore;
+        if (store != null) {
+            store.append(e);
+        }
+    }
+
+    /** When this engine process started: a report check that finds no history says so. */
+    private static final java.time.Instant PROCESS_START = java.time.Instant.now();
+
+    /** The on-disk copy of {@link #CALL_LOG}; null until {@link #enableCallLogPersistence}, and in
+     *  tests and eval mode, which must not read or write the user's history. */
+    private static volatile CallLogStore callLogStore;
+
+    /** How long a call log file lives without a write before it is removed (a quit app's file). */
+    private static final long CALL_LOG_FILE_MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000;
+
+    /**
+     * Reloads the calls an earlier process of this same app made and keeps writing new ones, so a
+     * restart or reconnect of the engine does not make the report checks see an empty history
+     * ("no query call anywhere this session"). Skipped in eval mode, where each run is meant to
+     * start clean, and when the parent process (the app) cannot be identified.
+     */
+    static void enableCallLogPersistence() {
+        if (EVAL_MODE) {
+            return;
+        }
+        java.nio.file.Path dir = java.nio.file.Paths.get(System.getProperty("user.home", ""),
+            ".askamerica", "call-logs");
+        java.util.Optional<java.nio.file.Path> file = CallLogStore.fileForParent(dir);
+        if (!file.isPresent()) {
+            log.println("[askamerica-mcp] call history is not persisted: the parent process "
+                + "cannot be identified");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        CallLogStore.deleteStale(dir, now, CALL_LOG_FILE_MAX_AGE_MS);
+        CallLogStore store = new CallLogStore(file.get(), MAPPER, CALL_LOG_MAX, IDLE_GAP_BOUNDARY_MS);
+        java.util.List<ObjectNode> earlier = store.load(now);
+        synchronized (CALL_LOG) {
+            CALL_LOG.addAll(0, earlier);
+            while (CALL_LOG.size() > CALL_LOG_MAX) {
+                CALL_LOG.remove(0);
+            }
+        }
+        for (ObjectNode entry : earlier) {
+            CALL_SEQ.accumulateAndGet(entry.path("seq").asInt(0), Math::max);
+        }
+        callLogStore = store;
+        if (!earlier.isEmpty()) {
+            log.println("[askamerica-mcp] reloaded " + earlier.size() + " call(s) from "
+                + file.get());
+        }
+    }
+
+    /** A sentence for a refusal that rests on the call history: where that history begins. */
+    private static String callHistoryNote() {
+        String earliest;
+        synchronized (CALL_LOG) {
+            earliest = CALL_LOG.isEmpty() ? null : CALL_LOG.get(0).path("ts").asText(null);
+        }
+        return " (This engine process started at " + PROCESS_START
+            + (earliest == null ? " and has recorded no calls" : "; its call history begins at " + earliest)
+            + ". History survives an engine restart only when the restart came within "
+            + IDLE_GAP_BOUNDARY_MS / 60000 + " minutes of the last call; after a longer gap, rerun "
+            + "the key queries so they are on record.)";
     }
 
     /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
@@ -7270,7 +7336,7 @@ public class McpServer {
         }
         StringBuilder msg = new StringBuilder(
             "no query call anywhere this session returned any rows -- askamerica's own data "
-            + "had nothing to contribute to this question. ");
+            + "had nothing to contribute to this question." + callHistoryNote() + " ");
         if (!catalogChecked) {
             msg.append("search_catalog, list_tables, and describe_table were NEVER called "
                 + "this session -- before falling back to the open web, actually check the "
@@ -7698,7 +7764,7 @@ public class McpServer {
         }
         return "it claims a statistical method was run with "
             + "no matching tool call anywhere in this session — " + String.join("; ", unsupported)
-            + ". Either call the matching tool for real and cite its actual result, or rewrite "
+            + callHistoryNote() + ". Either call the matching tool for real and cite its actual result, or rewrite "
             + "the sentence so it does not claim the method was executed (e.g. describe it as a "
             + "check that could be run, or drop the claim). A reader cannot tell a result you "
             + "actually computed from one you did not.";
