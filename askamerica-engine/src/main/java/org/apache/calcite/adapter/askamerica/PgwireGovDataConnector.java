@@ -753,9 +753,8 @@ final class PgwireGovDataConnector {
           // pgwire-govdata's bundled jars) actually accepts it, same reason the embedded engine
           // sets it. --jdbc-prop is pgwire-calcite's generic passthrough to the JDBC Properties
           // object (launcher.py: "--jdbc-prop", forwarded verbatim by calcite_backend.py).
-          "--fun", "standard,postgresql,spatial,mssql,bigquery",
-          "--jdbc-prop",
-          "parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY"));
+          "--fun", "standard,postgresql,spatial,mssql,bigquery"));
+      pb.command().addAll(jdbcPropArgs());
       pb.environment().put("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", IDLE_SHUTDOWN_SECONDS);
       // The bundled schema YAML resolves every table's warehousePath from
       // ${GOVDATA_PARQUET_DIR}, with no default — the spawned process crashes on connect
@@ -1061,6 +1060,29 @@ final class PgwireGovDataConnector {
           + "the default data directory instead.");
     }
     return new File(System.getProperty("user.home", ""), ".mcp_askamerica");
+  }
+
+  /**
+   * The Calcite connection properties the spawned server is started with, as {@code NAME=VALUE}.
+   * Identifiers in the data are lower snake case and an unquoted identifier is lower case, as in
+   * the embedded {@code GovDataDriver} (unquotedCasing=TO_LOWER, caseSensitive=false): without
+   * them Calcite's default lexer folds an unquoted {@code river} to {@code RIVER} and the result
+   * key comes back upper case, while a quoted identifier keeps its case.
+   */
+  static final String[] JDBC_PROPS = {
+    "parserFactory=org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY",
+    "unquotedCasing=TO_LOWER",
+    "caseSensitive=false"
+  };
+
+  /** {@link #JDBC_PROPS} as the server's repeated {@code --jdbc-prop NAME=VALUE} arguments. */
+  static java.util.List<String> jdbcPropArgs() {
+    java.util.List<String> args = new java.util.ArrayList<>();
+    for (String prop : JDBC_PROPS) {
+      args.add("--jdbc-prop");
+      args.add(prop);
+    }
+    return args;
   }
 
   /** True when {@code path} resolves under the JVM's own OS temp directory ({@code
