@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.113.1](https://github.com/kenstott/calcite/compare/engine-v0.113.0...engine-v0.113.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **askamerica:** the installed app crashed at startup — the launcher jar lacked a class it uses ([6962870](https://github.com/kenstott/calcite/commit/696287003d81201b0de1272843b48a8166872c78))
+
 ## [0.113.0](https://github.com/kenstott/calcite/compare/engine-v0.112.1...engine-v0.113.0) (2026-10-15)
 
 
