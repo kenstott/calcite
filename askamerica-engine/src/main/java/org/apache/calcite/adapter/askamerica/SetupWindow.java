@@ -68,6 +68,9 @@ public class SetupWindow {
     private JCheckBox telemetryCheckbox;
     private JCheckBox forceRefreshCheckbox;
     private JLabel statusLabel;
+    /** Animated while the data server installs: fills as the download arrives, and keeps moving
+     *  (indeterminate) while the size is unknown or the bundle is verified and unpacked. */
+    private javax.swing.JProgressBar installBar;
     private JLabel existingInstallLabel;
     private JButton configureBtn;
     private JButton relaunchBtn;
@@ -273,6 +276,15 @@ public class SetupWindow {
         c.gridy = row++; c.insets = new Insets(0, 0, 0, 0);
         p.add(statusLabel, c);
 
+        installBar = new javax.swing.JProgressBar(0, 1000);
+        installBar.setPreferredSize(new Dimension(400, 8));
+        installBar.setBorderPainted(false);
+        installBar.setForeground(new Color(0xE8A24A));
+        installBar.setBackground(CARD);
+        installBar.setVisible(false);
+        c.gridy = row++; c.insets = new Insets(8, 0, 0, 0);
+        p.add(installBar, c);
+
         return p;
     }
 
@@ -343,10 +355,26 @@ public class SetupWindow {
      */
     private void installDataServerThenFinish(List<Path> written, String repairNote) {
         setStatus("Installing the AskAmerica data server (about 1 GB, one time)…", null);
+        installBar.setIndeterminate(true);
+        installBar.setVisible(true);
+        frame.pack();
+        final boolean[] downloadSeen = {false};
         javax.swing.Timer poll = new javax.swing.Timer(500, ev -> {
             String progress = PgwireGovDataInstaller.installProgress();
+            long[] bytes = PgwireGovDataInstaller.installBytes();
             if (progress != null) {
+                downloadSeen[0] = true;
                 setStatus("Installing the AskAmerica data server: " + progress, null);
+                if (bytes != null && bytes[1] > 0) {
+                    installBar.setIndeterminate(false);
+                    installBar.setValue((int) Math.min(1000L, bytes[0] * 1000L / bytes[1]));
+                } else {
+                    installBar.setIndeterminate(true);
+                }
+            } else if (downloadSeen[0]) {
+                // Downloaded; verifying the checksum and unpacking takes a while with no byte count.
+                setStatus("Installing the AskAmerica data server: verifying and unpacking…", null);
+                installBar.setIndeterminate(true);
             }
         });
         poll.start();
@@ -360,6 +388,8 @@ public class SetupWindow {
             final String failed = failure;
             SwingUtilities.invokeLater(() -> {
                 poll.stop();
+                installBar.setIndeterminate(false);
+                installBar.setVisible(false);
                 if (failed != null) {
                     setStatus("The data server could not be installed: " + failed
                         + " Click Configure to try again.", false);

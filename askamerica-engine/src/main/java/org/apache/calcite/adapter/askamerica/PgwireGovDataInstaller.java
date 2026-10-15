@@ -439,6 +439,16 @@ final class PgwireGovDataInstaller {
         return installProgress;
     }
 
+    private static volatile long installFetchedBytes;
+    private static volatile long installTotalBytes;
+
+    /** Bytes fetched and bytes expected (0 when the server did not say) of the bundle download
+     *  running in this process, or null when no download is running; for a progress bar. */
+    static long[] installBytes() {
+        return installProgress == null
+            ? null : new long[] {installFetchedBytes, installTotalBytes};
+    }
+
     static String progressLine(String version, long fetched, long total) {
         return "downloading pgwire-govdata " + version + ": " + (fetched / (1024 * 1024))
             + (total > 0 ? " of " + (total / (1024 * 1024)) : "") + " MB";
@@ -594,8 +604,11 @@ final class PgwireGovDataInstaller {
             removeOrphans(dir, version, part);
             // A failed download keeps the partial file so the next attempt resumes it.
             try {
-                download(assetUrl, part, (fetched, total) ->
-                    installProgress = progressLine(version, fetched, total));
+                download(assetUrl, part, (fetched, total) -> {
+                    installFetchedBytes = fetched;
+                    installTotalBytes = total;
+                    installProgress = progressLine(version, fetched, total);
+                });
             } finally {
                 installProgress = null;
             }
