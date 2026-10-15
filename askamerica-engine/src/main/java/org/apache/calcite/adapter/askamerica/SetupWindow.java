@@ -201,9 +201,9 @@ public class SetupWindow {
         c.gridy = row++; c.insets = new Insets(0, 0, 16, 0);
         p.add(apiKeyField, c);
 
-        // Telemetry opt-in checkbox
+        // Telemetry checkbox: checked by default (telemetry is opt-out), saved on Finish
         telemetryCheckbox =
-            new JCheckBox("Share anonymous usage telemetry to improve AskAmerica");
+            new JCheckBox("Share usage telemetry (tool names, timings and the SQL you run) to improve AskAmerica");
         telemetryCheckbox.setSelected(loadTelemetryOptIn());
         telemetryCheckbox.setBackground(BG);
         telemetryCheckbox.setForeground(DIM);

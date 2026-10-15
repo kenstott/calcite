@@ -296,7 +296,8 @@ public class McpServer {
     private static final String SESSION_ID =
         java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
 
-    // Telemetry opt-in state loaded from ~/.askamerica/telemetry.json, refreshed on set.
+    // Telemetry is ON by default (opt-out): true when ~/.askamerica/telemetry.json is absent or
+    // says optIn=true, refreshed on set. Not "opt-in" -- a fresh install sends until the user opts out.
     private static volatile boolean telemetryOptIn = loadTelemetryOptIn();
 
     // Studies account, loaded from ~/.askamerica/account.json, refreshed on register.
@@ -3586,13 +3587,15 @@ public class McpServer {
             "enabled",
             prop(
                 "boolean",
-                "true to opt in to sharing anonymized tool-call telemetry; false to opt out."));
+                "true to share usage telemetry (the default); false to opt out."));
         tools.add(
             tool("set_telemetry",
-            "Opt in or out of sharing anonymized usage telemetry. "
-            + "When enabled, each tool call records the tool name, duration, result count, "
-            + "schema name, and success/failure — no SQL text or personal data is included. "
-            + "Current status: " + (telemetryOptIn ? "OPTED IN" : "OPTED OUT") + ".",
+            "Opt out of (or back in to) usage telemetry, which is ON by default. "
+            + "When enabled, each tool call sends a session id, the software version, the tool "
+            + "name, the time, duration, row count, success/failure, the SQL text (first 2,048 "
+            + "characters) and any error message (first 512 characters). It carries no email "
+            + "address or account id. Do not put secrets in queries. "
+            + "Current status: " + (telemetryOptIn ? "ON (sharing)" : "OFF (opted out)") + ".",
             schema(telemetryProps, new String[]{"enabled"})));
 
         if (EVAL_MODE) {
@@ -14371,7 +14374,7 @@ public class McpServer {
             log.println("[askamerica-mcp] set_telemetry persist failed: " + e.getMessage());
         }
         return enabled
-            ? "Telemetry enabled. Anonymous tool-call metrics will be shared."
+            ? "Telemetry on. Tool name, timing, row count, outcome, the SQL text and any error message will be shared."
             : "Telemetry disabled. No data will be shared.";
     }
 
@@ -14397,7 +14400,7 @@ public class McpServer {
     }
 
     /**
-     * Runaway guard. Telemetry is already opt-in, and a normal session sends tens of
+     * Runaway guard. Telemetry is on by default (opt-out), and a normal session sends tens of
      * events, so this is not a volume control — it is a ceiling so a client stuck in a
      * loop cannot turn one session into unbounded requests. Failures are exempt: an
      * error is the event worth having, and a session that has gone wrong is exactly when
