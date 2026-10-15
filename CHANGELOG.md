@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.112.1](https://github.com/kenstott/calcite/compare/engine-v0.112.0...engine-v0.112.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** the data-server install no longer looks the release up through the GitHub API ([e784ea3](https://github.com/kenstott/calcite/commit/e784ea3f3d3fecdc2f8102d7934409e3d0afd104))
+* **govdata:** the doc comments the thin engine's javadoc reads have no errors ([#551](https://github.com/kenstott/calcite/issues/551)) ([42c5f68](https://github.com/kenstott/calcite/commit/42c5f680fb9b8f54f7c1d5f08c291295cf12a445))
+
 ## [0.112.0](https://github.com/kenstott/calcite/compare/engine-v0.111.2...engine-v0.112.0) (2026-10-15)
 
 
