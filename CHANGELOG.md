@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.111.2](https://github.com/kenstott/calcite/compare/engine-v0.111.1...engine-v0.111.2) (2026-10-15)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** unquoted identifiers are lower case in the pgwire-govdata server ([#946](https://github.com/kenstott/calcite/issues/946)) ([c78d3b6](https://github.com/kenstott/calcite/commit/c78d3b6ccd6745290e3e073eb8294e4a51362b66))
+* **govdata/ops:** fetch-edgar-feed.sh gives the unpacker a 3 GB heap ([73b38d3](https://github.com/kenstott/calcite/commit/73b38d3df32b4f5482a10993f04ef6552f4e17d7))
+
 ## [0.111.1](https://github.com/kenstott/calcite/compare/engine-v0.111.0...engine-v0.111.1) (2026-10-14)
 
 
