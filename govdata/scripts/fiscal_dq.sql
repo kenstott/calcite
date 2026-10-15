@@ -1296,6 +1296,251 @@ FROM (SELECT COUNT(*) AS n FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_apportionments', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
+-- DUNS was retired in 2022: recipient_duns/recipient_parent_duns are empty from FY2022, and the
+-- DQ sample is FY2025-FY2026 only (they are populated FY2007-FY2021).
+-- usaspending_assistance (bulk download; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (DQ sample (dqRowLimit 200000 per year); full years carry 1-9 million rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'recipient_duns', 'recipient_parent_duns')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'recipient_duns', 'recipient_parent_duns')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows (assistance_transaction_unique_key)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE assistance_transaction_unique_key IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, assistance_transaction_unique_key) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, assistance_transaction_unique_key, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- fac_audits (bulk download; partition cols: type)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (DQ sample (dqRowLimit 200000); full table carries about 418,000 audits)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'is_public')));
+
+-- The file is ordered by audit year and the DQ cap keeps the first 200000 rows (audit years
+-- 2016-2018 only, all UG / version 1 / most_recent), so those three columns are single-valued
+-- in the sample and varied in the full table.
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'is_public', 'type_audit_code', 'resubmission_version', 'resubmission_status')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows (report_id)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true)
+  WHERE report_id IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (report_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT report_id, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- The file is ordered by audit year and the DQ cap keeps the first 200000 rows (audit year 2016
+-- only), and other_cluster_name is rarely filled, so audit_year/other_cluster_name are
+-- single-valued or empty in the sample.
+-- fac_federal_awards (bulk download; partition cols: type)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (DQ sample (dqRowLimit 200000); full table carries about 7.3 million rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'audit_year', 'other_cluster_name')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'audit_year', 'other_cluster_name')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows (report_id, award_reference)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true)
+  WHERE report_id IS NULL OR award_reference IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (report_id, award_reference) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT report_id, award_reference, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- fac_audits_historic (bulk download; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits_historic', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits_historic', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (DQ sample; full table carries about 650,000 audits across 18 years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits_historic', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'uei')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits_historic', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'uei')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits_historic', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows (dbkey)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true)
+  WHERE dbkey IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_audits_historic', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, dbkey) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, dbkey, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_audits_historic', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- fac_federal_awards_historic (bulk download; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards_historic', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards_historic', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (DQ sample (dqRowLimit 200000 per year); full table carries about 9.4 million rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true) LIMIT 3;
+
+-- state_cluster_name is populated on only 142 of 9.4 million source rows (Census-era states used it
+-- rarely), so the capped sample can legitimately lack it.
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards_historic', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'state_cluster_name')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards_historic', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'state_cluster_name')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards_historic', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows (dbkey, cfda_seq_num)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true)
+  WHERE dbkey IS NULL OR cfda_seq_num IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'fac_federal_awards_historic', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, dbkey, cfda_seq_num) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, dbkey, cfda_seq_num, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

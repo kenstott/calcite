@@ -12,6 +12,8 @@
 #   - IRS SOI county migration       — countyoutflow{YYZZ}.csv (SoiMigrationProvider)
 #   - IRS EO Business Master File    — eo1..eo4.csv        (IrsEoBmfProvider)
 #   - IRS Form 990 e-file XML        — index_{YEAR}.csv + TEOS zips (Irs990Provider)
+#   - USAspending assistance awards  — files.usaspending.gov/award_data_archive Full zips (UsaSpendingAssistanceBulkProvider)
+#   - Federal Audit Clearinghouse     — app.fac.gov bulk CSVs, current 2016+ and Census 1998-2015 (Fac*Provider)
 #   - USAspending by agency          — /api/v2/spending/   (UsaSpendingAgencyProvider)
 #   - USAspending by state           — /api/v2/search/spending_by_geography/ (UsaSpendingStateProvider)
 #   - USAspending by county          — /api/v2/search/spending_by_geography/ (UsaSpendingCountyProvider)
@@ -46,7 +48,7 @@
 # DEFERRED (documented, not yet built — see govdata/docs/data-plans/fiscal.md):
 #   - soi_national            — SOI historical XLS tables have non-uniform,
 #                               per-table layouts; needs a bespoke workbook parser.
-#   - usaspending_awards      — Phase 2 (award-level detail from the bulk archive).
+#   - usaspending_contracts   — contracts bulk archive (same mechanism as usaspending_assistance, ~31 GB zips).
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fiscal}"
@@ -5400,6 +5402,1036 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # USASPENDING ASSISTANCE — award data archive, all-agency Full file per fiscal year
+  # ---------------------------------------------------------------------------
+  - name: usaspending_assistance
+    # The archive is rebuilt every month; each Full file holds its whole fiscal year with
+    # corrections already applied. Reopening the 2 newest years each run picks up the awards
+    # still accruing; refresh_month re-keys the raw cache so a reopened year re-downloads.
+    lookbackPeriods: 2
+    pattern: "type=usaspending_assistance/year=*/*.parquet"
+    partitions: *standard_partitions
+    dqRowLimit: 200000
+    comment: >
+      Every federal assistance transaction (grants, cooperative agreements, direct payments,
+      loans, insurance) by federal fiscal year (Oct-Sep; year = the fiscal year of action_date),
+      one row per award action (award x modification), from USAspending's award data archive
+      (all-agency Assistance Full files, FY2007 onward; roughly 6-9 million rows per recent year,
+      about 115 million in all). Carries the recipient (UEI, DUNS, parent, name, address, county
+      and congressional district), the program (cfda_number = Assistance Listing / ALN), the
+      awarding and funding agency, place of performance, period of performance and dollars.
+      federal_action_obligation is additive across rows (sum it for obligations by year,
+      recipient or program); total_obligated_amount and total_outlayed_amount_for_overall_award
+      are cumulative per award and repeated on every row of that award, so take one row per
+      assistance_award_unique_key (the latest action_date) before summing outlays. Outlays are
+      only available as that cumulative per-award figure. Loan rows report the subsidy cost as
+      the obligation and the face value in face_value_of_loan. recipient_uei joins to
+      fac_audits.auditee_uei (Single Audit filings) and cfda_number to fac_federal_awards (see
+      the view fac_awards_vs_usaspending); recipient_duns joins the pre-UEI FAC years; there is
+      no EIN in USAspending, so EIN reaches it through fac_audits. Individuals' awards carry a
+      masked recipient and no UEI. Contracts are not in this table. Source:
+      files.usaspending.gov/award_data_archive (URL resolved through
+      api.usaspending.gov/api/v2/bulk_download/list_monthly_files/).
+
+    dimensions:
+      type:
+        - usaspending_assistance
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2007}"
+        minYear: 2007
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        descending: true
+      # Cache buster (see lookbackPeriods above). Deliberately a single value: a multi-value
+      # dimension with no partition column would multiply rows.
+      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+
+    columns:
+      - name: assistance_transaction_unique_key
+        type: string
+        nullable: false
+        comment: "Transaction identifier (PK): one row per award action (award x modification)"
+      - name: assistance_award_unique_key
+        type: string
+        nullable: true
+        comment: USAspending award identifier; many transaction rows share one award
+      - name: award_id_fain
+        type: string
+        nullable: true
+        comment: Federal Award Identification Number assigned by the awarding agency (non-aggregate awards)
+      - name: modification_number
+        type: string
+        nullable: true
+        comment: Modification number of this action (0 = original award)
+      - name: award_id_uri
+        type: string
+        nullable: true
+        comment: Unique Record Identifier for aggregate (per-recipient-per-period) awards
+      - name: sai_number
+        type: string
+        nullable: true
+        comment: System for Award Information number
+      - name: federal_action_obligation
+        type: double
+        nullable: true
+        comment: Dollars obligated by this single action (USD); additive across rows. Negative on de-obligations. For loans this is the subsidy cost, not face value
+      - name: total_obligated_amount
+        type: double
+        nullable: true
+        comment: Cumulative obligation of the whole award as of the extract, repeated on every row of that award; do not sum across rows
+      - name: total_outlayed_amount_for_overall_award
+        type: double
+        nullable: true
+        comment: Cumulative outlays (dollars actually paid) of the whole award as of the extract, repeated on every row of that award; do not sum across rows. Source carries no per-year outlay flow
+      - name: non_federal_funding_amount
+        type: double
+        nullable: true
+        comment: Non-federal (recipient/cost-share) funding of this action (USD)
+      - name: face_value_of_loan
+        type: double
+        nullable: true
+        comment: Face value of the loan for loan actions (USD)
+      - name: original_loan_subsidy_cost
+        type: double
+        nullable: true
+        comment: Original subsidy cost of the loan (USD)
+      - name: action_date
+        type: string
+        nullable: true
+        comment: Date of the action (YYYY-MM-DD); its federal fiscal year (Oct-Sep) is the year partition
+      - name: period_of_performance_start_date
+        type: string
+        nullable: true
+        comment: Award period-of-performance start (YYYY-MM-DD)
+      - name: period_of_performance_current_end_date
+        type: string
+        nullable: true
+        comment: Award current period-of-performance end (YYYY-MM-DD)
+      - name: awarding_agency_code
+        type: string
+        nullable: true
+        comment: Awarding top-tier agency code (Treasury CGAC)
+      - name: awarding_agency_name
+        type: string
+        nullable: true
+        comment: Awarding top-tier federal agency
+      - name: awarding_sub_agency_code
+        type: string
+        nullable: true
+        comment: Awarding sub-tier agency code
+      - name: awarding_sub_agency_name
+        type: string
+        nullable: true
+        comment: Awarding sub-tier agency
+      - name: awarding_office_name
+        type: string
+        nullable: true
+        comment: Awarding office
+      - name: funding_agency_code
+        type: string
+        nullable: true
+        comment: Funding top-tier agency code
+      - name: funding_agency_name
+        type: string
+        nullable: true
+        comment: Funding top-tier federal agency (can differ from the awarding agency)
+      - name: funding_sub_agency_name
+        type: string
+        nullable: true
+        comment: Funding sub-tier agency
+      - name: recipient_uei
+        type: string
+        nullable: true
+        comment: Recipient Unique Entity ID (12 characters). Join key to fac_audits.auditee_uei; USAspending backfills UEI on older records, but individuals and masked recipients have none
+      - name: recipient_duns
+        type: string
+        nullable: true
+        comment: Recipient DUNS number (populated FY2007-FY2021, sparse after). Join key to fac_audits_historic.duns
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: Recipient legal name as normalised by USAspending (individuals appear as MULTIPLE RECIPIENTS or redacted)
+      - name: recipient_parent_uei
+        type: string
+        nullable: true
+        comment: Parent organisation UEI
+      - name: recipient_parent_duns
+        type: string
+        nullable: true
+        comment: Parent organisation DUNS
+      - name: recipient_parent_name
+        type: string
+        nullable: true
+        comment: Parent organisation name
+      - name: recipient_country_code
+        type: string
+        nullable: true
+        comment: Recipient country (ISO alpha-3)
+      - name: recipient_city_name
+        type: string
+        nullable: true
+        comment: Recipient city
+      - name: recipient_county_fips
+        type: string
+        nullable: true
+        comment: Recipient 5-digit county FIPS (FK to geo.counties)
+      - name: recipient_state_code
+        type: string
+        nullable: true
+        comment: Recipient state (USPS abbreviation)
+      - name: recipient_zip_code
+        type: string
+        nullable: true
+        comment: Recipient 5-digit ZIP
+      - name: recipient_congressional_district
+        type: string
+        nullable: true
+        comment: Recipient congressional district (current)
+      - name: pop_state_fips
+        type: string
+        nullable: true
+        comment: Place-of-performance 2-digit state FIPS
+      - name: pop_state_name
+        type: string
+        nullable: true
+        comment: Place-of-performance state name
+      - name: pop_county_fips
+        type: string
+        nullable: true
+        comment: Place-of-performance 5-digit county FIPS (FK to geo.counties)
+      - name: pop_county_name
+        type: string
+        nullable: true
+        comment: Place-of-performance county name
+      - name: pop_city_name
+        type: string
+        nullable: true
+        comment: Place-of-performance city
+      - name: pop_zip4
+        type: string
+        nullable: true
+        comment: Place-of-performance ZIP+4
+      - name: pop_congressional_district
+        type: string
+        nullable: true
+        comment: Place-of-performance congressional district (current)
+      - name: cfda_number
+        type: string
+        nullable: true
+        comment: Assistance Listing (CFDA) number, e.g. 93.778; matches fac_federal_awards federal_agency_prefix || '.' || federal_award_extension
+      - name: cfda_title
+        type: string
+        nullable: true
+        comment: Assistance Listing program title
+      - name: funding_opportunity_number
+        type: string
+        nullable: true
+        comment: Notice of funding opportunity number
+      - name: assistance_type_code
+        type: string
+        nullable: true
+        comment: Assistance type code (02-05 grants/cooperative agreements, 06 direct payment, 07/08 loans, 09 insurance, 10 direct payment unrestricted, 11 other)
+      - name: assistance_type_description
+        type: string
+        nullable: true
+        comment: Assistance type description
+      - name: business_types_code
+        type: string
+        nullable: true
+        comment: Recipient business-type codes (comma separated)
+      - name: business_types_description
+        type: string
+        nullable: true
+        comment: Recipient business types (state/local government, nonprofit, etc.)
+      - name: action_type_code
+        type: string
+        nullable: true
+        comment: Action type code (A new, B continuation, C revision, D adjustment to completed project)
+      - name: record_type_code
+        type: string
+        nullable: true
+        comment: Record type (1 aggregate by recipient, 2 non-aggregate, 3 individual recipient)
+      - name: transaction_description
+        type: string
+        nullable: true
+        comment: Free-text description of the action as filed
+      - name: disaster_emergency_fund_codes
+        type: string
+        nullable: true
+        comment: Disaster Emergency Fund codes funding the award (COVID-19, IIJA, etc.)
+      - name: usaspending_permalink
+        type: string
+        nullable: true
+        comment: Link to the award on usaspending.gov
+      - name: last_modified_date
+        type: string
+        nullable: true
+        comment: When USAspending last changed this transaction
+
+    source:
+      type: http
+      url: "https://files.usaspending.gov/award_data_archive/"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAssistanceBulkProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_assistance/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_assistance
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAC_AUDITS — FAC current bulk file general.csv (full daily extract, refreshed monthly)
+  # ---------------------------------------------------------------------------
+  - name: fac_audits
+    pattern: "type=fac_audits/*.parquet"
+    partitions: *static_partitions
+    dqRowLimit: 200000
+    comment: >
+      One row per Single Audit (Uniform Guidance audit of an entity that spent $750,000 or more in federal awards; $1,000,000 from FY2025) filed with the Federal Audit Clearinghouse, audit years 2016 to date, from the FAC current-data bulk file general.csv (about 418,000 audits through October 2026; roughly 37,000-48,000 per year). Carries the auditee (name, address, EIN, UEI), the audit firm, the cognizant and oversight agencies, the opinion and internal-control findings flags and total federal dollars expended. auditee_uei is the placeholder GSA_MIGRATION for audit years 2016-2021 (filed before UEIs); auditee_ein is always present, so those years reach usaspending_assistance through the EIN-to-UEI mapping in the view fac_awards_vs_usaspending. EIN joins exempt_org_990 and ref.canonical_org_entity. Filings arrive up to 9 months after fiscal year end and are amended in place (resubmission_version, resubmission_status), and the file is a full daily extract, so each monthly run replaces the table. Contact people (names, e-mail, phone) are not loaded. Pre-2016 audits are in fac_audits_historic. Source: fac.gov/data/download (app.fac.gov/dissemination/public-data/gsa/full/general.csv).
+
+    dimensions:
+      type:
+        - fac_audits
+      # Cache buster: the FAC file keeps one URL and is regenerated daily, so the month keys the
+      # raw cache and the run tracker. Deliberately a single value (no partition column).
+      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+
+    columns:
+      - name: report_id
+        type: string
+        nullable: false
+        comment: FAC report identifier (PK of fac_audits); for 2016-2021 filings it embeds the Census id
+      - name: auditee_uei
+        type: string
+        nullable: true
+        comment: Auditee UEI; the literal GSA_MIGRATION for audit years 2016-2021 (filed before UEIs), real UEI from 2022. Use auditee_ein for those years
+      - name: audit_year
+        type: integer
+        nullable: true
+        comment: "Audit year: the fiscal year covered by the audit"
+      - name: auditee_name
+        type: string
+        nullable: true
+        comment: Auditee (recipient of federal awards) name
+      - name: auditee_ein
+        type: string
+        nullable: true
+        comment: Auditee EIN, always present; joins exempt_org_990 and ref.canonical_org_entity
+      - name: auditee_address_line_1
+        type: string
+        nullable: true
+        comment: Auditee street address
+      - name: auditee_city
+        type: string
+        nullable: true
+        comment: Auditee city
+      - name: auditee_state
+        type: string
+        nullable: true
+        comment: Auditee state (USPS)
+      - name: auditee_zip
+        type: string
+        nullable: true
+        comment: Auditee ZIP
+      - name: auditor_firm_name
+        type: string
+        nullable: true
+        comment: Audit firm
+      - name: auditor_ein
+        type: string
+        nullable: true
+        comment: Audit firm EIN
+      - name: auditor_city
+        type: string
+        nullable: true
+        comment: Audit firm city
+      - name: auditor_state
+        type: string
+        nullable: true
+        comment: Audit firm state
+      - name: auditor_zip
+        type: string
+        nullable: true
+        comment: Audit firm ZIP
+      - name: cognizant_agency
+        type: string
+        nullable: true
+        comment: Cognizant federal agency prefix (2-digit)
+      - name: oversight_agency
+        type: string
+        nullable: true
+        comment: Oversight federal agency prefix (2-digit)
+      - name: date_created
+        type: string
+        nullable: true
+        comment: Date the submission record was created
+      - name: submitted_date
+        type: string
+        nullable: true
+        comment: Date submitted
+      - name: fac_accepted_date
+        type: string
+        nullable: true
+        comment: Date the FAC accepted the filing
+      - name: fy_start_date
+        type: string
+        nullable: true
+        comment: Audited fiscal year start
+      - name: fy_end_date
+        type: string
+        nullable: true
+        comment: Audited fiscal year end
+      - name: audit_type
+        type: string
+        nullable: true
+        comment: single-audit, program-specific, or alternative-compliance-examination
+      - name: audit_period_covered
+        type: string
+        nullable: true
+        comment: annual, biennial, or other
+      - name: number_months
+        type: string
+        nullable: true
+        comment: Months covered when the period is other
+      - name: gaap_results
+        type: string
+        nullable: true
+        comment: Auditor opinion type(s) on the financial statements
+      - name: is_going_concern_included
+        type: string
+        nullable: true
+        comment: Going-concern paragraph included (Yes/No)
+      - name: is_internal_control_deficiency_disclosed
+        type: string
+        nullable: true
+        comment: Internal-control deficiency disclosed (Yes/No)
+      - name: is_internal_control_material_weakness_disclosed
+        type: string
+        nullable: true
+        comment: Material weakness disclosed (Yes/No)
+      - name: is_material_noncompliance_disclosed
+        type: string
+        nullable: true
+        comment: Material noncompliance disclosed (Yes/No)
+      - name: dollar_threshold
+        type: double
+        nullable: true
+        comment: Threshold separating Type A and Type B programs (USD)
+      - name: is_low_risk_auditee
+        type: string
+        nullable: true
+        comment: Qualified as a low-risk auditee (Yes/No)
+      - name: agencies_with_prior_findings
+        type: string
+        nullable: true
+        comment: Agency prefixes with prior-year findings (comma separated)
+      - name: entity_type
+        type: string
+        nullable: true
+        comment: Auditee type (local, state, non-profit, higher-ed, tribal, unknown)
+      - name: total_amount_expended
+        type: double
+        nullable: true
+        comment: Total federal awards expended in the audit year (USD)
+      - name: type_audit_code
+        type: string
+        nullable: true
+        comment: UG uniform guidance, AL alternative compliance, ...
+      - name: is_public
+        type: string
+        nullable: true
+        comment: Report is public (t/f)
+      - name: data_source
+        type: string
+        nullable: true
+        comment: GSA (filed in the new system) or CENSUS (migrated)
+      - name: resubmission_version
+        type: string
+        nullable: true
+        comment: Version number of this filing
+      - name: resubmission_status
+        type: string
+        nullable: true
+        comment: most_recent or superseded marker
+      - name: is_multiple_eins
+        type: string
+        nullable: true
+        comment: Filing covers multiple EINs (Yes/No)
+      - name: is_additional_ueis
+        type: string
+        nullable: true
+        comment: Filing lists additional UEIs (Yes/No)
+      - name: is_secondary_auditors
+        type: string
+        nullable: true
+        comment: Secondary auditors involved (Yes/No)
+
+    source:
+      type: http
+      url: "https://app.fac.gov/dissemination/public-data/gsa/full/general.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.FacCurrentGeneralProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fac_audits/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: fac_audits
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAC_FEDERAL_AWARDS — FAC current bulk file federal_awards.csv (full daily extract, refreshed monthly)
+  # ---------------------------------------------------------------------------
+  - name: fac_federal_awards
+    pattern: "type=fac_federal_awards/*.parquet"
+    partitions: *static_partitions
+    dqRowLimit: 200000
+    comment: >
+      One row per federal program (Assistance Listing) audited in a Single Audit, audit years 2016 to date (about 7.3 million rows through October 2026; 580,000-930,000 per year), from the FAC current-data bulk file federal_awards.csv. Joins fac_audits on report_id (EIN, auditee name and state live there). The ALN is federal_agency_prefix || '.' || federal_award_extension and matches usaspending_assistance.cfda_number. amount_expended is the program's federal expenditure in the audit year. is_direct = 'Y' rows are prime awards received straight from the agency and can be matched to USAspending; is_direct = 'N' rows are pass-through funds received from a state or other entity and will not match a prime award to the same UEI. Includes cluster, major-program, loan, findings and pass-through-to-subrecipient fields. Same monthly full replacement as fac_audits. Pre-2016 awards are in fac_federal_awards_historic. Source: app.fac.gov/dissemination/public-data/gsa/full/federal_awards.csv.
+
+    dimensions:
+      type:
+        - fac_federal_awards
+      # Cache buster: the FAC file keeps one URL and is regenerated daily, so the month keys the
+      # raw cache and the run tracker. Deliberately a single value (no partition column).
+      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+
+    columns:
+      - name: report_id
+        type: string
+        nullable: false
+        comment: FAC report identifier (PK of fac_audits); for 2016-2021 filings it embeds the Census id
+      - name: auditee_uei
+        type: string
+        nullable: true
+        comment: Auditee UEI; the literal GSA_MIGRATION for audit years 2016-2021 (filed before UEIs), real UEI from 2022. Use auditee_ein for those years
+      - name: audit_year
+        type: integer
+        nullable: true
+        comment: "Audit year: the fiscal year covered by the audit"
+      - name: fac_accepted_date
+        type: string
+        nullable: true
+        comment: Date the FAC accepted the filing
+      - name: award_reference
+        type: string
+        nullable: false
+        comment: Award line within the report (PK with report_id)
+      - name: federal_agency_prefix
+        type: string
+        nullable: true
+        comment: Assistance Listing agency prefix (2 digits), first part of the ALN
+      - name: federal_award_extension
+        type: string
+        nullable: true
+        comment: Assistance Listing extension (3 characters), second part of the ALN, e.g. 778 or U01 for an unnamed program
+      - name: additional_award_identification
+        type: string
+        nullable: true
+        comment: Additional award identification supplied by the auditee
+      - name: federal_program_name
+        type: string
+        nullable: true
+        comment: Federal program name
+      - name: amount_expended
+        type: double
+        nullable: true
+        comment: Federal dollars expended on this program in the audit year (USD)
+      - name: cluster_name
+        type: string
+        nullable: true
+        comment: Program cluster
+      - name: other_cluster_name
+        type: string
+        nullable: true
+        comment: Cluster name when cluster_name is OTHER CLUSTER
+      - name: state_cluster_name
+        type: string
+        nullable: true
+        comment: State cluster name
+      - name: cluster_total
+        type: double
+        nullable: true
+        comment: Total expended for the cluster (USD)
+      - name: federal_program_total
+        type: double
+        nullable: true
+        comment: Total expended for the program across its lines (USD)
+      - name: is_major
+        type: string
+        nullable: true
+        comment: Audited as a major program (Y/N)
+      - name: is_loan
+        type: string
+        nullable: true
+        comment: Federal loan program (Y/N)
+      - name: loan_balance
+        type: string
+        nullable: true
+        comment: "Loan balance outstanding as the auditee typed it (free text in the source: plain numbers, $ and comma formats, N/A, and the GSA_MIGRATION placeholder on migrated rows), so it is not parsed"
+      - name: is_direct
+        type: string
+        nullable: true
+        comment: Y when received directly from the federal agency (a prime award that can match USAspending), N when passed through another entity
+      - name: audit_report_type
+        type: string
+        nullable: true
+        comment: Auditor opinion on the program (U unmodified, Q qualified, A adverse, D disclaimer)
+      - name: findings_count
+        type: integer
+        nullable: true
+        comment: Number of audit findings for the program
+      - name: is_passthrough_award
+        type: string
+        nullable: true
+        comment: Part of the award was passed through to subrecipients (Y/N)
+      - name: passthrough_amount
+        type: double
+        nullable: true
+        comment: Amount passed through (USD)
+
+    source:
+      type: http
+      url: "https://app.fac.gov/dissemination/public-data/gsa/full/federal_awards.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.FacCurrentAwardsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fac_federal_awards/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: fac_federal_awards
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAC_AUDITS_HISTORIC — FAC archived Census files, one zip per audit year (frozen)
+  # ---------------------------------------------------------------------------
+  - name: fac_audits_historic
+    pattern: "type=fac_audits_historic/year=*/*.parquet"
+    partitions: *standard_partitions
+    dqRowLimit: 200000
+    comment: >
+      One row per Single Audit for audit years 1998-2015 (723,457 audits; 32,000-46,000 per year), from the Federal Audit Clearinghouse's archived Census data (ELECAUDITHEADER). Identified by (year, dbkey); year is the audit year. The Census system pre-dates UEIs, so the keys are ein (always present) and duns (blank on about 30 percent of rows); uei is empty. Carries the auditee, audit firm, cognizant and oversight agencies, opinion and internal-control flags and total federal expenditure. The files are frozen (the FAC replaced them with the GSA system for 2016 onward, see fac_audits). Contact people are not loaded. Source: app.fac.gov/dissemination/public-data/census/csv/census-<year>.zip.
+
+    dimensions:
+      type:
+        - fac_audits_historic
+      # The Census archive is frozen at audit year 2015 (the FAC moved to the GSA system for
+      # 2016), so the range is closed on both ends; GOVDATA_START_YEAR must not narrow it.
+      year:
+        type: yearRange
+        start: "1998"
+        minYear: 1998
+        end: "2015"
+        descending: true
+
+    columns:
+      - name: dbkey
+        type: string
+        nullable: false
+        comment: Census database key; unique within the audit year (PK with year)
+      - name: census_id
+        type: string
+        nullable: true
+        comment: Census id (dbkey+year)
+      - name: ein
+        type: string
+        nullable: true
+        comment: Auditee EIN (EIN+subcode identify the auditee)
+      - name: ein_subcode
+        type: string
+        nullable: true
+        comment: EIN sub-code
+      - name: duns
+        type: string
+        nullable: true
+        comment: Auditee DUNS number (blank on about 30 percent of rows); join key to usaspending_assistance.recipient_duns
+      - name: auditee_name
+        type: string
+        nullable: true
+        comment: Auditee (recipient of federal awards) name
+      - name: street
+        type: string
+        nullable: true
+        comment: Auditee street
+      - name: city
+        type: string
+        nullable: true
+        comment: Auditee city
+      - name: state
+        type: string
+        nullable: true
+        comment: Auditee state
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: Auditee ZIP
+      - name: cpa_firm_name
+        type: string
+        nullable: true
+        comment: Audit firm
+      - name: cpa_city
+        type: string
+        nullable: true
+        comment: Audit firm city
+      - name: cpa_state
+        type: string
+        nullable: true
+        comment: Audit firm state
+      - name: cpa_zip_code
+        type: string
+        nullable: true
+        comment: Audit firm ZIP
+      - name: auditor_ein
+        type: string
+        nullable: true
+        comment: Audit firm EIN
+      - name: cognizant_agency
+        type: string
+        nullable: true
+        comment: Cognizant federal agency prefix (2-digit)
+      - name: oversight_agency
+        type: string
+        nullable: true
+        comment: Oversight federal agency prefix (2-digit)
+      - name: fy_start_date
+        type: string
+        nullable: true
+        comment: Audited fiscal year start
+      - name: fy_end_date
+        type: string
+        nullable: true
+        comment: Audited fiscal year end
+      - name: audit_type
+        type: string
+        nullable: true
+        comment: single-audit, program-specific, or alternative-compliance-examination
+      - name: period_covered
+        type: string
+        nullable: true
+        comment: Audit period covered (A annual, B biennial, O other)
+      - name: number_months
+        type: string
+        nullable: true
+        comment: Months covered when the period is other
+      - name: report_type_fs
+        type: string
+        nullable: true
+        comment: Opinion type on the financial statements
+      - name: material_weakness
+        type: string
+        nullable: true
+        comment: Material weakness disclosed
+      - name: material_noncompliance
+        type: string
+        nullable: true
+        comment: Material noncompliance disclosed
+      - name: going_concern
+        type: string
+        nullable: true
+        comment: Going-concern paragraph included
+      - name: dollar_threshold
+        type: double
+        nullable: true
+        comment: Threshold separating Type A and Type B programs (USD)
+      - name: low_risk
+        type: string
+        nullable: true
+        comment: Low-risk auditee flag
+      - name: total_federal_expenditure
+        type: double
+        nullable: true
+        comment: Total federal awards expended (USD)
+      - name: entity_type
+        type: string
+        nullable: true
+        comment: Auditee type (local, state, non-profit, higher-ed, tribal, unknown)
+      - name: fac_accepted_date
+        type: string
+        nullable: true
+        comment: Date the FAC accepted the filing
+      - name: uei
+        type: string
+        nullable: true
+        comment: UEI (empty in the Census years)
+
+    source:
+      type: http
+      url: "https://app.fac.gov/dissemination/public-data/census/csv/census-{year}.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.FacHistoricAuditsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fac_audits_historic/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: fac_audits_historic
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # FAC_FEDERAL_AWARDS_HISTORIC — FAC archived Census files, one zip per audit year (frozen)
+  # ---------------------------------------------------------------------------
+  - name: fac_federal_awards_historic
+    pattern: "type=fac_federal_awards_historic/year=*/*.parquet"
+    partitions: *standard_partitions
+    dqRowLimit: 200000
+    comment: >
+      One row per federal program (CFDA) audited in a Single Audit, audit years 1998-2015 (about 9.4 million rows; 340,000-700,000 per year), from the archived Census data (ELECAUDITS). Joins fac_audits_historic on (year, dbkey); the EIN is repeated on each row. cfda is the Assistance Listing number (e.g. 93.569) and matches usaspending_assistance.cfda_number. amount is the program's federal expenditure in the audit year; direct = 'Y' marks funds received directly from the agency (prime awards), 'N' pass-through funds. Same frozen source as fac_audits_historic. Source: app.fac.gov/dissemination/public-data/census/csv/census-<year>.zip.
+
+    dimensions:
+      type:
+        - fac_federal_awards_historic
+      # The Census archive is frozen at audit year 2015 (the FAC moved to the GSA system for
+      # 2016), so the range is closed on both ends; GOVDATA_START_YEAR must not narrow it.
+      year:
+        type: yearRange
+        start: "1998"
+        minYear: 1998
+        end: "2015"
+        descending: true
+
+    columns:
+      - name: dbkey
+        type: string
+        nullable: false
+        comment: Census database key; unique within the audit year (PK with year)
+      - name: cfda_seq_num
+        type: integer
+        nullable: true
+        comment: Sequence of the program within the audit
+      - name: cfda
+        type: string
+        nullable: true
+        comment: Assistance Listing (CFDA) number, e.g. 93.569; matches usaspending_assistance.cfda_number
+      - name: cfda_prefix
+        type: string
+        nullable: true
+        comment: Agency prefix of the CFDA number
+      - name: cfda_ext
+        type: string
+        nullable: true
+        comment: Extension of the CFDA number
+      - name: ein
+        type: string
+        nullable: true
+        comment: Auditee EIN (EIN+subcode identify the auditee)
+      - name: federal_program_name
+        type: string
+        nullable: true
+        comment: Federal program name
+      - name: amount
+        type: double
+        nullable: true
+        comment: Federal dollars expended on the program (USD)
+      - name: program_total
+        type: double
+        nullable: true
+        comment: Total expended for the program (USD)
+      - name: cluster_total
+        type: double
+        nullable: true
+        comment: Total expended for the cluster (USD)
+      - name: major_program
+        type: string
+        nullable: true
+        comment: Audited as a major program (Y/N)
+      - name: direct
+        type: string
+        nullable: true
+        comment: Y when received directly from the federal agency, N when passed through
+      - name: loans
+        type: string
+        nullable: true
+        comment: Loan program (Y/N)
+      - name: loan_balance
+        type: double
+        nullable: true
+        comment: Loan balance outstanding (USD)
+      - name: arra
+        type: string
+        nullable: true
+        comment: ARRA (Recovery Act) funds (Y/N)
+      - name: passthrough_award
+        type: string
+        nullable: true
+        comment: Passed through to subrecipients (Y/N)
+      - name: passthrough_amount
+        type: double
+        nullable: true
+        comment: Amount passed through (USD)
+      - name: cluster_name
+        type: string
+        nullable: true
+        comment: Program cluster
+      - name: state_cluster_name
+        type: string
+        nullable: true
+        comment: State cluster name
+      - name: award_identification
+        type: string
+        nullable: true
+        comment: Additional award identification
+      - name: findings_count
+        type: integer
+        nullable: true
+        comment: Number of audit findings for the program
+      - name: type_requirement
+        type: string
+        nullable: true
+        comment: Compliance requirement types tested
+      - name: questioned_costs
+        type: string
+        nullable: true
+        comment: Questioned costs flag
+
+    source:
+      type: http
+      url: "https://app.fac.gov/dissemination/public-data/census/csv/census-{year}.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.FacHistoricAwardsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fac_federal_awards_historic/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: fac_federal_awards_historic
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -5582,6 +6614,21 @@ constraints:
       # state_fips is null for jurisdiction_type FEDERAL/TERRITORY (Guam/Puerto
       # Rico/U.S. Virgin Islands are not in geo.state_ref); the FK only applies
       # to the STATE/DISTRICT rows where it is populated.
+
+  usaspending_assistance:
+    primaryKey: [year, assistance_transaction_unique_key]
+
+  fac_audits:
+    primaryKey: [report_id]
+
+  fac_federal_awards:
+    primaryKey: [report_id, award_reference]
+
+  fac_audits_historic:
+    primaryKey: [year, dbkey]
+
+  fac_federal_awards_historic:
+    primaryKey: [year, dbkey, cfda_seq_num]
 
 # ============================================================================
 # VIEWS
@@ -5846,3 +6893,55 @@ views:
           + (CASE WHEN pct_access_inv IS NOT NULL THEN 0.10 ELSE 0 END), 0
         ) AS siii
       FROM ranked
+
+  - name: fac_awards_vs_usaspending
+    comment: >
+      Single Audit federal awards (fac_federal_awards joined to fac_audits) beside the prime
+      assistance obligations USAspending recorded for the same recipient UEI, Assistance
+      Listing (ALN) and fiscal year, for audit years 2016 onward. One row per audit award line.
+      uei is the filing's own UEI for audit years 2022 on; for 2016-2021 filings (UEI
+      placeholder GSA_MIGRATION) it is the UEI the same EIN carries on a 2022+ filing, only
+      where that EIN maps to exactly one UEI (otherwise null). usaspending_obligated is the sum
+      of federal_action_obligation in that fiscal year only, so a multi-year award obligated in
+      an earlier year shows 0 transactions here; sum usaspending_assistance across years for
+      the lifetime figure. is_direct = 'N' lines are pass-through funds and are not expected
+      to match a prime award to the auditee; amount_expended is the auditee's expenditure in
+      the audit year, not an obligation, so the two amounts are comparable only in magnitude.
+    sql: >
+      WITH ein_uei AS (
+        SELECT auditee_ein, MIN(auditee_uei) AS uei
+        FROM fac_audits
+        WHERE auditee_uei <> 'GSA_MIGRATION'
+        GROUP BY auditee_ein
+        HAVING COUNT(DISTINCT auditee_uei) = 1
+      ),
+      usa AS (
+        SELECT year, recipient_uei, cfda_number,
+               SUM(federal_action_obligation) AS obligated,
+               COUNT(*) AS transactions
+        FROM usaspending_assistance
+        WHERE recipient_uei IS NOT NULL
+        GROUP BY year, recipient_uei, cfda_number
+      )
+      SELECT
+        a.audit_year,
+        a.report_id,
+        a.award_reference,
+        g.auditee_ein,
+        g.auditee_name,
+        g.auditee_state,
+        CASE WHEN g.auditee_uei = 'GSA_MIGRATION' THEN m.uei ELSE g.auditee_uei END AS uei,
+        a.federal_agency_prefix || '.' || a.federal_award_extension AS aln,
+        a.federal_program_name,
+        a.is_direct,
+        a.amount_expended,
+        u.obligated AS usaspending_obligated,
+        COALESCE(u.transactions, 0) AS usaspending_transactions,
+        (u.transactions IS NOT NULL) AS matched_usaspending
+      FROM fac_federal_awards a
+      JOIN fac_audits g ON g.report_id = a.report_id
+      LEFT JOIN ein_uei m ON m.auditee_ein = g.auditee_ein
+      LEFT JOIN usa u
+        ON u.recipient_uei = CASE WHEN g.auditee_uei = 'GSA_MIGRATION' THEN m.uei ELSE g.auditee_uei END
+       AND u.cfda_number = a.federal_agency_prefix || '.' || a.federal_award_extension
+       AND u.year = a.audit_year
