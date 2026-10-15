@@ -19,6 +19,7 @@ package org.apache.calcite.adapter.askamerica;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -73,5 +74,12 @@ class PgwireGovDataConnectorCasingTest {
 
   @Test void withoutThePropertiesTheDefaultFoldsToUpper() throws Exception {
     assertEquals("RIVER,name", labelOfUnquotedRiver(false));
+  }
+
+  @Test void serverStateDirIsUnderTheAskAmericaHomeNotXdg() {
+    File dir = PgwireGovDataConnector.serverStateDir();
+    assertEquals(new File(new File(System.getProperty("user.home"), ".askamerica"),
+        "pgwire-govdata-state"), dir);
+    assertTrue(!dir.getPath().contains(".local"), dir.getPath());
   }
 }

@@ -756,6 +756,14 @@ final class PgwireGovDataConnector {
           "--fun", "standard,postgresql,spatial,mssql,bigquery"));
       pb.command().addAll(jdbcPropArgs());
       pb.environment().put("PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS", IDLE_SHUTDOWN_SECONDS);
+      // Where the server writes while it runs. The bundle's launcher otherwise defaults to
+      // $XDG_STATE_HOME or ~/.local/state, which need not exist or be writable on the user's
+      // machine (a root-owned ~/.local made the server die at start with PermissionError on a
+      // Mac, 2026-10-14), so it is named here, beside the bundle and engine we already own. An
+      // operator's own PGWIRE_CALCITE_STATE_DIR is left alone.
+      if (pb.environment().get("PGWIRE_CALCITE_STATE_DIR") == null) {
+        pb.environment().put("PGWIRE_CALCITE_STATE_DIR", serverStateDir().getAbsolutePath());
+      }
       // The bundled schema YAML resolves every table's warehousePath from
       // ${GOVDATA_PARQUET_DIR}, with no default — the spawned process crashes on connect
       // ("Environment variable 'GOVDATA_PARQUET_DIR' is not defined") without it. This was a
@@ -1060,6 +1068,13 @@ final class PgwireGovDataConnector {
           + "the default data directory instead.");
     }
     return new File(System.getProperty("user.home", ""), ".mcp_askamerica");
+  }
+
+  /** Directory the spawned server writes its state to: {@code ~/.askamerica/pgwire-govdata-state},
+   *  outside the bundle directory so a bundle update does not replace it. */
+  static File serverStateDir() {
+    return new File(new File(System.getProperty("user.home", ""), ".askamerica"),
+        "pgwire-govdata-state");
   }
 
   /**
