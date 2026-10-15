@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.114.0](https://github.com/kenstott/calcite/compare/engine-v0.113.1...engine-v0.114.0) (2026-10-15)
+
+
+### Features
+
+* **askamerica:** the setup window animates while the data server installs ([adebd41](https://github.com/kenstott/calcite/commit/adebd41c0f73d643b579db7edb0938988eb5b6a1))
+
+
+### Bug Fixes
+
+* **file:** an exact COUNT(DISTINCT) stays exact; HLL answers APPROX_COUNT_DISTINCT ([#535](https://github.com/kenstott/calcite/issues/535)) ([#556](https://github.com/kenstott/calcite/issues/556)) ([340b289](https://github.com/kenstott/calcite/commit/340b2899e9c4d073189929e56a3898e2bc69cec9))
+
 ## [0.113.1](https://github.com/kenstott/calcite/compare/engine-v0.113.0...engine-v0.113.1) (2026-10-15)
 
 
