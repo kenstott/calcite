@@ -606,6 +606,7 @@ val launcherJar by tasks.registering(Jar::class) {
         include("**/McpServerLauncher.class")
         include("**/EngineInstaller.class")
         include("**/EngineInstaller\$*.class")
+        include("**/PlatformVariant.class")
         // EngineInstaller.DialogProgress's window icon (loadAppIcons()) — this jar runs
         // standalone before the fat engine jar is ever downloaded, so the icon resources
         // have to live here too, not just in the main jar SetupWindow reads from.

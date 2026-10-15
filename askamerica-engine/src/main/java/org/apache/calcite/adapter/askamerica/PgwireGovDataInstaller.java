@@ -769,20 +769,7 @@ final class PgwireGovDataInstaller {
     }
 
     static String osVariant() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            return "windows-x86_64";
-        }
-        if (os.contains("mac")) {
-            if (!arch.contains("aarch64") && !arch.contains("arm")) {
-                throw new IllegalStateException(
-                    "pgwire-govdata is only published for Apple Silicon Macs (macos-arm64); "
-                    + "this machine reports os.arch=" + arch);
-            }
-            return "macos-arm64";
-        }
-        return "linux-x86_64";
+        return PlatformVariant.osVariant();
     }
 
     private static String fetchLatestReleaseJson() throws IOException, InterruptedException {

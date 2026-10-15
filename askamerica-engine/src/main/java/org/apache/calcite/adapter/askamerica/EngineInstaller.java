@@ -65,7 +65,7 @@ final class EngineInstaller {
      * natives of every platform. The names match the pgwire-govdata bundle's platforms.
      */
     static String platformAsset() {
-        return "askamerica-engine-" + PgwireGovDataInstaller.osVariant() + ".jar";
+        return "askamerica-engine-" + PlatformVariant.osVariant() + ".jar";
     }
 
     /** Stable, version-less asset URL of this machine's jar — always the latest engine release. */
