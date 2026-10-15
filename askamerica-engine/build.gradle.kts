@@ -210,6 +210,49 @@ tasks.test {
     }
 }
 
+// ─── Per-OS engine jars ────────────────────────────────────────────────────────
+// The shadow jar carries the native libraries of every platform (OpenBLAS for the stats library,
+// DuckDB for the claims store): about 600 MB of the 790 MB unpacked, of which one machine can use
+// a quarter. Each variant below is the same jar minus the other platforms' natives; the launcher
+// downloads its own (EngineInstaller.platformAsset). Variant names match the pgwire-govdata
+// bundle's platforms. The universal askamerica-engine.jar stays the release asset for the pip
+// client and anything else that cannot tell which platform it will run on.
+//   Run: ./gradlew :askamerica-engine:platformJars     Output: build/platform-jars/
+val allBytedecoPlatforms = listOf("linux-x86_64", "macosx-x86_64", "macosx-arm64", "windows-x86_64")
+val allDuckdbNatives = listOf("linux_amd64", "linux_arm64", "osx_universal", "windows_amd64")
+val enginePlatforms = mapOf(
+    // variant to (bytedeco platform directory, duckdb native suffix)
+    "windows-x86_64" to Pair("windows-x86_64", "windows_amd64"),
+    "macos-arm64" to Pair("macosx-arm64", "osx_universal"),
+    "linux-x86_64" to Pair("linux-x86_64", "linux_amd64"))
+
+val platformJarTasks = enginePlatforms.map { (variant, keep) ->
+    tasks.register<Zip>("platformJar-$variant") {
+        group = "distribution"
+        description = "askamerica-engine for $variant: the shadow jar without other platforms' natives"
+        val shadow = tasks.shadowJar
+        dependsOn(shadow)
+        from(zipTree(shadow.flatMap { it.archiveFile })) {
+            for (platform in allBytedecoPlatforms - keep.first) {
+                exclude("org/bytedeco/*/$platform/**")
+            }
+            for (suffix in allDuckdbNatives - keep.second) {
+                exclude("libduckdb_java.so_$suffix")
+            }
+        }
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        isZip64 = true
+        archiveFileName.set("askamerica-engine-$variant.jar")
+        destinationDirectory.set(layout.buildDirectory.dir("platform-jars"))
+    }
+}
+
+tasks.register("platformJars") {
+    group = "distribution"
+    description = "Builds askamerica-engine-<variant>.jar for every supported platform"
+    dependsOn(platformJarTasks)
+}
+
 // ─── Shadow JAR ──────────────────────────────────────────────────────────────
 // Produces a read-only fat JAR by excluding ETL-only classes and dependencies.
 // DuckDB handles all S3/Parquet reading so Hadoop is not needed at query time.

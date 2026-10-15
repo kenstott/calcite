@@ -768,7 +768,7 @@ final class PgwireGovDataInstaller {
         return false;
     }
 
-    private static String osVariant() {
+    static String osVariant() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {

@@ -29,7 +29,8 @@ class EngineInstallerLatestReleaseTest {
     private static final String PUBLISHED_WITH_JAR =
         "{\"tag_name\": \"engine-v0.100.1\", \"assets\": [\n"
         + "  {\"name\": \"pgwire-govdata-0.100.1-macos-arm64.tar.gz\", \"size\": 1},\n"
-        + "  {\"name\": \"askamerica-engine.jar\", \"size\": 435577075}\n"
+        + "  {\"name\": \"askamerica-engine.jar\", \"size\": 435577075},\n"
+        + "  {\"name\": \"" + EngineInstaller.platformAsset() + "\", \"size\": 120000000}\n"
         + "]}";
 
     @Test void versionComesFromTheEngineTag() {
@@ -45,6 +46,20 @@ class EngineInstallerLatestReleaseTest {
     @Test void onlyTheExactAssetNameCounts() {
         assertTrue(EngineInstaller.hasEngineJar(PUBLISHED_WITH_JAR));
         assertFalse(EngineInstaller.hasEngineJar(
-            "{\"tag_name\":\"engine-v0.100.1\",\"assets\":[{\"name\":\"askamerica-engine.jar.sha256\"}]}"));
+            "{\"tag_name\":\"engine-v0.100.1\",\"assets\":[{\"name\":\""
+                + EngineInstaller.platformAsset() + ".sha256\"}]}"));
+    }
+
+    /** The universal jar alone is not this machine's jar: its natives are every platform's. */
+    @Test void theUniversalJarDoesNotStandInForThePlatformJar() {
+        assertFalse(EngineInstaller.hasEngineJar(
+            "{\"tag_name\":\"engine-v0.112.0\",\"assets\":[{\"name\":\"askamerica-engine.jar\"}]}"));
+    }
+
+    @Test void platformJarIsNamedAfterThePgwireBundlePlatform() {
+        assertEquals("askamerica-engine-" + PgwireGovDataInstaller.osVariant() + ".jar",
+            EngineInstaller.platformAsset());
+        assertTrue(EngineInstaller.defaultUrl().endsWith("/releases/latest/download/"
+            + EngineInstaller.platformAsset()), EngineInstaller.defaultUrl());
     }
 }

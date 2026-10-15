@@ -29,6 +29,9 @@ fi
 
 required=(
   "askamerica-engine.jar"
+  "askamerica-engine-linux-x86_64.jar"
+  "askamerica-engine-macos-arm64.jar"
+  "askamerica-engine-windows-x86_64.jar"
   "sih-govdata.jar"
   "askamerica-extension.zip"
   "AskAmerica-MCP-${version}.pkg"

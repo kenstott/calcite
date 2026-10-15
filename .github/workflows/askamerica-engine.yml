@@ -250,6 +250,57 @@ jobs:
           path: askamerica-engine/build/libs/askamerica-engine.jar
           retention-days: 30
 
+      # One engine jar per OS: the shadow jar minus the other platforms' native libraries (OpenBLAS,
+      # DuckDB), about half the download. The launcher fetches its own (EngineInstaller.platformAsset);
+      # the universal askamerica-engine.jar above stays for the pip client and the site's JAR link.
+      - name: Build per-OS engine jars
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          ./gradlew :askamerica-engine:platformJars --no-daemon -PreleaseVersion="$VERSION"
+          fail=0
+          check() {  # variant, its bytedeco platform, its duckdb native suffix
+            jar="askamerica-engine/build/platform-jars/askamerica-engine-$1.jar"
+            [ -f "$jar" ] || { echo "FAIL: $jar was not built"; fail=1; return; }
+            entries=$(unzip -Z1 "$jar")
+            for p in linux-x86_64 macosx-x86_64 macosx-arm64 windows-x86_64; do
+              c=$(echo "$entries" | grep -cE "^org/bytedeco/[a-z]+/$p/" || true)
+              if [ "$p" = "$2" ]; then
+                [ "$c" -gt 0 ] || { echo "FAIL: $1 has none of its own $p natives"; fail=1; }
+              else
+                [ "$c" -eq 0 ] || { echo "FAIL: $1 carries $c $p native entries"; fail=1; }
+              fi
+            done
+            for d in linux_amd64 linux_arm64 osx_universal windows_amd64; do
+              c=$(echo "$entries" | grep -cE "^libduckdb_java\.so_$d$" || true)
+              if [ "$d" = "$3" ]; then
+                [ "$c" -eq 1 ] || { echo "FAIL: $1 lacks its DuckDB native $d"; fail=1; }
+              else
+                [ "$c" -eq 0 ] || { echo "FAIL: $1 carries the DuckDB native $d"; fail=1; }
+              fi
+            done
+            # The launcher compares this stamp with the release to decide whether to update.
+            unzip -p "$jar" META-INF/MANIFEST.MF | tr -d '\r' \
+              | grep -qx "AskAmerica-Engine-Version: $VERSION" \
+              || { echo "FAIL: $1 manifest lacks AskAmerica-Engine-Version: $VERSION"; fail=1; }
+            sz=$(stat -Lc%s "$jar")
+            echo "$1: $((sz/1024/1024)) MB (ceiling 170 MB)"
+            [ "$sz" -le $((170*1024*1024)) ] || { echo "FAIL: $1 exceeds its size ceiling"; fail=1; }
+          }
+          check windows-x86_64 windows-x86_64 windows_amd64
+          check macos-arm64 macosx-arm64 osx_universal
+          check linux-x86_64 linux-x86_64 linux_amd64
+          [ "$fail" -eq 0 ] && echo "Per-OS jar guards passed." || exit 1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload per-OS engine jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: askamerica-engine-platform-jars
+          path: askamerica-engine/build/platform-jars/askamerica-engine-*.jar
+          retention-days: 30
+
   # ── Browser extension (source lives in kenstott/askamerica) ────────────────
   browser-extension:
     name: Package browser extension
@@ -1009,6 +1060,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: govdata-jar
+          path: release-assets/
+
+      - name: Download per-OS engine jars
+        uses: actions/download-artifact@v4
+        with:
+          name: askamerica-engine-platform-jars
           path: release-assets/
 
       - name: Download all installers
