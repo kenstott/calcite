@@ -196,9 +196,9 @@ jobs:
             [ "$c" -eq 0 ] || { echo "FAIL: gandiva '$pat' present ($c)"; fail=1; }
           done
           # ASKAM-008/009: a thin engine. Nothing that opens the store is in the jar: no govdata
-          # beyond the three shared classes, no file adapter, hadoop, iceberg, aws, parquet, arrow.
+          # beyond the three shared classes (plus the two JDK-only file helpers VariableResolver and PeriodFormat), no file adapter, hadoop, iceberg, aws, parquet, arrow.
           c=$(echo "$entries" | grep -E '^org/apache/hadoop/|^org/apache/iceberg/|^software/amazon/|^com/amazonaws/|^org/apache/parquet/|^org/apache/arrow/|^org/apache/calcite/adapter/driver/|^org/apache/calcite/adapter/file/|^org/apache/calcite/adapter/govdata/.*\.class$' \
-              | grep -cvE '^org/apache/calcite/adapter/govdata/(R2CredentialProvider|GovDataCatalog|YamlUtils)(\$[^/]*)?\.class$|^org/apache/calcite/adapter/file/etl/(VariableResolver[^/]*\.class)?$|^org/apache/calcite/adapter/file/$' || true)
+              | grep -cvE '^org/apache/calcite/adapter/govdata/(R2CredentialProvider|GovDataCatalog|YamlUtils)(\$[^/]*)?\.class$|^org/apache/calcite/adapter/file/etl/((VariableResolver|PeriodFormat)[^/]*\.class)?$|^org/apache/calcite/adapter/file/$' || true)
           [ "$c" -eq 0 ] || { echo "FAIL: $c entries of the data stack in the engine jar"; fail=1; }
           # The catalog the tools describe: the schema YAMLs must be in the jar.
           y=$(echo "$entries" | grep -cE -- '-schema\.yaml$' || true)
