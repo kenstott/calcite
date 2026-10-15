@@ -59,7 +59,9 @@ public class HLLCountDistinctRule extends RelRule<HLLCountDistinctRule.Config> {
     List<Long> hllEstimates = new ArrayList<>();
 
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
-      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
+      // An exact COUNT(DISTINCT) stays exact; only APPROX_COUNT_DISTINCT takes the estimate
+      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()
+          && aggCall.isApproximate()) {
         Long estimate = getHLLEstimate(input, aggCall);
         if (estimate != null) {
           hasOptimizableAgg = true;

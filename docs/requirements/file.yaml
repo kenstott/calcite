@@ -2393,19 +2393,27 @@
 
 - id: FILE-124
   module: file
-  status: proposed
+  status: complete
   group: optimization
-  category: HLL rule instance bug
+  category: HLL rewrite only for APPROX_COUNT_DISTINCT
   priority: SHOULD
   type: behavioral
   seam: execution
   description: >
+    [SUPERSEDED by C-18, 2026-10-14 -- the approx-only instance honors its flag. Kept here for history; do not implement against it.]
     SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize()
-    ignores the flag and optimizes EVERY COUNT(DISTINCT); all HLL rules no-op (leave the plan) when no
+    ignores the flag and optimizes EVERY COUNT(DISTINCT);
+    [END SUPERSEDED BLOCK]
+    all HLL rules no-op (leave the plan) when no
     cached sketch exists.
-  source: file/src/main/java/.../rules/SimpleHLLCountDistinctRule.java shouldOptimize 112-122
-  notes: "RESOLVED C-18 (code-wrong): exact COUNT(DISTINCT) stays exact; HLL only for APPROX_COUNT_DISTINCT (or explicit opt-in). Issue staged."
-  tests: []
+    (Amended 2026-10-14, EXACT STAYS EXACT:) A plain COUNT(DISTINCT) always returns an exact count; an
+    HLL sketch estimate answers only APPROX_COUNT_DISTINCT. APPROX_ONLY_INSTANCE honors approxOnly, the
+    CSV and Parquet scans register it, and the ClickHouse and file HLL rules rewrite only approximate calls.
+  source: file/src/main/java/.../rules/SimpleHLLCountDistinctRule.java shouldOptimize
+  notes: "RESOLVED C-18 (code-wrong): exact COUNT(DISTINCT) stays exact; HLL only for APPROX_COUNT_DISTINCT."
+  tests:
+    - file/HllRuleOperandDefaultsRequirementsTest#file124ApproxOnlyMustNotOptimizeExactCountDistinct
+    - file/HllRuleOperandDefaultsRequirementsTest#file124NoCachedSketchLeavesPlanUnchanged
 
 - id: FILE-125
   module: file
