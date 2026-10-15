@@ -222,7 +222,22 @@ if [ -d "$snap_dir" ] && ! $DRY_RUN; then
       log "removing unused pinned jar $(basename "$old_jar")"
       rm -f "$old_jar"
     fi
-  done < <(find "$snap_dir" -maxdepth 1 -name '*.jar' -mmin +1440)
+  # The trailing slash matters: .jars is a symlink to the large disk, and find does not descend into
+  # a symlink named as its start. Without it this matched nothing and 79 GB of pinned copies piled up
+  # for 18 days (2026-09-26 to 2026-10-15).
+  done < <(find "$snap_dir/" -maxdepth 1 -name '*.jar' -mmin +1440)
+fi
+
+# ── private jars ─────────────────────────────────────────────────────────────
+# Runners build private jars (sih-govdata-<topic>.jar) to test a fix and to run a remediation from.
+# One is deleted once it is a day old, no live process uses it and no open ops issue names it
+# (scripts/clean-private-jars.py). If the issue list cannot be read nothing is deleted, and that is
+# logged: a jar a job still needs is worth more than the disk it takes.
+if ! $DRY_RUN; then
+  jar_rc=0
+  jar_out="$(python3 "$GOVDATA_ROOT/scripts/clean-private-jars.py" --delete 2>&1)" || jar_rc=$?
+  while IFS= read -r line; do log "private jars: $line"; done <<<"$jar_out"
+  [ "$jar_rc" -eq 0 ] || log "WARNING: clean-private-jars.py exited $jar_rc; private jars were not cleaned"
 fi
 
 # ── 4. build ─────────────────────────────────────────────────────────────────
