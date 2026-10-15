@@ -208,14 +208,13 @@ tasks.shadowJar {
     // specifically so no per-platform tokenizer binary is needed.
     exclude("ai/djl/**")
 
-    // ONNX Runtime is REQUIRED at query time and must NOT be excluded. SEMANTIC_SEARCH and
-    // EMBED embed the query through OnnxClsEmbedder; without these classes both fail with
-    // "no embedder configured", which is exactly the state this jar shipped in until now.
-    // The earlier "not used at query time" assumption held only while embeddings were an
-    // ETL-only concern.
+    // No ONNX Runtime and no embedding model in this jar (owner decision, 2026-10-14): the
+    // engine never embeds anything itself. The data server (the pgwire-govdata bundle) ships its
+    // own onnxruntime and the arctic-embed-xs model (model/embedder) and embeds the query there.
+    exclude("ai/onnxruntime/**")                       // ~350 MB of natives for every OS/CPU
+    exclude("models/snowflake-arctic-embed-xs/**")     // ~22 MB model + tokenizer
 
-    // Orphaned ML resources — nothing loads these any more (the arctic-embed-xs int8 model
-    // under models/snowflake-arctic-embed-xs/ is the live one and is deliberately kept).
+    // Orphaned ML resources — nothing loads these any more.
     exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB, superseded, mean-pooled
     exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives (DJL)
 
@@ -306,8 +305,7 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
     // excluded from the fat jar too). Keeps AWS SDK v1: the Iceberg s3a read path
     // still needs com.amazonaws until IcebergTable moves to S3FileIO (v2).
     val dropPrefixes = listOf(
-        // "onnxruntime" removed: it backs OnnxClsEmbedder, the query-time embedder for
-        // SEMANTIC_SEARCH/EMBED. Dropping the jar left those functions permanently broken.
+        "onnxruntime",  // the data server embeds queries; the engine carries no embedder
         // "pdfbox"/"fontbox"/"xmpbox"/"poi"/"jsoup" removed: web_fetch (McpServer) needs
         // them at query time now.
         "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
