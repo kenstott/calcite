@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.115.0](https://github.com/kenstott/calcite/compare/engine-v0.114.0...engine-v0.115.0) (2026-10-16)
+
+
+### Features
+
+* **fiscal:** federal awards - USAspending assistance transactions and the Federal Audit Clearinghouse, loaded in bulk ([a3dc240](https://github.com/kenstott/calcite/commit/a3dc2400b88f6c83f13dba42eb8d4ba29c19b4f5))
+
+
+### Bug Fixes
+
+* **askamerica:** the setup window's data-server install no longer dies with IllegalAccessError ([15ae6e1](https://github.com/kenstott/calcite/commit/15ae6e100d98c5bbe7a3085070658e4ad699da51))
+* **askamerica:** the wizard no longer exits when Claude Desktop holds the cached engine jar ([937ff17](https://github.com/kenstott/calcite/commit/937ff17fc3602a7812c11124bc1bb6d83a918938))
+* **file,core:** file-reader and not-found errors carry their SQLStates ([#534](https://github.com/kenstott/calcite/issues/534)) ([#560](https://github.com/kenstott/calcite/issues/560)) ([cd28010](https://github.com/kenstott/calcite/commit/cd2801065f3206dc73f5bb12c48ad554e014bde0))
+
 ## [0.114.0](https://github.com/kenstott/calcite/compare/engine-v0.113.1...engine-v0.114.0) (2026-10-15)
 
 
