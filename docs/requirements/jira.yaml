@@ -1,0 +1,139 @@
+# Jira Cloud adapter — requirements ledger. Schema: README.md.
+#
+# Unit of work = a capability of the adapter or of its pgwire packaging. The source is the
+# owner's decisions of 2026-10-16 (relayed by the lead and agreed with the Provisa side).
+#
+# Nothing here has run against a Jira site yet. in-progress = implemented under unit tests that
+# run the real client against FakeJira, a local stub of the documented REST v3 (this project's
+# reading of Atlassian's reference, not captured output).
+
+- id: JIRA-001
+  module: jira
+  status: in-progress
+  group: scope
+  category: Connection
+  priority: MUST
+  type: behavioral
+  description: >
+    A schema is one Jira Cloud site, named by its base URL (https; http only for a loopback
+    host), reached through REST v3 with basic authentication (the account's email and an API
+    token). The credentials are checked with GET /rest/api/3/myself when the schema is created; a
+    rejection names the account and the site. The REST version, the authorization and the
+    rich-text format sit behind one seam (JiraFlavor), so Data Center (REST v2, a personal access
+    token as a bearer) is a second flavour, not a second code path.
+  source: owner decision 2026-10-16; JiraAdapterTest.aRejectedTokenFailsTheSchemaNamingTheAccount
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-002
+  module: jira
+  status: in-progress
+  group: catalog
+  category: Forms
+  priority: MUST
+  type: behavioral
+  description: >
+    The `forms` operand names the tables served: each form is a project, an issue type (by name
+    or id) and the fields chosen for it, each by id or name, with an optional column name. A form's
+    table has the fixed columns key (the key column), id, summary, status, created and updated,
+    then one column per chosen field, by default its name snake-cased. A user field's display name
+    is a read-only field of its own, <user field id>.displayName. No fields gives the fixed columns only. Two fields that give one
+    column, a field whose column is a fixed one, and a field name shared by two fields are refused
+    naming the fields, never renamed. Only the forms named are tables of issues.
+  source: owner decision 2026-10-16; JiraAdapterTest (columnsAre..., twoFieldsGiving..., aFieldWhoseColumn..., aFieldNameShared..., aColumnGiven...)
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-003
+  module: jira
+  status: in-progress
+  group: catalog
+  category: Listing
+  priority: MUST
+  type: structural
+  description: >
+    The schema always serves _jira_forms(project_key, project_name, issue_type, issue_type_id,
+    subtask, name), every project and issue type the account can create, and
+    _jira_fields(project_key, issue_type, field_id, field_name, column_name, data_type, required,
+    read_only, ordinal_position), the create-screen fields of one issue type (each user field
+    followed by its <id>.displayName), which must be queried with project_key and issue_type.
+    data_type is the PostgreSQL name of the column's type; read_only marks a field no INSERT or
+    UPDATE may set.
+  source: owner decision 2026-10-16; JiraAdapterTest (formsLists..., fieldsLists..., fieldsWithout...)
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-004
+  module: jira
+  status: in-progress
+  group: read
+  category: Values
+  priority: MUST
+  type: behavioral
+  description: >
+    Values read as Jira shows them to a person: an option as its value; priority, status, issue
+    type, resolution, component and version as their name; a cascading select as "parent / child";
+    rich text (Atlassian Document Format) as plain text, a line per block; a user as its account id
+    and its <id>.displayName field as the display name; a multi-value field as a JSON array of those values
+    (pgwire has no array type); a field of unknown shape as its JSON text.
+  source: owner decision 2026-10-16; JiraAdapterTest.valuesReadAsAPersonSeesThem
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-005
+  module: jira
+  status: in-progress
+  group: read
+  category: Pushdown
+  priority: MUST
+  type: behavioral
+  description: >
+    A form is read by JQL (POST /search/jql, paged by nextPageToken), asking only for the selected
+    fields; a LIMIT stops the pages. key = or key IN fetches those issues by key
+    (POST /issue/bulkfetch), so a missing key is no row. Comparisons of dates and numbers are
+    sent as JQL; a datetime bound is widened by a day, JQL comparing to the minute in the
+    account's time zone. Equality on text, options, statuses and users is not sent, as JQL refuses
+    a value naming nothing. Every filter is still evaluated by Calcite, and ORDER BY is Calcite's.
+  source: owner decision 2026-10-16 (WHERE/ORDER BY/LIMIT into JQL), narrowed to what is exact; JiraAdapterTest (aSearchIs..., keysAre..., aDatetimeBound..., equalityOnAnOption...)
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-006
+  module: jira
+  status: in-progress
+  group: write
+  category: Issues
+  priority: MUST
+  type: behavioral
+  description: >
+    INSERT creates issues in the form's project and issue type, 50 a request (POST /issue/bulk),
+    and reports their keys, so RETURNING works; a status, key, id, created or updated is refused.
+    UPDATE writes the changed fields per issue (PUT /issue/<key>); a changed status is the workflow
+    transition reaching it, and none reaching it is refused naming the reachable statuses. DELETE
+    deletes per issue; an issue with subtasks is refused, naming them, before anything is deleted.
+    A failure part way names how many rows were written.
+  source: owner decision 2026-10-16; JiraAdapterTest (insert..., aBulkCreate..., update..., aStatusNo..., delete...)
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-007
+  module: jira
+  status: in-progress
+  group: write
+  category: Links
+  priority: MUST
+  type: behavioral
+  description: >
+    issue_links(link_id, link_type, outward_key, inward_key) serves each link once, where either
+    end is an issue of a served form; outward_key and inward_key are the link's outwardIssue and
+    inwardIssue. A condition on either key fetches just those issues. INSERT creates a link and
+    reports its id; DELETE removes one; UPDATE is refused.
+  source: owner decision 2026-10-16; JiraAdapterTest (linksAre..., aLinkIs..., aLinkCannot...)
+  tests: [jira/JiraAdapterTest]
+
+- id: JIRA-008
+  module: jira
+  status: in-progress
+  group: scope
+  category: Packaging
+  priority: MUST
+  type: infrastructure
+  description: >
+    The adapter ships as a pgwire bundle (pgwire-jira, with writes allowed). No Trino connector:
+    a Trino deployment reaches Jira through the pgwire server.
+  source: owner decision 2026-10-16 (exchange, the Provisa side)
+  tests: []
