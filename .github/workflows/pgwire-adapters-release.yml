@@ -425,7 +425,13 @@ jobs:
           name="pgwire-${{ matrix.adapter.name }}-${VER}-${{ matrix.os.variant }}"
           echo "BUNDLE_NAME=$name" >> "$GITHUB_ENV"
           mv bundle "$name"
-          tar -czf "${name}.tar.gz" "$name"
+          # Windows' tar cannot create symlinks without a privilege most users lack, and the
+          # embedder model cache (Hugging Face layout) is made of them: the installer's extraction
+          # failed with "Can't create ...: Invalid argument" (0.115.0). -h stores each link as the
+          # file it points at (repeats become hard links, so the archive does not grow).
+          deref=""
+          if [ "${{ matrix.os.variant }}" = "windows-x86_64" ]; then deref="-h"; fi
+          tar -czf "${name}.tar.gz" $deref "$name"
           # `command -v sha256sum` is checked only for its exit status -- redirected to
           # /dev/null so its own stdout (the binary's path, e.g. "/usr/bin/sha256sum") does
           # not leak into the pipe ahead of the real hash line on any runner where
