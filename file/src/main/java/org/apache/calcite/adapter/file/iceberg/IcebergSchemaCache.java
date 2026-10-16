@@ -106,6 +106,8 @@ public final class IcebergSchemaCache {
   private static volatile boolean loaded;
   private static volatile boolean trusted;
   private static volatile boolean syncAttempted;
+  /** True once the sync has finished (trusted or not); callers arriving earlier wait for it. */
+  private static volatile boolean syncDone;
 
   /**
    * Warehouse coordinates observed on the live read path, so publishing needs no plumbing.
@@ -467,52 +469,64 @@ public final class IcebergSchemaCache {
   // ---------------------------------------------------------------------------------------------
 
   private static void syncIfNeeded(String tablePath, Map<String, String> s3Config) {
-    if (syncAttempted) {
+    if (syncDone) {
       return;
     }
+    // A caller that arrives while another thread is syncing waits here for the verdict. Returning
+    // at once would answer "untrusted", and every schema loader that started alongside the first
+    // would read its tables live from the object store: minutes of start-up the cache exists to
+    // avoid. syncAttempted stops the syncing thread re-entering itself.
     synchronized (IcebergSchemaCache.class) {
-      if (syncAttempted) {
+      if (syncDone || syncAttempted) {
         return;
       }
       syncAttempted = true;
-      if (Boolean.getBoolean(IGNORE_PUBLISHED_PROPERTY)) {
-        // A rebuild creates the cache again from the live tables: nothing from an earlier cache,
-        // which may hold tables that have since gone or schemas that have since changed.
-        LOGGER.info("Iceberg schema cache: {} is set, ignoring any published cache — reading "
-            + "schemas live", IGNORE_PUBLISHED_PROPERTY);
-        return;
-      }
-      String root = bucketRoot(tablePath);
-      if (root == null || s3Config == null || s3Config.isEmpty()) {
-        LOGGER.debug("Iceberg schema cache not synced (no object-store root for {}) — "
-            + "every lookup will read live", tablePath);
-        return;
-      }
       try {
-        StorageProvider provider = providerFor(s3Config);
-        String publishedPath = root + PUBLISHED_KEY;
-        String publishedDigest = etagDigest(provider, publishedPath);
-        if (publishedDigest == null) {
-          LOGGER.info("No published Iceberg schema cache at {} — reading schemas live",
-              publishedPath);
-          return;
-        }
-        if (!publishedDigest.equals(localFileDigest())) {
-          download(provider, publishedPath);
-        }
-        // Re-digest after the download: trust requires the local bytes to BE the published bytes.
-        if (publishedDigest.equals(localFileDigest())) {
-          trusted = true;
-          ensureLoaded();
-          LOGGER.info("Iceberg schema cache trusted ({} tables, digest {})",
-              ENTRIES.size(), publishedDigest);
-        } else {
-          LOGGER.warn("Iceberg schema cache digest still differs from published {} — reading live",
-              publishedPath);
-        }
-      } catch (IOException | RuntimeException e) {
-        LOGGER.info("Iceberg schema cache sync failed ({}) — reading schemas live", e.toString());
+        sync(tablePath, s3Config);
+      } finally {
+        syncDone = true;
       }
+    }
+  }
+
+  private static void sync(String tablePath, Map<String, String> s3Config) {
+    if (Boolean.getBoolean(IGNORE_PUBLISHED_PROPERTY)) {
+      // A rebuild creates the cache again from the live tables: nothing from an earlier cache,
+      // which may hold tables that have since gone or schemas that have since changed.
+      LOGGER.info("Iceberg schema cache: {} is set, ignoring any published cache — reading "
+          + "schemas live", IGNORE_PUBLISHED_PROPERTY);
+      return;
+    }
+    String root = bucketRoot(tablePath);
+    if (root == null || s3Config == null || s3Config.isEmpty()) {
+      LOGGER.debug("Iceberg schema cache not synced (no object-store root for {}) — "
+          + "every lookup will read live", tablePath);
+      return;
+    }
+    try {
+      StorageProvider provider = providerFor(s3Config);
+      String publishedPath = root + PUBLISHED_KEY;
+      String publishedDigest = etagDigest(provider, publishedPath);
+      if (publishedDigest == null) {
+        LOGGER.info("No published Iceberg schema cache at {} — reading schemas live",
+            publishedPath);
+        return;
+      }
+      if (!publishedDigest.equals(localFileDigest())) {
+        download(provider, publishedPath);
+      }
+      // Re-digest after the download: trust requires the local bytes to BE the published bytes.
+      if (publishedDigest.equals(localFileDigest())) {
+        trusted = true;
+        ensureLoaded();
+        LOGGER.info("Iceberg schema cache trusted ({} tables, digest {})",
+            ENTRIES.size(), publishedDigest);
+      } else {
+        LOGGER.warn("Iceberg schema cache digest still differs from published {} — reading live",
+            publishedPath);
+      }
+    } catch (IOException | RuntimeException e) {
+      LOGGER.info("Iceberg schema cache sync failed ({}) — reading schemas live", e.toString());
     }
   }
 
@@ -750,6 +764,7 @@ public final class IcebergSchemaCache {
     loaded = false;
     trusted = false;
     syncAttempted = false;
+    syncDone = false;
     warehouseTablePath = null;
     warehouseS3Config = null;
     File f = cacheFile();
@@ -801,6 +816,14 @@ public final class IcebergSchemaCache {
    * the hadoop {@code fs.s3a.*} keys or the plain {@code accessKeyId}/{@code secretAccessKey} ones.
    */
   private static StorageProvider providerFor(Map<String, String> s3Config) {
+    return providerFactory.apply(s3Config);
+  }
+
+  /** Builds the object-store provider; replaceable so a test can observe the sync. */
+  static volatile java.util.function.Function<Map<String, String>, StorageProvider> providerFactory =
+      IcebergSchemaCache::buildProvider;
+
+  private static StorageProvider buildProvider(Map<String, String> s3Config) {
     Map<String, Object> config = new HashMap<>();
     copyFirst(config, "accessKeyId", s3Config, "fs.s3a.access.key", "accessKeyId");
     copyFirst(config, "secretAccessKey", s3Config, "fs.s3a.secret.key", "secretAccessKey");
