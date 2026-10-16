@@ -127,7 +127,7 @@ final class FemaDeclaredCountyFips {
     for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
       try {
         HttpRequest req = HttpRequest.newBuilder(URI.create(URL + skip))
-            .timeout(Duration.ofSeconds(180)).GET().build();
+            .timeout(Duration.ofMinutes(3)).GET().build();
         HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() == 200) {
           JsonNode records = MAPPER.readTree(resp.body()).path("DisasterDeclarationsSummaries");
