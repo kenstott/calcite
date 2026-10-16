@@ -51,6 +51,8 @@ public class CalciteContextException extends CalciteException {
 
   private @Nullable String originalStatement;
 
+  private @Nullable String sqlState;
+
   //~ Constructors -----------------------------------------------------------
 
   /**
@@ -178,6 +180,21 @@ public class CalciteContextException extends CalciteException {
    */
   public void setOriginalStatement(@Nullable String originalStatement) {
     this.originalStatement = originalStatement;
+  }
+
+  /**
+   * Returns the SQLState of the underlying error, as its resource declares with
+   * {@code @Property(name = "SQLSTATE", ...)}, or null if the resource declares none.
+   */
+  public @Nullable String getSqlState() {
+    return sqlState;
+  }
+
+  /**
+   * Sets the SQLState of the underlying error.
+   */
+  public void setSqlState(@Nullable String sqlState) {
+    this.sqlState = sqlState;
   }
 
   @Override public @Nullable String getMessage() {

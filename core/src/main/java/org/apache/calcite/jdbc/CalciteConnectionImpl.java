@@ -49,6 +49,7 @@ import org.apache.calcite.rel.type.DelegatingTypeSystem;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.TimeFrameSet;
 import org.apache.calcite.rel.type.TimeFrames;
+import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.SchemaVersion;
@@ -234,8 +235,44 @@ abstract class CalciteConnectionImpl
           ? "Error while preparing statement [" + query.sql + "]"
           : "Error while preparing plan [" + RelOptUtil.toString(query.rel) + "]";
       e.printStackTrace();
+      final String sqlState = contextSqlState(e);
+      if (sqlState != null) {
+        throw new SQLException(message, sqlState, e);
+      }
       throw Helper.INSTANCE.createException(message, e);
     }
+  }
+
+  /** Builds the SQLException for a statement that failed to prepare, so that
+   * an error whose resource declares a SQLState (such as 42S02 for an object
+   * that is not found) carries it; Avatica's own wrapping drops it. */
+  @Override protected Meta.ExecuteResult prepareAndExecuteInternal(
+      AvaticaStatement statement, String sql, long maxRowCount)
+      throws SQLException, NoSuchStatementException {
+    try {
+      return super.prepareAndExecuteInternal(statement, sql, maxRowCount);
+    } catch (RuntimeException e) {
+      final String sqlState = contextSqlState(e);
+      if (sqlState == null) {
+        throw e;
+      }
+      throw new SQLException("Error while executing SQL \"" + sql + "\": "
+          + e.getMessage(), sqlState, e);
+    }
+  }
+
+  /** Returns the SQLState of the first {@link CalciteContextException} in
+   * {@code e}'s cause chain that has one, or null. */
+  private static @Nullable String contextSqlState(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      if (t instanceof CalciteContextException) {
+        final String sqlState = ((CalciteContextException) t).getSqlState();
+        if (sqlState != null) {
+          return sqlState;
+        }
+      }
+    }
+    return null;
   }
 
   <T> CalcitePrepare.CalciteSignature<T> parseQuery(

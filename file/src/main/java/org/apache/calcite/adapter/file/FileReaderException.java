@@ -10,14 +10,26 @@
  */
 package org.apache.calcite.adapter.file;
 
+import java.sql.SQLException;
+
 /**
- * Indicates that the FileReader failed.
+ * Indicates that the FileReader failed, with the SQLState of the failure mode (FILE-151).
  */
-public class FileReaderException extends Exception {
-  FileReaderException(String message) {
-    super(message);
+public class FileReaderException extends SQLException {
+  /** The document has no table the source names (no table, no match for the selector). */
+  public static final String TABLE_NOT_FOUND = "42S02";
+  /** The source's selector or index names something other than one table. */
+  public static final String CONFIGURATION = "42000";
+  /** The source could not be read. */
+  public static final String FILE_ACCESS = "HY000";
+  /** The source's storage location could not be reached. */
+  public static final String STORAGE_CONNECT = "08001";
+
+  FileReaderException(String message, String sqlState) {
+    super(message, sqlState);
   }
-  FileReaderException(String message, Throwable e) {
-    super(message, e);
+
+  FileReaderException(String message, String sqlState, Throwable cause) {
+    super(message, sqlState, cause);
   }
 }

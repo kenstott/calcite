@@ -70,19 +70,22 @@ public class FileReader implements Iterable<Elements> {
         try {
           file = source.file();
         } catch (UnsupportedOperationException e) {
-          throw new FileReaderException("Cannot get file from source: " + source);
+          throw new FileReaderException("Cannot get file from source: " + source,
+              FileReaderException.FILE_ACCESS);
         }
 
         if (file != null && file.exists()) {
           doc = Jsoup.parse(file, this.charset.name());
         } else {
           throw new FileReaderException(
-              "File not found: " + (file != null ? file.getPath() : source.path()));
+              "File not found: " + (file != null ? file.getPath() : source.path()),
+              FileReaderException.FILE_ACCESS);
         }
       } else if ("s3".equals(proto)) {
         // Handle S3 protocol
         if (source.url() == null) {
-          throw new FileReaderException("S3 source URL is null: " + source);
+          throw new FileReaderException("S3 source URL is null: " + source,
+              FileReaderException.STORAGE_CONNECT);
         } else {
           // This is a real S3 URL
           InputStream stream = S3Reader.getS3ObjectStream(source.url().toString());
@@ -91,7 +94,8 @@ public class FileReader implements Iterable<Elements> {
       } else if (Arrays.asList("http", "https", "ftp").contains(proto)) {
         // known protocols handled by URL
         if (source.url() == null) {
-          throw new FileReaderException("URL is null for protocol " + proto + ": " + source);
+          throw new FileReaderException("URL is null for protocol " + proto + ": " + source,
+              FileReaderException.STORAGE_CONNECT);
         }
         // Use Jsoup.connect() to set User-Agent header for Wikipedia compatibility
         doc = Jsoup.connect(source.url().toString())
@@ -103,7 +107,7 @@ public class FileReader implements Iterable<Elements> {
         doc = Jsoup.parse(source.openStream(), charset.name(), "");
       }
     } catch (IOException e) {
-      throw new FileReaderException("Cannot read " + source, e);
+      throw new FileReaderException("Cannot read " + source, FileReaderException.FILE_ACCESS, e);
     }
 
     this.tableElement = (this.selector != null && !this.selector.isEmpty())
@@ -136,7 +140,8 @@ public class FileReader implements Iterable<Elements> {
 
     // Check if any elements were found
     if (list.isEmpty()) {
-      throw new FileReaderException("No HTML elements found with selector: " + selector);
+      throw new FileReaderException("No HTML elements found with selector: " + selector,
+          FileReaderException.TABLE_NOT_FOUND);
     }
 
     // get the element
@@ -145,14 +150,15 @@ public class FileReader implements Iterable<Elements> {
     if (this.index == null) {
       if (list.size() != 1) {
         throw new FileReaderException(list.size()
-            + " HTML element(s) selected");
+            + " HTML element(s) selected", FileReaderException.CONFIGURATION);
       }
 
       el = list.first();
     } else {
       if (this.index >= list.size()) {
         throw new FileReaderException("Index " + this.index + " out of bounds, only "
-            + list.size() + " element(s) found with selector: " + selector);
+            + list.size() + " element(s) found with selector: " + selector,
+            FileReaderException.TABLE_NOT_FOUND);
       }
       el = list.get(this.index);
     }
@@ -162,7 +168,7 @@ public class FileReader implements Iterable<Elements> {
       return el;
     } else {
       throw new FileReaderException("selected (" + selector + ") element is a "
-          + el.tag().getName() + ", not a table");
+          + el.tag().getName() + ", not a table", FileReaderException.CONFIGURATION);
     }
   }
 
@@ -182,7 +188,7 @@ public class FileReader implements Iterable<Elements> {
     }
 
     if (bestTable == null) {
-      throw new FileReaderException("no tables found");
+      throw new FileReaderException("no tables found", FileReaderException.TABLE_NOT_FOUND);
     }
 
     return bestTable;
