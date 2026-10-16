@@ -129,23 +129,6 @@ _REG_CAST_TYPES = frozenset(
     }
 )
 
-# Row-count sourcing for pg_class.reltuples (PGW-051). "count" issues one COUNT(*) per table
-# through the backend at catalog-build time (once per memoized catalog, never per query);
-# "off" leaves reltuples at 0, which is PG's "never analyzed" value. Counting is exact but
-# O(tables) full scans, so a deployment over a very large or slow adapter sets "off" via
-# set_row_count_mode(). Only a backend that implements table_row_count() is ever counted.
-_ROW_COUNT_MODES = ("count", "off")
-_ROW_COUNT_MODE = "count"
-
-
-def set_row_count_mode(mode: str) -> None:
-    """Select how pg_class.reltuples is sourced. Called once at startup."""
-    global _ROW_COUNT_MODE
-    if mode not in _ROW_COUNT_MODES:
-        raise ValueError(f"row count mode must be one of {_ROW_COUNT_MODES}, got {mode!r}")
-    _ROW_COUNT_MODE = mode
-
-
 def set_database_name(name: str) -> None:
     """Set the catalog/database name reported to clients. Called once at startup;
     no silent default — an empty name is a configuration error (CLAUDE.md rule 6)."""
@@ -169,17 +152,9 @@ _SCALAR_FN_RE = re.compile(
 )
 
 _INTERCEPT_SCHEMAS = frozenset({"pg_catalog"})
-# information_schema was intercepted here too until 2026-09-18: this module's own memoized
-# in-memory DuckDB catalog (_get_catalog_db/_build_catalog_db) answers it by eagerly computing
-# row counts for EVERY table via _fetch_row_counts, so even a single-table, WHERE-filtered
-# information_schema.tables lookup (e.g. describe_table) paid for a live Iceberg touch of the
-# entire catalog on first use -- confirmed live, minutes for a describe_table call that timed
-# out client-side twice. Unlike pg_catalog (Postgres-proprietary, not fully replicated by
-# Calcite's PostgresMetadataSchema, so still intercepted here), information_schema is standard
-# SQL that Calcite's own InformationSchema.java already answers directly -- correctly
-# filter-pushed-down, and now benefiting from that class's own row-count cache too -- so this
-# is architecturally the right connection for it: PASS_THROUGH lets it reach the real Calcite
-# connection instead of this parallel, eagerly-eager DuckDB reimplementation.
+# information_schema was intercepted here too until 2026-09-18. It is standard SQL that
+# Calcite's own InformationSchema.java answers directly, filter-pushed-down, so PASS_THROUGH
+# sends it to the real Calcite connection instead of this module's memoized DuckDB catalog.
 
 _TABLE_MAP: dict[tuple[str, str], str] = {
     ("information_schema", "schemata"): "_is_schemata",
@@ -1670,7 +1645,7 @@ def _populate_pg_namespace(db, idx: CatalogIndex) -> None:
     db.executemany("INSERT INTO _pg_namespace VALUES (?,?,?,?)", ns_rows)
 
 
-def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | None = None) -> None:
+def _populate_pg_class(db, idx: CatalogIndex) -> None:
     db.execute("""CREATE TABLE _pg_class (
         oid INTEGER, relname VARCHAR, relnamespace INTEGER, reltype INTEGER,
         reloftype INTEGER, relowner INTEGER, relam INTEGER, relfilenode INTEGER,
@@ -1689,7 +1664,6 @@ def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | Non
     for _, s, t, _, toid in idx.tables:
         ns_oid = idx.ns_map.get(s, 2200)
         natts = natts_by_toid.get(toid, 0)
-        reltuples = float(row_counts.get(toid, 0.0)) if row_counts else 0.0
         pg_class_rows.append(
             (
                 toid,
@@ -1702,7 +1676,11 @@ def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | Non
                 toid,
                 0,
                 0,
-                reltuples,
+                # reltuples 0 is PG's "never analyzed". Rows are never counted to build the
+                # catalog: a COUNT(*) per table is a full scan of every table served, which
+                # for govdata held the first pg_catalog query for over 30 minutes; and
+                # PGW-023 reports relpages/reltuples ~ 0 so DuckDB scans in one stream.
+                0.0,
                 0,
                 0,
                 False,
@@ -2990,46 +2968,6 @@ def _populate_pg_extension(db, state) -> None:
     )
 
 
-def _fetch_row_counts(ctx, idx: CatalogIndex, backend) -> dict[int, float]:
-    """Real pg_class.reltuples per table, sourced from the backend (PGW-051).
-
-    Runs ONCE per catalog build (the catalog DB is memoized per role and invalidated on
-    DDL / re-populate), never per query. Backends that cannot count — the Phase-0 stub, the
-    bridge backend whose JVM lives in the child — do not implement ``table_row_count`` and
-    contribute nothing, leaving reltuples at 0 (PG's "never analyzed"). Counting is skipped
-    entirely under ``set_row_count_mode("off")``.
-    """
-    if _ROW_COUNT_MODE == "off" or ctx is None or backend is None:
-        return {}
-    counter = getattr(backend, "table_row_count", None)
-    if counter is None:
-        return {}
-    physical = {tm.table_id: (tm.schema_name, tm.table_name) for tm in ctx.tables.values()}
-    counts: dict[int, float] = {}
-    for _cat, _sch, _tname, table_id, toid in idx.tables:
-        schema_name, table_name = physical[table_id]
-        try:
-            counts[toid] = float(counter(schema_name, table_name))
-        except Exception as e:
-            # A COUNT(*) failure here means this table's ETL hasn't (fully) materialized
-            # it yet — normal, expected transient state for a warehouse this large, not
-            # corruption (see the matching guard in catalog_populate.build_context, which
-            # hits the same class of not-yet-ETL'd table earlier in startup). Must not take
-            # the whole catalog build down with it: every OTHER table in a 26-schema
-            # warehouse having already mounted successfully is the normal case, and one
-            # still-materializing table falls back to reltuples=0 ("never analyzed" in PG's
-            # own semantics, the same value already used for backends that cannot count at
-            # all) exactly like FileSchema's own per-table metadata recording already
-            # tolerates a missing table elsewhere in the same schema instead of aborting
-            # the whole schema.
-            log.warning(
-                "table_row_count failed for %s.%s (%s: %s) — leaving reltuples=0",
-                schema_name, table_name, type(e).__name__, e,
-            )
-            counts[toid] = 0.0
-    return counts
-
-
 def _populate_function_catalog(db, state) -> None:
     """Project Calcite's operator table into pg_proc / routines / parameters (PGW-051)."""
     from pgwire_calcite import function_catalog
@@ -3099,13 +3037,11 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     col_types: dict = state.schema_build_cache.get("column_types", {})
     idx = _build_catalog_index(ctx, col_types)
 
-    row_counts = _fetch_row_counts(ctx, idx, getattr(state, "backend", None))
-
     _populate_is_schemata(db, idx)
     _populate_is_tables(db, idx)
     _populate_is_columns(db, idx)
     _populate_pg_namespace(db, idx)
-    _populate_pg_class(db, idx, row_counts)
+    _populate_pg_class(db, idx)
     # A PK column is NOT NULL by definition in PostgreSQL. DataGrip's DDL generator omits
     # nullable columns from the generated `primary key (...)` clause, so if our catalog reports
     # PK columns as nullable (attnotnull=false) the PK renders with no columns for EVERY table

@@ -94,7 +94,6 @@ class Backend(Protocol):
 
     # Optional capabilities, discovered with getattr() by the catalog builder because not
     # every backend can answer them (PGW-051):
-    #   table_row_count(schema, table) -> int   real pg_class.reltuples
     #   function_library() -> str               Calcite `fun` list, for pg_proc projection
 
 
