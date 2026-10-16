@@ -23,14 +23,17 @@ import java.util.Locale;
  * pgwire-govdata bundles). Its own class, with no other dependencies, because the thin launcher
  * jar (see {@code launcherJar} in build.gradle.kts) carries only {@code McpServerLauncher},
  * {@code EngineInstaller} and this class: a reference from the launcher to any other class fails
- * at startup with NoClassDefFoundError, before any window opens.
+ * at startup with NoClassDefFoundError, before any window opens. Public because the engine jar
+ * carries it too and the engine's class loader resolves it from the launcher's (parent-first):
+ * two loaders make two runtime packages, and a package-private class is then inaccessible
+ * (IllegalAccessError in the setup window's data-server install, 0.113.1 - 0.114.0).
  */
-final class PlatformVariant {
+public final class PlatformVariant {
 
   private PlatformVariant() {
   }
 
-  static String osVariant() {
+  public static String osVariant() {
     String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
     String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
     if (os.contains("win")) {

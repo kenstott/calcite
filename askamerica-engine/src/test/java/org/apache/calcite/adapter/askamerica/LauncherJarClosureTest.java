@@ -140,4 +140,50 @@ class LauncherJarClosureTest {
       assertTrue(expected.getMessage().contains("not in the launcher jar"));
     }
   }
+
+  /**
+   * The engine jar's classes run in a URLClassLoader whose parent is the launcher's loader, which
+   * delegates parent-first: a class both jars carry resolves from the launcher. Package-private
+   * access across the two then fails (IllegalAccessError), so what the engine classes use from
+   * the launcher jar must be public.
+   */
+  @Test void theEngineLoaderCanUseTheClassesItSharesWithTheLauncherJar() throws Exception {
+    final List<Pattern> includes = launcherIncludes();
+    final ClassLoader launcher = new LauncherOnlyLoader(includes);
+    ClassLoader engine = new ClassLoader(launcher) {
+      @Override protected Class<?> loadClass(String name, boolean resolve)
+          throws ClassNotFoundException {
+        if (name.startsWith(PACKAGE)) {
+          try {
+            return launcher.loadClass(name);
+          } catch (ClassNotFoundException notInLauncher) {
+            synchronized (getClassLoadingLock(name)) {
+              Class<?> c = findLoadedClass(name);
+              if (c == null) {
+                try (InputStream in = LauncherJarClosureTest.class.getClassLoader()
+                    .getResourceAsStream(name.replace('.', '/') + ".class")) {
+                  if (in == null) {
+                    throw new ClassNotFoundException(name);
+                  }
+                  byte[] bytes = LauncherOnlyLoader.readAll(in);
+                  c = defineClass(name, bytes, 0, bytes.length);
+                } catch (IOException e) {
+                  throw new ClassNotFoundException(name, e);
+                }
+              }
+              return c;
+            }
+          }
+        }
+        return super.loadClass(name, resolve);
+      }
+    };
+    Class<?> installer = Class.forName(PACKAGE + "PgwireGovDataInstaller", true, engine);
+    java.lang.reflect.Method variant = installer.getDeclaredMethod("osVariant");
+    variant.setAccessible(true);
+    String v = (String) variant.invoke(null);
+    assertTrue(v.endsWith("-x86_64") || v.endsWith("-arm64"), v);
+    assertTrue(Class.forName(PACKAGE + "PlatformVariant", false, engine).getClassLoader()
+        == launcher, "the shared class should come from the launcher's loader");
+  }
 }
