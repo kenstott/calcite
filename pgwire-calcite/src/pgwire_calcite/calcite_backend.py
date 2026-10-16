@@ -606,26 +606,6 @@ class CalciteBackend:
         """The connection's ``fun`` library list, the source for pg_proc (PGW-051)."""
         return self._fun
 
-    def table_row_count(self, schema: str, table: str) -> int:
-        """Exact ``COUNT(*)`` for one table, for pg_class.reltuples (PGW-051).
-
-        Runs on the JDBC connection directly rather than through ``execute_sql`` so no
-        PG->Calcite transpile stands between the catalog and the count. Called once per
-        table per catalog build (the catalog DB is memoized), never per query.
-        """
-        if self._conn is None:
-            raise RuntimeError("Calcite connection is not open")
-        quoted = f'"{schema.replace(chr(34), chr(34) * 2)}"."{table.replace(chr(34), chr(34) * 2)}"'
-        with self._lock:
-            stmt = self._conn.createStatement()
-            try:
-                rs = stmt.executeQuery(f"SELECT COUNT(*) FROM {quoted}")
-                if not bool(rs.next()):
-                    raise RuntimeError(f"COUNT(*) on {quoted} returned no row")
-                return int(rs.getLong(1))
-            finally:
-                stmt.close()
-
     @property
     def connection(self):
         """The embedded java.sql.Connection (used by catalog_populate, Phase 2)."""
