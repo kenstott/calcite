@@ -29,6 +29,7 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -333,7 +334,8 @@ public class HllRuleOperandDefaultsRequirementsTest {
           FileSchemaFactory.INSTANCE.create(rootSchema, "files047", operand);
       assertNotNull(schema,
           "FILE-047: factory must build a schema with ephemeralCache/recursive omitted");
-      Set<String> tables = rootSchema.add("files047", schema).getTableNames();
+      Set<String> tables =
+          rootSchema.add("files047", schema).tables().getNames(LikePattern.any());
       assertTrue(tables.stream().anyMatch(t -> t.endsWith("deep")),
           "FILE-047: recursive defaults to true, so nested/deep.csv is a table: " + tables);
     } finally {
