@@ -337,11 +337,11 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   @Override public @org.checkerframework.checker.nullness.qual.Nullable String getComment() {
     if (fileSchema != null) {
       String comment = fileSchema.getComment();
-      LOGGER.info("DuckDBJdbcSchema.getComment() returning: {}",
+      LOGGER.debug("DuckDBJdbcSchema.getComment() returning: {}",
                   comment != null && comment.length() > 80 ? comment.substring(0, 77) + "..." : comment);
       return comment;
     }
-    LOGGER.info("DuckDBJdbcSchema.getComment() returning null (fileSchema is null)");
+    LOGGER.debug("DuckDBJdbcSchema.getComment() returning null (fileSchema is null)");
     return null;
   }
 
