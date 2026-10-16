@@ -148,11 +148,15 @@ dimension_values:
     descending: true
 
   # SOI migration is published as a year pair (e.g. 2021->2022 == "2122"); the
-  # provider derives the pair token from effective_year. Same lag as the income
-  # files (newest pair is 2021-2022).
+  # provider derives the pair token from effective_year (year - dataLag), and minYear
+  # bounds the dimension `year`, not effective_year. Same lag as the income files
+  # (newest pair is 2021-2022). minYear 2012 with dataLag 4 reaches effective year 2008,
+  # the pair 2007-2008 ("0708"), the oldest file the provider reads. Pairs 0708..1011 carry a
+  # different header set that the provider aliases (verified HTTP 200 and column
+  # semantics 2026-10-16); start 2012 reaches them in a default run.
   migration_year_range: &migration_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2012}"
     minYear: 2012
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 4
@@ -2316,7 +2320,12 @@ partitionedTables:
       year (from the OUTFLOW file: Y1 = origin, Y2 = destination). Summary/foreign
       buckets (state FIPS >= 57; county 000) and non-migrant same-county rows are
       filtered out; suppressed cells (n1 < 0) dropped. Both endpoints join to
-      geo.counties. agi in $1000s. Source:
+      geo.counties. agi in $1000s. Years 2008 onward (2008 = the 2007-2008 file).
+      Coverage is not uniform: IRS lists a county pair only above a disclosure
+      threshold, 10 returns for 2008-2013 (about 78,000-91,000 pairs a year) and about 20
+      returns from 2014 (about 36,000-60,000 pairs a year), so pair counts and summed
+      flows from 2014 on are not comparable with 2008-2013 and a pre/post comparison of
+      small flows needs the threshold applied to both sides. Source:
       irs.gov/pub/irs-soi/countyoutflow{YYZZ}.csv.
     dqRowLimit: 50000
 
