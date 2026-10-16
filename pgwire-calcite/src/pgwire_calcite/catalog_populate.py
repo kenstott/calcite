@@ -497,7 +497,6 @@ def catalog_cache_write_path(model_path: str) -> str:
     state_dir = os.environ.get(STATE_DIR_ENV)
     if not state_dir:
         return catalog_cache_path(model_path)
-    os.makedirs(state_dir, exist_ok=True)
     return os.path.join(os.path.abspath(state_dir), _cache_file_name(model_path))
 
 
@@ -535,9 +534,17 @@ def build_and_cache_context(conn, model_path: str):
             "launch will walk live again", len(gaps), ", ".join(gaps), cache_path)
         return ctx, column_types
     tmp_path = cache_path + ".tmp"
-    with open(tmp_path, "wb") as f:
-        pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f, protocol=pickle.HIGHEST_PROTOCOL)
-    os.replace(tmp_path, cache_path)
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(tmp_path, "wb") as f:
+            pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp_path, cache_path)
+    except PermissionError as exc:
+        # The catalog is served either way; without the file, every start walks it live
+        log.warning("Catalog cache not written: %s is not writable (%s); every start walks "
+                    "the catalog live until it is", os.path.dirname(cache_path), exc.strerror)
+        return ctx, column_types
     log.info("Wrote catalog cache to %s (%d tables)", cache_path, len(ctx.tables))
     return ctx, column_types
 
