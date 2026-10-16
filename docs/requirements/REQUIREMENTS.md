@@ -2,7 +2,7 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**341 requirements across 7 adapters.**
+**342 requirements across 7 adapters.**
 
 
 ## askamerica  (11: 9 accepted, 1 complete, 1 proposed)
@@ -296,7 +296,7 @@
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
 
-## salesforce  (30: 19 accepted, 7 complete, 4 proposed)
+## salesforce  (31: 19 accepted, 8 complete, 4 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -330,6 +330,7 @@
 | [ ] | SF-051 | MUST | behavioral | trino / Queries | Through Trino the org's sObjects are listed and described as tables, and filters, aggregates and joins over t… | trino-salesforce/TestSalesforceConnector#testShowTables, tr… |
 | [.] | SF-052 | MUST | constraint | trino / Name matching | The connector fails at startup unless case-insensitive-name-matching is true, because sObject names are mixed… | — |
 | [x] | SF-053 | MUST | behavioral | catalog / Discovery | information_schema.tables and .columns list a Salesforce schema's sObjects and their fields. The schema facto… | salesforce/InformationSchemaTest |
+| [x] | SF-054 | MUST | behavioral | catalog / Discovery | The schema always holds two listing tables, whatever the tables operand names, for picking the sObjects to na… | salesforce/TablesOperandTest |
 
 ## servicenow  (35: 9 accepted, 1 complete, 25 in-progress)
 

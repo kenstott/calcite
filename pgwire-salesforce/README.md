@@ -26,13 +26,16 @@ Other auth options, replacing `clientId`/`clientSecret` in the operand:
   username-password flow. Orgs created since Summer '23 block it by default.
 - `accessToken` + `instanceUrl` — a pre-issued token.
 
-Optional: `apiVersion` (default `v58.0`), `cacheMaxSize` (describe cache entries held in memory,
-default 1000), `describeCacheDirectory` and `describeCacheTtlMinutes` (see below).
+Optional: `tables` (the sObjects served, see below), `apiVersion` (default `v58.0`),
+`cacheMaxSize` (describe cache entries held in memory, default 1000), `describeCacheDirectory` and
+`describeCacheTtlMinutes` (see below).
 
 ## Startup time and caching
 
 Before it listens, the server reads the columns of every sObject, which is one Salesforce
-describe call per sObject — about four minutes for an org with 1,200 of them. That is paid once:
+describe call per sObject — about four minutes for an org with 1,200 of them. Naming the sObjects
+you need in `tables`, e.g. `"tables": ["Account", "Contact", "Opportunity"]`, limits that to
+those. The cost is paid once:
 
 - The finished catalog is written next to the model as `model/catalog-cache-<hash>.pkl` and
   loaded on every later start. The hash is of `model.json`, so editing the model rebuilds it.
@@ -43,9 +46,16 @@ describe call per sObject — about four minutes for an org with 1,200 of them. 
 To pick up fields or sObjects added in Salesforce, delete `model/catalog-cache-*.pkl` and the
 describe cache directory, then restart.
 
-Every queryable sObject is a table (`Account`, `Contact`, `Opportunity`, custom `*__c` objects);
-columns and types come from the sObject's describe. Filters, projections, sorts and limits are
-pushed down as SOQL; joins and aggregates run in Calcite.
+Every queryable sObject is a table (`Account`, `Contact`, `Opportunity`, custom `*__c` objects),
+or, with `tables`, each sObject it names (matched ignoring case; a name that is not a queryable
+sObject fails the schema). Columns and types come from the sObject's describe. Filters,
+projections, sorts and limits are pushed down as SOQL; joins and aggregates run in Calcite.
+
+Two listing tables are always served, whatever `tables` names:
+
+- `_salesforce_objects(name, label)` — every queryable sObject in the org, from one list call.
+- `_salesforce_columns(table_name, column_name, data_type, ordinal_position)` — the columns of one
+  sObject, from its describe. A query must name it: `WHERE table_name = 'Contact'`.
 
 ## Run
 
