@@ -4376,6 +4376,9 @@ public class XbrlToParquetConverter implements FileConverter {
    */
   private String downloadFile(String urlString) {
     // A document unpacked from the daily feed is read locally; anything else is fetched.
+    if (SecFeedStore.knownAbsentUnchecked(urlString)) {
+      return null; // what sec.gov's 404 would return: the filing carries no XBRL
+    }
     String held = SecFeedStore.textUnchecked(urlString);
     if (held != null) {
       return held;
