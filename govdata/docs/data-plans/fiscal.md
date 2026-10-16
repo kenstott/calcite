@@ -18,7 +18,8 @@ deferral (not a shortfall).
 | `ssa_benefits_by_geography` | ✅ Delivered | `SsaBenefitsProvider` |
 | `sba_loan_approvals` | ✅ Delivered | `SbaLoansProvider` |
 | `soi_national` | ❌ **NOT BUILT** | absent from YAML; no provider/transformer exists — real gap |
-| `usaspending_awards` | ⏸ **Deferred (Phase 2)** | intentionally deferred per plan; not a shortfall |
+| `usaspending_assistance` | ✅ Delivered (assistance transactions) | `UsaSpendingAssistanceBulkProvider`; contracts not yet loaded |
+| `fac_audits`, `fac_federal_awards`, `fac_audits_historic`, `fac_federal_awards_historic` | ✅ Delivered | `Fac*Provider` (Federal Audit Clearinghouse bulk CSVs, 1998-present) |
 
 **Extension views beyond the plan (delivered):** `ssa_benefits_by_geography_acs`,
 `soi_income_by_county_year`, `federal_spending_vs_income_tax_by_state_year`, `nonprofit_financials`.
@@ -26,8 +27,8 @@ deferral (not a shortfall).
 **Not yet built:**
 - `soi_national` — SOI national + corporate historical aggregates. No `SoiNationalProvider`/
   `SoiNationalTransformer` in the code or YAML. Genuine outstanding gap.
-- `usaspending_awards` — award-level detail. **Planned Phase 2 deferral**, not a delivery
-  shortfall (see the "Phase 2 — deferred" section below).
+- `usaspending_contracts` — contract transactions from the same award data archive (the
+  assistance half is delivered as `usaspending_assistance`).
 
 ---
 
@@ -238,7 +239,13 @@ spatial counterpart to the SOI revenue tables.
 | cfda_program | VARCHAR | Assistance listing (CFDA) program, nullable |
 | obligated_amount | DOUBLE | Total obligations |
 
-### `usaspending_awards` *(Phase 2 — deferred)* — **NOT BUILT (intentional Phase 2 deferral, not a shortfall)**
+### `usaspending_assistance` — delivered (assistance only); contracts remain
+
+Delivered from the all-agency `Full` files of the award data archive, one row per assistance
+transaction, FY2007 onward (view `fac_awards_vs_usaspending` joins it to the Federal Audit
+Clearinghouse tables on UEI and ALN; view `usaspending_assistance_by_county` aggregates it to
+place-of-performance county x ALN x fiscal year, as a view because it is a three-column aggregate
+of one table and cannot drift from it). The original Phase 2 description follows.
 
 Award-level detail (one row per award × modification), keyed to recipient EIN/UEI and
 place-of-performance. Deferred to Phase 2 because of volume; sourced from the USAspending bulk

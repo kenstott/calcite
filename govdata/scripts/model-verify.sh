@@ -89,6 +89,8 @@ while [[ $# -gt 0 ]]; do
         # meaningful with --single-connection: the enumeration is what fills the cache, and a
         # per-schema loop would publish 24 partial caches over the top of each other.
         --publish-schema-cache) PUBLISH_ARGS+=(--publish-schema-cache); shift ;;
+        # Read every declared base table so the schema cache holds all of them (seed generation).
+        --read-all-tables) PUBLISH_ARGS+=(--read-all-tables); shift ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
         --mode)
             MODE="$2"

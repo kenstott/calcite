@@ -17,7 +17,11 @@ import org.apache.calcite.schema.SchemaPlus;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Factory for Salesforce schemas.
@@ -87,13 +91,33 @@ public class SalesforceSchemaFactory implements SchemaFactory {
         ? Duration.ofHours(24)
         : Duration.ofMinutes(Long.parseLong(describeCacheTtlOperand.toString()));
 
+    // Only these sObjects are served; without it, every queryable one is
+    final Set<String> tables = names(operand.get("tables"));
+
     try {
       SalesforceConnection connection =
           new SalesforceConnection(loginUrl, authConfig, apiVersion);
       return new SalesforceSchema(connection, cacheMaxSize, lowercaseAliases,
-          describeCacheDirectory, describeCacheTimeToLive);
+          describeCacheDirectory, describeCacheTimeToLive, tables);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create Salesforce schema", e);
     }
+  }
+
+  /** Names from a list, or from comma-separated text as the JDBC driver supplies. */
+  private static Set<String> names(Object value) {
+    final Set<String> names = new LinkedHashSet<>();
+    if (value == null) {
+      return names;
+    }
+    final Collection<?> items = value instanceof Collection
+        ? (Collection<?>) value : Arrays.asList(value.toString().split(","));
+    for (Object item : items) {
+      final String text = item.toString().trim();
+      if (!text.isEmpty()) {
+        names.add(text);
+      }
+    }
+    return names;
   }
 }

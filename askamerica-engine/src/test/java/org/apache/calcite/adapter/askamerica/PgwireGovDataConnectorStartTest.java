@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -140,5 +141,37 @@ class PgwireGovDataConnectorStartTest {
     String message = PgwireGovDataConnector.failedStartMessage(7, 9009, log,
         PgwireGovDataConnector.spawnLogTail(log, 0));
     assertTrue(message.contains("It printed nothing."), message);
+  }
+
+  private static void writeBytes(File file, long size, char fill) throws IOException {
+    byte[] bytes = new byte[(int) size];
+    java.util.Arrays.fill(bytes, (byte) fill);
+    Files.write(file.toPath(), bytes);
+  }
+
+  @Test void aSpawnLogWithinTheCapIsLeftAsItIs(@TempDir Path dir) throws Exception {
+    File log = dir.resolve("spawn.log").toFile();
+    writeBytes(log, PgwireGovDataConnector.SPAWN_LOG_MAX_BYTES, 'a');
+    PgwireGovDataConnector.rotateSpawnLog(log);
+    assertEquals(PgwireGovDataConnector.SPAWN_LOG_MAX_BYTES, log.length());
+    assertFalse(new File(log.getPath() + ".1").exists());
+  }
+
+  @Test void aSpawnLogPastTheCapMovesToTheFirstBackupAndTheOldestIsDropped(@TempDir Path dir)
+      throws Exception {
+    File log = dir.resolve("spawn.log").toFile();
+    writeBytes(log, PgwireGovDataConnector.SPAWN_LOG_MAX_BYTES + 1, 'n');
+    for (int i = 1; i <= PgwireGovDataConnector.SPAWN_LOG_BACKUPS; i++) {
+      Files.write(dir.resolve("spawn.log." + i), ("backup " + i).getBytes(StandardCharsets.UTF_8));
+    }
+
+    PgwireGovDataConnector.rotateSpawnLog(log);
+
+    assertFalse(log.exists(), "the next spawn starts a new spawn.log");
+    assertEquals(PgwireGovDataConnector.SPAWN_LOG_MAX_BYTES + 1,
+        dir.resolve("spawn.log.1").toFile().length());
+    assertEquals("backup 1", Files.readString(dir.resolve("spawn.log.2")));
+    assertEquals("backup 2", Files.readString(dir.resolve("spawn.log.3")));
+    assertFalse(dir.resolve("spawn.log.4").toFile().exists(), "backup 3 was the oldest");
   }
 }

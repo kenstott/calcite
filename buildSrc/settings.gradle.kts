@@ -16,6 +16,12 @@
  */
 
 pluginManagement {
+    // Maven Central first: buildSrc's plugins are published there, so a Plugin Portal outage
+    // ("Plugin [id: 'com.github.autostyle'] was not found") cannot fail the build
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
     plugins {
         fun String.v() = extra["$this.version"].toString()
         fun PluginDependenciesSpec.idv(id: String, key: String = id) = id(id) version key.v()

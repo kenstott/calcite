@@ -88,7 +88,7 @@ public class FileReaderV2 implements Iterable<Elements> {
         doc = Jsoup.parse(stream, charset.name(), "");
       }
     } catch (IOException e) {
-      throw new FileReaderException("Cannot read " + source, e);
+      throw new FileReaderException("Cannot read " + source, FileReaderException.FILE_ACCESS, e);
     }
 
     this.tableElement = (this.selector != null && !this.selector.isEmpty())
@@ -106,7 +106,7 @@ public class FileReaderV2 implements Iterable<Elements> {
     if (this.index == null) {
       if (list.size() != 1) {
         throw new FileReaderException(list.size()
-            + " HTML element(s) selected");
+            + " HTML element(s) selected", FileReaderException.CONFIGURATION);
       }
 
       el = list.first();
@@ -119,7 +119,7 @@ public class FileReaderV2 implements Iterable<Elements> {
       return el;
     } else {
       throw new FileReaderException("selected (" + selector + ") element is a "
-          + el.tag().getName() + ", not a table");
+          + el.tag().getName() + ", not a table", FileReaderException.CONFIGURATION);
     }
   }
 
@@ -139,7 +139,7 @@ public class FileReaderV2 implements Iterable<Elements> {
     }
 
     if (bestTable == null) {
-      throw new FileReaderException("no tables found");
+      throw new FileReaderException("no tables found", FileReaderException.TABLE_NOT_FOUND);
     }
 
     return bestTable;

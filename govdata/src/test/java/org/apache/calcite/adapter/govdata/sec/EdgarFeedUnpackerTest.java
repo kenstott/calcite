@@ -105,6 +105,29 @@ class EdgarFeedUnpackerTest {
         && text.contains("<CIK>0001234567") && !text.contains("<DOCUMENT>"), text);
   }
 
+  @Test void exhibitsNothingReadsAreListedButNotWritten(@TempDir File dir) throws Exception {
+    ByteArrayOutputStream raw = new ByteArrayOutputStream();
+    try (TarArchiveOutputStream tar = new TarArchiveOutputStream(new GZIPOutputStream(raw))) {
+      String doc = "<DOCUMENT>\n<TYPE>%s\n<SEQUENCE>%d\n<FILENAME>%s\n<DESCRIPTION>d\n<TEXT>\n"
+          + "<html>x</html>\n</TEXT>\n</DOCUMENT>\n";
+      String extra = String.format(doc, "EX-99.1", 5, "ex991.htm")
+          + String.format(doc, "EX-21.1", 6, "ex21.htm")
+          + String.format(doc, "EX-101.LAB", 7, "acme_lab.xml")
+          + String.format(doc, "EX-101.PRE", 8, "acme_pre.xml");
+      add(tar, "./0001234567-23-000009.nc",
+          NcSubmissionTest.EIGHT_K.replace("</SUBMISSION>", extra + "</SUBMISSION>"));
+    }
+    EdgarFeedUnpacker.unpack(new ByteArrayInputStream(raw.toByteArray()), dir);
+
+    File acc = new File(dir, "000123456723000009");
+    assertTrue(new File(acc, "ex991.htm").isFile());
+    assertTrue(new File(acc, "acme_pre.xml").isFile());
+    assertFalse(new File(acc, "ex21.htm").exists());
+    assertFalse(new File(acc, "acme_lab.xml").exists());
+    assertTrue(new String(Files.readAllBytes(new File(acc, "index.json").toPath()),
+        StandardCharsets.UTF_8).contains("ex21.htm"));
+  }
+
   @Test void anInsiderFormAlsoGetsItsSubmissionTextFile(@TempDir File dir) throws Exception {
     EdgarFeedUnpacker.unpack(new ByteArrayInputStream(dayFile()), dir);
     File txt = new File(dir, "000080567623000155/0000805676-23-000155.txt");

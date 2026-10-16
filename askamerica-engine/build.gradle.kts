@@ -14,6 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.util.zip.ZipFile
+
 plugins {
     id("com.github.johnrengelman.shadow")
     `maven-publish`
@@ -63,9 +65,27 @@ configurations.all {
     exclude(group = "org.slf4j", module = "slf4j-reload4j")
 }
 
+// :core carries the AWS S3 SDK for its S3Reader, which the engine never calls (it uses Calcite's
+// parser only); the jar must carry no AWS (ASKAM-009).
+configurations.matching { it.name == "runtimeClasspath" || it.name == "compileClasspath" }.configureEach {
+    exclude(group = "software.amazon.awssdk")
+}
+
 dependencies {
-    implementation(project(":driver-base"))
-    implementation(project(":govdata"))
+    // The engine is the MCP server and the setup wizard: protocol, tools, a pg-wire client.
+    // Everything that touches data lives in the data server (owner rules 2026-10-10, ASKAM-008
+    // and ASKAM-009). It does NOT depend on :govdata, :file or :driver-base. The three small
+    // classes it shares with them, and the schema YAMLs the catalog tools read, are compiled
+    // in from their one copy in the source tree; see sourceSets below.
+    //
+    // Calcite itself is here for its SQL parser only (ExclusionProbe, reserved words).
+    implementation(project(":core"))
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.17")
+    // SnakeYAML, for YamlUtils (YAML anchors in the schema files).
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17")
+    implementation("org.slf4j:slf4j-api")
+    // ClaimsServer keeps the browser extension's reports in a local DuckDB file.
+    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
     // Babel's SqlBabelParserImpl accepts the Postgres/DuckDB-shell "expr::type" infix cast
     // syntax that Calcite's default core parser has no grammar production for at all — a
     // parser-factory connection property (see McpServer's connection setup), not a dialect
@@ -121,7 +141,43 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")  // in-memory DB for surface tests
+    // Tests that run SQL against an in-process Calcite or DuckDB to check what the tools send.
+    // Test scope only: none of this reaches the shaded jar.
+    testImplementation(project(":govdata"))
+    testImplementation(project(":file"))
+}
+
+// One copy in the source tree, compiled into both sides: the store-credential provider and
+// the catalog reader live in govdata's sources, the variable resolver in the file adapter's.
+// Each depends only on Jackson, SnakeYAML and SLF4J. The engine and govdata never share a
+// classpath, so the classes are not duplicated at run time.
+val sharedSources by tasks.registering(Sync::class) {
+    from("../govdata/src/main/java") {
+        include("org/apache/calcite/adapter/govdata/R2CredentialProvider.java")
+        include("org/apache/calcite/adapter/govdata/GovDataCatalog.java")
+        include("org/apache/calcite/adapter/govdata/YamlUtils.java")
+    }
+    from("../file/src/main/java") {
+        include("org/apache/calcite/adapter/file/etl/VariableResolver.java")
+        // VariableResolver renders period formats through it; JDK-only.
+        include("org/apache/calcite/adapter/file/etl/PeriodFormat.java")
+    }
+    into(layout.buildDirectory.dir("shared-sources"))
+}
+// What search_catalog and the tool descriptions read without a server: the schema YAMLs.
+// Also govdata's log4j2.xml, the logging configuration this jar has always shipped.
+val sharedResources by tasks.registering(Sync::class) {
+    from("../govdata/src/main/resources") {
+        include("**/*-schema.yaml")
+        include("log4j2.xml")
+    }
+    into(layout.buildDirectory.dir("shared-resources"))
+}
+sourceSets {
+    main {
+        java.srcDir(sharedSources)
+        resources.srcDir(sharedResources)
+    }
 }
 
 tasks.test {
@@ -152,6 +208,49 @@ tasks.test {
         events("passed", "skipped", "failed")
         showStandardStreams = true
     }
+}
+
+// ─── Per-OS engine jars ────────────────────────────────────────────────────────
+// The shadow jar carries the native libraries of every platform (OpenBLAS for the stats library,
+// DuckDB for the claims store): about 600 MB of the 790 MB unpacked, of which one machine can use
+// a quarter. Each variant below is the same jar minus the other platforms' natives; the launcher
+// downloads its own (EngineInstaller.platformAsset). Variant names match the pgwire-govdata
+// bundle's platforms. The universal askamerica-engine.jar stays the release asset for the pip
+// client and anything else that cannot tell which platform it will run on.
+//   Run: ./gradlew :askamerica-engine:platformJars     Output: build/platform-jars/
+val allBytedecoPlatforms = listOf("linux-x86_64", "macosx-x86_64", "macosx-arm64", "windows-x86_64")
+val allDuckdbNatives = listOf("linux_amd64", "linux_arm64", "osx_universal", "windows_amd64")
+val enginePlatforms = mapOf(
+    // variant to (bytedeco platform directory, duckdb native suffix)
+    "windows-x86_64" to Pair("windows-x86_64", "windows_amd64"),
+    "macos-arm64" to Pair("macosx-arm64", "osx_universal"),
+    "linux-x86_64" to Pair("linux-x86_64", "linux_amd64"))
+
+val platformJarTasks = enginePlatforms.map { (variant, keep) ->
+    tasks.register<Zip>("platformJar-$variant") {
+        group = "distribution"
+        description = "askamerica-engine for $variant: the shadow jar without other platforms' natives"
+        val shadow = tasks.shadowJar
+        dependsOn(shadow)
+        from(zipTree(shadow.flatMap { it.archiveFile })) {
+            for (platform in allBytedecoPlatforms - keep.first) {
+                exclude("org/bytedeco/*/$platform/**")
+            }
+            for (suffix in allDuckdbNatives - keep.second) {
+                exclude("libduckdb_java.so_$suffix")
+            }
+        }
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        isZip64 = true
+        archiveFileName.set("askamerica-engine-$variant.jar")
+        destinationDirectory.set(layout.buildDirectory.dir("platform-jars"))
+    }
+}
+
+tasks.register("platformJars") {
+    group = "distribution"
+    description = "Builds askamerica-engine-<variant>.jar for every supported platform"
+    dependsOn(platformJarTasks)
 }
 
 // ─── Shadow JAR ──────────────────────────────────────────────────────────────
@@ -208,14 +307,19 @@ tasks.shadowJar {
     // specifically so no per-platform tokenizer binary is needed.
     exclude("ai/djl/**")
 
-    // ONNX Runtime is REQUIRED at query time and must NOT be excluded. SEMANTIC_SEARCH and
-    // EMBED embed the query through OnnxClsEmbedder; without these classes both fail with
-    // "no embedder configured", which is exactly the state this jar shipped in until now.
-    // The earlier "not used at query time" assumption held only while embeddings were an
-    // ETL-only concern.
+    // No embedder in the engine jar (owner rule 2026-10-10, ASKAM-007: "remove onnx from the
+    // engine jar"). The engine sends SEMANTIC_SEARCH and EMBED to the pgwire-govdata server as
+    // SQL, and the server embeds in its own JVM, from the unshaded jars its bundle carries;
+    // nothing in this process embeds.
+    // ONNX Runtime (every platform's native library, ~84 MB of this jar, ~370 MB unpacked) and
+    // the arctic-embed-xs model (~16 MB) were here for an in-process embedder
+    // (file adapter's OnnxClsEmbedder) that the shipped mode never reaches. Without the model
+    // resource that embedder reports itself unconfigured before it touches an ONNX class, so
+    // an in-process SEMANTIC_SEARCH fails by name, not with a missing class.
+    exclude("ai/onnxruntime/**")
+    exclude("models/snowflake-arctic-embed-xs/**")
 
-    // Orphaned ML resources — nothing loads these any more (the arctic-embed-xs int8 model
-    // under models/snowflake-arctic-embed-xs/ is the live one and is deliberately kept).
+    // Orphaned ML resources — nothing loads these any more.
     exclude("models/all-MiniLM-L6-v2/**")   // ~79 MB, superseded, mean-pooled
     exclude("native/lib/**")                 // ~16 MB HuggingFace tokenizer natives (DJL)
 
@@ -306,8 +410,7 @@ val stageEngineRuntime by tasks.registering(Sync::class) {
     // excluded from the fat jar too). Keeps AWS SDK v1: the Iceberg s3a read path
     // still needs com.amazonaws until IcebergTable moves to S3FileIO (v2).
     val dropPrefixes = listOf(
-        // "onnxruntime" removed: it backs OnnxClsEmbedder, the query-time embedder for
-        // SEMANTIC_SEARCH/EMBED. Dropping the jar left those functions permanently broken.
+        "onnxruntime",  // the data server embeds queries; the engine carries no embedder
         // "pdfbox"/"fontbox"/"xmpbox"/"poi"/"jsoup" removed: web_fetch (McpServer) needs
         // them at query time now.
         "tokenizers",   // ai.djl.huggingface tokenizers — djl classes excluded from fat jar too
@@ -369,6 +472,44 @@ tasks.shadowJar {
         manifest {
             attributes["AskAmerica-Engine-Version"] = engineReleaseVersion
         }
+    }
+    // The engine jar carries no embedder (ASKAM-007) and nothing that opens the store
+    // (ASKAM-008, ASKAM-009): fail the build that would ship either. From the govdata package
+    // only the three shared classes may be present.
+    doLast {
+        val jar = archiveFile.get().asFile
+        val sharedGovdata = setOf("R2CredentialProvider", "GovDataCatalog", "YamlUtils")
+        val forbidden = listOf(
+            "ai/onnxruntime/", "models/snowflake-arctic-embed-xs/",
+            "org/apache/hadoop/", "org/apache/iceberg/", "software/amazon/", "com/amazonaws/",
+            "org/apache/parquet/", "org/apache/arrow/",
+            "org/apache/calcite/adapter/driver/", "org/apache/calcite/adapter/askamerica/AskAmericaDriver")
+        val found = ZipFile(jar).use { zip ->
+            zip.entries().asSequence().map { entry -> entry.name }
+                .filter { name ->
+                    name.endsWith(".onnx") ||
+                        forbidden.any { prefix -> name.startsWith(prefix) } ||
+                        (name.startsWith("org/apache/calcite/adapter/file/") &&
+                            name.endsWith(".class") &&
+                            !name.startsWith("org/apache/calcite/adapter/file/etl/VariableResolver") &&
+                            !name.startsWith("org/apache/calcite/adapter/file/etl/PeriodFormat")) ||
+                        (name.startsWith("org/apache/calcite/adapter/govdata/") &&
+                            name.endsWith(".class") &&
+                            sharedGovdata.none { shared ->
+                                name.substringAfterLast('/').substringBefore('.')
+                                    .substringBefore('$') == shared
+                            })
+                }
+                .take(8).toList()
+        }
+        if (found.isNotEmpty()) {
+            throw GradleException(
+                "${jar.name} contains what the engine jar must not carry " +
+                    "(${found.joinToString()}): no embedder, and nothing that opens the store - " +
+                    "data and semantic search are served by the data server")
+        }
+        logger.lifecycle("${jar.name}: ${jar.length() / (1024 * 1024)} MB, thin: no embedder, " +
+            "no govdata, file adapter, hadoop, iceberg, aws, parquet or arrow inside")
     }
 }
 
@@ -465,6 +606,7 @@ val launcherJar by tasks.registering(Jar::class) {
         include("**/McpServerLauncher.class")
         include("**/EngineInstaller.class")
         include("**/EngineInstaller\$*.class")
+        include("**/PlatformVariant.class")
         // EngineInstaller.DialogProgress's window icon (loadAppIcons()) — this jar runs
         // standalone before the fat engine jar is ever downloaded, so the icon resources
         // have to live here too, not just in the main jar SetupWindow reads from.

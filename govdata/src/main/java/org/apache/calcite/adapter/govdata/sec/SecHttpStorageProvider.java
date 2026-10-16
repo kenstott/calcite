@@ -102,6 +102,9 @@ public class SecHttpStorageProvider extends HttpStorageProvider {
 
   @Override public InputStream openInputStream(String path) throws IOException {
     // A document unpacked from the daily feed is read locally; anything else is fetched.
+    if (SecFeedStore.knownAbsent(path)) {
+      throw new java.io.FileNotFoundException(path + " does not exist: the filing carries no XBRL");
+    }
     InputStream local = SecFeedStore.open(path);
     if (local != null) {
       return local;

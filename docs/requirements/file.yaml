@@ -1822,6 +1822,8 @@
     Unknown schema/table → SqlValidatorException "Object 'X' not found"; FileReaderException(SQLException) reports
     SQLStates 42S02 (table not found), 22018 (type conversion), 08001 (storage connect), HY000 (file access),
     42000 (config syntax). Clear errors, never silent.
+    (Amended 2026-10-14, NOT-FOUND SQLSTATE:) The JDBC SQLException for an unknown schema or table, whether the
+    statement is executed or prepared, carries SQLState 42S02 (C-11).
   source: file/docs/troubleshooting.md; file/docs/api-reference.md
   tests:
     - file/CatalogErrorRequirementsTest
@@ -1864,10 +1866,15 @@
   seam: catalog
   description: >
     Integer-pattern values fitting [Integer.MIN,MAX] → INTEGER, outside → BIGINT; INTEGER_PATTERN is
-    tried before BOOLEAN so "0"/"1" are INTEGER not BOOLEAN. FLOAT_PATTERN requires a literal decimal
+    tried before BOOLEAN so "0"/"1" are INTEGER not BOOLEAN.
+    [SUPERSEDED by C-09, 2026-10-14 -- dot-less scientific notation is now DOUBLE. Kept here for history; do not implement against it.]
+    FLOAT_PATTERN requires a literal decimal
     point, so "1e5" (no dot) is NOT numeric → VARCHAR; matched floats are always DOUBLE.
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-14, SCIENTIFIC NOTATION:) A value with a decimal point, an exponent, or both
+    ("1.5", "1e5", "2.5E-3") is DOUBLE.
   source: file/src/main/java/.../format/csv/CsvTypeInferrer.java analyzeValue 368-398
-  notes: "RESOLVED C-09 (code-wrong): infer dot-less scientific notation (1e5) as DOUBLE; document yes/y/no/n booleans. INT/BIGINT + 0/1 tested; 1e5-DOUBLE target @Disabled."
+  notes: "RESOLVED C-09 (code-wrong): infer dot-less scientific notation (1e5) as DOUBLE; document yes/y/no/n booleans. INT/BIGINT + 0/1 and 1e5-DOUBLE tested."
   tests:
     - file/CsvInferenceRequirementsTest#numericPromotion
     - file/CsvInferenceRequirementsTest#zeroOneAreIntegerNotBoolean
@@ -2388,19 +2395,27 @@
 
 - id: FILE-124
   module: file
-  status: proposed
+  status: complete
   group: optimization
-  category: HLL rule instance bug
+  category: HLL rewrite only for APPROX_COUNT_DISTINCT
   priority: SHOULD
   type: behavioral
   seam: execution
   description: >
+    [SUPERSEDED by C-18, 2026-10-14 -- the approx-only instance honors its flag. Kept here for history; do not implement against it.]
     SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize()
-    ignores the flag and optimizes EVERY COUNT(DISTINCT); all HLL rules no-op (leave the plan) when no
+    ignores the flag and optimizes EVERY COUNT(DISTINCT);
+    [END SUPERSEDED BLOCK]
+    all HLL rules no-op (leave the plan) when no
     cached sketch exists.
-  source: file/src/main/java/.../rules/SimpleHLLCountDistinctRule.java shouldOptimize 112-122
-  notes: "RESOLVED C-18 (code-wrong): exact COUNT(DISTINCT) stays exact; HLL only for APPROX_COUNT_DISTINCT (or explicit opt-in). Issue staged."
-  tests: []
+    (Amended 2026-10-14, EXACT STAYS EXACT:) A plain COUNT(DISTINCT) always returns an exact count; an
+    HLL sketch estimate answers only APPROX_COUNT_DISTINCT. APPROX_ONLY_INSTANCE honors approxOnly, the
+    CSV and Parquet scans register it, and the ClickHouse and file HLL rules rewrite only approximate calls.
+  source: file/src/main/java/.../rules/SimpleHLLCountDistinctRule.java shouldOptimize
+  notes: "RESOLVED C-18 (code-wrong): exact COUNT(DISTINCT) stays exact; HLL only for APPROX_COUNT_DISTINCT."
+  tests:
+    - file/HllRuleOperandDefaultsRequirementsTest#file124ApproxOnlyMustNotOptimizeExactCountDistinct
+    - file/HllRuleOperandDefaultsRequirementsTest#file124NoCachedSketchLeavesPlanUnchanged
 
 - id: FILE-125
   module: file
@@ -2926,16 +2941,22 @@
   module: file
   status: complete
   group: error-handling
-  category: FileReaderException has no SQLState
+  category: FileReaderException SQLStates
   priority: MUST
   type: structural
   seam: bytes
   description: >
+    [SUPERSEDED by C-11, 2026-10-14 -- FileReaderException is a SQLException carrying a SQLState. Kept here for history; do not implement against it.]
     FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor
     code; FileReader throws it for missing file, null source, IOException, no-match selector, non-<table> element,
     ambiguous selection, and "no tables found". Documented SQLStates originate in the Calcite/Avatica layer, not here.
-  source: file/src/main/java/.../FileReaderException.java 16-23; FileReader.java 62-185
-  notes: "RESOLVED C-11 (code-wrong): make FileReaderException a SQLException carrying the documented SQLStates."
+    [END SUPERSEDED BLOCK]
+    (Amended 2026-10-14, SQLSTATES:) FileReaderException extends SQLException and carries the SQLState of its
+    failure mode: 42S02 when the document has no table or the selector/index matches none; 42000 when the
+    selector matches several elements or a non-<table> element; HY000 when the file is missing or cannot be
+    read; 08001 when an S3 or HTTP source has no URL.
+  source: file/src/main/java/.../FileReaderException.java; FileReader.java; FileReaderV2.java
+  notes: "RESOLVED C-11 (code-wrong): FileReaderException is a SQLException carrying the documented SQLStates."
   tests:
     - file/JsonPathParquetReaderTest
   since: 2026-06

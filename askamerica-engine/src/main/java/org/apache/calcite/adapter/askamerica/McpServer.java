@@ -10,9 +10,6 @@
  */
 package org.apache.calcite.adapter.askamerica;
 
-import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
-import org.apache.calcite.adapter.govdata.GovDataDriver;
-import org.apache.calcite.adapter.govdata.R2CredentialProvider;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.SchemaPlus;
@@ -44,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -300,7 +296,8 @@ public class McpServer {
     private static final String SESSION_ID =
         java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
 
-    // Telemetry opt-in state loaded from ~/.askamerica/telemetry.json, refreshed on set.
+    // Telemetry is ON by default (opt-out): true when ~/.askamerica/telemetry.json is absent or
+    // says optIn=true, refreshed on set. Not "opt-in" -- a fresh install sends until the user opts out.
     private static volatile boolean telemetryOptIn = loadTelemetryOptIn();
 
     // Studies account, loaded from ~/.askamerica/account.json, refreshed on register.
@@ -342,36 +339,6 @@ public class McpServer {
         "sec,geo,econ,census,crime,weather,ref,fec,"
         + "fedregister,law,officials,cyber_vuln,cyber_threat,energy,health,edu,econ_reference,"
         + "patents,lands,disasters,housing,cftc,ag,transport,environment,research,fiscal,banking,fisheries";
-
-    // Connections keyed by comma-joined source set. The all-schemas set is warmed at
-    // startup and backs every tool; narrower sets exist only for legacy callers.
-    private static final ConcurrentHashMap<String, Connection> schemaConns =
-        new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, CountDownLatch> schemaLatches =
-        new ConcurrentHashMap<>();
-    // Throwable, not Exception: an Error during driver init (NoClassDefFoundError,
-    // ExceptionInInitializerError, OOM in the Parquet/DuckDB native path) must be
-    // recorded too, or the latch releases with no connection and no recorded cause.
-    private static final ConcurrentHashMap<String, Throwable> schemaErrors =
-        new ConcurrentHashMap<>();
-    // Epoch millis each cached connection was opened. isValid(5) only catches a DEAD
-    // connection — a live one is handed out forever even though the Iceberg tables it
-    // was built against are read once at connection-open and never re-resolved (a
-    // schema/table build is a one-time construction, not a per-query lookup). Observed:
-    // a 'sec' connection opened hours before a same-day R2 backfill kept serving the
-    // pre-backfill row counts indefinitely after the backfill completed, with no error
-    // and no way to tell from the response that the answer was stale. This TTL forces a
-    // periodic reconnect (which rebuilds the schema from current Iceberg state) so
-    // staleness is bounded instead of open-ended.
-    private static final ConcurrentHashMap<String, Long> schemaConnOpenedAtMillis =
-        new ConcurrentHashMap<>();
-    private static final long SCHEMA_CONN_TTL_MILLIS =
-        TimeUnit.MINUTES.toMillis(resolveSchemaConnTtlMinutes());
-
-    private static long resolveSchemaConnTtlMinutes() {
-        String raw = System.getenv("ASKAMERICA_SCHEMA_CONN_TTL_MINUTES");
-        return (raw == null || raw.isEmpty()) ? 30L : Long.parseLong(raw);
-    }
 
     // Package-private (not private): PgwireGovDataConnector shares this same diagnostic
     // stream so its spawn/connect logging interleaves with the rest of the engine's log.
@@ -425,22 +392,9 @@ public class McpServer {
         // Fixed loopback endpoint for the browser extension: claim verdicts by article URL.
         ClaimsServer.start(log);
 
-        // DuckDBJdbcSchemaFactory's own default (4GB) is sized for many small connections
-        // sharing a box; this server holds one long-lived, many-schema connection serving
-        // real analytical queries, which needs more headroom. Only sets it if the operator
-        // hasn't already passed -Dcalcite.duckdb.memoryLimit — never override an explicit
-        // choice. Adjustable at runtime via the set_memory_limit tool.
-        if (System.getProperty("calcite.duckdb.memoryLimit") == null) {
-            System.setProperty("calcite.duckdb.memoryLimit", "8GB");
-        }
-
         // Resolve the data dir: MCP_DATA_DIR (server-specific override) → default ~/.mcp_askamerica.
-        // Exported as ASKAMERICA_DATA_DIR so any code that reads that name (e.g. a spawned
-        // subprocess) sees it too, then pinned directly via AskAmericaDriver.pinOperatingDir().
-        // This server connects govdata straight through GovDataDriver (see getSchemaConnection()
-        // below), never through jdbc:askamerica:, so AskAmericaDriver.connect() is never invoked
-        // here and cannot be relied on to do this pinning as a side effect of some unrelated
-        // DriverManager call.
+        // Exported as ASKAMERICA_DATA_DIR: PgwireGovDataConnector reads it to tell the data
+        // server it spawns which catalog file to use.
         String resolvedDataDir = System.getenv("ASKAMERICA_DATA_DIR");
         if (resolvedDataDir == null || resolvedDataDir.isEmpty()) {
             resolvedDataDir = System.getProperty("ASKAMERICA_DATA_DIR");
@@ -456,12 +410,12 @@ public class McpServer {
         }
         if (resolvedDataDir != null && !resolvedDataDir.isEmpty()) {
             System.setProperty("ASKAMERICA_DATA_DIR", resolvedDataDir);
-            AskAmericaDriver.pinOperatingDir(resolvedDataDir);
         }
 
         suppressFrameworkLogging();
 
         log.println("[askamerica-mcp] Starting... build=" + BUILD_ID);
+        enableCallLogPersistence();
         // Name the active SLF4J binding. Two bindings ship in the shaded jar and whichever one
         // wins decides whether adapter logs appear at all: bound to reload4j, which nothing
         // configures, every govdata and file log statement is discarded and the server looks hung
@@ -469,6 +423,7 @@ public class McpServer {
         log.println("[askamerica-mcp] logging binding="
             + org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName());
 
+        PgwireGovDataConnector.noteRetiredModeSwitch();
         configureQueryEmbedder();
 
         // Mount every allowed schema on one connection up front, off the request thread.
@@ -478,29 +433,9 @@ public class McpServer {
             long t0 = System.currentTimeMillis();
             try {
                 getCatalogConnection();
-                if (PgwireGovDataConnector.isEnabled()) {
-                    // The counters/catalog path below describe the embedded DuckDB engine,
-                    // which this mode never instantiates (getSchemaConnection's pgwire
-                    // short-circuit runs before GovDataDriver is ever constructed) — printing
-                    // them here would report misleading zeros for a mount that actually
-                    // succeeded through the shared pgwire-govdata server instead.
-                    log.println("[askamerica-mcp] All schemas mounted in "
-                        + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
-                        + PgwireGovDataConnector.describeTarget() + ")");
-                } else {
-                    // Loading the JAR-bundled seed catalog and rebuilding every view from Iceberg
-                    // metadata end in the same mounted state, so without these counts a mount that
-                    // spent minutes on object-store round trips is indistinguishable in the log from
-                    // one that started instantly. Printed to this stream, not through SLF4J, because
-                    // the shaded jar's logging binding drops adapter logs entirely.
-                    log.println("[askamerica-mcp] All schemas mounted in "
-                        + (System.currentTimeMillis() - t0) + "ms"
-                        + " — catalog=" + new java.io.File(
-                            System.getProperty("govdata.operating.dir.base", "?"),
-                            ".duckdb/govdata.duckdb")
-                        + " icebergViewsReused=" + DuckDBJdbcSchemaFactory.icebergViewsReused()
-                        + " icebergViewsRebuilt=" + DuckDBJdbcSchemaFactory.icebergViewsCreated());
-                }
+                log.println("[askamerica-mcp] All schemas mounted in "
+                    + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
+                    + PgwireGovDataConnector.describeTarget() + ")");
             } catch (Throwable e) {
                 log.println("[askamerica-mcp] Schema warm-up failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -530,8 +465,14 @@ public class McpServer {
                 // thread: they are trivial, and ordering against the requests around them
                 // is easier to reason about kept in sequence.
                 if (!req.has("id")) {
-                    handleNotification(reqMethod);
+                    handleNotification(reqMethod, req.path("params"));
                     continue;
+                }
+                // The scope is opened here, not on the worker, so the budget clock starts when
+                // the host's does and a cancellation that overtakes a queued request finds it.
+                if ("tools/call".equals(reqMethod)) {
+                    String tool = req.path("params").path("name").asText("");
+                    CallScope.begin(req.get("id").toString(), tool, toolBudgetMillis(tool));
                 }
 
                 // Dispatch off the reader thread. Reading stays serial — there is one stdin
@@ -571,6 +512,10 @@ public class McpServer {
      * failure to serialise cannot leave a half-written line on the wire.
      */
     private static void respond(PrintStream out, ObjectNode resp) {
+        if (resp == null) {
+            // The host cancelled this request and is no longer listening for its answer.
+            return;
+        }
         synchronized (OUT_LOCK) {
             try {
                 out.println(MAPPER.writeValueAsString(resp));
@@ -658,9 +603,8 @@ public class McpServer {
      * PgwireGovDataConnector#killAndRespawn}), which also severs the socket the stuck thread is
      * blocked reading from — unlike a same-process cancel, a killed socket connection is
      * something Java's I/O layer reliably observes even when a cooperative interrupt flag isn't
-     * being checked. In embedded mode (the explicit opt-out), it evicts the cached embedded
-     * connection instead, same as before. Neither path reclaims whatever the stuck native call
-     * was doing before the kill/evict — see the caveat in DEFECTS-OPEN.md #16.
+     * being checked. It does not reclaim whatever the stuck native call was doing before the
+     * kill — see the caveat in DEFECTS-OPEN.md #16.
      */
     private static final int WATCHDOG_TIMEOUT_MULTIPLE = 2;
 
@@ -687,37 +631,15 @@ public class McpServer {
                     long cancelAtMillis = timeoutSeconds * 1000L * WATCHDOG_TIMEOUT_MULTIPLE;
                     long evictAtMillis = cancelAtMillis * 2;
                     if (ageMillis >= evictAtMillis) {
-                        // Measured live 2026-09-23: in the default pgwire-enabled configuration,
-                        // the schemaConns eviction below is dead code — that map is only ever
-                        // populated by the EMBEDDED-mode branch of getSchemaConnection, which
-                        // pgwire mode bypasses entirely. So this branch used to do nothing at
-                        // all for the one configuration everyone actually runs, and the stuck
-                        // thread held DB_LOCK forever with no recovery. killAndRespawn kills the
-                        // separate pgwire-govdata OS process outright (see its own javadoc for
-                        // why that unsticks a blocked socket read where an in-process interrupt
-                        // flag might not) — this is the real fix for that path; schemaConns
-                        // eviction remains correct and unchanged for the embedded-mode opt-out.
-                        if (PgwireGovDataConnector.isEnabled()) {
-                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
-                                + (ageMillis / 1000) + "s after starting (timeout was "
-                                + timeoutSeconds + "s) — cancel() did not unstick it; killing "
-                                + "the shared pgwire-govdata process so it respawns fresh.");
-                            PgwireGovDataConnector.killAndRespawn(
-                                "statement active " + (ageMillis / 1000) + "s, cancel() failed");
-                        } else {
-                            log.println("[askamerica-mcp] WATCHDOG: statement still active "
-                                + (ageMillis / 1000) + "s after starting (timeout was "
-                                + timeoutSeconds + "s) — cancel() did not unstick it; evicting "
-                                + "the embedded connection so future callers get a fresh one. "
-                                + "This does NOT reclaim whatever the stuck query is still "
-                                + "doing.");
-                            String catalogKey = String.join(",", allowedSchemas());
-                            Connection stuck = schemaConns.remove(catalogKey);
-                            schemaConnOpenedAtMillis.remove(catalogKey);
-                            if (stuck != null) {
-                                closeQuietly(stuck, catalogKey);
-                            }
-                        }
+                        // killAndRespawn kills the separate pgwire-govdata OS process outright
+                        // (see its own javadoc for why that unsticks a blocked socket read where
+                        // an in-process interrupt flag might not).
+                        log.println("[askamerica-mcp] WATCHDOG: statement still active "
+                            + (ageMillis / 1000) + "s after starting (timeout was "
+                            + timeoutSeconds + "s) — cancel() did not unstick it; killing "
+                            + "the shared pgwire-govdata process so it respawns fresh.");
+                        PgwireGovDataConnector.killAndRespawn(
+                            "statement active " + (ageMillis / 1000) + "s, cancel() failed");
                         // Removing the entry (not the ACTIVE_STATEMENTS registration) is
                         // deliberate: leaving the registration in place stops this branch from
                         // re-firing every 15s for the same statement while it is still there,
@@ -768,11 +690,28 @@ public class McpServer {
                 case "resources/read":   return handleResourcesRead(id, params);
                 case "tools/call": {
                     String tool = params.path("name").asText("");
-                    if (LOCK_FREE_TOOLS.contains(tool)) {
-                        return handleToolsCall(id, params);
-                    }
-                    synchronized (DB_LOCK) {
-                        return handleToolsCall(id, params);
+                    CallScope scope = CallScope.begin(String.valueOf(id), tool,
+                        toolBudgetMillis(tool));
+                    scope.enter();
+                    try {
+                        scope.check();
+                        ObjectNode resp;
+                        if (LOCK_FREE_TOOLS.contains(tool)) {
+                            resp = handleToolsCall(id, params);
+                        } else {
+                            synchronized (DB_LOCK) {
+                                scope.lockAcquired();
+                                // Waiting for the lock can outlast the host's patience; a call
+                                // cancelled or timed out in the queue must not start.
+                                scope.check();
+                                resp = handleToolsCall(id, params);
+                            }
+                        }
+                        return scope.hostCancelled() ? null : resp;
+                    } catch (CallScope.Stopped stopped) {
+                        return scope.hostCancelled() ? null : stoppedResult(id, stopped);
+                    } finally {
+                        scope.end();
                     }
                 }
                 default:
@@ -813,8 +752,21 @@ public class McpServer {
         }
     }
 
-    private static void handleNotification(String method) {
+    private static void handleNotification(String method, JsonNode params) {
         log.println("[askamerica-mcp] Notification: " + method);
+        if ("notifications/cancelled".equals(method) && params.has("requestId")) {
+            String requestId = params.get("requestId").toString();
+            String reason = params.path("reason").asText("");
+            // Statement.cancel() goes to the database driver and can block, so it must not run
+            // on the reader thread: a blocked reader stops every later request being read.
+            Thread t = new Thread(() -> {
+                boolean found = CallScope.cancelRequest(requestId, reason);
+                log.println("[askamerica-mcp] cancelled request " + requestId
+                    + (found ? ": in-flight call stopped" : ": no such call in flight"));
+            }, "mcp-cancel");
+            t.setDaemon(true);
+            t.start();
+        }
     }
 
     // ── MCP handlers ─────────────────────────────────────────────────────────
@@ -1763,15 +1715,7 @@ public class McpServer {
             "How many chunks to return. Default 10, capped at 50. Ask for more than you need: "
             + "the top hits are frequently boilerplate, so a short list can contain no real "
             + "match at all."));
-        // No auto-provisioning exists for the embedder (unlike the engine jar and
-        // pgwire-govdata, both of which self-install on first use) — only a manual operator
-        // script (govdata/scripts/vss-embed-setup.sh) that nobody runs on a real Claude
-        // Desktop install. Advertising this tool unconditionally means every real install
-        // gets offered a capability guaranteed to fail with "no embedder configured" the
-        // instant it's called. Gate registration on the same properties
-        // configureQueryEmbedder() (called at startup, before toolDefs() is ever built) uses
-        // to decide whether an embedder is actually reachable.
-        if (embedderConfigured()) {
+        // Served by the data server, which carries the embedder. See configureQueryEmbedder().
         tools.add(
             tool("semantic_search",
             "Search TEXT by meaning rather than by keyword — SEC MD&A, risk factors and "
@@ -1814,7 +1758,6 @@ public class McpServer {
             + "attack_techniques hits (methodology, not an event) from ioc_urls/actual indicator "
             + "hits. Do not expect the embedding score alone to make any of these distinctions.",
             schema(semProps, new String[]{"query"})));
-        }
 
         ObjectNode relProps = MAPPER.createObjectNode();
         relProps.set("lei", prop("string",
@@ -3208,6 +3151,18 @@ public class McpServer {
                 + "team, not just the wrong label.");
         reportTypeProp.putArray("enum").add("defect").add("sourcing");
         reportProps.set("type", reportTypeProp);
+        ObjectNode reportCategoryProp = prop(
+            "string",
+            "Required when type is 'defect', omitted for 'sourcing'. What the defect is about, "
+                + "because the confirmation relayed to the user depends on it: 'data_value' — a "
+                + "returned figure looks wrong; 'metadata_coverage' — list_tables, "
+                + "search_catalog, describe_table or a coverage window is empty, missing or "
+                + "wrong; 'diagnostics' — a warning, severity, grain inference or other "
+                + "guidance askamerica generated misfired while the figures themselves are not "
+                + "in question; 'tooling' — a tool timed out, errored or was unavailable.");
+        reportCategoryProp.putArray("enum")
+            .add("data_value").add("metadata_coverage").add("diagnostics").add("tooling");
+        reportProps.set("category", reportCategoryProp);
         reportProps.set("subject", prop("string", "Brief issue summary (1 line)."));
         reportProps.set(
             "body",
@@ -3225,9 +3180,7 @@ public class McpServer {
             + "answer, and then relay the confirmation text it returns (a data request was "
             + "sent; new series typically take 24-48 hours; check back then). Likewise ALWAYS "
             + "call it with type 'defect' whenever a value looks implausible or inconsistent, "
-            + "and relay the confirmation text it returns (a data-quality report was sent; "
-            + "fixes typically take 24-48 hours; treat the figure as unverified until "
-            + "checked). Every report "
+            + "with the matching category and relay the confirmation text it returns. Every report "
             + "MUST be classified via `type` (defect or sourcing) — an "
             + "unclassified report cannot be routed and is effectively invisible to whichever "
             + "team should act on it.",
@@ -3674,27 +3627,16 @@ public class McpServer {
             "enabled",
             prop(
                 "boolean",
-                "true to opt in to sharing anonymized tool-call telemetry; false to opt out."));
+                "true to share usage telemetry (the default); false to opt out."));
         tools.add(
             tool("set_telemetry",
-            "Opt in or out of sharing anonymized usage telemetry. "
-            + "When enabled, each tool call records the tool name, duration, result count, "
-            + "schema name, and success/failure — no SQL text or personal data is included. "
-            + "Current status: " + (telemetryOptIn ? "OPTED IN" : "OPTED OUT") + ".",
+            "Opt out of (or back in to) usage telemetry, which is ON by default. "
+            + "When enabled, each tool call sends a session id, the software version, the tool "
+            + "name, the time, duration, row count, success/failure, the SQL text (first 2,048 "
+            + "characters) and any error message (first 512 characters). It carries no email "
+            + "address or account id. Do not put secrets in queries. "
+            + "Current status: " + (telemetryOptIn ? "ON (sharing)" : "OFF (opted out)") + ".",
             schema(telemetryProps, new String[]{"enabled"})));
-
-        ObjectNode memoryLimitProps = MAPPER.createObjectNode();
-        memoryLimitProps.set(
-            "limit",
-            prop("string",
-            "DuckDB size literal, e.g. '8GB', '12GB'. Current default: 8GB."));
-        tools.add(
-            tool("set_memory_limit",
-            "Raise (or lower) the DuckDB memory ceiling for this server, e.g. after a query "
-            + "fails with an out-of-memory error on a large aggregation. Applies immediately "
-            + "to the live connection — no reconnect needed — and persists for connections "
-            + "opened after this call too.",
-            schema(memoryLimitProps, new String[]{"limit"})));
 
         if (EVAL_MODE) {
             // Never registered for a real user — see EVAL_MODE and deliverReport() above.
@@ -3722,208 +3664,15 @@ public class McpServer {
     }
 
     /**
-     * Ensure R2 credentials are fresh before connecting.
-     * Uses the ASKAMERICA_API_KEY to fetch credentials from the AskAmerica API
-     * and caches them at ~/.askamerica/credentials.json so GovDataDriver picks them up.
+     * The connection every tool runs on: the shared pgwire-govdata server's. The engine has one
+     * mode (owner rule 2026-10-10, ASKAM-008): data is served by the data server. Nothing in
+     * this process opens Calcite, govdata or DuckDB on the store. A server that is not
+     * reachable is waited for within a bound or reported by name (see
+     * {@link PgwireGovDataConnector#getSharedConnection()}); there is no other path to fall
+     * back to. Returns a live connection or throws with the cause; never null.
      */
-    private static void ensureFreshR2Credentials() {
-        java.util.Map<String, String> existing = R2CredentialProvider.resolve();
-        log.println("[askamerica-mcp] R2 creds endpoint=" + existing.get("endpoint")
-            + " keyId=" + existing.get("accessKeyId"));
-
-        // FREE_ASKAMERICA_KEY takes precedence over ASKAMERICA_API_KEY, which may hold a
-        // metering-bypass self-test key the catalog endpoint rejects. Never log the key.
-        String apiKey = R2CredentialProvider.credentialApiKey();
-        if (apiKey == null || apiKey.isEmpty()) {
-            log.println("[askamerica-mcp] No catalog API key set (FREE_ASKAMERICA_KEY or "
-                + "ASKAMERICA_API_KEY) — cannot fetch R2 credentials.");
-            return;
-        }
-        try {
-            java.util.Map<String, String> fresh = R2CredentialProvider.refresh(apiKey);
-            log.println("[askamerica-mcp] R2 credentials refreshed endpoint=" + fresh.get("endpoint"));
-        } catch (Exception e) {
-            // Do not claim a working fallback: there are no baked-in defaults
-            // (config/r2-defaults.json ships as "{}"). Log the real failure and let the
-            // driver fail loudly if it genuinely needs R2, rather than proceeding with nulls.
-            log.println("[askamerica-mcp] R2 credential refresh FAILED: " + e.getMessage()
-                + " — no usable R2 credentials from the catalog API.");
-        }
-    }
-
-    /**
-     * Get (or start initializing) a per-schema connection.
-     * Returns a live connection, or throws with the underlying cause. Never returns null.
-     */
-    /**
-     * Closes a discarded schema connection, logging rather than throwing on failure.
-     *
-     * <p>A connection being replaced is already suspect — it may be past its TTL or dead — so a
-     * failure to close it must not propagate into the caller's tool call. The point is to release
-     * the sockets, and a best-effort close does that in every case where a close was possible at
-     * all.
-     */
-    private static void closeQuietly(Connection conn, String schemaName) {
-        if (conn == null) {
-            return;
-        }
-        try {
-            conn.close();
-        } catch (Exception e) {
-            log.println("[askamerica-mcp] Failed to close discarded connection for '"
-                + schemaName + "': " + e);
-        }
-    }
-
     static Connection getSchemaConnection(final String schemaName) throws Exception {
-        // On by default (kenstott/calcite#364): every schema is mounted on one shared
-        // server-side catalog, so one shared client connection answers for all of them —
-        // bypass the per-schema embedded-DuckDB path below entirely. Deliberately NO
-        // fallback to the embedded path on a pgwire failure: two data-access paths that
-        // could each be seeded from a different build (askamerica-engine.yml and
-        // pgwire-adapters-release.yml are separate CI pipelines) is exactly the
-        // multiple-divergent-instance problem this whole design exists to eliminate — a
-        // silent fallback would trade a loud, actionable pgwire failure for a quiet,
-        // possibly-inconsistent second version of the data. If pgwire is unreachable, the
-        // caller gets a clear error naming why; ASKAMERICA_PGWIRE_MODE=0 is the only
-        // supported way to run on the embedded path, as a deliberate operator choice, not
-        // an automatic degradation.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return PgwireGovDataConnector.getSharedConnection();
-        }
-        Connection existing = schemaConns.get(schemaName);
-        if (existing != null) {
-            Long openedAt = schemaConnOpenedAtMillis.get(schemaName);
-            long ageMillis = (openedAt == null) ? Long.MAX_VALUE
-                : System.currentTimeMillis() - openedAt;
-            // A cached-but-dead connection would otherwise be handed out forever, so a
-            // connection that has died since init drops out of the cache and re-inits below.
-            // A cached-but-STALE connection is the same failure mode with no exception to
-            // catch it by: isValid(5) only pings the connection, it does not know the
-            // Iceberg tables built at open time have since changed on R2. TTL expiry forces
-            // the same re-init path so staleness is bounded rather than open-ended.
-            if (ageMillis < SCHEMA_CONN_TTL_MILLIS && existing.isValid(5)) {
-                return existing;
-            }
-            log.println("[askamerica-mcp] Cached connection for '" + schemaName
-                + "' is " + (ageMillis >= SCHEMA_CONN_TTL_MILLIS ? "past its TTL" : "dead")
-                + " — discarding and re-initializing.");
-            schemaConns.remove(schemaName, existing);
-            schemaConnOpenedAtMillis.remove(schemaName);
-            schemaLatches.remove(schemaName);
-            schemaErrors.remove(schemaName);
-            // Dropping the map entry does NOT release the connection. Everything the schema
-            // built at open time stays reachable through it — including the S3 client each
-            // govdata schema creates for its materialized and cache storage, with a
-            // 200-connection Apache pool behind it. Left unclosed, those sockets sit idle
-            // until the object store sends FIN and nothing answers, so they pile up in
-            // CLOSE_WAIT: a user on a MinIO-backed dev server reported 214 of them.
-            // Reported as "calling MinIO every few minutes and never closing the connection";
-            // the periodic part is this TTL re-init, the leak is that the old connection was
-            // only forgotten, never closed.
-            closeQuietly(existing, schemaName);
-        }
-
-        // Atomically start initialization the first time this schema is requested.
-        schemaLatches.computeIfAbsent(schemaName, k -> {
-            final CountDownLatch latch = new CountDownLatch(1);
-            Thread t = new Thread(() -> {
-                try {
-                    log.println("[askamerica-mcp] Initializing schema: " + k);
-                    ensureFreshR2Credentials();
-                    GovDataDriver driver = new GovDataDriver();
-                    Properties connProps = new Properties();
-                    // GovDataDriver's own default (standard,postgresql,spatial,mssql) has no
-                    // DATE_TRUNC operator at all -- it is registered only under the bigquery
-                    // function library (SqlLibraryOperators.DATE_TRUNC, signature <DATE>,
-                    // <DATETIME_INTERVAL>) -- so a caller's DATE_TRUNC('month', d) fails
-                    // validation with "No match found for function signature" before ever
-                    // reaching DuckDB. Adding bigquery here is scoped to this engine's own
-                    // connections only (GovDataDriver only applies its default when the caller
-                    // has not already set "fun"), not to the shared driver default other
-                    // tooling (DQ, ETL, model-verify) still uses.
-                    connProps.setProperty("fun", "standard,postgresql,spatial,mssql,bigquery");
-                    // GovDataDriver's shared default has no parserFactory at all, so this passes
-                    // straight through unmodified to the connection Calcite builds -- scoped to
-                    // this engine's own connections only, same as fun= above, not to the shared
-                    // driver default other tooling (DQ, ETL, model-verify) still uses. Calcite's
-                    // default core parser grammar has no "::" cast production; callers whose
-                    // training data defaults to Postgres/DuckDB-shell SQL (this warehouse's own
-                    // storage engine) reach for expr::type and hit an opaque JavaCC parse error
-                    // instead of either accepting it or explaining what's wrong. Babel's parser
-                    // is a strict grammar superset built for exactly this kind of dialect
-                    // compatibility, already wires "::" to SqlLibraryOperators.INFIX_CAST.
-                    connProps.setProperty("parserFactory",
-                        "org.apache.calcite.sql.parser.babel.SqlBabelParserImpl#FACTORY");
-                    Connection c = driver.connect("jdbc:govdata:source=" + k, connProps);
-                    if (c == null) {
-                        throw new IllegalStateException(
-                            "GovDataDriver returned null for schema: " + k);
-                    }
-                    // Meter + quota/license-gate the govdata connection the MCP server actually
-                    // uses — metering belongs on the calcite/govdata path, not only on the
-                    // jdbc:askamerica driver. wrap() is a no-op when no API key is present, and
-                    // returns the connection unwrapped for a self-test bypass key (presented as
-                    // ASKAMERICA_API_KEY with -Daskamerica.selftest.enabled=true or
-                    // ASKAMERICA_SELFTEST_ENABLED=true).
-                    c = UsageMetering.wrap(c, UsageMetering.resolveApiKey(null));
-                    schemaConns.put(k, c);
-                    schemaConnOpenedAtMillis.put(k, System.currentTimeMillis());
-                    // Clear any error from a previous attempt. Readers no longer consume it,
-                    // so success is the only thing that retires it — otherwise a recovered
-                    // schema would keep reporting the failure that is no longer true.
-                    schemaErrors.remove(k);
-                    log.println("[askamerica-mcp] Schema ready: " + k);
-                } catch (Throwable e) {
-                    schemaErrors.put(k, e);
-                    log.println("[askamerica-mcp] Schema init failed: " + k
-                        + " — " + e.getClass().getName() + ": " + e.getMessage());
-                    for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
-                        log.println("[askamerica-mcp]   caused by: "
-                            + cause.getClass().getName() + ": " + cause.getMessage());
-                    }
-                    for (StackTraceElement f : e.getStackTrace()) {
-                        log.println("[askamerica-mcp]   at " + f);
-                    }
-                } finally {
-                    latch.countDown();
-                }
-            }, "conn-init-" + k);
-            t.setDaemon(true);
-            t.start();
-            return latch;
-        });
-
-        CountDownLatch latch = schemaLatches.get(schemaName);
-        if (!latch.await(600, TimeUnit.SECONDS)) {
-            throw new RuntimeException(
-                "Schema '" + schemaName + "' is still initializing "
-                + "(first use can take several minutes). Please retry.");
-        }
-        // Drop the completed latch before reading the outcome so the next call genuinely
-        // retries init. Leaving it in place made computeIfAbsent skip initialization
-        // forever, so a single transient failure bricked the schema until restart.
-        Throwable err = schemaErrors.get(schemaName);
-        Connection ready = schemaConns.get(schemaName);
-        if (ready == null) {
-            schemaLatches.remove(schemaName);
-        }
-        if (err != null) {
-            // The error is NOT removed here. It used to be, and every caller that had
-            // already passed the latch then found neither a connection nor an error and
-            // reported that instead — so the real cause was consumed by whichever caller
-            // read it first. A dnsjava ServiceConfigurationError hid behind that message
-            // for an entire release. It is cleared when init next succeeds, not on read.
-            throw new RuntimeException(
-                "Schema '" + schemaName + "' failed to initialize: "
-                + err.getClass().getName() + ": " + err.getMessage(), err);
-        }
-        if (ready == null) {
-            throw new IllegalStateException(
-                "Schema '" + schemaName + "' initialization completed without producing a "
-                + "connection and without recording an error.");
-        }
-        return ready;
+        return PgwireGovDataConnector.getSharedConnection();
     }
 
     private static final DatasetRegistry DATASETS = new DatasetRegistry();
@@ -4094,11 +3843,24 @@ public class McpServer {
                                 + "value; see the tool's own description for how to tell them "
                                 + "apart.");
                     }
+                    String category = args.path("category").asText("");
+                    if ("defect".equals(issueType) && !DEFECT_NOTICES.containsKey(category)) {
+                        return errorResponse(id, -32602,
+                            "report_issue with type \"defect\" requires \"category\" to be one "
+                                + "of " + DEFECT_NOTICES.keySet() + ", got " + jsonStr(category)
+                                + " — pick the one that describes what is wrong; see the tool's "
+                                + "own description for how to tell them apart.");
+                    }
+                    if ("sourcing".equals(issueType) && !category.isEmpty()) {
+                        return errorResponse(id, -32602,
+                            "report_issue \"category\" applies only to type \"defect\", got "
+                                + jsonStr(category) + " with type \"sourcing\".");
+                    }
                     String subject = args.path("subject").asText();
                     String issueBody = args.path("body").asText();
                     log.println("[askamerica-mcp] tool=report_issue type=" + issueType
-                        + " subject=" + subject);
-                    text = reportIssue(issueType, subject, issueBody);
+                        + " category=" + category + " subject=" + subject);
+                    text = reportIssue(issueType, category, subject, issueBody);
                     break;
                 }
                 case "deliver_report": {
@@ -4231,12 +3993,6 @@ public class McpServer {
                             tsText(args, "score_domain",
                                 TextScoringEngine.DEFAULT_DOMAIN)).toString();
                     }
-                    break;
-                }
-                case "set_memory_limit": {
-                    String limit = args.path("limit").asText();
-                    log.println("[askamerica-mcp] tool=set_memory_limit limit=" + limit);
-                    text = setMemoryLimit(limit);
                     break;
                 }
                 case "resolve_geo": {
@@ -5339,7 +5095,11 @@ public class McpServer {
         // fallback-guard: allow -- see comment above
         } catch (Exception e) {
             long ms = System.currentTimeMillis() - t0;
-            String compact = compactErrorMessage(e);
+            // A statement cancelled by the call's own stop surfaces as the driver's generic
+            // "canceling statement" error; the stop reason is the real cause, so it wins.
+            CallScope stoppedScope = CallScope.current();
+            String compact = stoppedScope != null && stoppedScope.stopped()
+                ? stoppedScope.stopMessage() : compactErrorMessage(e);
             log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms + " msg=" + compact);
             recordCall(name, args, ms, -1, null, compact);
             if (telemetryOptIn && !"set_telemetry".equals(name)) {
@@ -5489,6 +5249,19 @@ public class McpServer {
             noticeAnnotations.putArray("audience").add("user").add("assistant");
             noticeBlock.set("annotations", noticeAnnotations);
             content.add(noticeBlock);
+        }
+
+        // The data server is older than this engine: say so, plainly, on every result. It still
+        // runs, so this is a nag and never an error.
+        String outOfDate = PgwireGovDataInstaller.outOfDateNotice();
+        if (outOfDate != null) {
+            ObjectNode updateBlock = MAPPER.createObjectNode();
+            updateBlock.put("type", "text");
+            updateBlock.put("text", outOfDate);
+            ObjectNode updateAnnotations = MAPPER.createObjectNode();
+            updateAnnotations.putArray("audience").add("user").add("assistant");
+            updateBlock.set("annotations", updateAnnotations);
+            content.add(updateBlock);
         }
 
         ObjectNode body = MAPPER.createObjectNode();
@@ -5743,87 +5516,14 @@ public class McpServer {
 
     /** The effective set of schema names (env override, else the built-in default set). */
     /**
-     * Points {@code EmbeddingService} at a query-time embedder, so {@code SEMANTIC_SEARCH} can
-     * embed the query rather than failing with "no embedder configured".
-     *
-     * <p>Nothing else in the product sets {@code calcite.embed.*}, so without this the consumer
-     * half of semantic search could never start: {@code vss-local.py} writes the corpus codes
-     * and the query side had no way to reach the same vector space.
-     *
-     * <p>Order matters and is not arbitrary:
-     * <ol>
-     *   <li>an explicit {@code calcite.embed.command|home|script} always wins — never override a
-     *       deliberate choice;</li>
-     *   <li>a bundle home ({@code bin/hugot-embed}, {@code lib/}, {@code model/}) under the
-     *       operating dir — the self-contained option, the only one viable on a client device;</li>
-     *   <li>the CPU embed venv + {@code embed.py} that {@code vss-embed-setup.sh} provisions —
-     *       the dev/ETL-box path, which needs torch and is not client-shippable.</li>
-     * </ol>
-     *
-     * <p>Resolution only; it never installs anything. If neither exists the properties stay unset
-     * and {@code SEMANTIC_SEARCH} reports the same explicit error as before — a wrong embedder
-     * would be far worse than none, because query vectors from a different pipeline than the
-     * corpus still return rows, just silently mis-ranked.
+     * Says at startup where semantic search is served. The engine carries no embedder and has
+     * one mode (owner rules 2026-10-10, ASKAM-007 and ASKAM-008): {@code SEMANTIC_SEARCH} and
+     * {@code EMBED} are SQL sent to the pgwire-govdata server, which embeds with the embedder
+     * it carries.
      */
-    /**
-     * Whether {@code configureQueryEmbedder()} (called once at startup, before toolDefs() is
-     * ever built) found or was given a usable embedder. Same three properties it resolves —
-     * checked here rather than cached separately so there is exactly one source of truth for
-     * "is an embedder actually reachable."
-     */
-    private static boolean embedderConfigured() {
-        // In pgwire mode, SEMANTIC_SEARCH/EMBED execute wherever Calcite actually runs — the
-        // shared pgwire-govdata server's own JVM (started via JPype from Python), not this
-        // client process — so this client's own local calcite.embed.* properties describe
-        // nothing relevant. The pgwire-govdata bundle always carries the embedder (see
-        // pgwire-adapters-release.yml's "Pre-download EMBED() model" step and
-        // pgwire_calcite/embedder.py), so pgwire mode alone is the correct signal here.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return true;
-        }
-        return !System.getProperty("calcite.embed.command", "").isEmpty()
-            || !System.getProperty("calcite.embed.home", "").isEmpty()
-            || !System.getProperty("calcite.embed.script", "").isEmpty();
-    }
-
     private static void configureQueryEmbedder() {
-        if (!System.getProperty("calcite.embed.command", "").isEmpty()
-            || !System.getProperty("calcite.embed.home", "").isEmpty()
-            || !System.getProperty("calcite.embed.script", "").isEmpty()) {
-            log.println("[askamerica-mcp] embedder: explicitly configured, leaving as-is");
-            return;
-        }
-
-        String dataDir = System.getProperty("ASKAMERICA_DATA_DIR", "");
-        if (!dataDir.isEmpty()) {
-            java.io.File home = new java.io.File(dataDir, "embedder");
-            if (new java.io.File(home, "bin/hugot-embed").isFile()) {
-                System.setProperty("calcite.embed.home", home.getAbsolutePath());
-                log.println("[askamerica-mcp] embedder: bundle home " + home.getAbsolutePath());
-                return;
-            }
-        }
-
-        String venv = System.getenv("VSS_EMBED_VENV");
-        String govdataHome = System.getenv("GOVDATA_HOME");
-        java.io.File py = (venv != null && !venv.isEmpty())
-            ? new java.io.File(venv, "bin/python")
-            : (govdataHome != null && !govdataHome.isEmpty()
-                ? new java.io.File(govdataHome, "build/.venv-embed/bin/python") : null);
-        java.io.File script = (govdataHome != null && !govdataHome.isEmpty())
-            ? new java.io.File(govdataHome, "scripts/embed.py") : null;
-        if (py != null && py.canExecute() && script != null && script.isFile()) {
-            System.setProperty("calcite.embed.python", py.getAbsolutePath());
-            System.setProperty("calcite.embed.script", script.getAbsolutePath());
-            log.println("[askamerica-mcp] embedder: venv " + py.getAbsolutePath()
-                + " + " + script.getAbsolutePath());
-            return;
-        }
-
-        log.println("[askamerica-mcp] embedder: none found — semantic_search/SEMANTIC_SEARCH will "
-            + "report 'no embedder configured'. Provide a bundle at <data-dir>/embedder "
-            + "(bin/hugot-embed, lib/, model/), or set GOVDATA_HOME with the venv from "
-            + "govdata/scripts/vss-embed-setup.sh.");
+        log.println("[askamerica-mcp] semantic search: served by the data server "
+            + "(pgwire-govdata), which carries the embedder; this process embeds nothing");
     }
 
     private static java.util.Set<String> allowedSchemas() {
@@ -7105,6 +6805,71 @@ public class McpServer {
             }
             CALL_LOG.add(e);
         }
+        CallLogStore store = callLogStore;
+        if (store != null) {
+            store.append(e);
+        }
+    }
+
+    /** When this engine process started: a report check that finds no history says so. */
+    private static final java.time.Instant PROCESS_START = java.time.Instant.now();
+
+    /** The on-disk copy of {@link #CALL_LOG}; null until {@link #enableCallLogPersistence}, and in
+     *  tests and eval mode, which must not read or write the user's history. */
+    private static volatile CallLogStore callLogStore;
+
+    /** How long a call log file lives without a write before it is removed (a quit app's file). */
+    private static final long CALL_LOG_FILE_MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000;
+
+    /**
+     * Reloads the calls an earlier process of this same app made and keeps writing new ones, so a
+     * restart or reconnect of the engine does not make the report checks see an empty history
+     * ("no query call anywhere this session"). Skipped in eval mode, where each run is meant to
+     * start clean, and when the parent process (the app) cannot be identified.
+     */
+    static void enableCallLogPersistence() {
+        if (EVAL_MODE) {
+            return;
+        }
+        java.nio.file.Path dir = java.nio.file.Paths.get(System.getProperty("user.home", ""),
+            ".askamerica", "call-logs");
+        java.util.Optional<java.nio.file.Path> file = CallLogStore.fileForParent(dir);
+        if (!file.isPresent()) {
+            log.println("[askamerica-mcp] call history is not persisted: the parent process "
+                + "cannot be identified");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        CallLogStore.deleteStale(dir, now, CALL_LOG_FILE_MAX_AGE_MS);
+        CallLogStore store = new CallLogStore(file.get(), MAPPER, CALL_LOG_MAX, IDLE_GAP_BOUNDARY_MS);
+        java.util.List<ObjectNode> earlier = store.load(now);
+        synchronized (CALL_LOG) {
+            CALL_LOG.addAll(0, earlier);
+            while (CALL_LOG.size() > CALL_LOG_MAX) {
+                CALL_LOG.remove(0);
+            }
+        }
+        for (ObjectNode entry : earlier) {
+            CALL_SEQ.accumulateAndGet(entry.path("seq").asInt(0), Math::max);
+        }
+        callLogStore = store;
+        if (!earlier.isEmpty()) {
+            log.println("[askamerica-mcp] reloaded " + earlier.size() + " call(s) from "
+                + file.get());
+        }
+    }
+
+    /** A sentence for a refusal that rests on the call history: where that history begins. */
+    private static String callHistoryNote() {
+        String earliest;
+        synchronized (CALL_LOG) {
+            earliest = CALL_LOG.isEmpty() ? null : CALL_LOG.get(0).path("ts").asText(null);
+        }
+        return " (This engine process started at " + PROCESS_START
+            + (earliest == null ? " and has recorded no calls" : "; its call history begins at " + earliest)
+            + ". History survives an engine restart only when the restart came within "
+            + IDLE_GAP_BOUNDARY_MS / 60000 + " minutes of the last call; after a longer gap, rerun "
+            + "the key queries so they are on record.)";
     }
 
     /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
@@ -7618,7 +7383,7 @@ public class McpServer {
         }
         StringBuilder msg = new StringBuilder(
             "no query call anywhere this session returned any rows -- askamerica's own data "
-            + "had nothing to contribute to this question. ");
+            + "had nothing to contribute to this question." + callHistoryNote() + " ");
         if (!catalogChecked) {
             msg.append("search_catalog, list_tables, and describe_table were NEVER called "
                 + "this session -- before falling back to the open web, actually check the "
@@ -8046,7 +7811,7 @@ public class McpServer {
         }
         return "it claims a statistical method was run with "
             + "no matching tool call anywhere in this session — " + String.join("; ", unsupported)
-            + ". Either call the matching tool for real and cite its actual result, or rewrite "
+            + callHistoryNote() + ". Either call the matching tool for real and cite its actual result, or rewrite "
             + "the sentence so it does not claim the method was executed (e.g. describe it as a "
             + "check that could be run, or drop the claim). A reader cannot tell a result you "
             + "actually computed from one you did not.";
@@ -8480,8 +8245,12 @@ public class McpServer {
      */
     static ResultSet executeWithRepair(Statement st, String sql) throws Exception {
         String effective = normalizeCallerSql(sql);
+        // Registered with the call so a host cancellation or the call's budget can cancel it.
+        CallScope.registerCurrent(st);
         try {
-            return st.executeQuery(effective);
+            ResultSet first = st.executeQuery(effective);
+            CallScope.checkCurrent();
+            return first;
         } catch (Exception e) {
             String msg = e.getMessage();
             if (msg == null || !msg.contains("parse failed")) {
@@ -9059,12 +8828,87 @@ public class McpServer {
         int timeoutSeconds = queryTimeoutSeconds();
         stmt.setQueryTimeout(timeoutSeconds);
         ACTIVE_STATEMENTS.put(stmt, new long[]{System.currentTimeMillis(), timeoutSeconds});
+        CallScope.registerCurrent(stmt);
     }
 
     /** Deregisters a statement bound by {@link #guardStatement}. */
     static void releaseGuardedStatement(Statement stmt) {
         ACTIVE_STATEMENTS.remove(stmt);
         WATCHDOG_CANCELLED_AT.remove(stmt);
+        CallScope.unregisterCurrent(stmt);
+    }
+
+    /** Tools that fit a model in-process over rows extracted by the caller's SQL. They get a
+     *  time budget (see {@link #statsCallBudgetSeconds()}) because the host abandons a tool call
+     *  at about 60s and, without a budget, the engine would keep the statement and the database
+     *  lock running long after nobody is waiting for the answer. */
+    static final java.util.Set<String> STATS_TOOLS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "event_study", "sensitivity_analysis", "ols_regression", "cross_validate", "iv_2sls",
+            "diff_in_diff", "hypothesis_test", "panel_fixed_effects", "robust_regression",
+            "flexible_regression", "feature_importance", "correlation_matrix",
+            "quantile_binning_test", "subgroup_contribution", "gini_coefficient",
+            "hhi_concentration", "partial_correlation", "arima_forecast", "garch_forecast",
+            "volatility_forecast", "backtest_volatility", "scenario_sweep", "double_ml_ate"));
+
+    /** Default seconds a stats call may run, chosen to land inside the host's ~60s limit. */
+    private static final int DEFAULT_STATS_CALL_BUDGET_SECONDS = 50;
+
+    /** Seconds a stats call may run before the engine stops it and says so
+     *  ({@code askamerica.stats.call.budget.seconds}; zero disables the budget). */
+    static int statsCallBudgetSeconds() {
+        return intProperty("askamerica.stats.call.budget.seconds",
+            DEFAULT_STATS_CALL_BUDGET_SECONDS);
+    }
+
+    /** Default seconds the diagnostics' exclusion probe may spend re-running SQL. */
+    private static final int DEFAULT_PROBE_BUDGET_SECONDS = 10;
+
+    /** Seconds one diagnostic probe statement may run
+     *  ({@code askamerica.diagnostics.probe.budget.seconds}), capped by what the call has left
+     *  of its own budget, so a diagnostic never costs more than the call it annotates. */
+    static int probeTimeoutSeconds() {
+        int seconds = intProperty("askamerica.diagnostics.probe.budget.seconds",
+            DEFAULT_PROBE_BUDGET_SECONDS);
+        CallScope scope = CallScope.current();
+        if (scope != null) {
+            long left = scope.remainingMillis() / 1000;
+            if (left < seconds) {
+                seconds = (int) Math.max(1, left);
+            }
+        }
+        return Math.max(1, seconds);
+    }
+
+    private static int intProperty(String name, int defaultValue) {
+        String raw = System.getProperty(name);
+        if (raw == null || raw.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Math.max(0, Integer.parseInt(raw.trim()));
+        } catch (NumberFormatException e) {
+            log.println("[askamerica-mcp] bad " + name + " '" + raw + "', using " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    private static long toolBudgetMillis(String tool) {
+        return STATS_TOOLS.contains(tool) ? statsCallBudgetSeconds() * 1000L : 0L;
+    }
+
+    /** The result for a call that was stopped before its handler ran (cancelled or out of
+     *  budget while queued): an ordinary isError result carrying the reason. */
+    private static ObjectNode stoppedResult(JsonNode id, CallScope.Stopped stopped) {
+        ArrayNode content = MAPPER.createArrayNode();
+        ObjectNode block = MAPPER.createObjectNode();
+        block.put("type", "text");
+        block.put("text", stopped.getMessage());
+        content.add(block);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("content", content);
+        body.put("isError", true);
+        return result(id, body);
     }
 
     /** Execute SQL on the single all-schemas connection, applying the same reserved-word
@@ -9402,6 +9246,72 @@ public class McpServer {
     /** As {@link #runSqlOn} but hands back the rows themselves, so a caller that needs to
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
+    /** One result-set row as JSON, typed the way {@code query} returns it. Shared with the
+     *  stats extraction so the rows it keeps compare equal to a re-run of the same SQL. */
+    static ObjectNode rowToJson(ResultSet rs, String[] names, int[] sqlTypes)
+            throws java.sql.SQLException {
+        ObjectNode row = MAPPER.createObjectNode();
+        for (int i = 0; i < names.length; i++) {
+            int t = sqlTypes[i];
+            if (t == java.sql.Types.INTEGER || t == java.sql.Types.SMALLINT
+                    || t == java.sql.Types.TINYINT) {
+                int v = rs.getInt(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.BIGINT) {
+                long v = rs.getLong(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.FLOAT || t == java.sql.Types.REAL) {
+                float v = rs.getFloat(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.DOUBLE || t == java.sql.Types.NUMERIC
+                    || t == java.sql.Types.DECIMAL) {
+                double v = rs.getDouble(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.BOOLEAN || t == java.sql.Types.BIT) {
+                boolean v = rs.getBoolean(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else {
+                Object val = rs.getObject(i + 1);
+                if (rs.wasNull() || val == null) row.putNull(names[i]);
+                else row.put(names[i], val.toString());
+            }
+        }
+        return row;
+    }
+
+    /**
+     * The first {@link ExclusionProbe#RELAXED_ROW_LIMIT} rows of a result, kept as JSON while a
+     * stats extraction reads it. This is what {@code query} would have returned for the same SQL,
+     * so the diagnostics' exclusion probe can compare against rows already in hand instead of
+     * running the caller's SQL a second time.
+     */
+    static final class RowSample {
+        private final String[] names;
+        private final int[] types;
+        private final ArrayNode rows = MAPPER.createArrayNode();
+
+        RowSample(ResultSet rs) throws java.sql.SQLException {
+            ResultSetMetaData meta = rs.getMetaData();
+            names = new String[meta.getColumnCount()];
+            types = new int[names.length];
+            for (int i = 0; i < names.length; i++) {
+                names[i] = meta.getColumnLabel(i + 1);
+                types[i] = meta.getColumnType(i + 1);
+            }
+        }
+
+        /** Keeps the current row while the sample is under its cap. */
+        void add(ResultSet rs) throws java.sql.SQLException {
+            if (rows.size() < ExclusionProbe.RELAXED_ROW_LIMIT) {
+                rows.add(rowToJson(rs, names, types));
+            }
+        }
+
+        ArrayNode rows() {
+            return rows;
+        }
+    }
+
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
         return runSqlRows(sql, limit, 0);
     }
@@ -9414,6 +9324,13 @@ public class McpServer {
      * page that could repeat or skip rows.
      */
     private static ArrayNode runSqlRows(String sql, int limit, int offset) throws Exception {
+        return runSqlRows(sql, limit, offset, queryTimeoutSeconds());
+    }
+
+    /** As above with an explicit statement timeout, for callers that must stay inside a
+     *  tighter bound than the per-query default (the diagnostics' exclusion probe). */
+    private static ArrayNode runSqlRows(String sql, int limit, int offset, int timeoutSeconds)
+            throws Exception {
         String effective = repairDateTruncDateArg(stripRedundantLimitClause(sql));
         String lower = effective.toLowerCase();
         if (offset > 0) {
@@ -9440,7 +9357,6 @@ public class McpServer {
         // at all appears to hang because it is queued behind the query that is still
         // running. Verified enforced on this path -- a 5s limit aborted a three-way cross
         // join at 5996ms -- so it is a real bound rather than an advisory one.
-        int timeoutSeconds = queryTimeoutSeconds();
         stmt.setQueryTimeout(timeoutSeconds);
         // Registered with the WATCHDOG above: setQueryTimeout has been observed not to fire on
         // a query wedged inside DuckDB's own engine (see ACTIVE_STATEMENTS' doc), so this is the
@@ -9461,33 +9377,7 @@ public class McpServer {
             }
             ArrayNode arr = MAPPER.createArrayNode();
             while (rs.next()) {
-                ObjectNode row = MAPPER.createObjectNode();
-                for (int i = 0; i < cols; i++) {
-                    int t = sqlTypes[i];
-                    if (t == java.sql.Types.INTEGER || t == java.sql.Types.SMALLINT
-                            || t == java.sql.Types.TINYINT) {
-                        int v = rs.getInt(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.BIGINT) {
-                        long v = rs.getLong(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.FLOAT || t == java.sql.Types.REAL) {
-                        float v = rs.getFloat(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.DOUBLE || t == java.sql.Types.NUMERIC
-                            || t == java.sql.Types.DECIMAL) {
-                        double v = rs.getDouble(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.BOOLEAN || t == java.sql.Types.BIT) {
-                        boolean v = rs.getBoolean(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else {
-                        Object val = rs.getObject(i + 1);
-                        if (rs.wasNull() || val == null) row.putNull(names[i]);
-                        else row.put(names[i], val.toString());
-                    }
-                }
-                arr.add(row);
+                arr.add(rowToJson(rs, names, sqlTypes));
             }
             rs.close();
             return arr;
@@ -9516,6 +9406,7 @@ public class McpServer {
             throw ex;
         } finally {
             ACTIVE_STATEMENTS.remove(stmt);
+            CallScope.unregisterCurrent(stmt);
             stmt.close();
         }
     }
@@ -12951,7 +12842,7 @@ public class McpServer {
     private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit, int offset) {
         try {
             return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit,
-                offset, relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
+                offset, McpServer::probeRun);
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above
@@ -12996,34 +12887,36 @@ public class McpServer {
     }
 
     /**
-     * Whether this SQL has the shape the find_recipe mandate names — a multi-step comparison
-     * rather than a lookup.
+     * Whether this SQL has the shape the find_recipe mandate names -- a rate, ratio, trend or
+     * cross-domain comparison rather than a lookup or a descriptive aggregate.
      *
-     * <p>Deliberately conservative. A warning that fires on every trivial SELECT becomes
-     * wallpaper and stops being read, which is the failure mode that makes an always-on notice
-     * worse than none. Three shapes qualify, all of which mean the caller is aggregating or
-     * relating rather than fetching:
+     * <p>Deliberately conservative. A warning that fires on every plain COUNT/SUM/MIN/MAX/AVG
+     * becomes wallpaper and teaches callers to ignore high-severity warnings, which is worse
+     * than none. Four shapes qualify:
      *
      * <ul>
-     *   <li>GROUP BY — any grouping is a comparison across the grouped dimension.
-     *   <li>a JOIN between two DIFFERENT schemas — a cross-domain join.
-     *   <li>an aggregate together with ORDER BY — a ranking.
+     *   <li>a JOIN between two DIFFERENT schemas -- a cross-domain join.
+     *   <li>a division -- a rate, share or ratio is being computed.
+     *   <li>CORR, STDDEV or REGR_* -- a statistic that implies a relationship or dispersion.
+     *   <li>GROUP BY a time column -- a trend across periods.
      * </ul>
      *
-     * <p>A plain filtered SELECT, a describe-style probe, or a single-row lookup does not fire.
+     * <p>A plain filtered SELECT, a single-table or single-schema aggregate or ranking, a
+     * describe-style probe, or a single-row lookup does not fire.
      */
-    private static boolean isMultiStepShape(String sql) {
+    static boolean isMultiStepShape(String sql) {
         if (sql == null) {
             return false;
         }
         String s = sql.toUpperCase(java.util.Locale.ROOT);
-        if (s.contains("GROUP BY")) {
+        if (s.contains("CORR(") || s.contains("STDDEV") || s.contains("REGR_")) {
             return true;
         }
-        boolean hasAggregate = s.contains("SUM(") || s.contains("AVG(")
-            || s.contains("COUNT(") || s.contains("MIN(") || s.contains("MAX(")
-            || s.contains("STDDEV") || s.contains("CORR(");
-        if (hasAggregate && s.contains("ORDER BY")) {
+        if (DIVISION.matcher(s).find()) {
+            return true;
+        }
+        java.util.regex.Matcher g = GROUP_BY_CLAUSE.matcher(s);
+        if (g.find() && TIME_COLUMN.matcher(g.group(1)).find()) {
             return true;
         }
         if (s.contains("JOIN")) {
@@ -13039,6 +12932,20 @@ public class McpServer {
         }
         return false;
     }
+
+    /** A division operator between two operands, ignoring the {@code *} of {@code COUNT(*)}. */
+    private static final java.util.regex.Pattern DIVISION =
+        java.util.regex.Pattern.compile("[A-Z0-9_)\\]'\"]\\s*/\\s*[A-Z0-9_(.'\"]");
+
+    /** The column list of a GROUP BY, up to the next clause. */
+    private static final java.util.regex.Pattern GROUP_BY_CLAUSE =
+        java.util.regex.Pattern.compile("GROUP\\s+BY\\s+(.*?)(?:\\bHAVING\\b|\\bORDER\\s+BY\\b"
+            + "|\\bLIMIT\\b|\\)|$)", java.util.regex.Pattern.DOTALL);
+
+    /** A grouping expression that is a period: year, quarter, month, date, fiscal period. */
+    private static final java.util.regex.Pattern TIME_COLUMN =
+        java.util.regex.Pattern.compile("YEAR|QUARTER|MONTH|DATE|PERIOD|FISCAL|VINTAGE|\\bFY\\b"
+            + "|DATE_TRUNC");
 
     /** Matches a {@code schema.table} qualifier in an uppercased statement. */
     private static final java.util.regex.Pattern SCHEMA_QUALIFIER =
@@ -13069,12 +12976,12 @@ public class McpServer {
         ObjectNode w = MAPPER.createObjectNode();
         w.put("type", "recipe_not_consulted");
         w.put("severity", "high");
-        w.put("note", "This query aggregates, ranks, or joins across schemas, and find_recipe "
+        w.put("note", "This query computes a rate, ratio, trend, or cross-schema join, and find_recipe "
             + "has not been called in this session. Call find_recipe now with a plain-words "
             + "topic for what you are computing, read what it returns, and re-run this query if "
             + "the recipe names a different method. An empty result means the catalog does not "
             + "cover this yet, not that the plan is sound. This warning repeats on every "
-            + "aggregate query until find_recipe is called once.");
+            + "such query until find_recipe is called once.");
         warnings.add(w);
     }
 
@@ -13167,23 +13074,45 @@ public class McpServer {
     /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped) {
-        return diagnoseStats(sql, covariates, covariateCols, n, totalRows, dropped, null);
+        return diagnoseStats(sql, covariates, covariateCols, n, totalRows, dropped, null, null);
     }
 
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped,
-            List<String> droppedLabels) {
+            List<String> droppedLabels, ArrayNode originalRows) {
         try {
-            return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
-                totalRows, dropped, droppedLabels,
-                relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
+            ObjectNode diagnostics = QuestionDiagnostics.forExtraction(sql, covariates,
+                covariateCols, n, totalRows, dropped, droppedLabels, McpServer::probeRun,
+                originalRows);
+            // A probe cancelled because the call itself was stopped must stop the call, not
+            // come back as a finished result with a diagnostic that quietly gave up.
+            CallScope.checkCurrent();
+            return diagnostics;
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
+            CallScope.checkCurrent();
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
             return QuestionDiagnostics.incomplete(reason);
+        }
+    }
+
+    /**
+     * Runs one of the diagnostics' own statements under the probe budget. A diagnostic annotates
+     * a result the call already has, so it must never cost more than the call: the statement gets
+     * {@link #probeTimeoutSeconds()}, and running out of it is reported to the caller as the reason
+     * the excluded units are not named rather than being dropped.
+     */
+    private static ArrayNode probeRun(String sql) throws Exception {
+        int seconds = probeTimeoutSeconds();
+        try {
+            return runSqlRows(sql, ExclusionProbe.RELAXED_ROW_LIMIT, 0, seconds);
+        } catch (java.sql.SQLException e) {
+            CallScope.checkCurrent();
+            throw new java.sql.SQLException("the diagnostic query did not finish within its "
+                + seconds + "s budget (" + compactErrorMessage(e) + "), so it was skipped", e);
         }
     }
 
@@ -13241,7 +13170,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels, ex.sampleRows));
     }
 
     /** {@link #statsResult(ObjectNode, String, List, StatsEngine.Extraction)} for the
@@ -13252,7 +13181,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels, ex.sampleRows));
     }
 
     /** Attaches sample-size bookkeeping every stats tool result shares — how many source
@@ -14280,13 +14209,32 @@ public class McpServer {
             + "been sent. A new data series typically takes 24-48 hours to become available, "
             + "so they should check back then.";
 
-    /** Relayed to the user after a defect report is recorded. */
-    private static final String DEFECT_REPORT_NOTICE =
-        "Tell the user: this value looks wrong, and a data-quality report has been sent for "
-            + "review. Fixes typically take 24-48 hours, so they should check back then, and "
-            + "treat the figure as unverified until it has been checked.";
+    /** Relayed to the user after a defect report is recorded, keyed by report category. */
+    private static final Map<String, String> DEFECT_NOTICES = defectNotices();
 
-    static String reportIssue(String type, String subject, String body) {
+    private static Map<String, String> defectNotices() {
+        Map<String, String> m = new LinkedHashMap<String, String>();
+        m.put("data_value",
+            "Tell the user: this value looks wrong, and a data-quality report has been sent for "
+                + "review. Fixes typically take 24-48 hours, so they should check back then, and "
+                + "treat the figure as unverified until it has been checked.");
+        m.put("metadata_coverage",
+            "Tell the user: the catalog or coverage information askamerica returned looks "
+                + "incomplete or wrong, and a report has been sent for review. Fixes typically "
+                + "take 24-48 hours, so they should check back then. This concerns what "
+                + "askamerica lists, not the accuracy of any figure already given.");
+        m.put("diagnostics",
+            "Tell the user: a warning or guidance message askamerica produced looks wrong, and a "
+                + "report has been sent for review. No figure is in question; fixes typically "
+                + "take 24-48 hours.");
+        m.put("tooling",
+            "Tell the user: an askamerica tool failed or was unavailable, and a report has been "
+                + "sent for review. No figure is in question; they can retry, and fixes "
+                + "typically take 24-48 hours.");
+        return java.util.Collections.unmodifiableMap(m);
+    }
+
+    static String reportIssue(String type, String category, String subject, String body) {
         HttpURLConnection c = null;
         try {
             String payload = "{"
@@ -14295,6 +14243,7 @@ public class McpServer {
                 + "\"session_id\":" + jsonStr(SESSION_ID) + ","
                 + "\"reported_at\":" + jsonStr(java.time.Instant.now().toString()) + ","
                 + "\"type\":" + jsonStr(type) + ","
+                + ("defect".equals(type) ? "\"category\":" + jsonStr(category) + "," : "")
                 + "\"subject\":" + jsonStr(subject) + ","
                 + "\"body\":" + jsonStr(body)
                 + "}";
@@ -14326,7 +14275,7 @@ public class McpServer {
                     return "Data request sent. Subject: " + subject + "\n" + DATA_REQUEST_NOTICE;
                 }
                 return "Data-quality report sent. Subject: " + subject + "\n"
-                    + DEFECT_REPORT_NOTICE;
+                    + DEFECT_NOTICES.get(category);
             }
             log.println("[askamerica-mcp] report_issue rejected: HTTP " + code);
             return "Could not record the issue (HTTP " + code
@@ -14617,45 +14566,8 @@ public class McpServer {
             log.println("[askamerica-mcp] set_telemetry persist failed: " + e.getMessage());
         }
         return enabled
-            ? "Telemetry enabled. Anonymous tool-call metrics will be shared."
+            ? "Telemetry on. Tool name, timing, row count, outcome, the SQL text and any error message will be shared."
             : "Telemetry disabled. No data will be shared.";
-    }
-
-    private static final java.util.regex.Pattern MEMORY_LIMIT_PATTERN =
-        java.util.regex.Pattern.compile("^[0-9]+(\\.[0-9]+)?\\s*(B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)?$",
-            java.util.regex.Pattern.CASE_INSENSITIVE);
-
-    /**
-     * Sets DuckDB's memory_limit/max_memory on the live connection immediately, and updates the
-     * calcite.duckdb.memoryLimit system property so connections opened later (e.g. after
-     * a TTL-driven reconnect) pick up the same value instead of reverting to the 8GB startup
-     * default.
-     */
-    private static String setMemoryLimit(String limit) throws Exception {
-        if (limit == null || !MEMORY_LIMIT_PATTERN.matcher(limit.trim()).matches()) {
-            return "Invalid memory limit '" + limit
-                + "' — expected a DuckDB size literal, e.g. '8GB' or '12GB'.";
-        }
-        String normalized = limit.trim();
-        System.setProperty("calcite.duckdb.memoryLimit", normalized);
-
-        // The shared pgwire connection isn't a CalciteConnection, and DuckDB's memory_limit
-        // there is server-wide, shared across every connected client.
-        if (PgwireGovDataConnector.isEnabled()) {
-            return "set_memory_limit is not available while ASKAMERICA_PGWIRE_MODE is enabled "
-                + "(this engine is a thin client of a shared pgwire-govdata server; "
-                + "set its memory limit directly instead).";
-        }
-
-        Connection conn = getCatalogConnection();
-        org.apache.calcite.jdbc.CalciteConnection calciteConn =
-            conn.unwrap(org.apache.calcite.jdbc.CalciteConnection.class);
-        org.apache.calcite.adapter.file.duckdb.DuckDBCatalogMaintenance.setMemoryLimit(
-            calciteConn, normalized);
-
-        log.println("[askamerica-mcp] memory_limit set to " + normalized);
-        return "DuckDB memory limit set to " + normalized + " on the live connection, and will "
-            + "apply to any new connections opened after this.";
     }
 
     private static boolean loadTelemetryOptIn() {
@@ -14680,7 +14592,7 @@ public class McpServer {
     }
 
     /**
-     * Runaway guard. Telemetry is already opt-in, and a normal session sends tens of
+     * Runaway guard. Telemetry is on by default (opt-out), and a normal session sends tens of
      * events, so this is not a volume control — it is a ceiling so a client stuck in a
      * loop cannot turn one session into unbounded requests. Failures are exempt: an
      * error is the event worth having, and a session that has gone wrong is exactly when

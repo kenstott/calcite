@@ -131,6 +131,7 @@ final class StatsEngine {
                 for (int i = 0; i < columns.length; i++) {
                     charCols[i] = isCharColumn(md, idx[i]);
                 }
+                McpServer.RowSample sample = new McpServer.RowSample(rs);
                 List<double[]> rows = new ArrayList<>();
                 int totalRows = 0;
                 int droppedForNull = 0;
@@ -138,6 +139,7 @@ final class StatsEngine {
                 List<String> droppedLabels = new ArrayList<>();
                 Set<String> usedLabels = new LinkedHashSet<>();
                 while (rs.next()) {
+                    sample.add(rs);
                     totalRows++;
                     if (totalRows > STATS_MAX_ROWS) {
                         throw new SQLException("Query returned more than " + STATS_MAX_ROWS
@@ -164,6 +166,7 @@ final class StatsEngine {
                 }
                 Extraction ex = new Extraction(columns, rows.toArray(new double[0][]),
                     totalRows, droppedForNull, droppedLabels);
+                ex.sampleRows = sample.rows();
                 ex.setUsedLabels(labelIdx > 0 ? md.getColumnLabel(labelIdx) : null, usedLabels);
                 return ex;
             } finally {
@@ -201,6 +204,7 @@ final class StatsEngine {
                 for (int i = 0; i < numericColumns.length; i++) {
                     charCols[i] = isCharColumn(md, numIdx[i]);
                 }
+                McpServer.RowSample sample = new McpServer.RowSample(rs);
                 List<double[]> rows = new ArrayList<>();
                 List<String[]> labelRows = new ArrayList<>();
                 int totalRows = 0;
@@ -208,6 +212,7 @@ final class StatsEngine {
                 List<String> droppedLabels = new ArrayList<>();
                 Set<String> usedLabels = new LinkedHashSet<>();
                 while (rs.next()) {
+                    sample.add(rs);
                     totalRows++;
                     if (totalRows > STATS_MAX_ROWS) {
                         throw new SQLException("Query returned more than " + STATS_MAX_ROWS
@@ -253,6 +258,7 @@ final class StatsEngine {
                     rows.toArray(new double[0][]), labelColumns,
                     labelRows.toArray(new String[0][]), totalRows, droppedForNull,
                     droppedLabels);
+                ex.sampleRows = sample.rows();
                 ex.setUsedLabels(labelColumns.length > 0 ? labelColumns[0] : null, usedLabels);
                 return ex;
             } finally {
@@ -272,6 +278,9 @@ final class StatsEngine {
         final int totalRows;
         final int droppedForNull;
         final List<String> droppedLabels;
+        /** The first rows of the SQL's result as {@code query} would return them, kept so the
+         *  diagnostics can compare against them instead of running the SQL again. */
+        com.fasterxml.jackson.databind.node.ArrayNode sampleRows;
         /** Column the used labels come from; null when the result had none. */
         String usedLabelColumn;
         /** Distinct labels of the rows that survived complete-case filtering. */
@@ -531,6 +540,9 @@ final class StatsEngine {
         final int droppedForNull;
         /** Labels (or row numbers) of the first {@link #MAX_DROPPED_LABELS} dropped rows. */
         final List<String> droppedLabels;
+        /** The first rows of the SQL's result as {@code query} would return them, kept so the
+         *  diagnostics can compare against them instead of running the SQL again. */
+        com.fasterxml.jackson.databind.node.ArrayNode sampleRows;
         /** Column the used labels come from; null when the result had no label column. */
         String usedLabelColumn;
         /** Distinct labels of the rows that survived complete-case filtering. */

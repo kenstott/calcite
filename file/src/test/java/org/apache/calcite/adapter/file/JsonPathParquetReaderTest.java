@@ -247,34 +247,30 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
    * Asserts that FileReaderException is a plain checked Exception with no JDBC vendor info,
    * and that it is not a {@link java.sql.SQLException}.
    */
-  private static void assertPlainException(FileReaderException ex) {
+  private static void assertSqlState(FileReaderException ex, String sqlState) {
     assertNotNull(ex, "a FileReaderException must be thrown");
-    assertTrue(Exception.class.isInstance(ex), "FileReaderException extends Exception");
-    assertFalse(RuntimeException.class.isInstance(ex), "it is a checked exception, not unchecked");
-    assertFalse(java.sql.SQLException.class.isInstance(ex),
-        "CURRENT behavior: it is NOT a SQLException (no SQLState/vendor code)");
+    assertTrue(java.sql.SQLException.class.isInstance(ex), "FileReaderException is a SQLException");
+    assertEquals(sqlState, ex.getSQLState(), "the failure mode's SQLState");
   }
 
-  @Test @Tag("FILE-151") void fileReaderExceptionIsPackagePrivateCheckedException() {
-    // Confirms the class shape the other assertions rely on: same package, extends Exception.
+  @Test @Tag("FILE-151") void fileReaderExceptionIsSqlException() {
+    // Confirms the class shape the other assertions rely on: same package, extends SQLException.
     assertEquals("org.apache.calcite.adapter.file",
         FileReaderException.class.getPackage().getName(),
         "FileReaderException lives in this package");
-    assertEquals(Exception.class, FileReaderException.class.getSuperclass(),
-        "FileReaderException extends java.lang.Exception directly");
-    assertFalse(java.sql.SQLException.class.isAssignableFrom(FileReaderException.class),
-        "FileReaderException is not a SQLException");
+    assertEquals(java.sql.SQLException.class, FileReaderException.class.getSuperclass(),
+        "FileReaderException extends java.sql.SQLException directly");
   }
 
   // The deprecated FileReader is the subject of this test.
   @SuppressWarnings("deprecation")
-  @Test @Tag("FILE-151") void missingFileThrowsPlainException(@TempDir Path dir) {
+  @Test @Tag("FILE-151") void missingFileIsFileAccessError(@TempDir Path dir) {
     File missing = dir.resolve("does-not-exist.html").toFile();
     Source source = Sources.of(missing);
     FileReader reader = new FileReader(source);
     FileReaderException ex = assertThrows(FileReaderException.class, reader::refresh,
         "a missing file must throw FileReaderException");
-    assertPlainException(ex);
+    assertSqlState(ex, FileReaderException.FILE_ACCESS);
     assertTrue(ex.getMessage().contains("File not found"),
         "message identifies the missing file (got: " + ex.getMessage() + ")");
   }
@@ -290,7 +286,7 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
 
   // The deprecated FileReader is the subject of this test.
   @SuppressWarnings("deprecation")
-  @Test @Tag("FILE-151") void noMatchSelectorThrowsPlainException(@TempDir Path dir) throws Exception {
+  @Test @Tag("FILE-151") void noMatchSelectorIsTableNotFound(@TempDir Path dir) throws Exception {
     String html = "<html><body><table><tr><th>a</th></tr><tr><td>1</td></tr></table></body></html>";
     File f = dir.resolve("doc.html").toFile();
     Files.write(f.toPath(), html.getBytes(StandardCharsets.UTF_8));
@@ -298,14 +294,14 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
     FileReader reader = new FileReader(Sources.of(f), "table#nonexistent");
     FileReaderException ex = assertThrows(FileReaderException.class, reader::refresh,
         "a selector matching nothing must throw");
-    assertPlainException(ex);
+    assertSqlState(ex, FileReaderException.TABLE_NOT_FOUND);
     assertTrue(ex.getMessage().contains("No HTML elements found"),
         "message reports the empty selection (got: " + ex.getMessage() + ")");
   }
 
   // The deprecated FileReader is the subject of this test.
   @SuppressWarnings("deprecation")
-  @Test @Tag("FILE-151") void nonTableElementSelectedThrowsPlainException(@TempDir Path dir)
+  @Test @Tag("FILE-151") void nonTableElementSelectedIsConfigurationError(@TempDir Path dir)
       throws Exception {
     // The selector matches exactly one element that is not a <table>.
     String html = "<html><body><div id=\"box\">not a table</div>"
@@ -316,14 +312,14 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
     FileReader reader = new FileReader(Sources.of(f), "div#box");
     FileReaderException ex = assertThrows(FileReaderException.class, reader::refresh,
         "a selected non-<table> element must throw");
-    assertPlainException(ex);
+    assertSqlState(ex, FileReaderException.CONFIGURATION);
     assertTrue(ex.getMessage().contains("not a table"),
         "message reports the wrong element type (got: " + ex.getMessage() + ")");
   }
 
   // The deprecated FileReader is the subject of this test.
   @SuppressWarnings("deprecation")
-  @Test @Tag("FILE-151") void noTablesFoundThrowsPlainException(@TempDir Path dir) throws Exception {
+  @Test @Tag("FILE-151") void noTablesFoundIsTableNotFound(@TempDir Path dir) throws Exception {
     // No selector -> getBestTable; a document with no <table> at all throws "no tables found".
     String html = "<html><body><p>nothing here</p></body></html>";
     File f = dir.resolve("notables.html").toFile();
@@ -332,17 +328,14 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
     FileReader reader = new FileReader(Sources.of(f));
     FileReaderException ex = assertThrows(FileReaderException.class, reader::refresh,
         "a document with no tables must throw");
-    assertPlainException(ex);
+    assertSqlState(ex, FileReaderException.TABLE_NOT_FOUND);
     assertEquals("no tables found", ex.getMessage(), "exact 'no tables found' message");
   }
 
   /**
-   * C-11 (RESOLVED contradiction, code-wrong): the INTENDED future is that FileReaderException
-   * becomes a {@link java.sql.SQLException} carrying documented SQLStates. This is disabled because
-   * the current code throws a plain checked Exception with no vendor info — see the active tests
-   * above which pin that present behavior. Enable this once the code fix lands.
+   * C-11 (resolved, code-wrong): FileReaderException is a {@link java.sql.SQLException} carrying
+   * the documented SQLState of its failure mode.
    */
-  @Disabled("C-11: FileReaderException should be a SQLException with SQLState — pending code fix")
   // The deprecated FileReader is the subject of this test.
   @SuppressWarnings("deprecation")
   @Test @Tag("FILE-151") void targetContractIsSqlExceptionWithSqlState(@TempDir Path dir)
@@ -352,10 +345,11 @@ public class JsonPathParquetReaderTest extends BaseFileTest {
     Files.write(f.toPath(), html.getBytes(StandardCharsets.UTF_8));
 
     FileReader reader = new FileReader(Sources.of(f));
-    // TARGET (not yet active): the thrown exception is a SQLException carrying a non-null SQLState.
+    // The thrown exception is a SQLException carrying the table-not-found SQLState.
     java.sql.SQLException ex =
         assertThrows(java.sql.SQLException.class, reader::refresh,
-            "future: FileReader throws a SQLException");
-    assertNotNull(ex.getSQLState(), "future: a documented SQLState is present");
+            "FileReader throws a SQLException");
+    assertEquals(FileReaderException.TABLE_NOT_FOUND, ex.getSQLState(),
+        "a document with no tables is table-not-found");
   }
 }

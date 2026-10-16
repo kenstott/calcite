@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
  * server's discovery tools) get complete metadata instantly.
  *
  * <p>Includes {@code partitionedTables}, {@code tables} and {@code views} — unlike
- * {@link GovDataUtils#loadTableDefinitions} which merges only the first two.
+ * {@code GovDataUtils.loadTableDefinitions}, which merges only the first two.
  */
 public final class GovDataCatalog {
 

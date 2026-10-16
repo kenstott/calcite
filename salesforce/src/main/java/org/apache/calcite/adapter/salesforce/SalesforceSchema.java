@@ -24,9 +24,12 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -39,6 +42,7 @@ public class SalesforceSchema extends AbstractSchema {
 
   private final SalesforceConnection connection;
   private final boolean lowercaseAliases;
+  private final Set<String> tables;
   private final LoadingCache<String, SalesforceConnection.SObjectDescription> descriptionCache;
   private Map<String, Table> tableMap;
 
@@ -52,14 +56,18 @@ public class SalesforceSchema extends AbstractSchema {
    *     runs
    * @param describeCacheTimeToLive how long a describe result on disk is used
    *     for; zero keeps nothing on disk
+   * @param tables the sObjects served, matched ignoring case; empty serves
+   *     every queryable sObject
    */
   public SalesforceSchema(SalesforceConnection connection, int cacheMaxSize,
-      boolean lowercaseAliases, Path describeCacheDirectory, Duration describeCacheTimeToLive) {
+      boolean lowercaseAliases, Path describeCacheDirectory, Duration describeCacheTimeToLive,
+      Set<String> tables) {
     final DescribeCache describeCache =
         new DescribeCache(describeCacheDirectory, connection.describeScope(),
             describeCacheTimeToLive);
     this.connection = connection;
     this.lowercaseAliases = lowercaseAliases;
+    this.tables = tables;
     this.descriptionCache = CacheBuilder.newBuilder()
         .maximumSize(cacheMaxSize)
         .expireAfterWrite(1, TimeUnit.HOURS)
@@ -84,21 +92,56 @@ public class SalesforceSchema extends AbstractSchema {
       List<SalesforceConnection.SObjectBasicInfo> sObjects = connection.listSObjects();
       ImmutableMap.Builder<String, Table> builder = ImmutableMap.builder();
 
-      for (SalesforceConnection.SObjectBasicInfo sObject : sObjects) {
-        if (sObject.queryable) {
-          builder.put(sObject.name, new SalesforceTable(this, sObject.name));
+      for (String name : served(sObjects)) {
+        builder.put(name, new SalesforceTable(this, name));
 
-          // Also add with lowercase name for case-insensitive matching
-          String lowerName = sObject.name.toLowerCase(Locale.ROOT);
-          if (lowercaseAliases && !lowerName.equals(sObject.name)) {
-            builder.put(lowerName, new SalesforceTable(this, sObject.name));
-          }
+        // Also add with lowercase name for case-insensitive matching
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        if (lowercaseAliases && !lowerName.equals(name)) {
+          builder.put(lowerName, new SalesforceTable(this, name));
         }
       }
+
+      // Served whatever 'tables' names, for picking the sObjects to name
+      builder.put(ListingTables.OBJECTS, new ListingTables.Objects(this));
+      builder.put(ListingTables.COLUMNS, new ListingTables.Columns(this));
 
       return builder.build();
     } catch (IOException e) {
       LOGGER.error("Failed to list Salesforce sObjects", e);
+      throw new RuntimeException("Failed to list Salesforce sObjects", e);
+    }
+  }
+
+  /** Names of the served sObjects: every queryable one, or those named in {@code tables}. */
+  private List<String> served(List<SalesforceConnection.SObjectBasicInfo> sObjects) {
+    final List<String> names = new ArrayList<>();
+    final Map<String, String> byName = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    for (SalesforceConnection.SObjectBasicInfo sObject : sObjects) {
+      byName.put(sObject.name, sObject.name);
+      if (tables.isEmpty()) {
+        names.add(sObject.name);
+      }
+    }
+    if (tables.isEmpty()) {
+      return names;
+    }
+    for (String table : tables) {
+      final String name = byName.get(table);
+      if (name == null) {
+        throw new IllegalArgumentException("'tables' names '" + table
+            + "', which is not a queryable sObject in this org");
+      }
+      names.add(name);
+    }
+    return names;
+  }
+
+  /** Every queryable sObject in the org, from the sObject list. */
+  List<SalesforceConnection.SObjectBasicInfo> queryableSObjects() {
+    try {
+      return connection.listSObjects();
+    } catch (IOException e) {
       throw new RuntimeException("Failed to list Salesforce sObjects", e);
     }
   }

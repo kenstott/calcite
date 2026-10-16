@@ -1,5 +1,159 @@
 # Changelog
 
+## [0.116.1](https://github.com/kenstott/calcite/compare/engine-v0.116.0...engine-v0.116.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **askamerica:** host cancellation and a time budget stop stats calls; diagnostics reuse extracted rows ([#954](https://github.com/kenstott/calcite/issues/954)) ([39cda4d](https://github.com/kenstott/calcite/commit/39cda4d825854c0fe050bffab4be1da7e6c7a3b0))
+
+## [0.116.0](https://github.com/kenstott/calcite/compare/engine-v0.115.0...engine-v0.116.0) (2026-10-16)
+
+
+### Features
+
+* **fiscal:** view usaspending_assistance_by_county - federal assistance obligations by county x Assistance Listing x fiscal year ([9972162](https://github.com/kenstott/calcite/commit/9972162791a7210bfe29bb2a5f7d1c4f7e053c14))
+* **salesforce:** a tables operand names the sObjects served; two listing tables list the org's ([#561](https://github.com/kenstott/calcite/issues/561)) ([80cbc86](https://github.com/kenstott/calcite/commit/80cbc86321fc702f26df89704ba8c8861d57824e))
+* **sec:** the feed store answers FilingSummary.xml as absent for a held filing with no XBRL ([f92342a](https://github.com/kenstott/calcite/commit/f92342ad4f3fad0a5462c3cefeae871c03945f3a))
+
+
+### Bug Fixes
+
+* **askamerica:** the Windows data-server bundle no longer carries symlinks ([857bd59](https://github.com/kenstott/calcite/commit/857bd59afe02f0f834166b741513424ea8af2446))
+* **file:** schema loaders that start during the Iceberg schema cache check wait for it ([3f6c7f9](https://github.com/kenstott/calcite/commit/3f6c7f9e08a824b679bea1bf6684a1525f8b2adb))
+
+## [0.115.0](https://github.com/kenstott/calcite/compare/engine-v0.114.0...engine-v0.115.0) (2026-10-16)
+
+
+### Features
+
+* **fiscal:** federal awards - USAspending assistance transactions and the Federal Audit Clearinghouse, loaded in bulk ([a3dc240](https://github.com/kenstott/calcite/commit/a3dc2400b88f6c83f13dba42eb8d4ba29c19b4f5))
+
+
+### Bug Fixes
+
+* **askamerica:** the setup window's data-server install no longer dies with IllegalAccessError ([15ae6e1](https://github.com/kenstott/calcite/commit/15ae6e100d98c5bbe7a3085070658e4ad699da51))
+* **askamerica:** the wizard no longer exits when Claude Desktop holds the cached engine jar ([937ff17](https://github.com/kenstott/calcite/commit/937ff17fc3602a7812c11124bc1bb6d83a918938))
+* **file,core:** file-reader and not-found errors carry their SQLStates ([#534](https://github.com/kenstott/calcite/issues/534)) ([#560](https://github.com/kenstott/calcite/issues/560)) ([cd28010](https://github.com/kenstott/calcite/commit/cd2801065f3206dc73f5bb12c48ad554e014bde0))
+
+## [0.114.0](https://github.com/kenstott/calcite/compare/engine-v0.113.1...engine-v0.114.0) (2026-10-15)
+
+
+### Features
+
+* **askamerica:** the setup window animates while the data server installs ([adebd41](https://github.com/kenstott/calcite/commit/adebd41c0f73d643b579db7edb0938988eb5b6a1))
+
+
+### Bug Fixes
+
+* **file:** an exact COUNT(DISTINCT) stays exact; HLL answers APPROX_COUNT_DISTINCT ([#535](https://github.com/kenstott/calcite/issues/535)) ([#556](https://github.com/kenstott/calcite/issues/556)) ([340b289](https://github.com/kenstott/calcite/commit/340b2899e9c4d073189929e56a3898e2bc69cec9))
+
+## [0.113.1](https://github.com/kenstott/calcite/compare/engine-v0.113.0...engine-v0.113.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **askamerica:** the installed app crashed at startup — the launcher jar lacked a class it uses ([6962870](https://github.com/kenstott/calcite/commit/696287003d81201b0de1272843b48a8166872c78))
+
+## [0.113.0](https://github.com/kenstott/calcite/compare/engine-v0.112.1...engine-v0.113.0) (2026-10-15)
+
+
+### Features
+
+* **govdata/ops:** private jars are deleted once nothing uses them; the pinned-jar cleanup works again ([e29b5fb](https://github.com/kenstott/calcite/commit/e29b5fbc456ec539326ba9bdf3d80a12e2e7355c))
+
+
+### Bug Fixes
+
+* **askamerica:** the tool-call history survives an engine restart ([449ddd9](https://github.com/kenstott/calcite/commit/449ddd9a0709e614c924d426528db2e8c0bb5427))
+
+## [0.112.1](https://github.com/kenstott/calcite/compare/engine-v0.112.0...engine-v0.112.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** the data-server install no longer looks the release up through the GitHub API ([e784ea3](https://github.com/kenstott/calcite/commit/e784ea3f3d3fecdc2f8102d7934409e3d0afd104))
+* **govdata:** the doc comments the thin engine's javadoc reads have no errors ([#551](https://github.com/kenstott/calcite/issues/551)) ([42c5f68](https://github.com/kenstott/calcite/commit/42c5f680fb9b8f54f7c1d5f08c291295cf12a445))
+
+## [0.112.0](https://github.com/kenstott/calcite/compare/engine-v0.111.2...engine-v0.112.0) (2026-10-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **askamerica:** a thin engine with one mode - no govdata, no in-process engine (ASKAM-008, ASKAM-009)
+
+### Features
+
+* **askamerica:** a thin engine with one mode - no govdata, no in-process engine (ASKAM-008, ASKAM-009) ([59a30e4](https://github.com/kenstott/calcite/commit/59a30e42f44fa3e15ee331a3c48ccfb511184aec))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** the pgwire-govdata server's state directory is under ~/.askamerica ([1cae5df](https://github.com/kenstott/calcite/commit/1cae5df8cd3a3fc127c0056aa57743eadaf8deb7))
+* **askamerica:** the engine jar carries no embedder (ASKAM-007) ([55f8569](https://github.com/kenstott/calcite/commit/55f8569021ff154977e7befb1e601b98bfeb02e5))
+* **pgwire-calcite:** unquoted identifiers fold to lower in normalize.py, dialect.py and the Calcite connection ([#946](https://github.com/kenstott/calcite/issues/946)) ([db70f2c](https://github.com/kenstott/calcite/commit/db70f2c4f5267778e45dac50dea55a2fa4042d9d))
+
+## [0.111.2](https://github.com/kenstott/calcite/compare/engine-v0.111.1...engine-v0.111.2) (2026-10-15)
+
+
+### Bug Fixes
+
+* **askamerica-engine:** unquoted identifiers are lower case in the pgwire-govdata server ([#946](https://github.com/kenstott/calcite/issues/946)) ([c78d3b6](https://github.com/kenstott/calcite/commit/c78d3b6ccd6745290e3e073eb8294e4a51362b66))
+* **govdata/ops:** fetch-edgar-feed.sh gives the unpacker a 3 GB heap ([73b38d3](https://github.com/kenstott/calcite/commit/73b38d3df32b4f5482a10993f04ef6552f4e17d7))
+
+## [0.111.1](https://github.com/kenstott/calcite/compare/engine-v0.111.0...engine-v0.111.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **govdata:** seed packaging reads the per-schema tracker layout and the seed-schema task sets its staging directory ([4d5c1a3](https://github.com/kenstott/calcite/commit/4d5c1a33e3b37f77777cf3836a13572b8b87651d))
+* **govdata:** the seed build creates the schema cache from the live tables ([ebe246f](https://github.com/kenstott/calcite/commit/ebe246f8f92683156079eb5c34139d8511ecc5e5))
+
+## [0.111.0](https://github.com/kenstott/calcite/compare/engine-v0.110.0...engine-v0.111.0) (2026-10-14)
+
+
+### Features
+
+* **askamerica-engine:** the server never downloads pgwire-govdata; an older one runs with an 'out of date' notice ([224039c](https://github.com/kenstott/calcite/commit/224039c64536aeb355fa78db3bd70e363753e993))
+* **askamerica-engine:** the setup window installs the data server, with visible progress ([659f2fd](https://github.com/kenstott/calcite/commit/659f2fdb13533913856f0235a034b4a9e229c100))
+* **govdata/ops:** fetch-edgar-feed.sh resumes, runs niced, and points at the large disk ([68ef9de](https://github.com/kenstott/calcite/commit/68ef9de32eb444421a9f1920dbb39963129b1480))
+* **govdata/ops:** fetch-edgar-feed.sh runs PARALLEL=N days at once ([79e43de](https://github.com/kenstott/calcite/commit/79e43de844bc82e77f6cf467614d52c936c35e89))
+* **govdata/ops:** historical windows fetch SEC's submissions.zip and use it ([0b06cee](https://github.com/kenstott/calcite/commit/0b06ceedbd1155641aef9ac26c2bbdf5cde71dd2))
+* **govdata/sec:** answer per-filer submissions JSON from SEC's nightly submissions.zip ([06b7d99](https://github.com/kenstott/calcite/commit/06b7d996be23fb87b9d2742bef58eb34be3edf27))
+* **govdata/sec:** feed unpacker skips exhibits and linkbases nothing reads ([71dd9d5](https://github.com/kenstott/calcite/commit/71dd9d5cc5ab387e32f7a30c6e6cde2dfc659c0e))
+* **govdata/sec:** feed unpacker waits and retries on HTTP 429 ([07df298](https://github.com/kenstott/calcite/commit/07df29892732af9fd48c7e44d297db0a1aa9127e))
+* **govdata/sec:** read 13F information tables from a local SEC data set instead of fetching them ([fed1bca](https://github.com/kenstott/calcite/commit/fed1bcac6aec268720314b10c2b2227f92c1ea45))
+* **govdata/sec:** read filing documents from EDGAR's daily feed instead of fetching them ([125566c](https://github.com/kenstott/calcite/commit/125566c466d09c8680303195e3586caba905ad2e))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** the shared pgwire-govdata server gets a stable catalog and working directory on every spawn ([20ff072](https://github.com/kenstott/calcite/commit/20ff072b59ea6d1a3eef8b48b2665ae5627cebc1))
+* **askamerica-engine:** Windows data tools report an occupied port and bundle install progress, and stale server stamp files no longer force a respawn on every call ([30272b6](https://github.com/kenstott/calcite/commit/30272b6e21670ddb8e4d5f7db0f2b6e4efb22662))
+* **askamerica:** diagnostics no longer infer state grain from a state column on an entity ranking ([3991d73](https://github.com/kenstott/calcite/commit/3991d730df6ce0817f6eadbfa54581c629a9f79e))
+* **askamerica:** explicit_exclusion warning is dropped when the unfiltered query returns the same rows ([d7d4834](https://github.com/kenstott/calcite/commit/d7d48340f8d9c788c57a15c55e2cbfdcf5e9b4f9))
+* **askamerica:** recipe_not_consulted no longer fires on plain descriptive aggregates ([366bcb7](https://github.com/kenstott/calcite/commit/366bcb77c7fb1067674f74eefd56e7c4bf9cb528))
+* **askamerica:** report_issue defect confirmation depends on a required category ([11613f4](https://github.com/kenstott/calcite/commit/11613f4853aa779f8360821359804c4336d436e5))
+* **file,govdata:** no temporary file goes to java.io.tmpdir (REQ-1992, part 2) ([#531](https://github.com/kenstott/calcite/issues/531)) ([89b647a](https://github.com/kenstott/calcite/commit/89b647aec8cc0438677f6728b51dd75e1f7da804))
+* **file:** a file extension is matched regardless of case ([#536](https://github.com/kenstott/calcite/issues/536)) ([#541](https://github.com/kenstott/calcite/issues/541)) ([b0b4cbf](https://github.com/kenstott/calcite/commit/b0b4cbfdc1723423879ad286d0aa739b87249e26))
+* **file:** a file schema is recursive by default and reads "true" as true ([#532](https://github.com/kenstott/calcite/issues/532)) ([#540](https://github.com/kenstott/calcite/issues/540)) ([2f500ac](https://github.com/kenstott/calcite/commit/2f500acb58b0b629de4db0f9c26f99547802ff2c))
+* **file:** CSV inference reads dot-less scientific notation as DOUBLE ([#533](https://github.com/kenstott/calcite/issues/533)) ([#546](https://github.com/kenstott/calcite/issues/546)) ([0938e49](https://github.com/kenstott/calcite/commit/0938e49e1e7adb5f1c8d825601711bd9c721ece4))
+* **file:** every file the adapter writes goes under the schema's base directory (REQ-1992, part 1) ([#529](https://github.com/kenstott/calcite/issues/529)) ([30abed0](https://github.com/kenstott/calcite/commit/30abed0aecb2e90339bee8e16769a534ee2fe0d1))
+* **file:** Iceberg 1.5.2, where a lock release no longer fails a commit that took effect ([#509](https://github.com/kenstott/calcite/issues/509)) ([e453447](https://github.com/kenstott/calcite/commit/e453447e47083910bc010d3b3d55f36275837dde))
+* **govdata/econ:** retry FRED 500/502/504 so one gateway error cannot abort a year's commit ([9725de4](https://github.com/kenstott/calcite/commit/9725de4cccde38eeb9ded38996723740a63c1bbc))
+* **govdata/sec:** feed unpacker backs off 2 minutes per attempt on HTTP 429 ([d0a7bda](https://github.com/kenstott/calcite/commit/d0a7bda113c457ea78d3cc6e3e4efd3dc12eacbd))
+* **govdata/sec:** feed unpacker skips closed days the bucket answers with 403 AccessDenied ([0fda764](https://github.com/kenstott/calcite/commit/0fda7646b23465c5b045b38269702f42b7d4e177))
+* **govdata/sec:** read prefixed 13F information tables, keep otherManager rows, store value in thousands ([eadb32d](https://github.com/kenstott/calcite/commit/eadb32dcd85e868a746677a6bf674247d997cd17))
+* **govdata/sec:** the bulk-file log line uses java.time, not java.util.Date ([#543](https://github.com/kenstott/calcite/issues/543)) ([8ee4832](https://github.com/kenstott/calcite/commit/8ee4832578d0375150843058b681ef06b9c9b658))
+* **govdata/sec:** the XML entity filter no longer changes text the parser reads correctly ([80b8637](https://github.com/kenstott/calcite/commit/80b8637b7d1390700513b5653fe2e6f7c2a64d3b))
+* **pgwire:** information_schema answers for every adapter ([#518](https://github.com/kenstott/calcite/issues/518)) ([#528](https://github.com/kenstott/calcite/issues/528)) ([f4f6b14](https://github.com/kenstott/calcite/commit/f4f6b149894e4c3463c86992e5a46d907adf5e08))
+* **release:** require trino-servicenow-plugin.zip only from 0.110.1, the first release that builds it ([81cf7e4](https://github.com/kenstott/calcite/commit/81cf7e4e292bf3dcf211076478a095fa9d5f33f2))
+
+
+### Performance Improvements
+
+* **govdata/ref:** ChunkOrganizer scans only rows that differ from the last-swept snapshot ([24ba9dd](https://github.com/kenstott/calcite/commit/24ba9dd918fa72b5c5a17b724490dbe4a05fac81))
+
 ## [0.110.0](https://github.com/kenstott/calcite/compare/engine-v0.109.0...engine-v0.110.0) (2026-10-12)
 
 

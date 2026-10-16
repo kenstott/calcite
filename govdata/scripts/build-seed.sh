@@ -22,7 +22,7 @@
 # phases:
 #   1. GENERATE — connect every govdata schema against S3 (via model-verify.sh) into a CLEAN,
 #      dedicated staging operating directory, so GovDataDriver builds a pristine
-#      <staging>/.duckdb/govdata.duckdb (all schemas) + <staging>/.aperio/*/.conversions.json.
+#      <staging>/.duckdb/govdata.duckdb (all schemas) + <staging>/<schema>/.aperio/<schema>/.conversions.json.
 #   2. PACKAGE — ./gradlew :govdata:bundleGovdataSeed zips those into
 #      govdata/src/main/resources/duckdb/seed/{govdata-seed.zip,govdata-seed.version}.
 #
@@ -139,7 +139,7 @@ echo "Warehouse:             $GOVDATA_PARQUET_DIR"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-VERIFY_ARGS=(--no-probes --no-dup --publish-schema-cache)
+VERIFY_ARGS=(--no-probes --no-dup --read-all-tables --publish-schema-cache)
 if [[ -n "$SOURCE" ]]; then
     VERIFY_ARGS+=(--source "$SOURCE")
     echo "WARNING: --source given; the resulting seed is PARTIAL (missing schemas cold-start normally)."
@@ -177,7 +177,7 @@ TMPDIR_STAGING="$STAGING/tmp"
 mkdir -p "$TMPDIR_STAGING"
 # -Dgovdata.seed.build=true: this is the one place a govdata catalog is built by discovery.
 # Without it GovDataDriver refuses to connect from a jar that carries no seed.
-export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING -Dcalcite.file.staging.directory=$TMPDIR_STAGING -Dgovdata.seed.build=true"
+export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING -Dcalcite.file.staging.directory=$TMPDIR_STAGING -Dgovdata.seed.build=true -Diceberg.schema.cache.ignorePublished=true"
 
 # GENERATE must build every view fresh from the CURRENT schema YAML. GovDataSeedInstaller
 # (invoked by GovDataDriver on first connect) extracts the classpath jar's OWN bundled seed

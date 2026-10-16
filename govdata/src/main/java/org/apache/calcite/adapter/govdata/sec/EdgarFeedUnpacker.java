@@ -44,6 +44,7 @@ public final class EdgarFeedUnpacker {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EdgarFeedUnpacker.class);
   private static final String USER_AGENT = "Apache Calcite SEC Adapter apache-calcite@apache.org";
+  private static final int MAX_429_ATTEMPTS = 8;
   private static final long MAX_ENTRY_BYTES = 200L * 1024 * 1024;
 
   /** What one pass wrote. */
@@ -124,7 +125,7 @@ public final class EdgarFeedUnpacker {
       index.append("{\"name\":\"").append(json(d.filename)).append("\",\"type\":\"")
           .append(json(d.type == null ? "" : d.type)).append("\",\"size\":\"")
           .append(d.content == null ? 0 : d.content.length).append("\"}");
-      if (d.content != null && !isRenderingOnly(d.filename)) {
+      if (d.content != null && !isRenderingOnly(d.filename) && isRead(d.type)) {
         File target = new File(accDir, d.filename);
         Files.createDirectories(target.getParentFile().toPath());
         Files.write(target.toPath(), d.content);
@@ -156,8 +157,36 @@ public final class EdgarFeedUnpacker {
         || "report.css".equals(filename) || "MetaLinks.json".equals(filename);
   }
 
+  /**
+   * Whether the converter ever reads a document of this type: the filing's own documents (type =
+   * the form), 8-K earnings exhibits (EX-99.x), the XBRL instance and the presentation, calculation
+   * and definition linkbases, the 13F information table, and untyped XML such as FilingSummary.xml.
+   * The label linkbase and schema (EX-101.LAB, EX-101.SCH, which the converter only filters out when
+   * looking for the instance) and every other exhibit (contracts, certifications, subsidiaries) are
+   * listed in index.json but not written. A request for one that is not held is fetched from
+   * sec.gov, so skipping a document can cost a request but never a wrong answer.
+   */
+  private static boolean isRead(String type) {
+    if (type == null || !type.startsWith("EX-")) {
+      return true;
+    }
+    return type.startsWith("EX-99") || "EX-101.INS".equals(type) || "EX-101.PRE".equals(type)
+        || "EX-101.CAL".equals(type) || "EX-101.DEF".equals(type);
+  }
+
   private static String json(String s) {
     return s.replace("\\", "\\\\").replace("\"", "\\\"");
+  }
+
+  /** True when a 403 carries the object store's {@code AccessDenied} error, i.e. the key is absent. */
+  private static boolean isMissingKey(HttpURLConnection conn) throws IOException {
+    try (InputStream err = conn.getErrorStream()) {
+      if (err == null) {
+        return false;
+      }
+      byte[] body = readEntry(err, 1024);
+      return new String(body, StandardCharsets.UTF_8).contains("<Code>AccessDenied</Code>");
+    }
   }
 
   public static void main(String[] args) throws Exception {
@@ -172,14 +201,29 @@ public final class EdgarFeedUnpacker {
       long t0 = System.currentTimeMillis();
       Stats stats;
       if (src.startsWith("http")) {
-        HttpURLConnection conn = (HttpURLConnection) new URL(src).openConnection();
-        conn.setRequestProperty("User-Agent", USER_AGENT);
-        conn.setConnectTimeout(30000);
-        conn.setReadTimeout(120000);
-        int status = conn.getResponseCode();
-        if (status == 404) {
-          // a holiday or weekend has no feed file; a day not yet published has none either
-          System.out.println("[edgar-feed] " + src + ": no file (HTTP 404), skipped");
+        HttpURLConnection conn;
+        int status;
+        // SEC answers HTTP 429 when too many day files are in flight; it clears within a minute or
+        // two. Wait and ask again (each wait is printed), then fail so a rerun retries the day.
+        for (int attempt = 1; ; attempt++) {
+          conn = (HttpURLConnection) new URL(src).openConnection();
+          conn.setRequestProperty("User-Agent", USER_AGENT);
+          conn.setConnectTimeout(30000);
+          conn.setReadTimeout(120000);
+          status = conn.getResponseCode();
+          if (status != 429 || attempt >= MAX_429_ATTEMPTS) {
+            break;
+          }
+          long waitSec = 120L * attempt + (long) (Math.random() * 60);
+          System.out.println("[edgar-feed] " + src + ": HTTP 429 (attempt " + attempt + "), waiting "
+              + waitSec + "s");
+          Thread.sleep(waitSec * 1000);
+        }
+        if (status == 404 || (status == 403 && isMissingKey(conn))) {
+          // a holiday or weekend has no feed file; a day not yet published has none either. The
+          // feed bucket answers a missing key with 403 AccessDenied rather than 404; any other
+          // 403 (a rate-limit or block page) is a real failure and falls through to the throw.
+          System.out.println("[edgar-feed] " + src + ": no file (HTTP " + status + "), skipped");
           continue;
         }
         if (status != 200) {

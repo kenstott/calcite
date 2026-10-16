@@ -119,7 +119,7 @@ class ReportIssueDataRequestTest {
   @Test
   void acceptedSourcingReportTellsTheUserARequestWasSent() throws Exception {
     serveIssues(200);
-    String text = McpServer.reportIssue("sourcing", "No salmon population data", "body");
+    String text = McpServer.reportIssue("sourcing", "", "No salmon population data", "body");
     assertTrue(text.startsWith("Data request sent."), text);
     assertTrue(text.contains("24-48 hours"), text);
     assertTrue(text.contains("check back"), text);
@@ -131,7 +131,7 @@ class ReportIssueDataRequestTest {
   @Test
   void acceptedDefectReportTellsTheUserTheValueIsUnverified() throws Exception {
     serveIssues(200);
-    String text = McpServer.reportIssue("defect", "Implausible total", "body");
+    String text = McpServer.reportIssue("defect", "data_value", "Implausible total", "body");
     assertTrue(text.startsWith("Data-quality report sent."), text);
     assertTrue(text.contains("unverified"), text);
     assertTrue(text.contains("24-48 hours"), text);
@@ -140,9 +140,21 @@ class ReportIssueDataRequestTest {
   }
 
   @Test
+  void nonDataDefectCategoriesDoNotTellTheUserAFigureIsUnverified() throws Exception {
+    for (String category : new String[]{"metadata_coverage", "diagnostics", "tooling"}) {
+      serveIssues(200);
+      String text = McpServer.reportIssue("defect", category, "Subject", "body");
+      assertTrue(text.startsWith("Data-quality report sent."), text);
+      assertFalse(text.contains("unverified"), text);
+      assertFalse(text.contains("this value looks wrong"), text);
+      assertEquals(category, MAPPER.readTree(receivedBody.get()).path("category").asText());
+    }
+  }
+
+  @Test
   void rejectedDefectReportDoesNotClaimItWasSent() throws Exception {
     serveIssues(500);
-    String text = McpServer.reportIssue("defect", "Implausible total", "body");
+    String text = McpServer.reportIssue("defect", "data_value", "Implausible total", "body");
     assertTrue(text.contains("Nothing was filed"), text);
     assertFalse(text.contains("Data-quality report sent"), text);
   }
@@ -150,7 +162,7 @@ class ReportIssueDataRequestTest {
   @Test
   void rejectedSourcingReportDoesNotClaimARequestWasSent() throws Exception {
     serveIssues(500);
-    String text = McpServer.reportIssue("sourcing", "No salmon population data", "body");
+    String text = McpServer.reportIssue("sourcing", "", "No salmon population data", "body");
     assertTrue(text.contains("Nothing was filed"), text);
     assertFalse(text.contains("24-48 hours"), text);
     assertFalse(text.contains("Data request sent"), text);

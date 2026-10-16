@@ -3513,6 +3513,18 @@ public class HttpSource implements DataSource {
       return true;
     }
 
+    // A response body that the server cut off mid-stream (chunked transfer ended early, or the
+    // connection reset while reading it) is a transport fault on an idempotent GET: the same
+    // request is retried, within maxRetries, and the exception still propagates when the retries
+    // are exhausted. Seen on OpenFEMA, which closes deep $skip pages early at random, and on the
+    // Census flows API, which resets the connection on its multi-megabyte state responses.
+    if (e instanceof java.io.EOFException
+        || (e.getMessage() != null
+            && (e.getMessage().contains("Premature EOF")
+                || e.getMessage().contains("Connection reset")))) {
+      return true;
+    }
+
     String message = e.getMessage();
     if (message == null) {
       return false;

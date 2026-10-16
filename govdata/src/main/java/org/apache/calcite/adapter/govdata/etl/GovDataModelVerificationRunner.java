@@ -20,6 +20,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -126,6 +127,9 @@ public final class GovDataModelVerificationRunner {
     // Publish the Iceberg schema cache this run materialized. Enumerating every table is exactly
     // what fills that cache, so seed generation reuses this run rather than adding a second pass.
     boolean publishSchemaCache = false;
+    // Read every declared base table's columns, so the schema cache holds all of them (seed
+    // generation); a table that cannot be read fails the run.
+    boolean readAllTables = false;
   }
 
   /** A table/view defined in a schema YAML, with its category and (for views) dependencies. */
@@ -386,6 +390,10 @@ public final class GovDataModelVerificationRunner {
       int exit = (errs > 0 || missingHard > 0 || probeFailures > 0 || !dupped.isEmpty()
           || !globbing.isEmpty()) ? 1 : 0;
 
+      if (cfg.readAllTables && !readAllDeclaredTables(conn)) {
+        exit = 1;
+      }
+
       if (cfg.publishSchemaCache) {
         // Enumerating every table above is what materialized the schema cache, so publishing is
         // just persisting what this run already read. Only a clean run may publish: a run with
@@ -418,6 +426,47 @@ public final class GovDataModelVerificationRunner {
         // ignore
       }
     }
+  }
+
+  /**
+   * Reads the columns of every base table the schema YAMLs declare, which is what puts a table's
+   * schema into the Iceberg schema cache. The mount only reads the tables something resolves, so
+   * without this a cache created from scratch holds a fraction of them. A table that cannot be
+   * read is listed and fails the run.
+   *
+   * @return true when every declared base table was read
+   */
+  private static boolean readAllDeclaredTables(Connection conn) throws Exception {
+    Map<String, Defined> declared = classifyDefined(new LinkedHashSet<String>(SCHEMA_YAML.keySet()));
+    DatabaseMetaData md = conn.getMetaData();
+    List<String> failed = new ArrayList<String>();
+    int read = 0;
+    for (Defined d : declared.values()) {
+      if (!BASE.equals(d.category)) {
+        continue;
+      }
+      int columns = 0;
+      try (ResultSet rs = md.getColumns(null, d.schema, d.table, "%")) {
+        while (rs.next()) {
+          columns++;
+        }
+      } catch (SQLException e) {
+        failed.add(d.schema + "." + d.table + ": " + e.getMessage());
+        continue;
+      }
+      if (columns == 0) {
+        failed.add(d.schema + "." + d.table + ": no columns");
+      } else {
+        read++;
+      }
+    }
+    System.out.println("  read-all-tables      : " + read + " declared base tables read, "
+        + failed.size() + " failed; schema cache holds "
+        + org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.size() + " tables");
+    for (String f : failed) {
+      System.out.println("    FAILED " + f);
+    }
+    return failed.isEmpty();
   }
 
   private static List<TableResult> probeTables(Connection conn, Config cfg) throws Exception {
@@ -1006,6 +1055,8 @@ public final class GovDataModelVerificationRunner {
         cfg.dupCheck = false;
       } else if ("--publish-schema-cache".equals(a)) {
         cfg.publishSchemaCache = true;
+      } else if ("--read-all-tables".equals(a)) {
+        cfg.readAllTables = true;
       } else if ("--dup-threshold".equals(a)) {
         cfg.dupThreshold = Integer.parseInt(args[++i]);
       } else if ("--expected".equals(a)) {

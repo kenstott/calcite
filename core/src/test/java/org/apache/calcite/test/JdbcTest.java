@@ -6180,6 +6180,24 @@ public class JdbcTest {
         .throws_("Object 'EMPLOYEES' not found within 'adhoc'");
   }
 
+  /** An object that is not found is reported with SQLState 42S02, whether the
+   * statement is executed or prepared. */
+  @Test void testObjectNotFoundHasSqlState42S02() throws Exception {
+    CalciteAssert.hr().doWithConnection(connection -> {
+      final String sql = "select * from \"hr\".\"does_not_exist\"";
+      try (Statement statement = connection.createStatement()) {
+        final SQLException executed =
+            assertThrows(SQLException.class, () -> statement.executeQuery(sql));
+        assertThat(executed.getSQLState(), is("42S02"));
+      } catch (SQLException e) {
+        throw TestUtil.rethrow(e);
+      }
+      final SQLException prepared =
+          assertThrows(SQLException.class, () -> connection.prepareStatement(sql));
+      assertThat(prepared.getSQLState(), is("42S02"));
+    });
+  }
+
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE-1360">[CALCITE-1360]
    * Custom schema in file in current directory</a>. */

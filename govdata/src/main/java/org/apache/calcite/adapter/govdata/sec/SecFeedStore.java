@@ -50,6 +50,8 @@ final class SecFeedStore {
       "^https://www\\.sec\\.gov/Archives/edgar/data/(\\d+)/(\\d{18})/\\d{10}-\\d{2}-\\d{6}-index\\.html?$");
   private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
       new com.fasterxml.jackson.databind.ObjectMapper();
+  private static final Pattern FILING_SUMMARY_URL = Pattern.compile(
+      "^https://www\\.sec\\.gov/Archives/edgar/data/\\d+/(\\d{18})/FilingSummary\\.xml$");
   private static final Pattern TXT_URL = Pattern.compile(
       "^https://www\\.sec\\.gov/Archives/edgar/data/\\d+/(\\d{10}-\\d{2}-\\d{6})\\.txt$");
 
@@ -127,6 +129,86 @@ final class SecFeedStore {
     }
     store.hits.incrementAndGet();
     return Files.readAllBytes(f.toPath());
+  }
+
+  /**
+   * True when {@code url} is a filing's {@code FilingSummary.xml} that sec.gov cannot have: the
+   * accession is held and nothing in it is XBRL. sec.gov renders {@code FilingSummary.xml} (with
+   * the R files) only for a filing carrying XBRL, so a held accession whose index lists no
+   * {@code EX-101.*} document and none of whose HTML documents has an inline-XBRL header answers a
+   * request for it with 404 (a proxy statement or Schedule 13G, say). The caller then records it as
+   * absent without the request. Anything less certain returns false and is fetched.
+   */
+  static boolean knownAbsent(String url) throws IOException {
+    SecFeedStore store = instance;
+    if (store == null || url == null) {
+      return false;
+    }
+    Matcher m = FILING_SUMMARY_URL.matcher(url);
+    if (!m.matches()) {
+      return false;
+    }
+    File acc = new File(store.dir, m.group(1)); // justification: same transient local tree
+    File index = new File(acc, "index.json");
+    if (!index.isFile() || store.fileFor(url).isFile()) {
+      return false;
+    }
+    for (com.fasterxml.jackson.databind.JsonNode item
+        : MAPPER.readTree(index).path("directory").path("item")) {
+      if (item.path("type").asText().startsWith("EX-101")) {
+        return false;
+      }
+    }
+    File[] files = acc.listFiles();
+    if (files == null) {
+      return false;
+    }
+    for (File f : files) {
+      String n = f.getName().toLowerCase(java.util.Locale.ROOT);
+      if ((n.endsWith(".htm") || n.endsWith(".html")) && hasInlineXbrlHeader(f)) {
+        return false;
+      }
+    }
+    long n = store.hits.incrementAndGet();
+    if (n <= MAX_MISS_LOGS) {
+      LOGGER.info("EDGAR feed store: answered locally as absent (the filing carries no XBRL): {}",
+          url);
+    }
+    return true;
+  }
+
+  /** As {@link #knownAbsent}, for callers that cannot throw a checked exception. */
+  static boolean knownAbsentUnchecked(String url) {
+    try {
+      return knownAbsent(url);
+    } catch (IOException e) {
+      throw new IllegalStateException("could not read the EDGAR feed store for " + url, e);
+    }
+  }
+
+  /** Whether the HTML document carries an inline-XBRL {@code <ix:header>}. */
+  private static boolean hasInlineXbrlHeader(File f) throws IOException {
+    byte[] needle = "<ix:header".getBytes(StandardCharsets.US_ASCII);
+    byte[] buf = new byte[1 << 20];
+    int keep = 0;
+    try (InputStream in = Files.newInputStream(f.toPath())) {
+      int n;
+      while ((n = in.read(buf, keep, buf.length - keep)) > 0) {
+        int end = keep + n;
+        for (int i = 0; i + needle.length <= end; i++) {
+          int j = 0;
+          while (j < needle.length && (buf[i + j] | 0x20) == needle[j]) {
+            j++;
+          }
+          if (j == needle.length) {
+            return true;
+          }
+        }
+        keep = Math.min(needle.length - 1, end);
+        System.arraycopy(buf, end - keep, buf, 0, keep);
+      }
+    }
+    return false;
   }
 
   /** The held content for {@code url} as text, or null. */

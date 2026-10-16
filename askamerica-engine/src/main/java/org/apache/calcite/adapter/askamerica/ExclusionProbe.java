@@ -88,11 +88,15 @@ final class ExclusionProbe {
    * Adds {@code excluded_units} (or {@code excluded_units_unavailable} with the reason) to an
    * {@code explicit_exclusion} warning.
    *
+   * <p>Returns true when the statement without its exclusions returns exactly the rows the
+   * caller's statement did, which proves the predicates removed nothing and the warning has
+   * nothing to report.
+   *
    * @param originalRows rows the caller's SQL returned, or null to have the probe run it
    * @param diffAliases  lower-cased aliases of LAG/LEAD-differenced columns, whose null filter is
    *                     a consequence of differencing rather than an exclusion
    */
-  static void annotate(ObjectNode warning, String sql, ArrayNode originalRows,
+  static boolean annotate(ObjectNode warning, String sql, ArrayNode originalRows,
       Set<String> diffAliases, SqlRunner runner) {
     try {
       if (runner == null) {
@@ -101,6 +105,9 @@ final class ExclusionProbe {
       String relaxed = relax(sql, diffAliases);
       ArrayNode original = originalRows != null ? originalRows : runner.run(sql);
       ArrayNode wider = runner.run(relaxed);
+      if (original.equals(wider)) {
+        return true;
+      }
       String label = labelColumn(original, wider);
       List<String> units = missingUnits(label, original, wider);
       warning.put("excluded_unit_column", label);
@@ -127,6 +134,7 @@ final class ExclusionProbe {
       warning.put("excluded_units_unavailable",
           "the unfiltered query could not be run: " + e.getMessage());
     }
+    return false;
   }
 
   /**

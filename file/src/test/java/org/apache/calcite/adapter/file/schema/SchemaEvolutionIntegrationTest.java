@@ -42,7 +42,7 @@ public class SchemaEvolutionIntegrationTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"baseDirectory\": \"" + java.nio.file.Files.createTempDirectory("base").toString().replace("\\", "\\\\") + "\",\n"
-        + "        \"directory\": \"resources/test/schema-evolution/csv\",\n"
+        + "        \"directory\": \"" + resourceDir("schema-evolution/csv") + "\",\n"
         + "        \"schemaStrategy\": \"richest_file\"\n"
         + "      }\n"
         + "    }\n"
@@ -80,7 +80,7 @@ public class SchemaEvolutionIntegrationTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"baseDirectory\": \"" + java.nio.file.Files.createTempDirectory("base").toString().replace("\\", "\\\\") + "\",\n"
-        + "        \"directory\": \"resources/test/mixed-formats\",\n"
+        + "        \"directory\": \"" + resourceDir("mixed-formats") + "\",\n"
         + "        \"schemaStrategy\": {\n"
         + "          \"formatPriority\": [\"parquet\", \"csv\", \"json\"]\n"
         + "        }\n"
@@ -120,7 +120,7 @@ public class SchemaEvolutionIntegrationTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"baseDirectory\": \"" + java.nio.file.Files.createTempDirectory("base").toString().replace("\\", "\\\\") + "\",\n"
-        + "        \"directory\": \"resources/test/parquet-evolution\",\n"
+        + "        \"directory\": \"" + resourceDir("parquet-evolution") + "\",\n"
         + "        \"ephemeralCache\": true,\n"
         + "        \"schemaStrategy\": {\n"
         + "          \"parquet\": \"LATEST_SCHEMA_WINS\",\n"
@@ -163,7 +163,7 @@ public class SchemaEvolutionIntegrationTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"baseDirectory\": \"" + java.nio.file.Files.createTempDirectory("base").toString().replace("\\", "\\\\") + "\",\n"
-        + "        \"directory\": \"resources/test/parquet-evolution\",\n"
+        + "        \"directory\": \"" + resourceDir("parquet-evolution") + "\",\n"
         + "        \"ephemeralCache\": true,\n"
         + "        \"schemaStrategy\": {\n"
         + "          \"parquet\": \"UNION_ALL_COLUMNS\"\n"
@@ -210,7 +210,7 @@ public class SchemaEvolutionIntegrationTest {
         + "      \"operand\": {\n"
         + "        \"engineType\": \"DUCKDB\",\n"
         + "        \"baseDirectory\": \"" + java.nio.file.Files.createTempDirectory("base").toString().replace("\\", "\\\\") + "\",\n"
-        + "        \"directory\": \"resources/test/mixed-formats\",\n"
+        + "        \"directory\": \"" + resourceDir("mixed-formats") + "\",\n"
         + "        \"schemaStrategy\": \"latest_schema_wins\"\n"
         + "      }\n"
         + "    }\n"
@@ -240,5 +240,15 @@ public class SchemaEvolutionIntegrationTest {
                    "DuckDB should handle evolved schema efficiently");
       }
     }
+  }
+
+  /** The absolute path of a test-resource directory, escaped for a JSON model; a path relative
+   * to the working directory found no files. */
+  private static String resourceDir(String path) {
+    java.net.URL url = SchemaEvolutionIntegrationTest.class.getResource("/" + path);
+    if (url == null) {
+      throw new IllegalStateException("test resource /" + path + " is missing");
+    }
+    return org.apache.calcite.util.Sources.of(url).file().getAbsolutePath().replace("\\", "\\\\");
   }
 }

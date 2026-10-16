@@ -2,10 +2,10 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**338 requirements across 7 adapters.**
+**342 requirements across 7 adapters.**
 
 
-## askamerica  (8: 6 accepted, 1 complete, 1 proposed)
+## askamerica  (11: 9 accepted, 1 complete, 1 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -17,8 +17,11 @@
 | [ ] | ASKAM-006 | MUST | behavioral | semantic-search / Semantic search | Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing set by the user, the … | — |
 | [ ] | ASKAM-010 | MUST | constraint | data-server / Key sign-in | Every connection to the pgwire-govdata server passes its AskAmerica API key as the PostgreSQL password, and t… | pgwire-calcite/tests/unit/test_key_sign_in.py, askamerica-e… |
 | [x] | ASKAM-011 | MUST | behavioral | data-server / Key sign-in | With no API key, the engine neither connects to nor starts a data server: the caller is told at once that no … | askamerica-engine/src/test/java/org/apache/calcite/adapter/… |
+| [ ] | ASKAM-007 | MUST | constraint | installer / Thin engine jar | The engine jar carries no embedder: no ONNX Runtime and no embedding model. Semantic search (the semantic_sea… | — |
+| [ ] | ASKAM-008 | MUST | constraint | engine / One mode | The engine has one mode: it serves data through the data server. There is no in-process query mode. No code p… | — |
+| [ ] | ASKAM-009 | MUST | constraint | installer / Thin engine jar | The engine jar is thin: the MCP protocol, the tools, a pg-wire client and the setup wizard. It contains no go… | — |
 
-## file  (191: 161 complete, 12 in-progress, 15 proposed, 3 rejected)
+## file  (191: 162 complete, 12 in-progress, 14 proposed, 3 rejected)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -151,7 +154,7 @@
 | [x] | FILE-121 | MUST | constraint | statistics / stats-rule activation gates | The statistics optimization rules are each gated by a system property defaulting FALSE: calcite.file.statisti… | file/StatisticsRequirementsTest (tagged FILE-121) |
 | [x] | FILE-122 | MUST | behavioral | optimization / count-star guards | CountStarStatisticsRule fires only for true COUNT(*) (empty groupSet, single non-distinct COUNT, empty argLis… | file/StatisticsRuleFiringRequirementsTest |
 | [x] | FILE-123 | MUST | behavioral | optimization / pushdown/prune/reorder thresholds | SimpleFileFilterPushdownRule (ParquetTranslatableTable only): folds always-true to scan / always-false to emp… | file/StatisticsRuleFiringRequirementsTest |
-| [.] | FILE-124 | SHOULD | behavioral | optimization / HLL rule instance bug | SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE is configured approxOnly=true but shouldOptimize() ignores th… | — |
+| [x] | FILE-124 | SHOULD | behavioral | optimization / HLL rewrite only for APPROX_COUNT_DISTINCT | [SUPERSEDED by C-18, 2026-10-14 -- the approx-only instance honors its flag. Kept here for history; do not im… | file/HllRuleOperandDefaultsRequirementsTest#file124ApproxOn… |
 | [~] | FILE-125 | SHOULD | constraint | optimization / debug-artifact leak | DuckDBHLLCountDistinctRule writes hard-coded /tmp/duckdb_hll_rule_loaded.txt (static init) and appends /tmp/d… | file/ResolvedBugTargetsTest#duckdbHllRuleWritesNoTmpArtifac… |
 | [x] | FILE-126 | MUST | behavioral | statistics / parquet stats & NDV fallbacks | ParquetStatisticsExtractor reads min/max/nullCount/rowCount from the footer (no NDV), summing across row grou… | file/StatisticsRequirementsTest (tagged FILE-126) |
 | [x] | FILE-127 | MUST | behavioral | concurrency / parquet conversion lock | ConcurrentParquetCache.convertWithLocking: Redis lock if available, else per-(schema:absPath) ReentrantLock t… | file/ConcurrencyRequirementsTest |
@@ -178,7 +181,7 @@
 | [x] | FILE-148 | MUST | behavioral | table-naming / SmartCasing rules | SmartCasing.toSnakeCase lowercases an all-uppercase non-acronym without splitting (DEPTS→depts), applies a di… | file/SmartCasingTest#testNumberHandling |
 | [x] | FILE-149 | MUST | structural | constraints / positional FK resolution | TableConstraints builds PK/unique bitsets from columnNames.indexOf, SILENTLY dropping unfound columns (and a … | file/ConstraintRequirementsTest (tagged FILE-149) |
 | [x] | FILE-150 | MUST | behavioral | vector-search / UDF semantics & encodings | SimilarityFunctions registers exactly 10 UDFs (COSINE_SIMILARITY, SEMANTIC_SIMILARITY, EMBED, COSINE_DISTANCE… | file/VectorFunctionRequirementsTest (tagged FILE-150) |
-| [x] | FILE-151 | MUST | structural | error-handling / FileReaderException has no SQLState | FileReaderException is a plain package-private checked Exception (extends Exception) with NO SQLState/vendor … | file/JsonPathParquetReaderTest |
+| [x] | FILE-151 | MUST | structural | error-handling / FileReaderException SQLStates | [SUPERSEDED by C-11, 2026-10-14 -- FileReaderException is a SQLException carrying a SQLState. Kept here for h… | file/JsonPathParquetReaderTest |
 | [x] | FILE-152 | MUST | behavioral | statistics / HLL measured error bounds | Tested HLL accuracy: precision 12 estimates 100 distinct within 20%, 10k within 5%, 100k within 5%; precision… | file/HllAccuracyEngineParityRequirementsTest |
 | [x] | FILE-153 | MUST | behavioral | statistics / selectivity formulas | ColumnStatistics.getSelectivity pins: "=" → 1/distinct, "!=" → 1-1/distinct, IS NULL → nullCount/total, IS NO… | file/ColumnStatisticsDeepTest#testSelectivityEqualityWithDi… |
 | [x] | FILE-154 | MUST | behavioral | engine / engine equivalence (tested) | Parquet and DuckDB engines return identical COUNT(*) (both 1000) and identical row-level results for CSV/JSON… | file/HllAccuracyEngineParityRequirementsTest |
@@ -293,7 +296,7 @@
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
 
-## salesforce  (30: 19 accepted, 7 complete, 4 proposed)
+## salesforce  (31: 19 accepted, 8 complete, 4 proposed)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -327,6 +330,7 @@
 | [ ] | SF-051 | MUST | behavioral | trino / Queries | Through Trino the org's sObjects are listed and described as tables, and filters, aggregates and joins over t… | trino-salesforce/TestSalesforceConnector#testShowTables, tr… |
 | [.] | SF-052 | MUST | constraint | trino / Name matching | The connector fails at startup unless case-insensitive-name-matching is true, because sObject names are mixed… | — |
 | [x] | SF-053 | MUST | behavioral | catalog / Discovery | information_schema.tables and .columns list a Salesforce schema's sObjects and their fields. The schema facto… | salesforce/InformationSchemaTest |
+| [x] | SF-054 | MUST | behavioral | catalog / Discovery | The schema always holds two listing tables, whatever the tables operand names, for picking the sObjects to na… | salesforce/TablesOperandTest |
 
 ## servicenow  (35: 9 accepted, 1 complete, 25 in-progress)
 

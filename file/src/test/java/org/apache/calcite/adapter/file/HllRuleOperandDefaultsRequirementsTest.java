@@ -37,7 +37,6 @@ import org.apache.calcite.util.ImmutableBitSet;
 
 import com.google.common.collect.ImmutableList;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -62,15 +61,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Requirement-pinning tests for the file-adapter HLL-rule {@code shouldOptimize()} GATING
  * (FILE-124) and the FileSchemaFactory operand DEFAULTS golden (FILE-047).
  *
- * <p>FILE-124 pins the CURRENT (intentionally-aggressive) gating of
- * {@link SimpleHLLCountDistinctRule}: despite
- * {@link SimpleHLLCountDistinctRule#APPROX_ONLY_INSTANCE} being configured with
- * {@code approxOnly=true}, the private {@code shouldOptimize(AggregateCall)} IGNORES the
- * {@code approxOnly} flag and returns {@code true} for EVERY {@code COUNT(DISTINCT)} (only
- * gating on {@code SqlKind.COUNT} + {@code isDistinct()}). It also pins the no-op safety
- * property: with no cached HLL sketch the rule leaves the plan unchanged. The
- * {@code @Disabled} C-18 method documents the INTENDED (not-yet-implemented) behavior and
- * deliberately does NOT assert the current behavior as passing.
+ * <p>FILE-124 pins the gating of {@link SimpleHLLCountDistinctRule}:
+ * {@link SimpleHLLCountDistinctRule#APPROX_ONLY_INSTANCE} ({@code approxOnly=true}) optimizes
+ * only an approximate {@code COUNT(DISTINCT)} (APPROX_COUNT_DISTINCT), so an exact one stays
+ * exact (C-18). It also pins the no-op safety property: with no cached HLL sketch the rule
+ * leaves the plan unchanged.
  *
  * <p>This class is about the RULE's gating, not sketch accuracy or end-to-end EXPLAIN
  * folding (covered by {@code SimpleHLLCountDistinctRuleTest} /
@@ -101,13 +96,19 @@ public class HllRuleOperandDefaultsRequirementsTest {
   // (empty group set). Returns the LogicalAggregate so its AggCall list yields real
   // AggregateCall instances for shouldOptimize() reflection and a real plan for the no-op run.
   private static LogicalAggregate countAggregate(RelOptCluster cluster, boolean distinct) {
+    return countAggregate(cluster, distinct, false);
+  }
+
+  // As above; approximate=true builds APPROX_COUNT_DISTINCT's call (COUNT, distinct, approximate).
+  private static LogicalAggregate countAggregate(RelOptCluster cluster, boolean distinct,
+      boolean approximate) {
     RelDataType intType =
         cluster.getTypeFactory().createSqlType(SqlTypeName.INTEGER);
     RelDataType rowType =
         cluster.getTypeFactory().builder().add("c0", intType).build();
     LogicalValues input = LogicalValues.createEmpty(cluster, rowType);
     AggregateCall countCall =
-        AggregateCall.create(SqlStdOperatorTable.COUNT, distinct, false, false,
+        AggregateCall.create(SqlStdOperatorTable.COUNT, distinct, approximate, false,
             ImmutableList.of(), ImmutableList.of(0), -1, null,
             RelCollations.EMPTY, true, input, null, "cd");
     return LogicalAggregate.create(input, ImmutableList.of(), ImmutableBitSet.of(),
@@ -115,7 +116,7 @@ public class HllRuleOperandDefaultsRequirementsTest {
         Collections.singletonList(countCall));
   }
 
-  // Reach the private gating method directly, so we assert the CURRENT behavior of
+  // Reach the private gating method directly, so we assert the behavior of
   // shouldOptimize() itself rather than only an end-to-end folding side effect.
   private static boolean invokeShouldOptimize(SimpleHLLCountDistinctRule rule,
       AggregateCall aggCall) throws Exception {
@@ -130,25 +131,18 @@ public class HllRuleOperandDefaultsRequirementsTest {
   // ------------------------------------------------------------------
 
   /**
-   * FILE-124: shouldOptimize() ignores the {@code approxOnly} flag — it optimizes EVERY
-   * exact {@code COUNT(DISTINCT)} regardless of which instance (DEFAULT vs APPROX_ONLY) owns
-   * it — and only gates on {@code COUNT} + {@code isDistinct()}.
+   * FILE-124: shouldOptimize() gates on {@code COUNT} + {@code isDistinct()}, and the
+   * approx-only instance also on {@code isApproximate()}.
    *
-   * <p>Asserts the CURRENT (to-be-fixed) behavior:
    * <ul>
-   *   <li>{@code APPROX_ONLY_INSTANCE} is genuinely configured {@code approxOnly=true}
-   *       (so the flag exists and is set), yet</li>
-   *   <li>both {@code INSTANCE} (approxOnly=false) and {@code APPROX_ONLY_INSTANCE}
-   *       (approxOnly=true) return {@code true} for an EXACT {@code COUNT(DISTINCT $0)}
-   *       — proving the flag is not consulted; and</li>
-   *   <li>both return {@code false} for a non-distinct {@code COUNT($0)} (the only real
-   *       gate is COUNT + distinct).</li>
+   *   <li>{@code APPROX_ONLY_INSTANCE} is configured {@code approxOnly=true};</li>
+   *   <li>it optimizes an approximate {@code COUNT(DISTINCT $0)} and leaves an exact one
+   *       exact, while {@code INSTANCE} (approxOnly=false) optimizes both; and</li>
+   *   <li>neither optimizes a non-distinct {@code COUNT($0)}.</li>
    * </ul>
    */
   @Test @Tag("unit") @Tag("FILE-124")
-  public void file124ShouldOptimizeIgnoresApproxOnlyFlag() throws Exception {
-    // The flag is genuinely set on APPROX_ONLY (and unset on DEFAULT) — the bug is that
-    // shouldOptimize() never reads it, not that the config is missing.
+  public void file124ShouldOptimizeHonorsApproxOnlyFlag() throws Exception {
     assertTrue(SimpleHLLCountDistinctRule.Config.APPROX_ONLY.approxOnly(),
         "FILE-124: APPROX_ONLY config must declare approxOnly=true");
     assertFalse(SimpleHLLCountDistinctRule.Config.DEFAULT.approxOnly(),
@@ -157,23 +151,27 @@ public class HllRuleOperandDefaultsRequirementsTest {
     RelOptCluster cluster = newCluster();
     AggregateCall exactCountDistinct =
         countAggregate(cluster, true).getAggCallList().get(0);
+    AggregateCall approxCountDistinct =
+        countAggregate(cluster, true, true).getAggCallList().get(0);
     AggregateCall nonDistinctCount =
         countAggregate(cluster, false).getAggCallList().get(0);
 
-    // Sanity: the distinct flag actually survived onto the AggregateCall we built.
-    assertTrue(exactCountDistinct.isDistinct(),
-        "FILE-124: built call must be COUNT(DISTINCT)");
+    // Sanity: the flags actually survived onto the AggregateCalls we built.
+    assertTrue(exactCountDistinct.isDistinct() && !exactCountDistinct.isApproximate(),
+        "FILE-124: built call must be an exact COUNT(DISTINCT)");
+    assertTrue(approxCountDistinct.isDistinct() && approxCountDistinct.isApproximate(),
+        "FILE-124: built call must be an approximate COUNT(DISTINCT)");
     assertFalse(nonDistinctCount.isDistinct(),
         "FILE-124: built call must be a non-distinct COUNT");
 
-    // CURRENT behavior: approxOnly is ignored — BOTH instances optimize the exact
-    // COUNT(DISTINCT), and NEITHER optimizes the non-distinct COUNT.
     assertTrue(invokeShouldOptimize(SimpleHLLCountDistinctRule.INSTANCE, exactCountDistinct),
         "FILE-124: DEFAULT instance optimizes exact COUNT(DISTINCT)");
-    assertTrue(
+    assertFalse(
         invokeShouldOptimize(SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE, exactCountDistinct),
-        "FILE-124: APPROX_ONLY instance ALSO optimizes exact COUNT(DISTINCT) "
-            + "(approxOnly flag ignored)");
+        "FILE-124: APPROX_ONLY instance leaves an exact COUNT(DISTINCT) exact");
+    assertTrue(
+        invokeShouldOptimize(SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE, approxCountDistinct),
+        "FILE-124: APPROX_ONLY instance optimizes APPROX_COUNT_DISTINCT");
     assertFalse(invokeShouldOptimize(SimpleHLLCountDistinctRule.INSTANCE, nonDistinctCount),
         "FILE-124: non-distinct COUNT is not optimized (DEFAULT)");
     assertFalse(
@@ -214,18 +212,11 @@ public class HllRuleOperandDefaultsRequirementsTest {
   }
 
   /**
-   * C-18 (INTENDED behavior, pending code fix): an EXACT {@code COUNT(DISTINCT)} must stay
-   * EXACT — the HLL approximation must apply ONLY to {@code APPROX_COUNT_DISTINCT} or an
-   * explicit opt-in. Under the desired contract, {@code APPROX_ONLY_INSTANCE}
-   * ({@code approxOnly=true}) must NOT optimize an exact {@code COUNT(DISTINCT)}.
-   *
-   * <p>Disabled until {@code shouldOptimize()} honors {@code approxOnly}: it asserts the
-   * INTENDED result ({@code false}), which the current code does not satisfy, so it is not
-   * green-washing the present (wrong) behavior.
+   * C-18: an exact {@code COUNT(DISTINCT)} stays exact; the HLL approximation applies only to
+   * {@code APPROX_COUNT_DISTINCT}. {@code APPROX_ONLY_INSTANCE} ({@code approxOnly=true}) does
+   * not optimize an exact {@code COUNT(DISTINCT)}.
    */
   @Test @Tag("unit") @Tag("FILE-124")
-  @Disabled("C-18: exact COUNT(DISTINCT) must stay exact; HLL only for "
-      + "APPROX_COUNT_DISTINCT or explicit opt-in — pending code fix")
   public void file124ApproxOnlyMustNotOptimizeExactCountDistinct() throws Exception {
     RelOptCluster cluster = newCluster();
     AggregateCall exactCountDistinct =

@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * FILE-110 / FILE-111 / FILE-095 — catalog-discovery and error-surface goldens for the file
- * adapter, plus {@link Disabled @Disabled} targets documenting two resolved-but-pending bugs.
+ * adapter.
  *
  * <p>These drive the real discovery/error path end-to-end: a {@link FileSchemaFactory}-backed
  * schema is built over a temp directory via a model, and the catalog is inspected through the JDBC
@@ -220,14 +219,9 @@ public class CatalogErrorRequirementsTest {
   }
 
   /**
-   * C-11 (pending fix): the INTENDED contract is that a table-not-found surfaces a
-   * {@link SQLException} carrying SQLState {@code 42S02} ("base table or view not found"). This
-   * target asserts that intended SQLState contract; it is {@link Disabled} and will FAIL until the
-   * error layer is fixed to set SQLState 42S02 (today the message says "not found" but the SQLState
-   * is not the standardized 42S02). It does NOT assert the current (wrong) behavior as passing.
+   * C-11: a table-not-found surfaces a {@link SQLException} carrying SQLState {@code 42S02}
+   * ("base table or view not found").
    */
-  @Disabled("C-11: FileReaderException should be SQLException carrying SQLState 42S02 "
-      + "(table not found) etc. — pending code fix")
   @Test @Tag("FILE-095") void unknownTableShouldCarrySqlState42S02(@TempDir Path dir)
       throws Exception {
     csv(dir.resolve("present.csv"));
@@ -242,6 +236,6 @@ public class CatalogErrorRequirementsTest {
       });
     }
     assertTrue("42S02".equals(ex.getSQLState()),
-        "INTENDED: table-not-found must carry SQLState 42S02 (got SQLState: " + ex.getSQLState() + ")");
+        "table-not-found must carry SQLState 42S02 (got SQLState: " + ex.getSQLState() + ")");
   }
 }

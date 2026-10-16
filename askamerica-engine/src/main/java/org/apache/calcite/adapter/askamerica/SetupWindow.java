@@ -68,6 +68,9 @@ public class SetupWindow {
     private JCheckBox telemetryCheckbox;
     private JCheckBox forceRefreshCheckbox;
     private JLabel statusLabel;
+    /** Animated while the data server installs: fills as the download arrives, and keeps moving
+     *  (indeterminate) while the size is unknown or the bundle is verified and unpacked. */
+    private javax.swing.JProgressBar installBar;
     private JLabel existingInstallLabel;
     private JButton configureBtn;
     private JButton relaunchBtn;
@@ -201,9 +204,9 @@ public class SetupWindow {
         c.gridy = row++; c.insets = new Insets(0, 0, 16, 0);
         p.add(apiKeyField, c);
 
-        // Telemetry opt-in checkbox
+        // Telemetry checkbox: checked by default (telemetry is opt-out), saved on Finish
         telemetryCheckbox =
-            new JCheckBox("Share anonymous usage telemetry to improve AskAmerica");
+            new JCheckBox("Share usage telemetry (tool names, timings and the SQL you run) to improve AskAmerica");
         telemetryCheckbox.setSelected(loadTelemetryOptIn());
         telemetryCheckbox.setBackground(BG);
         telemetryCheckbox.setForeground(DIM);
@@ -273,6 +276,15 @@ public class SetupWindow {
         c.gridy = row++; c.insets = new Insets(0, 0, 0, 0);
         p.add(statusLabel, c);
 
+        installBar = new javax.swing.JProgressBar(0, 1000);
+        installBar.setPreferredSize(new Dimension(400, 8));
+        installBar.setBorderPainted(false);
+        installBar.setForeground(new Color(0xE8A24A));
+        installBar.setBackground(CARD);
+        installBar.setVisible(false);
+        c.gridy = row++; c.insets = new Insets(8, 0, 0, 0);
+        p.add(installBar, c);
+
         return p;
     }
 
@@ -329,23 +341,77 @@ public class SetupWindow {
                     : " (No cached engine found to clear.)";
             }
 
-            // Name the count, and the paths on hover: a bare "Done!" was reported after
-            // writing a config file Claude Desktop does not read, which is unfalsifiable
-            // from the wizard and looks identical to success.
-            setStatus("Done! Updated " + written.size()
-                + (written.size() == 1 ? " config file. " : " config files. ")
-                + "Restart Claude Desktop to activate." + repairNote + " Tip: try \"What "
-                + "can I do with AskAmerica?\", \"What questions can AskAmerica answer?\", "
-                + "or \"Pose a sample question to AskAmerica\" in a new chat any time to "
-                + "see what it can do.", true);
-            statusLabel.setToolTipText(written.toString());
-            configureBtn.setText("Configure again");
-            maybeOfferRelaunch();
+            installDataServerThenFinish(written, repairNote);
         } catch (Exception ex) {
             setStatus("Error: " + ex.getMessage(), false);
-        } finally {
             configureBtn.setEnabled(true);
         }
+    }
+
+    /**
+     * The installer's asset step for the data server (about a gigabyte): done here, with the
+     * download shown, so the MCP server never has to download anything inside a tool call.
+     * Runs off the event thread; the status line follows the download until it finishes.
+     */
+    private void installDataServerThenFinish(List<Path> written, String repairNote) {
+        setStatus("Installing the AskAmerica data server (about 1 GB, one time)…", null);
+        installBar.setIndeterminate(true);
+        installBar.setVisible(true);
+        frame.pack();
+        final boolean[] downloadSeen = {false};
+        javax.swing.Timer poll = new javax.swing.Timer(500, ev -> {
+            String progress = PgwireGovDataInstaller.installProgress();
+            long[] bytes = PgwireGovDataInstaller.installBytes();
+            if (progress != null) {
+                downloadSeen[0] = true;
+                setStatus("Installing the AskAmerica data server: " + progress, null);
+                if (bytes != null && bytes[1] > 0) {
+                    installBar.setIndeterminate(false);
+                    installBar.setValue((int) Math.min(1000L, bytes[0] * 1000L / bytes[1]));
+                } else {
+                    installBar.setIndeterminate(true);
+                }
+            } else if (downloadSeen[0]) {
+                // Downloaded; verifying the checksum and unpacking takes a while with no byte count.
+                setStatus("Installing the AskAmerica data server: verifying and unpacking…", null);
+                installBar.setIndeterminate(true);
+            }
+        });
+        poll.start();
+        Thread worker = new Thread(() -> {
+            String failure = null;
+            try {
+                PgwireGovDataInstaller.installOrUpdateBlocking();
+            } catch (RuntimeException e) {
+                failure = e.getMessage();
+            }
+            final String failed = failure;
+            SwingUtilities.invokeLater(() -> {
+                poll.stop();
+                installBar.setIndeterminate(false);
+                installBar.setVisible(false);
+                if (failed != null) {
+                    setStatus("The data server could not be installed: " + failed
+                        + " Click Configure to try again.", false);
+                } else {
+                    // Name the count, and the paths on hover: a bare "Done!" was reported after
+                    // writing a config file Claude Desktop does not read, which is
+                    // unfalsifiable from the wizard and looks identical to success.
+                    setStatus("Done! Updated " + written.size()
+                        + (written.size() == 1 ? " config file. " : " config files. ")
+                        + "Restart Claude Desktop to activate." + repairNote + " Tip: try \"What "
+                        + "can I do with AskAmerica?\", \"What questions can AskAmerica "
+                        + "answer?\", or \"Pose a sample question to AskAmerica\" in a new chat "
+                        + "any time to see what it can do.", true);
+                    statusLabel.setToolTipText(written.toString());
+                    configureBtn.setText("Configure again");
+                    maybeOfferRelaunch();
+                }
+                configureBtn.setEnabled(true);
+            });
+        }, "askamerica-data-server-install");
+        worker.setDaemon(false);
+        worker.start();
     }
 
     /**

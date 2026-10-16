@@ -23,6 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,5 +47,24 @@ class PgwireGovDataConnectorTempDirTest {
   @Test void realHomeDirectoryIsNotDetected() {
     String home = System.getProperty("user.home");
     assertFalse(PgwireGovDataConnector.isUnderTempDir(home + "/.mcp_askamerica"));
+  }
+
+  /** A respawn by any caller must give the shared server the same stable catalog, never a path
+   *  relative to the caller's working directory (2026-10-14: a worktree later deleted). */
+  @Test void missingDataDirFallsBackToTheDefaultNotARelativePath() {
+    File expected = new File(System.getProperty("user.home"), ".mcp_askamerica");
+    assertEquals(expected, PgwireGovDataConnector.sharedCatalogDataDir(null));
+    assertEquals(expected, PgwireGovDataConnector.sharedCatalogDataDir(""));
+  }
+
+  @Test void tempDataDirIsReplacedByTheDefault(@TempDir Path tmpDir) {
+    File expected = new File(System.getProperty("user.home"), ".mcp_askamerica");
+    assertEquals(expected, PgwireGovDataConnector.sharedCatalogDataDir(tmpDir.toString()));
+  }
+
+  @Test void durableDataDirIsKept() {
+    String home = System.getProperty("user.home");
+    assertEquals(new File(home, "data/askamerica"),
+        PgwireGovDataConnector.sharedCatalogDataDir(home + "/data/askamerica"));
   }
 }

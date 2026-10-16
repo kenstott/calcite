@@ -959,6 +959,8 @@ public abstract class SqlUtil {
             ? RESOURCE.validatorContextPoint(line, col)
             : RESOURCE.validatorContext(line, col, endLine, endCol)).ex(e.ex());
     contextExcn.setPosition(line, col, endLine, endCol);
+    // A resource that declares a SQLSTATE property gives the error its SQLState
+    contextExcn.setSqlState(e.getProperties().get("SQLSTATE"));
     return contextExcn;
   }
 

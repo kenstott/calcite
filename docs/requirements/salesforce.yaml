@@ -85,8 +85,15 @@
   description: >
     Every queryable sObject of the org, standard and custom, is one SQL table named as in
     Salesforce; an sObject that is not queryable is not a table.
-  source: SalesforceSchema (sObject.queryable)
-  tests: [ salesforce/SalesforceIntegrationTest#schemaExposesStandardSObjectsAsTables ]
+    (Amended 2026-10-15, tables operand:) The optional tables operand, a list or comma-separated
+    text, names the sObjects served; only those are SQL tables, so a host such as the pgwire
+    server reads the columns and row counts of those alone. A name matches an sObject ignoring
+    case and the table takes the sObject's own name. A name that is not a queryable sObject of
+    the org is refused. Without the operand, every queryable sObject is a table.
+  source: "SalesforceSchema (sObject.queryable); lead request 2026-10-15 (an org of 1,165 sObjects kept Provisa's replica builds waiting 15+ minutes), shaped like SNOW-010"
+  tests:
+    - salesforce/SalesforceIntegrationTest#schemaExposesStandardSObjectsAsTables
+    - salesforce/TablesOperandTest
 
 - id: SF-011
   module: salesforce
@@ -526,4 +533,24 @@
   source: "issue 518; pgwire-calcite calcite_backend._ensure_information_schema"
   tests:
     - salesforce/InformationSchemaTest
+  since: 2026-10
+
+- id: SF-054
+  module: salesforce
+  status: complete
+  group: catalog
+  category: Discovery
+  priority: MUST
+  type: behavioral
+  description: >
+    The schema always holds two listing tables, whatever the tables operand names, for picking
+    the sObjects to name. _salesforce_objects(name, label) lists every queryable sObject of the
+    org, ordered by name, from the one sObject list call; it reads no describe.
+    _salesforce_columns(table_name, column_name, data_type, ordinal_position) gives the columns
+    the one sObject a query names with table_name = '<sObject>' has as a table, from its
+    describe, with the PostgreSQL type name the pgwire server reports; it refuses a query that
+    names no sObject, and a name that is not a queryable sObject.
+  source: "lead request 2026-10-15, matching ServiceNow's _servicenow_tables / _servicenow_columns (SNOW-010)"
+  tests:
+    - salesforce/TablesOperandTest
   since: 2026-10

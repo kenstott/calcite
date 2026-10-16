@@ -57,6 +57,9 @@ public class VectorizedParquetReader implements AutoCloseable {
   private final Map<String, Boolean> timestampAdjustedMap;
 
   private PageReadStore currentRowGroup;
+  // One reader per row group: it consumes the group's pages, so a second reader over the same
+  // group finds none (#544)
+  private RecordReader<VectorizedGroup> currentRecordReader;
   private int currentRowGroupIndex = 0;
   private int currentRowInGroup = 0;
   private long totalRowsRead = 0;
@@ -174,6 +177,9 @@ public class VectorizedParquetReader implements AutoCloseable {
 
     currentRowGroupIndex++;
     currentRowInGroup = 0;
+    MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
+    currentRecordReader =
+        columnIO.getRecordReader(currentRowGroup, new VectorizedGroupMaterializer());
 
     LOGGER.trace("Loaded row group {} with {} rows",
                 currentRowGroupIndex - 1, currentRowGroup.getRowCount());
@@ -182,11 +188,7 @@ public class VectorizedParquetReader implements AutoCloseable {
   }
 
   private void readRowsColumnar(int numRows) throws IOException {
-    // Create column readers for each column
-    MessageColumnIO columnIO = new ColumnIOFactory().getColumnIO(schema);
-    VectorizedGroupMaterializer materializer = new VectorizedGroupMaterializer();
-    RecordReader<VectorizedGroup> recordReader =
-        columnIO.getRecordReader(currentRowGroup, materializer);
+    RecordReader<VectorizedGroup> recordReader = currentRecordReader;
 
     // Read rows in a more efficient batch - avoid individual read() calls
     // Pre-allocate array to avoid repeated ArrayList growth

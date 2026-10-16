@@ -169,6 +169,61 @@ final class QuestionDiagnostics {
                 || Pattern.compile("(?i)\\bSELECT\\s+DISTINCT\\b").matcher(sql).find());
     }
 
+    private static final Pattern GROUP_BY_CLAUSE = Pattern.compile(
+        "(?is)\\bGROUP\\s+BY\\b(.*?)(?:\\bHAVING\\b|\\bORDER\\s+BY\\b|\\bLIMIT\\b"
+        + "|\\bFETCH\\b|\\bOFFSET\\b|\\bUNION\\b|\\)|;|$)");
+
+    private static final Pattern IDENT = Pattern.compile("[a-z_][a-z0-9_]*");
+
+    private static final Pattern EXPLICIT_ROW_LIMIT = Pattern.compile(
+        "(?i)\\b(?:LIMIT\\s+\\d+|FETCH\\s+(?:FIRST|NEXT)\\s+\\d+\\s+ROWS?\\s+ONLY)");
+
+    /** Name fragments of a column that identifies a place or a period rather than an entity. */
+    private static final String[] GEO_OR_TIME_KEY = {
+        "tract", "zcta", "zip", "county", "state", "stusps", "fips", "geo", "year", "month",
+        "quarter", "date", "period"};
+
+    /**
+     * True when the query groups by a key that names an entity of its own (a park unit, a
+     * company, a facility) rather than a place or a period. A state column riding along as a
+     * descriptive attribute of such an entity does not make the row a state.
+     */
+    static boolean entityKeyed(String sql) {
+        if (sql == null) {
+            return false;
+        }
+        Matcher g = GROUP_BY_CLAUSE.matcher(sql);
+        if (!g.find()) {
+            return false;
+        }
+        for (String key : g.group(1).split(",")) {
+            Matcher id = IDENT.matcher(key.trim().toLowerCase(Locale.ROOT));
+            String last = null;
+            while (id.find()) {
+                last = id.group();
+            }
+            if (last == null) {
+                continue;
+            }
+            boolean geoOrTime = false;
+            for (String frag : GEO_OR_TIME_KEY) {
+                if (last.contains(frag)) {
+                    geoOrTime = true;
+                    break;
+                }
+            }
+            if (!geoOrTime) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A caller-written LIMIT / FETCH FIRST N: a request for the top N, not a sample size. */
+    private static boolean hasExplicitRowLimit(String sql) {
+        return sql != null && EXPLICIT_ROW_LIMIT.matcher(sql).find();
+    }
+
     static boolean bivariateAssociation(String sql) {
         return sql != null && BIVARIATE_AGG.matcher(sql).find();
     }
@@ -214,6 +269,14 @@ final class QuestionDiagnostics {
      * tables are named.
      */
     static String grainOf(List<String> columns) {
+        return grainOf(columns, null);
+    }
+
+    /** As above, but a query grouped by an entity key has no place grain to infer. */
+    static String grainOf(List<String> columns, String sql) {
+        if (entityKeyed(sql)) {
+            return null;
+        }
         boolean county = false;
         boolean state = false;
         boolean zcta = false;
@@ -717,7 +780,7 @@ final class QuestionDiagnostics {
      */
     private static void mixedUnitKinds(String sql, ArrayNode rows, List<String> columns,
             String grain, ArrayNode warnings) {
-        if (rows == null || rows.size() == 0) {
+        if (rows == null || rows.size() == 0 || entityKeyed(sql)) {
             return;
         }
         boolean crossUnit = bivariateAssociation(sql) || anyStatAggregate(sql);
@@ -879,7 +942,7 @@ final class QuestionDiagnostics {
             int offset, ExclusionProbe.SqlRunner runner) {
         ArrayNode warnings = MAPPER.createArrayNode();
         List<String> columns = columnsOf(rows);
-        String grain = grainOf(columns);
+        String grain = grainOf(columns, sql);
         int n = observationCount(rows, sql);
         boolean capped = rows != null && rowLimit > 0 && rows.size() >= rowLimit;
 
@@ -1046,7 +1109,9 @@ final class QuestionDiagnostics {
                 + "that test exists to catch." : ""));
         w.set("predicates", predicates);
         w.put("recipe", "report-what-an-exclusion-changed-not-only-that-you-made-one");
-        ExclusionProbe.annotate(w, sql, originalRows, diffAliases, runner);
+        if (ExclusionProbe.annotate(w, sql, originalRows, diffAliases, runner)) {
+            return;
+        }
         warnings.add(w);
     }
 
@@ -1211,6 +1276,10 @@ final class QuestionDiagnostics {
             ArrayNode warnings) {
         boolean causalShape = bivariateAssociation(sql) || anyStatAggregate(sql) || grain != null;
         if (!causalShape || n < 0) {
+            return;
+        }
+        // A top-N ranking returns the N it was asked for; that count is not a sample size.
+        if (hasExplicitRowLimit(sql) && !bivariateAssociation(sql) && !anyStatAggregate(sql)) {
             return;
         }
         // A result that filled its row cap reports a floor on the unit count, not the count,
@@ -1548,10 +1617,21 @@ final class QuestionDiagnostics {
     static ObjectNode forExtraction(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped,
             List<String> droppedLabels, ExclusionProbe.SqlRunner runner) {
+        return forExtraction(sql, covariates, covariateCols, n, totalRows, dropped,
+            droppedLabels, runner, null);
+    }
+
+    /** As above, with the rows the tool already extracted from {@code sql} (as {@code query}
+     *  would have returned them), so the probe compares against those rather than running the
+     *  caller's SQL again. Null when the tool kept none; the probe then runs it, bounded. */
+    static ObjectNode forExtraction(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped,
+            List<String> droppedLabels, ExclusionProbe.SqlRunner runner,
+            ArrayNode originalRows) {
         ArrayNode warnings = MAPPER.createArrayNode();
 
         sampleAttrition(totalRows, dropped, droppedLabels, warnings);
-        explicitExclusion(sql, null, runner, warnings);
+        explicitExclusion(sql, originalRows, runner, warnings);
 
         if (n > 0 && n <= SMALL_N) {
             ObjectNode w = warning("small_n", CAUTION,

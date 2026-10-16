@@ -72,4 +72,13 @@ class PgwireGovDataConnectorOccupantTest {
     }
     assertNull(PgwireGovDataConnector.portListenerPid(port));
   }
+
+  @Test void netstatListingYieldsTheListenerOfExactlyThatPort() {
+    String listing = "  Proto  Local Address          Foreign Address        State           PID\r\n"
+        + "  TCP    0.0.0.0:145433         0.0.0.0:0              LISTENING       111\r\n"
+        + "  TCP    127.0.0.1:45433        0.0.0.0:0              LISTENING       4242\r\n"
+        + "  TCP    127.0.0.1:45433        127.0.0.1:50000        ESTABLISHED     7\r\n";
+    assertEquals(Long.valueOf(4242), PgwireGovDataConnector.netstatListenerPid(listing, 45433));
+    assertNull(PgwireGovDataConnector.netstatListenerPid(listing, 9999));
+  }
 }
