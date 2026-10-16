@@ -465,8 +465,14 @@ public class McpServer {
                 // thread: they are trivial, and ordering against the requests around them
                 // is easier to reason about kept in sequence.
                 if (!req.has("id")) {
-                    handleNotification(reqMethod);
+                    handleNotification(reqMethod, req.path("params"));
                     continue;
+                }
+                // The scope is opened here, not on the worker, so the budget clock starts when
+                // the host's does and a cancellation that overtakes a queued request finds it.
+                if ("tools/call".equals(reqMethod)) {
+                    String tool = req.path("params").path("name").asText("");
+                    CallScope.begin(req.get("id").toString(), tool, toolBudgetMillis(tool));
                 }
 
                 // Dispatch off the reader thread. Reading stays serial — there is one stdin
@@ -506,6 +512,10 @@ public class McpServer {
      * failure to serialise cannot leave a half-written line on the wire.
      */
     private static void respond(PrintStream out, ObjectNode resp) {
+        if (resp == null) {
+            // The host cancelled this request and is no longer listening for its answer.
+            return;
+        }
         synchronized (OUT_LOCK) {
             try {
                 out.println(MAPPER.writeValueAsString(resp));
@@ -680,11 +690,28 @@ public class McpServer {
                 case "resources/read":   return handleResourcesRead(id, params);
                 case "tools/call": {
                     String tool = params.path("name").asText("");
-                    if (LOCK_FREE_TOOLS.contains(tool)) {
-                        return handleToolsCall(id, params);
-                    }
-                    synchronized (DB_LOCK) {
-                        return handleToolsCall(id, params);
+                    CallScope scope = CallScope.begin(String.valueOf(id), tool,
+                        toolBudgetMillis(tool));
+                    scope.enter();
+                    try {
+                        scope.check();
+                        ObjectNode resp;
+                        if (LOCK_FREE_TOOLS.contains(tool)) {
+                            resp = handleToolsCall(id, params);
+                        } else {
+                            synchronized (DB_LOCK) {
+                                scope.lockAcquired();
+                                // Waiting for the lock can outlast the host's patience; a call
+                                // cancelled or timed out in the queue must not start.
+                                scope.check();
+                                resp = handleToolsCall(id, params);
+                            }
+                        }
+                        return scope.hostCancelled() ? null : resp;
+                    } catch (CallScope.Stopped stopped) {
+                        return scope.hostCancelled() ? null : stoppedResult(id, stopped);
+                    } finally {
+                        scope.end();
                     }
                 }
                 default:
@@ -725,8 +752,21 @@ public class McpServer {
         }
     }
 
-    private static void handleNotification(String method) {
+    private static void handleNotification(String method, JsonNode params) {
         log.println("[askamerica-mcp] Notification: " + method);
+        if ("notifications/cancelled".equals(method) && params.has("requestId")) {
+            String requestId = params.get("requestId").toString();
+            String reason = params.path("reason").asText("");
+            // Statement.cancel() goes to the database driver and can block, so it must not run
+            // on the reader thread: a blocked reader stops every later request being read.
+            Thread t = new Thread(() -> {
+                boolean found = CallScope.cancelRequest(requestId, reason);
+                log.println("[askamerica-mcp] cancelled request " + requestId
+                    + (found ? ": in-flight call stopped" : ": no such call in flight"));
+            }, "mcp-cancel");
+            t.setDaemon(true);
+            t.start();
+        }
     }
 
     // ── MCP handlers ─────────────────────────────────────────────────────────
@@ -5055,7 +5095,11 @@ public class McpServer {
         // fallback-guard: allow -- see comment above
         } catch (Exception e) {
             long ms = System.currentTimeMillis() - t0;
-            String compact = compactErrorMessage(e);
+            // A statement cancelled by the call's own stop surfaces as the driver's generic
+            // "canceling statement" error; the stop reason is the real cause, so it wins.
+            CallScope stoppedScope = CallScope.current();
+            String compact = stoppedScope != null && stoppedScope.stopped()
+                ? stoppedScope.stopMessage() : compactErrorMessage(e);
             log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms + " msg=" + compact);
             recordCall(name, args, ms, -1, null, compact);
             if (telemetryOptIn && !"set_telemetry".equals(name)) {
@@ -8201,8 +8245,12 @@ public class McpServer {
      */
     static ResultSet executeWithRepair(Statement st, String sql) throws Exception {
         String effective = normalizeCallerSql(sql);
+        // Registered with the call so a host cancellation or the call's budget can cancel it.
+        CallScope.registerCurrent(st);
         try {
-            return st.executeQuery(effective);
+            ResultSet first = st.executeQuery(effective);
+            CallScope.checkCurrent();
+            return first;
         } catch (Exception e) {
             String msg = e.getMessage();
             if (msg == null || !msg.contains("parse failed")) {
@@ -8780,12 +8828,87 @@ public class McpServer {
         int timeoutSeconds = queryTimeoutSeconds();
         stmt.setQueryTimeout(timeoutSeconds);
         ACTIVE_STATEMENTS.put(stmt, new long[]{System.currentTimeMillis(), timeoutSeconds});
+        CallScope.registerCurrent(stmt);
     }
 
     /** Deregisters a statement bound by {@link #guardStatement}. */
     static void releaseGuardedStatement(Statement stmt) {
         ACTIVE_STATEMENTS.remove(stmt);
         WATCHDOG_CANCELLED_AT.remove(stmt);
+        CallScope.unregisterCurrent(stmt);
+    }
+
+    /** Tools that fit a model in-process over rows extracted by the caller's SQL. They get a
+     *  time budget (see {@link #statsCallBudgetSeconds()}) because the host abandons a tool call
+     *  at about 60s and, without a budget, the engine would keep the statement and the database
+     *  lock running long after nobody is waiting for the answer. */
+    static final java.util.Set<String> STATS_TOOLS =
+        new java.util.HashSet<>(java.util.Arrays.asList(
+            "event_study", "sensitivity_analysis", "ols_regression", "cross_validate", "iv_2sls",
+            "diff_in_diff", "hypothesis_test", "panel_fixed_effects", "robust_regression",
+            "flexible_regression", "feature_importance", "correlation_matrix",
+            "quantile_binning_test", "subgroup_contribution", "gini_coefficient",
+            "hhi_concentration", "partial_correlation", "arima_forecast", "garch_forecast",
+            "volatility_forecast", "backtest_volatility", "scenario_sweep", "double_ml_ate"));
+
+    /** Default seconds a stats call may run, chosen to land inside the host's ~60s limit. */
+    private static final int DEFAULT_STATS_CALL_BUDGET_SECONDS = 50;
+
+    /** Seconds a stats call may run before the engine stops it and says so
+     *  ({@code askamerica.stats.call.budget.seconds}; zero disables the budget). */
+    static int statsCallBudgetSeconds() {
+        return intProperty("askamerica.stats.call.budget.seconds",
+            DEFAULT_STATS_CALL_BUDGET_SECONDS);
+    }
+
+    /** Default seconds the diagnostics' exclusion probe may spend re-running SQL. */
+    private static final int DEFAULT_PROBE_BUDGET_SECONDS = 10;
+
+    /** Seconds one diagnostic probe statement may run
+     *  ({@code askamerica.diagnostics.probe.budget.seconds}), capped by what the call has left
+     *  of its own budget, so a diagnostic never costs more than the call it annotates. */
+    static int probeTimeoutSeconds() {
+        int seconds = intProperty("askamerica.diagnostics.probe.budget.seconds",
+            DEFAULT_PROBE_BUDGET_SECONDS);
+        CallScope scope = CallScope.current();
+        if (scope != null) {
+            long left = scope.remainingMillis() / 1000;
+            if (left < seconds) {
+                seconds = (int) Math.max(1, left);
+            }
+        }
+        return Math.max(1, seconds);
+    }
+
+    private static int intProperty(String name, int defaultValue) {
+        String raw = System.getProperty(name);
+        if (raw == null || raw.isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Math.max(0, Integer.parseInt(raw.trim()));
+        } catch (NumberFormatException e) {
+            log.println("[askamerica-mcp] bad " + name + " '" + raw + "', using " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    private static long toolBudgetMillis(String tool) {
+        return STATS_TOOLS.contains(tool) ? statsCallBudgetSeconds() * 1000L : 0L;
+    }
+
+    /** The result for a call that was stopped before its handler ran (cancelled or out of
+     *  budget while queued): an ordinary isError result carrying the reason. */
+    private static ObjectNode stoppedResult(JsonNode id, CallScope.Stopped stopped) {
+        ArrayNode content = MAPPER.createArrayNode();
+        ObjectNode block = MAPPER.createObjectNode();
+        block.put("type", "text");
+        block.put("text", stopped.getMessage());
+        content.add(block);
+        ObjectNode body = MAPPER.createObjectNode();
+        body.set("content", content);
+        body.put("isError", true);
+        return result(id, body);
     }
 
     /** Execute SQL on the single all-schemas connection, applying the same reserved-word
@@ -9123,6 +9246,72 @@ public class McpServer {
     /** As {@link #runSqlOn} but hands back the rows themselves, so a caller that needs to
      *  inspect the result (the diagnostics envelope) does not re-parse its own JSON. The
      *  serialized form is identical either way. */
+    /** One result-set row as JSON, typed the way {@code query} returns it. Shared with the
+     *  stats extraction so the rows it keeps compare equal to a re-run of the same SQL. */
+    static ObjectNode rowToJson(ResultSet rs, String[] names, int[] sqlTypes)
+            throws java.sql.SQLException {
+        ObjectNode row = MAPPER.createObjectNode();
+        for (int i = 0; i < names.length; i++) {
+            int t = sqlTypes[i];
+            if (t == java.sql.Types.INTEGER || t == java.sql.Types.SMALLINT
+                    || t == java.sql.Types.TINYINT) {
+                int v = rs.getInt(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.BIGINT) {
+                long v = rs.getLong(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.FLOAT || t == java.sql.Types.REAL) {
+                float v = rs.getFloat(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.DOUBLE || t == java.sql.Types.NUMERIC
+                    || t == java.sql.Types.DECIMAL) {
+                double v = rs.getDouble(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else if (t == java.sql.Types.BOOLEAN || t == java.sql.Types.BIT) {
+                boolean v = rs.getBoolean(i + 1);
+                if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
+            } else {
+                Object val = rs.getObject(i + 1);
+                if (rs.wasNull() || val == null) row.putNull(names[i]);
+                else row.put(names[i], val.toString());
+            }
+        }
+        return row;
+    }
+
+    /**
+     * The first {@link ExclusionProbe#RELAXED_ROW_LIMIT} rows of a result, kept as JSON while a
+     * stats extraction reads it. This is what {@code query} would have returned for the same SQL,
+     * so the diagnostics' exclusion probe can compare against rows already in hand instead of
+     * running the caller's SQL a second time.
+     */
+    static final class RowSample {
+        private final String[] names;
+        private final int[] types;
+        private final ArrayNode rows = MAPPER.createArrayNode();
+
+        RowSample(ResultSet rs) throws java.sql.SQLException {
+            ResultSetMetaData meta = rs.getMetaData();
+            names = new String[meta.getColumnCount()];
+            types = new int[names.length];
+            for (int i = 0; i < names.length; i++) {
+                names[i] = meta.getColumnLabel(i + 1);
+                types[i] = meta.getColumnType(i + 1);
+            }
+        }
+
+        /** Keeps the current row while the sample is under its cap. */
+        void add(ResultSet rs) throws java.sql.SQLException {
+            if (rows.size() < ExclusionProbe.RELAXED_ROW_LIMIT) {
+                rows.add(rowToJson(rs, names, types));
+            }
+        }
+
+        ArrayNode rows() {
+            return rows;
+        }
+    }
+
     private static ArrayNode runSqlRows(String sql, int limit) throws Exception {
         return runSqlRows(sql, limit, 0);
     }
@@ -9135,6 +9324,13 @@ public class McpServer {
      * page that could repeat or skip rows.
      */
     private static ArrayNode runSqlRows(String sql, int limit, int offset) throws Exception {
+        return runSqlRows(sql, limit, offset, queryTimeoutSeconds());
+    }
+
+    /** As above with an explicit statement timeout, for callers that must stay inside a
+     *  tighter bound than the per-query default (the diagnostics' exclusion probe). */
+    private static ArrayNode runSqlRows(String sql, int limit, int offset, int timeoutSeconds)
+            throws Exception {
         String effective = repairDateTruncDateArg(stripRedundantLimitClause(sql));
         String lower = effective.toLowerCase();
         if (offset > 0) {
@@ -9161,7 +9357,6 @@ public class McpServer {
         // at all appears to hang because it is queued behind the query that is still
         // running. Verified enforced on this path -- a 5s limit aborted a three-way cross
         // join at 5996ms -- so it is a real bound rather than an advisory one.
-        int timeoutSeconds = queryTimeoutSeconds();
         stmt.setQueryTimeout(timeoutSeconds);
         // Registered with the WATCHDOG above: setQueryTimeout has been observed not to fire on
         // a query wedged inside DuckDB's own engine (see ACTIVE_STATEMENTS' doc), so this is the
@@ -9182,33 +9377,7 @@ public class McpServer {
             }
             ArrayNode arr = MAPPER.createArrayNode();
             while (rs.next()) {
-                ObjectNode row = MAPPER.createObjectNode();
-                for (int i = 0; i < cols; i++) {
-                    int t = sqlTypes[i];
-                    if (t == java.sql.Types.INTEGER || t == java.sql.Types.SMALLINT
-                            || t == java.sql.Types.TINYINT) {
-                        int v = rs.getInt(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.BIGINT) {
-                        long v = rs.getLong(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.FLOAT || t == java.sql.Types.REAL) {
-                        float v = rs.getFloat(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.DOUBLE || t == java.sql.Types.NUMERIC
-                            || t == java.sql.Types.DECIMAL) {
-                        double v = rs.getDouble(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else if (t == java.sql.Types.BOOLEAN || t == java.sql.Types.BIT) {
-                        boolean v = rs.getBoolean(i + 1);
-                        if (rs.wasNull()) row.putNull(names[i]); else row.put(names[i], v);
-                    } else {
-                        Object val = rs.getObject(i + 1);
-                        if (rs.wasNull() || val == null) row.putNull(names[i]);
-                        else row.put(names[i], val.toString());
-                    }
-                }
-                arr.add(row);
+                arr.add(rowToJson(rs, names, sqlTypes));
             }
             rs.close();
             return arr;
@@ -9237,6 +9406,7 @@ public class McpServer {
             throw ex;
         } finally {
             ACTIVE_STATEMENTS.remove(stmt);
+            CallScope.unregisterCurrent(stmt);
             stmt.close();
         }
     }
@@ -12672,7 +12842,7 @@ public class McpServer {
     private static ObjectNode diagnose(String sql, ArrayNode rows, int rowLimit, int offset) {
         try {
             return QuestionDiagnostics.forQuery(getCatalogConnection(), sql, rows, rowLimit,
-                offset, relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
+                offset, McpServer::probeRun);
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above
@@ -12904,23 +13074,45 @@ public class McpServer {
     /** {@link #diagnose} for the stats tools, which measure their own n and covariates. */
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped) {
-        return diagnoseStats(sql, covariates, covariateCols, n, totalRows, dropped, null);
+        return diagnoseStats(sql, covariates, covariateCols, n, totalRows, dropped, null, null);
     }
 
     private static ObjectNode diagnoseStats(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped,
-            List<String> droppedLabels) {
+            List<String> droppedLabels, ArrayNode originalRows) {
         try {
-            return QuestionDiagnostics.forExtraction(sql, covariates, covariateCols, n,
-                totalRows, dropped, droppedLabels,
-                relaxed -> runSqlRows(relaxed, ExclusionProbe.RELAXED_ROW_LIMIT));
+            ObjectNode diagnostics = QuestionDiagnostics.forExtraction(sql, covariates,
+                covariateCols, n, totalRows, dropped, droppedLabels, McpServer::probeRun,
+                originalRows);
+            // A probe cancelled because the call itself was stopped must stop the call, not
+            // come back as a finished result with a diagnostic that quietly gave up.
+            CallScope.checkCurrent();
+            return diagnostics;
         // .incomplete(reason) is an explicit failure sentinel, logged above -- not confused
         // with a successful diagnostics result.
         // fallback-guard: allow -- explicit failure sentinel, see comment above
         } catch (Exception e) {
+            CallScope.checkCurrent();
             String reason = compactErrorMessage(e);
             log.println("[askamerica-mcp] diagnostics failed: " + reason);
             return QuestionDiagnostics.incomplete(reason);
+        }
+    }
+
+    /**
+     * Runs one of the diagnostics' own statements under the probe budget. A diagnostic annotates
+     * a result the call already has, so it must never cost more than the call: the statement gets
+     * {@link #probeTimeoutSeconds()}, and running out of it is reported to the caller as the reason
+     * the excluded units are not named rather than being dropped.
+     */
+    private static ArrayNode probeRun(String sql) throws Exception {
+        int seconds = probeTimeoutSeconds();
+        try {
+            return runSqlRows(sql, ExclusionProbe.RELAXED_ROW_LIMIT, 0, seconds);
+        } catch (java.sql.SQLException e) {
+            CallScope.checkCurrent();
+            throw new java.sql.SQLException("the diagnostic query did not finish within its "
+                + seconds + "s budget (" + compactErrorMessage(e) + "), so it was skipped", e);
         }
     }
 
@@ -12978,7 +13170,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels, ex.sampleRows));
     }
 
     /** {@link #statsResult(ObjectNode, String, List, StatsEngine.Extraction)} for the
@@ -12989,7 +13181,7 @@ public class McpServer {
         double[][] cols = covariates.isEmpty()
             ? null : ex.columnsFor(covariates.toArray(new String[0]));
         return new StatsOutput(out.toString(), diagnoseStats(sql, covariates, cols, ex.n(),
-            ex.totalRows, ex.droppedForNull, ex.droppedLabels));
+            ex.totalRows, ex.droppedForNull, ex.droppedLabels, ex.sampleRows));
     }
 
     /** Attaches sample-size bookkeeping every stats tool result shares — how many source

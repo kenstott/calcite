@@ -1617,10 +1617,21 @@ final class QuestionDiagnostics {
     static ObjectNode forExtraction(String sql, List<String> covariates,
             double[][] covariateCols, int n, int totalRows, int dropped,
             List<String> droppedLabels, ExclusionProbe.SqlRunner runner) {
+        return forExtraction(sql, covariates, covariateCols, n, totalRows, dropped,
+            droppedLabels, runner, null);
+    }
+
+    /** As above, with the rows the tool already extracted from {@code sql} (as {@code query}
+     *  would have returned them), so the probe compares against those rather than running the
+     *  caller's SQL again. Null when the tool kept none; the probe then runs it, bounded. */
+    static ObjectNode forExtraction(String sql, List<String> covariates,
+            double[][] covariateCols, int n, int totalRows, int dropped,
+            List<String> droppedLabels, ExclusionProbe.SqlRunner runner,
+            ArrayNode originalRows) {
         ArrayNode warnings = MAPPER.createArrayNode();
 
         sampleAttrition(totalRows, dropped, droppedLabels, warnings);
-        explicitExclusion(sql, null, runner, warnings);
+        explicitExclusion(sql, originalRows, runner, warnings);
 
         if (n > 0 && n <= SMALL_N) {
             ObjectNode w = warning("small_n", CAUTION,
