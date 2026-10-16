@@ -3,7 +3,7 @@
 -- Schema: disasters
 -- Tables: disaster_declarations, public_assistance_projects, hazard_mitigation_projects,
 --         nfip_claims, nfip_policies, nfip_multiple_loss_properties, storm_events,
---         wildfire_perimeters
+--         wildfire_perimeters, ihp_housing_assistance_owners, ihp_housing_assistance_renters
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- nfip_policies is capped by dqRowLimit (50k/year) in DQ mode, so its T2 threshold is a
@@ -258,6 +258,152 @@ INSERT INTO dq_results
 SELECT 'disasters', 'nfip_multiple_loss_properties', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nfip_multiple_loss_properties', allow_moved_paths := true) WHERE id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ihp_housing_assistance_owners (snapshot, no year axis; full OpenFEMA dataset, not sampled)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T2_row_count',
+  CASE WHEN n >= 150000 THEN 'pass' ELSE 'fail' END, n, 150000,
+  'Expected >=150000 rows (OpenFEMA published 160625 on 2026-10-16)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name <> 'type'));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name <> 'type'));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL id rows plus duplicate id values'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true) WHERE id IS NULL)
+           + (SELECT COUNT(*) FROM (SELECT id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true) GROUP BY id HAVING COUNT(*) > 1)) AS n);
+
+-- County FIPS comes from the declaration of the same disaster number and area name; rows
+-- stay NULL only for tribal areas and area names no declaration lists. Measured 97.5 percent
+-- resolved on 2026-10-16; fail below 95 percent.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T7_county_fips_resolution',
+  CASE WHEN share >= 0.95 THEN 'pass' ELSE 'fail' END, ROUND(share, 4), 0.95,
+  'Share of rows with a county_fips (unresolved are tribal areas or unlisted area names)'
+FROM (SELECT COUNT(county_fips) * 1.0 / COUNT(*) AS share FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T7_fips_shape',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows whose county_fips is not 5 digits or does not start with state_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true)
+      WHERE county_fips IS NOT NULL
+        AND (LENGTH(county_fips) <> 5 OR state_fips IS NULL OR SUBSTR(county_fips, 1, 2) <> state_fips));
+
+-- Counts and dollars are non-negative; approvals and inspections cannot exceed the valid
+-- registrations of the same row. (The approved total is NOT checked against its parts:
+-- about 9 percent of FEMA's own rows differ by more than $1, and renters' damage degrees do
+-- not sum to total_inspected in the source either.)
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with a negative count/amount, or approved or inspected above valid registrations'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true)
+      WHERE valid_registrations < 0 OR total_damage < 0 OR total_approved_ihp_amount < 0
+         OR repair_replace_amount < 0 OR rental_amount < 0 OR other_needs_amount < 0
+         OR approved_for_assistance > valid_registrations OR total_inspected > valid_registrations);
+
+-- Known anchor: Hurricane Harvey (DR-4332) damaged owner-occupied homes in Harris County TX
+-- (48201); FEMA inspected about 130,000 of them (130,520 on 2026-10-16).
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_owners', 'T7_known_value',
+  CASE WHEN insp >= 100000 THEN 'pass' ELSE 'fail' END, insp, 100000,
+  'Harvey DR-4332 Harris County TX owners inspected, expected >= 100000 (county_fips 48201)'
+FROM (SELECT COALESCE(SUM(total_inspected), 0) AS insp
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true)
+      WHERE disaster_number = 4332 AND county_fips = '48201');
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ihp_housing_assistance_renters (snapshot, no year axis; full OpenFEMA dataset, not sampled)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T2_row_count',
+  CASE WHEN n >= 140000 THEN 'pass' ELSE 'fail' END, n, 140000,
+  'Expected >=140000 rows (OpenFEMA published 148157 on 2026-10-16)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name <> 'type'));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name <> 'type'));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL id rows plus duplicate id values'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true) WHERE id IS NULL)
+           + (SELECT COUNT(*) FROM (SELECT id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true) GROUP BY id HAVING COUNT(*) > 1)) AS n);
+
+-- County FIPS comes from the declaration of the same disaster number and area name; rows
+-- stay NULL only for tribal areas and area names no declaration lists. Measured 97.5 percent
+-- resolved on 2026-10-16; fail below 95 percent.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T7_county_fips_resolution',
+  CASE WHEN share >= 0.95 THEN 'pass' ELSE 'fail' END, ROUND(share, 4), 0.95,
+  'Share of rows with a county_fips (unresolved are tribal areas or unlisted area names)'
+FROM (SELECT COUNT(county_fips) * 1.0 / COUNT(*) AS share FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T7_fips_shape',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows whose county_fips is not 5 digits or does not start with state_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true)
+      WHERE county_fips IS NOT NULL
+        AND (LENGTH(county_fips) <> 5 OR state_fips IS NULL OR SUBSTR(county_fips, 1, 2) <> state_fips));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_housing_assistance_renters', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with a negative count/amount, or approved or inspected above valid registrations'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true)
+      WHERE valid_registrations < 0 OR total_approved_ihp_amount < 0
+         OR repair_replace_amount < 0 OR rental_amount < 0 OR other_needs_amount < 0
+         OR approved_for_assistance > valid_registrations OR total_inspected > valid_registrations);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: storm_events
