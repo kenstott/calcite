@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.116.0](https://github.com/kenstott/calcite/compare/engine-v0.115.0...engine-v0.116.0) (2026-10-16)
+
+
+### Features
+
+* **fiscal:** view usaspending_assistance_by_county - federal assistance obligations by county x Assistance Listing x fiscal year ([9972162](https://github.com/kenstott/calcite/commit/9972162791a7210bfe29bb2a5f7d1c4f7e053c14))
+* **salesforce:** a tables operand names the sObjects served; two listing tables list the org's ([#561](https://github.com/kenstott/calcite/issues/561)) ([80cbc86](https://github.com/kenstott/calcite/commit/80cbc86321fc702f26df89704ba8c8861d57824e))
+* **sec:** the feed store answers FilingSummary.xml as absent for a held filing with no XBRL ([f92342a](https://github.com/kenstott/calcite/commit/f92342ad4f3fad0a5462c3cefeae871c03945f3a))
+
+
+### Bug Fixes
+
+* **askamerica:** the Windows data-server bundle no longer carries symlinks ([857bd59](https://github.com/kenstott/calcite/commit/857bd59afe02f0f834166b741513424ea8af2446))
+* **file:** schema loaders that start during the Iceberg schema cache check wait for it ([3f6c7f9](https://github.com/kenstott/calcite/commit/3f6c7f9e08a824b679bea1bf6684a1525f8b2adb))
+
 ## [0.115.0](https://github.com/kenstott/calcite/compare/engine-v0.114.0...engine-v0.115.0) (2026-10-16)
 
 
