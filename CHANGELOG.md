@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.116.1](https://github.com/kenstott/calcite/compare/engine-v0.116.0...engine-v0.116.1) (2026-10-16)
+
+
+### Bug Fixes
+
+* **askamerica:** host cancellation and a time budget stop stats calls; diagnostics reuse extracted rows ([#954](https://github.com/kenstott/calcite/issues/954)) ([39cda4d](https://github.com/kenstott/calcite/commit/39cda4d825854c0fe050bffab4be1da7e6c7a3b0))
+
 ## [0.116.0](https://github.com/kenstott/calcite/compare/engine-v0.115.0...engine-v0.116.0) (2026-10-16)
 
 
