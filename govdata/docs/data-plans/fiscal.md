@@ -243,7 +243,9 @@ spatial counterpart to the SOI revenue tables.
 
 Delivered from the all-agency `Full` files of the award data archive, one row per assistance
 transaction, FY2007 onward (view `fac_awards_vs_usaspending` joins it to the Federal Audit
-Clearinghouse tables on UEI and ALN). The original Phase 2 description follows.
+Clearinghouse tables on UEI and ALN; view `usaspending_assistance_by_county` aggregates it to
+place-of-performance county x ALN x fiscal year, as a view because it is a three-column aggregate
+of one table and cannot drift from it). The original Phase 2 description follows.
 
 Award-level detail (one row per award × modification), keyed to recipient EIN/UEI and
 place-of-performance. Deferred to Phase 2 because of volume; sourced from the USAspending bulk

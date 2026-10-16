@@ -1541,6 +1541,87 @@ FROM (SELECT COUNT(*) AS n FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/fac_federal_awards_historic', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
+-- usaspending_assistance_by_county (VIEW over usaspending_assistance; there is no Iceberg table of its
+-- own, so the view's aggregation is repeated here against the base table, exactly as in the schema
+-- YAML). The DQ sample is the first 200000 rows of each of FY2025 and FY2026, so these checks prove the
+-- aggregation, not full-year county totals.
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance_by_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Rows of the county x listing x year aggregation'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, pop_county_fips AS county_fips, cfda_number AS assistance_listing,
+    SUM(federal_action_obligation) AS obligated_amount, COUNT(*) AS transactions
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE pop_county_fips IS NOT NULL AND pop_county_fips <> '' AND pop_county_fips NOT LIKE '%000'
+  GROUP BY year, pop_county_fips, cfda_number));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance_by_county', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Expected >=10000 (year, county, listing) rows from the DQ sample (about 58000 per sampled year)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, pop_county_fips AS county_fips, cfda_number AS assistance_listing,
+    SUM(federal_action_obligation) AS obligated_amount, COUNT(*) AS transactions
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE pop_county_fips IS NOT NULL AND pop_county_fips <> '' AND pop_county_fips NOT LIKE '%000'
+  GROUP BY year, pop_county_fips, cfda_number));
+
+-- Key columns: a NULL or malformed county would be a blank place of performance leaking into the view
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance_by_county', 'T6_pk_nulls_and_county_shape',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with a NULL key or a county_fips that is not 5 digits or ends in 000'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, pop_county_fips AS county_fips, cfda_number AS assistance_listing,
+    SUM(federal_action_obligation) AS obligated_amount, COUNT(*) AS transactions
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE pop_county_fips IS NOT NULL AND pop_county_fips <> '' AND pop_county_fips NOT LIKE '%000'
+  GROUP BY year, pop_county_fips, cfda_number)
+  WHERE year IS NULL OR county_fips IS NULL OR assistance_listing IS NULL
+     OR LENGTH(county_fips) <> 5 OR county_fips LIKE '%000');
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance_by_county', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, county_fips, assistance_listing) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, county_fips, assistance_listing, COUNT(*) AS c FROM (
+  SELECT year, pop_county_fips AS county_fips, cfda_number AS assistance_listing,
+    SUM(federal_action_obligation) AS obligated_amount, COUNT(*) AS transactions
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE pop_county_fips IS NOT NULL AND pop_county_fips <> '' AND pop_county_fips NOT LIKE '%000'
+  GROUP BY year, pop_county_fips, cfda_number)
+  GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- Conservation: every transaction is either in the view or in the excluded blank/state-level bucket, so
+-- the view's transactions plus the excluded ones equal the base table's row count.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance_by_county', 'T9_transactions_conserved',
+  CASE WHEN diff = 0 THEN 'pass' ELSE 'fail' END, diff, 0,
+  'Base rows minus (view transactions + excluded blank/state-level rows); 0 means nothing dropped or double counted'
+FROM (SELECT
+  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true))
+  - (SELECT SUM(transactions) FROM (
+  SELECT year, pop_county_fips AS county_fips, cfda_number AS assistance_listing,
+    SUM(federal_action_obligation) AS obligated_amount, COUNT(*) AS transactions
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE pop_county_fips IS NOT NULL AND pop_county_fips <> '' AND pop_county_fips NOT LIKE '%000'
+  GROUP BY year, pop_county_fips, cfda_number))
+  - (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+     WHERE pop_county_fips IS NULL OR pop_county_fips = '' OR pop_county_fips LIKE '%000') AS diff);
+
+-- The two programs the table was built for must be present
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_assistance_by_county', 'T10_example_listings_present',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'Distinct of 93.788 / 93.959 present in the sample'
+FROM (SELECT COUNT(DISTINCT assistance_listing) AS n FROM (
+  SELECT year, pop_county_fips AS county_fips, cfda_number AS assistance_listing,
+    SUM(federal_action_obligation) AS obligated_amount, COUNT(*) AS transactions
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true)
+  WHERE pop_county_fips IS NOT NULL AND pop_county_fips <> '' AND pop_county_fips NOT LIKE '%000'
+  GROUP BY year, pop_county_fips, cfda_number)
+  WHERE assistance_listing IN ('93.788', '93.959'));
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

@@ -6945,3 +6945,55 @@ views:
         ON u.recipient_uei = CASE WHEN g.auditee_uei = 'GSA_MIGRATION' THEN m.uei ELSE g.auditee_uei END
        AND u.cfda_number = a.federal_agency_prefix || '.' || a.federal_award_extension
        AND u.year = a.audit_year
+
+  - name: usaspending_assistance_by_county
+    comment: >
+      Federal assistance obligations by place-of-performance county x Assistance Listing (ALN,
+      formerly CFDA number) x federal fiscal year (Oct-Sep; year = fiscal year of action_date):
+      the program breakdown that usaspending_by_county (one total per county, all award types)
+      does not carry. One row per (year, county_fips, assistance_listing), aggregated from
+      usaspending_assistance, so it covers exactly the fiscal years that table has loaded.
+      obligated_amount is the signed sum of federal_action_obligation, so de-obligations net out
+      and a county-listing-year can be negative. obligated_amount_excl_loans leaves out the loan
+      assistance types (07 direct loan, 08 guaranteed/insured loan, and the FY2026-onward
+      codes F003 direct loan and F004 loan guarantee), whose obligation is the subsidy cost
+      rather than the face value, as usaspending_by_county does; face value is in
+      usaspending_assistance.face_value_of_loan. county_fips is the PLACE OF PERFORMANCE county,
+      not the recipient's: for pass-through awards (a state agency receiving a block grant and
+      subawarding it to counties) the prime award is attributed to where USAspending records the
+      work, which can be the recipient's own county, so a county's total need not equal what
+      reached its residents, and recipient-county grain (usaspending_assistance.
+      recipient_county_fips) gives different numbers. Transactions with a blank place-of-
+      performance county or a state-level code (county part 000) are left out, never guessed into
+      a county, so county rows do not sum to the national assistance total. The share is large and
+      varies by year: FY2008 full file 19 percent of transactions and 24 percent of net dollars;
+      FY2025 DQ sample 3 and 2 percent; FY2026 DQ sample 15 and 25 percent (state-level formula
+      grants dominate the dollars); measure the current share from usaspending_assistance.
+      transactions counts award actions (award x modification), not awards.
+      assistance_listing_title is the title on the year's rows. Joins to geo.counties on
+      county_fips; older fiscal years carry some retired county codes (FY2008: 12025, the former
+      Dade County, 4.4 billion dollars) that do not join. Example, State Opioid Response (93.788)
+      and Substance Abuse Prevention and Treatment Block Grant (93.959) obligations by county and
+      year: SELECT c.county_name, v.year, v.assistance_listing, v.obligated_amount FROM
+      usaspending_assistance_by_county v JOIN geo.counties c ON c.county_fips = v.county_fips
+      WHERE v.assistance_listing IN ('93.788', '93.959') ORDER BY v.year, v.obligated_amount
+      DESC. Reconciliation: usaspending_by_county is built from the USAspending API with the
+      assistance award types plus contracts, and has no assistance-only column, so compare with
+      the API's assistance-only county figures instead; for the FY2008 full file, 3,226 of 3,227
+      API counties matched, 72 percent to within one dollar, 99.6 percent to within 1 percent,
+      and the national totals differ by 0.42 percent (cause of the residual not isolated).
+    sql: >
+      SELECT
+        year,
+        pop_county_fips                 AS county_fips,
+        cfda_number                     AS assistance_listing,
+        MAX(cfda_title)                 AS assistance_listing_title,
+        SUM(federal_action_obligation)  AS obligated_amount,
+        SUM(CASE WHEN assistance_type_code IN ('07', '08', 'F003', 'F004')
+                 THEN 0 ELSE federal_action_obligation END) AS obligated_amount_excl_loans,
+        COUNT(*)                        AS transactions
+      FROM usaspending_assistance
+      WHERE pop_county_fips IS NOT NULL
+        AND pop_county_fips <> ''
+        AND pop_county_fips NOT LIKE '%000'
+      GROUP BY year, pop_county_fips, cfda_number
