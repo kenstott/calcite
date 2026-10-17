@@ -11,7 +11,7 @@
 
 The catalog intercept answered the shape of the DBeaver/DataGrip introspection
 joins but not their content: chained reg-casts collapsed to 0, format_type()
-returned PG's internal type names, pg_class.reltuples was hardcoded 0, and
+returned PG's internal type names, and
 pg_proc / information_schema.routines / .parameters / pg_available_extension_versions
 were created and never filled. These tests pin each surface to what real
 PostgreSQL answers.
@@ -155,40 +155,20 @@ def test_obj_description_on_a_schema_qualified_argument(calcite_state):
 
 
 # --------------------------------------------------------------------------- 4
-# Real pg_class.reltuples.
+# pg_class.reltuples is 0 ("never analyzed"): the catalog never counts rows.
 
 
-def test_reltuples_are_real_row_counts(calcite_state):
+def test_reltuples_are_never_counted(calcite_state):
     rows = _rows(
         calcite_state,
         "SELECT lower(relname), reltuples FROM pg_catalog.pg_class "
         "WHERE lower(relname) IN ('emps', 'depts') AND relkind = 'r' ORDER BY 1",
     )
-    assert rows == [("depts", 4.0), ("emps", 10.0)]
+    assert rows == [("depts", 0.0), ("emps", 0.0)]
 
 
-def test_row_count_mode_off_disables_counting(calcite_backend):
-    catalog.set_row_count_mode("off")
-    try:
-        state = launcher.build_state(backend=calcite_backend)
-        populate_state(calcite_backend.connection, state)
-        rows = _rows(
-            state,
-            "SELECT reltuples FROM pg_catalog.pg_class WHERE lower(relname) = 'emps'",
-        )
-        assert rows == [(0.0,)]
-    finally:
-        catalog.set_row_count_mode("count")
-        catalog.invalidate_catalog_cache()
-
-
-def test_row_count_mode_rejects_an_unknown_mode():
-    with pytest.raises(ValueError):
-        catalog.set_row_count_mode("estimate")
-
-
-def test_backend_table_row_count_is_exact(calcite_backend):
-    assert calcite_backend.table_row_count("SALES", "emps") == 10
+def test_backend_has_no_row_counter(calcite_backend):
+    assert not hasattr(calcite_backend, "table_row_count")
 
 
 # --------------------------------------------------------------------------- 5

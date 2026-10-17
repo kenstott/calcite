@@ -244,6 +244,28 @@ public final class GovDataCatalog {
       return;
     }
 
+    // A table whose observation year is not literally named "year" (house_price_index carries
+    // data_year) declares it with a table-level `timeColumn:`. That declaration is the
+    // authority for the time axis; no column-name guessing is done for other names.
+    if (t.hasNonNull("timeColumn")) {
+      String timeColumn = text(t.get("timeColumn"));
+      if (!hasColumn(t, timeColumn)) {
+        throw new IllegalStateException("Table " + text(t.get("name")) + " declares timeColumn '"
+            + timeColumn + "' which is not one of its columns");
+      }
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", timeColumn);
+      cov.put("form", "columnOnly");
+      cov.put("time_varying", true);
+      putObserved(cov, observed);
+      cov.put("note", "This table is organized by time through its " + timeColumn + " column "
+          + "(plus any finer period column) and can be filtered/grouped/trended by it, but "
+          + "declares no single ingestion window. Call data_coverage(schema, table) for the "
+          + "actual years present rather than assuming a continuous range.");
+      to.set("coverage", cov);
+      return;
+    }
+
     // Neither a year dimension nor a year partition column is declared, but the table may
     // still carry a plain "year" data column — e.g. a table unioning sub-series with
     // different real ranges (no single window can honestly describe all of them), or a
@@ -304,8 +326,12 @@ public final class GovDataCatalog {
   }
 
   private static boolean hasYearColumn(JsonNode t) {
+    return hasColumn(t, "year");
+  }
+
+  private static boolean hasColumn(JsonNode t, String name) {
     for (JsonNode c : t.path("columns")) {
-      if ("year".equalsIgnoreCase(text(c.get("name")))) {
+      if (name.equalsIgnoreCase(text(c.get("name")))) {
         return true;
       }
     }

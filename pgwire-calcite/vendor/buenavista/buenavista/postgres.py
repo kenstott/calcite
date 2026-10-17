@@ -470,6 +470,11 @@ class BuenaVistaHandler(socketserver.StreamRequestHandler):
                     ctx.flush()
                 else:
                     raise Exception("Unknown type_code: %s" % type_code)
+        except TimeoutError:
+            # A client that opens a connection and sends nothing before the socket timeout (a
+            # port probe, an idle client) is ordinary; one line, and nothing sent to it
+            logger.info("Client %s sent nothing before the socket timeout; connection closed",
+                        self.client_address)
         except Exception as e:
             logger.exception(e)
             self.send_error(e)

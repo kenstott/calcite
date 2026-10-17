@@ -131,7 +131,7 @@ public class HllAccuracyEngineParityRequirementsTest {
     String countCsv = "SELECT COUNT(*) FROM s.sales";
     // NOTE: filter threshold is an inline literal, not a "?" bind parameter. DuckDB pushes the
     // predicate into its own JDBC engine where an untyped bind "?" infers VARCHAR and fails the
-    // amount(>DECIMAL) comparison; a literal keeps the comparison type known. Still prepared below.
+    // amount (INTEGER) comparison; a literal keeps the comparison type known. Still prepared below.
     String filterCsv = "SELECT id, region, amount FROM s.sales WHERE amount > 25 ORDER BY id";
     String scanJson = "SELECT id, name FROM s.people ORDER BY id";
     String groupCsv =
@@ -142,8 +142,8 @@ public class HllAccuracyEngineParityRequirementsTest {
     String goldenFilter = "3 | east | 30\n4 | west | 40\n5 | east | 50\n6 | west | 60\n";
     String goldenScan = "1 | alice\n2 | bob\n3 | carol\n";
     // east: rows 1,3,5 -> count 3, sum 90; west: rows 2,4,6 -> count 3, sum 120.
-    // NOTE: CSV "amount" is inferred as DECIMAL, so SUM renders with scale (90.000000000).
-    String goldenGroup = "east | 3 | 90.000000000\nwest | 3 | 120.000000000\n";
+    // CSV "amount" holds whole numbers, which infer as INTEGER (FILE-097), so SUM is an integer.
+    String goldenGroup = "east | 3 | 90\nwest | 3 | 120\n";
 
     String countParquet = null;
     String filterParquet = null;

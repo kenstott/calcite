@@ -7695,6 +7695,7 @@ partitionedTables:
         overwritePartitions: true
 
   - name: medicare_geographic_variation
+    timeColumn: data_year  # observation year; this table has no column named 'year'
     # CMS publishes one combined CSV covering all years (2014-2024, currently) rather than a
     # per-year file, so there is no year dimension to iterate on the URL — the whole file is
     # re-fetched and the single [type] partition overwritten each run (same shape as

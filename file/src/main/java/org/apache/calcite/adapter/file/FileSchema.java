@@ -6281,10 +6281,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     this.constraintMetadata = constraintMetadata;
     LOGGER.info("FileSchema.setConstraintMetadata: Received constraint metadata for {} tables", constraintMetadata.size());
     for (String tableName : constraintMetadata.keySet()) {
-      LOGGER.info("  - Constraint config for table: '{}'", tableName);
+      LOGGER.debug("  - Constraint config for table: '{}'", tableName);
       Map<String, Object> config = constraintMetadata.get(tableName);
       if (config != null) {
-        LOGGER.info("    Keys in config: {}", config.keySet());
+        LOGGER.debug("    Keys in config: {}", config.keySet());
       }
     }
 

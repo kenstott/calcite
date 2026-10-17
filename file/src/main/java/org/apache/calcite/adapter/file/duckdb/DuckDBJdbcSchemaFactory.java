@@ -751,15 +751,17 @@ public class DuckDBJdbcSchemaFactory {
         }
       }
 
-      // Debug: List all registered views
-      try (Statement stmt = setupConn.createStatement();
-           ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables")) {
-        LOGGER.info("All DuckDB tables and views:");
-        while (rs.next()) {
-          LOGGER.info("  - Schema: {}, Name: {}, Type: {}",
-                     rs.getString("table_schema"),
-                     rs.getString("table_name"),
-                     rs.getString("table_type"));
+      // Debug: List all registered views (one line per table, so only when debugging)
+      if (LOGGER.isDebugEnabled()) {
+        try (Statement stmt = setupConn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables")) {
+          LOGGER.debug("All DuckDB tables and views:");
+          while (rs.next()) {
+            LOGGER.debug("  - Schema: {}, Name: {}, Type: {}",
+                       rs.getString("table_schema"),
+                       rs.getString("table_name"),
+                       rs.getString("table_type"));
+          }
         }
       }
 
@@ -911,15 +913,17 @@ public class DuckDBJdbcSchemaFactory {
       // Enqueue SQL views for deferred creation
       registerSqlViewsInDuckDB(setupConn, sharedInfo.catalogPath, duckdbSchema, operand);
 
-      // Debug: List all registered views
-      try (Statement stmt = setupConn.createStatement();
-           ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = '" + duckdbSchema + "'")) {
-        LOGGER.info("DuckDB tables and views in schema '{}':", duckdbSchema);
-        while (rs.next()) {
-          LOGGER.info("  - Schema: {}, Name: {}, Type: {}",
-                     rs.getString("table_schema"),
-                     rs.getString("table_name"),
-                     rs.getString("table_type"));
+      // Debug: List all registered views (one line per table, so only when debugging)
+      if (LOGGER.isDebugEnabled()) {
+        try (Statement stmt = setupConn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = '" + duckdbSchema + "'")) {
+          LOGGER.debug("DuckDB tables and views in schema '{}':", duckdbSchema);
+          while (rs.next()) {
+            LOGGER.debug("  - Schema: {}, Name: {}, Type: {}",
+                       rs.getString("table_schema"),
+                       rs.getString("table_name"),
+                       rs.getString("table_type"));
+          }
         }
       }
 

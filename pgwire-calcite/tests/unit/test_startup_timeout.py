@@ -18,6 +18,7 @@ recovers its connection count instead of hanging.
 
 from __future__ import annotations
 
+import logging
 import socket
 import time
 
@@ -45,8 +46,9 @@ def bare_server():
     srv.shutdown()
 
 
-def test_incomplete_handshake_is_dropped_not_leaked(bare_server):
+def test_incomplete_handshake_is_dropped_not_leaked(bare_server, caplog):
     srv, host, port = bare_server
+    caplog.set_level(logging.INFO, logger="buenavista.postgres")
 
     sock = socket.create_connection((host, port), timeout=5)
     try:
@@ -58,8 +60,7 @@ def test_incomplete_handshake_is_dropped_not_leaked(bare_server):
         assert srv._active_connections >= 1
 
         # The server must close its end well inside the startup timeout bound
-        # rather than hanging -- it may first send a Postgres ErrorResponse
-        # ('E'), so drain to EOF rather than expecting a bare, immediate close.
+        # rather than hanging; drain to EOF.
         sock.settimeout(CalciteHandler._STARTUP_TIMEOUT_SECONDS + 10)
         saw_eof = False
         for _ in range(1000):
@@ -76,3 +77,9 @@ def test_incomplete_handshake_is_dropped_not_leaked(bare_server):
     while time.monotonic() < deadline and srv._active_connections != 0:
         time.sleep(0.05)
     assert srv._active_connections == 0
+
+    # A client that sends nothing is ordinary: one INFO line, no ERROR and no traceback
+    records = [r for r in caplog.records if r.name == "buenavista.postgres"]
+    assert [r.levelno for r in records] == [logging.INFO]
+    assert "sent nothing before the socket timeout" in records[0].getMessage()
+    assert records[0].exc_info is None

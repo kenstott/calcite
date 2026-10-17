@@ -208,6 +208,41 @@ SELECT 'fiscal', 'county_migration_flows', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL origin_county_fips rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/county_migration_flows', allow_moved_paths := true) WHERE origin_county_fips IS NULL);
 
+-- 2008-2011 are the pairs 2007-2008 .. 2010-2011, whose files use a different header set
+-- (State_Code_Origin ... Aggr_AGI); the provider aliases it. All four years must be present.
+INSERT INTO dq_results
+SELECT 'fiscal', 'county_migration_flows', 'T7_years_2008_2011',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END, n, 4,
+  'Distinct years among 2008-2011 (pairs 0708..1011, legacy header set)'
+FROM (SELECT COUNT(DISTINCT year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/county_migration_flows', allow_moved_paths := true)
+      WHERE CAST(year AS INTEGER) BETWEEN 2008 AND 2011);
+
+-- Row-level invariants of the provider's filters: both endpoints are 5-digit real-county
+-- FIPS (state < 57), origin differs from destination, at least 10 returns (the IRS listing
+-- threshold in 2008-2013, about 20 from 2014), exemptions >= returns, AGI present.
+INSERT INTO dq_results
+SELECT 'fiscal', 'county_migration_flows', 'T7_row_invariants',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with a malformed/summary endpoint, same-county flow, returns < 10, individuals < returns or NULL agi'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/county_migration_flows', allow_moved_paths := true)
+      WHERE LENGTH(origin_county_fips) <> 5 OR LENGTH(dest_county_fips) <> 5
+         OR CAST(SUBSTR(origin_county_fips, 1, 2) AS INTEGER) >= 57
+         OR CAST(SUBSTR(dest_county_fips, 1, 2) AS INTEGER) >= 57
+         OR SUBSTR(origin_county_fips, 3, 3) = '000' OR SUBSTR(dest_county_fips, 3, 3) = '000'
+         OR origin_county_fips = dest_county_fips
+         OR num_returns < 10 OR num_individuals < num_returns OR agi IS NULL
+         OR origin_state_fips <> SUBSTR(origin_county_fips, 1, 2)
+         OR dest_state_fips <> SUBSTR(dest_county_fips, 1, 2));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'county_migration_flows', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Duplicate (year, origin_county_fips, dest_county_fips) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT year, origin_county_fips, dest_county_fips
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/county_migration_flows', allow_moved_paths := true)
+        GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: exempt_org_master (IRS EO BMF snapshot; partition col: type)
 -- ─────────────────────────────────────────────────────────────

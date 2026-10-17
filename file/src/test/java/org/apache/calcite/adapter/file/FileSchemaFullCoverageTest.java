@@ -680,8 +680,9 @@ public class FileSchemaFullCoverageTest {
       w.write("hid_id:int,hid_val:string\n1,HiddenVal\n");
     }
 
-    // Default is recursive=false
-    String model = buildModel("NONREC", tempDir.toFile().getAbsolutePath());
+    // Recursion is on by default (FILE-110, #532), so the model turns it off
+    String model =
+        buildModel("NONREC", tempDir.toFile().getAbsolutePath(), "        \"recursive\": false");
     try (Connection conn = connect(model)) {
       CalciteConnection cc = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = cc.getRootSchema().getSubSchema("NONREC");

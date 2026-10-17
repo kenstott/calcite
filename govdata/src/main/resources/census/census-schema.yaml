@@ -4286,6 +4286,348 @@ partitionedTables:
         compactionMinFiles: 5
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # PEP COMPONENTS OF CHANGE - births, deaths and net migration by county
+  # ---------------------------------------------------------------------------
+  - name: pep_components_of_change
+    pattern: "type=pep_components/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    comment: >
+      Population Estimates Program (PEP) components of population change for every county,
+      one row per county per data year (July 1 reference date): the population estimate,
+      births, deaths, natural change (births - deaths), net international migration, net
+      DOMESTIC migration (people moving between U.S. counties, the figure that shows whether a
+      county is gaining or losing residents to other places), total net migration and the
+      residual (change the components do not explain). Counts are people over the estimate
+      year (July 1 of the prior year to June 30). The first year of each vintage is shorter:
+      data year 2010 runs from the April 1, 2010 census base and data year 2020 from the
+      April 1, 2020 base, so those two years carry about three months of births, deaths and
+      migration. Data years 2010-2019 come from the final 2010-2019 vintage; data years 2020
+      onward come from the latest published vintage (the vintage column says which), so the
+      series breaks at 2019/2020 because the 2020 vintage re-bases on the 2020 census. From
+      the 2022 vintage Connecticut is published as its nine planning regions (county_fips
+      09110-09190) instead of its eight counties (09001-09015), so Connecticut rows for data
+      years 2020 onward do not join geo.counties; every other county does. Complements
+      pep_population (which has population and density only). The Census API serves
+      components for data year 2019 only, so this table reads the bulk files
+      co-est{vintage}-alldata.csv. Join to disasters.disaster_declarations or to
+      disasters.ihp_housing_assistance_owners on county_fips. Source:
+      www2.census.gov/programs-surveys/popest/datasets/.
+    dqRowLimit: 50000
+
+    dimensions:
+      type:
+        - pep_components
+      # `year` is the publish year; the data year is effective_year = year - dataLag, and
+      # start/minYear bound `year`. start/minYear 2011 therefore reach data year 2010, the
+      # first year of the 2010-2019 vintage; the newest year is the prior calendar year.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2011}"
+        minYear: 2011
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 1
+        descending: true
+      # Latest published PEP county vintage (data years 2020 through this value). Census
+      # publishes the next vintage each March; raise this value then. A data year beyond the
+      # vintage fails loudly because its column is absent from the file.
+      pep_vintage:
+        type: list
+        values: ['2025']
+
+    columns:
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: 2-digit state FIPS code (FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: 5-digit county FIPS code (FK to geo.counties; Connecticut planning regions for data years 2020 onward do not join)
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name as published by PEP (parish, borough, planning region for Connecticut 2020 onward)
+      - name: population_estimate
+        type: long
+        nullable: true
+        comment: Resident population estimate at July 1 of the data year
+      - name: births
+        type: long
+        nullable: true
+        comment: Births during the estimate year (from April 1 for data years 2010 and 2020)
+      - name: deaths
+        type: long
+        nullable: true
+        comment: Deaths during the estimate year (from April 1 for data years 2010 and 2020)
+      - name: natural_change
+        type: long
+        nullable: true
+        comment: Natural increase, births minus deaths
+      - name: international_migration
+        type: long
+        nullable: true
+        comment: Net international migration (people arriving from abroad minus people leaving)
+      - name: domestic_migration
+        type: long
+        nullable: true
+        comment: Net domestic migration, people who moved in from other U.S. counties minus people who moved out; negative means the county lost residents to other places
+      - name: net_migration
+        type: long
+        nullable: true
+        comment: Net migration, international plus domestic
+      - name: residual
+        type: long
+        nullable: true
+        comment: Residual, population change not explained by the components (reconciles the estimate to the census base)
+      - name: vintage
+        type: string
+        nullable: false
+        comment: PEP vintage of the source file (2019 for data years 2010-2019, the latest vintage for 2020 onward)
+
+    source:
+      type: http
+      url: "https://www2.census.gov/programs-surveys/popest/datasets/2020-{pep_vintage}/counties/totals/co-est{pep_vintage}-alldata.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.census.PepComponentsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=pep_components/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: pep_components_of_change
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # ACS COUNTY-TO-COUNTY MIGRATION FLOWS - origin-destination flows between counties
+  # ---------------------------------------------------------------------------
+  - name: acs_county_migration_flows
+    pattern: "type=acs_flows/year=*/ref_state=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+        - name: ref_state
+          type: VARCHAR
+    comment: >
+      American Community Survey 5-year county-to-county migration flows: for each reference
+      county (county_fips) and each other area it exchanged residents with, the people who
+      moved IN from that area (lived there one year before the survey, live in the county
+      now), the people who moved OUT to it, and the net, each with its 90 percent margin of
+      error. It is origin-destination flow data, unlike acs_migration (counts by prior
+      residence only). It is a survey of people, so it covers households that file no tax
+      return and is not cut off at the IRS reporting threshold, but every figure is a sample
+      estimate with a wide margin of error for small flows (moved_in_moe often exceeds
+      moved_in). One row per vintage x reference county x other area. other_area_type says
+      what the other area is: county (other_area_fips is a 5-digit county FIPS; the
+      county-to-county flows), county_subdivision (a 10-digit county plus minor civil
+      division code, in the states that publish MCD flows; these overlap the county rows, so
+      filter them out before summing), or world_region (Asia, Europe and so on, other_area_fips
+      NULL; moved_out and net are NULL because outbound moves abroad are not measured). year
+      is the last year of the 5-year ACS window (year 2020 = ACS 2016-2020). Coverage 2010
+      through 2020: Census stopped publishing county-to-county flows after the 2016-2020 window
+      (the 2017-2021 release is county-to-state only), so there is no later year. Each flow is
+      listed from both ends, once under each reference county. Puerto Rico municipios appear
+      from 2012. Join county_fips to geo.counties; join disasters.disaster_declarations on
+      county_fips for flows in disaster-hit counties. Source: Census Data API
+      api.census.gov/data/{year}/acs/flows (census.gov/topics/population/migration/guidance/
+      county-to-county-migration-flows.html). Requires CENSUS_API_KEY.
+    dqRowLimit: 100000
+
+    dimensions:
+      type:
+        - acs_flows
+      # `year` is the vintage (end year of the 5-year window). dataLag 0 so effective_year = year;
+      # maxYear 2020 is the data ceiling: the 2021 vintage of the same API endpoint is the
+      # county-to-state product (verified 2026-10-16), and county-to-county ends at 2016-2020.
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2010
+        maxYear: 2020
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        descending: true
+      # One request per reference state: a nationwide request exceeds the API response limits.
+      ref_state:
+        - '01'
+        - '02'
+        - '04'
+        - '05'
+        - '06'
+        - '08'
+        - '09'
+        - '10'
+        - '11'
+        - '12'
+        - '13'
+        - '15'
+        - '16'
+        - '17'
+        - '18'
+        - '19'
+        - '20'
+        - '21'
+        - '22'
+        - '23'
+        - '24'
+        - '25'
+        - '26'
+        - '27'
+        - '28'
+        - '29'
+        - '30'
+        - '31'
+        - '32'
+        - '33'
+        - '34'
+        - '35'
+        - '36'
+        - '37'
+        - '38'
+        - '39'
+        - '40'
+        - '41'
+        - '42'
+        - '44'
+        - '45'
+        - '46'
+        - '47'
+        - '48'
+        - '49'
+        - '50'
+        - '51'
+        - '53'
+        - '54'
+        - '55'
+        - '56'
+        - '72'
+
+    columns:
+      - name: county_fips
+        type: string
+        nullable: false
+        expression: 'src."GEOID1"'
+        comment: 5-digit FIPS of the reference county (FK to geo.counties)
+      - name: county_name
+        type: string
+        nullable: true
+        expression: 'src."FULL1_NAME"'
+        comment: Reference county name with state
+      - name: other_area_fips
+        type: string
+        nullable: true
+        expression: 'NULLIF(TRIM(src."GEOID2"), '''')'
+        comment: FIPS of the other area, 5 digits for a county or 10 for a county subdivision; NULL for a world region (the 2016 vintage sends a single space there, normalized to NULL)
+      - name: other_area_name
+        type: string
+        nullable: false
+        expression: 'src."FULL2_NAME"'
+        comment: Name of the other area (county with state, county subdivision, or world region)
+      - name: other_area_type
+        type: string
+        nullable: false
+        expression: 'CASE WHEN NULLIF(TRIM(src."GEOID2"), '''') IS NULL THEN ''world_region'' WHEN LENGTH(TRIM(src."GEOID2")) = 5 THEN ''county'' ELSE ''county_subdivision'' END'
+        comment: county, county_subdivision or world_region; sum only one type to avoid counting a flow twice
+      - name: moved_in
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MOVEDIN" AS BIGINT)'
+        comment: People who lived in the other area one year ago and live in the reference county now
+      - name: moved_in_moe
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MOVEDIN_M" AS BIGINT)'
+        comment: 90 percent margin of error of moved_in
+      - name: moved_out
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MOVEDOUT" AS BIGINT)'
+        comment: People who lived in the reference county one year ago and live in the other area now; NULL for a world region
+      - name: moved_out_moe
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MOVEDOUT_M" AS BIGINT)'
+        comment: 90 percent margin of error of moved_out
+      - name: net_moved
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MOVEDNET" AS BIGINT)'
+        comment: Net migration into the reference county from the other area, moved_in minus moved_out; negative means the county lost residents to that area; NULL for a world region
+      - name: net_moved_moe
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."MOVEDNET_M" AS BIGINT)'
+        comment: 90 percent margin of error of net_moved
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/flows?get=GEOID1,GEOID2,FULL1_NAME,FULL2_NAME,MOVEDIN,MOVEDOUT,MOVEDNET,MOVEDIN_M,MOVEDOUT_M,MOVEDNET_M&for=county:*&in=state:{ref_state}&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.geo.CensusResponseTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs_flows/year=*/ref_state=*/"
+      partition:
+        columns: [type, year, ref_state]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_county_migration_flows
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year, ref_state]
+        incrementalKeys: [year, ref_state]
+        overwritePartitions: true
+
 # ============================================================================
 # COUNTY BUSINESS PATTERNS (CBP)
 # Annual business establishment and employment data by industry
@@ -7224,6 +7566,26 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  pep_components_of_change:
+    primaryKey: [year, county_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: counties
+        targetColumns: [county_fips]
+
+  acs_county_migration_flows:
+    primaryKey: [year, county_fips, other_area_name]
+    foreignKeys:
       - columns: [county_fips]
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties

@@ -107,6 +107,10 @@ final class PgwireGovDataConnector {
   private static final int LOSER_GRACE_MILLIS = 5000;
   /** How much of the end of the spawned server's output a failed start's error carries. */
   private static final int SPAWN_LOG_TAIL_BYTES = 2000;
+  /** Size past which spawn.log is rotated before the next spawn appends to it. */
+  static final long SPAWN_LOG_MAX_BYTES = 10L * 1024 * 1024;
+  /** Rotated logs kept beside spawn.log: spawn.log.1 (newest) to spawn.log.3. */
+  static final int SPAWN_LOG_BACKUPS = 3;
 
   private static final Object LOCK = new Object();
   private static volatile Connection sharedConnection;
@@ -290,6 +294,7 @@ final class PgwireGovDataConnector {
     log().println("[askamerica-mcp] No pgwire-govdata server listening on " + host() + ":" + port()
         + " — attempting to spawn one.");
     File spawnLog = new File(cacheDirLogPath());
+    rotateSpawnLog(spawnLog);
     long spawnLogStart = spawnLog.length();
     Process spawned = spawnIfPossible();
     boolean respawned = false;
@@ -353,6 +358,36 @@ final class PgwireGovDataConnector {
       }
       Thread.sleep(250);
     }
+  }
+
+  /**
+   * Moves {@code log} to {@code log.1}, and each older backup one number up, dropping the
+   * oldest, when it is past {@value #SPAWN_LOG_MAX_BYTES} bytes. Every spawn appends to the one
+   * file, and a server lives until it is idle, so without this it only grows (131 MB by
+   * 2026-10-16).
+   */
+  static void rotateSpawnLog(File log) {
+    if (log.length() <= SPAWN_LOG_MAX_BYTES) {
+      return;
+    }
+    try {
+      java.nio.file.Files.deleteIfExists(backup(log, SPAWN_LOG_BACKUPS).toPath());
+      for (int i = SPAWN_LOG_BACKUPS - 1; i >= 1; i--) {
+        File older = backup(log, i);
+        if (older.exists()) {
+          java.nio.file.Files.move(older.toPath(), backup(log, i + 1).toPath());
+        }
+      }
+      java.nio.file.Files.move(log.toPath(), backup(log, 1).toPath());
+    } catch (IOException e) {
+      // A server another process spawned may still hold the file open, which Windows refuses
+      // to move; the spawn goes ahead appending to it, and a later spawn rotates it
+      log().println("[askamerica-mcp] Could not rotate " + log + ": " + e);
+    }
+  }
+
+  private static File backup(File log, int number) {
+    return new File(log.getPath() + "." + number);
   }
 
   /** What the spawned server appended to {@code logFile} from {@code fromOffset} on: the last
@@ -846,9 +881,8 @@ final class PgwireGovDataConnector {
       // caller just sees a generic "did not start accepting connections" timeout minutes
       // later. Confirmed live: with DISCARD, a spawn crashing instantly on a missing
       // GOVDATA_PARQUET_DIR looked identical to one that was still slowly mounting 26 schemas
-      // — completely undiagnosable without re-running the launcher by hand. A rotating-by-size
-      // convention isn't needed: PGWIRE_CALCITE_IDLE_SHUTDOWN_SECONDS means this process's
-      // lifetime, and therefore its log, is naturally bounded.
+      // — completely undiagnosable without re-running the launcher by hand. Every spawn appends
+      // to the one file, which rotateSpawnLog keeps bounded.
       configureHttpfsCache(pb);
       File logFile = new File(cacheDirLogPath());
       logFile.getParentFile().mkdirs();
