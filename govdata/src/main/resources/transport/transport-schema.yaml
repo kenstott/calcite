@@ -302,6 +302,7 @@ partitionedTables:
   # NHTSA CONSUMER COMPLAINTS — FLAT_CMPL.zip (snapshot, TAB flat file)
   # ---------------------------------------------------------------------------
   - name: safety_complaints
+    timeColumn: date_complaint_received  # observation time: when the complaint was filed (always populated, 1995-2026, clean); fail_date is consumer-entered, 5% null and holds values such as year 0003 and 2203
     # Freshness gate: no ETag on HEAD (chunked); the file changes daily. freshness type
     # etag still works off the GET response ETag the server does send. Must be at the
     # table level, not nested under source: — EtlPipelineConfig.fromMap only reads

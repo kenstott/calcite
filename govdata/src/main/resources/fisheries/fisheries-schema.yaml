@@ -1523,6 +1523,7 @@ partitionedTables:
   # RMIS_RELEASES — hatchery and wild salmon/steelhead release groups (RMIS)
   # ---------------------------------------------------------------------------
   - name: rmis_releases
+    timeColumn: release_year  # observation time: the year the fish were released (1952-2026; 31 of 192,408 rows null); brood_year is the cohort spawn year, a median of one year earlier
     freshness:
       type: hash
     pattern: "type=rmis_releases/agency=*/*.parquet"

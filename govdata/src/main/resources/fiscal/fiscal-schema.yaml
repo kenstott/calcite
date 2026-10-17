@@ -3681,6 +3681,7 @@ partitionedTables:
   # BROADBAND RECONNECT AWARDS — USAspending spending_by_award (CFDA 10.752, snapshot)
   # ---------------------------------------------------------------------------
   - name: broadband_reconnect_awards
+    timeColumn: start_date  # observation time: period-of-performance start (always populated; end_date is a planned end); this table has no column named 'year'
     # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
@@ -3798,6 +3799,7 @@ partitionedTables:
   # BROADBAND ARRA AWARDS — USAspending spending_by_award (CFDA 11.557 + 10.855)
   # ---------------------------------------------------------------------------
   - name: broadband_arra_awards
+    timeColumn: start_date  # observation time: period-of-performance start (always populated; end_date is a planned end); this table has no column named 'year'
     # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
@@ -3918,6 +3920,7 @@ partitionedTables:
   # USASPENDING BRIDGE AWARDS — USAspending spending_by_award (CFDA 20.263 + 20.264)
   # ---------------------------------------------------------------------------
   - name: usaspending_bridge_awards
+    timeColumn: start_date  # observation time: period-of-performance start (always populated; end_date is a planned end); this table has no column named 'year'
     # Freshness gate: USAspending REST API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
@@ -4049,6 +4052,7 @@ partitionedTables:
   # BROADBAND BEAD STATE ALLOCATIONS — USAspending spending_by_award (CFDA 11.035, snapshot)
   # ---------------------------------------------------------------------------
   - name: broadband_bead_state_allocations
+    timeColumn: start_date  # observation time: period-of-performance start (always populated; end_date is a planned end); this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=broadband_bead_state_allocations/*.parquet"

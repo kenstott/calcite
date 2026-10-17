@@ -1864,6 +1864,7 @@ partitionedTables:
   # EPA SDWIS VIOLATIONS — Envirofacts violation (per-state snapshot)
   # ---------------------------------------------------------------------------
   - name: drinking_water_violations
+    timeColumn: compl_per_begin_date  # observation time: start of the compliance period the violation covers (always populated; compl_per_end_date is null on open violations; 1900-01-01 is a source sentinel)
     # Freshness gate: EPA envirofacts efservice is a live DB-query export with no
     # meaningful Last-Modified, so this hashes the response body post-fetch to skip the
     # materialize/commit when unchanged (fails open on a missing prior token).
