@@ -31,6 +31,7 @@ import org.junit.jupiter.api.parallel.Resources;
 
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -110,5 +111,14 @@ public class IcebergSchemaCacheCompletenessTest {
     assertEquals(2, problems.size(), problems.toString());
     assertTrue(problems.get(0).startsWith("law/lobbying_filings") && problems.get(0).contains("row count"));
     assertTrue(problems.get(1).startsWith("fiscal/absent") && problems.get(1).contains("no entry"));
+  }
+
+  /** A local warehouse on Windows records its table locations with backslashes. */
+  @Test void aDeclaredTableIsFoundUnderABackslashSeparatedLocation() {
+    IcebergSchemaCache.recordStatistics(
+        "C:\\Users\\runner\\wh\\law\\lobbying_activities", 1L, 5.0);
+
+    assertTrue(IcebergSchemaCache.incompleteTables(
+        Collections.singletonList("law/lobbying_activities")).isEmpty());
   }
 }
