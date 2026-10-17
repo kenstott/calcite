@@ -43,7 +43,13 @@
 #                                        1999-00 -> 2000). The two-digit end must be exactly
 #                                        start+1 (mod 100), otherwise the value is YYYY-MM or
 #                                        garbage and is rejected rather than guessed at.
-#                 A NULL value is no observation and is skipped. An empty string, or any other
+#
+#   Every kind: a year before 1000, or more than 10 years after the check date, is a source data
+#   error (a two-digit year stored as 0013, a typo like 3011), not an observation. Reporting it
+#   would publish a first/last year no caller could trust, so the table fails to measure and the
+#   offending year is named; the defect belongs to the table's source, not to this script.
+#
+#   VARCHAR notes: a NULL value is no observation and is skipped. An empty string, or any other
 #                 shape, aborts the measurement of that table with the offending value.
 #
 #   The end year is chosen for span labels because a school year 2019-20 is observed across the
@@ -229,11 +235,19 @@ def parse_year_label(value):
     raise MeasureError(f"unparseable time value {value!r}")
 
 
-def summarize_years(year_counts, row_count):
+MIN_PLAUSIBLE_YEAR = 1000
+FUTURE_YEARS_ALLOWED = 10
+
+
+def summarize_years(year_counts, row_count, max_year):
     """Block fields from {year: rows}. year_counts is empty only when no row had a time value."""
     years = sorted(year_counts)
     if not years:
         raise MeasureError(f"table has {row_count} rows but none has a time value")
+    bad = [y for y in years if not MIN_PLAUSIBLE_YEAR <= y <= max_year]
+    if bad:
+        raise MeasureError(f"implausible year(s) {bad[:5]} (allowed {MIN_PLAUSIBLE_YEAR}.."
+                           f"{max_year}): source data error, not measured")
     return {
         "min_year": years[0],
         "max_year": years[-1],
@@ -253,7 +267,7 @@ def run_duckdb(setup_sql, sql):
     return list(csv.DictReader(io.StringIO(proc.stdout)))
 
 
-def measure_relation(setup_sql, relation, column, runner=run_duckdb):
+def measure_relation(setup_sql, relation, column, max_year, runner=run_duckdb):
     """Measure one time column of a FROM-able relation (an Iceberg scan, or a test table).
 
     Returns None for a readable table with no rows, else the dict from summarize_years.
@@ -282,10 +296,8 @@ def measure_relation(setup_sql, relation, column, runner=run_duckdb):
             y = parse_year_label(r["v"])
         else:
             y = int(r["v"])
-            if kind == KIND_INTEGER and not 1000 <= y <= 9999:
-                raise MeasureError(f"integer time value {y} is not a four-digit year")
         year_counts[y] = year_counts.get(y, 0) + int(r["n"])
-    return summarize_years(year_counts, row_count)
+    return summarize_years(year_counts, row_count, max_year)
 
 
 def block_from_measurement(m, checked_at):
@@ -329,6 +341,7 @@ def local_table_path(mirror_dir, schema, table):
 def measure_mode(args):
     wanted = set(t for t in args.tables.split(",") if t) if args.tables else None
     failures = 0
+    max_year = int(args.checked_at[:4]) + FUTURE_YEARS_ALLOWED
     for path, schema, table, column in time_column_tables(args.resources_dir):
         if wanted is not None and table not in wanted and f"{schema}.{table}" not in wanted:
             continue
@@ -339,7 +352,7 @@ def measure_mode(args):
         relation = f"iceberg_scan('{local}', allow_moved_paths=true)"
         setup = "INSTALL iceberg; LOAD iceberg; SET unsafe_enable_version_guessing = true;"
         try:
-            m = measure_relation(setup, relation, column)
+            m = measure_relation(setup, relation, column, max_year)
             block = block_from_measurement(m, args.checked_at)
             status = edit_yaml(path, table, block, args.dry_run, allow_time_column_anchor=True)
         except (MeasureError, NoAnchor, KeyError) as e:

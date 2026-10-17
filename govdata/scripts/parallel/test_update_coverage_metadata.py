@@ -11,6 +11,7 @@ spec = importlib.util.spec_from_file_location("ucm", os.path.join(HERE, "update-
 ucm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ucm)
 
+MAX_YEAR = 2036
 HAVE_DUCKDB = shutil.which("duckdb") is not None
 
 
@@ -21,7 +22,7 @@ def rel(sql_type, values):
 
 
 def measure(sql_type, values):
-    return ucm.measure_relation("", rel(sql_type, values), "c")
+    return ucm.measure_relation("", rel(sql_type, values), "c", MAX_YEAR)
 
 
 class ParseYearLabelTest(unittest.TestCase):
@@ -49,6 +50,17 @@ class MeasureColumnKindTest(unittest.TestCase):
     def test_integer_column_that_is_not_a_year_fails(self):
         with self.assertRaises(ucm.MeasureError):
             measure("BIGINT", [20190101])
+
+    def test_implausible_years_fail_for_every_kind(self):
+        for sql_type, values in (("DATE", ["'2020-01-01'", "'3011-01-01'"]),
+                                 ("VARCHAR", ["'2020-01-01'", "'0013-03-05'"]),
+                                 ("INTEGER", [2020, 999])):
+            with self.assertRaises(ucm.MeasureError, msg=sql_type) as ctx:
+                measure(sql_type, values)
+            self.assertIn("implausible", str(ctx.exception))
+
+    def test_a_year_within_the_allowed_future_is_measured(self):
+        self.assertEqual(2029, measure("INTEGER", [2025, 2029])["max_year"])
 
     def test_date_column(self):
         m = measure("DATE", ["'2020-12-31'", "'2021-01-01'", "'2022-06-30'"])
@@ -81,7 +93,7 @@ class MeasureColumnKindTest(unittest.TestCase):
             measure("DOUBLE", [2019.5])
 
     def test_empty_table_is_reported_as_empty(self):
-        self.assertIsNone(ucm.measure_relation("", "(SELECT CAST(NULL AS INTEGER) AS c WHERE false)", "c"))
+        self.assertIsNone(ucm.measure_relation("", "(SELECT CAST(NULL AS INTEGER) AS c WHERE false)", "c", MAX_YEAR))
 
     def test_rows_with_no_time_value_fail(self):
         with self.assertRaises(ucm.MeasureError):
@@ -110,7 +122,7 @@ class EditYamlTest(unittest.TestCase):
         shutil.rmtree(self.dir)
 
     def block(self, years=(2020, 2021)):
-        m = ucm.summarize_years({y: 1 for y in years}, len(years))
+        m = ucm.summarize_years({y: 1 for y in years}, len(years), MAX_YEAR)
         return ucm.block_from_measurement(m, "2026-10-17T00:00:00Z")
 
     def read(self):
