@@ -2644,6 +2644,7 @@ partitionedTables:
   # treasurer/candidate names) are Cal-Access's own filer_id space — distinct from FEC's
   # candidate_id/committee_id, so no FK to the federal tables above.
   - name: ca_contributions
+    timeColumn: receipt_date  # observation time; this table has no column named 'year'
     # Freshness gate: campaignfinance.cdn.sos.ca.gov returns a real ETag on the zip (confirmed
     # live 2026-09-14, CloudFront+S3) — skips the ~1.6GB re-download when unchanged.
     freshness:
@@ -2909,6 +2910,7 @@ partitionedTables:
   # CA_EXPENDITURES — California Cal-Access itemized expenditures (EXPN_CD)
   # ==========================================================================
   - name: ca_expenditures
+    timeColumn: expenditure_date  # observation time; this table has no column named 'year'
     # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
     freshness:
       type: etag
@@ -3115,6 +3117,7 @@ partitionedTables:
   # CA_INDEPENDENT_EXPENDITURES — Cal-Access late independent-expenditure reports (S496_CD)
   # ==========================================================================
   - name: ca_independent_expenditures
+    timeColumn: expenditure_date  # observation time; this table has no column named 'year'
     # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
     freshness:
       type: etag

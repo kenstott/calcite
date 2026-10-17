@@ -179,6 +179,7 @@ partitionedTables:
   # NHTSA VEHICLE RECALLS — DOT Socrata 6axg-epim (snapshot, JSON)
   # ---------------------------------------------------------------------------
   - name: vehicle_recalls
+    timeColumn: report_received_date  # observation time; this table has no column named 'year'
     # Freshness gate: Socrata SODA JSON query API has no meaningful Last-Modified, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token).
@@ -2288,6 +2289,7 @@ partitionedTables:
   # NTSB AVIATION ACCIDENTS — avall.zip / avall.mdb (snapshot, Jackcess MDB read)
   # ---------------------------------------------------------------------------
   - name: ntsb_aviation_accidents
+    timeColumn: event_year  # observation time; this table has no column named 'year'
     # Freshness gate: NTSB bulk zip on a fixed static path. A Last-Modified probe skips
     # the re-download and re-materialize on unchanged runs (fails open).
     freshness:
@@ -2584,6 +2586,7 @@ partitionedTables:
   # CFS SHIPMENTS — Commodity Flow Survey Public Use File (snapshot, bulk CSV)
   # ---------------------------------------------------------------------------
   - name: cfs_shipments
+    timeColumn: survey_year  # observation time; this table has no column named 'year'
     # Freshness gate: Socrata dataset ETag. Must be at the table level, not nested under
     # source: — EtlPipelineConfig.fromMap only reads freshness: from the table's own map,
     # so a copy nested under source: is silently never parsed.
@@ -2868,6 +2871,7 @@ partitionedTables:
   # BTS PORT TEU — Monthly container throughput, Top-10 US ports (static, Jan 2019-Oct 2022)
   # ---------------------------------------------------------------------------
   - name: bts_port_teu
+    timeColumn: report_date  # observation time; this table has no column named 'year'
       # Socrata serves a version-based ETag and a Last-Modified on a HEAD (verified live), so
       # the dataset's own version is the change signal. A hash gate would have to download the
       # whole response every run to compute one, since the hash is taken from the body.
@@ -2935,6 +2939,7 @@ partitionedTables:
         overwritePartitions: true
 
   - name: bts_tsi_monthly
+    timeColumn: obs_date  # observation time; this table has no column named 'year'
     freshness:
       type: etag
     pattern: "type=bts_tsi_monthly/*.parquet"
@@ -3378,6 +3383,7 @@ partitionedTables:
   # PHMSA HAZARDOUS LIQUID PIPELINE INCIDENTS — DOT open-data bulk file (snapshot)
   # ---------------------------------------------------------------------------
   - name: phmsa_hazardous_liquid_incidents
+    timeColumn: activity_year  # observation time; this table has no column named 'year'
     # Freshness gate: PHMSA republishes this one whole-history file as incidents are
     # filed/corrected, no meaningful Last-Modified. Hashes the response body post-fetch
     # to skip the materialize/commit when unchanged.
@@ -3576,6 +3582,7 @@ partitionedTables:
   # PHMSA HAZARDOUS LIQUID PIPELINE MILEAGE — DOT open-data bulk file (snapshot)
   # ---------------------------------------------------------------------------
   - name: phmsa_hazardous_liquid_mileage
+    timeColumn: report_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=phmsa_hazardous_liquid_mileage/*.parquet"
@@ -3730,6 +3737,7 @@ partitionedTables:
   # PHMSA GAS DISTRIBUTION PIPELINE INCIDENTS — DOT open-data bulk file (snapshot)
   # ---------------------------------------------------------------------------
   - name: phmsa_gas_distribution_incidents
+    timeColumn: activity_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=phmsa_gas_distribution_incidents/*.parquet"
@@ -3923,6 +3931,7 @@ partitionedTables:
   # PHMSA GAS DISTRIBUTION PIPELINE MILEAGE — DOT open-data bulk file (snapshot)
   # ---------------------------------------------------------------------------
   - name: phmsa_gas_distribution_mileage
+    timeColumn: report_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=phmsa_gas_distribution_mileage/*.parquet"
@@ -4070,6 +4079,7 @@ partitionedTables:
   # PHMSA GAS TRANSMISSION & GATHERING PIPELINE INCIDENTS — DOT open-data bulk file (snapshot)
   # ---------------------------------------------------------------------------
   - name: phmsa_gas_transmission_incidents
+    timeColumn: activity_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=phmsa_gas_transmission_incidents/*.parquet"
@@ -4267,6 +4277,7 @@ partitionedTables:
   # PHMSA GAS TRANSMISSION & GATHERING PIPELINE MILEAGE — DOT open-data bulk file (snapshot)
   # ---------------------------------------------------------------------------
   - name: phmsa_gas_transmission_mileage
+    timeColumn: report_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=phmsa_gas_transmission_mileage/*.parquet"

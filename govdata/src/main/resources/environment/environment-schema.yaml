@@ -2356,6 +2356,7 @@ partitionedTables:
   # release, snapshot, response transformer)
   # ---------------------------------------------------------------------------
   - name: water_use_county
+    timeColumn: census_year  # observation time; this table has no column named 'year'
     # This is a withdrawal-CAPACITY proxy, not a legal water-RIGHTS record: it reports what
     # was actually withdrawn/delivered by sector in the census year, not permitted allocations
     # or unallocated headroom. USGS publishes this compilation once per 5-year cycle (Circular

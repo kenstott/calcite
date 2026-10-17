@@ -5147,6 +5147,7 @@ partitionedTables:
 
   # --- CES REVISION VINTAGES (BLS CES vintage-data product, new 6 Sep 2026) ---
   - name: ces_revision_vintages
+    timeColumn: reference_year  # observation time; this table has no column named 'year'
     pattern: "type=ces_revision_vintages/*.parquet"
     partitions:
       style: hive
@@ -5294,6 +5295,7 @@ partitionedTables:
 
   # --- WORLD INDICATORS ---
   - name: world_indicators
+    timeColumn: date  # observation time; this table has no column named 'year'
     freshness:
       type: last_modified
     pattern: "type=indicators/indicator=*/*.parquet"

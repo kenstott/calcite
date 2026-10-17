@@ -575,6 +575,7 @@ partitionedTables:
   # PATENT_APPLICATIONS — Faithful g_application.tsv snapshot
   # ---------------------------------------------------------------------------
   - name: patent_applications
+    timeColumn: filing_date  # observation time; this table has no column named 'year'
     # Freshness gate: PatentsView republishes this full dump ~quarterly (see Run Cadence at
     # top of file). A Last-Modified probe skips the re-download and re-materialize on
     # unchanged runs (fails open — a null token just re-fetches).

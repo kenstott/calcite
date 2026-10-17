@@ -628,6 +628,7 @@ partitionedTables:
   # FDA DRUG SHORTAGES — one row per shortage episode, bulk partition ZIP (single file)
   # ==========================================================================
   - name: fda_drug_shortages
+    timeColumn: posting_year  # observation time; this table has no column named 'year'
     pattern: "type=fda_drug_shortages"
     freshness:
       type: version
@@ -797,6 +798,7 @@ partitionedTables:
   # (snapshot_date, generic_name, presentation, initial_posting_date) from those captures.
   # ==========================================================================
   - name: fda_drug_shortages_history
+    timeColumn: snapshot_date  # observation time; this table has no column named 'year'
     pattern: "type=fda_drug_shortages_history"
     partitions:
       style: hive
@@ -1102,6 +1104,7 @@ partitionedTables:
         runCompaction: true
 
   - name: chr_premature_death_trends
+    timeColumn: period_end_year  # observation time; this table has no column named 'year'
     # Content-hash gate: unlike chr_premature_death's per-release file, this trends file's
     # ETag behavior on countyhealthrankings.org has not been verified live — hash is always
     # safe (downloads once, then skips reprocessing when the body is byte-identical).
@@ -1254,6 +1257,7 @@ partitionedTables:
   # Year filter: GOVDATA_START_YEAR (default 2010); partitions enumerated from download.json
   # ==========================================================================
   - name: fda_adverse_events
+    timeColumn: receive_year  # observation time; this table has no column named 'year'
     pattern: "type=fda_adverse_events"
     partitions:
       style: hive
@@ -1383,6 +1387,7 @@ partitionedTables:
   # FDA DEVICE RECALLS — medical device enforcement actions
   # ==========================================================================
   - name: fda_device_recalls
+    timeColumn: event_date_initiated  # observation time; this table has no column named 'year'
     pattern: "type=fda_device_recalls"
     # Freshness: skip fetch+commit when openFDA's published export_date for this
     # endpoint is unchanged since the last successful run.
@@ -1914,6 +1919,7 @@ partitionedTables:
   # CDC COVID-19 VACCINATIONS — Socrata SODA API, ~ongoing updates
   # ==========================================================================
   - name: cdc_covid_vaccinations
+    timeColumn: date  # observation time; this table has no column named 'year'
     freshness:
       type: last_modified
     releaseWindow:
@@ -2526,6 +2532,7 @@ partitionedTables:
   # CMS HOSPITAL COST REPORT (HCRIS) — payer-mix revenue + total margin + liquidity financials
   # ==========================================================================
   - name: hospital_cost_report_financials
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
     # Freshness gate: CMS data-api dataset has no meaningful Last-Modified; hash the
     # response body post-fetch (fails open on a missing prior token). CMS replaces
     # this same dataset id with the newest final-settled fiscal year in place — there
@@ -5374,6 +5381,7 @@ partitionedTables:
         runCompaction: true
 
   - name: cdc_drug_overdose_deaths_by_drug
+    timeColumn: death_year  # observation time; this table has no column named 'year'
     freshness:
       type: etag
     comment: >
@@ -5838,6 +5846,7 @@ partitionedTables:
         runCompaction: true
 
   - name: cdc_nndss_weekly
+    timeColumn: mmwr_year  # observation time; this table has no column named 'year'
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
@@ -5986,6 +5995,7 @@ partitionedTables:
         runCompaction: true
 
   - name: cdc_school_vaccination_coverage
+    timeColumn: school_year  # observation time; this table has no column named 'year'
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).

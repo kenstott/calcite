@@ -1332,6 +1332,7 @@ partitionedTables:
   # INTERCONNECTION_QUEUE - LBNL "Queued Up" project-level interconnection requests
   # ---------------------------------------------------------------------------
   - name: interconnection_queue
+    timeColumn: q_year  # observation time; this table has no column named 'year'
     pattern: "type=interconnection_queue/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -2392,6 +2393,7 @@ partitionedTables:
   # EIA NATURAL GAS PRICE - Henry Hub daily spot price (EIA API v2)
   # ---------------------------------------------------------------------------
   - name: eia_natural_gas_price
+    timeColumn: report_date  # observation time; this table has no column named 'year'
     # Freshness gate: hashes the response body post-fetch to skip the materialize/commit
     # when unchanged. Spot prices are final same-day (unlike EIA's monthly survey series),
     # so no lookback is needed here.
@@ -3092,6 +3094,7 @@ partitionedTables:
   # DPR region.
   # ---------------------------------------------------------------------------
   - name: eia_drilling_activity
+    timeColumn: report_year  # observation time; this table has no column named 'year'
     # STEO revises recent months on every release; single cumulative fetch
     # (all history in one request, well under the 5000-row page cap) makes a
     # hash-based freshness check the natural fit — no year windowing needed.

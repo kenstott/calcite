@@ -361,6 +361,7 @@ partitionedTables:
   # FOREST INVENTORY — USDA FIA per-state COND CSV
   # ---------------------------------------------------------------------------
   - name: forest_inventory
+    timeColumn: inventory_year  # observation time; this table has no column named 'year'
     pattern: "type=forest_inventory/*.parquet"
     partitions:
       style: hive
@@ -445,6 +446,7 @@ partitionedTables:
   # FOREST METRICS — USDA FIA per-state TREE CSV (live-tree metrics)
   # ---------------------------------------------------------------------------
   - name: forest_metrics
+    timeColumn: inventory_year  # observation time; this table has no column named 'year'
     pattern: "type=forest_metrics/*.parquet"
     partitions:
       style: hive
@@ -535,6 +537,7 @@ partitionedTables:
   # FIA PLOTS — per-plot identification, fuzzed lat/lon, status
   # ---------------------------------------------------------------------------
   - name: fia_plots
+    timeColumn: measure_year  # observation time; this table has no column named 'year'
     pattern: "type=fia_plots/*.parquet"
     partitions:
       style: hive
@@ -635,6 +638,7 @@ partitionedTables:
   # FIA TREE GRM — per-state/year/species annualized growth/removal/mortality
   # ---------------------------------------------------------------------------
   - name: fia_tree_grm
+    timeColumn: inventory_year  # observation time; this table has no column named 'year'
     pattern: "type=fia_tree_grm/*.parquet"
     partitions:
       style: hive
@@ -723,6 +727,7 @@ partitionedTables:
   # FIA SEEDLINGS — per-state/year/species seedling regeneration intensity
   # ---------------------------------------------------------------------------
   - name: fia_seedlings
+    timeColumn: inventory_year  # observation time; this table has no column named 'year'
     pattern: "type=fia_seedlings/*.parquet"
     partitions:
       style: hive
@@ -801,6 +806,7 @@ partitionedTables:
   # FIA DOWN WOODY DEBRIS — per-state biomass tons/acre of CWD/FWD/duff+litter
   # ---------------------------------------------------------------------------
   - name: fia_down_woody_debris
+    timeColumn: inventory_year  # observation time; this table has no column named 'year'
     pattern: "type=fia_down_woody_debris/*.parquet"
     partitions:
       style: hive
@@ -876,6 +882,7 @@ partitionedTables:
   # FIA INVASIVES — invasive plant species cover by state-year-species
   # ---------------------------------------------------------------------------
   - name: fia_invasives
+    timeColumn: inventory_year  # observation time; this table has no column named 'year'
     pattern: "type=fia_invasives/*.parquet"
     partitions:
       style: hive
@@ -1766,6 +1773,7 @@ partitionedTables:
   # ONRR REVENUES — ONRR federal/tribal mineral royalties (bulk annual CSV)
   # ---------------------------------------------------------------------------
   - name: onrr_revenues
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
     pattern: "type=onrr_revenues/*.parquet"
     partitions: *static_partitions
     comment: >
@@ -1881,6 +1889,7 @@ partitionedTables:
   # BLM OIL & GAS ACREAGE — federal oil & gas lease acreage by state × FY (bulk XLSX)
   # ---------------------------------------------------------------------------
   - name: blm_oil_gas_acreage
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
     pattern: "type=blm_oil_gas_acreage/*.parquet"
     partitions: *static_partitions
     freshness:

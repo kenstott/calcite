@@ -1893,6 +1893,7 @@ partitionedTables:
   # NYC DHS DAILY SHELTER CENSUS — Socrata k46n-sa2m + dwrg-kzni (snapshot, JSON)
   # ---------------------------------------------------------------------------
   - name: homeless_shelter_census
+    timeColumn: date_of_census  # observation time; this table has no column named 'year'
     # Freshness gate: Socrata has no meaningful Last-Modified on either resource, so this
     # hashes the response body post-fetch to skip the materialize/commit when unchanged
     # (fails open on a missing prior token). Both resources are small (~2,000-2,700 rows

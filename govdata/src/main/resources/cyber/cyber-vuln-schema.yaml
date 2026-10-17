@@ -569,6 +569,7 @@ partitionedTables:
   # CISA KEV CATALOG — Known Exploited Vulnerabilities
   # ==========================================================================
   - name: kev_catalog
+    timeColumn: date_added  # observation time; this table has no column named 'year'
     pattern: "type=kev_catalog.parquet"
     dataset_type: snapshot          # full-catalog replace; cumulative KEV JSON
     freshness:

@@ -16,7 +16,15 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -163,5 +171,54 @@ public class GovDataCatalogCoverageTest {
     assertTrue(cov.path("time_varying").asBoolean(), "data_year is a time dimension");
     assertTrue(!cov.path("note").asText().contains("cannot be filtered"),
         "must not tell callers the table cannot be trended over time");
+  }
+
+  /**
+   * Every table or view that declares {@code timeColumn} must name one of its own columns. The
+   * catalog throws for the schema it is asked about, but only when that schema is requested; this
+   * walks every bundled schema YAML so a typo in any of them fails the build rather than the
+   * first caller to describe that schema.
+   */
+  @Test void everyDeclaredTimeColumnNamesAnExistingColumn() throws Exception {
+    java.net.URL anchor = GovDataCatalog.class.getResource(GovDataCatalog.resourcePath("ref"));
+    assertNotNull(anchor, "ref schema resource must be on the classpath");
+    assertEquals("file", anchor.getProtocol(), "schema resources must be an exploded directory");
+    Path root = Paths.get(anchor.toURI()).getParent().getParent();
+    List<Path> yamls;
+    try (Stream<Path> walk = Files.walk(root)) {
+      yamls = walk.filter(p -> p.getFileName().toString().endsWith("-schema.yaml"))
+          .collect(Collectors.toList());
+    }
+    assertTrue(yamls.size() >= 25, "expected the bundled schema YAMLs, found " + yamls.size());
+
+    List<String> bad = new ArrayList<>();
+    int declared = 0;
+    for (Path yaml : yamls) {
+      JsonNode doc;
+      try (InputStream is = Files.newInputStream(yaml)) {
+        doc = YamlUtils.parseYamlOrJson(is, yaml.toString());
+      }
+      for (String section : Arrays.asList("partitionedTables", "tables", "views")) {
+        for (JsonNode t : doc.path(section)) {
+          if (!t.hasNonNull("timeColumn")) {
+            continue;
+          }
+          declared++;
+          String col = t.get("timeColumn").asText();
+          boolean found = false;
+          for (JsonNode c : t.path("columns")) {
+            if (col.equalsIgnoreCase(c.path("name").asText())) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            bad.add(yaml.getFileName() + ": " + t.path("name").asText() + " -> " + col);
+          }
+        }
+      }
+    }
+    assertTrue(declared >= 50, "expected the declared timeColumn tables, found " + declared);
+    assertTrue(bad.isEmpty(), "timeColumn names a column the table does not have: " + bad);
   }
 }

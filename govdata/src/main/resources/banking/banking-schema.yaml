@@ -706,6 +706,7 @@ partitionedTables:
   # Enforcement Actions — Federal Reserve Board bulk CSV (full-history, static)
   # ---------------------------------------------------------------------------
   - name: enforcement_actions
+    timeColumn: effective_date  # observation time; this table has no column named 'year'
     freshness:
       type: last_modified
     pattern: "type=enforcement_actions/*.parquet"

@@ -5544,6 +5544,7 @@ partitionedTables:
   # BUILDING PERMITS - Residential construction activity
   # ---------------------------------------------------------------------------
   - name: building_permits
+    timeColumn: survey_year  # observation time; this table has no column named 'year'
     pattern: "type=bps/period_code=*/*.parquet"
     partitions:
       style: hive

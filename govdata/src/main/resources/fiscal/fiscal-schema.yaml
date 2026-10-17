@@ -5723,6 +5723,7 @@ partitionedTables:
   # FAC_AUDITS — FAC current bulk file general.csv (full daily extract, refreshed monthly)
   # ---------------------------------------------------------------------------
   - name: fac_audits
+    timeColumn: audit_year  # observation time; this table has no column named 'year'
     pattern: "type=fac_audits/*.parquet"
     partitions: *static_partitions
     dqRowLimit: 200000
@@ -5947,6 +5948,7 @@ partitionedTables:
   # FAC_FEDERAL_AWARDS — FAC current bulk file federal_awards.csv (full daily extract, refreshed monthly)
   # ---------------------------------------------------------------------------
   - name: fac_federal_awards
+    timeColumn: audit_year  # observation time; this table has no column named 'year'
     pattern: "type=fac_federal_awards/*.parquet"
     partitions: *static_partitions
     dqRowLimit: 200000

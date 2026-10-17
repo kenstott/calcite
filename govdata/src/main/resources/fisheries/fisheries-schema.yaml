@@ -657,6 +657,7 @@ partitionedTables:
   # DART_ADULT_COUNTS — adult salmon/steelhead passage counts at dams (WA/OR)
   # ---------------------------------------------------------------------------
   - name: dart_adult_counts
+    timeColumn: count_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=dart_adult_counts/project=*/*.parquet"
@@ -756,6 +757,7 @@ partitionedTables:
   # ADFG_FISH_COUNTS — Alaska Sport Fish Division annual salmon/steelhead counts by site
   # ---------------------------------------------------------------------------
   - name: adfg_fish_counts
+    timeColumn: count_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=adfg_fish_counts/location_id=*/species_id=*/*.parquet"
@@ -870,6 +872,7 @@ partitionedTables:
   # CDFW_GRANDTAB_ESCAPEMENT — California Central Valley Chinook escapement by run and origin
   # ---------------------------------------------------------------------------
   - name: cdfw_grandtab_escapement
+    timeColumn: count_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=cdfw_grandtab_escapement/run=*/origin=*/*.parquet"
@@ -1069,6 +1072,7 @@ partitionedTables:
   # STOCK_SMART_ASSESSMENTS — NOAA Stock SMART assessment reference points by stock
   # ---------------------------------------------------------------------------
   - name: stock_smart_assessments
+    timeColumn: assessment_year  # observation time; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=stock_smart_assessments/*.parquet"

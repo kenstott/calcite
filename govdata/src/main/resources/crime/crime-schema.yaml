@@ -1879,6 +1879,7 @@ partitionedTables:
   # ICE DETENTION POPULATION BY CRIMINALITY - TRAC compiled snapshot series
   # ---------------------------------------------------------------------------
   - name: ice_detention_population_by_criminality
+    timeColumn: snapshot_date  # observation time; this table has no column named 'year'
     # Snapshot table, same shape as cde_trends: the source returns its full point-in-time
     # history (155+ dates, irregular cadence, not fixed-schedule) in one JSON array on every
     # fetch, so there is no year axis to partition on — the hash freshness gate skips the

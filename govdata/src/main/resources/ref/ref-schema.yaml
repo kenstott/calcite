@@ -1569,6 +1569,7 @@ partitionedTables:
   # FISCAL_YEAR — US federal fiscal-year dimension (Oct 1 start)
   # ==========================================================================
   - name: fiscal_year
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
     pattern: "type=fiscal_year.parquet"
     partitions:
       style: hive
