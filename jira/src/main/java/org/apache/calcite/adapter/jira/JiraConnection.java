@@ -274,18 +274,18 @@ class JiraConnection {
   }
 
   /** {@code errorMessages} and {@code errors} of a Jira error object, joined. */
-  static String errorText(JsonNode error) {
+  static String errorText(JsonNode response) {
     final StringBuilder text = new StringBuilder();
-    for (JsonNode message : error.path("errorMessages")) {
+    for (JsonNode message : response.path("errorMessages")) {
       text.append(text.length() == 0 ? "" : "; ").append(message.asText());
     }
-    final Iterator<Map.Entry<String, JsonNode>> fields = error.path("errors").fields();
+    final Iterator<Map.Entry<String, JsonNode>> fields = response.path("errors").fields();
     while (fields.hasNext()) {
       final Map.Entry<String, JsonNode> field = fields.next();
       text.append(text.length() == 0 ? "" : "; ").append(field.getKey()).append(": ")
           .append(field.getValue().asText());
     }
-    return text.length() == 0 ? snippet(error.toString()) : text.toString();
+    return text.length() == 0 ? snippet(response.toString()) : text.toString();
   }
 
   private static String snippet(String body) {
