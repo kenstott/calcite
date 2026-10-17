@@ -91,11 +91,11 @@ class PgwireGovDataConnectorStartTest {
       IllegalStateException first =
           assertThrows(IllegalStateException.class,
               () -> starter.await(slow, 200, PgwireGovDataConnectorStartTest::ignore));
-      assertTrue(first.getMessage().contains("still starting"), first.getMessage());
+      assertTrue(first.getMessage().contains("has not answered"), first.getMessage());
       IllegalStateException second =
           assertThrows(IllegalStateException.class,
               () -> starter.await(slow, 200, PgwireGovDataConnectorStartTest::ignore));
-      assertTrue(second.getMessage().contains("still starting"), second.getMessage());
+      assertTrue(second.getMessage().contains("has not answered"), second.getMessage());
       // The start runs on a thread of its own, which a busy machine may not have scheduled
       // within the two calls' waits: count once it has begun.
       assertTrue(begun.await(60, java.util.concurrent.TimeUnit.SECONDS), "the start never began");

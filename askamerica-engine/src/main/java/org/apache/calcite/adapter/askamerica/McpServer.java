@@ -5124,7 +5124,7 @@ public class McpServer {
             // "canceling statement" error; the stop reason is the real cause, so it wins.
             CallScope stoppedScope = CallScope.current();
             String compact = stoppedScope != null && stoppedScope.stopped()
-                ? stoppedScope.stopMessage() : compactErrorMessage(e);
+                ? stoppedScope.stopMessage() : compactErrorMessage(e, ms);
             log.println("[askamerica-mcp] tool=" + name + " ERROR ms=" + ms + " msg=" + compact);
             recordCall(name, args, ms, -1, null, compact);
             if (telemetryOptIn && !"set_telemetry".equals(name)) {
@@ -5323,6 +5323,12 @@ public class McpServer {
      * </ul>
      */
     static String compactErrorMessage(Throwable e) {
+        return compactErrorMessage(e, -1);
+    }
+
+    /** As {@link #compactErrorMessage(Throwable)}, given how long the failed call ran (-1 when
+     *  not measured), which a read-timeout message reports. */
+    static String compactErrorMessage(Throwable e, long elapsedMillis) {
         // Every preview_report enforce* gate throws IllegalArgumentException with a complete,
         // deliberately-authored, actionable message -- never a raw stack trace or noisy driver
         // text. The generic truncateMessage() fallback below exists for THOSE (a SQL
@@ -5360,6 +5366,12 @@ public class McpServer {
             if (msg != null && msg.startsWith("WATCHDOG_TIMEOUT: ")) {
                 return msg.substring("WATCHDOG_TIMEOUT: ".length());
             }
+        }
+        // An object-store read that timed out arrives as a bare "Read timed out". Say what
+        // stalled, how long a read waits, that the retries were used up, and what to do.
+        String stall = ReadStall.describe(e, elapsedMillis);
+        if (stall != null) {
+            return stall;
         }
         // TRY_CAST is correct DuckDB and correct in most dialects, and callers reach for it
         // constantly on this warehouse because so many measure columns are VARCHAR. Calcite's
@@ -5623,6 +5635,26 @@ public class McpServer {
         return st.executeQuery(sql);
     }
 
+    /**
+     * {@link #executeMetaQuery} for one named step of describe_table. An information_schema
+     * lookup is answered by the data server from the table's own metadata, which for an
+     * Iceberg table can be an object-store read; when that read times out, the failure names
+     * the step that stalled (and how long the call had run), where the driver's own message
+     * is only "Read timed out". Any other failure passes through unchanged.
+     */
+    private static ResultSet executeMetaStep(String step, long startedMillis, Statement st,
+            String sql) throws java.sql.SQLException {
+        try {
+            return executeMetaQuery(st, sql);
+        } catch (java.sql.SQLException e) {
+            if (ReadStall.isReadTimeout(e)) {
+                throw new ReadStall.StepFailure("describe_table step '" + step + "'",
+                    System.currentTimeMillis() - startedMillis, e);
+            }
+            throw e;
+        }
+    }
+
     /** Reduce a caller-supplied identifier to a safe [a-z0-9_] literal for meta queries. */
     private static String safeIdent(String s) {
         return s == null ? "" : s.replaceAll("[^A-Za-z0-9_]", "").toLowerCase();
@@ -5822,6 +5854,7 @@ public class McpServer {
     private static String describeTable(String schema, String table) throws Exception {
         String s = safeIdent(schema);
         String t = safeIdent(table);
+        long t0 = System.currentTimeMillis();
         Connection c = getCatalogConnection();
 
         ObjectNode out = MAPPER.createObjectNode();
@@ -5830,7 +5863,7 @@ public class McpServer {
 
         // Table type + description (information_schema resolves both base tables and views).
         Statement typeSt = c.createStatement();
-        try (ResultSet rs = executeMetaQuery(typeSt,
+        try (ResultSet rs = executeMetaStep("type", t0, typeSt,
                 "SELECT table_type, remarks FROM information_schema.tables "
                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "'")) {
             if (rs.next()) {
@@ -5851,7 +5884,7 @@ public class McpServer {
         // Columns — resolved by Calcite, so view row types come through correctly.
         ArrayNode cols = MAPPER.createArrayNode();
         Statement colSt = c.createStatement();
-        try (ResultSet rs = executeMetaQuery(colSt,
+        try (ResultSet rs = executeMetaStep("columns", t0, colSt,
                 "SELECT column_name, data_type, is_nullable, remarks "
                 + "FROM information_schema.columns "
                 + "WHERE lower(table_schema) = '" + s + "' AND lower(table_name) = '" + t + "' "
@@ -5885,7 +5918,7 @@ public class McpServer {
         // grain visible at the point a caller decides how to join.
         ArrayNode pk = MAPPER.createArrayNode();
         Statement pkSt = c.createStatement();
-        try (ResultSet rs = executeMetaQuery(pkSt,
+        try (ResultSet rs = executeMetaStep("primary key", t0, pkSt,
                 "SELECT k.column_name FROM information_schema.key_column_usage k "
                 + "JOIN information_schema.table_constraints tc "
                 + "  ON k.constraint_name = tc.constraint_name "

@@ -478,10 +478,13 @@ def main(argv: list | None = None) -> int:
 
     from pgwire_calcite.extensions import resolve as _resolve_ext
 
+    log.info("STAGE socket-claimed host=%s port=%d", args.host, args.port)
     enabled_ext = _resolve_ext(args.extension)
+    log.info("STAGE backend-building model=%s", args.model)
     backend = build_backend(
         args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child, extensions=enabled_ext
     )
+    log.info("STAGE backend-built")
     auth_provider = None
     if args.auth == "askamerica-key":
         from pgwire_calcite.auth import AskAmericaKeyProvider
@@ -547,6 +550,7 @@ def main(argv: list | None = None) -> int:
             exc_info=exc,
         )
         os._exit(1)
+    log.info("STAGE ready")
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
         args.backend,
