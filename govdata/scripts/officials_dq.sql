@@ -709,12 +709,31 @@ SELECT 'officials', 'house_election_results', 'T1_existence',
   n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/house_election_results', allow_moved_paths := true));
 
--- T2: row_count (the Lab's file is frozen, so the count is exact)
+-- T2: row_count (the Lab's file is frozen, so its count is exact; the FEC workbooks are pinned and
+-- parsed with strict subtotal checks, so their per-cycle counts are exact too)
 INSERT INTO dq_results
-SELECT 'officials', 'house_election_results', 'T2_row_count',
+SELECT 'officials', 'house_election_results', 'T2_row_count_medsl',
   CASE WHEN n = 29636 THEN 'pass' ELSE 'fail' END,
-  n, 29636, 'Row count equals the published file (29636 rows)'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/house_election_results', allow_moved_paths := true));
+  n, 29636, 'MIT Election Lab rows equal the published file (29636 rows)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'MEDSL');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T2_row_count_fec_2020',
+  CASE WHEN n = 1393 THEN 'pass' ELSE 'fail' END,
+  n, 1393, 'FEC 2020 rows (1393)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'FEC' AND year = 2020);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T2_row_count_fec_2022',
+  CASE WHEN n = 1313 THEN 'pass' ELSE 'fail' END,
+  n, 1313, 'FEC 2022 rows (1313)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'FEC' AND year = 2022);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_source_values_and_years',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'Rows whose source is not MEDSL for 1976-2018 or FEC for 2020-2022 (expect 0; 2024 is missing until the FEC publishes it)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE NOT ((source = 'MEDSL' AND year <= 2018) OR (source = 'FEC' AND year IN (2020, 2022))));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/house_election_results', allow_moved_paths := true) LIMIT 3;
@@ -961,6 +980,87 @@ SELECT 'officials', 'house_election_results', 'T7_spot_bacon_ne2_2016',
   CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
   n, NULL, 'NE-2 2016: Bacon (R) 141,066 vs Ashford (D) 137,602'
 FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2016 AND state_postal = 'NE' AND district = 2 AND d_votes = 137602 AND r_votes = 141066);
+
+-- FEC cycles 2020 and 2022 (2024 is missing until the FEC publishes it)
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_cycles_1976_2022',
+  CASE WHEN n = 24 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'Distinct election years in the table (24 even years 1976 to 2022; 2024 missing)'
+FROM (SELECT COUNT(DISTINCT year) AS n FROM house_election_results WHERE year BETWEEN 1976 AND 2022 AND year % 2 = 0);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_seats_2020_D',
+  CASE WHEN n = 222 THEN 'pass' ELSE 'fail' END,
+  n, NULL, '2020 House seats won by D (222 at the election; Wikipedia 2020 United States House of Representatives elections)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2020 AND leader_party_major = 'D');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_seats_2020_R',
+  CASE WHEN n = 213 THEN 'pass' ELSE 'fail' END,
+  n, NULL, '2020 House seats won by R (213 at the election)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2020 AND leader_party_major = 'R');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_seats_2022_R',
+  CASE WHEN n = 222 THEN 'pass' ELSE 'fail' END,
+  n, NULL, '2022 House seats won by R (222 at the election; Wikipedia 2022 United States House of Representatives elections)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2022 AND leader_party_major = 'R');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_seats_2022_D',
+  CASE WHEN n = 213 THEN 'pass' ELSE 'fail' END,
+  n, NULL, '2022 House seats won by D (213 at the election)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2022 AND leader_party_major = 'D');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_fec_winner_party_never_blank',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'FEC-cycle decisive winners with no party (expect 0; the FEC publishes a party for every candidate)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year IN (2020, 2022) AND leader_party_major IS NULL);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_fec_uncontested_three',
+  CASE WHEN n = 3 THEN 'pass' ELSE 'fail' END,
+  n, 3, 'FEC rows marked uncontested: FL-25 2020, FL-5 2022, LA-4 2022 (the FEC prints Unopposed)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'FEC' AND uncontested);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_fec_ranked_choice_2022',
+  CASE WHEN n = 8 AND r = 2 THEN 'pass' ELSE 'fail' END,
+  n, 8, 'Ranked-choice rows (Maine 2: 4, Alaska at-large: 4, all 2022) from 2 districts, each with a first-choice count'
+FROM (SELECT COUNT(*) AS n, COUNT(DISTINCT state_fips) AS r FROM house_election_results WHERE ranked_choice AND first_choice_votes IS NOT NULL AND year = 2022 AND source = 'FEC');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_fec_louisiana_5_2020_runoff',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'Louisiana 5 2020 runoff round (Dec 5): Letlow 49,183 vs Harris 30,124, total 79,307'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2020 AND state_postal = 'LA' AND district = 5 AND runoff AND leader_votes = 49183 AND runner_up_votes = 30124 AND total_votes = 79307);
+
+-- State D and R totals against the workbook's own Table 7 (Alabama: 2020 D 608,809 R 1,416,012; 2022 D 318,540 R 942,393)
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_fec_alabama_party_totals_match_table7',
+  CASE WHEN n = 4 THEN 'pass' ELSE 'fail' END,
+  n, 4, 'Alabama D and R vote totals for 2020 and 2022 equal the FEC workbook Table 7 (4 of 4 equal)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, party_major, SUM(candidate_votes) AS v FROM house_election_results WHERE state_postal = 'AL' AND year >= 2020 AND party_major IN ('D', 'R') GROUP BY year, party_major) WHERE (year = 2020 AND party_major = 'D' AND v = 608809) OR (year = 2020 AND party_major = 'R' AND v = 1416012) OR (year = 2022 AND party_major = 'D' AND v = 318540) OR (year = 2022 AND party_major = 'R' AND v = 942393));
+
+-- Spot checks against independent sources
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_spot_ocasio_cortez_ny14_2020',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'NY-14 2020: Ocasio-Cortez 152,661 (Democratic line; Wikipedia 2020 House elections in New York)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2020 AND state_postal = 'NY' AND district = 14 AND leader_candidate = 'Alexandria Ocasio-Cortez' AND d_votes = 152661);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_spot_boebert_co3_2022',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'CO-3 2022: Boebert (R) 163,839 vs Frisch (D) 163,293, total 327,285 (Wikipedia 2022 House elections in Colorado)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2022 AND state_postal = 'CO' AND district = 3 AND r_votes = 163839 AND d_votes = 163293 AND total_votes = 327285);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_spot_peltola_ak_2022',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'AK-AL 2022 final instant-runoff round: Peltola (D) 137,263 vs Palin (R) 112,471 (54.96%)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2022 AND state_postal = 'AK' AND leader_candidate = 'Mary S. Peltola' AND leader_votes = 137263 AND runner_up_votes = 112471);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: senate_election_results

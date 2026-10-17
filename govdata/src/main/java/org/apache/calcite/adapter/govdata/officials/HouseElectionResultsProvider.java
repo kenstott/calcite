@@ -36,7 +36,8 @@ import java.util.Map;
 
 /**
  * DataProvider for {@code officials.house_election_results}: the MIT Election Data + Science Lab
- * U.S. House returns 1976-2018 (CC0), one row per candidate (or write-in / residual bucket) per
+ * U.S. House returns 1976-2018 (CC0) plus the FEC official results for 2020 and 2022 (see
+ * {@link FecHouseResultsParser}; 2024 is not yet published by the FEC), one row per candidate (or write-in / residual bucket) per
  * party line per district election round.
  *
  * <p>The Lab's current House release (1976-2024, Harvard Dataverse doi:10.7910/DVN/IG0UN2) sits
@@ -52,6 +53,7 @@ public class HouseElectionResultsProvider implements CachingDataProvider {
       LoggerFactory.getLogger(HouseElectionResultsProvider.class);
 
   static final String TABLE = "house_election_results";
+  static final String SOURCE = "MEDSL";
   static final String COMMIT = "cca36bc159334e1e2ae82904a5dd0a8a299c9124";
   static final String URL = "https://raw.githubusercontent.com/MEDSL/constituency-returns/"
       + COMMIT + "/1976-2018-house.csv";
@@ -68,19 +70,26 @@ public class HouseElectionResultsProvider implements CachingDataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
-    byte[] csv = download(rawCache);
+    byte[] csv = download(rawCache, URL, "MIT Election Lab House returns");
     List<Map<String, Object>> rows = parse(new BufferedReader(
         new InputStreamReader(new ByteArrayInputStream(csv), StandardCharsets.ISO_8859_1)));
-    LOGGER.info("house_election_results: {} rows from {}", Integer.valueOf(rows.size()), URL);
+    LOGGER.info("house_election_results: {} MIT rows from {}", Integer.valueOf(rows.size()), URL);
+    for (FecHouseResultsParser.Release rel : FecHouseResultsParser.RELEASES) {
+      byte[] xlsx = download(rawCache, rel.url, "FEC " + rel.year + " official results");
+      List<Map<String, Object>> fec = FecHouseResultsParser.parseWorkbook(xlsx, rel);
+      LOGGER.info("house_election_results: {} FEC {} rows from {}", Integer.valueOf(fec.size()),
+          Integer.valueOf(rel.year), rel.url);
+      rows.addAll(fec);
+    }
     return rows.iterator();
   }
 
-  private static byte[] download(RawCache rawCache) throws IOException {
+  private static byte[] download(RawCache rawCache, String url, String label)
+      throws IOException {
     IOException last = null;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try (InputStream in = rawCache.openStream(URL,
-              () -> ResumableHttpStream.open("MIT Election Lab House returns", USER_AGENT, URL,
-                  BACKOFF_MS));
+      try (InputStream in = rawCache.openStream(url,
+              () -> ResumableHttpStream.open(label, USER_AGENT, url, BACKOFF_MS));
            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
         byte[] buf = new byte[1 << 16];
         int n;
@@ -91,7 +100,7 @@ public class HouseElectionResultsProvider implements CachingDataProvider {
       } catch (IOException e) {
         last = e;
         LOGGER.warn("house_election_results: attempt {}/{} failed for {}: {}",
-            Integer.valueOf(attempt), Integer.valueOf(MAX_ATTEMPTS), URL, e.getMessage());
+            Integer.valueOf(attempt), Integer.valueOf(MAX_ATTEMPTS), url, e.getMessage());
       }
     }
     throw last;
@@ -191,6 +200,9 @@ public class HouseElectionResultsProvider implements CachingDataProvider {
       m.put("version_date", ElectionResultsSupport.versionDate(
           ElectionResultsSupport.required(f, idx, "version", TABLE, line), TABLE, line));
       m.put("source_release", RELEASE);
+      m.put("source", SOURCE);
+      m.put("ranked_choice", null);
+      m.put("first_choice_votes", null);
       rows.add(m);
     }
     if (rows.isEmpty()) {

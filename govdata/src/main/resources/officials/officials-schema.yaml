@@ -22,6 +22,10 @@
 #     doi:10.7910/DVN/PEJ5QU) election returns by district/state and candidate. The Lab's
 #     House release through 2024 (doi:10.7910/DVN/IG0UN2) is behind a Dataverse guestbook
 #     (name, e-mail, institution, position) and cannot be fetched by an automated job.
+#   - Federal Election Commission official results workbooks "Federal Elections 2020" and
+#     "Federal Elections 2022" (fec.gov, public domain) — U.S. House general-election results
+#     for 2020 and 2022, appended to house_election_results (source = 'FEC'). The FEC has not
+#     published a 2024 House results workbook (only a candidate list), so 2024 is missing.
 #
 # Explicitly out of scope for this schema:
 #   - Direct Bioguide scrape (bioguide.congress.gov blocks non-browser clients via
@@ -52,8 +56,9 @@ comment: >
   community-maintained aggregator (unitedstates/congress-legislators) rather than a
   government system of record directly, because no official source exposes committee
   membership or jurisdiction in structured form; see the header comment above.
-  `house_election_results` (1976-2018) and `senate_election_results` (1976-2024) hold
-  candidate-level election returns from the MIT Election Data + Science Lab, with the views
+  `house_election_results` (1976-2018 from the MIT Election Data + Science Lab, 2020 and 2022
+  from the FEC; 2024 missing) and `senate_election_results` (1976-2024, MIT) hold
+  candidate-level election returns, with the views
   `house_race_results`, `senate_race_results` and `election_seats_won` giving winner, two-party
   margin and seats won per cycle.
 
@@ -1131,21 +1136,28 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ---------------------------------------------------------------------------
-  # HOUSE_ELECTION_RESULTS — district-level U.S. House returns, MIT Election Lab 1976-2018
+  # HOUSE_ELECTION_RESULTS — district-level U.S. House returns, MIT Election Lab 1976-2018 + FEC 2020, 2022
   # ---------------------------------------------------------------------------
   - name: house_election_results
     # One snapshot of the whole series (year is a column, not a partition): the Lab publishes the
-    # returns as one file that is only ever replaced by a later release, so the ~29,600 rows are
-    # re-read each run and the hash probe skips the write when nothing changed.
+    # returns as one file and the FEC one workbook per cycle, each only ever replaced by a later
+    # release, so the ~32,300 rows are re-read each run and the hash probe skips the write when
+    # nothing changed.
     dataset_type: snapshot
     freshness:
       type: hash
     pattern: "type=house_election_results/*.parquet"
     partitions: *type_partition
     comment: >
-      U.S. House general-election returns by district and candidate, every cycle 1976 to 2018 (22
-      cycles), from the MIT Election Data + Science Lab (CC0), as the Lab's GitHub repository
-      MEDSL/constituency-returns publishes them (release dated 2019, commit cca36bc159). One row
+      U.S. House general-election returns by district and candidate for 24 cycles: 1976 to 2018
+      from the MIT Election Data + Science Lab (CC0), as the Lab's GitHub repository
+      MEDSL/constituency-returns publishes them (release dated 2019, commit cca36bc159), and
+      2020 and 2022 from the Federal Election Commission's official results workbooks (source
+      'FEC' against 'MEDSL' in the source column). 2024 IS MISSING: the Lab's 1976-2024 release
+      (Harvard Dataverse doi:10.7910/DVN/IG0UN2) sits behind a Dataverse guestbook that requires
+      a name, e-mail, institution and position, so an automated job cannot fetch it, and the FEC
+      has not published a 2024 House results workbook (fec.gov lists only the 2024 candidate
+      list and presidential results); 2024 is to be added when the FEC publishes it. One row
       per candidate per party line per district election round: year, state, district, whether
       it is a special election or a runoff, the stage (gen general election, pri primary, null
       when the Lab gave none), the candidate, the party label as published and a normalised
@@ -1165,20 +1177,70 @@ partitionedTables:
       candidate who won a special election appears under special=true. Redistricting: results
       are by the district map in force that year (new maps in 1982, 1992, 2002, 2012, and the
       court-ordered mid-decade Texas redraws of 1996 and 2006, which appear as extra special,
-      runoff and null-stage rounds), so a (state, district) pair is a different place before and
+      runoff and null-stage rounds; 2022 uses the 2020-census maps), so a (state, district) pair is a different place before and
       after a redistricting year and is not comparable across them without a crosswalk. Louisiana
-      2002 district 5 is a runoff round after an open first round. COVERAGE GAP: the Lab's
-      current release (1976 to 2024, Harvard Dataverse doi:10.7910/DVN/IG0UN2) adds 2020, 2022
-      and 2024 but sits behind a Dataverse guestbook that requires a name, e-mail, institution
-      and position before the API serves the file, so it cannot be fetched by an automated job;
-      this table therefore stops at 2018. Joins: state_fips to geo.state_ref.state_fips;
+      2002 district 5 is a runoff round after an open first round (Louisiana 2020 district 5
+      likewise, FEC). FEC ROWS (2020, 2022), read from the workbook's 'US House Results by State'
+      sheet with strict parsing (an unknown header, state, party label or subtotal fails the
+      fetch; every district's rows must sum to the sheet's own district total and the winner
+      flag must name the leader): only the 50 states' general elections are loaded, stage gen,
+      from the General Votes and General Runoff columns; primaries, primary runoffs and the
+      per-party and combined subtotal rows are not. The delegates (DC, AS, GU, MP, PR, VI) are
+      not loaded, as the Lab's series has none. Vacancy-filling special elections are not
+      loaded (the Lab's series has none either; they sit on the FEC 'Special Elections'
+      appendix), except Indiana 2 in 2022, whose unexpired-term election is on the main sheet
+      beside the full-term one and is special=true. Fusion tickets (New York, Connecticut,
+      Oregon, South Carolina, Alaska): each party line of a candidate is its own row with its own
+      votes, as in the Lab's data; the FEC 'Combined Parties' rows and combined-total columns are
+      not read. Oregon and a few other states publish one combined total under a combined label
+      (D/WF, D/IP/WF), which is one row whose party_published joins the lines with '/'. A
+      combined label is credited to the major party only when it contains exactly one of D or R
+      and the candidate has a primary or convention entry; otherwise it is OTHER (Connecticut
+      4 2020 Brian Merlen, labelled D/IP, is OTHER). Write-ins: the FEC's 'Scattered', 'All
+      Others' and 'Anyone Else' lines are write-in aggregates (candidate null, candidate_kind
+      write_in_aggregate, writein true); named write-in candidates (party W) are kept as
+      candidate rows with writein true and party null, which is more granular than the Lab's
+      2018 rows (one named write-in in all of 2018). Party labels are the workbook's own
+      codes resolved through its 'Party Labels' sheet and lower-cased (party_published
+      'democratic', not the Lab's 'democrat'); party_major D covers D, DFL and DNL
+      (Democratic-Nonpartisan League), R covers R, everything else is OTHER; the star after a
+      code (R*, D*) marks a convention nominee and is dropped; W(x)/x (a primary write-in who is
+      on the general ballot as x) is x; two codes are aliased to the label the sheet defines
+      (AVP to APV, Approval Voting Party, in 2020; GS to GSA, God Save America, in 2022). A
+      candidate taken off the ballot by a court (the '#' result of a Montana 2020 Green) has no
+      row. Uncontested races: the FEC prints 'Unopposed' for Florida 25 (2020) and Florida 5
+      and Louisiana 4 (2022), which become the Lab's marker, candidate_votes 1 and total_votes 1
+      (uncontested true, a placeholder); other races whose opponents did not appear carry the
+      FEC's real counts. At-large districts are district 0 (FEC 00), as the Lab. Runoffs: a
+      General Runoff value makes a second round, runoff true, beside the first round (runoff
+      false), as the Lab does for Louisiana. Ranked-choice contests (Maine 2 and Alaska at-large
+      in 2022): candidate_votes and total_votes are the LAST round's counts of the instant
+      runoff tabulation, as the Lab's Maine 2 in 2018 is, with ranked_choice true and the
+      first-choice count in first_choice_votes; eliminated candidates carry 0 in the last round,
+      and write-ins that the tabulation excludes (the Scattered line) have no row, so the round
+      total is the tabulation's. Rows from the Lab have ranked_choice null (its 2018 Maine 2
+      rows are last-round counts, unflagged). A candidate who appears in two districts (a
+      redistricted incumbent) is two unrelated rows; nothing is merged across districts or
+      years, and the FEC file carries no stable candidate key that the table keeps. total_votes
+      is, in both sources, the sum of every row of the round including write-ins. DISCONTINUITY
+      at 2018/2020: party_published vocabulary changes (the Lab's 'democrat' to the FEC's
+      'democratic'; use party_major across the boundary); candidate names are the FEC's
+      first and last name columns joined as 'first last' (a suffix the FEC puts in the first-name
+      column stays there: 'Martin, Jr. Lemelle'), not the Lab's spellings, so names do not join
+      across the boundary; version_date is null on FEC rows (the workbooks carry only a month, October
+      2022 for 2020 and February 2025 for 2022, named in source_release); unofficial is false on
+      FEC rows (an official-results publication); the Lab's per-year set of vote buckets
+      (Blank Vote, Scatter, Over Vote) does not exist in the FEC data; the FEC rows are the
+      states' certified results while the Lab's may carry unofficial flags. Joins: state_fips to geo.state_ref.state_fips;
       state_name to officials.members.state_name; members.district equals district and the
       Congress seated after the election is (year - 1786) / 2 (year 2018 is Congress 116);
       cd_fips (state FIPS + 2-digit district, 00 at large) matches geo.congressional_districts
       cd_fips for the same map vintage, which geo carries from 2021 only. Candidate-level
       joins to members would be name matching and are not attempted (the Lab carries no
-      bioguide id). Source: https://github.com/MEDSL/constituency-returns (1976-2018-house.csv);
-      codebook and license on the Dataverse record doi:10.7910/DVN/IG0UN2.
+      bioguide id). Sources: https://github.com/MEDSL/constituency-returns (1976-2018-house.csv; codebook
+      and license on the Dataverse record doi:10.7910/DVN/IG0UN2) and the FEC workbooks
+      federalelections2020.xlsx and federalelections2022.xlsx under
+      https://www.fec.gov/introduction-campaign-finance/election-and-voting-information/.
 
     dimensions:
       type:
@@ -1188,7 +1250,7 @@ partitionedTables:
       - name: year
         type: integer
         nullable: false
-        comment: 'Election year (even years 1976 to 2018); PK component'
+        comment: 'Election year (even years 1976 to 2018 from MIT, 2020 and 2022 from the FEC; 2024 missing); PK component'
       - name: state_fips
         type: string
         nullable: false
@@ -1240,11 +1302,11 @@ partitionedTables:
       - name: party_published
         type: string
         nullable: true
-        comment: 'Party label as published, lower case (democrat, republican, conservative, working families, democratic-farmer-labor, ...); null when published NA'
+        comment: "Party label as published, lower case. MIT rows: democrat, republican, conservative, working families, democratic-farmer-labor, ...; FEC rows: the workbook's party-label name, democratic, republican, conservative, working families, ..., combined labels joined with '/' (democratic/working families). Null when published NA, and for FEC write-in rows"
       - name: party_major
         type: string
         nullable: true
-        comment: "D for the labels democrat and democratic-farmer-labor, R for republican and independent-republican (Minnesota's Republican Party until 1995), OTHER for any other label, null when party_published is null"
+        comment: "D for the labels democrat and democratic-farmer-labor (MIT) and the codes D, DFL and DNL (FEC), R for republican and independent-republican (Minnesota's Republican Party until 1995; MIT) and the code R (FEC), OTHER for any other label, null when party_published is null; see the table comment for combined FEC labels"
       - name: writein
         type: boolean
         nullable: false
@@ -1264,19 +1326,32 @@ partitionedTables:
       - name: unofficial
         type: boolean
         nullable: false
-        comment: 'True where the Lab flagged the result as unofficial pending later update (39 rows, 2018)'
+        comment: 'True where the Lab flagged the result as unofficial pending later update (39 rows, 2018); always false on FEC rows (an official-results publication)'
       - name: version_date
         type: string
-        nullable: false
-        comment: 'Date the Lab finalised the row (ISO date from the published yyyyMMdd version)'
+        nullable: true
+        comment: 'Date the Lab finalised the row (ISO date from the published yyyyMMdd version); null on FEC rows, whose workbook carries only a month (named in source_release)'
       - name: source_release
         type: string
         nullable: false
-        comment: 'Dataset, repository and commit the row was read from'
+        comment: 'Dataset, repository and commit (MIT rows) or workbook, publication month and URL (FEC rows) the row was read from'
+      - name: source
+        type: string
+        nullable: false
+        comment: "'MEDSL' for MIT Election Data + Science Lab rows (1976-2018), 'FEC' for Federal Election Commission rows (2020, 2022); tells the two series apart across the 2018/2020 boundary"
+      - name: ranked_choice
+        type: boolean
+        nullable: true
+        comment: 'True on FEC rows of a ranked-choice contest (Maine 2 and Alaska at-large, 2022), where candidate_votes and total_votes are the last-round counts; false on other FEC rows; null on MIT rows (the Lab does not flag it; Maine 2 in 2018 is a last-round count)'
+      - name: first_choice_votes
+        type: long
+        nullable: true
+        comment: 'First-choice votes as published (General Votes column) for a ranked-choice contest row; null otherwise'
 
     source:
       type: http
-      # Placeholder URL: HouseElectionResultsProvider downloads the file through rawCache itself.
+      # Placeholder URL: HouseElectionResultsProvider downloads the MIT file and the FEC 2020 and
+      # 2022 workbooks through rawCache itself.
       url: "https://raw.githubusercontent.com/MEDSL/constituency-returns/cca36bc159334e1e2ae82904a5dd0a8a299c9124/1976-2018-house.csv"
       method: GET
       response:
@@ -1750,7 +1825,7 @@ views:
       election published without a stage, then a special election published as a primary (Texas
       1996, where the court-ordered redistricting elections are published as special primaries
       with runoffs in districts 8, 9 and 25); this gives exactly one decisive round for each of
-      the 435 districts in every cycle 1976 to 2018 and puts the Texas 2006 redistricting
+      the 435 districts in every cycle 1976 to 2022 and puts the Texas 2006 redistricting
       special elections (published with a null stage) in the decisive round for the four
       districts that have no regular general round. Rounds that are not decisive (a first round
       that went to a runoff, a special election held beside the regular one) are kept with
@@ -1922,7 +1997,7 @@ views:
       Seats won per cycle by party: for each chamber, cycle year and special-election flag, the
       count of decisive election rounds won by the Democratic candidate (D), the Republican (R),
       another party (OTHER) or a candidate whose party the Lab left blank (null). House rows are
-      one per district: 435 seats with special=false in every cycle 1976 to 2018 (the Texas 1996
+      one per district: 435 seats with special=false in every cycle 1976 to 2022 (the Texas 1996
       and 2006 redistricting special elections that decide a district are counted there as
       special=true rows, 10 and 4 seats). Senate rows are the 33 or 34 regular seats of the
       class up that year (with the gaps documented on senate_race_results) plus special
