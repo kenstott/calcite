@@ -99,7 +99,7 @@ class NoAnchor(Exception):
 
 
 def edit_yaml(path, table, new_block, dry_run, allow_time_column_anchor=False):
-    """Insert or replace the table's observedCoverage block; returns 'UPDATED' or 'UNCHANGED'.
+    """Insert or replace the table's observedCoverage block; returns 'UPDATED', 'UNCHANGED' or 'DRY-RUN'.
 
     The block goes immediately after the table's `pattern:` line. A table with no `pattern:`
     (an unpartitioned table) is anchored on its `timeColumn:` line when allow_time_column_anchor
@@ -163,7 +163,7 @@ def edit_yaml(path, table, new_block, dry_run, allow_time_column_anchor=False):
     if dry_run:
         print(f"DRY RUN — would update {table} in {path}:")
         print("\n".join(new_block))
-        return "UNCHANGED"
+        return "DRY-RUN"
 
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -406,8 +406,9 @@ def main():
         print(f"SKIP: {args.table} has no 'pattern:' line — no year partition to report on", file=sys.stderr)
         sys.exit(3)
     if status == "UNCHANGED":
-        if not args.dry_run:
-            print(f"UNCHANGED: {args.table}")
+        print(f"UNCHANGED: {args.table}")
+        sys.exit(0)
+    if status == "DRY-RUN":
         sys.exit(0)
     print(f"UPDATED: {args.table}")
 
