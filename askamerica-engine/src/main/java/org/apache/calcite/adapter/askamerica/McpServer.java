@@ -3247,11 +3247,20 @@ public class McpServer {
         ObjectNode mktCandProps = MAPPER.createObjectNode();
         mktCandProps.set("driver", prop("string",
             "Only this driver, e.g. inflation, policy_rate, payrolls, unemployment, output, "
-            + "temperature, precipitation, storms, crop_yield, tariffs. An unknown name returns "
-            + "the full list."));
+            + "temperature, precipitation, storms, crop_yield, tariffs, chamber_control, "
+            + "district_race, statewide_race, voter_turnout, disaster_declaration, wildfire, "
+            + "outbreak, population, legislation, supreme_court, shutdown, deficit. An unknown "
+            + "name returns the full list."));
+        mktCandProps.set("domain", prop("string",
+            "Only this domain: economy, weather, disasters, elections, demographics_health, "
+            + "legal, fiscal, agriculture, energy, housing, public_safety, transport, "
+            + "environment, education, or market_only (events no corpus table grounds; "
+            + "counted by default, listed only when asked for)."));
         mktCandProps.set("basis", prop("string",
-            "Only this basis: release (a federal statistic), climatology (a weather "
-            + "reading), policy (a decision), market_price (a traded price)."));
+            "Only this basis: release (a federal statistic), climatology (a weather or "
+            + "disaster count with a base rate), policy (a decision), market_price (a traded "
+            + "price), outcome (a race, a vote, a ruling: tables inform a model, no forecast "
+            + "of its own), market_only (no grounding)."));
         mktCandProps.set("limit", prop("integer",
             "Events to show, alternating venues (default 20)."));
         mktCandProps.set("sample", prop("integer",
@@ -3273,15 +3282,19 @@ public class McpServer {
             "Re-read both venues instead of using the listing kept for 15 minutes."));
         tools.add(
             tool("find_market_candidates",
-            "List open prediction-market events on Kalshi AND Polymarket that settle on a "
-            + "quantity this catalog can forecast: a federal release (CPI, payrolls, GDP, "
-            + "rates), a weather reading, a policy decision, a traded price. Both venues are "
-            + "read on every call and the list alternates between them; matched_by_venue says "
-            + "what each had. Each event carries its driver, the govdata_tables holding the "
-            + "settlement series, forecast_with (the forecasting tool that fits its basis: "
-            + "arima_forecast, volatility_forecast / garch_forecast, or a samples_sql "
-            + "climatology), its median bid-ask spread, the market's own implied_median, and "
-            + "any locks visible in the quotes alone. sample=N draws N at random; the seed is "
+            "List open prediction-market events on Kalshi AND Polymarket in every domain the "
+            + "corpus can ground, not only the economy: elections (House/Senate control, "
+            + "races, turnout), disasters, demographics and health, law (bills, courts), "
+            + "spending and fiscal, federal releases, weather, policy decisions, traded "
+            + "prices. Both venues are read in full and the list alternates between them; "
+            + "matched_by_venue and matched_by_domain say what each had. Each event carries "
+            + "domain, driver, basis, the govdata_tables it could be grounded in, "
+            + "forecast_with (arima_forecast, volatility_forecast / garch_forecast, a "
+            + "samples_sql climatology, or for a discrete outcome a model you measure or a "
+            + "probability you can source), median bid-ask spread, implied_median and any "
+            + "locks in the quotes. Events no table grounds are counted in "
+            + "market_only_not_shown, listed with domain=market_only, never forecast. "
+            + "sample=N draws N at random; the seed is "
             + "returned, and exclude draws again without repeats. A candidate is where to "
             + "look, not a mispricing. Next: price_market_event with no forecast to read the "
             + "rules, forecast the settlement value, then price_market_event with the "
@@ -3290,7 +3303,8 @@ public class McpServer {
             + "only for an event the scan could not forecast (its not_forecast): draw, "
             + "forecast and price each, and draw again with exclude until N pass or 8 events "
             + "have been forecast and priced. A 'spread' or 'gap' of X% in a mispricing question is the "
-            + "edge between forecast fair value and price, not the bid-ask spread. The first call reads about 200 pages from the venues and can return "
+            + "edge between forecast fair value and price, not the bid-ask spread. The first "
+            + "call reads about 165 pages (a few minutes) and can return "
             + "status 'loading'. You MUST call again with the same arguments while status is "
             + "'loading'. You MUST cover both venues in the answer, or state that one had no "
             + "matching event. You MUST NOT call an event mispriced before price_market_event "
@@ -3343,6 +3357,16 @@ public class McpServer {
         mktEventProps.set("column", prop("string",
             "Name of the quantity this event settles on, used as its scenario column in "
             + "price_market_basket (default: the event_id)."));
+        mktEventProps.set("probability", prop("number",
+            "Forecast form for a discrete outcome (an election, a vote, a ruling): the "
+            + "probability, strictly between 0 and 1, that the outcome happens. Needs "
+            + "probability_source and conditions naming the markets it prices ({market_id: "
+            + "{\"above\": 0.5}} for a market that resolves YES if the outcome happens, "
+            + "{\"below\": 0.5} if it does not)."));
+        mktEventProps.set("probability_source", prop("string",
+            "Where the probability comes from: the measured model (with its cross-validation) "
+            + "or the publication that states it. Required with probability; never the "
+            + "market's own price."));
         mktEventProps.set("build_forecast", prop("boolean",
             "true: the engine builds the forecast from the catalog series the rules settle "
             + "on and prices with it. Give no other forecast form and no round."));
@@ -3363,9 +3387,9 @@ public class McpServer {
             + "forecast_std_error at the settlement period. mean + lower + upper + level: its "
             + "interval. price_median + cumulative_vol_pct: volatility_forecast's price_band, "
             + "or garch_forecast's cumulative vol (check it with backtest_volatility). "
-            + "samples or samples_sql: an empirical distribution, such as the same station "
-            + "and calendar window in every past year, or historical period-over-period "
-            + "changes applied to the latest level. A regression forecast (ols_regression, "
+            + "samples or samples_sql: an empirical distribution (see forecast_with). "
+            + "probability + probability_source: an outcome (a race, a vote), with "
+            + "conditions. A regression forecast (ols_regression, "
             + "flexible_regression) goes in as mean + sd after cross_validate. other_venue "
             + "lists other-venue events settling on the same driver within 3 days. "
             + "A mispriced market carries a ticket: limit price, depth, void conditions. "
@@ -3377,8 +3401,8 @@ public class McpServer {
             + "percentage is edge or return on cost. You MUST price each other_venue "
             + "counterpart with the same forecast. You MUST report the forecast's source "
             + "table and last period, fair, price, fee, edge, volume, and what would make the "
-            + "forecast wrong. You MUST NOT price a policy decision without an explicit, "
-            + "sourced probability.",
+            + "forecast wrong. You MUST NOT price a policy decision or an outcome without an "
+            + "explicit, sourced probability or a measured model.",
             schema(mktEventProps, new String[]{"source", "event_id"})));
         tools.add(MarketForecasts.toolDef());
         tools.add(MarketHistory.toolDef());
@@ -3416,7 +3440,8 @@ public class McpServer {
             + "name."));
         mktBasketProps.set("basis", arrayProp("string",
             "Bases to keep (default release, climatology, policy; add market_price for "
-            + "traded prices)."));
+            + "traded prices). Baskets are built from events the engine can forecast, so "
+            + "outcome and market_only events are not in them."));
         mktBasketProps.set("max_spread", prop("number",
             "Drop events whose median bid-ask spread exceeds this (default 0.10)."));
         mktBasketProps.set("limit", prop("integer",
