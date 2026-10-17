@@ -4,6 +4,7 @@
   {"name": "splunk", "module": "splunk", "flags": ""},
   {"name": "salesforce", "module": "salesforce", "flags": "--allow-writes"},
   {"name": "servicenow", "module": "servicenow", "flags": "--allow-writes", "since": "0.109.7"},
+  {"name": "jira", "module": "jira", "flags": "--allow-writes", "since": "0.119.0"},
   {"name": "cloudops", "module": "cloud-ops", "flags": ""},
   {"name": "govdata", "module": "govdata", "flags": "--auth askamerica-key"}
 ]

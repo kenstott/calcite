@@ -60,6 +60,7 @@ site/favicon.ico
 govdata/**
 salesforce/**
 servicenow/**
+jira/**
 sharepoint-list/**
 splunk/**
 cloud-ops/**
@@ -73,6 +74,7 @@ pgwire-calcite/**
 pgwire-cloudops/**
 pgwire-file/**
 pgwire-govdata/**
+pgwire-jira/**
 pgwire-salesforce/**
 pgwire-servicenow/**
 pgwire-sharepoint/**

@@ -81,6 +81,7 @@ include(
     "mongodb",
     // "pig",    // Disabled due to heavy dependencies
     // "piglet", // Disabled due to heavy dependencies
+    "jira",
     "plus",
     "openapi",
     "salesforce",
