@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.117.0](https://github.com/kenstott/calcite/compare/engine-v0.116.1...engine-v0.117.0) (2026-10-17)
+
+
+### Features
+
+* **census:** pep_components_of_change and acs_county_migration_flows ([01ee3da](https://github.com/kenstott/calcite/commit/01ee3dae5b67eaf5643afac817fca193cfe2931c))
+* **disasters:** ihp_housing_assistance_owners/_renters and view disasters_ihp_housing_by_county ([d619cd9](https://github.com/kenstott/calcite/commit/d619cd9232a69039ff9199b6a6d69606d2e4b084))
+* **fiscal:** county_migration_flows reaches 2008-2011; IRS legacy headers, duplicate pairs and Latin-1 names handled ([ac558ee](https://github.com/kenstott/calcite/commit/ac558ee23f5fe7338a3a5b19f36817406d16899e))
+
+
+### Bug Fixes
+
+* **askamerica:** a usage report that is not accepted is logged, not swallowed ([ea24608](https://github.com/kenstott/calcite/commit/ea246086bff193ed00fd168f50c6ed00d5db06ba))
+* **file:** HttpSource retries a response body the server cut off mid-stream ([bb2376b](https://github.com/kenstott/calcite/commit/bb2376b1f30be33a590efcbb28513d34df9cc915))
+* **file:** VectorizedParquetReader reads every batch of a row group ([#544](https://github.com/kenstott/calcite/issues/544)) ([#571](https://github.com/kenstott/calcite/issues/571)) ([0fcd328](https://github.com/kenstott/calcite/commit/0fcd32882fa78c7fb3b26a97b54a001533a3ff88))
+* **pgwire-calcite:** the catalog never counts rows; pg_class.reltuples is 0 ([#567](https://github.com/kenstott/calcite/issues/567)) ([d2445a2](https://github.com/kenstott/calcite/commit/d2445a268f21311bfcb068c57398de267d1e3144))
+* **pgwire-govdata:** spawn.log is rotated and quieter; a silent client and an unwritable cache directory are one line each ([#566](https://github.com/kenstott/calcite/issues/566)) ([9d06138](https://github.com/kenstott/calcite/commit/9d06138b40506e53fcc5eec590698bb3cf2ee6b8))
+
 ## [0.116.1](https://github.com/kenstott/calcite/compare/engine-v0.116.0...engine-v0.116.1) (2026-10-16)
 
 
