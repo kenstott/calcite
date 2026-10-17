@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.etl;
 
+import org.apache.calcite.adapter.file.etl.EtlFailureLedger;
+
 import org.apache.hadoop.util.ShutdownHookManager;
 
 import org.slf4j.Logger;
@@ -139,6 +141,10 @@ public class EtlRunner {
           String.valueOf(config.getParallelThreads()));
     }
 
+    // Failed tables are reported through the ledger: the ETL runs as a side effect of opening the
+    // connection, which succeeds even when tables failed.
+    EtlFailureLedger.enable();
+
     // Process schemas sequentially
     int processed = 0;
     int succeeded = 0;
@@ -257,6 +263,18 @@ public class EtlRunner {
           verbose("Connected to catalog: " + (catalog != null ? catalog : "(default)"));
         }
 
+        List<String> failedTables = EtlFailureLedger.drain();
+        for (String failure : failedTables) {
+          for (String line : failure.split("\n")) {
+            logWarn("ETL_FAILED: " + line.trim());
+          }
+        }
+        if (!failedTables.isEmpty()) {
+          logWarn("Schema " + schema.getName() + ": " + failedTables.size()
+              + " table(s) had failed periods (completed periods stay committed; failed ones"
+              + " are retried on the next run)");
+          return false;
+        }
         return true;
       }
 

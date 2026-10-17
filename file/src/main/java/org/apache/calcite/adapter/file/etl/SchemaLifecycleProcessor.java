@@ -313,6 +313,11 @@ public class SchemaLifecycleProcessor {
       long elapsed = System.currentTimeMillis() - startTime;
       resultBuilder.elapsedMs(elapsed);
       SchemaResult result = resultBuilder.build();
+      for (Map.Entry<String, EtlResult> tableEntry : result.getTableResults().entrySet()) {
+        if (tableEntry.getValue().isFailed()) {
+          EtlFailureLedger.record(schemaName, tableEntry.getKey(), tableEntry.getValue());
+        }
+      }
 
       LOGGER.info("Phase 5: Schema post-processing hooks");
       schemaListener.afterSchema(schemaContext, result);

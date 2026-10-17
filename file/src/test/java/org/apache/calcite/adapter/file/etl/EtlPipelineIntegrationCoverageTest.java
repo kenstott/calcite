@@ -928,11 +928,11 @@ public class EtlPipelineIntegrationCoverageTest {
         m.invoke(pipeline, new IOException("HTTP 502"), defaults));
 
     // Null message
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP,
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN,
         m.invoke(pipeline, new IOException((String) null), defaults));
 
-    // Generic
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP,
+    // Generic: no HTTP status, so a failed batch rather than a skip (govdata-ops#982)
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN,
         m.invoke(pipeline, new IOException("Timeout"), defaults));
   }
 

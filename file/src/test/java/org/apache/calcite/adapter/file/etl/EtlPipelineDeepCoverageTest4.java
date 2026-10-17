@@ -647,7 +647,8 @@ public class EtlPipelineDeepCoverageTest4 {
     Object result =
         invokePrivate(pipeline, "determineErrorAction", new Class[]{Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class},
         new IOException("Connection reset"), eh);
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, result);
+    // apiErrorAction=SKIP answers an HTTP status; a throw without one is a failed batch
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, result);
   }
 
   @Test void testDetermineErrorAction_nullMessageUsesApiAction() throws Exception {
@@ -1460,8 +1461,9 @@ public class EtlPipelineDeepCoverageTest4 {
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
-    // Should not abort because consecutive failures reset on success
-    assertFalse(result.isFailed());
+    // Should not abort because consecutive failures reset on success; the failed batches still
+    // make the table partially failed
+    assertTrue(result.isPartiallyFailed());
     assertTrue(result.getSuccessfulBatches() >= 2);
   }
 

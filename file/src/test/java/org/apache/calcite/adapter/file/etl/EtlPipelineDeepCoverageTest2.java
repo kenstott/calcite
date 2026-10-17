@@ -252,7 +252,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig.ErrorHandlingConfig.ErrorAction result =
         (EtlPipelineConfig.ErrorHandlingConfig.ErrorAction) method.invoke(pipeline,
             nullMsgError, errorConfig);
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, result);
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, result);
   }
 
   @Test void testDetermineErrorActionGenericError() throws Exception {
@@ -270,7 +270,7 @@ public class EtlPipelineDeepCoverageTest2 {
     EtlPipelineConfig.ErrorHandlingConfig.ErrorAction result =
         (EtlPipelineConfig.ErrorHandlingConfig.ErrorAction) method.invoke(pipeline,
             genericError, errorConfig);
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, result);
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, result);
   }
 
   // --- allIndicesSet via reflection ---
