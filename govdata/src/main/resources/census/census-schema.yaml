@@ -107,9 +107,16 @@ dimension_values:
   # --- Year Range for ACS 5-year (starts 2009) ---
   # ACS 5-year estimates only available from 2009 onwards (Census API limitation)
   # Pre-2009 data does not exist - API returns errors for earlier years
-  # dataLag: 2 because ACS 5-year data for year Y is released in December of Y+2
-  # releaseMonth: 12 because release happens in December; before Dec, subtract one more year
-  # Example in March 2026: effectiveEnd = min(2026-2, 2026) = 2024, then month 3 < 12 → 2023
+  # ACS 5-year vintage V (window V-4..V) is released in December of V+1 (2020-2024 came out
+  # December 2025; verified 2026-10-17: api.census.gov/data/2024/acs/acs5 exists, 2025 is 404).
+  # So in calendar year Y the newest published vintage is V = Y-1 from December, else Y-2.
+  # dataLag: 2 with NO releaseMonth yields V = Y-2 from 1 January, which is always published
+  # (released the previous December). The earlier releaseMonth: 12 pushed the newest vintage
+  # to Y-3 for eleven months of every year (October 2026 stopped at vintage 2023 although 2024
+  # has been out since December 2025). The lag stays 2 on purpose: effective_year = year -
+  # dataLag is the Iceberg partition value and the tracker key, so lowering the lag would
+  # re-map every publish year to a different vintage and need minYear shifted by one.
+  # Example in October 2026: effectiveEnd = 2026-2 = 2024 (no month adjustment).
   acs_year_range: &acs_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -118,7 +125,6 @@ dimension_values:
                            # so floor the shared 5-year anchor at 2011. Per-table minYear overrides
                            # below raise this further where a variable was added after 2011.
     dataLag: 2
-    releaseMonth: 12
 
   # --- Year Range for ACS 1-year (starts 2006) ---
   # ACS 1-year estimates available from 2006 onwards (only for areas with 65,000+ population)
@@ -591,13 +597,12 @@ partitionedTables:
       # B15003 (educational attainment) was added to ACS5 in 2012; earlier years return
       # 400 "unknown variable 'B15003_001E'" (fatal — no skipOn here). minYear floors at 2012
       # (feed-began for this variable) while start follows the global demarcation. Same
-      # dataLag/releaseMonth as the anchor.
+      # dataLag (and no releaseMonth) as the anchor.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2014          # B15003 (educational attainment) undefined in ACS 5-year before 2014
         dataLag: 2             # (2012/2013 still error "unknown variable B15003_001E"; first complete 2014)
-        releaseMonth: 12
       geography: *all_geographies
 
     columns:
@@ -3807,13 +3812,12 @@ partitionedTables:
       # B25034_011E (built_1939_or_earlier) undefined in ACS 5-year before 2015 — the group
       # only goes up to _010E for 2011-2014 (verified live: 2011/2013/2014 all 400 "unknown
       # variable B25034_011E"; 2015 is the first vintage with 11 variables). minYear floors
-      # at 2015 accordingly, same dataLag/releaseMonth as the shared anchor.
+      # at 2015 accordingly, same dataLag (and no releaseMonth) as the shared anchor.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2015          # B25034 built_1939_or_earlier (var _011E) undefined in ACS 5-year before 2015
         dataLag: 2
-        releaseMonth: 12
       geography: *all_geographies
 
     columns:
