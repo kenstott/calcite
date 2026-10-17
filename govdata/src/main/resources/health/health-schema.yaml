@@ -480,6 +480,7 @@ partitionedTables:
   # FDA DRUG RECALLS — Class I/II/III enforcement actions
   # ==========================================================================
   - name: fda_drug_recalls
+    timeColumn: recall_initiation_date  # observation time: when the firm began the recall (2006-2026); report_date is when FDA posted it (2012 onward, median 47 days later)
     pattern: "type=fda_drug_recalls"
     # Freshness: skip fetch+commit when openFDA's published export_date for this
     # endpoint is unchanged since the last successful run.
@@ -999,6 +1000,13 @@ partitionedTables:
       all-ages state-level rate. geo_level distinguishes nation/state/county rows sharing this
       one table (see the rollup-vs-leaf convention used elsewhere in this corpus) — filter to
       geo_level='county' rather than summing across levels.
+
+      Single vintage, no time dimension: the table holds only the latest CHR release
+      (release_year 2025: 1 nation, 51 state and 3,152 county rows), release_year is the
+      same value on every row, and the mortality years behind the rates are not carried. For
+      "what was it in year X" and for trends use chr_premature_death_trends, whose rows are
+      keyed by the multi-year period (period_end_year); do not read release_year here as an
+      observation year.
 
     columns:
       - name: geo_level
@@ -1532,6 +1540,7 @@ partitionedTables:
   # CLINICAL TRIALS (clinicaltrials.gov) — ~500k studies, token-based pagination
   # ==========================================================================
   - name: clinical_trials
+    timeColumn: start_date  # observation time: when the trial began (99.5% populated; includes anticipated future starts); first_submit_date is the registry filing date, completion_date is often a projection
     # Freshness gate: ClinicalTrials.gov REST API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
@@ -3409,6 +3418,7 @@ partitionedTables:
   # HRSA AREA HEALTH RESOURCES FILE — county-level physician supply (annual snapshot)
   # ==========================================================================
   - name: ahrf_physician_supply
+    timeColumn: physician_data_year  # observation time: the year the physician counts (the table's subject) describe; population_data_year is the denominator's year (2024 vs 2023 in the current release)
     # Freshness gate: HRSA landing/download page. A Last-Modified probe skips the
     # re-download and re-materialize on unchanged runs (fails open — a null token just
     # re-fetches).
