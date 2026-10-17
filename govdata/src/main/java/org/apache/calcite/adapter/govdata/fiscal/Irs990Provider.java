@@ -90,21 +90,22 @@ public class Irs990Provider implements CachingDataProvider {
       return Collections.emptyIterator();
     }
     final String yr = year.trim();
-    final String base = "https://apps.irs.gov/pub/epostcard/990/xml/" + yr + "/";
-    final String indexUrl = base + "index_" + yr + ".csv";
+    final String base = "https://apps.irs.gov/pub/epostcard/990/xml/";
+    final String indexUrl = base + yr + "/index_" + yr + ".csv";
     LOGGER.info("exempt_org_990: reading index {}", indexUrl);
 
     Index index = readIndex(indexUrl);
     LOGGER.info("exempt_org_990: index lists {} filings for year {} ({})", index.objectIds.size(),
         yr, index.batchIds.isEmpty() ? "no XML_BATCH_ID column"
             : index.batchIds.size() + " distinct XML_BATCH_IDs");
-    List<String> zips = discoverZips(base, yr, index, new HeadProbe());
-    LOGGER.info("exempt_org_990: year {} is published as {} zips: {}", yr, zips.size(), zips);
+    ZipSet zips = discoverZips(base, yr, index, new HeadProbe());
+    LOGGER.info("exempt_org_990: year {} is read from {} zips ({} layout): {}", yr,
+        zips.paths.size(), zips.legacy ? "legacy" : "monthly", zips.paths);
     return rows(base, zips, index, rawCache, yr);
   }
 
   /** Builds the row iterator over the given zips. Package-private for tests. */
-  static Iterator<Map<String, Object>> rows(String base, List<String> zips, Index index,
+  static Iterator<Map<String, Object>> rows(String base, ZipSet zips, Index index,
       RawCache rawCache, String year) {
     return new BatchIterator(base, zips, index, rawCache, year);
   }
@@ -147,49 +148,74 @@ public class Irs990Provider implements CachingDataProvider {
     }
   }
 
+  /** The zips holding a receipt year's filings: paths relative to the xml/ root, e.g. 2025/x. */
+  static final class ZipSet {
+    final List<String> paths = new ArrayList<String>();
+    /**
+     * True for the pre-2021 layout, where zips are grouped by the year an object id starts with,
+     * not by receipt year: the year's zips and the previous year's both hold filings of other
+     * receipt years, and CT1 repeats filings of the numbered series.
+     */
+    boolean legacy;
+  }
+
   /**
    * Lists the zips the IRS publishes for a receipt year. The index does not identify them: the
    * 2019-2023 indexes have no XML_BATCH_ID column, and the 2025 index labels every filing of
    * 2025_TEOS_XML_05A although the IRS split that batch into 05A and 05B. The IRS naming
    * conventions are probed instead: {@code {Y}_TEOS_XML_{MM}{A,B,...}} (each month's suffixes
    * until the first absent one), {@code {Y}_TEOS_XML_CT1}, and the older
-   * {@code download990xml_{Y}_{n}} series. Completeness is not assumed from the probe: the
-   * iterator requires every indexed filing to be found in exactly one zip, so a zip this
-   * discovery missed fails the load. Every batch the index names must be among the zips found.
+   * {@code download990xml_{Y}_{n}} series. A year with no monthly zip is the legacy layout (see
+   * {@link ZipSet#legacy}) and also takes the previous year's CT1 and numbered series, because
+   * the index of year Y lists filings whose object id starts with Y-1. Completeness is not
+   * assumed from the probe: the iterator requires every indexed filing to be found in a zip, so
+   * a zip this discovery missed fails the load. Every batch the index names must be among the
+   * zips found.
    */
-  static List<String> discoverZips(String base, String year, Index index, Probe probe)
+  static ZipSet discoverZips(String base, String year, Index index, Probe probe)
       throws IOException {
-    List<String> zips = new ArrayList<String>();
+    ZipSet set = new ZipSet();
     for (int m = 1; m <= 12; m++) {
       for (char suffix = 'A'; suffix <= 'Z'; suffix++) {
-        String name = year + "_TEOS_XML_" + (m < 10 ? "0" : "") + m + suffix;
-        if (!probe.exists(base + name + ".zip")) {
+        String path = year + "/" + year + "_TEOS_XML_" + (m < 10 ? "0" : "") + m + suffix;
+        if (!probe.exists(base + path + ".zip")) {
           break;
         }
-        zips.add(name);
+        set.paths.add(path);
       }
     }
-    String ct1 = year + "_TEOS_XML_CT1";
-    if (probe.exists(base + ct1 + ".zip")) {
-      zips.add(ct1);
+    set.legacy = set.paths.isEmpty();
+    if (set.legacy) {
+      String prev = String.valueOf(Integer.parseInt(year) - 1);
+      addSeries(base, prev, probe, set.paths);
     }
-    for (int n = 1; ; n++) {
-      String name = "download990xml_" + year + "_" + n;
-      if (!probe.exists(base + name + ".zip")) {
-        break;
-      }
-      zips.add(name);
-    }
-    if (zips.isEmpty()) {
-      throw new IOException("exempt_org_990: no zips are published under " + base);
+    addSeries(base, year, probe, set.paths);
+    if (set.paths.isEmpty()) {
+      throw new IOException("exempt_org_990: no zips are published under " + base + year + "/");
     }
     for (String batch : index.batchIds) {
-      if (!zips.contains(batch)) {
+      if (!set.paths.contains(year + "/" + batch)) {
         throw new IOException("exempt_org_990: the index names batch " + batch
-            + " but the IRS publishes only " + zips);
+            + " but the IRS publishes only " + set.paths);
       }
     }
-    return zips;
+    return set;
+  }
+
+  /** Adds a year's CT1 zip and its download990xml numbered series, whichever exist. */
+  private static void addSeries(String base, String year, Probe probe, List<String> out)
+      throws IOException {
+    for (int n = 1; ; n++) {
+      String path = year + "/download990xml_" + year + "_" + n;
+      if (!probe.exists(base + path + ".zip")) {
+        break;
+      }
+      out.add(path);
+    }
+    String ct1 = year + "/" + year + "_TEOS_XML_CT1";
+    if (probe.exists(base + ct1 + ".zip")) {
+      out.add(ct1);
+    }
   }
 
   /** The filings an IRS index lists. */
@@ -262,7 +288,9 @@ public class Irs990Provider implements CachingDataProvider {
    * Lazily walks each batch zip, yielding one row per XML return entry. Every listed filing must
    * come out as a row, exactly once: a zip that cannot be opened, a return that cannot be parsed,
    * a return the index does not list, a return found in two zips, or an indexed filing found in
-   * no zip throws instead of being skipped.
+   * no zip throws instead of being skipped. In the legacy layout ({@link ZipSet#legacy}) the
+   * first two are expected and are skipped and counted; an indexed filing found in no zip still
+   * throws.
    */
   private static final class BatchIterator implements Iterator<Map<String, Object>> {
     private static final int OPEN_ATTEMPTS = 3;
@@ -272,19 +300,23 @@ public class Irs990Provider implements CachingDataProvider {
     private final String year;
     private final Index index;
     private final List<String> batchNames;
+    private final boolean legacy;
     private final Set<String> written = new HashSet<String>();
+    private int skippedUnindexed;
+    private int skippedRepeated;
     private int batchPos = -1;
     private ZipArchiveInputStream zis;
     private int batchWritten;
     private Map<String, Object> nextRow;
     private boolean done;
 
-    BatchIterator(String base, List<String> zips, Index index, RawCache rawCache, String year) {
+    BatchIterator(String base, ZipSet zips, Index index, RawCache rawCache, String year) {
       this.base = base;
       this.index = index;
       this.rawCache = rawCache;
       this.year = year;
-      this.batchNames = new ArrayList<String>(zips);
+      this.batchNames = new ArrayList<String>(zips.paths);
+      this.legacy = zips.legacy;
     }
 
     /** Opens the next batch zip, retrying a bounded number of times and then throwing. */
@@ -342,8 +374,10 @@ public class Irs990Provider implements CachingDataProvider {
             + written.size() + " filings but the index lists " + index.objectIds.size()
             + "; e.g. not found in any of " + batchNames + ": " + missing);
       }
-      LOGGER.info("exempt_org_990: year {} complete, {} of {} listed filings written in {} zips",
-          year, written.size(), index.objectIds.size(), batchNames.size());
+      LOGGER.info("exempt_org_990: year {} complete, {} of {} listed filings written in {} zips"
+          + " (skipped {} entries listed by another receipt year's index, {} repeated entries)",
+          year, written.size(), index.objectIds.size(), batchNames.size(), skippedUnindexed,
+          skippedRepeated);
     }
 
     private void advance() {
@@ -372,10 +406,18 @@ public class Irs990Provider implements CachingDataProvider {
           }
           String objectId = objectIdFromName(name);
           if (!index.objectIds.contains(objectId)) {
+            if (legacy) {
+              skippedUnindexed++;  // a filing of the neighbouring receipt year's index
+              continue;
+            }
             throw new IllegalStateException("exempt_org_990: zip " + batchNames.get(batchPos)
                 + " of year " + year + " holds return " + objectId + " that the index does not list");
           }
           if (!written.add(objectId)) {
+            if (legacy) {
+              skippedRepeated++;  // CT1 repeats numbered-series filings, reformatted
+              continue;
+            }
             throw new IllegalStateException("exempt_org_990: return " + objectId + " of year "
                 + year + " is in more than one zip (again in " + batchNames.get(batchPos) + ")");
           }

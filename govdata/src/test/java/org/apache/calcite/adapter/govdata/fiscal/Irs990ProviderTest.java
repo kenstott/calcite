@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 class Irs990ProviderTest {
 
-  private static final String BASE = "https://irs.test/990/xml/2025/";
+  private static final String BASE = "https://irs.test/990/xml/";
   private static final String HEADER = "RETURN_ID,FILING_TYPE,EIN,TAX_PERIOD,SUB_DATE,"
       + "TAXPAYER_NAME,RETURN_TYPE,DLN,OBJECT_ID,XML_BATCH_ID\n";
 
@@ -61,8 +61,19 @@ class Irs990ProviderTest {
     return Irs990Provider.parseIndex(new BufferedReader(new StringReader(sb.toString())), "t");
   }
 
-  private static List<String> zips(Irs990Provider.Index idx) {
-    return new ArrayList<String>(idx.batchIds);
+  private static Irs990Provider.ZipSet zips(Irs990Provider.Index idx) {
+    Irs990Provider.ZipSet set = new Irs990Provider.ZipSet();
+    for (String b : idx.batchIds) {
+      set.paths.add(b.substring(0, 4) + "/" + b);
+    }
+    return set;
+  }
+
+  private static Irs990Provider.ZipSet zipSet(boolean legacy, String... paths) {
+    Irs990Provider.ZipSet set = new Irs990Provider.ZipSet();
+    set.legacy = legacy;
+    set.paths.addAll(java.util.Arrays.asList(paths));
+    return set;
   }
 
   private static String xml(String ein) {
@@ -135,8 +146,8 @@ class Irs990ProviderTest {
 
   @Test void everyListedFilingBecomesARow() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_01A.zip", zip("100", xml("1"), "101", xml("2")));
-    cache.zips.put(BASE + "2025_TEOS_XML_02A.zip", zip("200", xml("3")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_01A.zip", zip("100", xml("1"), "101", xml("2")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_02A.zip", zip("200", xml("3")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_01A"),
         indexRow("101", "2025_TEOS_XML_01A"), indexRow("200", "2025_TEOS_XML_02A"));
     List<Map<String, Object>> rows = drain(Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025"));
@@ -147,7 +158,7 @@ class Irs990ProviderTest {
 
   @Test void failedBatchFailsTheLoadAfterBoundedRetries() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_01A.zip", zip("100", xml("1")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_01A.zip", zip("100", xml("1")));
     // batch 02A is absent from the stub: every open throws
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_01A"),
         indexRow("200", "2025_TEOS_XML_02A"), indexRow("300", "2025_TEOS_XML_03A"));
@@ -163,14 +174,16 @@ class Irs990ProviderTest {
       }
     }
     assertEquals(3, attempts);
-    assertTrue(!cache.opened.contains(BASE + "2025_TEOS_XML_03A.zip"), "must not skip ahead");
+    assertTrue(!cache.opened.contains(BASE + "2025/2025_TEOS_XML_03A.zip"), "must not skip ahead");
   }
 
   @Test void lowerCaseBatchSuffixInIndexResolvesToTheUpperCaseZip() throws IOException {
     Irs990Provider.Index idx = index(indexRow("100", "2024_TEOS_XML_04a"));
-    List<String> found = Irs990Provider.discoverZips("b/", "2024", idx,
-        probe("b/2024_TEOS_XML_04A.zip", "b/2024_TEOS_XML_01A.zip"));
-    assertEquals(java.util.Arrays.asList("2024_TEOS_XML_01A", "2024_TEOS_XML_04A"), found);
+    Irs990Provider.ZipSet found = Irs990Provider.discoverZips("b/", "2024", idx,
+        probe("b/2024/2024_TEOS_XML_04A.zip", "b/2024/2024_TEOS_XML_01A.zip"));
+    assertEquals(java.util.Arrays.asList("2024/2024_TEOS_XML_01A", "2024/2024_TEOS_XML_04A"),
+        found.paths);
+    assertTrue(!found.legacy);
   }
 
   private static Irs990Provider.Probe probe(final String... existing) {
@@ -185,41 +198,78 @@ class Irs990ProviderTest {
   /** The 2025 defect: the index labels every filing 05A although the IRS split it into 05A+05B. */
   @Test void batchSplitAcrossTwoZipsButIndexedUnderOneIdIsRead() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_05A.zip", zip("100", xml("1"), "101", xml("2")));
-    cache.zips.put(BASE + "2025_TEOS_XML_05B.zip", zip("102", xml("3"), "103", xml("4")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05A.zip", zip("100", xml("1"), "101", xml("2")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05B.zip", zip("102", xml("3"), "103", xml("4")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_05A"),
         indexRow("101", "2025_TEOS_XML_05A"), indexRow("102", "2025_TEOS_XML_05A"),
         indexRow("103", "2025_TEOS_XML_05A"));
-    List<String> found = Irs990Provider.discoverZips(BASE, "2025", idx,
-        probe(BASE + "2025_TEOS_XML_05A.zip", BASE + "2025_TEOS_XML_05B.zip"));
-    assertEquals(java.util.Arrays.asList("2025_TEOS_XML_05A", "2025_TEOS_XML_05B"), found);
+    Irs990Provider.ZipSet found = Irs990Provider.discoverZips(BASE, "2025", idx,
+        probe(BASE + "2025/2025_TEOS_XML_05A.zip", BASE + "2025/2025_TEOS_XML_05B.zip"));
+    assertEquals(java.util.Arrays.asList("2025/2025_TEOS_XML_05A", "2025/2025_TEOS_XML_05B"),
+        found.paths);
     assertEquals(4, drain(Irs990Provider.rows(BASE, found, idx, cache, "2025")).size());
   }
 
-  @Test void indexWithoutBatchColumnIsReadFromTheYearsPublishedZips() throws IOException {
-    String base = "https://irs.test/990/xml/2019/";
+  private static Irs990Provider.Index noBatchIndex(String year, String... objectIds)
+      throws IOException {
+    StringBuilder sb = new StringBuilder(
+        "RETURN_ID,FILING_TYPE,EIN,TAX_PERIOD,SUB_DATE,TAXPAYER_NAME,RETURN_TYPE,DLN,OBJECT_ID\n");
+    for (String o : objectIds) {
+      sb.append("1,EFILE,1,201812,1/1/" + year + ",A,990,1," + o + "\n");
+    }
+    return Irs990Provider.parseIndex(new BufferedReader(new StringReader(sb.toString())), "t");
+  }
+
+  /** 2020: no monthly zips, no XML_BATCH_ID; ids start with 2019 or 2020, in two series + CT1. */
+  @Test void legacyYearReadsOwnAndPreviousSeriesAndSkipsOtherYearsFilings() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(base + "download990xml_2019_1.zip", zip("100", xml("1")));
-    cache.zips.put(base + "download990xml_2019_2.zip", zip("200", xml("2")));
-    cache.zips.put(base + "2019_TEOS_XML_CT1.zip", zip("300", xml("3")));
-    Irs990Provider.Index idx = Irs990Provider.parseIndex(new BufferedReader(new StringReader(
-        "RETURN_ID,FILING_TYPE,EIN,TAX_PERIOD,SUB_DATE,TAXPAYER_NAME,RETURN_TYPE,DLN,OBJECT_ID\n"
-        + "1,EFILE,1,201812,1/1/2019,A,990,1,100\n2,EFILE,1,201812,1/1/2019,A,990,1,200\n"
-        + "3,EFILE,1,201812,1/1/2019,A,990,1,300\n")), "t");
+    cache.zips.put(BASE + "2019/download990xml_2019_1.zip",
+        zip("201900000000000001", xml("1"), "201900000000000002", xml("9")));
+    cache.zips.put(BASE + "2020/download990xml_2020_1.zip",
+        zip("202000000000000001", xml("2"), "202000000000000002", xml("3")));
+    cache.zips.put(BASE + "2020/2020_TEOS_XML_CT1.zip", zip("202000000000000002", xml("3")));
+    // 201900000000000002 is listed by the 2019 index, not this one
+    Irs990Provider.Index idx = noBatchIndex("2020", "201900000000000001", "202000000000000001",
+        "202000000000000002");
     assertTrue(idx.batchIds.isEmpty());
-    List<String> found = Irs990Provider.discoverZips(base, "2019", idx,
-        probe(base + "download990xml_2019_1.zip", base + "download990xml_2019_2.zip",
-            base + "2019_TEOS_XML_CT1.zip"));
-    assertEquals(3, drain(Irs990Provider.rows(base, found, idx, cache, "2019")).size());
+    Irs990Provider.ZipSet found = Irs990Provider.discoverZips(BASE, "2020", idx,
+        probe(BASE + "2019/download990xml_2019_1.zip", BASE + "2020/download990xml_2020_1.zip",
+            BASE + "2020/2020_TEOS_XML_CT1.zip"));
+    assertTrue(found.legacy);
+    assertEquals(java.util.Arrays.asList("2019/download990xml_2019_1",
+        "2020/download990xml_2020_1", "2020/2020_TEOS_XML_CT1"), found.paths);
+    assertEquals(3, drain(Irs990Provider.rows(BASE, found, idx, cache, "2020")).size());
+  }
+
+  @Test void legacyYearStillFailsWhenAnIndexedFilingIsInNoZip() throws IOException {
+    StubCache cache = new StubCache();
+    cache.zips.put(BASE + "2020/download990xml_2020_1.zip", zip("202000000000000001", xml("2")));
+    Irs990Provider.Index idx = noBatchIndex("2020", "202000000000000001", "202000000000000009");
+    Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE,
+        zipSet(true, "2020/download990xml_2020_1"), idx, cache, "2020");
+    it.next();
+    IllegalStateException e = assertThrows(IllegalStateException.class, it::hasNext);
+    assertTrue(e.getMessage().contains("202000000000000009"), e.getMessage());
+  }
+
+  @Test void monthlyYearIndexWithoutBatchColumnIsRead() throws IOException {
+    StubCache cache = new StubCache();
+    cache.zips.put(BASE + "2023/2023_TEOS_XML_01A.zip", zip("202300000000000001", xml("1")));
+    cache.zips.put(BASE + "2023/2023_TEOS_XML_02A.zip", zip("202300000000000002", xml("2")));
+    Irs990Provider.Index idx = noBatchIndex("2023", "202300000000000001", "202300000000000002");
+    Irs990Provider.ZipSet found = Irs990Provider.discoverZips(BASE, "2023", idx,
+        probe(BASE + "2023/2023_TEOS_XML_01A.zip", BASE + "2023/2023_TEOS_XML_02A.zip"));
+    assertTrue(!found.legacy);
+    assertEquals(2, drain(Irs990Provider.rows(BASE, found, idx, cache, "2023")).size());
   }
 
   @Test void indexedFilingFoundInNoZipFails() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_05A.zip", zip("100", xml("1")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05A.zip", zip("100", xml("1")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_05A"),
         indexRow("101", "2025_TEOS_XML_05A"));
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE,
-        java.util.Arrays.asList("2025_TEOS_XML_05A"), idx, cache, "2025");
+        zipSet(false, "2025/2025_TEOS_XML_05A"), idx, cache, "2025");
     it.next();
     IllegalStateException e = assertThrows(IllegalStateException.class, it::hasNext);
     assertTrue(e.getMessage().contains("[101]"), e.getMessage());
@@ -227,7 +277,7 @@ class Irs990ProviderTest {
 
   @Test void returnTheIndexDoesNotListFails() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_05A.zip", zip("100", xml("1"), "999", xml("2")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05A.zip", zip("100", xml("1"), "999", xml("2")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_05A"));
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025");
     it.next();
@@ -237,11 +287,11 @@ class Irs990ProviderTest {
 
   @Test void returnInTwoZipsFails() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_05A.zip", zip("100", xml("1")));
-    cache.zips.put(BASE + "2025_TEOS_XML_05B.zip", zip("100", xml("1")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05A.zip", zip("100", xml("1")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05B.zip", zip("100", xml("1")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_05A"));
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE,
-        java.util.Arrays.asList("2025_TEOS_XML_05A", "2025_TEOS_XML_05B"), idx, cache, "2025");
+        zipSet(false, "2025/2025_TEOS_XML_05A", "2025/2025_TEOS_XML_05B"), idx, cache, "2025");
     it.next();
     IllegalStateException e = assertThrows(IllegalStateException.class, it::hasNext);
     assertTrue(e.getMessage().contains("more than one zip"), e.getMessage());
@@ -250,7 +300,7 @@ class Irs990ProviderTest {
   @Test void batchNamedByIndexButNotPublishedFails() throws IOException {
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_05A"));
     assertThrows(IOException.class,
-        () -> Irs990Provider.discoverZips(BASE, "2025", idx, probe(BASE + "2025_TEOS_XML_01A.zip")));
+        () -> Irs990Provider.discoverZips(BASE, "2025", idx, probe(BASE + "2025/2025_TEOS_XML_01A.zip")));
   }
 
   @Test void noPublishedZipsFails() throws IOException {
@@ -266,14 +316,14 @@ class Irs990ProviderTest {
 
   @Test void deflate64BatchIsRead() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_11B.zip", deflate64Zip("100", xml("1")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_11B.zip", deflate64Zip("100", xml("1")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_11B"));
     assertEquals(1, drain(Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025")).size());
   }
 
   @Test void batchShorterThanTheIndexListsFails() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_01A.zip", zip("100", xml("1")));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_01A.zip", zip("100", xml("1")));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_01A"),
         indexRow("101", "2025_TEOS_XML_01A"));
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025");
@@ -284,7 +334,7 @@ class Irs990ProviderTest {
 
   @Test void unparseableReturnFailsInsteadOfBeingSkipped() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_01A.zip", zip("100", "<Return><oops>"));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_01A.zip", zip("100", "<Return><oops>"));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_01A"));
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025");
     IllegalStateException e = assertThrows(IllegalStateException.class, it::hasNext);
@@ -293,7 +343,7 @@ class Irs990ProviderTest {
 
   @Test void returnWithoutEinFails() throws IOException {
     StubCache cache = new StubCache();
-    cache.zips.put(BASE + "2025_TEOS_XML_01A.zip", zip("100", "<Return/>"));
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_01A.zip", zip("100", "<Return/>"));
     Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_01A"));
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025");
     assertThrows(IllegalStateException.class, it::hasNext);
