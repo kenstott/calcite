@@ -226,7 +226,7 @@ def test_insert_returning_gives_the_new_rows_in_key_order(writable_backend, keye
             'RETURNING "ID", "QTY" * 2 AS DBL',
         )
         assert r["error"] is None, r["error"]
-        assert r["columns"] == ["ID", "DBL"]
+        assert r["columns"] == ["ID", "dbl"]  # quoted keeps its case; unquoted folds lower
         assert r["rows"] == [["2", "40"], ["1", "20"]]
         assert r["command_tag"] == "INSERT 0 2"
         assert _rows(port) == [["1", "10"], ["2", "20"]]
