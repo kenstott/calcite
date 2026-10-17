@@ -37,10 +37,11 @@ on:
       - '**'
 
 concurrency:
-  # On main/release, we don't want any jobs cancelled so the sha is used to name the group
-  # On PR branches, we cancel the job if new commits are pushed
+  # On release, no run is cancelled, so the sha names the group.
+  # On main and PR branches, a new push cancels the ref's run in progress: superseded main runs
+  # otherwise stack up and hold the account's concurrent-job slots, which provisa shares.
   # More info: https://stackoverflow.com/a/68422069/253468
-  group: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' ) && format('ci-main-{0}', github.sha) || format('ci-main-{0}', github.ref) }}
+  group: ${{ github.ref == 'refs/heads/release' && format('ci-main-{0}', github.sha) || format('ci-main-{0}', github.ref) }}
   cancel-in-progress: true
 
 # Throw OutOfMemoryError in case less than 35% is free after full GC
