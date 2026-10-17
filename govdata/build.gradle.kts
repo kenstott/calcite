@@ -455,6 +455,19 @@ tasks.register("bundleGovdataSeed") {
             throw GradleException("No Iceberg schema cache at $schemaCacheSrc — generation did not "
                 + "read any Iceberg table live, so a cold start would have nothing to seed.")
         }
+        // Every entry must carry its row count and the snapshot it was read at (snapshot-summary
+        // total-records). A runtime that finds none must ask the object store, which is exactly
+        // what describe_table and restart may not do. No silent skips.
+        @Suppress("UNCHECKED_CAST")
+        val cacheTables = (groovy.json.JsonSlurper().parse(schemaCacheSrc) as Map<String, Any?>)["tables"]
+            as Map<String, Map<String, Any?>>
+        val noStats = cacheTables.filter { (_, v) -> v["rowCount"] == null || v["statsSnapshotId"] == null }
+            .keys.toSortedSet()
+        if (cacheTables.isEmpty() || noStats.isNotEmpty()) {
+            throw GradleException("Iceberg schema cache $schemaCacheSrc is incomplete: "
+                + "${cacheTables.size} entries, ${noStats.size} without rowCount/statsSnapshotId: "
+                + noStats.joinToString(", "))
+        }
         val schemaCacheDest = file("$seedDir/iceberg-schema-cache.json")
         schemaCacheSrc.copyTo(schemaCacheDest, overwrite = true)
 

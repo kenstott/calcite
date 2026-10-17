@@ -474,6 +474,10 @@ def deserialize_catalog(d: dict):
 
 _CACHE_FORMAT_VERSION = 1
 
+#: Prefix of the one-line start-up progress markers this server logs, which the AskAmerica
+#: engine tail-parses to tell a caller what a start is doing (``STAGE <name> [key=value ...]``).
+STAGE_MARKER = "STAGE"
+
 
 #: Directory for files this server writes while it runs. Settable per server process, so
 #: several servers on one host (one per organisation, say) keep separate state, and so an
@@ -568,6 +572,7 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
     shipped = catalog_cache_path(model_path)
     if shipped not in candidates:
         candidates.append(shipped)
+    unloadable = []
     for cache_path in candidates:
         if not os.path.isfile(cache_path):
             continue
@@ -579,9 +584,19 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
                 raise ValueError(f"cache format version {version} != {_CACHE_FORMAT_VERSION}")
             install_catalog(state, ctx, column_types)
             log.info("Catalog loaded from cache: %s (%d tables)", cache_path, len(ctx.tables))
+            log.info("%s catalog-cache-hit path=%s tables=%d", STAGE_MARKER, cache_path,
+                     len(ctx.tables))
             return
         except Exception:
+            unloadable.append(cache_path)
             log.exception(
                 "Catalog cache at %s failed to load -- rebuilding live", cache_path)
+    # A production install ships the cache, so reaching here is a defect: the engine reads this
+    # marker from the server's log and says so, naming the files looked for and the model hash.
+    log.warning(
+        "%s catalog-cache-miss hash=%s looked=%s unloadable=%s -- walking the catalog live",
+        STAGE_MARKER, _cache_file_name(model_path)[len("catalog-cache-"):-len(".pkl")],
+        ",".join(candidates), ",".join(unloadable) or "none")
     ctx, column_types = build_and_cache_context(conn, model_path)
     install_catalog(state, ctx, column_types)
+    log.info("%s catalog-walked tables=%d", STAGE_MARKER, len(ctx.tables))

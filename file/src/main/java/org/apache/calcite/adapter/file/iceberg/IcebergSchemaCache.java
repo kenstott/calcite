@@ -19,6 +19,8 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SchemaParser;
+import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.Table;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -29,8 +31,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -404,6 +409,91 @@ public final class IcebergSchemaCache {
     }
     entry.rowCount = rowCount;
     entry.statsSnapshotId = snapshotId;
+  }
+
+  /** Snapshot summary key holding the table's total row count; maintained by every commit. */
+  static final String TOTAL_RECORDS = "total-records";
+
+  /**
+   * Row count of the table's current snapshot, read from the snapshot summary's
+   * {@value #TOTAL_RECORDS}. No manifest or data file is opened: the summary is part of the table
+   * metadata the caller already holds.
+   *
+   * @param tablePath table root, for the error message
+   * @param table loaded Iceberg table
+   * @return the row count, or 0 for a table with no snapshot
+   * @throws IllegalStateException when the snapshot's summary carries no usable total-records
+   */
+  static double snapshotRowCount(String tablePath, Table table) {
+    Snapshot snapshot = table.currentSnapshot();
+    if (snapshot == null) {
+      return 0.0;
+    }
+    Map<String, String> summary = snapshot.summary();
+    String total = summary == null ? null : summary.get(TOTAL_RECORDS);
+    if (total == null) {
+      throw new IllegalStateException("Iceberg snapshot " + snapshot.snapshotId() + " of "
+          + tablePath + " has no '" + TOTAL_RECORDS + "' in its summary; the row count cannot be "
+          + "read without walking data files, which is never done");
+    }
+    try {
+      return Double.parseDouble(total);
+    } catch (NumberFormatException e) {
+      throw new IllegalStateException("Iceberg snapshot " + snapshot.snapshotId() + " of "
+          + tablePath + " has a non-numeric '" + TOTAL_RECORDS + "': " + total, e);
+    }
+  }
+
+  /**
+   * Records, from table metadata alone, the statistics the planner needs for this table: the row
+   * count from the snapshot summary and the per-column NDV the table's Puffin statistics file
+   * publishes for the current snapshot (blob properties in the table metadata, no payload read).
+   *
+   * <p>NDV is recorded as an empty map when the table publishes none, so a lookup can tell
+   * "described, nothing published" from "never described" and does not go back to the object store.
+   * NDV is never computed from data.
+   *
+   * @param tablePath table root
+   * @param table loaded Iceberg table
+   * @return the recorded row count
+   */
+  public static double recordSnapshotStatistics(String tablePath, Table table) {
+    double rowCount = snapshotRowCount(tablePath, table);
+    Snapshot snapshot = table.currentSnapshot();
+    recordStatistics(tablePath, snapshot == null ? -1L : snapshot.snapshotId(), rowCount);
+    recordNdv(tablePath,
+        org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(table));
+    return rowCount;
+  }
+
+  /**
+   * Lists what is wrong with the cache relative to the tables a model declares: for each
+   * {@code schema/table} either no entry, or an entry without a row count or the snapshot it was
+   * read at. Empty means complete. Used by seed generation, which must fail rather than ship a
+   * cache a runtime would have to fill from the object store.
+   *
+   * @param declared declared tables as {@code schema/table}
+   * @return one problem description per incomplete table
+   */
+  public static List<String> incompleteTables(Collection<String> declared) {
+    ensureLoaded();
+    List<String> problems = new ArrayList<String>();
+    for (String d : declared) {
+      TableSchema found = null;
+      for (Map.Entry<String, TableSchema> e : ENTRIES.entrySet()) {
+        // A local warehouse's table location on Windows is separated by backslashes.
+        if (e.getKey().replace('\\', '/').endsWith("/" + d)) {
+          found = e.getValue();
+          break;
+        }
+      }
+      if (found == null) {
+        problems.add(d + ": no entry in the schema cache");
+      } else if (found.rowCount == null || found.statsSnapshotId == null) {
+        problems.add(d + ": entry has no row count / statsSnapshotId");
+      }
+    }
+    return problems;
   }
 
   /**

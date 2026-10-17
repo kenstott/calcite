@@ -1851,7 +1851,17 @@ public class DuckDBJdbcSchemaFactory {
       return;
     }
 
-    java.util.Set<String> declaredNames = fileSchema.getDeclaredTableNames();
+    java.util.Set<String> declaredNames = new java.util.LinkedHashSet<>();
+    for (String declared : fileSchema.getDeclaredTableNames()) {
+      // A declared SQL view is registered from its SQL by registerSqlViewsInDuckDB. It is not a
+      // table "not deterministically resolvable from config": counting it as one made
+      // eagerCount > 0 for every schema that declares a view (econ, census, weather), which
+      // sent the whole schema through registerFilesAsViews -> getAllTableRecords ->
+      // getTableMap(), i.e. per-table object-store discovery at mount.
+      if (!fileSchema.isDeclaredSqlView(declared)) {
+        declaredNames.add(declared);
+      }
+    }
     if (declaredNames.isEmpty()) {
       // No explicit tables:/partitionedTables: entries (a plain directory-scan schema — table
       // names come only from FileSchema scanning the filesystem, so there's nothing to defer by

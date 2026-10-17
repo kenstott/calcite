@@ -2340,6 +2340,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     return LocalPaths.join(warehousePath, icebergTableName);
   }
 
+  /**
+   * True when {@code tableName} is declared as a SQL view ({@code type: view}) rather than a
+   * table. A view has no table behind it for {@link #getDeclaredTable} to resolve ({@code
+   * addTable} skips it); the execution engine registers it from its SQL.
+   */
+  public boolean isDeclaredSqlView(String tableName) {
+    Map<String, Object> tableDef = findDeclaredTableDef(tableName);
+    return tableDef != null && "view".equals(tableDef.get("type"));
+  }
+
   private @Nullable Map<String, Object> findDeclaredTableDef(String tableName) {
     for (Map<String, Object> tableDef : this.tables) {
       if (tableName.equals(tableDef.get("name"))) {
