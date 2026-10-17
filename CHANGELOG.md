@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.118.1](https://github.com/kenstott/calcite/compare/engine-v0.118.0...engine-v0.118.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **govdata:** drop checkWinner's unused ranked parameter ([#586](https://github.com/kenstott/calcite/issues/586)) ([3ffde71](https://github.com/kenstott/calcite/commit/3ffde710fb17af1f79516bbedfd3353908a4574a))
+
 ## [0.118.0](https://github.com/kenstott/calcite/compare/engine-v0.117.0...engine-v0.118.0) (2026-10-17)
 
 
