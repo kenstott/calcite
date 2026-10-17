@@ -188,6 +188,7 @@ partitionedTables:
   # FHFA HOUSE PRICE INDEX — monthly hpi_master.csv (snapshot, streamed)
   # ---------------------------------------------------------------------------
   - name: house_price_index
+    timeColumn: data_year  # observation year; this table has no column named 'year'
     # Freshness gate: FHFA serves no ETag/Last-Modified — only Content-Length (18.9 MB,
     # verified). 'size' HEADs the file and skips the whole re-fetch when the byte length is
     # unchanged; appending a new period changes the length, forcing a refresh. Weak (a

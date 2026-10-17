@@ -1383,6 +1383,7 @@ partitionedTables:
   # NOAA_FEUS_ECONOMIC_IMPACTS — jobs, sales, income, value added by state and sector
   # ---------------------------------------------------------------------------
   - name: noaa_feus_economic_impacts
+    timeColumn: data_year  # observation year; this table has no column named 'year'
     freshness:
       type: hash
     pattern: "type=noaa_feus_economic_impacts/feus_file=*/*.parquet"

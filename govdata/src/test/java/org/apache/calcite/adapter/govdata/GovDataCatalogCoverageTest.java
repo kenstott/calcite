@@ -149,4 +149,19 @@ public class GovDataCatalogCoverageTest {
     assertTrue(!cov.path("note").asText().contains("cannot be filtered"),
         "must not tell callers the table cannot be trended over time");
   }
+
+  /**
+   * house_price_index carries data_year + period, not a column named year, and declares it via
+   * timeColumn. It must not be reported as having no time axis (#958).
+   */
+  @Test void declaredTimeColumnTableIsTimeVarying() {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList("housing"));
+    JsonNode cov = coverageOf(catalog, "housing", "house_price_index");
+    assertNotNull(cov, "house_price_index must carry a coverage node");
+    assertEquals("columnOnly", cov.path("form").asText());
+    assertEquals("data_year", cov.path("column").asText());
+    assertTrue(cov.path("time_varying").asBoolean(), "data_year is a time dimension");
+    assertTrue(!cov.path("note").asText().contains("cannot be filtered"),
+        "must not tell callers the table cannot be trended over time");
+  }
 }
