@@ -1606,8 +1606,10 @@ public class EtlPipelineDeepCoverageTest5 {
     assertEquals("/data/table", result.getTableLocation());
     assertEquals(MaterializeConfig.Format.PARQUET, result.getMaterializeFormat());
     assertFalse(result.isSkippedEntirePipeline());
-    assertFalse(result.isFailed());
-    assertNull(result.getFailureMessage());
+    // 2 failed batches: the table is failed (partially) and the message is derived from errors
+    assertTrue(result.isFailed());
+    assertTrue(result.isPartiallyFailed());
+    assertTrue(result.getFailureMessage().contains("error1"));
     assertEquals(13, result.getTotalBatches());
     assertEquals(200.0, result.getRowsPerSecond(), 0.01);
   }

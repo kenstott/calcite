@@ -1160,7 +1160,7 @@ public class EtlPipeline {
                         e.getMessage());
                   } catch (Exception e) {
                     String errorMsg =
-                        String.format("Batch %d (partition %d/%d) failed: %s", currentBatch, piFinal + 1, partCountFinal, e.getMessage());
+                        String.format("Batch %d (partition %d/%d) failed: %s (fetch=%s)", currentBatch, piFinal + 1, partCountFinal, e.getMessage(), variables);
                     LOGGER.error(errorMsg, e);
                     partErrors.add(errorMsg);
                     if (progressListener != null) {
@@ -1280,8 +1280,8 @@ public class EtlPipeline {
               } catch (Exception e) {
                 consecutiveFailures++;
                 String errorMsg =
-                    String.format("Batch %d (partition %d/%d) failed: %s",
-                        processedCount, pi + 1, partCount, e.getMessage());
+                    String.format("Batch %d (partition %d/%d) failed: %s (fetch=%s)",
+                        processedCount, pi + 1, partCount, e.getMessage(), variables);
                 LOGGER.error(errorMsg, e);
                 errors.add(errorMsg);
                 incrementalTracker.invalidateTableCompletion(pipelineName);
@@ -1435,7 +1435,7 @@ public class EtlPipeline {
                       e.getMessage());
                 } catch (Exception e) {
                   String errorMsg =
-                      String.format("Batch %d/%d failed: %s", currentBatch, unitCountFinal, e.getMessage());
+                      String.format("Batch %d/%d failed: %s (fetch=%s)", currentBatch, unitCountFinal, e.getMessage(), unit.getFetchVariables());
                   LOGGER.error(errorMsg, e);
                   parallelErrors.add(errorMsg);
                   if (progressListener != null) {
@@ -1581,7 +1581,7 @@ public class EtlPipeline {
             } catch (Exception e) {
               consecutiveFailures++;
               String errorMsg =
-                  String.format("Batch %d/%d failed: %s", processedCount, unitCount, e.getMessage());
+                  String.format("Batch %d/%d failed: %s (fetch=%s)", processedCount, unitCount, e.getMessage(), unit.getFetchVariables());
 
               // Enhanced diagnostics for HTTP/S3 errors
               String msg = e.getMessage();
@@ -2905,9 +2905,15 @@ public class EtlPipeline {
       }
     }
 
+    // An exception that carries no HTTP status is not an API answer either: it is a data-invariant,
+    // parse or I/O failure inside the pipeline (a row-count invariant, a missing index column).
+    // apiErrorAction defaults to SKIP, which filed such a throw under "skipped" and let a load in
+    // which two of three periods threw report as successful. SKIP stays what it always was — a
+    // response to an HTTP status (404 notFoundAction, 5xx apiErrorAction) — and anything else that
+    // throws is a failed batch (WARN: counted failed, other batches continue, retried next run).
     String message = e.getMessage();
-    if (message == null) {
-      return errorHandling.getApiErrorAction();
+    if (message == null || !message.contains("HTTP ")) {
+      return EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN;
     }
 
     if (message.contains("HTTP 401") || message.contains("HTTP 403")) {

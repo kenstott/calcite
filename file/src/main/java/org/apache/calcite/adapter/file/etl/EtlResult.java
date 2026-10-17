@@ -149,6 +149,16 @@ public class EtlResult {
    * Returns the failure message if the pipeline failed.
    */
   public String getFailureMessage() {
+    if (failureMessage == null && failedBatches > 0) {
+      StringBuilder sb = new StringBuilder();
+      sb.append(failedBatches).append(" of ").append(getTotalBatches())
+          .append(" batch(es) failed; completed batches remain committed and the failed ones"
+              + " are retried on the next run:");
+      for (String error : errors) {
+        sb.append("\n  - ").append(error);
+      }
+      return sb.toString();
+    }
     return failureMessage;
   }
 
@@ -171,7 +181,16 @@ public class EtlResult {
    * Returns whether the pipeline failed.
    */
   public boolean isFailed() {
-    return failed;
+    return failed || failedBatches > 0;
+  }
+
+  /**
+   * Returns whether the pipeline ran to its commit but one or more batches (periods) threw.
+   * The batches that completed are committed; the failed ones are retried on the next run. The
+   * table is {@link #isFailed() failed} but still has committed data.
+   */
+  public boolean isPartiallyFailed() {
+    return !failed && failedBatches > 0;
   }
 
   /**
@@ -230,6 +249,10 @@ public class EtlResult {
     } else if (failed) {
       sb.append(", FAILED: ").append(failureMessage);
     } else {
+      if (failedBatches > 0) {
+        sb.append(", FAILED (partial: ").append(failedBatches).append(" of ")
+            .append(getTotalBatches()).append(" batches failed)");
+      }
       sb.append(", rows=").append(totalRows);
       sb.append(", batches=").append(successfulBatches).append("/").append(getTotalBatches());
       if (failedBatches > 0) {
