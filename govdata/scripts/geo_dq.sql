@@ -11,7 +11,7 @@
 --   T6  pk_nulls        — any NULL in a column declared nullable:false?
 --   T7  expected_values — domain-specific value range / set checks
 -- ============================================================================
--- Tables (32):
+-- Tables (33):
 --   TIGER Boundaries:  states, counties, places, zctas, census_tracts,
 --                      block_groups, cbsa, congressional_districts,
 --                      school_districts, state_legislative_lower,
@@ -21,6 +21,7 @@
 --                      tract_zip_crosswalk, zip_tract_crosswalk,
 --                      zip_cd_crosswalk, county_zip_crosswalk, cd_zip_crosswalk
 --   USDA Classification: rural_urban_continuum, ruca_codes
+--   OMB delineation:   county_cbsa_delineation
 --   Census Gazetteer:  gazetteer_counties, gazetteer_places, gazetteer_zctas
 --   USGS Watersheds:   watersheds_huc2, watersheds_huc4, watersheds_huc8,
 --                      watersheds_huc12
@@ -762,6 +763,151 @@ SELECT 'geo', 'county_adjacency', 'T4_coverage',
        'counties with no adjacency row at all, excluding acknowledged island exceptions (Hawaii, state_fips=15): '
          || COALESCE(STRING_AGG(CASE WHEN NOT is_acknowledged_island THEN county_fips END, ', '), 'none')
 FROM isolated;
+
+-- ============================================================================
+-- TABLE CHECKS — county_cbsa_delineation (snapshot, all six OMB delineations in one table)
+-- ============================================================================
+-- Published List 1 workbooks (Census Bureau, checked 2026-10-17): data rows per vintage
+-- 2013: 1882, 2015: 1899, 2017: 1899, 2018 (Sep): 1915, 2020: 1916, 2023: 1915; one row per county,
+-- so rows = distinct counties. A county in no CBSA is absent by design (not tested as missing).
+
+INSERT INTO dq_results
+SELECT 'geo', 'county_cbsa_delineation', 'T1_existence',
+       CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n::VARCHAR, '1', 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true));
+
+-- T2 — exact row count per vintage against the published workbook (mismatches listed).
+INSERT INTO dq_results
+WITH expected(vintage, n) AS (
+  VALUES (2013, 1882), (2015, 1899), (2017, 1899), (2018, 1915), (2020, 1916), (2023, 1915)
+), actual AS (
+  SELECT vintage, COUNT(*) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+  GROUP BY vintage
+), bad AS (
+  SELECT e.vintage, e.n AS want, COALESCE(a.n, 0) AS got
+  FROM expected e LEFT JOIN actual a USING (vintage)
+  WHERE COALESCE(a.n, 0) <> e.n
+)
+SELECT 'geo', 'county_cbsa_delineation', 'T2_row_count_per_vintage',
+       CASE WHEN (SELECT COUNT(*) FROM bad) = 0
+             AND (SELECT COUNT(*) FROM actual WHERE vintage NOT IN (SELECT vintage FROM expected)) = 0
+            THEN 'pass' ELSE 'fail' END,
+       (SELECT COUNT(*) FROM bad)::VARCHAR, '0',
+       'vintages whose row count differs from the published file (want/got): '
+         || COALESCE((SELECT STRING_AGG(vintage || ' ' || want || '/' || got, ', ') FROM bad), 'none');
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'geo', 'county_cbsa_delineation', 'T4_all_null_cols',
+       CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt::VARCHAR, '0',
+       CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name <> 'type'));
+
+INSERT INTO dq_results
+SELECT 'geo', 'county_cbsa_delineation', 'T5_all_same_value',
+       CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt::VARCHAR, '0',
+       CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name <> 'type'));
+
+-- T6 — NULLs in nullable:false columns plus duplicate (vintage, county_fips).
+INSERT INTO dq_results
+SELECT 'geo', 'county_cbsa_delineation', 'T6_pk_nulls_duplicates',
+       CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n::VARCHAR, '0',
+       'NULL in a non-nullable column plus duplicate (vintage, county_fips) keys'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+              WHERE vintage IS NULL OR delineation_date IS NULL OR county_fips IS NULL OR state_fips IS NULL
+                 OR county_name IS NULL OR state_name IS NULL OR cbsa_code IS NULL OR cbsa_title IS NULL
+                 OR cbsa_type IS NULL OR central_outlying IS NULL)
+           + (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+              GROUP BY vintage, county_fips HAVING COUNT(*) > 1)) AS n);
+
+-- T7 — code shapes and domains.
+INSERT INTO dq_results
+SELECT 'geo', 'county_cbsa_delineation', 'T7_code_shapes_domains',
+       CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n::VARCHAR, '0',
+       'rows with county_fips not 5 digits / not starting with state_fips, cbsa_code not 5 digits, division code not 5 digits, csa_code not 3 digits, cbsa_type or central_outlying outside the domain'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+      WHERE NOT regexp_matches(county_fips, '^[0-9]{5}$') OR SUBSTR(county_fips, 1, 2) <> state_fips
+         OR NOT regexp_matches(cbsa_code, '^[0-9]{5}$')
+         OR (metro_division_code IS NOT NULL AND NOT regexp_matches(metro_division_code, '^[0-9]{5}$'))
+         OR (csa_code IS NOT NULL AND NOT regexp_matches(csa_code, '^[0-9]{3}$'))
+         OR cbsa_type NOT IN ('metropolitan', 'micropolitan')
+         OR central_outlying NOT IN ('central', 'outlying')
+         OR vintage NOT IN (2013, 2015, 2017, 2018, 2020, 2023));
+
+-- T7 — code/title pairs are all-or-none, a division only in a metropolitan CBSA, and every
+-- (vintage, CBSA) has one title and at least one central county.
+INSERT INTO dq_results
+WITH t AS (
+  SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+), pair_bad AS (
+  SELECT COUNT(*) AS n FROM t
+  WHERE (metro_division_code IS NULL) <> (metro_division_title IS NULL)
+     OR (csa_code IS NULL) <> (csa_title IS NULL)
+     OR (metro_division_code IS NOT NULL AND cbsa_type <> 'metropolitan')
+), title_bad AS (
+  SELECT COUNT(*) AS n FROM (SELECT 1 FROM t GROUP BY vintage, cbsa_code HAVING COUNT(DISTINCT cbsa_title) > 1)
+), central_bad AS (
+  SELECT COUNT(*) AS n FROM (SELECT 1 FROM t GROUP BY vintage, cbsa_code
+                              HAVING SUM(CASE WHEN central_outlying = 'central' THEN 1 ELSE 0 END) = 0)
+)
+SELECT 'geo', 'county_cbsa_delineation', 'T7_internal_consistency',
+       CASE WHEN pair_bad.n + title_bad.n + central_bad.n = 0 THEN 'pass' ELSE 'fail' END,
+       (pair_bad.n + title_bad.n + central_bad.n)::VARCHAR, '0',
+       'code/title pairs half-null: ' || pair_bad.n || '; CBSAs with 2+ titles: ' || title_bad.n
+         || '; CBSAs with no central county: ' || central_bad.n
+FROM pair_bad, title_bad, central_bad;
+
+-- T7 — CBSA counts per vintage (published: 929, 945, 945, 938, 939, 935) and, for the 2020
+-- vintage, against the ZIP-derived mapping from a customer report (2020 HUD crosswalk,
+-- res_ratio product > 0.5): 1,914 counties in 938 CBSAs. The OMB file has 1,916 / 939; the ZIP
+-- approximation may not differ by more than 1 percent either way.
+INSERT INTO dq_results
+WITH t AS (
+  SELECT vintage, COUNT(*) AS counties, COUNT(DISTINCT cbsa_code) AS cbsas
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+  GROUP BY vintage
+), expected(vintage, cbsas) AS (
+  VALUES (2013, 929), (2015, 945), (2017, 945), (2018, 938), (2020, 939), (2023, 935)
+), bad AS (
+  SELECT e.vintage FROM expected e LEFT JOIN t USING (vintage) WHERE COALESCE(t.cbsas, 0) <> e.cbsas
+), v2020 AS (
+  SELECT counties, cbsas FROM t WHERE vintage = 2020
+)
+SELECT 'geo', 'county_cbsa_delineation', 'T7_cbsa_counts_vs_zip_derived',
+       CASE WHEN (SELECT COUNT(*) FROM bad) = 0
+             AND ABS(v2020.counties - 1914) <= 19 AND ABS(v2020.cbsas - 938) <= 9 THEN 'pass' ELSE 'fail' END,
+       v2020.counties || ' counties / ' || v2020.cbsas || ' CBSAs (2020)', '1914 / 938 (ZIP-derived), 1916 / 939 (published)',
+       'vintages whose CBSA count differs from the published file: '
+         || COALESCE((SELECT STRING_AGG(vintage::VARCHAR, ', ') FROM bad), 'none')
+FROM v2020;
+
+-- T7 — known values: Bronx County is in CBSA 35620 (New York-Newark-Jersey City), division
+-- 35614, CSA 408, in every vintage; Los Angeles County is in 31080 / division 31084 in 2020; the
+-- 2023 vintage uses Connecticut planning regions (09110) and the 2020 one the legacy 09001.
+INSERT INTO dq_results
+WITH t AS (
+  SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/geo/county_cbsa_delineation', allow_moved_paths := true)
+)
+SELECT 'geo', 'county_cbsa_delineation', 'T7_known_values',
+       CASE WHEN (SELECT COUNT(*) FROM t WHERE county_fips = '36005' AND cbsa_code = '35620'
+                    AND metro_division_code = '35614' AND csa_code = '408' AND cbsa_type = 'metropolitan') = 6
+             AND (SELECT COUNT(*) FROM t WHERE vintage = 2020 AND county_fips = '06037'
+                    AND cbsa_code = '31080' AND metro_division_code = '31084') = 1
+             AND (SELECT COUNT(*) FROM t WHERE vintage = 2023 AND county_fips = '09110') = 1
+             AND (SELECT COUNT(*) FROM t WHERE vintage = 2023 AND county_fips = '09001') = 0
+             AND (SELECT COUNT(*) FROM t WHERE vintage = 2020 AND county_fips = '09001') = 1
+            THEN 'pass' ELSE 'fail' END,
+       NULL, NULL,
+       'Bronx (36005) -> 35620/35614/408 in all 6 vintages; LA County 2020 -> 31080/31084; CT planning region 09110 in 2023 only';
 
 -- ============================================================================
 -- ALL DQ RESULTS

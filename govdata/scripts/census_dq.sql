@@ -853,6 +853,111 @@ FROM (
   WHERE p.geography = 'county'
 );
 
+-- ----------------------------------------------------------------------------
+-- acs_congressional_district: ACS 5-year profile by congressional district, vintages 2012+,
+-- one Census API request per vintage. Not sampled: the whole table is read.
+-- ----------------------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T2_row_count',
+  CASE WHEN n >= 5600 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '5600',
+  'Expected >= 5600 rows (13 vintages 2012-2024 x 437 districts)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true));
+
+SELECT 'acs_congressional_district' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) LIMIT 1;
+
+INSERT INTO dq_results SELECT 'census', 'acs_congressional_district', 'T4_all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'acs_congressional_district', 'T5_all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0',
+  'NULL cd_fips/congress rows plus duplicate (year, cd_fips) keys'
+FROM (SELECT
+        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) WHERE cd_fips IS NULL OR congress IS NULL)
+      + (SELECT COUNT(*) FROM (SELECT year, cd_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)) AS n);
+
+-- Every vintage carries exactly 435 voting districts (district <> 98) and the 2 non-voting
+-- delegates (District of Columbia and Puerto Rico, district 98), under exactly one Congress.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_districts_per_vintage',
+  CASE WHEN yrs >= 13 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(yrs AS VARCHAR) || ' vintages / ' || CAST(bad AS VARCHAR) || ' bad', '>=13 vintages / 0 bad',
+  'Vintages loaded, and vintages without 435 voting rows, 2 delegate rows and a single Congress'
+FROM (SELECT COUNT(*) AS yrs, COUNT(*) FILTER (WHERE voting <> 435 OR delegates <> 2 OR congresses <> 1) AS bad
+      FROM (SELECT year,
+                   COUNT(*) FILTER (WHERE district <> '98') AS voting,
+                   COUNT(*) FILTER (WHERE district = '98') AS delegates,
+                   COUNT(DISTINCT congress) AS congresses
+            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+            GROUP BY year));
+
+-- Congress is the Congress seated when the vintage's lines were drawn: it never decreases with
+-- the vintage year, and the code is a plausible Congress number.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_congress_monotonic',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'Vintages whose Congress is lower than an earlier vintage, or outside 111..119'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT CAST(year AS INTEGER) AS y, MIN(congress) AS c,
+               MAX(MIN(congress)) OVER (ORDER BY CAST(year AS INTEGER) ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+        GROUP BY year)
+      WHERE c < prev_max OR c < 111 OR c > 119);
+
+-- Row invariants: cd_fips = state + district, percentages within 0..100, no negative counts,
+-- parts never exceed their wholes.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_row_invariants',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'Rows violating key shape, percent range, non-negativity or part <= whole'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+      WHERE LENGTH(cd_fips) <> 4 OR cd_fips <> state_fips || district
+         OR total_population <= 0 OR unemployed > civilian_labor_force OR below_poverty > poverty_universe
+         OR population_65_plus > total_population OR bachelors_or_higher > population_25_plus
+         OR foreign_born > total_population OR owner_occupied_units > occupied_housing_units
+         OR renters_cost_burdened > renter_households OR owners_cost_burdened > mortgaged_owner_households
+         OR unemployment_rate_pct NOT BETWEEN 0 AND 100 OR poverty_rate_pct NOT BETWEEN 0 AND 100
+         OR population_65_plus_pct NOT BETWEEN 0 AND 100 OR bachelors_or_higher_pct NOT BETWEEN 0 AND 100
+         OR foreign_born_pct NOT BETWEEN 0 AND 100 OR renter_cost_burden_pct NOT BETWEEN 0 AND 100
+         OR owner_cost_burden_pct NOT BETWEEN 0 AND 100 OR median_household_income <= 0);
+
+-- Districts tile the states exactly, so the districts of each state sum to the state ACS 5-year
+-- population of the same vintage (census.acs_population, geography = state, same API variable
+-- B01003 family); the sum over states is the national total.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_population_reconciles',
+  CASE WHEN n_years >= 12 AND worst = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n_years AS VARCHAR) || ' vintages / worst diff ' || CAST(worst AS VARCHAR), '>=12 vintages / 0',
+  'Largest absolute difference between the district sum and census.acs_population state sum per state-vintage'
+FROM (SELECT COUNT(DISTINCT y) AS n_years, COALESCE(MAX(ABS(d - s)), 999999999) AS worst FROM (
+        SELECT CAST(c.year AS INTEGER) AS y, c.state_fips, SUM(c.total_population) AS d, MAX(p.total_population) AS s
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) c
+        JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population', allow_moved_paths := true) p
+          ON p.year = c.year AND p.geography = 'state' AND p.state = c.state_fips
+        GROUP BY 1, 2));
+
+-- Anchors against published figures (ACS 5-year, Data USA / Census Bureau district profiles,
+-- checked 2026-10-17): Wyoming at-large median household income $74,815 (vintage 2023, 118th
+-- Congress) and $76,176 (2024, 119th); Mississippi 1 $60,877 (2023); New York 12 (Manhattan)
+-- 2024 population 719,940, median household income $147,775 and median age 40.3.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_known_values',
+  CASE WHEN hits = 4 THEN 'pass' ELSE 'fail' END, CAST(hits AS VARCHAR), '4',
+  'Spot-check districts: WY-AL 2023/2024 income, MS-1 2023 income, NY-12 2024 population, income and median age'
+FROM (SELECT COUNT(*) AS hits
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+      WHERE (CAST(year AS INTEGER) = 2023 AND cd_fips = '5600' AND congress = 118 AND median_household_income = 74815)
+         OR (CAST(year AS INTEGER) = 2024 AND cd_fips = '5600' AND congress = 119 AND median_household_income = 76176)
+         OR (CAST(year AS INTEGER) = 2023 AND cd_fips = '2801' AND median_household_income = 60877)
+         OR (CAST(year AS INTEGER) = 2024 AND cd_fips = '3612' AND total_population = 719940
+             AND median_household_income = 147775 AND ROUND(median_age, 1) = 40.3));
+
 -- ============================================================================
 -- RESULTS SUMMARY
 -- ============================================================================

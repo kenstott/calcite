@@ -817,7 +817,8 @@ class SchemaLifecycleProcessorCoverageTest {
     assertEquals(500, result.getTotalRows());
     assertEquals(10, result.getSuccessfulBatches());
     assertEquals(2, result.getFailedBatches());
-    assertFalse(result.isFailed());
+    assertTrue(result.isFailed(), "failed batches make the table failed");
+    assertTrue(result.isPartiallyFailed());
   }
 
   @Test void testEtlResultToString() {

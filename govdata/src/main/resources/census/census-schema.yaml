@@ -107,9 +107,16 @@ dimension_values:
   # --- Year Range for ACS 5-year (starts 2009) ---
   # ACS 5-year estimates only available from 2009 onwards (Census API limitation)
   # Pre-2009 data does not exist - API returns errors for earlier years
-  # dataLag: 2 because ACS 5-year data for year Y is released in December of Y+2
-  # releaseMonth: 12 because release happens in December; before Dec, subtract one more year
-  # Example in March 2026: effectiveEnd = min(2026-2, 2026) = 2024, then month 3 < 12 → 2023
+  # ACS 5-year vintage V (window V-4..V) is released in December of V+1 (2020-2024 came out
+  # December 2025; verified 2026-10-17: api.census.gov/data/2024/acs/acs5 exists, 2025 is 404).
+  # So in calendar year Y the newest published vintage is V = Y-1 from December, else Y-2.
+  # dataLag: 2 with NO releaseMonth yields V = Y-2 from 1 January, which is always published
+  # (released the previous December). The earlier releaseMonth: 12 pushed the newest vintage
+  # to Y-3 for eleven months of every year (October 2026 stopped at vintage 2023 although 2024
+  # has been out since December 2025). The lag stays 2 on purpose: effective_year = year -
+  # dataLag is the Iceberg partition value and the tracker key, so lowering the lag would
+  # re-map every publish year to a different vintage and need minYear shifted by one.
+  # Example in October 2026: effectiveEnd = 2026-2 = 2024 (no month adjustment).
   acs_year_range: &acs_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -118,7 +125,6 @@ dimension_values:
                            # so floor the shared 5-year anchor at 2011. Per-table minYear overrides
                            # below raise this further where a variable was added after 2011.
     dataLag: 2
-    releaseMonth: 12
 
   # --- Year Range for ACS 1-year (starts 2006) ---
   # ACS 1-year estimates available from 2006 onwards (only for areas with 65,000+ population)
@@ -591,13 +597,12 @@ partitionedTables:
       # B15003 (educational attainment) was added to ACS5 in 2012; earlier years return
       # 400 "unknown variable 'B15003_001E'" (fatal — no skipOn here). minYear floors at 2012
       # (feed-began for this variable) while start follows the global demarcation. Same
-      # dataLag/releaseMonth as the anchor.
+      # dataLag (and no releaseMonth) as the anchor.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2014          # B15003 (educational attainment) undefined in ACS 5-year before 2014
         dataLag: 2             # (2012/2013 still error "unknown variable B15003_001E"; first complete 2014)
-        releaseMonth: 12
       geography: *all_geographies
 
     columns:
@@ -3807,13 +3812,12 @@ partitionedTables:
       # B25034_011E (built_1939_or_earlier) undefined in ACS 5-year before 2015 — the group
       # only goes up to _010E for 2011-2014 (verified live: 2011/2013/2014 all 400 "unknown
       # variable B25034_011E"; 2015 is the first vintage with 11 variables). minYear floors
-      # at 2015 accordingly, same dataLag/releaseMonth as the shared anchor.
+      # at 2015 accordingly, same dataLag (and no releaseMonth) as the shared anchor.
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2015          # B25034 built_1939_or_earlier (var _011E) undefined in ACS 5-year before 2015
         dataLag: 2
-        releaseMonth: 12
       geography: *all_geographies
 
     columns:
@@ -4626,6 +4630,266 @@ partitionedTables:
         compactionMinFiles: 5
         batchPartitionColumns: [year, ref_state]
         incrementalKeys: [year, ref_state]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # ACS CONGRESSIONAL DISTRICT PROFILE - demographics and economics by district
+  # ---------------------------------------------------------------------------
+  - name: acs_congressional_district
+    pattern: "type=acs_cd/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - *partition_year
+    comment: >
+      American Community Survey 5-year demographics and economics for every U.S. House
+      district, one row per vintage year x district: total population, median household
+      income, per capita income, median age, unemployment rate, poverty rate, share aged 65
+      and over, bachelor's degree or higher, foreign-born share, home ownership, median rent
+      and home value, and housing cost burden (renters and mortgaged owners paying 30 percent
+      or more of income on housing). Counts come with derived percentages (the _pct columns;
+      NULL when the denominator is zero). It is a survey, so every figure is a sample estimate
+      (margins of error are not loaded) and medians are NULL where the Census suppresses
+      them. Covers the 435 voting districts plus the non-voting delegates (district 98:
+      District of Columbia and Puerto Rico) for each vintage from 2012; the placeholder rows
+      the API returns for states whose districts are not defined in a vintage (Connecticut,
+      Illinois, Michigan and New Hampshire in some years) are not stored. year is the last year of the
+      5-year ACS window (year 2022 = ACS 2018-2022). District lines change at redistricting,
+      so each ACS vintage is tabulated on one Congress's lines; the congress column says
+      which (for example 118). Never compare a district across Congresses without checking
+      that congress matches, because the same cd_fips can cover different territory. Do not
+      join geo.congressional_districts on cd_fips alone: its year is a TIGER boundary
+      vintage, so join to the boundary year whose Congress matches. Dollar figures are in
+      inflation-adjusted dollars of the vintage year, so compare incomes across vintages
+      only after adjusting. Use with fec.candidate_district_profile and officials members
+      for district-grain election analysis. Source: Census Data API
+      api.census.gov/data/{year}/acs/acs5 with for=congressional district. Requires
+      CENSUS_API_KEY.
+    dqRowLimit: 10000
+
+    dimensions:
+      type:
+        - acs_cd
+      # `year` is the publish year; the ACS vintage (the year column in the table) is
+      # effective_year = year - dataLag. ACS 5-year vintage V is released in December of V+1
+      # (2020-2024 came out December 2025), so dataLag 1. start/minYear bound the publish year:
+      # 2013 reaches vintage 2012, the first with every variable below. The Census data API
+      # answers "unknown variable" for B23025 before vintage 2012 and B15003 before vintage 2012
+      # although earlier variable lists show them (verified by request 2026-10-17).
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2013}"
+        minYear: 2013
+        dataLag: 1
+        releaseMonth: 12
+        descending: true
+
+    columns:
+      - name: cd_fips
+        type: string
+        nullable: false
+        expression: 'src."state" || src."congressional district"'
+        comment: 4-digit congressional district code, state FIPS + district number (00 = at-large, 98 = non-voting delegate or resident commissioner); joins geo.congressional_districts.cd_fips for the same Congress
+      - name: state_fips
+        type: string
+        nullable: false
+        expression: 'src."state"'
+        comment: 2-digit state FIPS code (FK to geo.state_ref)
+      - name: district
+        type: string
+        nullable: false
+        expression: 'src."congressional district"'
+        comment: 2-digit district number within the state; 00 at-large, 98 non-voting delegate (DC, Puerto Rico)
+      - name: congress
+        type: integer
+        nullable: false
+        expression: 'TRY_CAST(regexp_extract(src."NAME", ''\((\d+)(st|nd|rd|th) Congress'', 1) AS INTEGER)'
+        comment: Congress whose district lines the row uses (113 = 113th Congress, 2013-2015), parsed from the Census geography name; district lines change with it
+      - name: geo_name
+        type: string
+        nullable: false
+        expression: 'src."NAME"'
+        comment: Census geography name, e.g. Congressional District 1 (118th Congress), Alabama
+      - name: total_population
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B01003_001E" AS BIGINT)'
+        comment: Total population (B01003)
+      - name: median_household_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19013_001E" AS BIGINT)'
+        comment: Median household income in the past 12 months, in inflation-adjusted dollars of the vintage year (B19013); NULL where suppressed
+      - name: per_capita_income
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B19301_001E" AS BIGINT)'
+        comment: Per capita income in the past 12 months, in inflation-adjusted dollars of the vintage year (B19301)
+      - name: median_age
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."B01002_001E" AS DOUBLE)'
+        comment: Median age in years, both sexes (B01002)
+      - name: civilian_labor_force
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B23025_003E" AS BIGINT)'
+        comment: Civilian labor force, population 16 and over (B23025)
+      - name: unemployed
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B23025_005E" AS BIGINT)'
+        comment: Unemployed civilians in the labor force (B23025)
+      - name: unemployment_rate_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B23025_003E" AS BIGINT) > 0 THEN 100.0 * (TRY_CAST(src."B23025_005E" AS BIGINT)) / (TRY_CAST(src."B23025_003E" AS BIGINT)) END'
+        comment: Unemployed as a percent of the civilian labor force
+      - name: poverty_universe
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B17001_001E" AS BIGINT)'
+        comment: Population for whom poverty status is determined (B17001)
+      - name: below_poverty
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B17001_002E" AS BIGINT)'
+        comment: People with income in the past 12 months below the poverty level (B17001)
+      - name: poverty_rate_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B17001_001E" AS BIGINT) > 0 THEN 100.0 * (TRY_CAST(src."B17001_002E" AS BIGINT)) / (TRY_CAST(src."B17001_001E" AS BIGINT)) END'
+        comment: People below the poverty level as a percent of the population for whom poverty status is determined
+      - name: population_65_plus
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B01001_020E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_021E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_022E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_023E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_024E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_025E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_044E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_045E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_046E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_047E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_048E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_049E" AS BIGINT),0)'
+        comment: People aged 65 and over, sum of the male and female 65-66 through 85+ age cells of B01001
+      - name: population_65_plus_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B01001_001E" AS BIGINT) > 0 THEN 100.0 * (COALESCE(TRY_CAST(src."B01001_020E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_021E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_022E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_023E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_024E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_025E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_044E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_045E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_046E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_047E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_048E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B01001_049E" AS BIGINT),0)) / (TRY_CAST(src."B01001_001E" AS BIGINT)) END'
+        comment: People aged 65 and over as a percent of total population (B01001)
+      - name: population_25_plus
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B15003_001E" AS BIGINT)'
+        comment: Population 25 years and over (B15003)
+      - name: bachelors_or_higher
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B15003_022E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B15003_023E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B15003_024E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B15003_025E" AS BIGINT),0)'
+        comment: People 25 and over with a bachelor's, master's, professional or doctorate degree (B15003_022-025)
+      - name: bachelors_or_higher_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B15003_001E" AS BIGINT) > 0 THEN 100.0 * (COALESCE(TRY_CAST(src."B15003_022E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B15003_023E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B15003_024E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B15003_025E" AS BIGINT),0)) / (TRY_CAST(src."B15003_001E" AS BIGINT)) END'
+        comment: People 25 and over with a bachelor's degree or higher as a percent of people 25 and over
+      - name: foreign_born
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B05002_013E" AS BIGINT)'
+        comment: Foreign-born population (B05002)
+      - name: foreign_born_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B05002_001E" AS BIGINT) > 0 THEN 100.0 * (TRY_CAST(src."B05002_013E" AS BIGINT)) / (TRY_CAST(src."B05002_001E" AS BIGINT)) END'
+        comment: Foreign-born as a percent of total population (B05002 total)
+      - name: occupied_housing_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25003_001E" AS BIGINT)'
+        comment: Occupied housing units (B25003)
+      - name: owner_occupied_units
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25003_002E" AS BIGINT)'
+        comment: Owner-occupied housing units (B25003)
+      - name: owner_occupied_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25003_001E" AS BIGINT) > 0 THEN 100.0 * (TRY_CAST(src."B25003_002E" AS BIGINT)) / (TRY_CAST(src."B25003_001E" AS BIGINT)) END'
+        comment: Owner-occupied units as a percent of occupied housing units
+      - name: median_gross_rent
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25064_001E" AS BIGINT)'
+        comment: Median gross rent in dollars per month (B25064)
+      - name: median_home_value
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25077_001E" AS BIGINT)'
+        comment: Median value of owner-occupied housing units in dollars (B25077)
+      - name: renter_households
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25070_001E" AS BIGINT)'
+        comment: Renter households (B25070 total, includes those whose burden is not computed)
+      - name: renters_cost_burdened
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25070_007E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_008E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_009E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_010E" AS BIGINT),0)'
+        comment: Renter households paying 30 percent or more of income on gross rent (B25070_007-010)
+      - name: renters_severely_burdened
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25070_010E" AS BIGINT)'
+        comment: Renter households paying 50 percent or more of income on gross rent (B25070_010)
+      - name: renter_cost_burden_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN (TRY_CAST(src."B25070_001E" AS BIGINT) - COALESCE(TRY_CAST(src."B25070_011E" AS BIGINT),0)) > 0 THEN 100.0 * (COALESCE(TRY_CAST(src."B25070_007E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_008E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_009E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_010E" AS BIGINT),0)) / (TRY_CAST(src."B25070_001E" AS BIGINT) - COALESCE(TRY_CAST(src."B25070_011E" AS BIGINT),0)) END'
+        comment: Renters paying 30 percent or more of income on rent, as a percent of renter households with a computed burden (excludes B25070_011 not computed)
+      - name: mortgaged_owner_households
+        type: long
+        nullable: true
+        expression: 'TRY_CAST(src."B25091_002E" AS BIGINT)'
+        comment: Owner households with a mortgage (B25091)
+      - name: owners_cost_burdened
+        type: long
+        nullable: true
+        expression: 'COALESCE(TRY_CAST(src."B25091_008E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25091_009E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25091_010E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25091_011E" AS BIGINT),0)'
+        comment: Owner households with a mortgage paying 30 percent or more of income on owner costs (B25091_008-011)
+      - name: owner_cost_burden_pct
+        type: double
+        nullable: true
+        expression: 'CASE WHEN TRY_CAST(src."B25091_002E" AS BIGINT) > 0 THEN 100.0 * (COALESCE(TRY_CAST(src."B25091_008E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25091_009E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25091_010E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25091_011E" AS BIGINT),0)) / (TRY_CAST(src."B25091_002E" AS BIGINT)) END'
+        comment: Mortgaged owners paying 30 percent or more of income on housing costs, as a percent of owner households with a mortgage
+
+    source:
+      type: http
+      url: "https://api.census.gov/data/{effective_year}/acs/acs5?get=NAME,B01003_001E,B19013_001E,B19301_001E,B01002_001E,B23025_003E,B23025_005E,B17001_001E,B17001_002E,B01001_001E,B01001_020E,B01001_021E,B01001_022E,B01001_023E,B01001_024E,B01001_025E,B01001_044E,B01001_045E,B01001_046E,B01001_047E,B01001_048E,B01001_049E,B15003_001E,B15003_022E,B15003_023E,B15003_024E,B15003_025E,B05002_001E,B05002_013E,B25003_001E,B25003_002E,B25064_001E,B25077_001E,B25070_001E,B25070_007E,B25070_008E,B25070_009E,B25070_010E,B25070_011E,B25091_002E,B25091_008E,B25091_009E,B25091_010E,B25091_011E&for=congressional%20district:*&in=state:*&key={env:CENSUS_API_KEY}"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.AcsCongressionalDistrictTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=acs_cd/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: acs_congressional_district
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
         overwritePartitions: true
 
 # ============================================================================
@@ -5544,7 +5808,15 @@ partitionedTables:
   # BUILDING PERMITS - Residential construction activity
   # ---------------------------------------------------------------------------
   - name: building_permits
+    timeColumn: survey_year  # observation time; this table has no column named 'year'
     pattern: "type=bps/period_code=*/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2010
+      maxYear: 2025
+      distinctYears: 16
+      contiguous: true
+      rowCount: 1040
+      checkedAt: "2026-10-17T14:00:00Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -7590,6 +7862,14 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: counties
         targetColumns: [county_fips]
+
+  acs_congressional_district:
+    primaryKey: [year, cd_fips]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   cbp_establishments:
     primaryKey: [year, geography, state, county, naics_code]

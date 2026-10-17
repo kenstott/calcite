@@ -984,6 +984,13 @@ final class MarketForecasts {
                         + "settlement series can be read from it: give series (and table), or "
                         + "series_sql");
                 }
+                if ("outcome".equals(driver.basis)) {
+                    throw new IllegalArgumentException("the event is a discrete outcome ("
+                        + driver.name + ", basis outcome): no series settles it, so none can "
+                        + "be built. Give price_market_event a probability with its "
+                        + "probability_source, or mean and sd of a model measured from "
+                        + driver.tables);
+                }
                 String missing = driverSeries(driver.name, text, rulesSa, named, spec);
                 if (spec.notSourcedId != null) {
                     return spec;

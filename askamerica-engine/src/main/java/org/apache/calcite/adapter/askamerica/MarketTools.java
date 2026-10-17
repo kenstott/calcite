@@ -65,7 +65,7 @@ final class MarketTools {
     private static final Set<String> EVENT_SPEC_KEYS = new HashSet<>(Arrays.asList(
         "source", "event_id", "samples", "samples_sql", "mean", "sd", "lower", "upper",
         "level", "price_median", "cumulative_vol_pct", "round", "conditions", "column",
-        "fee_rate", "build_forecast"));
+        "fee_rate", "build_forecast", "probability", "probability_source"));
 
     private final PredictionMarkets.Fetcher fetcher;
     private final PredictionMarkets.ListingCache cache;
@@ -214,8 +214,13 @@ final class MarketTools {
         o.put("fetched_at", listing.fetchedAt.toString());
         o.put("kalshi_markets_read", listing.kalshiMarkets);
         o.put("polymarket_markets_read", listing.polymarketMarkets);
-        o.put("coverage", "Kalshi: every open event. Polymarket: open events tagged "
-            + PredictionMarkets.POLYMARKET_TAGS + ".");
+        o.put("kalshi_pages", listing.kalshiPages);
+        o.put("polymarket_pages", listing.polymarketPages);
+        o.put("coverage", "Kalshi and Polymarket: every open event, read in full. Sports "
+            + "events are dropped. Each event is classified by domain (" + PredictionMarkets.DOMAINS
+            + ") and carries the corpus tables it could be grounded in; an event no table "
+            + "grounds is domain market_only, counted but shown only when asked for "
+            + "(domain=market_only) and never forecast.");
         return o;
     }
 
@@ -225,8 +230,8 @@ final class MarketTools {
         o.put("status", "loading");
         o.put("pages_read", e.pagesRead);
         o.put("message", "The listing of open Kalshi and Polymarket markets is still being "
-            + "read. It takes about a minute and is then kept for 15 minutes. Call this tool "
-            + "again with the same arguments.");
+            + "read. It takes several minutes (about 165 pages) and is then kept for 15 "
+            + "minutes. Call this tool again with the same arguments.");
         return MAPPER.writeValueAsString(o);
     }
 
@@ -246,6 +251,11 @@ final class MarketTools {
         if (basis != null && !PredictionMarkets.BASES.contains(basis)) {
             throw new IllegalArgumentException("basis must be one of "
                 + PredictionMarkets.BASES + ", got '" + basis + "'");
+        }
+        String domain = textArg(args, "domain");
+        if (domain != null && !PredictionMarkets.DOMAINS.contains(domain)) {
+            throw new IllegalArgumentException("domain must be one of "
+                + PredictionMarkets.DOMAINS + ", got '" + domain + "'");
         }
         int within = intArg(args, "within", 180);
         int minDays = intArg(args, "min_days", 1);
@@ -268,18 +278,31 @@ final class MarketTools {
         } catch (PredictionMarkets.ListingPendingException e) {
             return pending(e);
         }
-        List<PredictionMarkets.Event> all = PredictionMarkets.screen(listing.rows,
+        List<PredictionMarkets.Event> all = PredictionMarkets.screenAll(listing.rows,
             clock.get(), within, minDays, minVolume);
+        // Events no table grounds are counted, and listed only when asked for by name.
+        boolean wantMarketOnly = PredictionMarkets.NONE.equals(domain)
+            || "market_only".equals(basis);
         List<PredictionMarkets.Event> matched = new ArrayList<>();
         Map<String, Integer> byBasis = new TreeMap<>();
+        Map<String, Integer> byDomain = new TreeMap<>();
+        int marketOnly = 0;
         for (PredictionMarkets.Event e : all) {
-            if ((driver != null && !driver.equals(e.driver.name))
-                    || (basis != null && !basis.equals(e.driver.basis))
+            if (driver != null && !driver.equals(e.driver.name)
                     || exclude.contains(e.eventId)) {
+                continue;
+            }
+            if (PredictionMarkets.NONE.equals(e.driver.domain) && !wantMarketOnly) {
+                marketOnly++;
+                continue;
+            }
+            if ((basis != null && !basis.equals(e.driver.basis))
+                    || (domain != null && !domain.equals(e.driver.domain))) {
                 continue;
             }
             matched.add(e);
             byBasis.merge(e.driver.basis, 1, Integer::sum);
+            byDomain.merge(e.driver.domain, 1, Integer::sum);
         }
         ObjectNode out = MAPPER.createObjectNode();
         out.set("listing", listingJson(listing));
@@ -288,6 +311,17 @@ final class MarketTools {
         ObjectNode bb = out.putObject("matched_by_basis");
         for (Map.Entry<String, Integer> e : byBasis.entrySet()) {
             bb.put(e.getKey(), e.getValue());
+        }
+        ObjectNode bd = out.putObject("matched_by_domain");
+        for (Map.Entry<String, Integer> e : byDomain.entrySet()) {
+            bd.put(e.getKey(), e.getValue());
+        }
+        if (!wantMarketOnly) {
+            out.put("market_only_not_shown", marketOnly);
+            out.put("market_only_note", marketOnly + " open events pass the same window, "
+                + "contest and volume tests but no corpus table grounds them. Ask for them "
+                + "with domain=market_only. They carry no forecast_with and are never "
+                + "priced from nothing.");
         }
         List<PredictionMarkets.Event> shown;
         if (sample > 0) {
@@ -326,7 +360,11 @@ final class MarketTools {
         for (PredictionMarkets.Event e : shown) {
             events.add(detail ? e.toJson() : e.toSummaryJson());
         }
-        out.put("next", "A candidate is where to look, not a mispricing. For each event: "
+        out.put("next", "A candidate is where to look, not a mispricing. A basis of outcome "
+            + "(an election, a vote, a ruling) has tables that inform a model but no forecast "
+            + "of its own: price it only with a probability you can source or a model you "
+            + "measured; with neither, report the market's price and the tables, not an edge. "
+            + "For each event: "
             + "price_market_event(source, event_id) with no forecast returns its rules and "
             + "quotes; build the forecast with the tool named in forecast_with; call "
             + "price_market_event again with the forecast. Volume is contracts on Kalshi and "
@@ -375,6 +413,12 @@ final class MarketTools {
         if (has(spec, "price_median")) {
             forms.add("price_median");
         }
+        if (has(spec, "probability")) {
+            forms.add("probability");
+        }
+        if (has(spec, "probability_source") && !has(spec, "probability")) {
+            throw new IllegalArgumentException("probability_source needs probability");
+        }
         if (forms.size() > 1) {
             throw new IllegalArgumentException("give one forecast form, not " + forms);
         }
@@ -405,6 +449,15 @@ final class MarketTools {
             f = MarketPricing.samples(v);
         } else if ("samples_sql".equals(forms.get(0))) {
             f = MarketPricing.samples(sampleColumn(spec.get("samples_sql").asText()));
+        } else if ("probability".equals(forms.get(0))) {
+            f = MarketPricing.probability(doubleArg(spec, "probability"),
+                textArg(spec, "probability_source"));
+            if (!has(spec, "conditions")) {
+                throw new IllegalArgumentException("probability prices the markets named in "
+                    + "conditions: {market_id: {\"above\": 0.5}} for a market that resolves "
+                    + "YES when the outcome happens, {\"below\": 0.5} for one that resolves "
+                    + "YES when it does not");
+            }
         } else if ("mean".equals(forms.get(0))) {
             double mean = doubleArg(spec, "mean");
             boolean interval = has(spec, "lower") || has(spec, "upper");
@@ -543,7 +596,7 @@ final class MarketTools {
         }
         LocalDate day = LocalDate.parse(closeTime.substring(0, 10));
         ArrayNode found = MAPPER.createArrayNode();
-        for (PredictionMarkets.Event e : PredictionMarkets.screen(listing.rows, clock.get(),
+        for (PredictionMarkets.Event e : PredictionMarkets.screenAll(listing.rows, clock.get(),
                 36500, 0, 0)) {
             if (other.equals(e.source) && e.driver.name.equals(driver)
                     && Math.abs(ChronoUnit.DAYS.between(day,
@@ -576,6 +629,16 @@ final class MarketTools {
             json.put("next", "No forecast was built: the series this event settles on is not "
                 + "in the catalog (forecast_built.flags). You MUST NOT price it against a "
                 + "forecast of another series. Say so, or draw another event.");
+        } else if (json.get("forecast").isNull() && json.hasNonNull("basis")
+                && "outcome".equals(json.get("basis").asText())) {
+            json.put("next", "Quotes only. This is a discrete outcome (basis outcome): the "
+                + "govdata_tables inform a model but no series settles it, so build_forecast "
+                + "cannot run. Price it with a probability and its source (probability + "
+                + "probability_source, with conditions naming the markets it applies to), or "
+                + "with mean + sd of a model you measured from govdata_tables (cross-validated). "
+                + "You MUST NOT take the probability from the market's own price or invent "
+                + "it; with neither a sourced probability nor a measured model, report the "
+                + "quotes and the tables and say the event is not priced.");
         } else if (json.get("forecast").isNull()) {
             json.put("next", "Quotes only — no forecast was given. Read rules for the exact "
                 + "series, period, rounding and release date. "
@@ -586,7 +649,9 @@ final class MarketTools {
                     + "MUST build the forecast from those rows ("
                     + PredictionMarkets.forecastWith(json.get("basis").asText())
                     + "). The web is only for a print newer than the table's last period."
-                    : "This event matches no driver: find the series with search_catalog.")
+                    : "This event matches no driver, so no corpus table is mapped to it: "
+                    + "it is market only. Search the catalog (search_catalog) for a series "
+                    + "it settles on; with none, report the quotes and do not forecast it.")
                 + " Markets in markets_without_condition need an entry in conditions.");
         } else {
             if (json.get("implied_median") != null && !json.get("implied_median").isNull()) {

@@ -1178,14 +1178,24 @@ public class HttpSourceCoverageTest {
     Method method = HttpSource.class.getDeclaredMethod("enforceRateLimit");
     method.setAccessible(true);
 
-    // First call sets lastRequestTime
-    method.invoke(source);
+    Field next = HttpSource.class.getDeclaredField("nextAllowedNanos");
+    next.setAccessible(true);
+    java.util.concurrent.atomic.AtomicLong nextAllowed =
+        (java.util.concurrent.atomic.AtomicLong) next.get(source);
+    long intervalNanos = 1_000_000_000L / 100;
 
-    // Second call should not block significantly with 100 RPS
-    long start = System.currentTimeMillis();
+    // Each call reserves the next slot, one interval after the previous one, and returns no
+    // earlier than its own slot opens. Asserted on the reservations rather than on elapsed
+    // wall-clock time, which a busy machine stretches.
     method.invoke(source);
-    long elapsed = System.currentTimeMillis() - start;
-    assertTrue(elapsed < 100, "Rate limiting took too long: " + elapsed + "ms");
+    long firstSlotEnd = nextAllowed.get();
+    method.invoke(source);
+    // Thread.sleep(millis, nanos) may drop a sub-millisecond remainder on older JDKs, so the
+    // slot is allowed to open up to 1 ms early; a slow machine only returns later.
+    assertTrue(System.nanoTime() >= firstSlotEnd - 1_000_000L,
+        "the second call returned before its slot opened");
+    assertTrue(nextAllowed.get() - firstSlotEnd >= intervalNanos,
+        "the second call reserved a slot less than one interval after the first");
 
     source.close();
   }

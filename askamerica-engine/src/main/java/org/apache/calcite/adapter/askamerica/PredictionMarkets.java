@@ -45,13 +45,14 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
 /**
- * Open Kalshi and Polymarket markets in one shape, and the screen that keeps the events
- * AskAmerica's data can price: an event settling on a quantity the warehouse carries, with a
- * market still contested and enough volume to trade.
+ * Open Kalshi and Polymarket markets in one shape, and the screen that classifies the events
+ * by what AskAmerica's data can bring to them: an election, a disaster count, a health
+ * statistic, a bill, a budget figure or an economic release each carry the corpus tables they
+ * could be grounded in, and an event no table grounds is kept as market-only and never
+ * forecast. A candidate needs a market still contested and enough volume to trade.
  *
  * <p>Public market-data endpoints only — no account, no key, nothing here can trade.
- * Kalshi pages its whole listing by cursor (about 70 pages); Polymarket is read by tag, since
- * its full listing is several times larger and almost none of it settles on a measurement.
+ * Both venues are paged through their whole open listing by cursor and screened as read.
  *
  * <p>Every network read goes through a {@link Fetcher}, so the screen and the pricing built on
  * it are testable without the venues.
@@ -60,9 +61,9 @@ final class PredictionMarkets {
 
     static final String KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
     static final String POLYMARKET = "https://gamma-api.polymarket.com";
-    /** Polymarket tags that carry the events worth screening. */
-    static final String POLYMARKET_TAGS =
-        "economy,fed,inflation,jobs,gdp,economic-policy,weather,climate,commodities";
+    /** Polymarket's id for the Sports tag (GET /tags/slug/sports). About two thirds of its
+     *  open events carry it, and none is screened, so the listing leaves them out. */
+    static final String POLYMARKET_SPORTS_TAG = "1";
     /** Kalshi's general taker fee: 0.07 * price * (1 - price), times the series multiplier. */
     static final double KALSHI_RATE = 0.07;
     /** A market still in play has a price inside this band. */
@@ -152,94 +153,279 @@ final class PredictionMarkets {
 
     // ─── Drivers ───────────────────────────────────────────────────────────────
 
-    /** What AskAmerica's data can bring to the price, best first. */
+    /**
+     * How the corpus can inform the price of an event, best first. release, climatology,
+     * policy and market_price settle on a measurement or a traded price and have a forecasting
+     * tool; outcome is a discrete result (an election, a vote, a ruling) that the corpus
+     * informs but does not forecast; market_only is an event no corpus table grounds.
+     */
     static final List<String> BASES =
         Collections.unmodifiableList(Arrays.asList(
-            "release", "climatology", "policy", "market_price"));
+            "release", "climatology", "policy", "market_price", "outcome", "market_only"));
+
+    /** The subject areas an event can fall in. */
+    static final String ECONOMY = "economy";
+    static final String WEATHER = "weather";
+    static final String DISASTERS = "disasters";
+    static final String ELECTIONS = "elections";
+    static final String HEALTH = "demographics_health";
+    static final String LEGAL = "legal";
+    static final String FISCAL = "fiscal";
+    static final String AGRICULTURE = "agriculture";
+    static final String ENERGY = "energy";
+    static final String HOUSING = "housing";
+    static final String SAFETY = "public_safety";
+    static final String TRANSPORT = "transport";
+    static final String ENVIRONMENT = "environment";
+    static final String EDUCATION = "education";
+    static final String NONE = "market_only";
+
+    static final List<String> DOMAINS = Collections.unmodifiableList(Arrays.asList(
+        ECONOMY, WEATHER, DISASTERS, ELECTIONS, HEALTH, LEGAL, FISCAL, AGRICULTURE, ENERGY,
+        HOUSING, SAFETY, TRANSPORT, ENVIRONMENT, EDUCATION, NONE));
 
     /** A kind of event, the pattern its title matches, and the tables that carry its data. */
     static final class Driver {
         final String name;
+        final String domain;
         final String basis;
         final Pattern pattern;
         final List<String> tables;
+        /** The settlement-series builder resolves this driver's series on its own, so the
+         *  scans may forecast it without being told the series. */
+        final boolean built;
 
-        Driver(String name, String basis, String pattern, String... tables) {
+        Driver(String name, String domain, String basis, boolean built, String pattern,
+                String... tables) {
             this.name = name;
+            this.domain = domain;
             this.basis = basis;
+            this.built = built;
             this.pattern = Pattern.compile(pattern);
             this.tables = Collections.unmodifiableList(Arrays.asList(tables));
         }
+
+        /** True when the corpus holds tables this event could be grounded in. */
+        boolean grounded() {
+            return !tables.isEmpty();
+        }
     }
+
+    /** The driver of an event no table grounds: it is listed, and never forecast. */
+    static final Driver MARKET_ONLY =
+        new Driver("market_only", NONE, "market_only", false, "(?!)");
 
     /** Matched against the lowercased event title. First match wins, so the narrower
      *  pattern comes first. */
     static final List<Driver> DRIVERS = Collections.unmodifiableList(Arrays.asList(
-        new Driver("drought", "release", "\\bdrought\\b", "weather.drought_monitor_weekly"),
-        new Driver("crop_yield", "release",
+        // Elections: discrete outcomes the officials, FEC and census tables inform.
+        new Driver("chamber_control", ELECTIONS, "outcome", false,
+            "(\\b(house|senate|congress)\\b.*\\b(control|majority|flip|seats?)\\b"
+            + "|\\bcontrol of (the )?(house|senate|congress)\\b"
+            + "|\\bwhich party\\b.*\\b(house|senate)\\b"
+            + "|\\b(midterms?|trifecta|lose reelection)\\b"
+            + "|\\b(number of|how many)\\b.*\\b(governors|senators|house seats)\\b)",
+            "officials.state_political_index", "officials.current_members",
+            "officials.members", "fec.candidate_summaries", "fec.candidate_district_profile",
+            "geo.congressional_districts"),
+        new Driver("voter_turnout", ELECTIONS, "outcome", false,
+            "\\bvoter turnout\\b|\\bturnout\\b",
+            "census.cps_voting_supplement", "officials.presidential_election_results",
+            "geo.states"),
+        new Driver("district_race", ELECTIONS, "outcome", false,
+            "(\\b[a-z]{2}-(\\d+|al) (house|winner)\\b"
+            + "|\\bhouse (election )?(winner|race|district)\\b"
+            + "|\\bdistrict\\b.*\\b(margin of victory|winner)\\b|\\bhouse general election\\b)",
+            "officials.current_members", "officials.members",
+            "fec.candidate_district_profile", "fec.candidate_summaries",
+            "geo.congressional_districts", "fiscal.usaspending_by_district"),
+        new Driver("statewide_race", ELECTIONS, "outcome", false,
+            "(\\b(senate|governor|gubernatorial|attorney general|secretary of state|"
+            + "lieutenant governor)\\b.*\\b(winner|race|election|win|margin|nominee)\\b"
+            + "|\\bwho will win\\b.*\\b(senate|governor)\\b)",
+            "officials.state_political_index", "officials.current_members",
+            "fec.candidates", "fec.candidate_summaries",
+            "officials.presidential_election_results"),
+        new Driver("presidential_election", ELECTIONS, "outcome", false,
+            "\\b(presidential election|electoral votes?|popular vote|electoral college|"
+            + "win the presidency)\\b",
+            "officials.electoral_college_votes", "officials.presidential_election_results"),
+        new Driver("primary", ELECTIONS, "outcome", false, "\\b(primary|runoff|caucus)\\b",
+            "fec.candidates", "fec.candidate_summaries", "officials.members"),
+        // Law: bills, courts, impeachment.
+        new Driver("legislation", LEGAL, "outcome", false,
+            "(\\b(congress|senate|house)\\b.*\\b(pass|vote|bill|override|confirm)\\w*\\b"
+            + "|\\b(bill|act)\\b.*\\b(become law|signed into law|pass(es)? (the )?"
+            + "(house|senate|congress))\\b|\\bveto\\b|\\bfilibuster\\b|\\bdischarge petition\\b)",
+            "law.bills", "law.bill_actions", "law.bill_recorded_votes", "law.bill_summaries"),
+        new Driver("impeachment", LEGAL, "outcome", false, "\\bimpeach\\w*\\b",
+            "law.bills", "law.bill_actions", "officials.members"),
+        new Driver("supreme_court", LEGAL, "outcome", false,
+            "\\b(supreme court|scotus)\\b",
+            "law.scotus_cases", "law.scotus_dockets", "law.scotus_slip_opinions",
+            "officials.federal_judges"),
+        new Driver("court_ruling", LEGAL, "outcome", false,
+            "\\b(court rule[sd]?|appeals court|federal judge|court strikes|overturn\\w*)\\b",
+            "officials.federal_judges", "law.scotus_cases"),
+        // Fiscal.
+        new Driver("shutdown", FISCAL, "outcome", false,
+            "\\b(government shutdown|shutdown|debt ceiling|continuing resolution)\\b",
+            "law.bills", "law.bill_actions", "fiscal.omb_apportionments"),
+        new Driver("deficit", FISCAL, "release", false,
+            "\\b(budget deficit|deficit|federal (spending|outlays|revenue)|tax revenue)\\b",
+            "econ.federal_outlays_by_function", "econ.mts_outlays_by_function",
+            "econ.federal_debt"),
+        new Driver("federal_awards", FISCAL, "release", false,
+            "\\b(federal (awards|grants|contracts)|usaspending)\\b",
+            "fiscal.usaspending_by_agency", "fiscal.usaspending_by_state"),
+        new Driver("minimum_wage", FISCAL, "policy", false, "\\bminimum wage\\b",
+            "fiscal.state_minimum_wage_history", "econ.state_wages"),
+        new Driver("entitlements", FISCAL, "outcome", false,
+            "\\b(social security|medicare|medicaid|food stamps|snap benefits)\\b",
+            "fiscal.ssa_benefits_by_geography", "fiscal.snap_benefits_by_geography",
+            "fiscal.entitlement_spending_by_state", "health.medicare_geographic_variation"),
+        // Disasters.
+        new Driver("disaster_declaration", DISASTERS, "climatology", false,
+            "\\b(fema|disaster declarations?|major disaster|emergency declaration|"
+            + "federal disaster)\\b",
+            "disasters.disaster_declarations", "disasters.disasters_declarations_by_state_year"),
+        new Driver("wildfire", DISASTERS, "climatology", false,
+            "\\b(wildfires?|acres burned|forest fires?)\\b",
+            "disasters.wildfire_perimeters", "disasters.wildfire_risk_by_county"),
+        new Driver("tornado_flood", DISASTERS, "climatology", false,
+            "\\b(tornado(es)?|severe weather|flood(s|ing)?)\\b",
+            "disasters.storm_events", "disasters.disasters_storm_impact_by_county"),
+        new Driver("hurricane_landfall", DISASTERS, "climatology", false,
+            "(\\b(landfall|hurricane season|major hurricane)\\b"
+            + "|\\bhurricanes? (make|hit|strike)\\b|\\bcategory [1-5] hurricane\\b)",
+            "disasters.storm_events", "disasters.disasters_storm_impact_by_county"),
+        // Original economy, weather and agriculture drivers.
+        new Driver("drought", WEATHER, "release", true, "\\bdrought\\b",
+            "weather.drought_monitor_weekly"),
+        new Driver("crop_yield", AGRICULTURE, "release", true,
             "\\b(corn|soybeans?|wheat|cotton) (yield|production)\\b",
             "ag.nass_crop_production", "weather.weather_daily_by_county",
             "weather.drought_monitor_weekly"),
-        new Driver("livestock", "release", "\\bcattle (inventory|on feed)\\b",
+        new Driver("livestock", AGRICULTURE, "release", true, "\\bcattle (inventory|on feed)\\b",
             "ag.nass_livestock_inventory"),
-        new Driver("food_prices", "release",
+        new Driver("food_prices", ECONOMY, "release", true,
             "\\b(egg prices?|price of dozen eggs|food prices?|grocery inflation)\\b",
             "econ.food_cpi"),
-        new Driver("tariffs", "policy", "\\b(tariff rate|effective tariff|tariff revenue)\\b",
+        new Driver("tariffs", ECONOMY, "policy", true,
+            "\\b(tariff rate|effective tariff|tariff revenue)\\b",
             "econ.trade_statistics", "econ.trade_balance_summary"),
-        new Driver("pce", "release", "\\bpce\\b", "econ.pce_inflation"),
-        new Driver("inflation", "release", "\\b(cpi|inflation)\\b",
+        new Driver("pce", ECONOMY, "release", true, "\\bpce\\b", "econ.pce_inflation"),
+        new Driver("inflation", ECONOMY, "release", true, "\\b(cpi|inflation)\\b",
             "econ.inflation_metrics", "econ.food_cpi", "econ.fred_indicators"),
-        new Driver("unemployment", "release", "\\b(unemployment( rate)?|u-3)\\b",
+        new Driver("unemployment", ECONOMY, "release", true,
+            "\\b(unemployment( rate)?|u-3)\\b",
             "econ.employment_statistics", "econ.labor_market_conditions"),
-        new Driver("payrolls", "release",
+        new Driver("payrolls", ECONOMY, "release", true,
             "\\b(payrolls?|jobs added|nonfarm|jobs report|jobs numbers)\\b",
             "econ.employment_statistics"),
-        new Driver("jobless_claims", "release", "\\b(jobless|initial) claims\\b",
+        new Driver("jobless_claims", ECONOMY, "release", true, "\\b(jobless|initial) claims\\b",
             "econ.fred_indicators"),
-        new Driver("output", "release", "\\b(gdp|recession)\\b",
+        new Driver("output", ECONOMY, "release", true, "\\b(gdp|recession)\\b",
             "econ.gdp_statistics", "econ.real_gdp_growth"),
-        new Driver("mortgage_rate", "release", "\\bmortgage rates?\\b",
+        new Driver("mortgage_rate", HOUSING, "release", true, "\\bmortgage rates?\\b",
             "econ.housing_indicators", "econ.fred_indicators"),
-        new Driver("policy_rate", "policy",
+        new Driver("policy_rate", ECONOMY, "policy", true,
             "\\b(fed funds|federal funds|fed decision|rate cuts?|rate hikes?|fomc)\\b",
             "econ.fed_policy_dashboard", "econ.fred_indicators"),
-        new Driver("treasury_yield", "market_price",
+        new Driver("treasury_yield", ECONOMY, "market_price", true,
             "\\b(treasury yield|treasury spread|yield curve)\\b",
             "econ.treasury_yields", "econ.interest_rate_spreads"),
-        new Driver("housing", "release",
+        new Driver("housing", HOUSING, "release", true,
             "\\b(housing starts|home sales|home prices?|building permits)\\b",
             "housing.house_price_index", "housing.building_permits", "econ.housing_indicators"),
-        new Driver("federal_debt", "release", "\\b(national debt|federal debt)\\b",
+        new Driver("federal_debt", FISCAL, "release", true, "\\b(national debt|federal debt)\\b",
             "econ.federal_debt"),
-        new Driver("gas_storage", "release", "\\bnatural gas storage\\b",
+        new Driver("gas_storage", ENERGY, "release", true, "\\bnatural gas storage\\b",
             "energy.eia_natural_gas_storage"),
-        new Driver("energy_price", "market_price",
+        new Driver("energy_price", ENERGY, "market_price", true,
             "\\b(crude|wti|brent|gas prices?|gasoline|natural gas)\\b",
             "econ.fred_indicators", "energy.eia_petroleum_stocks",
             "energy.eia_natural_gas_storage"),
-        new Driver("temperature", "climatology", "(\\b(temperature|hottest|coldest)\\b|°)",
+        new Driver("temperature", WEATHER, "climatology", true,
+            "(\\b(temperature|hottest|coldest)\\b|°)",
             "weather.ghcnd_daily", "weather.climate_normals_monthly"),
-        new Driver("precipitation", "climatology",
+        new Driver("precipitation", WEATHER, "climatology", true,
             "\\b(rain|rainfall|snow|snowfall|precipitation)\\b",
             "weather.ghcnd_daily", "weather.climate_normals_monthly"),
-        new Driver("storms", "climatology",
+        new Driver("storms", DISASTERS, "climatology", true,
             "\\b(how many|number of)\\b.*\\b(hurricanes?|tornado(es)?|named storms?)\\b",
             "disasters.storm_events"),
-        new Driver("campaign_finance", "release", "\\b(cash on hand|fundrais\\w+)\\b",
+        new Driver("campaign_finance", ELECTIONS, "release", true,
+            "\\b(cash on hand|fundrais\\w+)\\b",
             "fec.committee_summaries"),
-        new Driver("presidential_actions", "policy",
+        new Driver("presidential_actions", LEGAL, "policy", true,
             "\\bhow many (presidential actions|executive orders)\\b",
-            "fedregister.fr_documents")));
+            "fedregister.fr_documents"),
+        // Demographics, health, public safety.
+        new Driver("outbreak", HEALTH, "release", false,
+            "\\b(measles|polio|covid|influenza|bird flu|h5n1|whooping cough|outbreak|"
+            + "pandemic)\\b",
+            "health.cdc_nndss_weekly", "health.cdc_covid_vaccinations",
+            "health.cdc_school_vaccination_coverage"),
+        new Driver("vaccination", HEALTH, "release", false, "\\bvaccin\\w+\\b",
+            "health.cdc_school_vaccination_coverage", "health.cdc_covid_vaccinations"),
+        new Driver("mortality", HEALTH, "release", false,
+            "\\b(overdose deaths?|death rate|mortality|life expectancy|number of deaths)\\b",
+            "health.cdc_mortality", "health.cdc_state_vital_provisional",
+            "health.cdc_state_drug_overdose_deaths"),
+        new Driver("births", HEALTH, "release", false,
+            "\\b(births?|fertility rate|birth rate)\\b",
+            "health.cdc_wonder_natality", "health.cdc_state_vital_provisional"),
+        new Driver("population", HEALTH, "release", false,
+            "\\b(population|census|apportionment)\\b",
+            "census.pep_population", "census.pep_components_of_change",
+            "census.decennial_population"),
+        new Driver("drug_regulation", HEALTH, "outcome", false,
+            "\\bfda\\b.*\\b(approv\\w+|recall\\w*|ban)\\b",
+            "health.fda_drug_approvals", "health.fda_drug_recalls",
+            "health.fda_drug_shortages"),
+        new Driver("immigration", HEALTH, "release", false,
+            "\\b(deportations?|border encounters?|ice detention|detention population|"
+            + "illegal crossings?|immigration)\\b",
+            "crime.ice_detention_population_by_criminality", "census.acs_nativity",
+            "census.uscis_i765_employment_authorization"),
+        new Driver("crime", SAFETY, "release", false,
+            "\\b(murder rate|homicides?|crime rate|violent crime|mass shootings?)\\b",
+            "crime.cde_offenses", "crime.cde_trends"),
+        new Driver("homelessness", HOUSING, "release", false, "\\bhomeless\\w*\\b",
+            "housing.hud_pit_counts_by_state", "housing.homeless_shelter_census"),
+        // Other measured quantities.
+        new Driver("air_travel", TRANSPORT, "release", false,
+            "\\b(flight delays?|airline|tsa|air traffic|plane crash|aviation accident)\\b",
+            "transport.airline_ontime", "transport.ntsb_aviation_accidents",
+            "transport.atc_facility_staffing"),
+        new Driver("traffic_deaths", TRANSPORT, "release", false,
+            "\\b(traffic (deaths|fatalities)|fatal crashes)\\b",
+            "transport.fatal_crashes", "transport.fatal_crashes_by_state_year"),
+        new Driver("air_quality", ENVIRONMENT, "release", false, "\\b(air quality|aqi)\\b",
+            "environment.air_quality_daily", "environment.air_quality_annual"),
+        new Driver("emissions", ENVIRONMENT, "release", false,
+            "\\b(greenhouse gas|emissions)\\b",
+            "environment.ghg_emissions", "environment.ghg_facilities"),
+        new Driver("electricity", ENERGY, "release", false,
+            "\\b(electricity (prices?|generation|demand)|power grid|blackouts?)\\b",
+            "energy.eia_electricity_prices", "energy.eia_electricity_generation",
+            "energy.eia_electricity_demand_by_county"),
+        new Driver("education", EDUCATION, "release", false,
+            "\\b(naep|student loans?|college tuition|pslf)\\b",
+            "edu.naep_scores", "edu.ipeds_tuition", "edu.fsa_pslf_discharge_summary")));
 
-    /** Events about what someone says or who does something are not measurements. */
+    /** Events about what someone says or who does something are not measurements, unless the
+     *  driver's own pattern names the outcome (a race, a vote, a ruling). */
     private static final Pattern NOT_MEASURED =
         Pattern.compile("\\b(say|mention|dissents?|who will|nominee|streams)\\b");
     /** The warehouse is United States data. Tariff events name the trading partner and stay. */
     private static final Pattern FOREIGN = Pattern.compile(
         "\\b(china|chinese|mexico|russia|brazil|argentina|germany|german|japan|korea|india|"
         + "canada|uk|britain|eurozone|euro area|turkey|france|italy|spain|australia|venezuela|"
-        + "south africa|montreal|calgary|toronto|vancouver|global|world)\\b");
+        + "south africa|montreal|calgary|toronto|vancouver|global|world|ecb|bank of england|"
+        + "bank of japan|european|venezuelan|brazilian|taiwan|israel|israeli|ukraine|iran|"
+        + "gaza|minas gerais|guinea)\\b");
     private static final Set<String> FOREIGN_EXEMPT =
         Collections.singleton("tariffs");
     /** Weather events are kept only for places the warehouse has stations for. */
@@ -258,15 +444,47 @@ final class PredictionMarkets {
         "Tech", "AI", "Crypto", "Elections", "Politics", "Geopolitics", "World", "Sports",
         "Culture");
 
-    /** The driver of an event title, or null when the title is not one AskAmerica can price. */
+    private static final String STATES =
+        "alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|"
+        + "georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|"
+        + "massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|"
+        + "new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|"
+        + "oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|"
+        + "texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|"
+        + "district of columbia";
+    private static final Pattern US_STATE = Pattern.compile("\\b(" + STATES + ")\\b");
+    private static final Pattern US_ELECTION = Pattern.compile(
+        "(\\b(" + STATES + ")\\b|\\b(u\\.s\\.|us|united states|american|electoral|trump|vance|"
+        + "newsom|democrat(ic|s)?|republicans?|gop|midterms?)\\b)");
+    /** Elections the warehouse can ground are American ones: a governor, a primary or a
+     *  presidential election is kept only when its title names a state or a US cue. */
+    private static final Map<String, Pattern> NEEDS_US_CUE = usCues();
+
+    private static Map<String, Pattern> usCues() {
+        Map<String, Pattern> m = new LinkedHashMap<>();
+        m.put("statewide_race", US_STATE);
+        m.put("voter_turnout", US_STATE);
+        m.put("presidential_election", US_ELECTION);
+        m.put("primary", US_ELECTION);
+        return Collections.unmodifiableMap(m);
+    }
+
+    /** The driver of an event title, or null when no table of the corpus grounds the title. */
     static Driver driverOf(String title) {
         String text = title.toLowerCase(Locale.ROOT);
-        if (NOT_MEASURED.matcher(text).find()) {
-            return null;
-        }
+        // "New Mexico" is a state, not the foreign country the screen below drops.
+        String abroad = text.replace("new mexico", "new-state");
+        boolean notMeasured = NOT_MEASURED.matcher(text).find();
         for (Driver d : DRIVERS) {
+            if (notMeasured && !"outcome".equals(d.basis)) {
+                continue;
+            }
             if (d.pattern.matcher(text).find()) {
-                if (!FOREIGN_EXEMPT.contains(d.name) && FOREIGN.matcher(text).find()) {
+                if (!FOREIGN_EXEMPT.contains(d.name) && FOREIGN.matcher(abroad).find()) {
+                    return null;
+                }
+                Pattern cue = NEEDS_US_CUE.get(d.name);
+                if (cue != null && !cue.matcher(text).find()) {
                     return null;
                 }
                 if (WEATHER_DRIVERS.contains(d.name) && !US_PLACES.matcher(text).find()) {
@@ -514,10 +732,27 @@ final class PredictionMarkets {
         int polymarketPages;
     }
 
-    /** True for an event the screen could ever keep; the rest are dropped as they are read,
-     *  so a full listing — most of it sports — is never held in memory. */
-    private static boolean screenable(String category, String eventTitle) {
-        return !NEVER_SCREENED_CATEGORY.equals(category) && driverOf(eventTitle) != null;
+    /**
+     * The rows of one event worth keeping, dropped as they are read so a full listing — most
+     * of it sports and short-lived price ticks — is never held in memory: none for a sports
+     * event, the markets as read for an event a driver grounds, and for one no table grounds
+     * the priced markets without their rules text (it is re-read when the event is priced).
+     */
+    private static List<Market> retained(List<Market> ms) {
+        if (ms.isEmpty() || NEVER_SCREENED_CATEGORY.equals(ms.get(0).category)) {
+            return Collections.emptyList();
+        }
+        if (driverOf(ms.get(0).eventTitle) != null) {
+            return ms;
+        }
+        List<Market> out = new ArrayList<>();
+        for (Market m : ms) {
+            if (m.yesPrice != null) {
+                m.rules = "";
+                out.add(m);
+            }
+        }
+        return out;
     }
 
     private static String enc(String s) {
@@ -536,9 +771,7 @@ final class PredictionMarkets {
             for (JsonNode ev : required(doc, "events", "Kalshi listing")) {
                 List<Market> ms = kalshiMarkets(ev);
                 seen += ms.size();
-                if (!ms.isEmpty() && screenable(ms.get(0).category, ms.get(0).eventTitle)) {
-                    page.addAll(ms);
-                }
+                page.addAll(retained(ms));
             }
             synchronized (into) {
                 into.rows.addAll(page);
@@ -552,38 +785,38 @@ final class PredictionMarkets {
         }
     }
 
-    static void pullPolymarket(Fetcher fetcher, String tags, Listing into) throws IOException {
-        // The union of the tags, each market listed once.
+    /**
+     * Every open Polymarket event except sports, paged by cursor and screened as it is read.
+     * The venue's tags are free-form (thousands, most of them a person or a team), so no tag
+     * list covers the domains the corpus grounds; the non-sports listing is read in full and
+     * the title screen decides.
+     */
+    static void pullPolymarket(Fetcher fetcher, Listing into) throws IOException {
         Set<String> seenIds = new HashSet<>();
-        for (String tag : tags.split(",")) {
-            String cursor = "";
-            while (true) {
-                // /events refuses offsets past 2000; /events/keyset pages by cursor.
-                String url = POLYMARKET + "/events/keyset?limit=" + POLYMARKET_PAGE
-                    + "&closed=false&order=volume24hr&ascending=false&tag_slug="
-                    + enc(tag.trim())
-                    + (cursor.isEmpty() ? "" : "&after_cursor=" + enc(cursor));
-                JsonNode doc = fetcher.get(url);
-                JsonNode events = required(doc, "events", "Polymarket listing");
-                List<Market> page = new ArrayList<>();
-                int seen = 0;
-                for (JsonNode ev : events) {
-                    List<Market> ms = polymarketMarkets(ev, seenIds);
-                    seen += ms.size();
-                    if (!ms.isEmpty()
-                            && screenable(ms.get(0).category, ms.get(0).eventTitle)) {
-                        page.addAll(ms);
-                    }
-                }
-                synchronized (into) {
-                    into.rows.addAll(page);
-                    into.polymarketMarkets += seen;
-                    into.polymarketPages++;
-                }
-                cursor = doc.path("next_cursor").asText("");
-                if (cursor.isEmpty() || events.size() == 0) {
-                    break;
-                }
+        String cursor = "";
+        while (true) {
+            // /events refuses offsets past 2000; /events/keyset pages by cursor.
+            String url = POLYMARKET + "/events/keyset?limit=" + POLYMARKET_PAGE
+                + "&closed=false&order=volume24hr&ascending=false&exclude_tag_id="
+                + POLYMARKET_SPORTS_TAG
+                + (cursor.isEmpty() ? "" : "&after_cursor=" + enc(cursor));
+            JsonNode doc = fetcher.get(url);
+            JsonNode events = required(doc, "events", "Polymarket listing");
+            List<Market> page = new ArrayList<>();
+            int seen = 0;
+            for (JsonNode ev : events) {
+                List<Market> ms = polymarketMarkets(ev, seenIds);
+                seen += ms.size();
+                page.addAll(retained(ms));
+            }
+            synchronized (into) {
+                into.rows.addAll(page);
+                into.polymarketMarkets += seen;
+                into.polymarketPages++;
+            }
+            cursor = doc.path("next_cursor").asText("");
+            if (cursor.isEmpty() || events.size() == 0) {
+                return;
             }
         }
     }
@@ -599,7 +832,7 @@ final class PredictionMarkets {
     }
 
     /**
-     * The listing, read once and kept for {@link #ttl}. A full read is about a minute — longer
+     * The listing, read once and kept for {@link #ttl}. A full read is several minutes — longer
      * than an MCP host will reliably wait on one tool call — so it runs on its own thread: a
      * caller waits a bounded time and is otherwise told the read is in progress, and the next
      * call picks up the finished listing.
@@ -677,7 +910,7 @@ final class PredictionMarkets {
 
         private Listing load(Listing target) throws Exception {
             Future<?> poly = pool.submit(() -> {
-                pullPolymarket(fetcher, POLYMARKET_TAGS, target);
+                pullPolymarket(fetcher, target);
                 return null;
             });
             try {
@@ -736,9 +969,13 @@ final class PredictionMarkets {
             if (driver == null) {
                 o.putNull("driver");
                 o.putNull("basis");
+                o.put("domain", NONE);
+                o.put("grounded", false);
             } else {
                 o.put("driver", driver.name);
+                o.put("domain", driver.domain);
                 o.put("basis", driver.basis);
+                o.put("grounded", driver.grounded());
                 ArrayNode tables = o.putArray("govdata_tables");
                 for (String t : driver.tables) {
                     tables.add(t);
@@ -784,12 +1021,23 @@ final class PredictionMarkets {
                     + "forecast_std_error at the settlement period), or samples_sql of "
                     + "historical period-over-period changes applied to the latest level";
             case "climatology":
-                return "samples_sql: the same station and calendar window in every past year";
+                return "samples_sql: the same station, place or calendar window in every "
+                    + "past year";
             case "market_price":
                 return "volatility_forecast on the price series (a band, not a direction)";
             case "policy":
                 return "no forecasting tool applies to a decision; price it only with an "
                     + "explicit, sourced probability";
+            case "outcome":
+                return "no forecasting tool applies to a discrete outcome (a race, a vote, a "
+                    + "ruling, a count of declarations); the govdata_tables inform a model you "
+                    + "measure (ols_regression or flexible_regression on past results, "
+                    + "cross_validated) or a probability you can source. Price it with "
+                    + "price_market_event probability + probability_source, or mean + sd of the "
+                    + "measured model; never from the market's own price";
+            case "market_only":
+                return "none: no table of the corpus grounds this event. It is listed as "
+                    + "market only and is never forecast or priced from nothing";
             default:
                 throw new IllegalArgumentException("unknown basis " + basis);
         }
@@ -913,11 +1161,29 @@ final class PredictionMarkets {
     }
 
     /**
-     * Candidate events: closing between {@code minDays} and {@code within} days from
-     * {@code now}, with a contested market and at least {@code minVolume} traded. Best basis
-     * first, then most traded in the last 24 hours.
+     * Candidate events the scans can forecast on their own: those whose driver the
+     * settlement-series builder resolves. Closing between {@code minDays} and {@code within}
+     * days from {@code now}, with a contested market and at least {@code minVolume} traded.
+     * Best basis first, then most traded in the last 24 hours.
      */
     static List<Event> screen(List<Market> rows, Instant now, int within, int minDays,
+            double minVolume) {
+        List<Event> out = new ArrayList<>();
+        for (Event e : screenAll(rows, now, within, minDays, minVolume)) {
+            if (e.driver.built) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Every candidate event in every domain: grounded ones carry the corpus tables they could
+     * be grounded in, and an event no table grounds carries the market-only driver. Same
+     * window, contest and volume rules as {@link #screen}; best basis first, then most traded
+     * in the last 24 hours.
+     */
+    static List<Event> screenAll(List<Market> rows, Instant now, int within, int minDays,
             double minVolume) {
         Instant first = now.plus(Duration.ofDays(minDays));
         Instant last = now.plus(Duration.ofDays(within));
@@ -933,12 +1199,9 @@ final class PredictionMarkets {
                 continue;
             }
             Driver hit = driverOf(row.eventTitle);
-            if (hit == null) {
-                continue;
-            }
             String key = row.source + "\u0000" + row.eventId;
             byEvent.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
-            drivers.putIfAbsent(key, hit);
+            drivers.putIfAbsent(key, hit == null ? MARKET_ONLY : hit);
         }
         List<Event> out = new ArrayList<>();
         for (Map.Entry<String, List<Market>> e : byEvent.entrySet()) {

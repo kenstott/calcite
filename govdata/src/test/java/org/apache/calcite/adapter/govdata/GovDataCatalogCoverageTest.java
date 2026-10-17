@@ -16,7 +16,15 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -113,6 +121,28 @@ public class GovDataCatalogCoverageTest {
     assertTrue(checked > 0, "expected at least one table with no year axis across geo/ref/edu");
   }
 
+  /**
+   * drinking_water_violations declares a coverageWindow because 19 rows carry 1900-1930
+   * placeholders; its observed range must start at the real first year and say how many rows the
+   * window left out, not present the range as the whole table.
+   */
+  @Test void coverageWindowExclusionIsReported() {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList("environment"));
+    JsonNode cov = coverageOf(catalog, "environment", "drinking_water_violations");
+    assertNotNull(cov, "drinking_water_violations should have a coverage node");
+    assertEquals(1976, cov.path("observed_first_year").asInt());
+    assertTrue(cov.path("observed_excluded_rows").asInt() > 0, "excluded rows must be reported");
+    assertEquals(1970, cov.path("observed_window_first_year").asInt());
+    for (JsonNode s : catalog) {
+      for (JsonNode t : s.path("tables")) {
+        if ("drinking_water_violations".equals(t.path("name").asText())) {
+          assertTrue(t.path("comment").asText().contains("not counting"),
+              "the table description must carry the exclusion");
+        }
+      }
+    }
+  }
+
   /** A table with no observedCoverage block must not claim authority it does not have. */
   @Test void omitsAuthoritativeWhenNothingWasObserved() {
     ArrayNode catalog = GovDataCatalog.build(Arrays.asList("edu"));
@@ -163,5 +193,86 @@ public class GovDataCatalogCoverageTest {
     assertTrue(cov.path("time_varying").asBoolean(), "data_year is a time dimension");
     assertTrue(!cov.path("note").asText().contains("cannot be filtered"),
         "must not tell callers the table cannot be trended over time");
+  }
+
+  /**
+   * The observed range of a table whose timeColumn is not an integer year must reach the catalog
+   * the same way a year column's does (#963): a DATE column (enforcement_actions.effective_date),
+   * a string date (kev_catalog.date_added) and a school-year label
+   * (cdc_school_vaccination_coverage.school_year) each carry first/last year, and the table
+   * description repeats them.
+   */
+  @Test void dateAndLabelTimeColumnsCarryObservedBounds() {
+    assertObservedFor("banking", "enforcement_actions", "effective_date");
+    assertObservedFor("cyber_vuln", "kev_catalog", "date_added");
+    assertObservedFor("health", "cdc_school_vaccination_coverage", "school_year");
+  }
+
+  private static void assertObservedFor(String schema, String table, String column) {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList(schema));
+    JsonNode cov = coverageOf(catalog, schema, table);
+    assertNotNull(cov, table + " must carry a coverage node");
+    assertEquals(column, cov.path("column").asText());
+    assertTrue(cov.hasNonNull("observed_first_year") && cov.hasNonNull("observed_last_year"),
+        table + " must carry the measured first/last year");
+    assertTrue(cov.path("observed_first_year").asInt() <= cov.path("observed_last_year").asInt());
+    assertEquals("observed", cov.path("authoritative").asText());
+    for (JsonNode s : catalog) {
+      for (JsonNode t : s.path("tables")) {
+        if (table.equals(t.path("name").asText())) {
+          assertTrue(t.path("comment").asText().contains("Observed coverage: "),
+              table + " description must state the observed coverage");
+        }
+      }
+    }
+  }
+
+  /**
+   * Every table or view that declares {@code timeColumn} must name one of its own columns. The
+   * catalog throws for the schema it is asked about, but only when that schema is requested; this
+   * walks every bundled schema YAML so a typo in any of them fails the build rather than the
+   * first caller to describe that schema.
+   */
+  @Test void everyDeclaredTimeColumnNamesAnExistingColumn() throws Exception {
+    java.net.URL anchor = GovDataCatalog.class.getResource(GovDataCatalog.resourcePath("ref"));
+    assertNotNull(anchor, "ref schema resource must be on the classpath");
+    assertEquals("file", anchor.getProtocol(), "schema resources must be an exploded directory");
+    Path root = Paths.get(anchor.toURI()).getParent().getParent();
+    List<Path> yamls;
+    try (Stream<Path> walk = Files.walk(root)) {
+      yamls = walk.filter(p -> p.getFileName().toString().endsWith("-schema.yaml"))
+          .collect(Collectors.toList());
+    }
+    assertTrue(yamls.size() >= 25, "expected the bundled schema YAMLs, found " + yamls.size());
+
+    List<String> bad = new ArrayList<>();
+    int declared = 0;
+    for (Path yaml : yamls) {
+      JsonNode doc;
+      try (InputStream is = Files.newInputStream(yaml)) {
+        doc = YamlUtils.parseYamlOrJson(is, yaml.toString());
+      }
+      for (String section : Arrays.asList("partitionedTables", "tables", "views")) {
+        for (JsonNode t : doc.path(section)) {
+          if (!t.hasNonNull("timeColumn")) {
+            continue;
+          }
+          declared++;
+          String col = t.get("timeColumn").asText();
+          boolean found = false;
+          for (JsonNode c : t.path("columns")) {
+            if (col.equalsIgnoreCase(c.path("name").asText())) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            bad.add(yaml.getFileName() + ": " + t.path("name").asText() + " -> " + col);
+          }
+        }
+      }
+    }
+    assertTrue(declared >= 50, "expected the declared timeColumn tables, found " + declared);
+    assertTrue(bad.isEmpty(), "timeColumn names a column the table does not have: " + bad);
   }
 }

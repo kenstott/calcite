@@ -17,6 +17,15 @@
 #     not assumed). The unitedstates project scrapes House/Senate committee pages on
 #     an automated, near-continuous cadence and is the de facto standard this data
 #     is sourced from across the open-government tooling ecosystem.
+#   - MIT Election Data + Science Lab (CC0) — U.S. House (1976-2018, from the Lab's GitHub
+#     repository MEDSL/constituency-returns) and U.S. Senate (1976-2024, Harvard Dataverse
+#     doi:10.7910/DVN/PEJ5QU) election returns by district/state and candidate. The Lab's
+#     House release through 2024 (doi:10.7910/DVN/IG0UN2) is behind a Dataverse guestbook
+#     (name, e-mail, institution, position) and cannot be fetched by an automated job.
+#   - Federal Election Commission official results workbooks "Federal Elections 2020" and
+#     "Federal Elections 2022" (fec.gov, public domain) — U.S. House general-election results
+#     for 2020 and 2022, appended to house_election_results (source = 'FEC'). The FEC has not
+#     published a 2024 House results workbook (only a candidate list), so 2024 is missing.
 #
 # Explicitly out of scope for this schema:
 #   - Direct Bioguide scrape (bioguide.congress.gov blocks non-browser clients via
@@ -47,6 +56,11 @@ comment: >
   community-maintained aggregator (unitedstates/congress-legislators) rather than a
   government system of record directly, because no official source exposes committee
   membership or jurisdiction in structured form; see the header comment above.
+  `house_election_results` (1976-2018 from the MIT Election Data + Science Lab, 2020 and 2022
+  from the FEC; 2024 missing) and `senate_election_results` (1976-2024, MIT) hold
+  candidate-level election returns, with the views
+  `house_race_results`, `senate_race_results` and `election_seats_won` giving winner, two-party
+  margin and seats won per cycle.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -1121,6 +1135,398 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # HOUSE_ELECTION_RESULTS — district-level U.S. House returns, MIT Election Lab 1976-2018 + FEC 2020, 2022
+  # ---------------------------------------------------------------------------
+  - name: house_election_results
+    # One snapshot of the whole series (year is a column, not a partition): the Lab publishes the
+    # returns as one file and the FEC one workbook per cycle, each only ever replaced by a later
+    # release, so the ~32,300 rows are re-read each run and the hash probe skips the write when
+    # nothing changed.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=house_election_results/*.parquet"
+    partitions: *type_partition
+    comment: >
+      U.S. House general-election returns by district and candidate for 24 cycles: 1976 to 2018
+      from the MIT Election Data + Science Lab (CC0), as the Lab's GitHub repository
+      MEDSL/constituency-returns publishes them (release dated 2019, commit cca36bc159), and
+      2020 and 2022 from the Federal Election Commission's official results workbooks (source
+      'FEC' against 'MEDSL' in the source column). 2024 IS MISSING: the Lab's 1976-2024 release
+      (Harvard Dataverse doi:10.7910/DVN/IG0UN2) sits behind a Dataverse guestbook that requires
+      a name, e-mail, institution and position, so an automated job cannot fetch it, and the FEC
+      has not published a 2024 House results workbook (fec.gov lists only the 2024 candidate
+      list and presidential results); 2024 is to be added when the FEC publishes it. One row
+      per candidate per party line per district election round: year, state, district, whether
+      it is a special election or a runoff, the stage (gen general election, pri primary, null
+      when the Lab gave none), the candidate, the party label as published and a normalised
+      major-party field, votes and the published total. Fusion tickets: in states that let a
+      candidate appear on several party lines (mostly New York and Connecticut, also Maryland and South Carolina)
+      each line is its own row with its own votes and the same candidate name, so a candidate's
+      vote is the SUM over rows, never one row; party_major is D or R per line only when that
+      line is the Democratic or Republican party itself (the Conservative or Working Families
+      line of a Republican or Democrat is OTHER on its own row), which is why the views
+      house_race_results and house_seats_won assign a candidate to D or R when any of the
+      candidate's lines is a D or R line. Nothing is merged in this table. Other quirks kept as
+      published: district 0 is an at-large state (at_large=true, cd_fips ends 00); write-ins are
+      lumped in rows with candidate null (candidate_kind write_in_aggregate) and vote buckets
+      (Blank Vote, Scatter, Over Vote, Other) are candidate_kind residual; uncontested races
+      carry candidate_votes 1 and total_votes 1 (uncontested=true), which is a placeholder, not
+      a count; 39 2018 rows are marked unofficial; the file is not a Congress roster, so a
+      candidate who won a special election appears under special=true. Redistricting: results
+      are by the district map in force that year (new maps in 1982, 1992, 2002, 2012, and the
+      court-ordered mid-decade Texas redraws of 1996 and 2006, which appear as extra special,
+      runoff and null-stage rounds; 2022 uses the 2020-census maps), so a (state, district) pair is a different place before and
+      after a redistricting year and is not comparable across them without a crosswalk. Louisiana
+      2002 district 5 is a runoff round after an open first round (Louisiana 2020 district 5
+      likewise, FEC). FEC ROWS (2020, 2022), read from the workbook's 'US House Results by State'
+      sheet with strict parsing (an unknown header, state, party label or subtotal fails the
+      fetch; every district's rows must sum to the sheet's own district total and the winner
+      flag must name the leader): only the 50 states' general elections are loaded, stage gen,
+      from the General Votes and General Runoff columns; primaries, primary runoffs and the
+      per-party and combined subtotal rows are not. The delegates (DC, AS, GU, MP, PR, VI) are
+      not loaded, as the Lab's series has none. Vacancy-filling special elections are not
+      loaded (the Lab's series has none either; they sit on the FEC 'Special Elections'
+      appendix), except Indiana 2 in 2022, whose unexpired-term election is on the main sheet
+      beside the full-term one and is special=true. Fusion tickets (New York, Connecticut,
+      Oregon, South Carolina, Alaska): each party line of a candidate is its own row with its own
+      votes, as in the Lab's data; the FEC 'Combined Parties' rows and combined-total columns are
+      not read. Oregon and a few other states publish one combined total under a combined label
+      (D/WF, D/IP/WF), which is one row whose party_published joins the lines with '/'. A
+      combined label is credited to the major party only when it contains exactly one of D or R
+      and the candidate has a primary or convention entry; otherwise it is OTHER (Connecticut
+      4 2020 Brian Merlen, labelled D/IP, is OTHER). Write-ins: the FEC's 'Scattered', 'All
+      Others' and 'Anyone Else' lines are write-in aggregates (candidate null, candidate_kind
+      write_in_aggregate, writein true); named write-in candidates (party W) are kept as
+      candidate rows with writein true and party null, which is more granular than the Lab's
+      2018 rows (one named write-in in all of 2018). Party labels are the workbook's own
+      codes resolved through its 'Party Labels' sheet and lower-cased (party_published
+      'democratic', not the Lab's 'democrat'); party_major D covers D, DFL and DNL
+      (Democratic-Nonpartisan League), R covers R, everything else is OTHER; the star after a
+      code (R*, D*) marks a convention nominee and is dropped; W(x)/x (a primary write-in who is
+      on the general ballot as x) is x; two codes are aliased to the label the sheet defines
+      (AVP to APV, Approval Voting Party, in 2020; GS to GSA, God Save America, in 2022). A
+      candidate taken off the ballot by a court (the '#' result of a Montana 2020 Green) has no
+      row. Uncontested races: the FEC prints 'Unopposed' for Florida 25 (2020) and Florida 5
+      and Louisiana 4 (2022), which become the Lab's marker, candidate_votes 1 and total_votes 1
+      (uncontested true, a placeholder); other races whose opponents did not appear carry the
+      FEC's real counts. At-large districts are district 0 (FEC 00), as the Lab. Runoffs: a
+      General Runoff value makes a second round, runoff true, beside the first round (runoff
+      false), as the Lab does for Louisiana. Ranked-choice contests (Maine 2 and Alaska at-large
+      in 2022): candidate_votes and total_votes are the LAST round's counts of the instant
+      runoff tabulation, as the Lab's Maine 2 in 2018 is, with ranked_choice true and the
+      first-choice count in first_choice_votes; eliminated candidates carry 0 in the last round,
+      and write-ins that the tabulation excludes (the Scattered line) have no row, so the round
+      total is the tabulation's. Rows from the Lab have ranked_choice null (its 2018 Maine 2
+      rows are last-round counts, unflagged). A candidate who appears in two districts (a
+      redistricted incumbent) is two unrelated rows; nothing is merged across districts or
+      years, and the FEC file carries no stable candidate key that the table keeps. total_votes
+      is, in both sources, the sum of every row of the round including write-ins. DISCONTINUITY
+      at 2018/2020: party_published vocabulary changes (the Lab's 'democrat' to the FEC's
+      'democratic'; use party_major across the boundary); candidate names are the FEC's
+      first and last name columns joined as 'first last' (a suffix the FEC puts in the first-name
+      column stays there: 'Martin, Jr. Lemelle'), not the Lab's spellings, so names do not join
+      across the boundary; version_date is null on FEC rows (the workbooks carry only a month, October
+      2022 for 2020 and February 2025 for 2022, named in source_release); unofficial is false on
+      FEC rows (an official-results publication); the Lab's per-year set of vote buckets
+      (Blank Vote, Scatter, Over Vote) does not exist in the FEC data; the FEC rows are the
+      states' certified results while the Lab's may carry unofficial flags. Joins: state_fips to geo.state_ref.state_fips;
+      state_name to officials.members.state_name; members.district equals district and the
+      Congress seated after the election is (year - 1786) / 2 (year 2018 is Congress 116);
+      cd_fips (state FIPS + 2-digit district, 00 at large) matches geo.congressional_districts
+      cd_fips for the same map vintage, which geo carries from 2021 only. Candidate-level
+      joins to members would be name matching and are not attempted (the Lab carries no
+      bioguide id). Sources: https://github.com/MEDSL/constituency-returns (1976-2018-house.csv; codebook
+      and license on the Dataverse record doi:10.7910/DVN/IG0UN2) and the FEC workbooks
+      federalelections2020.xlsx and federalelections2022.xlsx under
+      https://www.fec.gov/introduction-campaign-finance/election-and-voting-information/.
+
+    dimensions:
+      type:
+        - house_election_results
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: 'Election year (even years 1976 to 2018 from MIT, 2020 and 2022 from the FEC; 2024 missing); PK component'
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: '2-digit state FIPS code (FK to geo.state_ref.state_fips); PK component'
+      - name: state_name
+        type: string
+        nullable: false
+        comment: 'State name in title case (join key to officials.members.state_name and geo.state_ref.state_name)'
+      - name: state_postal
+        type: string
+        nullable: false
+        comment: '2-letter postal abbreviation'
+      - name: district
+        type: integer
+        nullable: false
+        comment: 'Congressional district number as published; 0 for an at-large state; PK component'
+      - name: at_large
+        type: boolean
+        nullable: false
+        comment: 'True when district is 0 (the state elects one member at large)'
+      - name: cd_fips
+        type: string
+        nullable: false
+        comment: '4-character district code: state FIPS + 2-digit district, 00 for at-large'
+      - name: special
+        type: boolean
+        nullable: false
+        comment: 'True for a special election (to fill a vacancy or after a court-ordered redraw); PK component'
+      - name: runoff
+        type: boolean
+        nullable: true
+        comment: 'True for a runoff round; null when the Lab published NA (2006 Texas special rounds); PK component'
+      - name: stage
+        type: string
+        nullable: true
+        comment: "'gen' general election, 'pri' primary (1996 Texas special primaries); null when published NA; PK component"
+      - name: line_no
+        type: integer
+        nullable: false
+        comment: 'Position of the row within its (year, state, district, special, runoff, stage) round in the published file, 1-based; makes the key unique where a candidate appears on several party lines; PK component'
+      - name: candidate
+        type: string
+        nullable: true
+        comment: 'Candidate name as published; null for the write-in aggregate rows'
+      - name: candidate_kind
+        type: string
+        nullable: false
+        comment: "'candidate' a named candidate, 'write_in_aggregate' write-ins lumped together, 'residual' a vote bucket (Blank Vote, Scatter, Over Vote, Other)"
+      - name: party_published
+        type: string
+        nullable: true
+        comment: "Party label as published, lower case. MIT rows: democrat, republican, conservative, working families, democratic-farmer-labor, ...; FEC rows: the workbook's party-label name, democratic, republican, conservative, working families, ..., combined labels joined with '/' (democratic/working families). Null when published NA, and for FEC write-in rows"
+      - name: party_major
+        type: string
+        nullable: true
+        comment: "D for the labels democrat and democratic-farmer-labor (MIT) and the codes D, DFL and DNL (FEC), R for republican and independent-republican (Minnesota's Republican Party until 1995; MIT) and the code R (FEC), OTHER for any other label, null when party_published is null; see the table comment for combined FEC labels"
+      - name: writein
+        type: boolean
+        nullable: false
+        comment: 'True for write-in votes'
+      - name: candidate_votes
+        type: long
+        nullable: false
+        comment: 'Votes this candidate received on this party line (1 when uncontested)'
+      - name: total_votes
+        type: long
+        nullable: false
+        comment: 'Total votes cast in the district round as published (1 when uncontested)'
+      - name: uncontested
+        type: boolean
+        nullable: false
+        comment: 'True when the Lab published candidate_votes = 1 and total_votes = 1, its marker for an unopposed race; the vote count is not real'
+      - name: unofficial
+        type: boolean
+        nullable: false
+        comment: 'True where the Lab flagged the result as unofficial pending later update (39 rows, 2018); always false on FEC rows (an official-results publication)'
+      - name: version_date
+        type: string
+        nullable: true
+        comment: 'Date the Lab finalised the row (ISO date from the published yyyyMMdd version); null on FEC rows, whose workbook carries only a month (named in source_release)'
+      - name: source_release
+        type: string
+        nullable: false
+        comment: 'Dataset, repository and commit (MIT rows) or workbook, publication month and URL (FEC rows) the row was read from'
+      - name: source
+        type: string
+        nullable: false
+        comment: "'MEDSL' for MIT Election Data + Science Lab rows (1976-2018), 'FEC' for Federal Election Commission rows (2020, 2022); tells the two series apart across the 2018/2020 boundary"
+      - name: ranked_choice
+        type: boolean
+        nullable: true
+        comment: 'True on FEC rows of a ranked-choice contest (Maine 2 and Alaska at-large, 2022), where candidate_votes and total_votes are the last-round counts; false on other FEC rows; null on MIT rows (the Lab does not flag it; Maine 2 in 2018 is a last-round count)'
+      - name: first_choice_votes
+        type: long
+        nullable: true
+        comment: 'First-choice votes as published (General Votes column) for a ranked-choice contest row; null otherwise'
+
+    source:
+      type: http
+      # Placeholder URL: HouseElectionResultsProvider downloads the MIT file and the FEC 2020 and
+      # 2022 workbooks through rawCache itself.
+      url: "https://raw.githubusercontent.com/MEDSL/constituency-returns/cca36bc159334e1e2ae82904a5dd0a8a299c9124/1976-2018-house.csv"
+      method: GET
+      response:
+        format: json  # ignored: HouseElectionResultsProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.officials.HouseElectionResultsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=house_election_results/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: house_election_results
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # SENATE_ELECTION_RESULTS — statewide U.S. Senate returns, MIT Election Lab 1976-2024
+  # ---------------------------------------------------------------------------
+  - name: senate_election_results
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=senate_election_results/*.parquet"
+    partitions: *type_partition
+    comment: >
+      U.S. Senate statewide returns by candidate, every election 1976 to 2024 (25 even years plus the 2021 Georgia
+      runoffs, 3,945 rows), from the MIT Election Data + Science Lab (CC0; Harvard Dataverse
+      doi:10.7910/DVN/PEJ5QU, file 1976-2024-senate-state, found through the Dataverse API at
+      each fetch so a new release is picked up; the dataset has no guestbook). One row per
+      candidate per party line per election round: year, state, whether it is a special
+      election, the stage, the candidate, the party label as published and a normalised
+      major-party field, votes and the published total. Each cycle elects one class (33 to 35
+      seats) and special elections for vacated seats add rows with special=true in the same
+      year (Georgia 2020 carries two Senate races, the regular Perdue-Ossoff one and the special
+      Loeffler-Warnock-Collins one). Stages as published: gen general election; runoff a
+      runoff (the 2022 file's GEN RUNOFF is stored as runoff); pre appears only for Georgia 1992
+      and 2008, where pre is the first-round general election and the same year's gen rows are
+      the decisive runoff; the Georgia 5 January 2021 runoffs (Ossoff, Warnock) are stage runoff
+      with year 2021, although they decide the 2020 cycle's two Georgia seats, so the 2020 gen
+      rows of Georgia are first rounds. Fusion tickets: before 2024 a candidate on several party
+      lines (New York, Connecticut) has a row per line and the vote is the SUM over rows; the
+      2024 New York rows carry one combined label such as DEMOCRATIC/WORKING FAMILIES. The
+      views senate_race_results and senate_seats_won sum a candidate's lines and assign D or R
+      when any line is a D or R line. Quirks kept as published: write-ins lumped in rows with
+      candidate null (write_in_aggregate); vote buckets (Over Votes, Undervotes, Blank Vote,
+      Scatter, Void, Other, None of these candidates) are candidate_kind residual; uncontested
+      races (Louisiana 1978 to 1992 and a few others) carry candidate_votes 1 and total_votes 1
+      (uncontested=true), a placeholder; the unofficial flag is true for some 2018, 2020, 2021,
+      2022 and 2024 rows the Lab had not yet updated; version_date is the Lab's finalisation
+      date and differs by row (2021-01-14 for 1976 to 2020, 2023-09-20 for 2022, 2024-12-12 and
+      2025-11-20 for parts of 2024); total_votes counts the ballots the state reports for the
+      race and, where a state includes undervotes, can exceed the sum of candidate votes.
+      Joins: state_fips to geo.state_ref.state_fips; state_name to officials.members.state_name
+      (senators have district null there); candidate-level joins to members would be name
+      matching and are not attempted (the Lab carries no bioguide id). The Congress that a
+      class elected in year Y joins is (Y - 1786) / 2 (2024 is Congress 119). Source:
+      https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/PEJ5QU.
+
+    dimensions:
+      type:
+        - senate_election_results
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: 'Calendar year of the election round (even years; 2021 for the Georgia January runoffs); PK component'
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: '2-digit state FIPS code (FK to geo.state_ref.state_fips); PK component'
+      - name: state_name
+        type: string
+        nullable: false
+        comment: 'State name in title case (join key to officials.members.state_name and geo.state_ref.state_name)'
+      - name: state_postal
+        type: string
+        nullable: false
+        comment: '2-letter postal abbreviation'
+      - name: special
+        type: boolean
+        nullable: false
+        comment: 'True for a special election to fill a vacated seat; PK component'
+      - name: stage
+        type: string
+        nullable: false
+        comment: "'gen' general election, 'runoff', or 'pre' (Georgia 1992 and 2008 first round); PK component"
+      - name: line_no
+        type: integer
+        nullable: false
+        comment: 'Position of the row within its (year, state, special, stage) round in the published file, 1-based; makes the key unique where a candidate appears on several party lines; PK component'
+      - name: candidate
+        type: string
+        nullable: true
+        comment: 'Candidate name as published, upper case; null for the write-in aggregate rows'
+      - name: candidate_kind
+        type: string
+        nullable: false
+        comment: "'candidate' a named candidate, 'write_in_aggregate' write-ins lumped together, 'residual' a vote bucket (Over Votes, Undervotes, Blank Vote, Scatter, Void, Other)"
+      - name: party_published
+        type: string
+        nullable: true
+        comment: 'party_detailed as published, upper case (DEMOCRAT, REPUBLICAN, LIBERTARIAN, INDEPENDENT, DEMOCRATIC/WORKING FAMILIES, ...); null for write-in and residual rows'
+      - name: party_major
+        type: string
+        nullable: true
+        comment: "D or R when party_published is a Democratic or Republican label (DEMOCRAT, DEMOCRATIC, DEMOCRATIC-FARMER-LABOR, DEMOCRATIC-NPL, DEMOCRATIC/WORKING FAMILIES; REPUBLICAN, GOP, REPUBLICAN/CONSERVATIVE), which overrides the Lab's party_simplified where it is wrong (2022 Illinois and Maryland DEMOCRATIC are OTHER there); with no label, D or R from party_simplified when it says so; OTHER for any other published label; null when the party is not published (Murkowski 2010 and 2022 and Lummis 2020, who are Republicans in officials.members, and the write-in and residual rows). A label that contradicts party_simplified fails the fetch"
+      - name: writein
+        type: boolean
+        nullable: false
+        comment: 'True for write-in votes'
+      - name: candidate_votes
+        type: long
+        nullable: false
+        comment: 'Votes this candidate received on this party line (1 when uncontested)'
+      - name: total_votes
+        type: long
+        nullable: false
+        comment: 'Total votes cast in the race round as published (1 when uncontested)'
+      - name: uncontested
+        type: boolean
+        nullable: false
+        comment: 'True when the Lab published candidate_votes = 1 and total_votes = 1, its marker for an unopposed race; the vote count is not real'
+      - name: unofficial
+        type: boolean
+        nullable: false
+        comment: 'True where the Lab flagged the result as unofficial pending later update'
+      - name: version_date
+        type: string
+        nullable: false
+        comment: 'Date the Lab finalised the row (ISO date; from yyyyMMdd or the 2024 partial rows MM/dd/yy)'
+      - name: source_release
+        type: string
+        nullable: false
+        comment: 'Dataverse dataset, version number and release date the row was read from'
+
+    source:
+      type: http
+      # Placeholder URL: SenateElectionResultsProvider reads the Dataverse dataset API, finds the
+      # state-level file and downloads it through rawCache itself.
+      url: "https://dataverse.harvard.edu/api/datasets/:persistentId?persistentId=doi:10.7910/DVN/PEJ5QU"
+      method: GET
+      response:
+        format: json  # ignored: SenateElectionResultsProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.officials.SenateElectionResultsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=senate_election_results/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: senate_election_results
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1196,6 +1602,24 @@ constraints:
     # a matching candidate-name spelling/format guarantee (different source, different
     # publisher) — join on (year, state_name) at query time rather than declaring a
     # candidate-level FK this data doesn't actually guarantee.
+  house_election_results:
+    primaryKey: [year, state_fips, district, special, runoff, stage, line_no]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+    # No FK to members: the Lab carries no bioguide id, so a candidate-level join would be name
+    # matching. Join on (state_name, district) and the Congress (year - 1786) / 2 instead.
+    # runoff and stage are null for the 2006 Texas special rounds, so the key is not enforced.
+  senate_election_results:
+    primaryKey: [year, state_fips, special, stage, line_no]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+    # No FK to members, as for house_election_results.
 
 # ============================================================================
 # VIEWS
@@ -1378,3 +1802,221 @@ views:
       JOIN senate s ON s.state_name = h.state_name AND s.congress = h.congress
       JOIN pres p ON p.state_name = h.state_name AND p.congress = h.congress
       JOIN congresses c ON c.congress = h.congress
+
+  - name: house_race_results
+    comment: >
+      One row per U.S. House district election round (year, state, district, special, runoff,
+      stage) built from house_election_results, general-election rounds and special elections
+      only (regular primaries are left out): the leader and the leader's party, the leader's and
+      runner-up's votes, D and R votes and the two-party margin
+      (D - R) / (D + R) in [-1, 1] (positive favours the Democratic candidate), and is_decisive
+      marking the round that decides the district for that cycle. Votes are summed per candidate
+      across party lines (fusion tickets), then each candidate is put in a party group: D when
+      the candidate's Democratic lines carry more votes than the Republican lines (or only
+      Democratic lines exist), R likewise, OTHER when the candidate has only other known lines,
+      and null when no line has a published party (the Lab left the party blank for a few
+      winners, for example Alabama 5, New Jersey 4 and Wisconsin 8 in 2018, all Republicans in
+      officials.members). cross_endorsed_candidates counts candidates that have both a D line
+      and an R line (New York 1976 to 1990 Democrats who also got the Republican line, for
+      example); their whole vote goes to the party group with the larger line. two_party_margin
+      is null for uncontested races (the Lab's placeholder vote of 1) and when neither major
+      party has a candidate. is_decisive: within a (year, state, district) the round with the
+      highest precedence, a runoff round, then the regular general election, then a special
+      election published without a stage, then a special election published as a primary (Texas
+      1996, where the court-ordered redistricting elections are published as special primaries
+      with runoffs in districts 8, 9 and 25); this gives exactly one decisive round for each of
+      the 435 districts in every cycle 1976 to 2022 and puts the Texas 2006 redistricting
+      special elections (published with a null stage) in the decisive round for the four
+      districts that have no regular general round. Rounds that are not decisive (a first round
+      that went to a runoff, a special election held beside the regular one) are kept with
+      is_decisive false. tied is true when two candidates share the lead, in which case the
+      leader columns are null.
+    sql: >
+        WITH cand AS (
+          SELECT
+            year, state_fips, state_name, state_postal, district, cd_fips, at_large, special,
+            runoff, stage, candidate,
+            SUM(candidate_votes) AS votes,
+            SUM(CASE WHEN party_major = 'D' THEN candidate_votes ELSE 0 END) AS d_line_votes,
+            SUM(CASE WHEN party_major = 'R' THEN candidate_votes ELSE 0 END) AS r_line_votes,
+            SUM(CASE WHEN party_major = 'D' THEN 1 ELSE 0 END) AS d_lines,
+            SUM(CASE WHEN party_major = 'R' THEN 1 ELSE 0 END) AS r_lines,
+            SUM(CASE WHEN party_major IS NOT NULL THEN 1 ELSE 0 END) AS known_lines,
+            MAX(total_votes) AS total_votes,
+            MAX(CASE WHEN uncontested THEN 1 ELSE 0 END) AS uncontested
+          FROM house_election_results
+          WHERE candidate_kind = 'candidate'
+            AND NOT (stage = 'pri' AND special = FALSE)
+          GROUP BY year, state_fips, state_name, state_postal, district, cd_fips, at_large, special,
+            runoff, stage, candidate
+        ),
+        ranked AS (
+          SELECT cand.*,
+            CASE WHEN d_line_votes > r_line_votes THEN 'D'
+                 WHEN r_line_votes > d_line_votes THEN 'R'
+                 WHEN d_lines > 0 AND r_lines = 0 THEN 'D'
+                 WHEN r_lines > 0 AND d_lines = 0 THEN 'R'
+                 WHEN known_lines > 0 THEN 'OTHER' END AS party_group,
+            RANK() OVER (PARTITION BY year, state_fips, district, special, runoff, stage
+                         ORDER BY votes DESC) AS rnk
+          FROM cand
+        ),
+        round_agg AS (
+          SELECT
+            year, state_fips, state_name, state_postal, district, cd_fips, at_large, special,
+            runoff, stage,
+            COUNT(*) AS candidates,
+            MAX(total_votes) AS total_votes,
+            SUM(votes) AS candidate_votes,
+            MAX(uncontested) AS uncontested,
+            SUM(CASE WHEN rnk = 1 THEN 1 ELSE 0 END) AS tied_for_lead,
+            MAX(CASE WHEN rnk = 1 THEN votes END) AS leader_votes,
+            MAX(CASE WHEN rnk = 2 THEN votes END) AS runner_up_votes,
+            MAX(CASE WHEN rnk = 1 THEN candidate END) AS leader_candidate,
+            MAX(CASE WHEN rnk = 1 THEN party_group END) AS leader_party_major,
+            SUM(CASE WHEN party_group = 'D' THEN votes ELSE 0 END) AS d_votes,
+            SUM(CASE WHEN party_group = 'R' THEN votes ELSE 0 END) AS r_votes,
+            SUM(CASE WHEN d_line_votes > 0 AND r_line_votes > 0 THEN 1 ELSE 0 END)
+              AS cross_endorsed_candidates,
+            CASE WHEN runoff = TRUE THEN 4
+                 WHEN special = FALSE THEN 3
+                 WHEN stage IS NULL THEN 2
+                 ELSE 1 END AS round_rank
+          FROM ranked
+          GROUP BY year, state_fips, state_name, state_postal, district, cd_fips, at_large, special,
+            runoff, stage
+        )
+        SELECT
+          year, state_fips, state_name, state_postal, district, cd_fips, at_large, special,
+          runoff, stage, candidates, total_votes, candidate_votes,
+          CASE WHEN tied_for_lead = 1 THEN leader_candidate END AS leader_candidate,
+          CASE WHEN tied_for_lead = 1 THEN leader_party_major END AS leader_party_major,
+          leader_votes, runner_up_votes,
+          tied_for_lead > 1 AS tied,
+          uncontested = 1 AS uncontested,
+          d_votes, r_votes,
+          CASE WHEN uncontested = 0 AND d_votes + r_votes > 0
+               THEN 1.0 * (d_votes - r_votes) / (d_votes + r_votes) END AS two_party_margin,
+          cross_endorsed_candidates,
+          round_rank = MAX(round_rank) OVER (PARTITION BY year, state_fips, district) AS is_decisive
+        FROM round_agg
+
+  - name: senate_race_results
+    comment: >
+      One row per U.S. Senate election round (year, state, special, stage) built from
+      senate_election_results: the leader and the leader's party, the leader's and runner-up's
+      votes, D and R votes, the two-party margin (D - R) / (D + R) (positive favours the
+      Democratic candidate), cycle_year (the even election year: 2020 for the Georgia runoffs of
+      January 2021) and is_decisive. Candidate and party grouping rules are those of
+      house_race_results (a candidate's party lines are summed, the party group follows the larger
+      of the D and R lines, null when no line has a published party: Murkowski 2010 and 2022 and
+      Lummis 2020, whose party the Lab left blank, are Republicans in officials.members). is_decisive:
+      the round with the highest stage rank within (year, state, special), runoff over gen over
+      pre, except that a first round whose state and seat have a runoff in the following year is
+      not decisive (the Georgia 2020 general elections, decided by the 5 January 2021 runoffs).
+      Known gaps inherited from the Lab's file (verified against the file, not filled in): no
+      Connecticut 2022 and no North Dakota 1980 race; the regular North Carolina 1986 and
+      Illinois 2010 elections are published with special=true; so regular-class counts are 33
+      or 34 per cycle except those years.
+    sql: >
+        WITH cand AS (
+          SELECT
+            year, state_fips, state_name, state_postal, special, stage, candidate,
+            SUM(candidate_votes) AS votes,
+            SUM(CASE WHEN party_major = 'D' THEN candidate_votes ELSE 0 END) AS d_line_votes,
+            SUM(CASE WHEN party_major = 'R' THEN candidate_votes ELSE 0 END) AS r_line_votes,
+            SUM(CASE WHEN party_major = 'D' THEN 1 ELSE 0 END) AS d_lines,
+            SUM(CASE WHEN party_major = 'R' THEN 1 ELSE 0 END) AS r_lines,
+            SUM(CASE WHEN party_major IS NOT NULL THEN 1 ELSE 0 END) AS known_lines,
+            MAX(total_votes) AS total_votes,
+            MAX(CASE WHEN uncontested THEN 1 ELSE 0 END) AS uncontested,
+            MAX(CASE WHEN unofficial THEN 1 ELSE 0 END) AS unofficial
+          FROM senate_election_results
+          WHERE candidate_kind = 'candidate'
+          GROUP BY year, state_fips, state_name, state_postal, special, stage, candidate
+        ),
+        ranked AS (
+          SELECT cand.*,
+            CASE WHEN d_line_votes > r_line_votes THEN 'D'
+                 WHEN r_line_votes > d_line_votes THEN 'R'
+                 WHEN d_lines > 0 AND r_lines = 0 THEN 'D'
+                 WHEN r_lines > 0 AND d_lines = 0 THEN 'R'
+                 WHEN known_lines > 0 THEN 'OTHER' END AS party_group,
+            RANK() OVER (PARTITION BY year, state_fips, special, stage
+                         ORDER BY votes DESC) AS rnk
+          FROM cand
+        ),
+        round_agg AS (
+          SELECT
+            year, state_fips, state_name, state_postal, special, stage,
+            COUNT(*) AS candidates,
+            MAX(total_votes) AS total_votes,
+            SUM(votes) AS candidate_votes,
+            MAX(uncontested) AS uncontested,
+            MAX(unofficial) AS unofficial,
+            SUM(CASE WHEN rnk = 1 THEN 1 ELSE 0 END) AS tied_for_lead,
+            MAX(CASE WHEN rnk = 1 THEN votes END) AS leader_votes,
+            MAX(CASE WHEN rnk = 2 THEN votes END) AS runner_up_votes,
+            MAX(CASE WHEN rnk = 1 THEN candidate END) AS leader_candidate,
+            MAX(CASE WHEN rnk = 1 THEN party_group END) AS leader_party_major,
+            SUM(CASE WHEN party_group = 'D' THEN votes ELSE 0 END) AS d_votes,
+            SUM(CASE WHEN party_group = 'R' THEN votes ELSE 0 END) AS r_votes,
+            SUM(CASE WHEN d_line_votes > 0 AND r_line_votes > 0 THEN 1 ELSE 0 END)
+              AS cross_endorsed_candidates,
+            CASE stage WHEN 'runoff' THEN 3 WHEN 'gen' THEN 2 ELSE 1 END AS round_rank
+          FROM ranked
+          GROUP BY year, state_fips, state_name, state_postal, special, stage
+        ),
+        next_year_runoff AS (
+          SELECT DISTINCT year, state_fips, special
+          FROM round_agg
+          WHERE stage = 'runoff'
+        )
+        SELECT
+          r.year, r.year - MOD(r.year, 2) AS cycle_year, r.state_fips, r.state_name,
+          r.state_postal, r.special, r.stage, r.candidates,
+          r.total_votes, r.candidate_votes,
+          CASE WHEN r.tied_for_lead = 1 THEN r.leader_candidate END AS leader_candidate,
+          CASE WHEN r.tied_for_lead = 1 THEN r.leader_party_major END AS leader_party_major,
+          r.leader_votes, r.runner_up_votes,
+          r.tied_for_lead > 1 AS tied,
+          r.uncontested = 1 AS uncontested,
+          r.unofficial = 1 AS unofficial,
+          r.d_votes, r.r_votes,
+          CASE WHEN r.uncontested = 0 AND r.d_votes + r.r_votes > 0
+               THEN 1.0 * (r.d_votes - r.r_votes) / (r.d_votes + r.r_votes) END AS two_party_margin,
+          r.cross_endorsed_candidates,
+          r.round_rank = MAX(r.round_rank) OVER (PARTITION BY r.year, r.state_fips, r.special)
+            AND (r.stage = 'runoff' OR n.year IS NULL) AS is_decisive
+        FROM round_agg r
+        LEFT JOIN next_year_runoff n
+          ON n.year = r.year + 1 AND n.state_fips = r.state_fips AND n.special = r.special
+
+  - name: election_seats_won
+    comment: >
+      Seats won per cycle by party: for each chamber, cycle year and special-election flag, the
+      count of decisive election rounds won by the Democratic candidate (D), the Republican (R),
+      another party (OTHER) or a candidate whose party the Lab left blank (null). House rows are
+      one per district: 435 seats with special=false in every cycle 1976 to 2022 (the Texas 1996
+      and 2006 redistricting special elections that decide a district are counted there as
+      special=true rows, 10 and 4 seats). Senate rows are the 33 or 34 regular seats of the
+      class up that year (with the gaps documented on senate_race_results) plus special
+      elections; the Georgia January 2021 runoffs count in cycle_year 2020. These are election
+      winners, not Congress rosters: a member who switches party, dies or resigns, or a seat
+      filled by appointment, is not reflected (see officials.members for who held the seat; for
+      Congresses 111 to 116 the winner's party is among the party names of the seat's members in
+      every district except four party switches, one misfiled chamber and three blank parties,
+      and for the Senate in every race except three blank parties). Independents who caucus with
+      a party count as OTHER.
+    sql: >
+      SELECT 'house' AS chamber, year AS cycle_year, special, leader_party_major AS winner_party_major,
+        COUNT(*) AS seats
+      FROM house_race_results
+      WHERE is_decisive AND NOT tied
+      GROUP BY year, special, leader_party_major
+      UNION ALL
+      SELECT 'senate' AS chamber, cycle_year, special, leader_party_major AS winner_party_major,
+        COUNT(*) AS seats
+      FROM senate_race_results
+      WHERE is_decisive AND NOT tied
+      GROUP BY cycle_year, special, leader_party_major

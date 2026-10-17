@@ -3,7 +3,7 @@
 -- Schema: disasters
 -- Tables: disaster_declarations, public_assistance_projects, hazard_mitigation_projects,
 --         nfip_claims, nfip_policies, nfip_multiple_loss_properties, storm_events,
---         wildfire_perimeters, ihp_housing_assistance_owners, ihp_housing_assistance_renters
+--         wildfire_perimeters, ihp_housing_assistance_owners, ihp_housing_assistance_renters, ihp_valid_registrations_by_county
 -- All tables are Iceberg; reads via iceberg_scan.
 -- T4/T5 exclude partition columns 'type' and 'year'.
 -- nfip_policies is capped by dqRowLimit (50k/year) in DQ mode, so its T2 threshold is a
@@ -404,6 +404,137 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disaster
       WHERE valid_registrations < 0 OR total_approved_ihp_amount < 0
          OR repair_replace_amount < 0 OR rental_amount < 0 OR other_needs_amount < 0
          OR approved_for_assistance > valid_registrations OR total_inspected > valid_registrations);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: ihp_valid_registrations_by_county (snapshot, no year axis; aggregate of the full
+-- OpenFEMA IndividualsAndHouseholdsProgramValidRegistrations v2 bulk file, not sampled)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000,
+  'Expected >=10000 disaster x county rows (11349 from the 2026-10-15 file)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name <> 'type'));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name <> 'type'));
+
+-- Grain: one row per disaster x county; a row with no county is one area name of a state.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL disaster_number/registrations rows plus duplicate disaster x county (or x state x area name) keys'
+FROM (SELECT (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)
+              WHERE disaster_number IS NULL OR registrations IS NULL)
+           + (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)
+              GROUP BY disaster_number, county_fips,
+                       CASE WHEN county_fips IS NULL THEN state_abbr END,
+                       CASE WHEN county_fips IS NULL THEN county_name END
+              HAVING COUNT(*) > 1)) AS n);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_fips_shape',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows whose county_fips is not 5 digits or does not start with state_fips'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)
+      WHERE county_fips IS NOT NULL
+        AND (LENGTH(county_fips) <> 5 OR state_fips IS NULL OR SUBSTR(county_fips, 1, 2) <> state_fips));
+
+-- The registrations that have no county: 3.3 percent of the source rows carry no fips; the
+-- declarations resolve most of them. What is left (1.0 percent on 2026-10-15) is almost all
+-- FEMA's catch-all disaster numbers 6xxx/9xxx (no declaration), asserted separately below.
+-- Fail at 2 percent.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_county_fips_resolution',
+  CASE WHEN share <= 0.02 THEN 'pass' ELSE 'fail' END, ROUND(share, 5), 0.02,
+  'Share of registrations in rows with no county_fips (tribal or statewide areas, unlisted names)'
+FROM (SELECT SUM(registrations) FILTER (WHERE county_fips IS NULL) * 1.0 / SUM(registrations) AS share
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true));
+
+-- Disaster numbers from 6000 up are FEMA catch-alls with no declaration (10 numbers, 264,113
+-- registrations = 1.0 percent on 2026-10-15). A real disaster appearing there would be a
+-- change in FEMA's numbering, so fail above 2 percent.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_undeclared_disaster_numbers',
+  CASE WHEN share <= 0.02 THEN 'pass' ELSE 'fail' END, ROUND(share, 5), 0.02,
+  'Share of registrations under disaster numbers >= 6000 (FEMA catch-all numbers without a declaration)'
+FROM (SELECT SUM(registrations) FILTER (WHERE disaster_number >= 6000) * 1.0 / SUM(registrations) AS share
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true));
+
+-- Cross-check against the housing-assistance tables: they cover the same registrations at
+-- disaster x county x city x ZIP. On 2026-10-15 the aggregate held 1.2 percent more (26,243,551
+-- against 25,951,630 summed over owners and renters). Pass within 5 percent either way.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_vs_housing_assistance',
+  CASE WHEN ratio BETWEEN 0.95 AND 1.05 THEN 'pass' ELSE 'fail' END, ROUND(ratio, 4), 1.0,
+  'Registrations here over valid registrations in ihp_housing_assistance_owners + _renters, expected within 5 percent'
+FROM (SELECT (SELECT SUM(registrations) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)) * 1.0
+           / ((SELECT SUM(valid_registrations) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_owners', allow_moved_paths := true))
+            + (SELECT SUM(valid_registrations) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_housing_assistance_renters', allow_moved_paths := true))) AS ratio);
+
+-- Splits that partition the registrations must add back up to them: tenure, the seven income
+-- ranges plus unreported, and the six household sizes.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_partitions_sum_to_registrations',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows where tenure, income or household-size splits do not sum to registrations'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)
+      WHERE owner_registrations + renter_registrations + tenure_unknown_registrations <> registrations
+         OR income_zero_registrations + income_under_15000_registrations
+            + income_15000_to_30000_registrations + income_30001_to_60000_registrations
+            + income_60001_to_120000_registrations + income_120001_to_175000_registrations
+            + income_over_175000_registrations + income_unreported_registrations <> registrations
+         OR household_1_person_registrations + household_2_person_registrations
+            + household_3_person_registrations + household_4_person_registrations
+            + household_5_person_registrations + household_over_5_person_registrations
+            <> registrations);
+
+-- Counts and dollars are non-negative; every subset count is at most the registrations; the
+-- total IHP award is housing plus other needs on every registration, so on every row.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with a negative amount, a subset count above registrations, or ihp_amount <> ha_amount + ona_amount'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)
+      WHERE registrations <= 0 OR fips_from_declaration_registrations > registrations
+         OR ihp_awarded_registrations > ihp_eligible_registrations
+         OR inspections_returned > inspections_issued OR inspections_issued > registrations
+         OR destroyed_registrations > registrations OR ihp_eligible_registrations > registrations
+         OR ihp_amount < 0 OR ha_amount < 0 OR ona_amount < 0 OR repair_amount < 0
+         OR replacement_amount < 0 OR rental_assistance_amount < 0
+         OR real_property_verified_loss < 0 OR personal_property_verified_loss < 0
+         OR ABS(ihp_amount - (ha_amount + ona_amount)) > 0.01 * registrations);
+
+-- Known anchor: Hurricane Harvey (DR-4332), Harris County TX (48201): 449,336 registrations in
+-- the 2026-10-15 file; ihp_housing_assistance_owners + _renters give 447,076 valid registrations.
+INSERT INTO dq_results
+SELECT 'disasters', 'ihp_valid_registrations_by_county', 'T7_known_value',
+  CASE WHEN regs BETWEEN 440000 AND 460000 THEN 'pass' ELSE 'fail' END, regs, 440000,
+  'Harvey DR-4332 Harris County TX (48201) registrations, expected 440000-460000'
+FROM (SELECT COALESCE(SUM(registrations), 0) AS regs
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/ihp_valid_registrations_by_county', allow_moved_paths := true)
+      WHERE disaster_number = 4332 AND county_fips = '48201');
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: storm_events

@@ -363,6 +363,14 @@ public final class GovDataCatalog {
       cov.put("observed_contiguous", observed.get("contiguous").asBoolean());
     }
     putInt(cov, "observed_row_count", observed.get("rowCount"));
+    // A table that declares a coverageWindow had rows outside it left out of the bounds above;
+    // saying so keeps the observed range from reading as the whole table.
+    putInt(cov, "observed_excluded_rows", observed.get("excludedRows"));
+    JsonNode kept = observed.get("excludedOutsideYears");
+    if (kept != null && kept.isArray() && kept.size() == 2) {
+      putInt(cov, "observed_window_first_year", kept.get(0));
+      putInt(cov, "observed_window_last_year", kept.get(1));
+    }
     putText(cov, "observed_checked_at", observed.get("checkedAt"));
     if (observed.hasNonNull("minYear") || observed.hasNonNull("maxYear")) {
       cov.put("authoritative", "observed");
@@ -440,6 +448,14 @@ public final class GovDataCatalog {
     if (oc.hasNonNull("rowCount")) {
       sb.append(", ").append(String.format(Locale.ROOT, "%,d", oc.get("rowCount").asLong()))
           .append(" rows");
+    }
+    JsonNode kept = oc.get("excludedOutsideYears");
+    if (oc.hasNonNull("excludedRows") && oc.get("excludedRows").asLong() > 0
+        && kept != null && kept.isArray() && kept.size() == 2) {
+      sb.append(", not counting ")
+          .append(String.format(Locale.ROOT, "%,d", oc.get("excludedRows").asLong()))
+          .append(" rows dated outside ").append(kept.get(0).asInt()).append('–')
+          .append(kept.get(1).asInt());
     }
     if (oc.hasNonNull("checkedAt")) {
       String checkedAt = oc.get("checkedAt").asText("");

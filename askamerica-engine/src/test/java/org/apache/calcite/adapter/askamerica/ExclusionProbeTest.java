@@ -148,4 +148,67 @@ class ExclusionProbeTest {
         "SELECT river, COUNT(*) AS locks FROM t WHERE year_open IS NOT NULL GROUP BY river",
         agg, Collections.<String>emptySet(), s -> agg));
   }
+
+  /** Issue #961 query shape: a single-row aggregate whose alias contains "county". */
+  private static final String ISSUE_961_SQL =
+      "WITH cz AS (SELECT c.county_fips, z.cbsa_code, SUM(c.res_ratio*z.res_ratio) AS share "
+      + "FROM geo.county_zip_crosswalk c JOIN geo.zip_cbsa_crosswalk z ON c.zip=z.zip "
+      + "AND z.\"year\"='2020' WHERE c.\"year\"='2020' AND z.cbsa_code <> '99999' "
+      + "GROUP BY c.county_fips, z.cbsa_code) "
+      + "SELECT COUNT(*) AS county_cbsa_rows, COUNT(DISTINCT county_fips) AS counties "
+      + "FROM cz WHERE share > 0.5";
+
+  private static ArrayNode countRow(int n) {
+    ArrayNode arr = MAPPER.createArrayNode();
+    arr.add(MAPPER.createObjectNode().put("county_cbsa_rows", n).put("counties", n));
+    return arr;
+  }
+
+  @Test void aggregateCountIsNeverTheUnitColumn() {
+    ObjectNode w = MAPPER.createObjectNode();
+    ExclusionProbe.annotate(w, ISSUE_961_SQL, countRow(1914), Collections.<String>emptySet(),
+        s -> countRow(3211));
+    assertFalse(w.has("excluded_units"));
+    assertFalse(w.has("excluded_unit_column"));
+    assertTrue(w.get("excluded_units_unavailable").asText().contains("aggregate"));
+  }
+
+  @Test void diagnosticsForIssue961EmitNoInventedUnit() {
+    ObjectNode env = QuestionDiagnostics.forQuery(null, ISSUE_961_SQL, countRow(1914), 500,
+        s -> countRow(3211));
+    boolean sawWarning = false;
+    for (com.fasterxml.jackson.databind.JsonNode x : env.get("diagnostics").get("warnings")) {
+      if ("explicit_exclusion".equals(x.get("type").asText())) {
+        sawWarning = true;
+        assertFalse(x.has("excluded_units"));
+        assertTrue(x.has("excluded_units_unavailable"));
+      }
+    }
+    assertTrue(sawWarning);
+  }
+
+  @Test void groupKeyIdentifierStillLabelsUnitsBesideAnAggregate() {
+    ArrayNode kept = MAPPER.createArrayNode();
+    kept.add(MAPPER.createObjectNode().put("county_fips", "01001").put("county_rows", 2));
+    ArrayNode wide = kept.deepCopy();
+    wide.add(MAPPER.createObjectNode().put("county_fips", "01003").put("county_rows", 1));
+    ObjectNode w = MAPPER.createObjectNode();
+    ExclusionProbe.annotate(w,
+        "SELECT county_fips, COUNT(*) AS county_rows FROM t WHERE x IS NOT NULL "
+        + "GROUP BY county_fips", kept, Collections.<String>emptySet(), s -> wide);
+    assertEquals("county_fips", w.get("excluded_unit_column").asText());
+    assertEquals("01003", w.get("excluded_units").get(0).asText());
+  }
+
+  @Test void computedExpressionAliasIsNotAUnitColumn() {
+    ArrayNode kept = MAPPER.createArrayNode();
+    kept.add(MAPPER.createObjectNode().put("state_share", 0.5));
+    ArrayNode wide = MAPPER.createArrayNode();
+    wide.add(MAPPER.createObjectNode().put("state_share", 0.7));
+    ObjectNode w = MAPPER.createObjectNode();
+    ExclusionProbe.annotate(w, "SELECT a / b AS state_share FROM t WHERE a IS NOT NULL", kept,
+        Collections.<String>emptySet(), s -> wide);
+    assertFalse(w.has("excluded_units"));
+    assertTrue(w.has("excluded_units_unavailable"));
+  }
 }

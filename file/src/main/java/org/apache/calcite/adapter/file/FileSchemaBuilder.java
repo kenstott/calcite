@@ -340,13 +340,19 @@ public class FileSchemaBuilder {
       if (result.getFailedTables() > 0) {
         StringBuilder errorMsg = new StringBuilder();
         errorMsg.append("ETL had ").append(result.getFailedTables())
-            .append(" failed table(s) (excluded from schema):");
+            .append(" failed table(s):");
         for (Map.Entry<String, org.apache.calcite.adapter.file.etl.EtlResult> entry
             : result.getTableResults().entrySet()) {
+          // A partially failed table committed its completed batches; only a table that
+          // produced nothing is excluded from the schema.
           if (entry.getValue().isFailed()) {
-            errorMsg.append("\n  - ").append(entry.getKey()).append(": ")
+            boolean partial = entry.getValue().isPartiallyFailed();
+            errorMsg.append("\n  - ").append(entry.getKey())
+                .append(partial ? " (partial, kept in schema): " : " (excluded from schema): ")
                 .append(entry.getValue().getFailureMessage());
-            excludedTables.add(entry.getKey());
+            if (!partial) {
+              excludedTables.add(entry.getKey());
+            }
           }
         }
         LOGGER.warn(errorMsg.toString());
@@ -363,7 +369,8 @@ public class FileSchemaBuilder {
           // Table was skipped by isEnabled hook (not a completed Iceberg table)
           excludedTables.add(entry.getKey());
           LOGGER.debug("Table '{}' excluded from schema (skipped during ETL)", entry.getKey());
-        } else if (!etlResult.isFailed() && etlResult.getTableLocation() != null) {
+        } else if ((!etlResult.isFailed() || etlResult.isPartiallyFailed())
+            && etlResult.getTableLocation() != null) {
           // Store materialization info for updating ConversionMetadata later
           // This includes both newly materialized tables AND skipped tables that are already complete
           Map<String, String> info = new HashMap<>();

@@ -10,7 +10,7 @@
 """Schema YAMLs whose model differs between two commits.
 
 Prints one path per line. A file counts as changed only when its parsed content differs once the
-generated `observedCoverage` blocks are removed: update-coverage-metadata.sh rewrites those (row
+generated `observedCoverage` blocks and the `coverageWindow` declarations that feed them are removed: update-coverage-metadata.sh rewrites those (row
 counts, timestamps) in every schema YAML each night, and comments and formatting carry no model, so
 none of them should force a seed rebuild. A file added or deleted between the commits counts as
 changed. A file that cannot be parsed is an error, never silently treated as unchanged.
@@ -25,7 +25,8 @@ import yaml
 
 PATHSPECS = ["govdata/src/main/resources/*-schema.yaml",
              "govdata/src/main/resources/**/*-schema.yaml"]
-IGNORED_KEY = "observedCoverage"
+# observedCoverage is generated; coverageWindow is the declaration the measurer reads to produce it.
+IGNORED_KEYS = ("observedCoverage", "coverageWindow")
 
 
 def git(*args):
@@ -34,7 +35,7 @@ def git(*args):
 
 def strip(node):
     if isinstance(node, dict):
-        return {k: strip(v) for k, v in node.items() if k != IGNORED_KEY}
+        return {k: strip(v) for k, v in node.items() if k not in IGNORED_KEYS}
     if isinstance(node, list):
         return [strip(v) for v in node]
     return node

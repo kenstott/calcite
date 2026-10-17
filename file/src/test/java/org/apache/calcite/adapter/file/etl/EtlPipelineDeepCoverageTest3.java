@@ -196,7 +196,7 @@ public class EtlPipelineDeepCoverageTest3 {
     m.setAccessible(true);
     Object r =
         m.invoke(pipeline, new IOException((String) null), EtlPipelineConfig.ErrorHandlingConfig.defaults());
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, r);
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, r);
   }
 
   @Test void testDetermineErrorAction_genericError() throws Exception {
@@ -207,7 +207,7 @@ public class EtlPipelineDeepCoverageTest3 {
     m.setAccessible(true);
     Object r =
         m.invoke(pipeline, new IOException("Connection timed out"), EtlPipelineConfig.ErrorHandlingConfig.defaults());
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, r);
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, r);
   }
 
   // ===== allIndicesSet =====

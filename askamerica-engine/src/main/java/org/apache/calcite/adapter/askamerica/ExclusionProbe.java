@@ -108,7 +108,7 @@ final class ExclusionProbe {
       if (original.equals(wider)) {
         return true;
       }
-      String label = labelColumn(original, wider);
+      String label = labelColumn(original, wider, OutputShape.of(sql));
       List<String> units = missingUnits(label, original, wider);
       warning.put("excluded_unit_column", label);
       warning.put("excluded_unit_count", units.size());
@@ -269,9 +269,97 @@ final class ExclusionProbe {
     return new int[] {start, end};
   }
 
+  /**
+   * Which output columns of a statement are passed-through identifiers and which are computed.
+   *
+   * <p>A unit label is a value the data carries for each unit. An aggregate ({@code COUNT},
+   * {@code SUM}, {@code AVG}) or any computed expression is a property of the result, not of a
+   * unit, so comparing its values between the filtered and unfiltered results names numbers, not
+   * units. The shape comes from the outermost {@code SELECT} list of the caller's own SQL.
+   */
+  static final class OutputShape {
+    private final boolean star;
+    private final Set<String> passThrough;
+    private final Set<String> derived;
+
+    private OutputShape(boolean star, Set<String> passThrough, Set<String> derived) {
+      this.star = star;
+      this.passThrough = passThrough;
+      this.derived = derived;
+    }
+
+    /** Whether the named output column can be a unit label. */
+    boolean isPassThrough(String column) {
+      String lower = column.toLowerCase(Locale.ROOT);
+      if (derived.contains(lower)) {
+        return false;
+      }
+      return star || passThrough.contains(lower);
+    }
+
+    static OutputShape of(String sql) throws Unavailable {
+      String text = sql.replace('\t', ' ').replaceAll(";\\s*$", "");
+      SqlNode root;
+      try {
+        root = SqlParser.create(text,
+            SqlParser.config().withConformance(SqlConformanceEnum.LENIENT)).parseQuery();
+      } catch (SqlParseException e) {
+        throw new Unavailable("the SQL could not be parsed to classify its output columns: "
+            + e.getMessage().replaceAll("\\s+", " "));
+      }
+      SqlSelect select = outermostSelect(root);
+      if (select == null) {
+        throw new Unavailable("the statement's output columns could not be classified as "
+            + "identifiers or computed values, so the excluded units cannot be named");
+      }
+      boolean star = false;
+      Set<String> pass = new LinkedHashSet<>();
+      Set<String> derived = new LinkedHashSet<>();
+      for (SqlNode item : select.getSelectList()) {
+        SqlNode expr = item;
+        String alias = null;
+        if (item.getKind() == SqlKind.AS) {
+          expr = ((SqlCall) item).operand(0);
+          alias = ((SqlIdentifier) ((SqlCall) item).operand(1)).getSimple();
+        }
+        if (expr instanceof SqlIdentifier) {
+          SqlIdentifier id = (SqlIdentifier) expr;
+          if (id.isStar()) {
+            star = true;
+          } else {
+            pass.add((alias != null ? alias : id.names.get(id.names.size() - 1))
+                .toLowerCase(Locale.ROOT));
+          }
+        } else if (alias != null) {
+          derived.add(alias.toLowerCase(Locale.ROOT));
+        }
+      }
+      return new OutputShape(star, pass, derived);
+    }
+
+    private static SqlSelect outermostSelect(SqlNode node) {
+      if (node instanceof SqlSelect) {
+        return (SqlSelect) node;
+      }
+      if (node instanceof org.apache.calcite.sql.SqlWith) {
+        return outermostSelect(((org.apache.calcite.sql.SqlWith) node).body);
+      }
+      if (node instanceof org.apache.calcite.sql.SqlOrderBy) {
+        return outermostSelect(((org.apache.calcite.sql.SqlOrderBy) node).query);
+      }
+      if (node instanceof SqlBasicCall && (node.getKind() == SqlKind.UNION
+          || node.getKind() == SqlKind.INTERSECT || node.getKind() == SqlKind.EXCEPT)) {
+        return outermostSelect(((SqlBasicCall) node).operand(0));
+      }
+      return null;
+    }
+  }
+
   /** The column that identifies a unit, found by value rather than by a fixed list, in the
-   *  columns both results share. A {@code name} column is preferred over a code. */
-  static String labelColumn(ArrayNode original, ArrayNode wider) throws Unavailable {
+   *  columns both results share and that the SQL passes through as identifiers (never an
+   *  aggregate or computed column). A {@code name} column is preferred over a code. */
+  static String labelColumn(ArrayNode original, ArrayNode wider, OutputShape shape)
+      throws Unavailable {
     if (wider == null || wider.size() == 0) {
       throw new Unavailable("the query without its exclusions returned no rows");
     }
@@ -279,7 +367,8 @@ final class ExclusionProbe {
     Iterator<String> it = wider.get(0).fieldNames();
     while (it.hasNext()) {
       String c = it.next();
-      if (original == null || original.size() == 0 || original.get(0).has(c)) {
+      if ((original == null || original.size() == 0 || original.get(0).has(c))
+          && shape.isPassThrough(c)) {
         shared.add(c);
       }
     }
@@ -298,7 +387,8 @@ final class ExclusionProbe {
     }
     if (fallback == null) {
       throw new Unavailable("the result has no unit-label column (state, county, name, code) "
-          + "to compare, so the excluded units cannot be named");
+          + "that is a plain identifier rather than an aggregate or computed value, so the "
+          + "excluded units cannot be named");
     }
     return fallback;
   }

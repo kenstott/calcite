@@ -319,6 +319,66 @@ SELECT 'fiscal', 'exempt_org_990', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL object_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true) WHERE object_id IS NULL);
 
+-- Form 990 expense/compensation fields (calcite#565): filed on return_type 990 only.
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990', 'T7_part_ix_total_matches_part_i',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Form 990 rows whose Part IX line 25 col A differs from Part I total expenses by more than $1'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true)
+  WHERE return_type = '990' AND functional_expenses_total IS NOT NULL AND total_expenses IS NOT NULL
+    AND abs(functional_expenses_total - total_expenses) > 1);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990', 'T8_part_ix_columns_sum',
+  CASE WHEN pct <= 10 THEN 'pass' ELSE 'warn' END, pct, 10,
+  'Percent of Form 990 rows where Part IX B+C+D differs from col A by more than $1 (filer arithmetic errors / blank columns exist in the source)'
+FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE abs(functional_expenses_program + functional_expenses_mgmt_general + functional_expenses_fundraising - functional_expenses_total) > 1)
+         / NULLIF(COUNT(*), 0) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true)
+  WHERE return_type = '990' AND functional_expenses_program IS NOT NULL AND functional_expenses_mgmt_general IS NOT NULL
+    AND functional_expenses_fundraising IS NOT NULL AND functional_expenses_total IS NOT NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990', 'T9_line15_16b_within_total_expenses',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Form 990 rows where Part I line 15 or line 16b exceeds total expenses'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true)
+  WHERE return_type = '990' AND total_expenses IS NOT NULL
+    AND (salaries_comp_benefits > total_expenses + 1 OR fundraising_expenses_16b > total_expenses + 1));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990', 'T10_form990_new_fields_populated',
+  CASE WHEN pct >= 95 THEN 'pass' ELSE 'fail' END, pct, 95,
+  'Percent of Form 990 rows carrying line 15, 16b, Part IX col A and Part VII persons'
+FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE salaries_comp_benefits IS NOT NULL AND fundraising_expenses_16b IS NOT NULL
+         AND functional_expenses_total IS NOT NULL AND part_vii_persons_listed IS NOT NULL) / NULLIF(COUNT(*), 0) AS pct
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true) WHERE return_type = '990');
+
+-- Listed vs written (#970): one row per filing the IRS index lists, so for a receipt year the
+-- table must hold exactly as many rows as index_{year}.csv has filings. Checked for the two most
+-- recent receipt years present in the table. A DQ bucket holds only the dqRowLimit sample
+-- (5000 rows per load), so a year at or under that cap is reported as the sample it is.
+SET VARIABLE y_latest = (SELECT max(year) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true));
+SET VARIABLE url_latest = 'https://apps.irs.gov/pub/epostcard/990/xml/' || getvariable('y_latest') || '/index_' || getvariable('y_latest') || '.csv';
+SET VARIABLE url_prior = 'https://apps.irs.gov/pub/epostcard/990/xml/' || (CAST(getvariable('y_latest') AS INTEGER) - 1) || '/index_' || (CAST(getvariable('y_latest') AS INTEGER) - 1) || '.csv';
+
+-- apps.irs.gov answers ranged reads with a body the httpfs reader rejects; download whole.
+SET force_download = true;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990', 'T11_written_matches_irs_index_' || y,
+  CASE WHEN written = listed THEN 'pass'
+       WHEN written <= 5000 THEN 'pass'
+       ELSE 'fail' END,
+  listed - written, 0,
+  'IRS index filings minus rows written for receipt year ' || y || ' (index ' || listed || ', table ' || written
+    || CASE WHEN written <= 5000 AND written <> listed THEN '; dqRowLimit sample, full count verified on production only' ELSE '' END || ')'
+FROM (
+  SELECT y, listed, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true) t WHERE CAST(t.year AS VARCHAR) = y) AS written
+  FROM (SELECT CAST(getvariable('y_latest') AS VARCHAR) AS y, COUNT(*) AS listed FROM read_csv(getvariable('url_latest'), all_varchar = true, strict_mode = false)
+        UNION ALL
+        SELECT CAST(CAST(getvariable('y_latest') AS INTEGER) - 1 AS VARCHAR), COUNT(*) FROM read_csv(getvariable('url_prior'), all_varchar = true, strict_mode = false)));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: usaspending_by_agency (USAspending; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────

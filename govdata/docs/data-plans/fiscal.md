@@ -160,6 +160,13 @@ filing year. Joins to `ref` on EIN (a nonprofit analog to the `ref` SEC CIK brid
 | total_expenses | DOUBLE | Total expenses |
 | total_assets | DOUBLE | End-of-year total assets |
 | form_type | VARCHAR | 990 / 990-EZ / 990-PF |
+| salaries_comp_benefits | DOUBLE | Form 990 Part I line 15 (return_type 990 only) |
+| fundraising_expenses_16b | DOUBLE | Form 990 Part I line 16b |
+| functional_expenses_total / _program / _mgmt_general / _fundraising | DOUBLE | Form 990 Part IX line 25 columns A / B / C / D |
+| officer_comp_part_ix_line5 | DOUBLE | Form 990 Part IX line 5 column A |
+| part_vii_persons_listed, part_vii_comp_from_org / _from_related_orgs / _other_comp | INTEGER / DOUBLE | Form 990 Part VII Section A columns D / E / F summed over listed persons |
+
+The Part I line 15 / 16b, Part IX and Part VII columns are populated for full Form 990 returns only; they are null on 990-EZ, 990-PF and 990-T returns, which do not report those parts, and null on a 990 whose filer left a Part IX column blank (the XML omits it).
 
 ### `exempt_org_master` — delivered as `IrsEoBmfProvider`
 

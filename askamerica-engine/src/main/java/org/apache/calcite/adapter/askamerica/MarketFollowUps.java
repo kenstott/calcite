@@ -57,7 +57,7 @@ final class MarketFollowUps {
         boolean built = priced.hasNonNull("forecast_built");
         ArrayNode out = MAPPER.createArrayNode();
 
-        if (!forecastGiven && !built && priced.hasNonNull("driver")) {
+        if (!forecastGiven && !built && priced.hasNonNull("driver") && buildable(priced)) {
             ObjectNode a = event(source, eventId);
             a.put("build_forecast", true);
             add(out, "What does the engine's own forecast say this event is worth?",
@@ -258,7 +258,7 @@ final class MarketFollowUps {
                 market(text(leg, "source", "basket leg"), marketId));
         }
 
-        if (first.path("forecast").isNull() && first.hasNonNull("driver")) {
+        if (first.path("forecast").isNull() && first.hasNonNull("driver") && buildable(first)) {
             String eventId = first.get("event_id").asText();
             ObjectNode a = event(first.get("source").asText(), eventId);
             a.put("build_forecast", true);
@@ -266,6 +266,11 @@ final class MarketFollowUps {
                 "price_market_event", a);
         }
         return capped(out);
+    }
+
+    /** False for a discrete outcome, which has no series for build_forecast to build. */
+    private static boolean buildable(JsonNode event) {
+        return !"outcome".equals(event.path("basis").asText());
     }
 
     /** Legs of the best subset a search kept; of all legs when no search ran. */
