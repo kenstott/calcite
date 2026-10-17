@@ -481,7 +481,8 @@ public final class IcebergSchemaCache {
     for (String d : declared) {
       TableSchema found = null;
       for (Map.Entry<String, TableSchema> e : ENTRIES.entrySet()) {
-        if (e.getKey().endsWith("/" + d)) {
+        // A local warehouse's table location on Windows is separated by backslashes.
+        if (e.getKey().replace('\\', '/').endsWith("/" + d)) {
           found = e.getValue();
           break;
         }
