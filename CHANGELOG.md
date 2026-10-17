@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.118.0](https://github.com/kenstott/calcite/compare/engine-v0.117.0...engine-v0.118.0) (2026-10-17)
+
+
+### Features
+
+* **askamerica:** market discovery covers elections, disasters, health, law and fiscal events, not only the economy ([#968](https://github.com/kenstott/calcite/issues/968)) ([085e920](https://github.com/kenstott/calcite/commit/085e92090bebf609bd72506e0d4019d2225489a6))
+* **census:** acs_congressional_district, ACS 5-year profile by congressional district and Congress ([8f4e96c](https://github.com/kenstott/calcite/commit/8f4e96c4112fb16ed213efdbafd06f3dce518156))
+* **disasters:** ihp_valid_registrations_by_county, FEMA IHP registrations aggregated to disaster x county ([edfd7c1](https://github.com/kenstott/calcite/commit/edfd7c1a36b5ba33d8043542af6beea152111cc9))
+* **fiscal:** exempt_org_990 carries Part I lines 15/16b, Part IX functional expenses and Part VII compensation ([a88e37e](https://github.com/kenstott/calcite/commit/a88e37edb6acea7678cf9d33c1ea84541606dc90))
+* **geo:** county_cbsa_delineation, OMB metropolitan/micropolitan delineation by county and vintage ([7d47476](https://github.com/kenstott/calcite/commit/7d4747608f1f2529e767d32f486c1035286594b8))
+* **govdata:** declared coverageWindow lets the measurer skip out-of-range dates and count them; measure 8 tables ([#975](https://github.com/kenstott/calcite/issues/975)) ([3a63fe0](https://github.com/kenstott/calcite/commit/3a63fe0eaca90fe51472bc1c282a00bc2e360b55))
+* **govdata:** measured observedCoverage for 48 timeColumn tables ([#963](https://github.com/kenstott/calcite/issues/963)) ([3211a71](https://github.com/kenstott/calcite/commit/3211a71a3ed67ef86e252ea4a9efc3d4513fffcf))
+* **govdata:** measured observedCoverage for the tables [#962](https://github.com/kenstott/calcite/issues/962) declared ([#963](https://github.com/kenstott/calcite/issues/963)) ([4dcd74d](https://github.com/kenstott/calcite/commit/4dcd74df8c12762a600c6d1faeab7cba5926ded4))
+* **govdata:** observedCoverage for house_price_index, medicare_geographic_variation, noaa_feus_economic_impacts ([#958](https://github.com/kenstott/calcite/issues/958)) ([da288c9](https://github.com/kenstott/calcite/commit/da288c9e62efa7c97c8be4985a04b5d77e0076a2))
+* **govdata:** update-coverage-metadata measures observed years for every timeColumn table ([#963](https://github.com/kenstott/calcite/issues/963)) ([399e0e8](https://github.com/kenstott/calcite/commit/399e0e882288587b8bcfe7bb0bd57a75191e651f))
+* **govdata:** update-coverage-metadata reads YYYYMMDD dates and tells YYYY-MM from YYYY-YY per column ([#963](https://github.com/kenstott/calcite/issues/963)) ([bfe05cb](https://github.com/kenstott/calcite/commit/bfe05cb0d69b27f1b84143ca844b0f24d7506a7f))
+* **officials:** house_election_results (1976-2018) and senate_election_results (1976-2024) from MIT Election Lab ([eb41edc](https://github.com/kenstott/calcite/commit/eb41edc306ad253954120dcc81e985db1baf1d62))
+* **officials:** house_election_results 2020 and 2022 from FEC official results workbooks ([0f9195e](https://github.com/kenstott/calcite/commit/0f9195e0e92d4d88a74d609c9ed1c62adb714e6c))
+
+
+### Bug Fixes
+
+* **askamerica:** an empty report-check history after a restart says the server restarted and how to recover ([#964](https://github.com/kenstott/calcite/issues/964)) ([aae2154](https://github.com/kenstott/calcite/commit/aae2154ba9bda96c01f0248d6587864bb49746e6))
+* **askamerica:** explicit_exclusion never takes an aggregate or computed column as the unit label ([#961](https://github.com/kenstott/calcite/issues/961)) ([ac2407d](https://github.com/kenstott/calcite/commit/ac2407d1d2c5953b03438fc3968763e2ca4410ac))
+* **askamerica:** still-starting and read-timeout errors state what actually stalled (govdata-ops[#983](https://github.com/kenstott/calcite/issues/983)) ([e08461f](https://github.com/kenstott/calcite/commit/e08461f24f804f7a4cb37b0787326ff7e9106ade))
+* **etl:** a pipeline whose periods throw is a failed table and force-reprocess exits non-zero ([#982](https://github.com/kenstott/calcite/issues/982)) ([2cfb25c](https://github.com/kenstott/calcite/commit/2cfb25c84d0996751b2eb5b10022c5711b8c1014))
+* **file:** a declared SQL view no longer forces per-table discovery at mount; S3 bucket check moves to first write (govdata-ops[#985](https://github.com/kenstott/calcite/issues/985)) ([fd62c5d](https://github.com/kenstott/calcite/commit/fd62c5dfa66107c6e0845f1396bd8a1df3f8945b))
+* **file:** describe_table/restart read no object store for statistics; seed records total-records and NDV for every declared table (govdata-ops[#984](https://github.com/kenstott/calcite/issues/984)) ([25b636b](https://github.com/kenstott/calcite/commit/25b636b8766db0877c10ecaa57984b3b4ba4fba1))
+* **govdata:** a table that declares timeColumn is reported as time-varying, not as having no year dimension ([#958](https://github.com/kenstott/calcite/issues/958)) ([3994126](https://github.com/kenstott/calcite/commit/3994126d85c2f0dc0054a0dca55ba92bbc8e3e1e))
+* **govdata:** cdc_county_injury_mortality emits an observation year parsed from period / ttm_date_range and declares timeColumn year ([#962](https://github.com/kenstott/calcite/issues/962)) ([59b9378](https://github.com/kenstott/calcite/commit/59b93782f2f35286eb5860ba31ed1e43573ec80c))
+* **govdata:** census acs5 tables reach the newest published vintage; drop releaseMonth 12 from the acs year anchors ([#979](https://github.com/kenstott/calcite/issues/979)) ([c546d09](https://github.com/kenstott/calcite/commit/c546d097684b464fde9b9f11eca8223614e04ba6))
+* **govdata:** dry-run of update-coverage-metadata reports DRY-RUN, not UNCHANGED ([#963](https://github.com/kenstott/calcite/issues/963)) ([40024f6](https://github.com/kenstott/calcite/commit/40024f67307c1f1e8b2909641241540db5dc2de0))
+* **govdata:** exempt_org_990 fails loudly on a batch it cannot read; read Deflate64 and lower-case-suffix batches ([#970](https://github.com/kenstott/calcite/issues/970)) ([696bf10](https://github.com/kenstott/calcite/commit/696bf10b9959a0f63b521fde7a361b92adc933ac))
+* **govdata:** exempt_org_990 finds every filing in the year's published zips, not the index batch ids ([#970](https://github.com/kenstott/calcite/issues/970), [#974](https://github.com/kenstott/calcite/issues/974)) ([5da9157](https://github.com/kenstott/calcite/commit/5da9157ff69268ba090269810f77e0afa88782e3))
+* **govdata:** exempt_org_990 reads the pre-2021 zip layout (numbered series + CT1, grouped by object-id year) ([#970](https://github.com/kenstott/calcite/issues/970), [#974](https://github.com/kenstott/calcite/issues/974)) ([b2380aa](https://github.com/kenstott/calcite/commit/b2380aa8fafc0b0ff0eaa4d31fc34ad68edc3baa))
+* **govdata:** tables whose observation year is not a column named year declare timeColumn instead of reporting form none ([#958](https://github.com/kenstott/calcite/issues/958)) ([a73c420](https://github.com/kenstott/calcite/commit/a73c420cf54a64218c9d1ea092862e0f4419503d))
+* **govdata:** timeColumn for ahrf_physician_supply, fda_drug_recalls, clinical_trials; chr_premature_death documented as a single vintage ([#962](https://github.com/kenstott/calcite/issues/962)) ([f31761e](https://github.com/kenstott/calcite/commit/f31761ef9f49753afd6f09df706e84e18d76ab8b))
+* **govdata:** timeColumn for rmis_releases, safety_complaints, drinking_water_violations and the four USAspending award tables ([#962](https://github.com/kenstott/calcite/issues/962)) ([4f6fcb9](https://github.com/kenstott/calcite/commit/4f6fcb9f199deab193da981fff58cc586441aa34))
+* **govdata:** update-coverage-metadata refuses implausible years instead of publishing them ([#963](https://github.com/kenstott/calcite/issues/963)) ([16bbe6b](https://github.com/kenstott/calcite/commit/16bbe6b33e4a686ae597b4b43102644451072851))
+
 ## [0.117.0](https://github.com/kenstott/calcite/compare/engine-v0.116.1...engine-v0.117.0) (2026-10-17)
 
 
