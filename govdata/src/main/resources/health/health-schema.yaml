@@ -5647,6 +5647,7 @@ partitionedTables:
         runCompaction: true
 
   - name: cdc_county_injury_mortality
+    timeColumn: year  # observation year, derived by the transformer from period / ttm_date_range
     # Freshness gate: CDC Socrata JSON query API has no meaningful Last-Modified, so
     # this hashes the response body post-fetch to skip the materialize/commit when
     # unchanged (fails open on a missing prior token).
@@ -5664,7 +5665,10 @@ partitionedTables:
       instead of a crude rate, flagged by rate_m=true with its credible interval in rate_m_ci.
       rate is therefore a crude rate where rate_m is false and a model estimate where rate_m is
       true, so a population-weighted rate over many counties blends the two. rate is NULL only
-      where CDC publishes no estimate at all.
+      where CDC publishes no estimate at all. year is the observation year: the calendar year
+      for a Yearly row (2019 onward), and for a trailing-twelve-months row the year in which the
+      window ends (ttm_date_range, e.g. June 2025 to May 2026 is 2026), so filter period to the
+      four-digit rows for like-for-like annual comparisons.
     columns:
       - name: geoid
         comment: "County FIPS code"
@@ -5686,8 +5690,12 @@ partitionedTables:
         comment: "Death category: All_Homicide, All_Suicide, Drug_OD, FA_Deaths (all firearm deaths), FA_Homicide, FA_Suicide"
         type: VARCHAR
         nullable: true
+      - name: year
+        comment: "Observation year: the four-digit period for a yearly row, the year the window ends for a trailing-twelve-months row (from ttm_date_range)"
+        type: INTEGER
+        nullable: true
       - name: period
-        comment: "Yearly or trailing-twelve-months reporting period"
+        comment: "Yearly (a four-digit year) or TTM (trailing-twelve-months) reporting period"
         type: VARCHAR
         nullable: true
       - name: count_sup
@@ -5717,6 +5725,9 @@ partitionedTables:
         comment: "Constant record-type discriminator cdc_county_injury_mortality"
         type: VARCHAR
         nullable: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.CdcCountyInjuryMortalityResponseTransformer"
 
     source:
       type: http
