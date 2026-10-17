@@ -6839,9 +6839,14 @@ public class McpServer {
                 + "cannot be identified");
             return;
         }
-        long now = System.currentTimeMillis();
-        CallLogStore.deleteStale(dir, now, CALL_LOG_FILE_MAX_AGE_MS);
-        CallLogStore store = new CallLogStore(file.get(), MAPPER, CALL_LOG_MAX, IDLE_GAP_BOUNDARY_MS);
+        CallLogStore.deleteStale(dir, System.currentTimeMillis(), CALL_LOG_FILE_MAX_AGE_MS);
+        restoreCallLog(file.get(), System.currentTimeMillis());
+    }
+
+    /** Loads the earlier process's calls from {@code file} into {@link #CALL_LOG} and starts
+     *  appending to it; split from {@link #enableCallLogPersistence} so a test can restart. */
+    static void restoreCallLog(java.nio.file.Path file, long now) {
+        CallLogStore store = new CallLogStore(file, MAPPER, CALL_LOG_MAX, IDLE_GAP_BOUNDARY_MS);
         java.util.List<ObjectNode> earlier = store.load(now);
         synchronized (CALL_LOG) {
             CALL_LOG.addAll(0, earlier);
@@ -6854,8 +6859,7 @@ public class McpServer {
         }
         callLogStore = store;
         if (!earlier.isEmpty()) {
-            log.println("[askamerica-mcp] reloaded " + earlier.size() + " call(s) from "
-                + file.get());
+            log.println("[askamerica-mcp] reloaded " + earlier.size() + " call(s) from " + file);
         }
     }
 
@@ -6865,11 +6869,18 @@ public class McpServer {
         synchronized (CALL_LOG) {
             earliest = CALL_LOG.isEmpty() ? null : CALL_LOG.get(0).path("ts").asText(null);
         }
-        return " (This engine process started at " + PROCESS_START
-            + (earliest == null ? " and has recorded no calls" : "; its call history begins at " + earliest)
-            + ". History survives an engine restart only when the restart came within "
-            + IDLE_GAP_BOUNDARY_MS / 60000 + " minutes of the last call; after a longer gap, rerun "
-            + "the key queries so they are on record.)";
+        long idleMinutes = IDLE_GAP_BOUNDARY_MS / 60000;
+        if (earliest == null) {
+            return " (The AskAmerica server restarted at " + PROCESS_START + " and has no record of "
+                + "earlier calls: the record is kept across a restart only when the restart came "
+                + "within " + idleMinutes + " minutes of the last call. Queries run before then "
+                + "are not lost, only unrecorded -- rerun the key queries now and they will be "
+                + "on record.)";
+        }
+        return " (This engine process started at " + PROCESS_START + "; its call history begins at "
+            + earliest + ". History survives an engine restart only when the restart came within "
+            + idleMinutes + " minutes of the last call; after a longer gap, rerun the key queries "
+            + "so they are on record.)";
     }
 
     /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
