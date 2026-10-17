@@ -225,8 +225,10 @@ def _post_usage(key: str, sql: str, row_count: int, egress_bytes: int, duration_
     )
     try:
         urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT_SECONDS).read()
-    except Exception:
-        pass  # best-effort -- metering never surfaces an error to the caller
+    except Exception as e:
+        # Best-effort -- metering never surfaces an error to the caller, but a report that
+        # does not arrive must leave a trace or usage silently reads zero.
+        log.warning("usage report was not accepted (%s: %s)", type(e).__name__, e)
 
 
 class EgressSampler:
