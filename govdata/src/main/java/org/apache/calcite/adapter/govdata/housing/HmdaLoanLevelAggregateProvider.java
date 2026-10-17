@@ -178,12 +178,15 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
    * a server that will not honour {@code Range}, or that keeps failing without progress, raises
    * an {@link IOException} instead.
    */
-  static final class ResumableHttpStream extends InputStream {
+  public static final class ResumableHttpStream extends InputStream {
+    private static final String HMDA_USER_AGENT = "Apache-Calcite-GovData/1.0";
     private static final int MAX_STALLED_RESUMES = 5;
     private static final int CONNECT_TIMEOUT_MS = 60_000;
     private static final int IDLE_TIMEOUT_MS = 600_000;
     private static final long RESUME_BACKOFF_MS = 5_000L;
 
+    private final String label;
+    private final String userAgent;
     private final String url;
     private final long expectedBytes;
     private final long backoffMs;
@@ -191,8 +194,10 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     private long position;
     private int stalledResumes;
 
-    private ResumableHttpStream(String url, long expectedBytes, InputStream current,
-        long backoffMs) {
+    private ResumableHttpStream(String label, String userAgent, String url, long expectedBytes,
+        InputStream current, long backoffMs) {
+      this.label = label;
+      this.userAgent = userAgent;
       this.url = url;
       this.expectedBytes = expectedBytes;
       this.current = current;
@@ -204,22 +209,43 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     }
 
     static ResumableHttpStream open(String url, long backoffMs) throws IOException {
-      HttpURLConnection conn = connect(url, 0);
+      return open("HMDA", url, backoffMs);
+    }
+
+    /**
+     * Opens {@code url} for any large file download; {@code label} names the dataset in the
+     * log lines and exceptions.
+     */
+    public static ResumableHttpStream open(String label, String url, long backoffMs)
+        throws IOException {
+      return open(label, HMDA_USER_AGENT, url, backoffMs);
+    }
+
+    /**
+     * As {@link #open(String, String, long)} with an explicit {@code User-Agent}; {@code null}
+     * sends the JDK's own ({@code Java/<version>}), for hosts whose CDN rejects other agents.
+     */
+    public static ResumableHttpStream open(String label, String userAgent, String url,
+        long backoffMs) throws IOException {
+      HttpURLConnection conn = connect(url, 0, userAgent);
       long expected = conn.getContentLengthLong();
       if (expected < 0) {
         conn.disconnect();
-        throw new IOException("HMDA download from " + url + " returned no Content-Length; "
+        throw new IOException(label + " download from " + url + " returned no Content-Length; "
             + "cannot verify the file arrived whole");
       }
-      return new ResumableHttpStream(url, expected, conn.getInputStream(), backoffMs);
+      return new ResumableHttpStream(label, userAgent, url, expected, conn.getInputStream(), backoffMs);
     }
 
-    private static HttpURLConnection connect(String url, long from) throws IOException {
+    private static HttpURLConnection connect(String url, long from, String userAgent)
+        throws IOException {
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
       conn.setReadTimeout(IDLE_TIMEOUT_MS);
       conn.setInstanceFollowRedirects(true);
-      conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+      if (userAgent != null) {
+        conn.setRequestProperty("User-Agent", userAgent);
+      }
       if (from > 0) {
         conn.setRequestProperty("Range", "bytes=" + from + "-");
       }
@@ -246,7 +272,7 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
           continue;
         }
         if (n < 0) {
-          resume(new IOException("HMDA download ended after " + position + " of " + expectedBytes
+          resume(new IOException(label + " download ended after " + position + " of " + expectedBytes
               + " bytes"));
           continue;
         }
@@ -261,16 +287,16 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       closeQuietly();
       while (true) {
         if (++stalledResumes > MAX_STALLED_RESUMES) {
-          throw new IOException("HMDA download stalled at " + position + " of " + expectedBytes
+          throw new IOException(label + " download stalled at " + position + " of " + expectedBytes
               + " bytes after " + MAX_STALLED_RESUMES + " resume attempts", cause);
         }
-        LOGGER.warn("HMDA download interrupted at {} of {} bytes ({}); resuming (attempt {}/{})",
-            position, expectedBytes, cause.getMessage(), stalledResumes, MAX_STALLED_RESUMES);
+        LOGGER.warn("{} download interrupted at {} of {} bytes ({}); resuming (attempt {}/{})",
+            label, position, expectedBytes, cause.getMessage(), stalledResumes, MAX_STALLED_RESUMES);
         try {
           Thread.sleep(backoffMs * stalledResumes);
         } catch (InterruptedException ie) {
           Thread.currentThread().interrupt();
-          throw new InterruptedIOException("HMDA download interrupted while resuming");
+          throw new InterruptedIOException(label + " download interrupted while resuming");
         }
         try {
           current = openFrom(position);
@@ -282,13 +308,13 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
     }
 
     private InputStream openFrom(long from) throws IOException {
-      HttpURLConnection conn = connect(url, from);
+      HttpURLConnection conn = connect(url, from, userAgent);
       int code = conn.getResponseCode();
       String range = conn.getHeaderField("Content-Range");
       String expectedRange = "bytes " + from + "-" + (expectedBytes - 1) + "/" + expectedBytes;
       if (code != HttpURLConnection.HTTP_PARTIAL || !expectedRange.equals(range)) {
         conn.disconnect();
-        throw new IOException("HMDA resume from byte " + from + " rejected: HTTP " + code
+        throw new IOException(label + " resume from byte " + from + " rejected: HTTP " + code
             + ", Content-Range " + range + " (wanted " + expectedRange + ")");
       }
       return conn.getInputStream();
@@ -304,7 +330,8 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       try {
         current.close();
       } catch (IOException e) {
-        LOGGER.debug("HMDA download: error closing interrupted connection: {}", e.getMessage());
+        LOGGER.debug("{} download: error closing interrupted connection: {}", label,
+            e.getMessage());
       }
     }
   }
