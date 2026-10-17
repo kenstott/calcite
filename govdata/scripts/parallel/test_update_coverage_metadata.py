@@ -130,6 +130,60 @@ YAML = """partitionedTables:
 """
 
 
+class CoverageWindowTest(unittest.TestCase):
+    """A declared coverageWindow excludes out-of-range rows, counts them, and says so in the block."""
+
+    def windowed(self, sql_type, values, window_min=1976, max_year=2026):
+        return ucm.measure_relation("", rel(sql_type, values), "c", max_year, window_min=window_min)
+
+    def test_sentinel_rows_are_excluded_and_counted(self):
+        m = self.windowed("DATE", ["'1900-01-01'", "'1900-01-01'", "'1930-11-29'", "'1976-06-01'",
+                                   "'2020-01-01'"])
+        self.assertEqual((1976, 2020, 2, 5, 3), (m["min_year"], m["max_year"], m["distinct_years"],
+                                                 m["row_count"], m["excluded"]["rows"]))
+        self.assertEqual([1976, 2020], m["years"])
+
+    def test_future_rows_beyond_the_window_are_excluded(self):
+        m = self.windowed("VARCHAR", ["'2020-05'", "'2040-01-01'", "'2099-01-01'"], max_year=2036)
+        self.assertEqual((2020, 2020, 2), (m["min_year"], m["max_year"], m["excluded"]["rows"]))
+
+    def test_window_applies_to_unreadable_years_a_default_would_refuse(self):
+        with self.assertRaises(ucm.MeasureError):
+            measure("VARCHAR", ["'0013-03-05'", "'2013-03-05'"])
+        m = self.windowed("VARCHAR", ["'0013-03-05'", "'2013-03-05'"], window_min=1990)
+        self.assertEqual((2013, 1), (m["min_year"], m["excluded"]["rows"]))
+
+    def test_window_leaving_nothing_fails(self):
+        with self.assertRaises(ucm.MeasureError) as ctx:
+            self.windowed("DATE", ["'1900-01-01'"])
+        self.assertIn("leaves no row", str(ctx.exception))
+
+    def test_no_window_keeps_the_default_refusal_and_no_excluded_field(self):
+        m = measure("INTEGER", [2019, 2020])
+        self.assertIsNone(m["excluded"])
+        self.assertNotIn("excludedRows", "\n".join(ucm.block_from_measurement(m, "2026-10-17T00:00:00Z")))
+
+    def test_block_records_the_exclusion(self):
+        m = self.windowed("DATE", ["'1900-01-01'", "'2020-01-01'"])
+        lines = ucm.block_from_measurement(m, "2026-10-17T00:00:00Z")
+        self.assertIn("      rowCount: 2", lines)
+        self.assertIn("      excludedRows: 1", lines)
+        self.assertIn("      excludedOutsideYears: [1976, 2026]", lines)
+        self.assertLess(lines.index("      excludedRows: 1"), lines.index('      checkedAt: "2026-10-17T00:00:00Z"'))
+
+    def test_window_declaration_is_validated(self):
+        ok = {"minYear": 1976, "maxFutureYears": 0, "reason": "sentinel"}
+        self.assertEqual((1976, 0), ucm.validate_window(ok))
+        for bad in ({"minYear": 1976, "maxFutureYears": 0},
+                    dict(ok, extra=1),
+                    dict(ok, minYear="1976"),
+                    dict(ok, maxFutureYears=-1),
+                    dict(ok, reason="  "),
+                    "1976"):
+            with self.assertRaises(ucm.MeasureError, msg=repr(bad)):
+                ucm.validate_window(bad)
+
+
 class EditYamlTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()

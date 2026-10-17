@@ -121,6 +121,28 @@ public class GovDataCatalogCoverageTest {
     assertTrue(checked > 0, "expected at least one table with no year axis across geo/ref/edu");
   }
 
+  /**
+   * drinking_water_violations declares a coverageWindow because 19 rows carry 1900-1930
+   * placeholders; its observed range must start at the real first year and say how many rows the
+   * window left out, not present the range as the whole table.
+   */
+  @Test void coverageWindowExclusionIsReported() {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList("environment"));
+    JsonNode cov = coverageOf(catalog, "environment", "drinking_water_violations");
+    assertNotNull(cov, "drinking_water_violations should have a coverage node");
+    assertEquals(1976, cov.path("observed_first_year").asInt());
+    assertTrue(cov.path("observed_excluded_rows").asInt() > 0, "excluded rows must be reported");
+    assertEquals(1970, cov.path("observed_window_first_year").asInt());
+    for (JsonNode s : catalog) {
+      for (JsonNode t : s.path("tables")) {
+        if ("drinking_water_violations".equals(t.path("name").asText())) {
+          assertTrue(t.path("comment").asText().contains("not counting"),
+              "the table description must carry the exclusion");
+        }
+      }
+    }
+  }
+
   /** A table with no observedCoverage block must not claim authority it does not have. */
   @Test void omitsAuthoritativeWhenNothingWasObserved() {
     ArrayNode catalog = GovDataCatalog.build(Arrays.asList("edu"));
