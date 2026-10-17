@@ -174,6 +174,38 @@ public class GovDataCatalogCoverageTest {
   }
 
   /**
+   * The observed range of a table whose timeColumn is not an integer year must reach the catalog
+   * the same way a year column's does (#963): a DATE column (enforcement_actions.effective_date),
+   * a string date (kev_catalog.date_added) and a school-year label
+   * (cdc_school_vaccination_coverage.school_year) each carry first/last year, and the table
+   * description repeats them.
+   */
+  @Test void dateAndLabelTimeColumnsCarryObservedBounds() {
+    assertObservedFor("banking", "enforcement_actions", "effective_date");
+    assertObservedFor("cyber_vuln", "kev_catalog", "date_added");
+    assertObservedFor("health", "cdc_school_vaccination_coverage", "school_year");
+  }
+
+  private static void assertObservedFor(String schema, String table, String column) {
+    ArrayNode catalog = GovDataCatalog.build(Arrays.asList(schema));
+    JsonNode cov = coverageOf(catalog, schema, table);
+    assertNotNull(cov, table + " must carry a coverage node");
+    assertEquals(column, cov.path("column").asText());
+    assertTrue(cov.hasNonNull("observed_first_year") && cov.hasNonNull("observed_last_year"),
+        table + " must carry the measured first/last year");
+    assertTrue(cov.path("observed_first_year").asInt() <= cov.path("observed_last_year").asInt());
+    assertEquals("observed", cov.path("authoritative").asText());
+    for (JsonNode s : catalog) {
+      for (JsonNode t : s.path("tables")) {
+        if (table.equals(t.path("name").asText())) {
+          assertTrue(t.path("comment").asText().contains("Observed coverage: "),
+              table + " description must state the observed coverage");
+        }
+      }
+    }
+  }
+
+  /**
    * Every table or view that declares {@code timeColumn} must name one of its own columns. The
    * catalog throws for the schema it is asked about, but only when that schema is requested; this
    * walks every bundled schema YAML so a typo in any of them fails the build rather than the
