@@ -78,10 +78,12 @@ class PgwireGovDataConnectorStartTest {
 
   @Test void aStartStillRunningIsWaitedOnForABoundedTimeAndNeverBegunTwice() throws Exception {
     AtomicInteger starts = new AtomicInteger();
+    CountDownLatch begun = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     Connection up = connection();
     java.util.concurrent.Callable<Connection> slow = () -> {
       starts.incrementAndGet();
+      begun.countDown();
       release.await();
       return up;
     };
@@ -94,6 +96,9 @@ class PgwireGovDataConnectorStartTest {
           assertThrows(IllegalStateException.class,
               () -> starter.await(slow, 200, PgwireGovDataConnectorStartTest::ignore));
       assertTrue(second.getMessage().contains("still starting"), second.getMessage());
+      // The start runs on a thread of its own, which a busy machine may not have scheduled
+      // within the two calls' waits: count once it has begun.
+      assertTrue(begun.await(60, java.util.concurrent.TimeUnit.SECONDS), "the start never began");
       assertEquals(1, starts.get(), "the second call waited on the first call's start");
     } finally {
       release.countDown();
