@@ -74,7 +74,8 @@ final class PgwireGovDataConnector {
    * a spawn that can't reuse an already-seeded catalog (GOVDATA_DUCKDB_CATALOG unset, or a
    * genuinely first-ever install) cold-mounts all 26 schemas from S3/Iceberg metadata, which
    * takes minutes, not seconds — confirmed live (a 60s timeout here failed a real spawn that
-   * was still actively mounting schemas, not stuck).
+   * was still actively mounting schemas, not stuck). The slow part is the JVM-side model mount
+   * (one schema adapter after another); the catalog itself loads from the shipped cache.
    */
   private static final int SPAWN_TIMEOUT_MILLIS = 600_000;
   private static final int SPAWN_POLL_INTERVAL_MILLIS = 500;
@@ -268,9 +269,38 @@ final class PgwireGovDataConnector {
     if (holder != null) {
       return holder;
     }
-    return "pgwire-govdata, the data server, is still starting on " + host() + ":" + port()
-        + " (" + secondsSoFar + "s so far). A first start mounts every schema and can take "
-        + "several minutes. Try this call again shortly.";
+    return "pgwire-govdata, the data server, has not answered on " + host() + ":" + port()
+        + " after " + secondsSoFar + "s. What its own log shows: " + startState()
+        + " Try this call again shortly.";
+  }
+
+  /** The start being waited on, for {@link #startState()}: the server's log, where this
+   *  start's output begins in it (negative when unknown), and the process when this one
+   *  spawned it. */
+  private static volatile File trackedLog;
+  private static volatile long trackedLogOffset = -1;
+  private static volatile Process trackedProcess;
+
+  static void trackStart(File log, long offset, Process process) {
+    trackedLog = log;
+    trackedLogOffset = offset;
+    trackedProcess = process;
+  }
+
+  /** What the server's own log says its stage and health are. */
+  static String startState() {
+    File log = trackedLog != null ? trackedLog : new File(cacheDirLogPath());
+    Process p = trackedProcess;
+    if (!log.isFile()) {
+      return "The server's log " + log + " does not exist, so it has written nothing.";
+    }
+    try {
+      return ServerStartState.describe(ServerStartState.readLog(log, trackedLogOffset),
+          log.lastModified(), System.currentTimeMillis(), p == null ? null : p.isAlive(),
+          log.getPath());
+    } catch (IOException e) {
+      return "The server's log " + log + " could not be read (" + e + ").";
+    }
   }
 
   private static Connection connect() throws Exception {
@@ -297,6 +327,7 @@ final class PgwireGovDataConnector {
     rotateSpawnLog(spawnLog);
     long spawnLogStart = spawnLog.length();
     Process spawned = spawnIfPossible();
+    trackStart(spawnLog, spawnLogStart, spawned);
     boolean respawned = false;
     long deadline = System.currentTimeMillis() + SPAWN_TIMEOUT_MILLIS;
     while (System.currentTimeMillis() < deadline) {
@@ -305,9 +336,9 @@ final class PgwireGovDataConnector {
         log().println("[askamerica-mcp] Connected to pgwire-govdata after spawn.");
         return c;
       }
-      // A legitimate cold mount binds the port in milliseconds (pgwire-calcite's
-      // claim_listen_socket()) and then stays alive for minutes while it mounts all 26
-      // govdata schemas — spawned.isAlive() stays true the whole time. Our spawn having
+      // A server binds the port in milliseconds (pgwire-calcite's claim_listen_socket()) and
+      // stays alive, logging STAGE lines (see ServerStartState), until it has loaded its
+      // catalog — spawned.isAlive() stays true the whole time. Our spawn having
       // EXITED means one of two things, and the port says which. Held by another process: our
       // server lost the bind race to it (another conversation's spawn, by design — see
       // spawnIfPossible), or to an orphan; wait for that one. Not held: nothing won, and our
@@ -338,6 +369,7 @@ final class PgwireGovDataConnector {
         respawned = true;
         spawnLogStart = spawnLog.length();
         spawned = spawnIfPossible();
+        trackStart(spawnLog, spawnLogStart, spawned);
       }
       Thread.sleep(SPAWN_POLL_INTERVAL_MILLIS);
     }

@@ -440,11 +440,13 @@ public final class GovDataModelVerificationRunner {
     Map<String, Defined> declared = classifyDefined(new LinkedHashSet<String>(SCHEMA_YAML.keySet()));
     DatabaseMetaData md = conn.getMetaData();
     List<String> failed = new ArrayList<String>();
+    List<String> baseTables = new ArrayList<String>();
     int read = 0;
     for (Defined d : declared.values()) {
       if (!BASE.equals(d.category)) {
         continue;
       }
+      baseTables.add(d.schema + "/" + d.table);
       int columns = 0;
       try (ResultSet rs = md.getColumns(null, d.schema, d.table, "%")) {
         while (rs.next()) {
@@ -466,7 +468,17 @@ public final class GovDataModelVerificationRunner {
     for (String f : failed) {
       System.out.println("    FAILED " + f);
     }
-    return failed.isEmpty();
+    // Every declared table must also carry its row count (snapshot-summary total-records): a
+    // runtime that finds none has to ask the object store, which the shipped cache exists to
+    // prevent. No silent skips.
+    List<String> incomplete =
+        org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache.incompleteTables(baseTables);
+    System.out.println("  schema-cache stats   : " + (baseTables.size() - incomplete.size()) + " of "
+        + baseTables.size() + " declared base tables carry a row count");
+    for (String f : incomplete) {
+      System.out.println("    INCOMPLETE " + f);
+    }
+    return failed.isEmpty() && incomplete.isEmpty();
   }
 
   private static List<TableResult> probeTables(Connection conn, Config cfg) throws Exception {

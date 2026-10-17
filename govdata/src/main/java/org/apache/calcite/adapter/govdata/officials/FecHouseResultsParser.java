@@ -832,12 +832,15 @@ final class FecHouseResultsParser {
         }
       }
     }
-    checkWinner(rel, b, decisive, hasRunoff, ranked, shown);
+    checkWinner(rel, b, decisive, hasRunoff, shown);
   }
 
-  /** The winner flags must name the leader of the deciding round, when the sheet flags one. */
+  /**
+   * The winner flags must name the leader of the deciding round, when the sheet flags one. For a
+   * ranked-choice contest {@code shown} holds the final-round counts.
+   */
   private static void checkWinner(Release rel, Block b, List<Cand> decisive, boolean runoff,
-      boolean ranked, Map<Cand, Long> shown) throws IOException {
+      Map<Cand, Long> shown) throws IOException {
     Map<String, Long> byName = new LinkedHashMap<String, Long>();
     for (Cand c : decisive) {
       long v = runoff ? c.runoff.longValue() : shown.get(c).longValue();

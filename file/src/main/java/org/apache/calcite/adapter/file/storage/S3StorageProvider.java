@@ -115,6 +115,11 @@ public class S3StorageProvider implements StorageProvider {
     this(null, config);
   }
 
+  /** A provider over a caller-supplied client and a config carrying the {@code directory}. */
+  static S3StorageProvider forTesting(S3Client s3Client, java.util.Map<String, Object> config) {
+    return new S3StorageProvider(s3Client, config);
+  }
+
   /**
    * Internal constructor with both s3Client and config.
    */
@@ -208,8 +213,9 @@ public class S3StorageProvider implements StorageProvider {
       // Ensure it ends with /
       this.baseS3Path = directory.endsWith("/") ? directory : directory + "/";
 
-      // Ensure bucket exists - create if needed
-      ensureBucketExists(this.baseS3Path);
+      // The bucket is NOT checked here: a HEAD at construction is a network call on every start,
+      // read-only servers included. It is checked once, before the first write (see
+      // ensureBaseBucketBeforeWrite).
     } else {
       this.baseS3Path = null;
     }
@@ -263,12 +269,48 @@ public class S3StorageProvider implements StorageProvider {
     }
   }
 
+  // Whether the base bucket has been checked (and created if absent) by a write on this provider.
+  private volatile boolean baseBucketChecked;
+
+  /**
+   * Number of bucket-exists checks this provider has issued; a provider that only reads issues
+   * none.
+   */
+  private final java.util.concurrent.atomic.AtomicInteger bucketChecks =
+      new java.util.concurrent.atomic.AtomicInteger();
+
+  /** Count of bucket-exists (HEAD) checks issued by this provider so far. */
+  int bucketCheckCount() {
+    return bucketChecks.get();
+  }
+
+  /**
+   * Before the first write into the configured base bucket, confirms the bucket exists and
+   * creates it when absent. Reads never call this: a missing bucket is reported by the read
+   * itself, and a server that only reads makes no bucket call at start.
+   */
+  private void ensureBaseBucketBeforeWrite(String writeBucket) throws IOException {
+    if (baseBucketChecked || baseS3Path == null) {
+      return;
+    }
+    if (!parseS3Uri(baseS3Path).bucket.equals(writeBucket)) {
+      return;
+    }
+    synchronized (this) {
+      if (!baseBucketChecked) {
+        ensureBucketExists(baseS3Path);
+        baseBucketChecked = true;
+      }
+    }
+  }
+
   /**
    * Ensures that the S3 bucket exists, creating it if necessary.
    *
    * @param s3Path Full S3 path (e.g., "s3://bucket-name/prefix/")
    */
   private void ensureBucketExists(String s3Path) {
+    bucketChecks.incrementAndGet();
     try {
       S3Uri s3Uri = parseS3Uri(s3Path);
       String bucketName = s3Uri.bucket;
@@ -687,6 +729,7 @@ public class S3StorageProvider implements StorageProvider {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
+    ensureBaseBucketBeforeWrite(s3Uri.bucket);
 
     PutObjectRequest.Builder requestBuilder = PutObjectRequest.builder()
         .bucket(s3Uri.bucket)
@@ -727,6 +770,7 @@ public class S3StorageProvider implements StorageProvider {
   private void streamMultipartUpload(String path, InputStream content) throws IOException {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
+    ensureBaseBucketBeforeWrite(s3Uri.bucket);
     final int partSize = 16 * 1024 * 1024; // 16 MB parts
 
     String contentType = guessContentType(path);
@@ -884,6 +928,7 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     S3Uri s3Uri = parseS3Uri(fullPath);
+    ensureBaseBucketBeforeWrite(s3Uri.bucket);
 
     try {
       s3Client.putObject(
@@ -1067,6 +1112,7 @@ public class S3StorageProvider implements StorageProvider {
     String fullDest = toFullPath(destination);
     S3Uri sourceUri = parseS3Uri(fullSource);
     S3Uri destUri = parseS3Uri(fullDest);
+    ensureBaseBucketBeforeWrite(destUri.bucket);
 
     try {
       // Check if source exists
