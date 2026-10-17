@@ -99,6 +99,11 @@ column_templates:
       - *partition_type
       - *partition_year
 
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+
 # ============================================================================
 # DIMENSION VALUES
 # ============================================================================
@@ -3290,6 +3295,159 @@ partitionedTables:
         compactionMinFiles: 5
         compactionSmallFileSizeBytes: 10485760
 
+  # --------------------------------------------------------------------------
+  # County to CBSA delineation (OMB metropolitan / micropolitan statistical areas)
+  # --------------------------------------------------------------------------
+  - name: county_cbsa_delineation
+    # All six OMB delineations in one table (vintage is a column, not a partition): the Census
+    # Bureau publishes each as a fixed workbook that never changes once released, so the whole
+    # table is ~11,500 rows re-read as a snapshot; the hash probe skips the write when the
+    # parsed rows are unchanged. A new OMB delineation (Bulletin) is added to
+    # CbsaDelineationProvider.FILES.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=county_cbsa_delineation/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      County to Core Based Statistical Area (metropolitan and micropolitan area) membership
+      from the OMB delineations as republished by the Census Bureau ("List 1" of the
+      delineation files): one row per county per delineation vintage, with the CBSA code and
+      title, metropolitan or micropolitan type, the metropolitan division (31 divisions in
+      2013 to 2020, 37 in 2023, e.g. division 35614 within CBSA 35620 New York), the
+      combined statistical area (CSA), and whether the county is a central or an outlying
+      county of the CBSA. Six vintages: 2013 (Feb 2013, 1,882 counties), 2015 (Jul 2015,
+      1,899), 2017 (Aug 2017, 1,899), 2018 (Sep 2018, 1,915), 2020 (Mar 2020, 1,916) and 2023
+      (Jul 2023, 1,915; Connecticut counties are replaced by its nine planning regions,
+      09110 to 09190). Counties that belong to no CBSA (rural counties outside every metro and
+      micro area, about 1,200 of the ~3,140) are simply absent: a left join from a county
+      table gives null cbsa_code for them. (vintage, county_fips) is unique: a county is in at
+      most one CBSA per vintage. Which vintage to join: for a time-varying join pick the
+      latest vintage in force at the observation date, i.e. the largest vintage with
+      delineation_date on or before it (2013 for data through mid-2015, 2015 from Jul 2015,
+      2017 from Aug 2017, 2018 from Sep 2018, 2020 from Mar 2020, 2023 from Jul 2023); for a
+      single current mapping use vintage 2023 (the latest), but note that its Connecticut codes
+      are planning regions, so Connecticut county data keyed on the legacy 09001 to 09015
+      codes needs vintage 2020. Exact county membership as OMB defines it, unlike the
+      ZIP-weighted approximation of geo.zip_county_crosswalk x geo.zip_cbsa_crosswalk.
+      Boundaries are in geo.cbsa. Joins to geo.counties on county_fips and to geo.cbsa on
+      cbsa_code = cbsa_fips. Source: Census Bureau metro-micro delineation files
+      (www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/{vintage}/
+      delineation-files/list1*.xls[x]). The April 2018 delineation (Bulletin 18-03) that the
+      September 2018 one replaced is not included.
+
+    dimensions:
+      type:
+        - county_cbsa_delineation
+
+    columns:
+      - name: vintage
+        type: integer
+        nullable: false
+        comment: >-
+          Year of the OMB delineation: 2013, 2015, 2017, 2018, 2020 or 2023 (PK component).
+          delineation_date gives the month it took effect
+      - name: delineation_date
+        type: string
+        nullable: false
+        comment: >-
+          Month of the OMB delineation as YYYY-MM, taken from the source file title (2013-02,
+          2015-07, 2017-08, 2018-09, 2020-03, 2023-07); use it to pick the vintage in force at
+          an observation date
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: >-
+          5-digit county FIPS (state + county), PK component. FK to geo.counties.county_fips.
+          Vintage 2023 uses Connecticut planning regions (09110 to 09190) in place of its eight
+          counties (09001 to 09015)
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: '2-digit state FIPS code (FK to geo.state_ref.state_fips)'
+      - name: county_name
+        type: string
+        nullable: false
+        comment: 'County or county-equivalent name as published, e.g. Bronx County, Orleans Parish'
+      - name: state_name
+        type: string
+        nullable: false
+        comment: 'State name as published, e.g. New York (includes Puerto Rico)'
+      - name: cbsa_code
+        type: string
+        nullable: false
+        comment: >-
+          5-digit CBSA code of the metropolitan or micropolitan area the county belongs to; FK to
+          geo.cbsa.cbsa_fips and the key of geo.zip_cbsa_crosswalk and housing MSA series
+      - name: cbsa_title
+        type: string
+        nullable: false
+        comment: 'CBSA title, principal cities and states, e.g. New York-Newark-Jersey City, NY-NJ-PA'
+      - name: cbsa_type
+        type: string
+        nullable: false
+        comment: "'metropolitan' (urban core of 50,000 or more) or 'micropolitan' (10,000 to 49,999)"
+      - name: metro_division_code
+        type: string
+        nullable: true
+        comment: >-
+          5-digit metropolitan division code, set only for counties of a metropolitan CBSA that
+          is divided (e.g. 35614 within CBSA 35620); null otherwise. FHFA HPI and BLS publish
+          some large metros by division
+      - name: metro_division_title
+        type: string
+        nullable: true
+        comment: 'Metropolitan division title; null when metro_division_code is null'
+      - name: csa_code
+        type: string
+        nullable: true
+        comment: >-
+          3-digit Combined Statistical Area code; null for CBSAs not in any CSA (most
+          micropolitan areas)
+      - name: csa_title
+        type: string
+        nullable: true
+        comment: 'Combined Statistical Area title; null when csa_code is null'
+      - name: central_outlying
+        type: string
+        nullable: false
+        comment: >-
+          'central' if the county is a central county of the CBSA (contains or anchors the urban
+          core), 'outlying' if it is included through commuting ties
+
+    source:
+      type: http
+      # Placeholder URL: CbsaDelineationProvider downloads the six Excel workbooks through
+      # rawCache itself and returns the parsed rows; HttpSource's own fetch path is never used.
+      url: "https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/2023/delineation-files/list1_2023.xlsx"
+      method: GET
+      response:
+        format: json  # ignored: CbsaDelineationProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.CbsaDelineationProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=county_cbsa_delineation/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: county_cbsa_delineation
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        compactionSmallFileSizeBytes: 10485760
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -3346,6 +3504,22 @@ constraints:
       - columns: [state_fips]
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  county_cbsa_delineation:
+    primaryKey: [vintage, county_fips]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [cbsa_code]
+        targetTable: cbsa
+        targetColumns: [cbsa_fips]
+    indexes:
+      - [county_fips]
+      - [cbsa_code]
 
   county_adjacency:
     primaryKey: [county_fips, neighbor_county_fips, year]
