@@ -15,6 +15,9 @@ import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +29,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
@@ -34,13 +38,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
  * DataProvider for {@code exempt_org_990} — IRS Form 990 e-file XML, one row per
@@ -91,78 +92,125 @@ public class Irs990Provider implements CachingDataProvider {
     final String indexUrl = base + "index_" + yr + ".csv";
     LOGGER.info("exempt_org_990: reading index {}", indexUrl);
 
-    List<String> batchIds = readBatchIds(indexUrl);
-    LOGGER.info("exempt_org_990: {} distinct XML batch zips for year {}", batchIds.size(), yr);
-    return new BatchIterator(base, batchIds, rawCache);
+    Index index = readIndex(indexUrl);
+    LOGGER.info("exempt_org_990: index lists {} filings in {} distinct XML batch zips for year {}",
+        index.total, index.listedByBatch.size(), yr);
+    return rows(base, index, rawCache, yr);
   }
 
-  /** Downloads the index CSV and returns the distinct XML_BATCH_ID values (in first-seen order). */
-  private static List<String> readBatchIds(String indexUrl) throws IOException {
-    HttpURLConnection conn = FiscalHttp.openGet(indexUrl);
+  /** Builds the row iterator over every batch zip the index lists. Package-private for tests. */
+  static Iterator<Map<String, Object>> rows(String base, Index index, RawCache rawCache,
+      String year) {
+    return new BatchIterator(base, index, rawCache, year);
+  }
+
+  /** The filings an IRS index lists: the total and the count per batch zip. */
+  static final class Index {
+    /** Upper-cased batch id (the IRS zip file name stem) -> filings the index lists in it. */
+    final Map<String, Integer> listedByBatch = new LinkedHashMap<String, Integer>();
+    int total;
+
+    void add(String batchId) {
+      String key = zipName(batchId);
+      Integer n = listedByBatch.get(key);
+      listedByBatch.put(key, Integer.valueOf(n == null ? 1 : n.intValue() + 1));
+      total++;
+    }
+  }
+
+  /**
+   * The zip file name stem for an index XML_BATCH_ID. The index lists some batches with a
+   * lower-case suffix (2024_TEOS_XML_04a) while the file on the IRS server is upper-case
+   * (2024_TEOS_XML_04A.zip); the lower-case URL answers 404.
+   */
+  static String zipName(String batchId) {
+    return batchId.trim().toUpperCase(java.util.Locale.ROOT);
+  }
+
+  /** Downloads the index CSV and counts the listed filings per XML_BATCH_ID. */
+  private static Index readIndex(String indexUrl) throws IOException {
+    HttpURLConnection conn = FiscalHttp.openGetWithRetry(indexUrl);
     BufferedReader reader =
         new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
     try {
-      String header = CsvRecordReader.readRecord(reader);
-      if (header == null) {
-        throw new IOException("exempt_org_990: empty index at " + indexUrl);
-      }
-      Map<String, Integer> idx = FiscalHttp.headerIndex(CsvRecordReader.splitFields(header, ','));
-      int batchCol = FiscalHttp.required(idx, "XML_BATCH_ID", indexUrl);
-      Set<String> batches = new LinkedHashSet<String>();
-      String record;
-      while ((record = CsvRecordReader.readRecord(reader)) != null) {
-        List<String> cols = CsvRecordReader.splitFields(record, ',');
-        String b = FiscalHttp.cell(cols, Integer.valueOf(batchCol));
-        b = FiscalHttp.str(b);
-        if (b != null) {
-          batches.add(b);
-        }
-      }
-      return new ArrayList<String>(batches);
+      return parseIndex(reader, indexUrl);
     } finally {
       reader.close();
     }
   }
 
-  /** Lazily walks each batch zip, yielding one row per XML return entry. */
+  /** Reads an index CSV; a listed filing without an OBJECT_ID or batch is an error, not a skip. */
+  static Index parseIndex(BufferedReader reader, String source) throws IOException {
+    String header = CsvRecordReader.readRecord(reader);
+    if (header == null) {
+      throw new IOException("exempt_org_990: empty index at " + source);
+    }
+    Map<String, Integer> idx = FiscalHttp.headerIndex(CsvRecordReader.splitFields(header, ','));
+    int batchCol = FiscalHttp.required(idx, "XML_BATCH_ID", source);
+    int objectCol = FiscalHttp.required(idx, "OBJECT_ID", source);
+    Index index = new Index();
+    String record;
+    while ((record = CsvRecordReader.readRecord(reader)) != null) {
+      List<String> cols = CsvRecordReader.splitFields(record, ',');
+      String b = FiscalHttp.str(FiscalHttp.cell(cols, Integer.valueOf(batchCol)));
+      String o = FiscalHttp.str(FiscalHttp.cell(cols, Integer.valueOf(objectCol)));
+      if (b == null || o == null) {
+        throw new IOException("exempt_org_990: index " + source + " lists a filing without "
+            + "XML_BATCH_ID/OBJECT_ID: " + record);
+      }
+      index.add(b);
+    }
+    return index;
+  }
+
+  /**
+   * Lazily walks each batch zip, yielding one row per XML return entry. Every listed filing must
+   * come out as a row: a batch that cannot be opened, a return that cannot be parsed, or a batch
+   * whose row count differs from what the index lists throws instead of being skipped.
+   */
   private static final class BatchIterator implements Iterator<Map<String, Object>> {
-    /**
-     * Each discovered file is its own entry, keyed by its URL. The listing they came from
-     * stays uncached: freezing that would pin the table to whatever was listed on the first
-     * run, and the discovery step is the part that has to stay live.
-     */
+    private static final int OPEN_ATTEMPTS = 3;
+
     private final RawCache rawCache;
     private final String base;
-    private final List<String> batchIds;
+    private final String year;
+    private final Index index;
+    private final List<String> batchNames;
     private int batchPos = -1;
-    private ZipInputStream zis;
+    private ZipArchiveInputStream zis;
+    private int batchWritten;
+    private int totalWritten;
     private Map<String, Object> nextRow;
     private boolean done;
 
-    BatchIterator(String base, List<String> batchIds, RawCache rawCache) {
+    BatchIterator(String base, Index index, RawCache rawCache, String year) {
       this.base = base;
-      this.batchIds = batchIds;
+      this.index = index;
       this.rawCache = rawCache;
+      this.year = year;
+      this.batchNames = new ArrayList<String>(index.listedByBatch.keySet());
     }
 
-    private boolean openNextZip() {
-      closeZip();
+    /** Opens the next batch zip, retrying a bounded number of times and then throwing. */
+    private void openNextZip() throws IOException {
       batchPos++;
-      if (batchPos >= batchIds.size()) {
-        return false;
+      batchWritten = 0;
+      String zipUrl = base + batchNames.get(batchPos) + ".zip";
+      IOException last = null;
+      for (int attempt = 1; attempt <= OPEN_ATTEMPTS; attempt++) {
+        try {
+          LOGGER.info("exempt_org_990: fetching batch {} (attempt {}/{})", zipUrl, attempt,
+              OPEN_ATTEMPTS);
+          zis = new ZipArchiveInputStream(rawCache.openStream(zipUrl));
+          return;
+        } catch (IOException e) {
+          last = e;
+          LOGGER.warn("exempt_org_990: batch {} attempt {}/{} failed ({})", zipUrl, attempt,
+              OPEN_ATTEMPTS, e.getMessage());
+        }
       }
-      String zipUrl = base + batchIds.get(batchPos) + ".zip";
-      try {
-        LOGGER.info("exempt_org_990: fetching batch {}", zipUrl);
-        zis = new ZipInputStream(rawCache.openStream(zipUrl));
-        return true;
-      // fallback-guard: allow comment below documents the design ("A single missing/failed batch should not abort the whole year"); narrowly scoped to one ZIP batch, iteration continues to the next
-      } catch (IOException e) {
-        // A single missing/failed batch should not abort the whole year.
-        LOGGER.warn("exempt_org_990: skipping batch {} ({})", zipUrl, e.getMessage());
-        zis = null;
-        return true;  // advance() will try the next batch
-      }
+      throw new IOException("exempt_org_990: batch " + zipUrl + " could not be opened after "
+          + OPEN_ATTEMPTS + " attempts; the load is incomplete", last);
     }
 
     private void closeZip() {
@@ -176,6 +224,18 @@ public class Irs990Provider implements CachingDataProvider {
       }
     }
 
+    /** The batch is exhausted: its rows must equal the filings the index lists for it. */
+    private void finishBatch() {
+      String name = batchNames.get(batchPos);
+      int listed = index.listedByBatch.get(name).intValue();
+      if (batchWritten != listed) {
+        throw new IllegalStateException("exempt_org_990: batch " + name + " of year " + year
+            + " yielded " + batchWritten + " rows but the index lists " + listed + " filings");
+      }
+      LOGGER.info("exempt_org_990: batch {} complete, {} of {} listed filings written", name,
+          batchWritten, listed);
+    }
+
     private void advance() {
       if (nextRow != null || done) {
         return;
@@ -183,37 +243,39 @@ public class Irs990Provider implements CachingDataProvider {
       try {
         while (true) {
           if (zis == null) {
-            if (batchPos + 1 >= batchIds.size()) {
+            if (batchPos + 1 >= batchNames.size()) {
               done = true;
+              if (totalWritten != index.total) {
+                throw new IllegalStateException("exempt_org_990: year " + year + " wrote "
+                    + totalWritten + " filings but the index lists " + index.total);
+              }
+              LOGGER.info("exempt_org_990: year {} complete, {} of {} listed filings written",
+                  year, totalWritten, index.total);
               return;
             }
-            if (!openNextZip()) {
-              done = true;
-              return;
-            }
-            if (zis == null) {
-              continue;  // batch open failed; try the next one
-            }
+            openNextZip();
           }
-          ZipEntry entry = zis.getNextEntry();
+          ZipArchiveEntry entry = (ZipArchiveEntry) zis.getNextEntry();
           if (entry == null) {
             closeZip();
+            finishBatch();
             continue;  // exhausted this zip; move on
           }
           String name = entry.getName();
-          if (name == null || !name.toLowerCase().endsWith(".xml")) {
+          if (entry.isDirectory() || name == null || !name.toLowerCase().endsWith(".xml")) {
             continue;
           }
           byte[] xml = readEntry(zis);
-          String objectId = objectIdFromName(name);
-          Map<String, Object> row = parseReturn(xml, objectId);
-          if (row != null) {
-            nextRow = row;
-            return;
-          }
+          Map<String, Object> row = parseReturn(xml, objectIdFromName(name));
+          batchWritten++;
+          totalWritten++;
+          nextRow = row;
+          return;
         }
       } catch (IOException e) {
-        throw new RuntimeException("exempt_org_990: streaming failed", e);
+        closeZip();
+        throw new RuntimeException("exempt_org_990: streaming failed in batch "
+            + batchNames.get(batchPos), e);
       }
     }
 
@@ -233,7 +295,7 @@ public class Irs990Provider implements CachingDataProvider {
     }
   }
 
-  private static byte[] readEntry(ZipInputStream zis) throws IOException {
+  private static byte[] readEntry(InputStream zis) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     byte[] buf = new byte[16384];
     int n;
@@ -257,8 +319,8 @@ public class Irs990Provider implements CachingDataProvider {
    * Parses one return via StAX. Leaf elements are matched by local name (flat fields) or by
    * {@code parent/local} for the Part IX functional-expense columns and the Part IX line 5
    * officer total; the Part VII Section A compensation columns are summed over the listed
-   * persons. A return with no EIN is skipped (returns null). A malformed entry logs a
-   * warning and is skipped (returns null). A part absent from the return leaves its fields
+   * persons. A return with no EIN, or a malformed entry, throws: every listed filing must
+   * become a row. A part absent from the return leaves its fields
    * null; nothing is zero-filled.
    */
   private static Map<String, Object> parseReturn(byte[] xml, String objectId) {
@@ -327,10 +389,9 @@ public class Irs990Provider implements CachingDataProvider {
           text.setLength(0);
         }
       }
-    // fallback-guard: allow per-record catch that skips a single unparseable XBRL return (logged at debug) without failing the whole batch; the null result is filtered out downstream the same as a missing EIN
     } catch (Exception e) {
-      LOGGER.debug("exempt_org_990: skipping unparseable return {} ({})", objectId, e.getMessage());
-      return null;
+      throw new IllegalStateException("exempt_org_990: return " + objectId
+          + " could not be parsed: " + e.getMessage(), e);
     } finally {
       if (r != null) {
         try {
@@ -341,7 +402,7 @@ public class Irs990Provider implements CachingDataProvider {
       }
     }
     if (out.get("ein") == null) {
-      return null;  // no filer EIN — not a usable row
+      throw new IllegalStateException("exempt_org_990: return " + objectId + " carries no filer EIN");
     }
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("ein", out.get("ein"));

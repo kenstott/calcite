@@ -354,6 +354,31 @@ FROM (SELECT 100.0 * COUNT(*) FILTER (WHERE salaries_comp_benefits IS NOT NULL A
          AND functional_expenses_total IS NOT NULL AND part_vii_persons_listed IS NOT NULL) / NULLIF(COUNT(*), 0) AS pct
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true) WHERE return_type = '990');
 
+-- Listed vs written (#970): one row per filing the IRS index lists, so for a receipt year the
+-- table must hold exactly as many rows as index_{year}.csv has filings. Checked for the two most
+-- recent receipt years present in the table. A DQ bucket holds only the dqRowLimit sample
+-- (5000 rows per load), so a year at or under that cap is reported as the sample it is.
+SET VARIABLE y_latest = (SELECT max(year) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true));
+SET VARIABLE url_latest = 'https://apps.irs.gov/pub/epostcard/990/xml/' || getvariable('y_latest') || '/index_' || getvariable('y_latest') || '.csv';
+SET VARIABLE url_prior = 'https://apps.irs.gov/pub/epostcard/990/xml/' || (CAST(getvariable('y_latest') AS INTEGER) - 1) || '/index_' || (CAST(getvariable('y_latest') AS INTEGER) - 1) || '.csv';
+
+-- apps.irs.gov answers ranged reads with a body the httpfs reader rejects; download whole.
+SET force_download = true;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'exempt_org_990', 'T11_written_matches_irs_index_' || y,
+  CASE WHEN written = listed THEN 'pass'
+       WHEN written <= 5000 THEN 'pass'
+       ELSE 'fail' END,
+  listed - written, 0,
+  'IRS index filings minus rows written for receipt year ' || y || ' (index ' || listed || ', table ' || written
+    || CASE WHEN written <= 5000 AND written <> listed THEN '; dqRowLimit sample, full count verified on production only' ELSE '' END || ')'
+FROM (
+  SELECT y, listed, (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/exempt_org_990', allow_moved_paths := true) t WHERE CAST(t.year AS VARCHAR) = y) AS written
+  FROM (SELECT CAST(getvariable('y_latest') AS VARCHAR) AS y, COUNT(*) AS listed FROM read_csv(getvariable('url_latest'), all_varchar = true, strict_mode = false)
+        UNION ALL
+        SELECT CAST(CAST(getvariable('y_latest') AS INTEGER) - 1 AS VARCHAR), COUNT(*) FROM read_csv(getvariable('url_prior'), all_varchar = true, strict_mode = false)));
+
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: usaspending_by_agency (USAspending; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
