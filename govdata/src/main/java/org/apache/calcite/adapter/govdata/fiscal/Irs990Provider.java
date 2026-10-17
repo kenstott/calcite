@@ -65,7 +65,16 @@ public class Irs990Provider implements CachingDataProvider {
   private static final Map<String, String> ELEMENT_MAP = buildElementMap();
   /** output fields parsed as double. */
   private static final Set<String> DOUBLE_FIELDS = new java.util.HashSet<String>(
-      java.util.Arrays.asList("total_revenue", "total_expenses", "total_assets"));
+      java.util.Arrays.asList("total_revenue", "total_expenses", "total_assets",
+          "salaries_comp_benefits", "fundraising_expenses_16b", "functional_expenses_total",
+          "functional_expenses_program", "functional_expenses_mgmt_general",
+          "functional_expenses_fundraising", "officer_comp_part_ix_line5"));
+  /** Form 990 Part VII Section A person group; its amount children are summed per column. */
+  private static final String PART_VII_GROUP = "Form990PartVIISectionAGrp";
+  /** Part VII Section A element -> column index (D reportable comp, E related orgs, F other). */
+  private static final Map<String, Integer> PART_VII_FIELDS = buildPartViiFields();
+  /** lowercased "parent/local" -> output field, honoured only inside the IRS990 (Form 990) body. */
+  private static final Map<String, String> PATH_MAP = buildPathMap();
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
@@ -245,46 +254,77 @@ public class Irs990Provider implements CachingDataProvider {
   }
 
   /**
-   * Parses one return via StAX, capturing the first occurrence of each mapped
-   * element by local name. A return with no EIN is skipped (returns null). A
-   * malformed entry logs a warning and is skipped (returns null).
+   * Parses one return via StAX. Leaf elements are matched by local name (flat fields) or by
+   * {@code parent/local} for the Part IX functional-expense columns and the Part IX line 5
+   * officer total; the Part VII Section A compensation columns are summed over the listed
+   * persons. A return with no EIN is skipped (returns null). A malformed entry logs a
+   * warning and is skipped (returns null). A part absent from the return leaves its fields
+   * null; nothing is zero-filled.
    */
   private static Map<String, Object> parseReturn(byte[] xml, String objectId) {
     Map<String, Object> out = new LinkedHashMap<String, Object>();
+    double[] vii = new double[3];
+    int[] viiSeen = new int[3];
+    int persons = 0;
+    List<String> names = new ArrayList<String>();
+    List<Boolean> hasChild = new ArrayList<Boolean>();
+    StringBuilder text = new StringBuilder();
     XMLStreamReader r = null;
     try {
       r = XML_FACTORY.createXMLStreamReader(new ByteArrayInputStream(xml), "UTF-8");
       while (r.hasNext()) {
         int ev = r.next();
-        if (ev != XMLStreamConstants.START_ELEMENT) {
-          continue;
-        }
-        String local = r.getLocalName();
-        if (local == null) {
-          continue;
-        }
-        String field = ELEMENT_MAP.get(local.toLowerCase());
-        if (field == null || out.containsKey(field)) {
-          continue;
-        }
-        String txt;
-        try {
-          txt = r.getElementText();
-        } catch (Exception e) {
-          continue;  // element had children / unreadable — ignore this hit
-        }
-        txt = FiscalHttp.str(txt);
-        if (txt == null) {
-          continue;
-        }
-        if (DOUBLE_FIELDS.contains(field)) {
-          out.put(field, FiscalHttp.toDouble(txt));
-        } else if ("tax_year".equals(field)) {
-          out.put(field, FiscalHttp.toInt(txt));
-        } else if ("ein".equals(field)) {
-          out.put(field, FiscalHttp.pad(txt, 9));
-        } else {
-          out.put(field, txt);
+        if (ev == XMLStreamConstants.START_ELEMENT) {
+          if (!hasChild.isEmpty()) {
+            hasChild.set(hasChild.size() - 1, Boolean.TRUE);
+          }
+          names.add(r.getLocalName());
+          hasChild.add(Boolean.FALSE);
+          text.setLength(0);
+        } else if (ev == XMLStreamConstants.CHARACTERS || ev == XMLStreamConstants.CDATA) {
+          text.append(r.getText());
+        } else if (ev == XMLStreamConstants.END_ELEMENT) {
+          int top = names.size() - 1;
+          String local = names.get(top);
+          String parent = top > 0 ? names.get(top - 1) : null;
+          boolean leaf = !hasChild.get(top).booleanValue();
+          if (leaf) {
+            String txt = FiscalHttp.str(text.toString());
+            if (txt != null) {
+              if (PART_VII_GROUP.equals(parent) && PART_VII_FIELDS.containsKey(local)) {
+                int k = PART_VII_FIELDS.get(local).intValue();
+                Double v = FiscalHttp.toDouble(txt);
+                if (v != null) {
+                  vii[k] += v.doubleValue();
+                  viiSeen[k]++;
+                }
+              } else {
+                String field = null;
+                if (parent != null && names.contains("IRS990")) {
+                  field = PATH_MAP.get(parent.toLowerCase() + "/" + local.toLowerCase());
+                }
+                if (field == null) {
+                  field = ELEMENT_MAP.get(local.toLowerCase());
+                }
+                if (field != null && !out.containsKey(field)) {
+                  if (DOUBLE_FIELDS.contains(field)) {
+                    out.put(field, FiscalHttp.toDouble(txt));
+                  } else if ("tax_year".equals(field)) {
+                    out.put(field, FiscalHttp.toInt(txt));
+                  } else if ("ein".equals(field)) {
+                    out.put(field, FiscalHttp.pad(txt, 9));
+                  } else {
+                    out.put(field, txt);
+                  }
+                }
+              }
+            }
+          } else if (PART_VII_GROUP.equals(local)) {
+            persons++;
+          }
+          names.remove(top);
+          hasChild.remove(top);
+          text.setLength(0);
         }
       }
     // fallback-guard: allow per-record catch that skips a single unparseable XBRL return (logged at debug) without failing the whole batch; the null result is filtered out downstream the same as a missing EIN
@@ -312,8 +352,24 @@ public class Irs990Provider implements CachingDataProvider {
     row.put("total_revenue", out.get("total_revenue"));
     row.put("total_expenses", out.get("total_expenses"));
     row.put("total_assets", out.get("total_assets"));
+    row.put("salaries_comp_benefits", out.get("salaries_comp_benefits"));
+    row.put("fundraising_expenses_16b", out.get("fundraising_expenses_16b"));
+    row.put("functional_expenses_total", out.get("functional_expenses_total"));
+    row.put("functional_expenses_program", out.get("functional_expenses_program"));
+    row.put("functional_expenses_mgmt_general", out.get("functional_expenses_mgmt_general"));
+    row.put("functional_expenses_fundraising", out.get("functional_expenses_fundraising"));
+    row.put("officer_comp_part_ix_line5", out.get("officer_comp_part_ix_line5"));
+    // Part VII Section A totals are emitted only when every listed person carried the amount.
+    row.put("part_vii_persons_listed", persons > 0 ? Integer.valueOf(persons) : null);
+    row.put("part_vii_comp_from_org", viiTotal(vii, viiSeen, persons, 0));
+    row.put("part_vii_comp_from_related_orgs", viiTotal(vii, viiSeen, persons, 1));
+    row.put("part_vii_other_comp", viiTotal(vii, viiSeen, persons, 2));
     row.put("object_id", objectId);
     return row;
+  }
+
+  private static Double viiTotal(double[] sums, int[] seen, int persons, int k) {
+    return persons > 0 && seen[k] == persons ? Double.valueOf(sums[k]) : null;
   }
 
   private static Map<String, String> buildElementMap() {
@@ -336,6 +392,29 @@ public class Irs990Provider implements CachingDataProvider {
     m.put("totalexpenses", "total_expenses");
     m.put("totalassetseoyamt", "total_assets");
     m.put("totalassetseoy", "total_assets");
+    // Form 990 Part I line 15 and line 16b
+    m.put("cysalariescompempbnftpaidamt", "salaries_comp_benefits");
+    m.put("cytotalfundraisingexpenseamt", "fundraising_expenses_16b");
+    return Collections.unmodifiableMap(m);
+  }
+
+  private static Map<String, String> buildPathMap() {
+    Map<String, String> m = new HashMap<String, String>();
+    // Part IX line 25, columns A-D
+    m.put("totalfunctionalexpensesgrp/totalamt", "functional_expenses_total");
+    m.put("totalfunctionalexpensesgrp/programservicesamt", "functional_expenses_program");
+    m.put("totalfunctionalexpensesgrp/managementandgeneralamt", "functional_expenses_mgmt_general");
+    m.put("totalfunctionalexpensesgrp/fundraisingamt", "functional_expenses_fundraising");
+    // Part IX line 5, column A
+    m.put("compcurrentofcrdirectorsgrp/totalamt", "officer_comp_part_ix_line5");
+    return Collections.unmodifiableMap(m);
+  }
+
+  private static Map<String, Integer> buildPartViiFields() {
+    Map<String, Integer> m = new HashMap<String, Integer>();
+    m.put("ReportableCompFromOrgAmt", Integer.valueOf(0));
+    m.put("ReportableCompFromRltdOrgAmt", Integer.valueOf(1));
+    m.put("OtherCompensationAmt", Integer.valueOf(2));
     return Collections.unmodifiableMap(m);
   }
 
