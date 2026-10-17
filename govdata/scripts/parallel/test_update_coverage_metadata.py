@@ -27,16 +27,31 @@ def measure(sql_type, values):
 
 class ParseYearLabelTest(unittest.TestCase):
     def test_accepted_forms(self):
-        for value, year in (("2019", 2019), ("2019-03-31", 2019), ("2019-03-31T10:00:00Z", 2019),
+        for value, year in (("20190331", 2019), ("2019", 2019), ("2019-03-31", 2019), ("2019-03-31T10:00:00Z", 2019),
                             ("2019-03-31 10:00:00", 2019), ("2019-2020", 2020), ("2019-20", 2020),
                             ("2025-26", 2026), ("1999-00", 2000)):
-            self.assertEqual(year, ucm.parse_year_label(value), value)
+            self.assertEqual(year, ucm.parse_year_label(value, ucm.FAMILY_LABEL), value)
+
+    def test_year_month_family(self):
+        self.assertEqual(2015, ucm.parse_year_label("2015-09", ucm.FAMILY_MONTH))
+        self.assertEqual(2011, ucm.parse_year_label("2011-12", ucm.FAMILY_MONTH))
+        self.assertEqual(ucm.FAMILY_MONTH, ucm.two_digit_family(["2015-09", "2011-12"]))
+        self.assertEqual(ucm.FAMILY_LABEL, ucm.two_digit_family(["2019-20", "2011-12"]))
+        self.assertIsNone(ucm.two_digit_family(["2011-12", "2019-05-01"]))
+
+    def test_ambiguous_or_mixed_two_digit_values_fail(self):
+        with self.assertRaises(ucm.MeasureError):
+            ucm.two_digit_family(["2019-20", "2015-09"])
+        with self.assertRaises(ucm.MeasureError):
+            ucm.parse_year_label("2011-12")
+        with self.assertRaises(ucm.MeasureError):
+            ucm.parse_year_label("2015-09", ucm.FAMILY_LABEL)
 
     def test_unparseable_values_fail_loudly(self):
-        for value in ("", " ", "unknown", "2019-12", "2019-21", "2019-2021", "2019-02-30",
+        for value in ("", " ", "unknown", "2019-21", "2019-2021", "2019-02-30", "20191340",
                       "03/31/2019", "19-20", "2019-20-01x", "N/A"):
             with self.assertRaises(ucm.MeasureError, msg=value):
-                ucm.parse_year_label(value)
+                ucm.parse_year_label(value, ucm.FAMILY_LABEL)
 
 
 @unittest.skipUnless(HAVE_DUCKDB, "duckdb CLI not installed")
@@ -82,6 +97,10 @@ class MeasureColumnKindTest(unittest.TestCase):
     def test_string_year_and_iso_date_columns(self):
         self.assertEqual((2004, 2006), tuple(measure("VARCHAR", ["'2004'", "'2006'"])[k] for k in ("min_year", "max_year")))
         self.assertEqual((2021, 2023), tuple(measure("VARCHAR", ["'2021-11-03'", "'2023-02-01'"])[k] for k in ("min_year", "max_year")))
+
+    def test_year_month_and_compact_string_columns(self):
+        m = measure("VARCHAR", ["'2015-09'", "'2016-11'", "'20170303'", "'2017-05-01'"])
+        self.assertEqual((2015, 2017, 3), (m["min_year"], m["max_year"], m["distinct_years"]))
 
     def test_unparseable_label_aborts_the_table(self):
         with self.assertRaises(ucm.MeasureError) as ctx:

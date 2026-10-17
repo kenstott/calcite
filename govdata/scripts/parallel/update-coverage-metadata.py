@@ -39,10 +39,15 @@
 #                   YYYY                 the year itself
 #                   YYYY-MM-DD[ or T...] an ISO date or timestamp: its calendar year
 #                   YYYY-YYYY            a span label: its END year (2019-2020 -> 2020)
-#                   YYYY-YY              a school/fiscal-year label: its END year (2019-20 -> 2020,
-#                                        1999-00 -> 2000). The two-digit end must be exactly
-#                                        start+1 (mod 100), otherwise the value is YYYY-MM or
-#                                        garbage and is rejected rather than guessed at.
+#                   YYYYMMDD             a compact date: its calendar year
+#                   YYYY-YY / YYYY-MM    two forms with the same shape, told apart by the column:
+#                                        a school/fiscal-year label (2019-20 -> its END year 2020,
+#                                        1999-00 -> 2000; YY must be start+1 mod 100) or a year-month
+#                                        (2015-09 -> 2015; MM must be 01..12). A value that is only
+#                                        one of the two (2015-09 is not a label, 2019-20 is not a
+#                                        month) decides the whole column; a column holding both
+#                                        kinds, or only values valid as either (2011-12), is
+#                                        ambiguous and aborts rather than being guessed at.
 #
 #   Every kind: a year before 1000, or more than 10 years after the check date, is a source data
 #   error (a two-digit year stored as 0013, a typo like 3011), not an observation. Reporting it
@@ -206,12 +211,51 @@ def column_kind(duck_type):
                        f"TIMESTAMP or VARCHAR column")
 
 
-def parse_year_label(value):
+_COMPACT = re.compile(r"^(\d{4})(\d{2})(\d{2})$")
+FAMILY_LABEL, FAMILY_MONTH = "label", "month"
+
+
+def _is_label(start, yy):
+    return yy == (start + 1) % 100
+
+
+def _is_month(yy):
+    return 1 <= yy <= 12
+
+
+def two_digit_family(values):
+    """Whether the YYYY-NN values of a column are school-year labels or year-months.
+
+    Only values valid as exactly one reading vote; a column with no votes (nothing of that shape,
+    or only values valid both ways) has no family and None is returned. Both readings voted for
+    raises, as does a YYYY-NN value valid as neither (reported by parse_year_label).
+    """
+    labels = months = 0
+    for v in values:
+        m = _SPAN2.match(v)
+        if not m:
+            continue
+        start, yy = int(m.group(1)), int(m.group(2))
+        lab, mon = _is_label(start, yy), _is_month(yy)
+        if lab and not mon:
+            labels += 1
+        elif mon and not lab:
+            months += 1
+    if labels and months:
+        raise MeasureError("column mixes YYYY-YY labels and YYYY-MM year-months")
+    if labels:
+        return FAMILY_LABEL
+    if months:
+        return FAMILY_MONTH
+    return None
+
+
+def parse_year_label(value, family=None):
     """The year a VARCHAR time value stands for, per the header's rule. Raises MeasureError."""
     m = _YEAR.match(value)
     if m:
         return int(m.group(1))
-    m = _ISO.match(value)
+    m = _ISO.match(value) or _COMPACT.match(value)
     if m:
         try:
             datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
@@ -227,11 +271,16 @@ def parse_year_label(value):
         return end
     m = _SPAN2.match(value)
     if m:
-        start, end2 = int(m.group(1)), int(m.group(2))
-        if end2 != (start + 1) % 100:
-            raise MeasureError(f"unparseable time value {value!r}: a YYYY-YY label must end "
-                               f"at start+1 (a year-month value is not a supported form)")
-        return start + 1
+        start, yy = int(m.group(1)), int(m.group(2))
+        if family is None:
+            raise MeasureError(f"ambiguous time value {value!r}: a YYYY-NN value valid as both "
+                               f"a school-year label and a year-month, and no other value in the "
+                               f"column says which")
+        if family == FAMILY_LABEL and _is_label(start, yy):
+            return start + 1
+        if family == FAMILY_MONTH and _is_month(yy):
+            return start
+        raise MeasureError(f"unparseable time value {value!r}: not a valid {family} for this column")
     raise MeasureError(f"unparseable time value {value!r}")
 
 
@@ -291,9 +340,10 @@ def measure_relation(setup_sql, relation, column, max_year, runner=run_duckdb):
                   f"SELECT {expr} AS v, count(*) AS n FROM {relation} "
                   f"WHERE {column} IS NOT NULL GROUP BY 1;")
     year_counts = {}
+    family = two_digit_family([r["v"] for r in rows]) if kind == KIND_LABEL else None
     for r in rows:
         if kind == KIND_LABEL:
-            y = parse_year_label(r["v"])
+            y = parse_year_label(r["v"], family)
         else:
             y = int(r["v"])
         year_counts[y] = year_counts.get(y, 0) + int(r["n"])
