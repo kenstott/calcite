@@ -99,39 +99,21 @@ class CraSmallBusinessLendingTransformerTest {
   }
 
   /**
-   * Regression for kenstott/govdata-ops#241's follow-up: the volume-triggered CAPTCHA gate
-   * (confirmed live - a burst of back-to-back requests trips it on every request, including
-   * years that had each individually just succeeded) cannot be out-waited by the original
-   * few-second linear backoff, since Cloudflare's own challenge-cookie default lifetime is far
-   * longer. A CAPTCHA-classified failure must always get the longer, fixed backoff regardless
-   * of which attempt number it is; any other transient IOException keeps the original linear
-   * schedule.
+   * The volume-triggered CAPTCHA gate (kenstott/govdata-ops#241) cannot be out-waited inside a
+   * run: its challenge cookie lives about 30 minutes, and every retry is one more request to a
+   * host whose gate trips on request volume (138 attempts at one file across the Oct 4-18 2026
+   * dailies, gate shut throughout). A challenge is therefore not retried in the same run; a
+   * one-off transient failure still is.
    */
-  @Test void captchaClassifiedFailureAlwaysGetsTheLongerFixedBackoff() {
-    IOException captcha = new CraSmallBusinessLendingTransformer.FfiecCaptchaException(
-        "CRA aggregate download returned non-zip body");
-
-    long backoffAttempt1 = CraSmallBusinessLendingTransformer.backoffForRetry(captcha, 1);
-    long backoffAttempt4 = CraSmallBusinessLendingTransformer.backoffForRetry(captcha, 4);
-
-    assertEquals(backoffAttempt1, backoffAttempt4,
-        "a CAPTCHA-classified failure's backoff must not scale with attempt number - "
-            + "retrying sooner cannot succeed against a still-active challenge");
-    assertTrue(backoffAttempt1 > 5_000L,
-        "CAPTCHA backoff must be meaningfully longer than the original few-second linear "
-            + "backoff, since that window is known too short to out-wait the challenge: "
-            + backoffAttempt1);
+  @Test void aChallengeIsNotRetriedInTheSameRun() {
+    assertFalse(CraSmallBusinessLendingTransformer.isRetryable(
+        new CraSmallBusinessLendingTransformer.FfiecCaptchaException(
+            "CRA aggregate download returned non-zip body")));
   }
 
-  @Test void genericTransientFailureKeepsTheOriginalLinearBackoff() {
-    IOException generic = new IOException("CRA aggregate download HTTP 500");
-
-    long backoffAttempt1 = CraSmallBusinessLendingTransformer.backoffForRetry(generic, 1);
-    long backoffAttempt2 = CraSmallBusinessLendingTransformer.backoffForRetry(generic, 2);
-
-    assertTrue(backoffAttempt2 > backoffAttempt1,
-        "a generic transient failure must still scale backoff with attempt number: "
-            + backoffAttempt1 + " then " + backoffAttempt2);
+  @Test void aGenericTransientFailureIsStillRetried() {
+    assertTrue(CraSmallBusinessLendingTransformer.isRetryable(
+        new IOException("CRA aggregate download HTTP 500")));
   }
 
   // ── Member-name regression (kenstott/govdata-ops#241, second root cause) ────────────────
