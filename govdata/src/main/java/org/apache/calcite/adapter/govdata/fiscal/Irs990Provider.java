@@ -107,7 +107,30 @@ public class Irs990Provider implements CachingDataProvider {
   /** Builds the row iterator over the given zips. Package-private for tests. */
   static Iterator<Map<String, Object>> rows(String base, ZipSet zips, Index index,
       RawCache rawCache, String year) {
-    return new BatchIterator(base, zips, index, rawCache, year);
+    return rows(base, zips, index, rawCache, year, KNOWN_ABSENT);
+  }
+
+  /** As {@link #rows(String, ZipSet, Index, RawCache, String)} with an explicit exclusion list. */
+  static Iterator<Map<String, Object>> rows(String base, ZipSet zips, Index index,
+      RawCache rawCache, String year, Map<String, String> knownAbsent) {
+    return new BatchIterator(base, zips, index, rawCache, year, knownAbsent);
+  }
+
+  /**
+   * Indexed OBJECT_IDs the IRS lists but publishes in no zip, each with the evidence. Checked
+   * 2026-10-18 against every published XML zip for receipt years 2021 through 2026 (by
+   * object id and by the 18-digit id) and against index_2024 and later, which do not list them.
+   * An id here is excluded from the completeness check only when it is not found in a zip,
+   * and each exclusion is logged and counted; any other indexed filing missing from the zips
+   * still fails the load. Remove an entry once the IRS publishes the filing.
+   */
+  static final Map<String, String> KNOWN_ABSENT = buildKnownAbsent();
+
+  private static Map<String, String> buildKnownAbsent() {
+    Map<String, String> m = new java.util.LinkedHashMap<String, String>();
+    m.put("202313409349100901", "Aurora Care Foundation Inc, Form 990-PF, receipt year 2023");
+    m.put("202301929339300110", "Northwestern Memorial Hospital, Form 990-T, receipt year 2023");
+    return Collections.unmodifiableMap(m);
   }
 
   /** Answers whether the IRS publishes a file at a URL. */
@@ -301,6 +324,7 @@ public class Irs990Provider implements CachingDataProvider {
     private final Index index;
     private final List<String> batchNames;
     private final boolean legacy;
+    private final Map<String, String> knownAbsent;
     private final Set<String> written = new HashSet<String>();
     private int skippedUnindexed;
     private int skippedRepeated;
@@ -310,8 +334,10 @@ public class Irs990Provider implements CachingDataProvider {
     private Map<String, Object> nextRow;
     private boolean done;
 
-    BatchIterator(String base, ZipSet zips, Index index, RawCache rawCache, String year) {
+    BatchIterator(String base, ZipSet zips, Index index, RawCache rawCache, String year,
+        Map<String, String> knownAbsent) {
       this.base = base;
+      this.knownAbsent = knownAbsent;
       this.index = index;
       this.rawCache = rawCache;
       this.year = year;
@@ -360,24 +386,34 @@ public class Irs990Provider implements CachingDataProvider {
 
     /** Every indexed filing must have been found in exactly one zip. */
     private void finishYear() {
+      int excluded = 0;
+      List<String> missing = new ArrayList<String>();
       if (written.size() != index.objectIds.size()) {
-        List<String> missing = new ArrayList<String>();
         for (String id : index.objectIds) {
-          if (!written.contains(id)) {
+          if (written.contains(id)) {
+            continue;
+          }
+          String reason = knownAbsent.get(id);
+          if (reason != null) {
+            excluded++;
+            LOGGER.warn("exempt_org_990: year {} indexed filing {} is in no published zip"
+                + " (known absent: {})", year, id, reason);
+          } else if (missing.size() < 5) {
             missing.add(id);
-            if (missing.size() == 5) {
-              break;
-            }
           }
         }
+      }
+      if (!missing.isEmpty() || written.size() + excluded != index.objectIds.size()) {
         throw new IllegalStateException("exempt_org_990: year " + year + " wrote "
-            + written.size() + " filings but the index lists " + index.objectIds.size()
-            + "; e.g. not found in any of " + batchNames + ": " + missing);
+            + written.size() + " filings (" + excluded + " more known absent) but the index lists "
+            + index.objectIds.size() + "; e.g. not found in any of " + batchNames + ": "
+            + missing);
       }
       LOGGER.info("exempt_org_990: year {} complete, {} of {} listed filings written in {} zips"
-          + " (skipped {} entries listed by another receipt year's index, {} repeated entries)",
-          year, written.size(), index.objectIds.size(), batchNames.size(), skippedUnindexed,
-          skippedRepeated);
+          + " ({} known absent from every zip, skipped {} entries listed by another receipt"
+          + " year's index, {} repeated entries)",
+          year, written.size(), index.objectIds.size(), batchNames.size(), excluded,
+          skippedUnindexed, skippedRepeated);
     }
 
     private void advance() {

@@ -275,6 +275,23 @@ class Irs990ProviderTest {
     assertTrue(e.getMessage().contains("[101]"), e.getMessage());
   }
 
+  @Test void knownAbsentFilingIsExcludedAndOthersStillFail() throws IOException {
+    StubCache cache = new StubCache();
+    cache.zips.put(BASE + "2025/2025_TEOS_XML_05A.zip", zip("100", xml("1")));
+    Irs990Provider.Index idx = index(indexRow("100", "2025_TEOS_XML_05A"),
+        indexRow("101", "2025_TEOS_XML_05A"));
+    Map<String, String> absent = java.util.Collections.singletonMap("101", "test");
+    assertEquals(1, drain(Irs990Provider.rows(BASE, zipSet(false, "2025/2025_TEOS_XML_05A"),
+        idx, cache, "2025", absent)).size());
+    Irs990Provider.Index idx2 = index(indexRow("100", "2025_TEOS_XML_05A"),
+        indexRow("101", "2025_TEOS_XML_05A"), indexRow("102", "2025_TEOS_XML_05A"));
+    Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE,
+        zipSet(false, "2025/2025_TEOS_XML_05A"), idx2, cache, "2025", absent);
+    it.next();
+    IllegalStateException e = assertThrows(IllegalStateException.class, it::hasNext);
+    assertTrue(e.getMessage().contains("[102]"), e.getMessage());
+  }
+
   @Test void returnTheIndexDoesNotListFails() throws IOException {
     StubCache cache = new StubCache();
     cache.zips.put(BASE + "2025/2025_TEOS_XML_05A.zip", zip("100", xml("1"), "999", xml("2")));
@@ -329,7 +346,7 @@ class Irs990ProviderTest {
     Iterator<Map<String, Object>> it = Irs990Provider.rows(BASE, zips(idx), idx, cache, "2025");
     it.next();
     IllegalStateException e = assertThrows(IllegalStateException.class, it::hasNext);
-    assertTrue(e.getMessage().contains("wrote 1 filings but the index lists 2"), e.getMessage());
+    assertTrue(e.getMessage().contains("wrote 1 filings (0 more known absent) but the index lists 2"), e.getMessage());
   }
 
   @Test void unparseableReturnFailsInsteadOfBeingSkipped() throws IOException {

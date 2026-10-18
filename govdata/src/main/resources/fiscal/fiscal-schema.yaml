@@ -2583,6 +2583,10 @@ partitionedTables:
       functional_expenses_mgmt_general + functional_expenses_fundraising over
       functional_expenses_total. NTEE is not in the XML — join to exempt_org_master on
       ein. Joins to ref/EIN. Source: apps.irs.gov/pub/epostcard/990/xml/{YEAR}/.
+      Two indexed receipt-2023 filings, 202313409349100901 (Aurora Care Foundation Inc,
+      990-PF) and 202301929339300110 (Northwestern Memorial Hospital, 990-T), are in no
+      published IRS zip and are absent from the table; the load logs and counts each as
+      known absent and fails on any other indexed filing it cannot find.
     dqRowLimit: 5000
 
     dimensions:
