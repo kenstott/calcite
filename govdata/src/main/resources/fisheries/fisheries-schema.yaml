@@ -1003,9 +1003,10 @@ partitionedTables:
       Fisheries is the lead agency for these): one row per Evolutionarily Significant Unit
       (salmon) or Distinct Population Segment (steelhead, Atlantic salmon), covering Chinook,
       coho, chum, sockeye, pink, steelhead and Atlantic salmon. esa_status gives the
-      designation (Threatened, Endangered, Experimental Population Non-Essential, Under
-      Review, Resolved Taxon, Species of Concern, ...), status_category the listed / not
-      listed / delisted bucket, and listing_date when the unit was first listed. Use it to read
+      designation (Threatened, Endangered, Experimental Population, Non-Essential, Under
+      Review, Resolved Taxon, Status Undefined, Not Listed), status_category the listed / not
+      listed / petitioned bucket, and listing_date, ECOS's listing date as published (blank for
+      three of the four experimental populations, present on a few Resolved Taxon rows). Use it to read
       population trends against recovery status, e.g. which states have listed salmon:
       state_abbrs is the comma-separated states each ESU/DPS spans (ECOS has no state column,
       so this is derived from the ESU name; null where ECOS gives no geography). A snapshot of
@@ -1020,7 +1021,7 @@ partitionedTables:
       - name: common_name
         type: string
         nullable: false
-        comment: ECOS common name - Chinook salmon, Coho salmon, Chum salmon, Sockeye salmon, Pink Salmon, Steelhead (Rainbow Trout) or Atlantic salmon
+        comment: Common name in one canonical spelling per species - Chinook salmon, Coho salmon, Chum salmon, Sockeye salmon, Pink salmon, Steelhead (Rainbow Trout) or Atlantic salmon
       - name: scientific_name
         type: string
         nullable: false
@@ -1036,11 +1037,11 @@ partitionedTables:
       - name: esa_status
         type: string
         nullable: false
-        comment: ECOS ESA listing status - Threatened, Endangered, Experimental Population Non-Essential, Under Review, Resolved Taxon, Species of Concern, Status Undefined or Not Listed
+        comment: ECOS ESA listing status, stored exactly as - Threatened, Endangered, 'Experimental Population, Non-Essential' (with the comma), Under Review, Resolved Taxon, Status Undefined or Not Listed
       - name: status_category
         type: string
         nullable: true
-        comment: ECOS listing status category - Listed, Not Listed, Delisted or Petitioned for Listing Under Review; null where ECOS leaves it blank
+        comment: Listing status category - Listed, Not Listed or Petitioned for Listing, Under Review; rows whose esa_status is Not Listed carry Not Listed even where ECOS leaves the category blank
       - name: cfr_citation
         type: string
         nullable: true
@@ -1048,7 +1049,7 @@ partitionedTables:
       - name: listing_date
         type: string
         nullable: true
-        comment: Date the unit was listed (yyyy-MM-dd); null for experimental populations and never-listed units
+        comment: Listing date exactly as ECOS publishes it (yyyy-MM-dd); null where ECOS has none, which includes three of the four experimental populations, while the Middle Columbia River steelhead experimental population and two Atlantic salmon Resolved Taxon rows carry a date
       - name: lead_agency
         type: string
         nullable: false

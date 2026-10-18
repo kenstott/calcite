@@ -38,6 +38,11 @@ import java.util.regex.Pattern;
  * fails the load, so a new listing forces the table to be extended rather than shipping with no
  * state. Entities that ECOS itself leaves without geography (an empty entity description, or
  * "wherever found") carry null states.
+ *
+ * <p>ECOS spells the same species with different capitalisation on different rows, so
+ * common_name is emitted in one canonical spelling per species. It also leaves status_category
+ * blank on rows whose status is "Not Listed"; those take "Not Listed" so the category agrees with
+ * the status.
  */
 public class FisheriesEsaListingsTransformer implements ResponseTransformer {
 
@@ -47,6 +52,8 @@ public class FisheriesEsaListingsTransformer implements ResponseTransformer {
 
   /** ECOS common name to species_group value. */
   private static final Map<String, String> GROUPS = new LinkedHashMap<String, String>();
+  /** species_group value to the one spelling of the common name every row of the group carries. */
+  private static final Map<String, String> COMMON_NAMES = new LinkedHashMap<String, String>();
   /** Lower-case entity-name prefix to the states the ESU/DPS spans. */
   private static final Map<String, String> STATES_BY_ENTITY = new LinkedHashMap<String, String>();
 
@@ -58,6 +65,14 @@ public class FisheriesEsaListingsTransformer implements ResponseTransformer {
     GROUPS.put("pink salmon", "pink");
     GROUPS.put("steelhead (rainbow trout)", "steelhead");
     GROUPS.put("atlantic salmon", "atlantic");
+
+    COMMON_NAMES.put("chinook", "Chinook salmon");
+    COMMON_NAMES.put("coho", "Coho salmon");
+    COMMON_NAMES.put("chum", "Chum salmon");
+    COMMON_NAMES.put("sockeye", "Sockeye salmon");
+    COMMON_NAMES.put("pink", "Pink salmon");
+    COMMON_NAMES.put("steelhead", "Steelhead (Rainbow Trout)");
+    COMMON_NAMES.put("atlantic", "Atlantic salmon");
 
     STATES_BY_ENTITY.put("gulf of maine", "ME");
     STATES_BY_ENTITY.put("kennebec river", "ME");
@@ -110,6 +125,9 @@ public class FisheriesEsaListingsTransformer implements ResponseTransformer {
       String entity = text(r.get(4));
       String status = text(r.get(2));
       String category = text(r.get(3));
+      if (category.isEmpty() && "Not Listed".equals(status)) {
+        category = "Not Listed";
+      }
 
       String cfr = null;
       Matcher c = CFR.matcher(entity);
@@ -119,7 +137,7 @@ public class FisheriesEsaListingsTransformer implements ResponseTransformer {
       }
 
       ObjectNode row = MAPPER.createObjectNode();
-      row.put("common_name", common);
+      row.put("common_name", COMMON_NAMES.get(group));
       row.put("scientific_name", r.get(1).get("value").asText());
       row.put("species_group", group);
       putNullable(row, "population_name", entity);
