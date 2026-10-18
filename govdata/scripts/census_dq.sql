@@ -283,10 +283,10 @@ INSERT INTO dq_results SELECT 'census', 'bds_dynamics', 'all_null_cols', 'fail',
 INSERT INTO dq_results SELECT 'census', 'abs_characteristics', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'nonemployer_statistics', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'building_permits', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits', allow_moved_paths := true)) WHERE null_percentage = 100.0;
--- Payroll is excluded: this table ingests only the LEHD QWI "SA" (Sex-by-Age) tabulation,
--- which never publishes Payroll at source (confirmed 100% null in LEHD's own raw file, not
+-- payroll is excluded: this table ingests only the LEHD QWI "SA" (Sex-by-Age) tabulation,
+-- which never publishes payroll at source (confirmed 100% null in LEHD's own raw file, not
 -- an ingestion gap).
-INSERT INTO dq_results SELECT 'census', 'qwi_employment', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name <> 'Payroll';
+INSERT INTO dq_results SELECT 'census', 'qwi_employment', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name <> 'payroll';
 INSERT INTO dq_results SELECT 'census', 'lodes_workplace', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 
 -- ============================================================================
