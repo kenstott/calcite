@@ -39,6 +39,7 @@ import org.apache.iceberg.hadoop.HadoopTables;
 import org.apache.iceberg.types.Types;
 
 import org.apache.calcite.adapter.file.metadata.TableConstraints;
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -244,6 +245,22 @@ public class IcebergTable extends AbstractTable
     this.config = new java.util.HashMap<>();
     this.snapshotId = null;
     this.asOfTimestamp = null;
+  }
+
+  /**
+   * Config key of the partition columns the table's schema declares
+   * ({@code partitions.columnDefinitions}), each with its declared type. The table's own schema
+   * may store one under another type (a year as text); the DuckDB engine serves the declared one.
+   */
+  public static final String DECLARED_PARTITION_COLUMNS = "declaredPartitionColumns";
+
+  /** Returns the partition columns the table's schema declares, or an empty list. */
+  @SuppressWarnings("unchecked")
+  public List<PartitionedTableConfig.ColumnDefinition> declaredPartitionColumns() {
+    Object declared = config.get(DECLARED_PARTITION_COLUMNS);
+    return declared == null
+        ? Collections.emptyList()
+        : (List<PartitionedTableConfig.ColumnDefinition>) declared;
   }
 
   /** Sets PK/FK constraint config from the schema YAML's tableConstraints section. */

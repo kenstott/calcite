@@ -39,10 +39,17 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_month: &partition_month
     name: month
     type: INTEGER
+
+  # fr_significance writes its month zero-padded ("01".."12", from fr_months_padded).
+  partition_month_padded: &partition_month_padded
+    name: month
+    type: INTEGER
+    storedDigits: 2
 
   year_month_partitions: &year_month_partitions
     style: hive
@@ -311,7 +318,7 @@ partitionedTables:
       style: hive
       columnDefinitions:
         - *partition_year
-        - *partition_month
+        - *partition_month_padded
     comment: >
       OIRA EO 12866 economic-significance determination per Federal Register
       document, sourced directly from the Federal Register API's own `significant`

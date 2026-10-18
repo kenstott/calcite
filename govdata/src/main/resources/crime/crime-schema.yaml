@@ -72,6 +72,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_state: &partition_state
     name: state_abbr
@@ -2193,7 +2194,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2342,7 +2343,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2477,7 +2478,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2603,7 +2604,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq

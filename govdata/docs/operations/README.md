@@ -36,6 +36,11 @@ tail runs/errors.log                 # last N lines
 grep "$(date +%Y-%m-%d)" runs/errors.log   # today only
 ```
 
+A WARN "stores column ... as string but declares it ..." names a table still holding text where
+it declares an integer or a date. Its loads keep running at the stored type. Those tables are
+listed, with what to check before purging and reprocessing each, in
+[stored-text-columns-to-rewrite.md](stored-text-columns-to-rewrite.md).
+
 **Logs:**
 - Crash/error lines: `runs/errors.log`
 - Per-window detail: `runs/scheduled-{mode}-{timestamp}.log`

@@ -110,6 +110,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   # --- Standard Hive Partition Set ---
 
@@ -4507,6 +4508,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: state_fips
           type: VARCHAR
     comment: >
@@ -5459,6 +5461,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: month
           type: VARCHAR
     comment: >
@@ -5746,6 +5749,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: tablename
           type: VARCHAR
     comment: >
@@ -5805,6 +5809,7 @@ partitionedTables:
         expression: "CAST(line_number_raw AS INTEGER)"
         comment: Line number within the BEA table
       - name: year
+        type: integer
         expression: "CAST(SUBSTR(time_period, 1, 4) AS INTEGER)"
         comment: Year extracted from time period
       - name: value
@@ -5967,6 +5972,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: tablename
           type: VARCHAR
     comment: >
@@ -6114,6 +6120,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       State-level personal income and its components — total personal income, population, per
       capita income, wages and salaries, transfer receipts, and more — from all 12 active BEA
@@ -6280,6 +6287,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       State-level GDP — summary, by-industry breakdowns, and chain-type quantity/price indexes —
       from all 10 active BEA SAGDP tables, annual, for all 50 states + DC. For county/MSA-level
@@ -6710,6 +6718,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       State-level personal consumption expenditures (PCE) by category, from all 4 active BEA
       SAPCE tables, annual, for all 50 states + DC. For county/MSA-level BEA data see
@@ -6868,6 +6877,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       State, county, MSA, and other sub-national (micropolitan, port, metro division, CSA)
       personal income, GDP, consumption, wages, arts & culture, and outdoor recreation statistics
@@ -6938,9 +6948,9 @@ partitionedTables:
           estimate elsewhere or below a small-amount threshold; '(NM)' = not meaningful;
           '(NA)' = not available. data_value is NULL on every flagged row, so filter
           data_value IS NOT NULL to sum only published numbers.
-      # Partition columns - types must match what DuckDB infers when writing
+      # Partition column, typed as its partitions.columnDefinitions declares it
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Year partition from dimension iteration
       - name: geo_fips_set
@@ -7178,6 +7188,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: indicator
           type: VARCHAR
     comment: >
@@ -7402,6 +7413,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       BEA Direct Investment (DI) statistics from the Multinational Enterprises
       (MNE) dataset. Balance-of-payments direct investment: position (stock),
@@ -7647,6 +7659,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       BEA International Investment Position (IIP): U.S. external assets and
       liabilities by type of investment, reporting position (stock) and the
@@ -7956,6 +7969,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: industry
           type: VARCHAR
     comment: >

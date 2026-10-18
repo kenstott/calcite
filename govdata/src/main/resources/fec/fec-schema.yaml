@@ -519,6 +519,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       All federal candidates registered with the FEC. Includes candidate ID,
@@ -680,6 +681,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       All political committees registered with the FEC. Includes PACs, party
@@ -834,6 +836,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Links between candidates and their authorized committees. Shows which
@@ -930,6 +933,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Itemized individual (donor-level) contributions to federal committees exceeding
@@ -1139,6 +1143,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Committee-to-candidate transactions (PACs, party committees), spanning direct
@@ -1329,6 +1334,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Transactions between political committees — transfers, joint fundraising
@@ -1514,6 +1520,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Itemized operating expenditures by political committees. Shows how
@@ -1713,6 +1720,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Independent expenditures — spending by committees and individuals for or
@@ -1921,6 +1929,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Electioneering communications — broadcast, cable, or satellite ads that
@@ -2080,6 +2089,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Communication costs reported by corporations and labor organizations for
@@ -2231,6 +2241,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Aggregated per-candidate financial summary for each election cycle — one row
@@ -2439,6 +2450,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Aggregated per-committee financial summary for each election cycle — one row

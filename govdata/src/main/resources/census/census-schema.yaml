@@ -82,6 +82,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_geography: &partition_geography
     name: geography
@@ -5216,6 +5217,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       Establishment counts, employment, annual payroll, and total sales/receipts (RCPTOT, in
       $1,000s) by NAICS industry, at state and county grain, quinquennial (2017, 2022, 2027, ...).
@@ -5722,6 +5724,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       Nonemployer Statistics establishment counts and total receipts by NAICS industry, for
       businesses with no paid employees (self-employed/unincorporated), at state and county

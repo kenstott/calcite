@@ -71,6 +71,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   standard_partitions: &standard_partitions
     style: hive

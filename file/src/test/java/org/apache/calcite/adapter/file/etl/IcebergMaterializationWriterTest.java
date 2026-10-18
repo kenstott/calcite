@@ -717,7 +717,7 @@ public class IcebergMaterializationWriterTest {
         buildIcebergConfig(
             warehouseDir, "type_mismatch_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
-            createColumnConfig("year", "VARCHAR")),
+            createColumnConfig("year", "INTEGER")),
         Collections.<String>emptyList());
 
     writer.initialize(config1);
@@ -725,7 +725,7 @@ public class IcebergMaterializationWriterTest {
     List<Map<String, Object>> rows1 = new ArrayList<Map<String, Object>>();
     Map<String, Object> row1 = new HashMap<String, Object>();
     row1.put("id", 1);
-    row1.put("year", "2023");
+    row1.put("year", 2023);
     rows1.add(row1);
     writer.writeBatch(rows1.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
@@ -738,9 +738,11 @@ public class IcebergMaterializationWriterTest {
         buildIcebergConfig(
             warehouseDir, "type_mismatch_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
-            createColumnConfig("year", "INTEGER")),
+            createColumnConfig("year", "VARCHAR")),
         Collections.<String>emptyList());
 
+    // A stored integer declared as text is no designed transition (GOV-075 covers only text
+    // declared as an integer or a date), so the type change still fails.
     IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> {
       writer.initialize(config2);
     });

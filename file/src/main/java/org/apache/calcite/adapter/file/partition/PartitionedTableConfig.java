@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.file.partition;
 
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import java.util.List;
 import java.util.Map;
 
@@ -174,15 +176,30 @@ public class PartitionedTableConfig {
     private final String name;
     private final String type;
     private final String sourceColumn;
+    private final @Nullable Integer storedDigits;
 
     public ColumnDefinition(String name, String type) {
       this(name, type, null);
     }
 
     public ColumnDefinition(String name, String type, String sourceColumn) {
+      this(name, type, sourceColumn, null);
+    }
+
+    public ColumnDefinition(String name, String type, String sourceColumn,
+        @Nullable Integer storedDigits) {
       this.name = name;
       this.type = type != null ? type : "VARCHAR";
       this.sourceColumn = sourceColumn;
+      this.storedDigits = storedDigits;
+    }
+
+    /** A definition read from a {@code columnDefinitions} entry of a schema's YAML or JSON. */
+    static ColumnDefinition fromMap(Map<String, Object> m) {
+      Object digits = m.get("storedDigits");
+      return new ColumnDefinition((String) m.get("name"), (String) m.get("type"),
+          (String) m.get("sourceColumn"),
+          digits == null ? null : ((Number) digits).intValue());
     }
 
     public String getName() {
@@ -198,6 +215,15 @@ public class PartitionedTableConfig {
      */
     public String getSourceColumn() {
       return sourceColumn;
+    }
+
+    /**
+     * Returns how many decimal digits every value of this column has where its table stores it
+     * as text (a year: 4, a zero-padded month: 2), or null when the text is the plain decimal
+     * form of the number with no padding (a month 1 to 12).
+     */
+    public @Nullable Integer getStoredDigits() {
+      return storedDigits;
     }
 
     /**
@@ -542,11 +568,7 @@ public class PartitionedTableConfig {
             // Full definition with types and optional sourceColumn:
             // [{"name": "geo_fips", "type": "VARCHAR", "sourceColumn": "GeoFips"}, ...]
             columnDefinitions = ((List<Map<String, Object>>) defsList).stream()
-                .map(
-                    m -> new ColumnDefinition(
-                    (String) m.get("name"),
-                    (String) m.get("type"),
-                    (String) m.get("sourceColumn")))
+                .map(ColumnDefinition::fromMap)
                 .collect(java.util.stream.Collectors.toList());
             // Extract column names for APIs that need them
             simpleColumns = columnDefinitions.stream()
@@ -630,11 +652,7 @@ public class PartitionedTableConfig {
             Object firstElem = defsList.get(0);
             if (firstElem instanceof Map) {
               columnDefs = ((List<Map<String, Object>>) defsList).stream()
-                  .map(
-                      cm -> new ColumnDefinition(
-                      (String) cm.get("name"),
-                      (String) cm.get("type"),
-                      (String) cm.get("sourceColumn")))
+                  .map(ColumnDefinition::fromMap)
                   .collect(java.util.stream.Collectors.toList());
               simpleColumns = columnDefs.stream()
                   .map(ColumnDefinition::getName)
