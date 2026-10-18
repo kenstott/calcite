@@ -2594,6 +2594,115 @@ SELECT 'law', 'lobbying_activity_government_entities', 'T7_government_entity_id_
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_government_entities', allow_moved_paths := true) c LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_government_entity_codes', allow_moved_paths := true) r ON c.government_entity_id = r.government_entity_id WHERE c.government_entity_id IS NOT NULL AND r.government_entity_id IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: lobbying_activity_bills
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true));
+
+-- T2: row_count (a sample of LD-2 activities names well over 100 bills)
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T2_row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  n, 100, 'Expected at least 100 rows in a DQ sample'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year', 'quarter')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year', 'quarter')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL filing_uuid, activity_seq, bill_type, bill_number, match_basis rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true)
+      WHERE filing_uuid IS NULL OR activity_seq IS NULL OR bill_type IS NULL OR bill_number IS NULL OR match_basis IS NULL);
+
+-- T6: pk_duplicates (unresolved_tag rows have a null congress and are excluded)
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (filing_uuid, activity_seq, congress, bill_type, bill_number) keys'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT filing_uuid, activity_seq, congress, bill_type, bill_number, COUNT(*) AS c
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true)
+    WHERE congress IS NOT NULL
+    GROUP BY filing_uuid, activity_seq, congress, bill_type, bill_number
+    HAVING COUNT(*) > 1
+  )
+);
+
+-- T7: lobbying_activity_bills rows with no matching lobbying_activities row
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T7_orphan_rows_lobbying_activities',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'lobbying_activity_bills rows with no matching lobbying_activities row'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true) c LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activities', allow_moved_paths := true) p ON c.filing_uuid = p.filing_uuid AND c.activity_seq = p.activity_seq WHERE p.filing_uuid IS NULL);
+
+-- T7: bill_type and match_basis hold only the documented values
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T7_enum_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with an undocumented bill_type or match_basis, or a null congress that is not unresolved_tag'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true)
+      WHERE bill_type NOT IN ('hr','s','hjres','sjres','hconres','sconres','hres','sres')
+         OR match_basis NOT IN ('explicit_congress_tag','inferred_from_posted_date','unresolved_tag')
+         OR (congress IS NULL) <> (match_basis = 'unresolved_tag'));
+
+-- T7: congress is never later than the Congress in session when the filing was posted
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T7_congress_not_after_posting',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows whose congress is later than the Congress in session in the posting year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true)
+      WHERE congress > (CAST(year AS INTEGER) - 1789 + CASE WHEN year % 2 = 1 THEN 0 ELSE -1 END) // 2 + 1);
+
+-- T7: both explicit and inferred matches occur (a table with only one means a tag rule is dead)
+INSERT INTO dq_results
+SELECT 'law', 'lobbying_activity_bills', 'T7_both_match_bases_present',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Distinct match_basis values among explicit_congress_tag and inferred_from_posted_date'
+FROM (SELECT COUNT(DISTINCT match_basis) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/lobbying_activity_bills', allow_moved_paths := true)
+      WHERE match_basis IN ('explicit_congress_tag','inferred_from_posted_date'));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: lobbying_foreign_entities
 -- ─────────────────────────────────────────────────────────────
 

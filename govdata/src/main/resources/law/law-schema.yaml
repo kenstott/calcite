@@ -32,7 +32,7 @@
 #     LDA_API_KEY: without it the API allows 15 requests a minute instead of 120, so the
 #     provider refuses to run rather than crawl anonymously. Tables: lobbying_filings,
 #     lobbying_activities, lobbying_activity_lobbyists, lobbying_activity_government_entities,
-#     lobbying_foreign_entities, lobbying_affiliated_organizations,
+#     lobbying_activity_bills, lobbying_foreign_entities, lobbying_affiliated_organizations,
 #     lobbying_conviction_disclosures, lobbying_contribution_reports,
 #     lobbying_contribution_items, lobbying_contribution_pacs, lobbyists,
 #     lobbying_registrants, lobbying_clients, lobbying_issue_codes,
@@ -78,7 +78,8 @@ comment: >
   and federal lobbying disclosures from LDA.gov — `lobbying_filings` (LD-1 registrations and
   LD-2 quarterly reports: who lobbied for whom and for how much) with `lobbying_activities`
   (the issues, in free text that names bills), `lobbying_activity_lobbyists`,
-  `lobbying_activity_government_entities`, `lobbying_foreign_entities`,
+  `lobbying_activity_government_entities`, `lobbying_activity_bills` (the bills each activity
+  names, extracted from that text), `lobbying_foreign_entities`,
   `lobbying_affiliated_organizations` and `lobbying_conviction_disclosures`; LD-203
   political-contribution reports in `lobbying_contribution_reports`,
   `lobbying_contribution_items` and `lobbying_contribution_pacs`; the registries `lobbyists`,
@@ -3045,6 +3046,136 @@ partitionedTables:
       format: iceberg
       output:
         pattern: "type=lobbying_activity_government_entities/year=*/quarter=*/"
+      partition:
+        columns: [type, year, quarter]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        batchPartitionColumns: [year, quarter]
+        incrementalKeys: [year, quarter]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
+  # LOBBYING_ACTIVITY_BILLS — bills each activity names
+  # ---------------------------------------------------------------------------
+  - name: lobbying_activity_bills
+    pattern: "type=lobbying_activity_bills/year=*/quarter=*/*.parquet"
+    dataset_type: delta
+    backfill_period: quarterly
+    # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
+    # That is the current quarter while it is open, and on the first run of a new quarter it is the
+    # quarter that just closed (the current one is not yet complete), so the closing read of the
+    # previous quarter's last-day filings happens without further configuration. Older quarters are
+    # immutable and stay complete.
+    partitions: *lobbying_window_partitions
+    comment: >
+      The federal bills each lobbying activity names, one row per (activity, Congress, bill
+      type, bill number), derived from the free-text `description` in lobbying_activities by
+      fixed rules, so a join to the bill_* tables does not need each user to parse text.
+      `bill_type` uses the bills table's values (hr, s, hjres, sjres, hconres, sconres, hres,
+      sres) and `bill_number` is unique only within (congress, bill_type): join to bills on
+      all three. Recognised forms: "H.R. 1", "HR 1", "HR1", "S. 123", "S123", "H.J.Res. 5",
+      "S.J.Res. 5", "H.Con.Res. 5", "S.Con.Res. 5", "H.Res. 5", "S.Res. 5", with an optional
+      "No.". `congress` comes from an explicit tag next to the reference ("H.R. 1 (118th)",
+      "H.R. 1, 118th Congress", "118th Congress: H.R. 1") and `match_basis` is
+      explicit_congress_tag; with no tag it is the Congress in session on the filing's posting
+      date and `match_basis` is inferred_from_posted_date — drop those rows for a strict
+      analysis, since an untagged number may name an older Congress's bill with the same
+      number. A tag naming a Congress later than the one in session at posting cannot be
+      right: that row has a null `congress` and `match_basis` unresolved_tag, and is kept
+      rather than guessed. Not captured: numbers that only follow a list ("H.R. 1, 2 and 3"
+      yields H.R. 1) and spelled-out names ("House Bill 1"). The same bill and Congress is
+      one row per activity, with an explicit tag winning over an inferred one. This table
+      does not judge whether a reference is the sponsor's bill or an older bill of the same
+      number beyond what the tag and posting date allow. Precision, hand-checked against the
+      description text in a 2026 Q1-Q3 sample (12 explicit, 40 inferred rows): every row was a
+      real bill reference; the 2 explicit rows with a wrong or missed tag were fixed by the
+      rules above, and 1 of the 40 inferred rows named an older Congress's bill (the Congress
+      is only as good as the posting-date inference, so treat inferred rows as probable, not
+      certain). `reference_text` is the matched
+      text. Join to lobbying_activities on (filing_uuid, activity_seq). Partitioned by `year`
+      and `quarter` like lobbying_activities: the calendar quarter in which the filing was
+      POSTED (Eastern time). A past partition never changes; the current quarter is re-read
+      on each daily run. Source: LDA.gov (Senate Office of Public Records); the extraction is
+      this project's. The Senate Office of Public Records cannot vouch for the data or
+      analyses derived from these data after they have been retrieved from LDA.gov.
+
+    dimensions:
+      type:
+        - lobbying_activity_bills
+      year: *lobbying_year_range
+      quarter: *lobbying_quarter
+
+    columns:
+      - <<: *partition_year
+      - <<: *partition_quarter
+      - name: filing_uuid
+        type: string
+        nullable: false
+        comment: >
+          LDA.gov's unique ID for the filing; joins every lobbying_* filing table
+      - name: activity_seq
+        type: integer
+        nullable: false
+        comment: >
+          Position of the activity within its filing, from 1
+      - name: congress
+        type: integer
+        nullable: true
+        comment: >
+          Congress the bill belongs to (e.g. 118); null only when match_basis is unresolved_tag
+      - name: bill_type
+        type: string
+        nullable: false
+        comment: >
+          Bill type as in the bills table: hr, s, hjres, sjres, hconres, sconres, hres, sres
+      - name: bill_number
+        type: integer
+        nullable: false
+        comment: >
+          Bill number, unique only within (congress, bill_type)
+      - name: match_basis
+        type: string
+        nullable: false
+        comment: >
+          explicit_congress_tag (a tag next to the reference), inferred_from_posted_date (no
+          tag; Congress in session when the filing was posted) or unresolved_tag (tag later
+          than the posting Congress; congress is null)
+      - name: reference_text
+        type: string
+        nullable: false
+        comment: >
+          The text matched in the description, e.g. "H.R. 1"
+
+    source:
+      type: http
+      url: "https://lda.gov/api/v1/filings/"
+      method: GET
+      headers:
+        Authorization: "Token ${LDA_API_KEY}"
+      parameters:
+        page_size: "25"
+        ordering: "dt_posted"
+        dq_record_limit: "1000"
+      response:
+        format: json
+      # 2 requests/second is the keyed limit of 120/minute; a 429 is retried after the
+      # server's own Retry-After.
+      rateLimit:
+        requestsPerSecond: 2
+        retryOn: [429, 500, 503]
+        maxRetries: 6
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.LdaApiProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=lobbying_activity_bills/year=*/quarter=*/"
       partition:
         columns: [type, year, quarter]
       iceberg:
