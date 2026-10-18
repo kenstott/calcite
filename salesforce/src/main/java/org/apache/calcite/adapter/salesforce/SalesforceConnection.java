@@ -130,8 +130,6 @@ public class SalesforceConnection implements Closeable {
       }
 
       return mapper.readValue(responseBody, QueryResult.class);
-    } catch (Exception e) {
-      throw new IOException("Query failed", e);
     }
   }
 
@@ -150,8 +148,6 @@ public class SalesforceConnection implements Closeable {
       }
 
       return mapper.readValue(responseBody, QueryResult.class);
-    } catch (Exception e) {
-      throw new IOException("QueryMore failed", e);
     }
   }
 
@@ -224,8 +220,6 @@ public class SalesforceConnection implements Closeable {
         }
       }
       return result;
-    } catch (Exception e) {
-      throw new IOException("List sObjects failed", e);
     }
   }
 
