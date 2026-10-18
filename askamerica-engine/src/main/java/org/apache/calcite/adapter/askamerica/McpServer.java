@@ -921,9 +921,9 @@ public class McpServer {
             + "may be reported in prose if a table would be silly for one row; two or more "
             + "assertions always go in `claims`. You MUST build a validation with "
             + "create_report_artifact and deliver BOTH of its outputs: the artifact rendered "
-            + "in the conversation AND the file:// link to the local report page. When the "
+            + "in the conversation AND the http link to the local report page. When the "
             + "client cannot render artifacts (a terminal client, for example), deliver the "
-            + "file:// link alone. When the client has an in-chat browser, you MUST also "
+            + "http link alone. When the client has an in-chat browser, you MUST also "
             + "open the article (`source_url`) in it.\n"
             + "8. With two or more claims, every claim MUST carry `group`, refused without it. "
             + "`fidelity`: the assertion relays a study, release, report, official figure or "
@@ -3028,7 +3028,7 @@ public class McpServer {
             + "whose saved copy outlives the process (see restore_report). Nothing is "
             + "published. You MUST use create_report_artifact to show a report — it "
             + "runs the same QC and delivers both a conversation artifact and this same page "
-            + "as a local file; call this ONLY when the client cannot render artifacts. When the user says 'publish report' or 'share "
+            + "as a local page; call this ONLY when the client cannot render artifacts. When the user says 'publish report' or 'share "
             + "report', that means a DURABLE, shareable link — build the report with either "
             + "tool, then register (once per account) then publish_report, and return the link "
             + "publish_report gives back. For a question worth more than a sentence, a report is "
@@ -3049,10 +3049,10 @@ public class McpServer {
             tool("create_report_artifact",
             "THE DEFAULT WAY TO SHOW A REPORT, article validations included. Every report is "
             + "delivered BOTH ways: you MUST render the returned report as an artifact in the "
-            + "conversation AND give the reader the returned file:// link to the local report "
+            + "conversation AND give the reader the returned http link to the local report "
             + "page. The artifact is the reader's copy; the page is the copy publish_report "
             + "publishes. When the client cannot render artifacts (a terminal client, for example), "
-            + "give the file:// link alone. Runs "
+            + "give the http link alone. Runs "
             + "the same QC preview_report runs (same "
             + "arguments, question_coverage included, same refusals) and hands back the QC'd "
             + "report as data plus layout hints so YOU render it with your own artifact/charting "
@@ -3065,10 +3065,12 @@ public class McpServer {
             + "`hints` object — orientation_hint (bar charts) and suppressed_cells (values with "
             + "no data: draw them as a gap or an explicit 'no data' mark, never as zero). Follow "
             + "the hints instead of re-deriving presentation from the numbers. It also builds the "
-            + "exact page publish_report would publish and returns a file:// link to it, and saves "
+            + "exact page publish_report would publish and returns an http link to it, served by "
+            + "this process until it exits, and saves "
             + "both the report instructions and that page under a report_id that outlives this "
-            + "process. Nothing is uploaded: after the artifact, give the reader the file:// "
-            + "link exactly as returned. You MUST NOT ask before calling this tool or before "
+            + "process. Nothing is uploaded: after the artifact, give the reader the http "
+            + "link exactly as returned; once it stops working, restore_report re-serves the "
+            + "saved page by report_id. You MUST NOT ask before calling this tool or before "
             + "showing the artifact. Offer publishing only after the artifact is shown, and "
             + "call register/publish_report only if they say yes.",
             schema(pubProps, new String[]{"title", "question_coverage"})));
@@ -4774,13 +4776,12 @@ public class McpServer {
                     log.println("[askamerica-mcp] tool=" + name + " sections=" + secs.size()
                         + " sources=" + srcs.size() + " board=" + (boardSvg != null)
                         + " saved=" + saved.json);
-                    String fileLink = reportFileLink(rTitle, ReportStore.fileUrl(saved.id));
-                    String httpNote = url == null ? "" : " The same page is served over http "
-                        + "while this engine process lasts: " + url;
+                    String localPage = localReportPage(rTitle, url,
+                        ReportStore.htmlFile(ReportStore.dir(), saved.id).getAbsolutePath(),
+                        saved.id);
                     String savedLine = "Saved as report_id `" + saved.id + "` — the saved page "
                         + "outlives this process: restore_report re-serves it over http by that "
-                        + "id if the file link won't open, and publish_report publishes it by "
-                        + "that id in any later session."
+                        + "id, and publish_report publishes it by that id in any later session."
                         + (hasClaims ? " The headline is \"" + rTitle + "\" — you MUST open "
                             + "your answer with it, unchanged." : "");
                     if (asArtifact) {
@@ -4832,13 +4833,12 @@ public class McpServer {
                             + "narrative, in order, including any coverage-gap sections added by "
                             + "QC; list `sources` as the citations." + validationHint
                             + " Draw only what is in this payload. You MUST deliver both: the "
-                            + "artifact, then the file:// link below exactly as written. If this "
-                            + "client cannot render artifacts, give the file:// link alone. "
+                            + "artifact, then the http link below exactly as written. If this "
+                            + "client cannot render artifacts, give the http link alone. "
                             + "You MUST NOT ask the reader before showing either. Once both "
                             + "are shown, offer a permanent link in one line; call register "
                             + "and publish_report only if the reader says yes.\n\n"
-                            + "Local report page for the reader: " + fileLink + " — a local file "
-                            + "that opens with no server." + httpNote + "\n" + savedLine + "\n\n"
+                            + localPage + "\n" + savedLine + "\n\n"
                             + MAPPER.writeValueAsString(artifact);
                         break;
                     }
@@ -4852,13 +4852,11 @@ public class McpServer {
                     // same way, which is exactly the distinction the caller asked for. Skipped
                     // entirely in EVAL_MODE either way, so a comparative-eval run never posts
                     // real content to a real Studies account.
-                    String linkLine = "Report built: " + fileLink
-                        + "\n\nGive the reader that file:// link exactly as written — it is "
-                        + "the whole answer in one page: " + secs.size() + " section(s), "
-                        + srcs.size() + " citation(s)"
+                    String linkLine = "Report built.\n\nGive the reader this link exactly as "
+                        + "written — it is the whole answer in one page: " + secs.size()
+                        + " section(s), " + srcs.size() + " citation(s)"
                         + (boardSvg == null ? "" : ", dashboard inlined")
-                        + ". It is a file on this machine: it opens with no server and outlives "
-                        + "this process, but it is not shareable." + httpNote
+                        + ". It is a page on this machine, not shareable.\n" + localPage
                         + (EVAL_MODE ? "" : " If the reader asked to publish or share this "
                             + "(rather than just see it), call `register` once (if not already "
                             + "done this session) and then `publish_report` right after this call "
@@ -8255,11 +8253,29 @@ public class McpServer {
         }
     }
 
-    /** Markdown link to the saved page's {@code file://} URL, labelled with the report title. */
-    static String reportFileLink(String title, String fileUrl) {
+    /** Markdown link labelled with the report title. */
+    static String reportLink(String title, String url) {
         String label = title == null || title.isEmpty() ? "Open the report"
             : title.replace("]", ")");
-        return "[" + label + "](" + fileUrl + ")";
+        return "[" + label + "](" + url + ")";
+    }
+
+    /**
+     * The local-page instruction: the engine's http URL as the clickable link (clients do not
+     * render {@code file:} links), the saved file's path as plain text, and restore_report for
+     * once the http link stops working with the engine process. {@code httpUrl} is null only
+     * when the loopback server could not start.
+     */
+    static String localReportPage(String title, String httpUrl, String filePath, String reportId) {
+        String restore = "restore_report with report_id `" + reportId + "` re-serves it over http";
+        if (httpUrl == null) {
+            return "Local report page: no http link could be served; the saved page is at "
+                + filePath + " (plain text, not a link) — " + restore + ".";
+        }
+        return "Local report page for the reader: " + reportLink(title, httpUrl)
+            + " — served by this engine process, so it works only while the process runs; "
+            + restore + " once it stops. The saved copy is at " + filePath
+            + " (plain text, not a link).";
     }
 
     private static void appendDetailRow(StringBuilder details, String label, String value) {
