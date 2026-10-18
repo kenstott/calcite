@@ -157,6 +157,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: quarter
           type: INTEGER
 
@@ -324,6 +325,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: quarter
           type: INTEGER
 
@@ -438,6 +440,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: quarter
           type: INTEGER
 
@@ -1030,6 +1033,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       CISA cybersecurity advisory metadata, one row per advisory (e.g.,

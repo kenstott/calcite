@@ -7613,6 +7613,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       SSA "OASDI Beneficiaries by State and County" (Tables 4 & 5, December snapshot) —
       one row per county per state per year (plus one state-total row per state/year),

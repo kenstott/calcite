@@ -525,6 +525,8 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
           org.apache.calcite.schema.Wrapper {
     private final Table jdbcTable;           // For query execution
     private final CommentableTable commentableTable;  // For metadata
+    /** The stored-text partition columns of the last scan {@link #toRel} built. */
+    private volatile StoredTextPartitions scannedPartitions = StoredTextPartitions.NONE;
 
     CommentableJdbcTableWrapper(Table jdbcTable, CommentableTable commentableTable) {
       this.jdbcTable = jdbcTable;
@@ -534,17 +536,61 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     @Override public org.apache.calcite.rel.RelNode toRel(
         org.apache.calcite.plan.RelOptTable.ToRelContext context,
         org.apache.calcite.plan.RelOptTable relOptTable) {
-      // Delegate to the wrapped JdbcTable to create JdbcTableScan with proper convention
-      if (jdbcTable instanceof org.apache.calcite.schema.TranslatableTable) {
-        return ((org.apache.calcite.schema.TranslatableTable) jdbcTable).toRel(context, relOptTable);
+      if (!(jdbcTable instanceof org.apache.calcite.schema.TranslatableTable)) {
+        throw new IllegalStateException("Wrapped table is not TranslatableTable: " + jdbcTable.getClass());
       }
-      throw new IllegalStateException("Wrapped table is not TranslatableTable: " + jdbcTable.getClass());
+      org.apache.calcite.schema.TranslatableTable scannable =
+          (org.apache.calcite.schema.TranslatableTable) jdbcTable;
+      RelDataTypeFactory typeFactory = context.getCluster().getTypeFactory();
+      StoredTextPartitions partitions = storedTextPartitions(typeFactory);
+      scannedPartitions = partitions;
+      if (partitions.isEmpty()) {
+        // Delegate to the wrapped JdbcTable to create JdbcTableScan with proper convention
+        return scannable.toRel(context, relOptTable);
+      }
+      // DuckDB reads each stored-text partition column as the text it stores; the scan carries
+      // that type, and a projection casts it to the type this table declares.
+      if (!(relOptTable instanceof org.apache.calcite.prepare.RelOptTableImpl)) {
+        throw new IllegalStateException("Stored-text partition columns of '"
+            + relOptTable.getQualifiedName() + "' need a RelOptTableImpl, got "
+            + relOptTable.getClass());
+      }
+      RelDataType stored = ((IcebergTable) commentableTable).getRowType(typeFactory);
+      org.apache.calcite.rel.RelNode scan = scannable.toRel(context,
+          ((org.apache.calcite.prepare.RelOptTableImpl) relOptTable).copy(stored));
+      RelDataType declared = partitions.declaredRowType(typeFactory, stored);
+      org.apache.calcite.rex.RexBuilder rexBuilder = context.getCluster().getRexBuilder();
+      java.util.List<org.apache.calcite.rex.RexNode> projects = new java.util.ArrayList<>();
+      for (org.apache.calcite.rel.type.RelDataTypeField field : stored.getFieldList()) {
+        org.apache.calcite.rex.RexNode ref = rexBuilder.makeInputRef(scan, field.getIndex());
+        projects.add(partitions.column(field.getIndex()) == null
+            ? ref
+            : rexBuilder.makeCast(declared.getFieldList().get(field.getIndex()).getType(), ref));
+      }
+      return org.apache.calcite.rel.logical.LogicalProject.create(scan,
+          com.google.common.collect.ImmutableList.of(), projects, declared.getFieldNames(),
+          com.google.common.collect.ImmutableSet.of());
+    }
+
+    /**
+     * The partition columns this table stores as text and declares as an integer: none unless
+     * it is an Iceberg table whose schema declares such a column.
+     */
+    private StoredTextPartitions storedTextPartitions(RelDataTypeFactory typeFactory) {
+      if (!(commentableTable instanceof IcebergTable)) {
+        return StoredTextPartitions.NONE;
+      }
+      IcebergTable iceberg = (IcebergTable) commentableTable;
+      return StoredTextPartitions.of(iceberg.getRowType(typeFactory),
+          iceberg.declaredPartitionColumns());
     }
 
     @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
-      // For Iceberg-backed tables, use IcebergTable's Calcite SQL types (not DuckDB native types)
+      // For Iceberg-backed tables, use IcebergTable's Calcite SQL types (not DuckDB native types),
+      // with each stored-text partition column at the type the table declares.
       if (commentableTable instanceof IcebergTable) {
-        return ((IcebergTable) commentableTable).getRowType(typeFactory);
+        RelDataType stored = ((IcebergTable) commentableTable).getRowType(typeFactory);
+        return storedTextPartitions(typeFactory).declaredRowType(typeFactory, stored);
       }
       return jdbcTable.getRowType(typeFactory);
     }
@@ -558,6 +604,10 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
      */
     @Override public <C extends Object> @org.checkerframework.checker.nullness.qual.Nullable C
         unwrap(Class<C> clazz) {
+      if (clazz == StoredTextPartitions.class) {
+        // Read by StoredTextPartitionFilter on the scan toRel built.
+        return clazz.cast(scannedPartitions);
+      }
       if (clazz.isInstance(commentableTable)) {
         return clazz.cast(commentableTable);
       }

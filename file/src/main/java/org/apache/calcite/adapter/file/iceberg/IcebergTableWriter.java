@@ -585,11 +585,11 @@ public class IcebergTableWriter {
         default:
           return value;
       }
-    // fallback-guard: allow non-empty unparseable partition value becomes null (correct three-valued-logic semantics, not a fabricated value), matching the field's own "-" null-indicator handling above
     } catch (NumberFormatException e) {
-      LOGGER.debug("Partition value '{}' is not a valid {}, using NULL: {}", value,
-          sourceType.typeId(), e.getMessage());
-      return null;
+      // A partition value is the path every row of its file lands under: one that is not its
+      // column's declared type is a defect in what wrote it, not a value to null out.
+      throw new IllegalStateException("Partition column '" + field.name() + "' value '" + value
+          + "' is not a valid " + sourceType.typeId() + " (table " + table.name() + ")", e);
     }
   }
 

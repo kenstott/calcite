@@ -94,6 +94,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   # --- Standard Hive Partition Set ---
 
