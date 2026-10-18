@@ -775,3 +775,69 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disaster
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nws_zone_county (static snapshot, NWS zone->county crosswalk for storm_events, #955)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true));
+
+-- ~4,800 zone x county rows in the NWS file
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T2_row_count',
+  CASE WHEN n >= 4000 THEN 'pass' ELSE 'fail' END, n, 4000, 'Expected ~4800 zone-county rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL zone/county_fips/state_abbr rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true)
+      WHERE zone IS NULL OR county_fips IS NULL OR state_abbr IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (state_abbr, zone, county_fips) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT state_abbr, zone, county_fips, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true)
+  GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T7_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with malformed county_fips or zone'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true)
+      WHERE county_fips NOT SIMILAR TO '[0-9]{5}' OR zone NOT SIMILAR TO '[0-9]{3}');
+
+-- The point of the table: share of zone-coded storm_events property damage 2011-2023 whose zone is
+-- in the crosswalk. Measured 81% at onboard ($97.9B single-county + $22.3B multi-county of $148.1B); the
+-- rest is Guam (no Census county equivalent) and zones absent from every downloadable NWS release.
+INSERT INTO dq_results
+SELECT 'disasters', 'nws_zone_county', 'T7_storm_zone_join',
+  CASE WHEN pct >= 0.80 THEN 'pass' ELSE 'warn' END, pct, 0.80, 'Share of zone-coded storm_events property damage 2011-2023 whose zone is in the crosswalk'
+FROM (SELECT COALESCE(SUM(CASE WHEN z.zone IS NOT NULL THEN s.damage_property END) / NULLIF(SUM(s.damage_property), 0), 0) AS pct
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/storm_events', allow_moved_paths := true) s
+      LEFT JOIN (SELECT DISTINCT state_fips, zone FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true)) z
+        ON s.state_fips = z.state_fips AND s.cz_fips = z.zone
+      WHERE s.cz_type = 'Z' AND CAST(s.year AS INTEGER) BETWEEN 2011 AND 2023);

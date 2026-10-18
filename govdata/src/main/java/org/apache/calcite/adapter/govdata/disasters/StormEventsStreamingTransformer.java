@@ -215,6 +215,8 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       row.put("state_name", str(cols, "STATE"));
       row.put("event_type", str(cols, "EVENT_TYPE"));
       row.put("cz_type", czType);
+      row.put("cz_fips", czFips);
+      row.put("cz_name", str(cols, "CZ_NAME"));
       row.put("magnitude", dbl(str(cols, "MAGNITUDE")));
       row.put("magnitude_type", str(cols, "MAGNITUDE_TYPE"));
       row.put("injuries_direct", intg(str(cols, "INJURIES_DIRECT")));

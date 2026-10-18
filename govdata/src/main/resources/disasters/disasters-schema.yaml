@@ -1809,6 +1809,15 @@ partitionedTables:
       to geo.counties silently drops these rows, expect the gap rather than treating it as a
       join bug.
 
+      Zone-coded events (cz_type = 'Z', ~41% of rows and ~half of 2011-2023 property damage —
+      mostly hurricane, wildfire, coastal flood and storm-surge events) have NULL county_fips by
+      design: NOAA records an NWS zone number, not a county. cz_fips keeps that zone number and
+      nws_zone_county maps it to counties: join on s.state_fips = z.state_fips AND s.cz_fips =
+      z.zone. About 10% of zones span more than one county, so the join can fan out one event
+      into several counties — damage summed after that join double counts unless allocated
+      (e.g. divide by the zone's county count). Zone numbering follows the current NWS file;
+      zones NWS retired or renumbered since the event do not match.
+
     dimensions:
       type:
         - storm_events
@@ -1845,6 +1854,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: C (county), Z (NWS zone), M (marine)
+      - name: cz_fips
+        type: string
+        nullable: true
+        comment: >
+          NOAA's CZ_FIPS, zero-padded to 3 digits. A county FIPS suffix when cz_type = 'C'; the NWS
+          public-zone number when cz_type = 'Z' (county_fips is NULL for those rows). Zone rows
+          join to nws_zone_county on (state_fips, cz_fips = zone) to find the county or counties
+          the zone covers.
+      - name: cz_name
+        type: string
+        nullable: true
+        comment: NOAA's CZ_NAME — county, NWS zone, or marine-area name for the row
       - name: magnitude
         type: double
         nullable: true
@@ -2082,6 +2103,111 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: wildfire_perimeters
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: nws_zone_county
+    # NWS republishes the zone-county correlation file a few times a year; the hash probe skips the
+    # write when unchanged. snapshot makes a zero-row run fail loudly.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=nws_zone_county/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NOAA National Weather Service zone-to-county correlation file — one row per (NWS public
+      forecast zone, county) pair, ~4,800 rows covering ~3,980 zones. Crosswalk for
+      storm_events rows with cz_type = 'Z', whose county_fips is NULL: join storm_events.state_fips
+      = state_fips AND storm_events.cz_fips = zone. A zone covering several counties appears
+      once per county (~10% of zones), so the join fans out; count rows per (state_abbr, zone)
+      to allocate. Built from every NWS release still downloadable (weather.gov/gis/ZoneCounty
+      lists the current one; the Mar 2024 file is also still served): each zone takes its
+      counties from the newest release containing it, recorded in release, so zones NWS has
+      since retired stay joinable. Zones absent from all of those releases (e.g. Guam, parts of
+      Louisiana) are not covered. zone_lat/zone_lon are NWS's zone centroid, repeated on each county row.
+      Source: weather.gov (NWS), keyless.
+
+    dimensions:
+      type:
+        - nws_zone_county
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation (NWS STATE)
+      - name: zone
+        type: string
+        nullable: true
+        comment: 3-digit NWS public-zone number within the state (matches storm_events.cz_fips)
+      - name: state_zone
+        type: string
+        nullable: true
+        comment: State abbreviation + zone number, e.g. NM201
+      - name: zone_name
+        type: string
+        nullable: true
+        comment: NWS zone name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (no state suffix)
+      - name: cwa
+        type: string
+        nullable: true
+        comment: NWS county warning area (forecast office id)
+      - name: time_zone
+        type: string
+        nullable: true
+        comment: NWS time zone code
+      - name: zone_lat
+        type: double
+        nullable: true
+        comment: Zone centroid latitude
+      - name: zone_lon
+        type: double
+        nullable: true
+        comment: Zone centroid longitude
+      - name: release
+        type: string
+        nullable: true
+        comment: >
+          Date (yyyy-mm-dd) of the NWS correlation-file release that supplied this zone. A zone
+          retired in a later release keeps its counties from the last release that listed it.
+
+    source:
+      type: http
+      url: "https://www.weather.gov/gis/ZoneCounty"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # NwsZoneCountyTransformer resolves the latest release file from this listing page
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.NwsZoneCountyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nws_zone_county/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: nws_zone_county
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
