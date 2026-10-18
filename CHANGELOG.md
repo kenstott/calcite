@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.119.0](https://github.com/kenstott/calcite/compare/engine-v0.118.0...engine-v0.119.0) (2026-10-18)
+
+
+### Features
+
+* **jira:** a Jira Cloud adapter serving forms as tables over pgwire ([#574](https://github.com/kenstott/calcite/issues/574)) ([aafe718](https://github.com/kenstott/calcite/commit/aafe718c7097f6c738782e20b66e5c3b610724c0))
+
+
+### Bug Fixes
+
+* **core:** a DuckDB HUGEINT, UHUGEINT or UBIGINT column is DECIMAL, not ANY ([#590](https://github.com/kenstott/calcite/issues/590)) ([411f865](https://github.com/kenstott/calcite/commit/411f8650521a947e116d85d5cfa3e47d5dce5829))
+* **file:** the seed completeness check finds a table under a backslash-separated location ([#587](https://github.com/kenstott/calcite/issues/587)) ([4bfbdfb](https://github.com/kenstott/calcite/commit/4bfbdfbe42431e5a19bc81c893510ee72fbeeae4))
+* **govdata:** drop checkWinner's unused ranked parameter ([#586](https://github.com/kenstott/calcite/issues/586)) ([3ffde71](https://github.com/kenstott/calcite/commit/3ffde710fb17af1f79516bbedfd3353908a4574a))
+* **pgwire-calcite:** a DECIMAL value is written at its column's declared scale ([#589](https://github.com/kenstott/calcite/issues/589)) ([ff9b569](https://github.com/kenstott/calcite/commit/ff9b569c4eb9bfd93b789ac7df08865367ea8157))
+
 ## [0.118.0](https://github.com/kenstott/calcite/compare/engine-v0.117.0...engine-v0.118.0) (2026-10-17)
 
 
