@@ -1755,6 +1755,104 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # FHFA COUNTY HOUSE PRICE INDEX — annual all-transactions workbook (snapshot, xlsx)
+  # ---------------------------------------------------------------------------
+  - name: county_house_price_index
+    timeColumn: data_year  # observation year; this table has no column named 'year'
+    # Freshness gate: FHFA serves no Last-Modified/ETag for the static download path; a
+    # Content-Length probe skips the re-fetch when unchanged (new years add rows, so a
+    # refresh changes the length). Table-level, not nested under source: — see
+    # house_price_index above.
+    freshness:
+      type: size
+    pattern: "type=county_house_price_index/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FHFA annual all-transactions House Price Index at county grain (developmental
+      series), 1975 through the latest published year. One row per (county, year).
+      Complements house_price_index, whose master file stops at state/MSA/national:
+      this is the only county-level price index in the corpus, so it supports
+      county-pair event studies (e.g. FEMA declarations in disasters.disaster_declarations
+      against geo.county_adjacency neighbors). annual_change_pct is the year-over-year
+      percent change; hpi is cumulative appreciation indexed to 100 in the county's first
+      recorded year; hpi_1990_base / hpi_2000_base rebase to 100 in 1990 / 2000 and are
+      null for counties with no value in that base year. County-years with samples too
+      small to publish are absent or null (FHFA reports "."). Nominal, not inflation-
+      adjusted. Snapshot table: the whole workbook is re-fetched and overwritten each
+      run. Joins to geo.counties via county_fips. Source:
+      fhfa.gov/hpi/download/annual/hpi_at_county.xlsx.
+
+    dimensions:
+      type:
+        - county_house_price_index
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+        nullable: false
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: USPS state abbreviation (FK to geo.state_ref.state_abbr)
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name as published by FHFA (no 'County' suffix)
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Observation year; part of the primary key with county_fips
+      - name: annual_change_pct
+        type: double
+        nullable: true
+        comment: Year-over-year percent change in the county HPI (null in a county's first year and where unpublished)
+      - name: hpi
+        type: double
+        nullable: true
+        comment: HPI, base 100 in the county's first recorded year (cumulative nominal appreciation)
+      - name: hpi_1990_base
+        type: double
+        nullable: true
+        comment: HPI rebased to 100 in 1990; null for counties with no 1990 value
+      - name: hpi_2000_base
+        type: double
+        nullable: true
+        comment: HPI rebased to 100 in 2000; null for counties with no 2000 value
+
+    source:
+      type: http
+      url: "https://www.fhfa.gov/hpi/download/annual/hpi_at_county.xlsx"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.FhfaCountyHpiDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=county_house_price_index/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: county_house_price_index
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — county workbook (delta year, xlsx)
   # ---------------------------------------------------------------------------
   - name: hud_subsidized_county

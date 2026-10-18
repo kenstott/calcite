@@ -61,6 +61,62 @@ SELECT 'housing', 'house_price_index', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/house_price_index', allow_moved_paths := true) WHERE place_id IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: county_house_price_index (FHFA annual county HPI snapshot; partition col: type)
+-- ~106K county-year rows expected (3,000+ counties, 1975-latest).
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 county-year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL county_fips or data_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true)
+  WHERE county_fips IS NULL OR data_year IS NULL);
+
+-- T7: HPI is a positive index; annual change beyond +/-100% would indicate a units mix-up
+-- (percent vs fraction) rather than a real county move.
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with hpi<=0 or |annual_change_pct|>100 or year outside 1975-2100'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true)
+  WHERE hpi <= 0 OR ABS(annual_change_pct) > 100 OR data_year < 1975 OR data_year > 2100);
+
+-- T8: (county_fips, data_year) must be unique.
+INSERT INTO dq_results
+SELECT 'housing', 'county_house_price_index', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (county_fips, data_year) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT county_fips, data_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/county_house_price_index', allow_moved_paths := true)
+  GROUP BY county_fips, data_year HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: homeless_shelter_census (NYC DHS Daily Report; partition col: type)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

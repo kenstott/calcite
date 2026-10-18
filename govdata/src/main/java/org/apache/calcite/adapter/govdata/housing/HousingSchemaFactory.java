@@ -29,7 +29,8 @@ import java.util.Set;
  *
  * <p>Consolidates housing-market and affordability data from six sources:
  * <ul>
- *   <li><b>FHFA</b> House Price Index — {@code house_price_index}
+ *   <li><b>FHFA</b> House Price Index — {@code house_price_index},
+ *       {@code county_house_price_index}
  *       (bulk {@code hpi_master.csv}, streamed; no key)</li>
  *   <li><b>Census</b> Building Permits Survey — {@code building_permits}
  *       (per-year county text file; no key)</li>
@@ -63,6 +64,7 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
   static {
     Map<String, String> m = new HashMap<String, String>();
     m.put("house_price_index", "fhfa");
+    m.put("county_house_price_index", "fhfa");
     m.put("building_permits", "census");
     m.put("fair_market_rents", "hud");
     m.put("income_limits", "hud");
