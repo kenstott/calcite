@@ -130,7 +130,7 @@ dependencies {
     // compileOnly, so the plugin must bundle it at runtime (DuckDBJdbcSchemaFactory loads
     // org.duckdb.DuckDBDriver by name). DuckDB reads CSV/Parquet natively, avoiding the Hadoop
     // dependency that breaks the PARQUET engine on JDK 25.
-    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
+    implementation("org.duckdb:duckdb_jdbc:1.5.6.0")
 
     testImplementation("io.trino:trino-spi:$trinoVersion")
     testImplementation("io.trino:trino-testing:$trinoVersion")
