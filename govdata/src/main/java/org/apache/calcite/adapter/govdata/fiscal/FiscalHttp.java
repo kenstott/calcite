@@ -192,7 +192,9 @@ final class FiscalHttp {
    * depth against transient 429/503s from either endpoint.
    */
   static byte[] fetchViaWayback(String originalUrl) throws IOException {
-    String cdxUrl = "http://web.archive.org/cdx/search/cdx?url="
+    // https, not http: a network filter answers plain-http requests to archive.org with an HTML
+    // block page, which the JSON parse below then reports as "Unexpected character '<'".
+    String cdxUrl = "https://web.archive.org/cdx/search/cdx?url="
         + java.net.URLEncoder.encode(originalUrl, "UTF-8")
         + "&output=json&filter=statuscode:200&limit=-1";
     String json;
@@ -214,7 +216,7 @@ final class FiscalHttp {
       throw new IOException("Wayback CDX: snapshot row without timestamp for " + originalUrl);
     }
     // Raw-capture form: /web/{TS}id_/<original-url>.
-    String rawUrl = "http://web.archive.org/web/" + ts + "id_/" + originalUrl;
+    String rawUrl = "https://web.archive.org/web/" + ts + "id_/" + originalUrl;
     byte[] bytes;
     InputStream raw = openGetWithRetry(rawUrl).getInputStream();
     try {
