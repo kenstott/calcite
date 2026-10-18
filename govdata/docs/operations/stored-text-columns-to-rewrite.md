@@ -370,3 +370,24 @@ rewriting.
 | vehicle_registrations | year | INTEGER | string | 561 | 2014–2024, 11 years |  |
 
 221 columns in 212 tables; 46 to check before rewriting.
+
+## A table with fewer columns than it declares
+
+`health.cdc_county_injury_mortality` declares 13 columns in `health-schema.yaml`. The seed
+catalog's view and `iceberg-schema-cache.json` record the same 13:
+
+`geoid`, `name`, `st_geoid`, `st_name`, `intent`, `year`, `period`, `count_sup`, `rate`,
+`rate_m`, `rate_m_ci`, `ttm_date_range`, `type`
+
+The published table scans 12. On DuckDB 1.4, every read of the 13-column view failed with
+`Binder Error: table "unnamed_subquery" has 12 columns available but 13 columns specified`.
+Calcite now recreates that view over the live table and retries (#601), so reads of the
+remaining columns work. The question for this device:
+
+1. Which declared column does the published table lack? Read the column list of its current
+   snapshot.
+2. If that column belongs in the table, reprocess the table so it carries all 13.
+3. If it does not, it is removed from `health-schema.yaml` in this repo.
+
+In both cases the seed catalog and the schema cache take the 13 or 12 columns at the next seed
+build (`govdata/scripts/build-seed.sh`), which reads them from the live table.
