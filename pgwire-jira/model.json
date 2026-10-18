@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "defaultSchema": "jira",
+  "schemas": [
+    {
+      "name": "jira",
+      "type": "custom",
+      "factory": "org.apache.calcite.adapter.jira.JiraSchemaFactory",
+      "operand": {
+        "baseUrl": "https://YOUR-SITE.atlassian.net",
+        "email": "YOUR_ACCOUNT_EMAIL",
+        "apiToken": "YOUR_API_TOKEN",
+        "forms": [
+          {
+            "name": "tasks",
+            "project": "ABC",
+            "issueType": "Task",
+            "fields": [{"field": "priority"}, {"field": "assignee"}, {"field": "labels"}]
+          }
+        ]
+      }
+    }
+  ]
+}

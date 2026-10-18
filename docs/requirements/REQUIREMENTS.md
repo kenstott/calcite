@@ -2,7 +2,7 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**342 requirements across 7 adapters.**
+**350 requirements across 8 adapters.**
 
 
 ## askamerica  (11: 9 accepted, 1 complete, 1 proposed)
@@ -295,6 +295,19 @@
 | [ ] | GOV-072 | MUST | behavioral | cyber / Write-mode & idempotence | threat_pulses (OTX) gates on freshness type:version (max pulse modified) with watermark_var otxModifiedSince … | — |
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
+
+## jira  (8: 8 in-progress)
+
+| | ID | Pri | Type | Group / Category | Guarantee | Tests |
+|---|---|---|---|---|---|---|
+| [~] | JIRA-001 | MUST | behavioral | scope / Connection | A schema is one Jira Cloud site, named by its base URL (https; http only for a loopback host), reached throug… | jira/JiraAdapterTest |
+| [~] | JIRA-002 | MUST | behavioral | catalog / Forms | The `forms` operand names the tables served: each form is a project, an issue type (by name or id) and the fi… | jira/JiraAdapterTest |
+| [~] | JIRA-003 | MUST | structural | catalog / Listing | The schema always serves _jira_forms(project_key, project_name, issue_type, issue_type_id, subtask, name), ev… | jira/JiraAdapterTest |
+| [~] | JIRA-004 | MUST | behavioral | read / Values | Values read as Jira shows them to a person: an option as its value; priority, status, issue type, resolution,… | jira/JiraAdapterTest |
+| [~] | JIRA-005 | MUST | behavioral | read / Pushdown | A form is read by JQL (POST /search/jql, paged by nextPageToken), asking only for the selected fields; a LIMI… | jira/JiraAdapterTest |
+| [~] | JIRA-006 | MUST | behavioral | write / Issues | INSERT creates issues in the form's project and issue type, 50 a request (POST /issue/bulk), and reports thei… | jira/JiraAdapterTest |
+| [~] | JIRA-007 | MUST | behavioral | write / Links | issue_links(link_id, link_type, outward_key, inward_key) serves each link once, where either end is an issue … | jira/JiraAdapterTest |
+| [~] | JIRA-008 | MUST | infrastructure | scope / Packaging | The adapter ships as a pgwire bundle (pgwire-jira, with writes allowed). No Trino connector: a Trino deployme… | — |
 
 ## salesforce  (31: 19 accepted, 8 complete, 4 proposed)
 
