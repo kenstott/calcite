@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.119.1](https://github.com/kenstott/calcite/compare/engine-v0.119.0...engine-v0.119.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **salesforce:** a refused query reports Salesforce's error code and message ([#591](https://github.com/kenstott/calcite/issues/591)) ([5fe06a3](https://github.com/kenstott/calcite/commit/5fe06a3a328083c9a734b703faf40d2d2e1f49b4))
+
 ## [0.119.0](https://github.com/kenstott/calcite/compare/engine-v0.118.0...engine-v0.119.0) (2026-10-18)
 
 
