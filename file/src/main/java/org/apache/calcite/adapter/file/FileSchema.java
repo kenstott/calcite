@@ -19,6 +19,7 @@ import org.apache.calcite.adapter.file.format.json.JsonSearchConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMetadataTables;
+import org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache;
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.file.materialized.MaterializedViewTable;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
@@ -2350,6 +2351,50 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     return tableDef != null && "view".equals(tableDef.get("type"));
   }
 
+  /**
+   * The {@code fs.s3a.*} credential map every Iceberg table of this schema is loaded with, or null
+   * when the storage provider has no object-store credentials.
+   */
+  private @Nullable Map<String, String> icebergHadoopConfig() {
+    if (storageProvider == null) {
+      return null;
+    }
+    Map<String, String> s3Creds = storageProvider.getS3Config();
+    if (s3Creds == null || s3Creds.isEmpty()) {
+      return null;
+    }
+    Map<String, String> hadoopConfig = new HashMap<>();
+    if (s3Creds.containsKey("accessKeyId")) {
+      hadoopConfig.put("fs.s3a.access.key", s3Creds.get("accessKeyId"));
+    }
+    if (s3Creds.containsKey("secretAccessKey")) {
+      hadoopConfig.put("fs.s3a.secret.key", s3Creds.get("secretAccessKey"));
+    }
+    // Short-lived credentials must carry their session token into the Iceberg
+    // config, or every metadata read signs wrong and 403s.
+    if (s3Creds.containsKey("sessionToken")) {
+      hadoopConfig.put("fs.s3a.session.token", s3Creds.get("sessionToken"));
+    }
+    if (s3Creds.containsKey("endpoint")) {
+      hadoopConfig.put("fs.s3a.endpoint", s3Creds.get("endpoint"));
+      hadoopConfig.put("fs.s3a.path.style.access", "true");
+    }
+    return hadoopConfig;
+  }
+
+  /**
+   * One declared Iceberg table's entry in the published {@link IcebergSchemaCache}, found without
+   * resolving the table, or null when the table is not a declared Iceberg table or the cache has
+   * no trusted entry for it (the caller must then resolve the table).
+   */
+  public IcebergSchemaCache.@Nullable TableSchema declaredIcebergCacheEntry(String tableName) {
+    String path = declaredIcebergTablePath(tableName);
+    if (path == null) {
+      return null;
+    }
+    return IcebergSchemaCache.lookup(path, icebergHadoopConfig());
+  }
+
   private @Nullable Map<String, Object> findDeclaredTableDef(String tableName) {
     for (Map<String, Object> tableDef : this.tables) {
       if (tableName.equals(tableDef.get("name"))) {
@@ -4346,27 +4391,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           Map<String, Object> tableConfig = new HashMap<>();
-          if (storageProvider != null) {
-            Map<String, String> s3Creds = storageProvider.getS3Config();
-            if (s3Creds != null && !s3Creds.isEmpty()) {
-              Map<String, String> hadoopConfig = new HashMap<>();
-              if (s3Creds.containsKey("accessKeyId")) {
-                hadoopConfig.put("fs.s3a.access.key", s3Creds.get("accessKeyId"));
-              }
-              if (s3Creds.containsKey("secretAccessKey")) {
-                hadoopConfig.put("fs.s3a.secret.key", s3Creds.get("secretAccessKey"));
-              }
-              // Short-lived credentials must carry their session token into the Iceberg
-              // config, or every metadata read signs wrong and 403s.
-              if (s3Creds.containsKey("sessionToken")) {
-                hadoopConfig.put("fs.s3a.session.token", s3Creds.get("sessionToken"));
-              }
-              if (s3Creds.containsKey("endpoint")) {
-                hadoopConfig.put("fs.s3a.endpoint", s3Creds.get("endpoint"));
-                hadoopConfig.put("fs.s3a.path.style.access", "true");
-              }
-              tableConfig.put("hadoopConfig", hadoopConfig);
-            }
+          Map<String, String> hadoopConfig = icebergHadoopConfig();
+          if (hadoopConfig != null) {
+            tableConfig.put("hadoopConfig", hadoopConfig);
           }
 
           Source icebergSource = Sources.of(tablePath);

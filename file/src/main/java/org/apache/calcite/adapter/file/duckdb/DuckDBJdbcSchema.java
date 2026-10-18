@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.duckdb;
 
+import org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache;
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.jdbc.JdbcConvention;
@@ -20,6 +21,7 @@ import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.CommentableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.schema.TableSummarySchema;
 import org.apache.calcite.sql.SqlDialect;
 
 import org.slf4j.Logger;
@@ -36,7 +38,8 @@ import javax.sql.DataSource;
  * All aggregations, filters, joins, and other operations are executed in DuckDB.
  * Maintains a persistent connection to keep the named in-memory database alive.
  */
-public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
+public class DuckDBJdbcSchema extends JdbcSchema
+    implements CommentableSchema, TableSummarySchema {
   private static final Logger LOGGER = LoggerFactory.getLogger(DuckDBJdbcSchema.class);
 
   @SuppressWarnings("UnusedVariable")
@@ -384,6 +387,26 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     }
     LOGGER.debug("DuckDB schema tables available: {}", tableNames);
     return tableNames;
+  }
+
+  /**
+   * A declared Iceberg table's type and comment straight from the published schema cache, so a
+   * metadata listing does not resolve (discover, heal, create the view of) every table just to
+   * read these two values. Null when the cache has no trusted entry, in which case the caller
+   * resolves the table through {@link #getTable}.
+   */
+  @Override public TableSummary tableSummary(String name) {
+    if (fileSchema == null) {
+      return null;
+    }
+    IcebergSchemaCache.TableSchema entry = fileSchema.declaredIcebergCacheEntry(name);
+    if (entry == null) {
+      return null;
+    }
+    // A cached entry with a null comment means the table genuinely has none, exactly as
+    // IcebergTable.getTableComment reads it. FileSchema serves a materialized Iceberg table as a
+    // base table (DuckDB's own VIEW type is execution detail, see CommentableJdbcTableWrapper).
+    return new TableSummary(org.apache.calcite.schema.Schema.TableType.TABLE, entry.tableComment);
   }
 
   @Override public Table getTable(String name) {

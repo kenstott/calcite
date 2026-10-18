@@ -38,6 +38,7 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
 import org.apache.calcite.schema.Table;
+import org.apache.calcite.schema.TableSummarySchema;
 import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
@@ -414,19 +415,29 @@ public class InformationSchema extends AbstractSchema {
             if (!retained(onlyTables, tableName)) {
               continue;
             }
-            Table table = lookUp(schema, tableName);
             String tableComment = null;
-
-            // Get table comment if available
-            if (table instanceof CommentableTable) {
-              tableComment = ((CommentableTable) table).getTableComment();
+            Schema.TableType jdbcType = null;
+            final Schema implementation = CalciteSchema.from(schema).schema;
+            // A schema that can summarize a table without resolving it spares a listing the
+            // per-table resolution cost; null means only the resolved table knows.
+            final TableSummarySchema.TableSummary summary =
+                implementation instanceof TableSummarySchema
+                    ? ((TableSummarySchema) implementation).tableSummary(tableName) : null;
+            if (summary != null) {
+              tableComment = summary.comment;
+              jdbcType = summary.type;
+            } else {
+              Table table = lookUp(schema, tableName);
+              // Get table comment if available
+              if (table instanceof CommentableTable) {
+                tableComment = ((CommentableTable) table).getTableComment();
+              }
+              jdbcType = table == null ? null : table.getJdbcTableType();
             }
 
             // SQL-standard TABLE_TYPE: "VIEW" for views, "BASE TABLE" for everything else.
             // Previously hardcoded to "BASE TABLE", which mislabelled every view as a table.
-            String tableType =
-                table != null && table.getJdbcTableType() == Schema.TableType.VIEW
-                    ? "VIEW" : "BASE TABLE";
+            String tableType = jdbcType == Schema.TableType.VIEW ? "VIEW" : "BASE TABLE";
 
             rows.add(new Object[]{
                 catalogName,
