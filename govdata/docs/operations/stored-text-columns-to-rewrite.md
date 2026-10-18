@@ -14,16 +14,18 @@ Two code changes, released together, deal with this:
 
 - **Read side.** The DuckDB engine now serves each stored-text integer partition column as its
   declared type and rewrites filters on it to the stored text, so partition pruning is kept.
-  Readers already see `INTEGER`; the files are unchanged.
+  Readers already see `INTEGER`; the files are unchanged. This covers partition columns only:
+  the four date columns of `health.fda_drug_shortages_history` are data columns, and readers see
+  them as text until that table is rewritten.
 - **Write side.** A table's materialize block now takes the partition types the table declares
-  (`partitions.columnDefinitions`). A table created from now on is written with them.
+  (`partitions.columnDefinitions`). A new table is written with them (GOV-075).
 
 ## What the rewrite involves
 
-The writer refuses a declared type that differs from an existing table's
-(`IcebergMaterializationWriter.checkTypeMismatch`). So **the next ETL of each table below fails**
-with "column type mismatch ... purge the table (e.g. data_purge.sh) and reprocess", until that
-table is purged and reprocessed.
+Loads of the tables below keep running. A table that already stores a column as text keeps
+writing it as text, and logs one WARN per table and column naming both types, "listed in
+stored-text-columns-to-rewrite.md". Each table switches to the declared type when it is purged
+and reprocessed, since the reprocess creates it anew.
 
 For each table:
 

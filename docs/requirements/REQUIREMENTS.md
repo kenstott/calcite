@@ -2,7 +2,7 @@
 
 > Generated from `docs/requirements/*.yaml` by `gen_requirements_md.py`. Do not hand-edit.
 > Status: `[x]` complete `[~]` in-progress `[ ]` accepted `[.]` proposed `[-]` rejected.
-**350 requirements across 8 adapters.**
+**351 requirements across 8 adapters.**
 
 
 ## askamerica  (11: 9 accepted, 1 complete, 1 proposed)
@@ -217,7 +217,7 @@
 | [x] | FILE-190 | MUST | behavioral | aperio-uri / connection defaults | AperioDriver defaults conformance.raggedUnionTypesToVarying=true on the delegated Calcite connection; an expl… | file/AperioDriverConformanceTest |
 | [x] | FILE-191 | MUST | constraint | iceberg / commit locking | Iceberg is at 1.5.2 or later. Commits to different Iceberg tables from several threads of one JVM must not fa… | file/IcebergLockReleaseConcurrencyTest |
 
-## govdata  (74: 74 accepted)
+## govdata  (75: 74 accepted, 1 complete)
 
 | | ID | Pri | Type | Group / Category | Guarantee | Tests |
 |---|---|---|---|---|---|---|
@@ -295,6 +295,7 @@
 | [ ] | GOV-072 | MUST | behavioral | cyber / Write-mode & idempotence | threat_pulses (OTX) gates on freshness type:version (max pulse modified) with watermark_var otxModifiedSince … | — |
 | [ ] | GOV-073 | SHOULD | structural | cyber / Taxonomy tables | Standards/taxonomy tables are version-pinned snapshots keyed on their natural ID: attack_techniques (techniqu… | — |
 | [ ] | GOV-074 | SHOULD | structural | cyber / Cross-domain mapping | attack_to_nist_mappings (PK type+technique_id+nist_control_id, mapping_type 'mitigates', status='complete', n… | — |
+| [x] | GOV-075 | MUST | behavioral | types / Declared partition types | A table's partition columns are written as the types its partitions.columnDefinitions declares, and every rea… | file/StoredTextPartitionTransitionTest, file/IcebergDeclare… |
 
 ## jira  (8: 8 in-progress)
 

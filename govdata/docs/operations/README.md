@@ -36,9 +36,9 @@ tail runs/errors.log                 # last N lines
 grep "$(date +%Y-%m-%d)" runs/errors.log   # today only
 ```
 
-A `column type mismatch` error names a table whose stored column type differs from what it
-declares. The tables still holding text where they declare an integer are listed, with what to
-check before purging and reprocessing each, in
+A WARN "stores column ... as string but declares it ..." names a table still holding text where
+it declares an integer or a date. Its loads keep running at the stored type. Those tables are
+listed, with what to check before purging and reprocessing each, in
 [stored-text-columns-to-rewrite.md](stored-text-columns-to-rewrite.md).
 
 **Logs:**

@@ -462,6 +462,55 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     return hadoopConfig;
   }
 
+  /** Table/column pairs {@link #keepStoredTextTypes} has warned about in this process. */
+  private static final Set<String> STORED_TEXT_WARNED =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** Iceberg types a column may be declared as while its existing table stores it as text. */
+  private static final Set<org.apache.iceberg.types.Type.TypeID> TEXT_STORED_DECLARED_TYPES =
+      java.util.EnumSet.of(org.apache.iceberg.types.Type.TypeID.INTEGER,
+          org.apache.iceberg.types.Type.TypeID.LONG, org.apache.iceberg.types.Type.TypeID.DATE);
+
+  /**
+   * Keeps writing an existing table's text column as text where the table declares it as an
+   * integer or a date, replacing that column's declared type in {@code expectedColumns} with
+   * STRING and logging one WARN per table and column per process.
+   *
+   * <p>Designed transition behavior (GOV-075): 211 govdata tables were written with their
+   * INTEGER year partitions as text before the writer took the declared partition types.
+   * Failing their loads on {@link #checkTypeMismatch} until each is rewritten would stop the
+   * pipeline; instead each keeps loading at its stored type, the DuckDB engine serves the
+   * declared type (cast, with filters rewritten to the stored text), and the table takes the
+   * declared type when it is purged and reprocessed. The tables are listed in
+   * govdata/docs/operations/stored-text-columns-to-rewrite.md. Any other type difference still
+   * fails in {@link #checkTypeMismatch}.
+   */
+  private static void keepStoredTextTypes(String targetTableId, Table existingTable,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    org.apache.iceberg.Schema existingSchema = existingTable.schema();
+    for (int i = 0; i < expectedColumns.size(); i++) {
+      IcebergCatalogManager.ColumnDef col = expectedColumns.get(i);
+      org.apache.iceberg.types.Types.NestedField existingField =
+          existingSchema.findField(col.getName());
+      if (existingField == null
+          || existingField.type().typeId() != org.apache.iceberg.types.Type.TypeID.STRING) {
+        continue;
+      }
+      org.apache.iceberg.types.Type declared = IcebergCatalogManager.mapToIcebergType(col.getType());
+      if (!TEXT_STORED_DECLARED_TYPES.contains(declared.typeId())) {
+        continue;
+      }
+      expectedColumns.set(i,
+          new IcebergCatalogManager.ColumnDef(col.getName(), "STRING", col.getDoc()));
+      if (STORED_TEXT_WARNED.add(targetTableId + "." + col.getName())) {
+        LOGGER.warn("Iceberg table '{}' stores column '{}' as {} but declares it {}: writing {}"
+            + " until the table is purged and reprocessed (listed in"
+            + " stored-text-columns-to-rewrite.md)", targetTableId, col.getName(),
+            existingField.type(), declared, existingField.type());
+      }
+    }
+  }
+
   /**
    * Throws when an expected column is present in {@code existingTable} under a DIFFERENT Iceberg
    * type than this run's config declares (e.g. a partition column's {@code columnDefinitions}
@@ -682,6 +731,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       // count-based drift dangerous (kenstott/govdata-ops#226). Failing loudly and requiring an
       // explicit data_purge.sh + reprocess keeps the operator's intent auditable instead of
       // guessing at it.
+      keepStoredTextTypes(targetTableId, existingTable, expectedColumns);
       checkTypeMismatch(targetTableId, existingTable, expectedColumns);
 
       // Check whether the existing table matches the expected columns. This handles the case where
