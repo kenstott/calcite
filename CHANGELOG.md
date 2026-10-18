@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.119.3](https://github.com/kenstott/calcite/compare/engine-v0.119.2...engine-v0.119.3) (2026-10-18)
+
+
+### Bug Fixes
+
+* **file:** a DuckDB view bound over more columns than its table now has is healed ([#601](https://github.com/kenstott/calcite/issues/601)) ([43b1820](https://github.com/kenstott/calcite/commit/43b18200bf4b1b2a87bb221310f0f5a8fe35d2ac))
+
 ## [0.119.2](https://github.com/kenstott/calcite/compare/engine-v0.119.1...engine-v0.119.2) (2026-10-18)
 
 
