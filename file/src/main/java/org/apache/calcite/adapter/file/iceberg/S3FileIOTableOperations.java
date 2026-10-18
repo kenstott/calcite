@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.iceberg;
 
 import org.apache.iceberg.LocationProviders;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.TableMetadata;
 import org.apache.iceberg.TableMetadataParser;
 import org.apache.iceberg.TableOperations;
@@ -142,6 +143,9 @@ public class S3FileIOTableOperations implements TableOperations {
     int previous = version;
     int next = (base == null) ? 0 : version + 1;
     String metadataLocation = location + "/metadata/v" + next + ".metadata.json";
+    if (base != null && io.newInputFile(metadataLocation).exists()) {
+      adoptLeftoverVersion(base, metadataLocation, next, hintPath);
+    }
     long commitStartNanos = System.nanoTime();
     // Named so the catch block's diagnostic log line can say exactly which of the three
     // sub-steps failed, without three separate try/catch blocks changing the thrown-exception
@@ -177,12 +181,7 @@ public class S3FileIOTableOperations implements TableOperations {
 
       step = "write version-hint.text";
       stepStartNanos = System.nanoTime();
-      PositionOutputStream out = io.newOutputFile(hintPath).createOrOverwrite();
-      try {
-        out.write(String.valueOf(next).getBytes(StandardCharsets.UTF_8));
-      } finally {
-        out.close();
-      }
+      writeVersionHint(hintPath, next);
       logStep(location, step, stepStartNanos, hintPath + " -> v" + next);
 
       current = metadata;
@@ -204,6 +203,83 @@ public class S3FileIOTableOperations implements TableOperations {
       throw new CommitFailedException(e,
           "Failed to commit Iceberg metadata v%d for table at %s (step: %s)", next, location, step);
     }
+  }
+
+  private void writeVersionHint(String hintPath, int version) throws IOException {
+    PositionOutputStream out = io.newOutputFile(hintPath).createOrOverwrite();
+    try {
+      out.write(String.valueOf(version).getBytes(StandardCharsets.UTF_8));
+    } finally {
+      out.close();
+    }
+  }
+
+  /**
+   * Handles {@code v{next}.metadata.json} already existing while the hint is still at the version
+   * this commit is based on. A commit writes the metadata file and only then moves the hint, so
+   * a process interrupted between the two leaves a complete next-version file behind; every later
+   * commit would try to write that same file, fail, and never advance (cftc_trades was wedged
+   * this way from Oct 10 to Oct 18, 2026).
+   *
+   * <p>A leftover that {@link #continuesFrom continues} the base is a commit that landed, so the
+   * hint is moved onto it and this commit fails so that Iceberg's retry re-applies its change on
+   * top of it. Anything else is not ours to overwrite or adopt, and fails without touching it.
+   */
+  private void adoptLeftoverVersion(TableMetadata base, String leftoverLocation,
+      int leftoverVersion, String hintPath) {
+    TableMetadata leftover;
+    try {
+      leftover = TableMetadataParser.read(io, io.newInputFile(leftoverLocation));
+    } catch (RuntimeException e) {
+      throw new CommitFailedException(e,
+          "Cannot commit to %s: %s already exists and cannot be read; resolve it by hand",
+          location, leftoverLocation);
+    }
+    if (!continuesFrom(base, leftover)) {
+      throw new CommitFailedException(
+          "Cannot commit to %s: %s already exists and does not continue v%d (a different table "
+              + "history); refusing to overwrite or adopt it, resolve it by hand",
+          location, leftoverLocation, version);
+    }
+    try {
+      writeVersionHint(hintPath, leftoverVersion);
+    } catch (IOException e) {
+      throw new CommitFailedException(e,
+          "Cannot commit to %s: failed to move version-hint onto the completed %s",
+          location, leftoverLocation);
+    }
+    LOGGER.warn("commit: {} found {} left by a commit whose version-hint update never landed; "
+        + "moved version-hint v{} -> v{} and failing this attempt so it retries on top of it",
+        location, leftoverLocation, version, leftoverVersion);
+    throw new CommitFailedException(
+        "Adopted the completed %s for %s; retry on the refreshed metadata", leftoverLocation,
+        location);
+  }
+
+  /**
+   * True when {@code leftover} is the table's own next metadata: the same table, holding every
+   * snapshot of {@code base}, whose current snapshot is {@code base}'s or a direct child of it.
+   */
+  static boolean continuesFrom(TableMetadata base, TableMetadata leftover) {
+    if (!base.uuid().equals(leftover.uuid())
+        || leftover.lastSequenceNumber() < base.lastSequenceNumber()) {
+      return false;
+    }
+    for (Snapshot s : base.snapshots()) {
+      if (leftover.snapshot(s.snapshotId()) == null) {
+        return false;
+      }
+    }
+    Snapshot baseCurrent = base.currentSnapshot();
+    Snapshot leftoverCurrent = leftover.currentSnapshot();
+    if (leftoverCurrent == null) {
+      return baseCurrent == null;
+    }
+    if (baseCurrent != null && leftoverCurrent.snapshotId() == baseCurrent.snapshotId()) {
+      return true;
+    }
+    Long parent = leftoverCurrent.parentId();
+    return baseCurrent == null ? parent == null : parent != null && parent == baseCurrent.snapshotId();
   }
 
   /** Logs a completed commit sub-step at DEBUG, or WARN if it took longer than
