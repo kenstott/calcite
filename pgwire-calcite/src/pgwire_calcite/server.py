@@ -57,6 +57,7 @@ from buenavista.postgres import (
 )
 
 from pgwire_calcite.auth import is_personal_access_token
+from pgwire_calcite.errors import error_text
 from pgwire_calcite import metering
 from pgwire_calcite.throttle import LockedOut, login_throttle, subject_key, throttled_auth
 from pgwire_calcite.types import QueryResult as TrinoResult
@@ -1454,10 +1455,11 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         """
         sqlstate = getattr(exception, "sqlstate", None)
         if sqlstate is None:
-            super().send_error(exception, ctx)
+            # The message carries each Java cause: the top one is often a wrapper's alone.
+            super().send_error(RuntimeError(error_text(exception)), ctx)
             return
         log.info("[PGWIRE] %s: %s", sqlstate, exception)
-        self._send_pg_error("ERROR", sqlstate, str(exception))
+        self._send_pg_error("ERROR", sqlstate, error_text(exception))
         if ctx is not None:
             ctx.mark_error()
 
@@ -1603,7 +1605,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                 self._send_pg_error("ERROR", getattr(exc, "sqlstate", None) or "42501", str(exc))
                 ctx.mark_error()
             except Exception as exc:
-                self._send_pg_error("ERROR", "0A000", str(exc))
+                self._send_pg_error("ERROR", "0A000", error_text(exc))
                 ctx.mark_error()
             return
         super().handle_execute(ctx, payload)
@@ -1636,7 +1638,7 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
                     self._send_pg_error("ERROR", getattr(exc, "sqlstate", None) or "42501", str(exc))
                     ctx.mark_error()
                 except Exception as exc:
-                    self._send_pg_error("ERROR", "0A000", str(exc))
+                    self._send_pg_error("ERROR", "0A000", error_text(exc))
                     ctx.mark_error()
                 break
             try:
