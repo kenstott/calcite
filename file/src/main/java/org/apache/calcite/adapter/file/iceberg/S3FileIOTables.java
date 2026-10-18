@@ -124,9 +124,22 @@ public final class S3FileIOTables {
    * keys). Shared by the read-only and writable table paths.
    */
   static S3FileIO newIO(Map<String, String> s3Config) {
+    return newIO(s3Config, null);
+  }
+
+  /**
+   * As {@link #newIO(Map)} with an explicit per-read socket timeout, for operations whose single
+   * response is legitimately slow (a prefix LIST over thousands of objects on a loaded MinIO disk).
+   * A null {@code socketTimeoutMs} keeps the default.
+   */
+  static S3FileIO newIO(Map<String, String> s3Config, String socketTimeoutMs) {
     return withAppClassLoader(() -> {
       S3FileIO io = new S3FileIO();
-      io.initialize(toS3Properties(s3Config));
+      Map<String, String> props = toS3Properties(s3Config);
+      if (socketTimeoutMs != null) {
+        props.put("http-client.apache.socket-timeout-ms", socketTimeoutMs);
+      }
+      io.initialize(props);
       return io;
     });
   }
@@ -183,6 +196,11 @@ public final class S3FileIOTables {
   private static final int DROP_VERIFY_MAX_ATTEMPTS = 5;
   private static final long DROP_VERIFY_RETRY_DELAY_MS = 200;
 
+  /** Per-read socket timeout for {@link #drop}: deletePrefix and the verify LIST each wait on one
+   * paginated listing response, which on a MinIO whose disk is saturated takes minutes, far past
+   * the 60s default sized for ordinary metadata reads and commits. */
+  private static final String DROP_SOCKET_TIMEOUT_MS = String.valueOf(15 * 60 * 1000);
+
   /**
    * Deletes every object at or under {@code tablePath} (both {@code metadata/} and {@code data/}),
    * verifying the prefix is actually empty afterward before returning.
@@ -203,7 +221,7 @@ public final class S3FileIOTables {
   public static void drop(String tablePath, Map<String, String> s3Config) {
     withAppClassLoader(() -> {
       String prefix = stripTrailingSlash(tablePath) + "/";
-      try (S3FileIO io = newIO(s3Config)) {
+      try (S3FileIO io = newIO(s3Config, DROP_SOCKET_TIMEOUT_MS)) {
         dropPrefix(io, prefix);
       }
       return null;
