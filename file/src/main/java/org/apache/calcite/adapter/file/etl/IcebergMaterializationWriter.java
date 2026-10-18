@@ -139,6 +139,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private boolean deferSchemaInference;
   private String deferredTargetTableId;
   private List<String> deferredPartitionColumns;
+  /**
+   * Set when the existing table's columns drifted from the config. The drop-and-recreate that
+   * resolves drift is physical (purge), so it waits for the first flush: a run whose batches all
+   * fail then leaves the existing table and its history untouched.
+   */
+  private PendingRecreate pendingRecreate;
   private long totalRowsWritten;
   private int totalFilesWritten;
   /**
@@ -693,37 +699,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         return existingTable;
       }
 
-      // Schema drift → drop + recreate. This physically purges the table, so it MUST run under the
-      // per-table commit lock: an unlocked purge can race a sibling writer that is mid-append (or
-      // another process that also observed drift), which is how a table gets left completely empty.
-      // After taking the lock we re-check against freshly-loaded metadata, so if a sibling already
-      // dropped+recreated the table we reuse its result instead of purging good data a second time.
-      final Table[] result = new Table[1];
-      CrossProcessCommitLock.runExclusive(existingTable.location(), () -> {
-        Table current = IcebergCatalogManager.tableExists(catalogConfig, targetTableId)
-            ? IcebergCatalogManager.loadTable(catalogConfig, targetTableId)
-            : null;
-        String reason = current == null ? null
-            : schemaDriftReason(current, expectedColumns, actualPartitionColumnNames);
-        if (current != null && reason == null) {
-          LOGGER.debug("Iceberg table '{}' schema OK after acquiring lock "
-              + "(recreated by a sibling)", targetTableId);
-          result[0] = current;
-          return;
-        }
-        LOGGER.warn("Iceberg table '{}' {}. Dropping and recreating table.",
-            targetTableId, current == null ? "no longer exists" : "has " + reason);
-        if (current != null) {
-          IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
-        }
-        result[0] = IcebergCatalogManager.createTableFromColumns(
-            catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
-        // The table's columns just changed, so any published schema cache now describes a schema
-        // that no longer exists. Withdraw it: readers fall back to the live read (slower but
-        // correct) until seed generation republishes. Leaving it would serve a wrong row type.
-        withdrawPublishedSchemaCache(result[0]);
-      });
-      return result[0];
+      // Schema drift → drop + recreate. The purge is deferred to the first flush that has rows to
+      // commit (see applyPendingRecreate), so until then the existing table stays readable and intact.
+      LOGGER.warn("Iceberg table '{}' has {}. Dropping and recreating it is deferred until the first "
+          + "batch has rows ready to commit.", targetTableId, driftReason);
+      this.pendingRecreate = new PendingRecreate(targetTableId, expectedColumns,
+          actualPartitionColumnNames);
+      return existingTable;
     }
 
     // Create new table
@@ -731,6 +713,64 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         targetTableId, expectedColumns.size(), actualPartitionColumnNames);
     return IcebergCatalogManager.createTableFromColumns(
         catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
+  }
+
+  /** Drift-driven recreate waiting for the first batch that has rows to commit. */
+  private static final class PendingRecreate {
+    final String tableId;
+    final List<IcebergCatalogManager.ColumnDef> expectedColumns;
+    final List<String> partitionColumnNames;
+
+    PendingRecreate(String tableId, List<IcebergCatalogManager.ColumnDef> expectedColumns,
+        List<String> partitionColumnNames) {
+      this.tableId = tableId;
+      this.expectedColumns = expectedColumns;
+      this.partitionColumnNames = partitionColumnNames;
+    }
+  }
+
+  /**
+   * Performs the drop-and-recreate deferred by {@link #ensureTableExists}, if one is pending.
+   *
+   * <p>The purge MUST run under the per-table commit lock: an unlocked purge can race a sibling
+   * writer that is mid-append (or another process that also observed drift), which is how a table
+   * gets left completely empty. After taking the lock the drift is re-checked against freshly
+   * loaded metadata, so if a sibling already dropped and recreated the table its result is reused
+   * instead of purging good data a second time.
+   */
+  private synchronized void applyPendingRecreate() {
+    final PendingRecreate pending = pendingRecreate;
+    if (pending == null) {
+      return;
+    }
+    final Table[] result = new Table[1];
+    CrossProcessCommitLock.runExclusive(table.location(), () -> {
+      Table current = IcebergCatalogManager.tableExists(catalogConfig, pending.tableId)
+          ? IcebergCatalogManager.loadTable(catalogConfig, pending.tableId)
+          : null;
+      String reason = current == null ? null
+          : schemaDriftReason(current, pending.expectedColumns, pending.partitionColumnNames);
+      if (current != null && reason == null) {
+        LOGGER.debug("Iceberg table '{}' schema OK after acquiring lock "
+            + "(recreated by a sibling)", pending.tableId);
+        result[0] = current;
+        return;
+      }
+      LOGGER.warn("Iceberg table '{}' {}. Dropping and recreating table.",
+          pending.tableId, current == null ? "no longer exists" : "has " + reason);
+      if (current != null) {
+        IcebergCatalogManager.dropTable(catalogConfig, pending.tableId, true);
+      }
+      result[0] = IcebergCatalogManager.createTableFromColumns(
+          catalogConfig, pending.tableId, pending.expectedColumns, pending.partitionColumnNames);
+      // The table's columns just changed, so any published schema cache now describes a schema
+      // that no longer exists. Withdraw it: readers fall back to the live read (slower but
+      // correct) until seed generation republishes. Leaving it would serve a wrong row type.
+      withdrawPublishedSchemaCache(result[0]);
+    });
+    this.table = result[0];
+    this.tableWriter = new IcebergTableWriter(table, storageProvider, onCoercionFailurePolicies);
+    this.pendingRecreate = null;
   }
 
   /**
@@ -1201,6 +1241,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
     Map<String, String> partVars = partitionVarsMap.get(partitionKey);
     int rowCount = rows.size();
+
+    applyPendingRecreate();
 
     // Deferred-schema materialize (FILE-186): first flush infers the schema and creates the table.
     ensureTableCreated(rows, partVars);

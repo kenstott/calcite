@@ -339,6 +339,12 @@ public class IcebergMaterializationWriterTest {
             createColumnConfig("extra", "VARCHAR")),
         Collections.<String>emptyList());
     writer.initialize(configV2);
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("id", 2);
+    row2.put("name", "second");
+    row2.put("extra", "x");
+    writer.writeBatch(Collections.singletonList(row2).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
 
     org.apache.iceberg.Table reloaded =
         new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
@@ -356,8 +362,55 @@ public class IcebergMaterializationWriterTest {
         rowCount++;
       }
     }
-    assertEquals(0, rowCount,
-        "a genuinely missing expected column must still purge prior data (existing behavior)");
+    assertEquals(1, rowCount,
+        "a genuinely missing expected column must still purge prior data once the first batch "
+            + "is committed; only the new batch's row remains");
+  }
+
+  @Test public void testDriftWithNoBatchLeavesExistingTableUntouched() throws Exception {
+    // A run whose every batch fails never reaches a flush. The drift drop-and-recreate purges
+    // physically, so it must not happen until a batch has rows to commit.
+    File warehouseDir = new File(tempDir, "warehouse_drift_deferred");
+    warehouseDir.mkdirs();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
+    MaterializeConfig configV1 =
+        buildIcebergConfig(warehouseDir, "drift_deferred_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configV1);
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("name", "first");
+    writer.writeBatch(Collections.singletonList(row).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
+    MaterializeConfig configV2 =
+        buildIcebergConfig(warehouseDir, "drift_deferred_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR"),
+            createColumnConfig("extra", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configV2);
+    writer.commit();
+    writer.close();
+
+    org.apache.iceberg.Table reloaded =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(writer.getTableLocation());
+    assertEquals(2, reloaded.schema().columns().size(),
+        "table with no batch written must keep its original columns");
+    int rowCount = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(reloaded).build()) {
+      for (org.apache.iceberg.data.Record ignored : records) {
+        rowCount++;
+      }
+    }
+    assertEquals(1, rowCount, "an all-failed run must not purge existing rows");
   }
 
   @Test public void testAddingPartitionColumnAlreadyPresentAsDataTriggersDropAndRecreate()
@@ -398,6 +451,12 @@ public class IcebergMaterializationWriterTest {
             createColumnConfig("name", "VARCHAR")),
         Arrays.asList("type", "year"));
     writer.initialize(configV2);
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("type", "widget");
+    row2.put("year", 2025);
+    row2.put("name", "second");
+    writer.writeBatch(Collections.singletonList(row2).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
 
     org.apache.iceberg.Table reloaded =
         new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
