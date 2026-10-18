@@ -175,4 +175,9 @@ class SupremeCourtSiteTest {
       assertTrue(gap >= 80, "gap " + gap + " ms between request " + (i - 1) + " and " + i);
     }
   }
+
+  /** The shared instance the providers use runs on the machine's clock (it was built with none). */
+  @Test void sharedInstanceHasAClock() throws IOException {
+    assertEquals("<html>ok</html>", SupremeCourtSite.DEFAULT.getHtml(url()));
+  }
 }
