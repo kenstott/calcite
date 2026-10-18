@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.119.2](https://github.com/kenstott/calcite/compare/engine-v0.119.1...engine-v0.119.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* **file,govdata:** a partition column stored as text serves as its declared integer, pruned ([#596](https://github.com/kenstott/calcite/issues/596)) ([c831170](https://github.com/kenstott/calcite/commit/c83117051ce404ffc04ed5bbcaf3f734e3684b01))
+* **pgwire-calcite:** an ErrorResponse carries each Java cause of the error ([#593](https://github.com/kenstott/calcite/issues/593)) ([d6cac96](https://github.com/kenstott/calcite/commit/d6cac96f5c892e90d01c753ae28416543626a983))
+
 ## [0.119.1](https://github.com/kenstott/calcite/compare/engine-v0.119.0...engine-v0.119.1) (2026-10-18)
 
 
