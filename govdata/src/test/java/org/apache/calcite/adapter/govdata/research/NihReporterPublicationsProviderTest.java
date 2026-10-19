@@ -193,13 +193,20 @@ class NihReporterPublicationsProviderTest {
     assertEquals(6, valid);
   }
 
-  @Test void oversizedResultWindowSplitsAndSingleIdOverCapThrows() {
+  /** A lone id whose answer overflows the window is an unscoped response: marked, not thrown. */
+  @Test void singleIdOverTheWindowIsMarkedInvalid() throws IOException {
     reportedTotal = 10001;
-    IOException e = assertThrows(IOException.class,
-        () -> fetch(Arrays.asList(1L, 2L, 3L), new LinkedHashMap<Long, String>()));
-    assertTrue(e.getMessage().contains("appl_id"), e.getMessage());
-    assertTrue(e.getMessage().contains("exceeds"), e.getMessage());
+    Map<Long, String> invalid = new LinkedHashMap<Long, String>();
+    List<Map<String, Object>> rows = fetch(Arrays.asList(1L, 2L, 3L), invalid);
     assertTrue(requestSizes.contains(3) && requestSizes.contains(1), requestSizes.toString());
+    assertEquals(new java.util.HashSet<Long>(Arrays.asList(1L, 2L, 3L)), invalid.keySet());
+    assertEquals(3, rows.size());
+    for (Map<String, Object> row : rows) {
+      assertEquals("invalid_source_record", row.get("record_status"));
+      assertNull(row.get("pmid"));
+      assertTrue(String.valueOf(row.get("record_issue")).contains("ignored the appl_id filter"),
+          String.valueOf(row.get("record_issue")));
+    }
   }
 
   private static org.apache.calcite.adapter.file.etl.EtlPipelineConfig configWith(

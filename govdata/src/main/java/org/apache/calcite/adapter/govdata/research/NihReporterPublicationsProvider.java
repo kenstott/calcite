@@ -299,8 +299,13 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       try {
         return fetchPublicationsPages(single, year, rawCache, "batch" + label);
       } catch (ResultWindowExceededException e) {
-        throw new IOException("appl_id " + applId + " alone (fy=" + year + "): " + e.getMessage(),
-            e);
+        // One grant does not have >10000 publications: for these ids the endpoint ignores the
+        // appl_id filter and answers with an unrelated set of projects' papers (observed for
+        // intramural appl_ids, e.g. 11333657 -> ZIDBC011317), so the response says nothing
+        // about this appl_id. Retrying returns the same thing; it is an invalid source record.
+        String issue = "NIH publications API ignored the appl_id filter: " + e.getMessage()
+            + " for this appl_id alone";
+        return invalidMarker(applId, year, issue, invalid, limits, e);
       } catch (IOException e) {
         if (!isHttp5xx(e)) {
           throw e;
@@ -313,24 +318,30 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
         }
         String issue = "NIH publications API returned HTTP " + httpStatus(e)
             + " for this appl_id alone after " + attempt + " attempts";
-        LOGGER.warn("nih_publications: appl_id {} fy={} is INVALID: {}", applId, year, issue);
-        invalid.put(applId, issue);
-        int max = limits.maxInvalid;
-        if (invalid.size() > max) {
-          List<Long> first = new ArrayList<Long>(invalid.keySet());
-          throw new IOException("nih_publications: " + invalid.size() + " invalid appl_ids in one "
-              + "slice exceeds maxInvalidRecordsPerSlice=" + max + " (first: "
-              + first.subList(0, Math.min(5, first.size())) + "); treating as an API outage, "
-              + "not committing invalid markers", e);
-        }
-        List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-        Map<String, Object> row = toRow(applId, null, null, year);
-        row.put("record_status", STATUS_INVALID);
-        row.put("record_issue", issue);
-        rows.add(row);
-        return rows;
+        return invalidMarker(applId, year, issue, invalid, limits, e);
       }
     }
+  }
+
+  /** Records {@code applId} as invalid and returns its single marker row; fails past the cap. */
+  private List<Map<String, Object>> invalidMarker(Long applId, String year, String issue,
+      Map<Long, String> invalid, Limits limits, IOException cause) throws IOException {
+    LOGGER.warn("nih_publications: appl_id {} fy={} is INVALID: {}", applId, year, issue);
+    invalid.put(applId, issue);
+    int max = limits.maxInvalid;
+    if (invalid.size() > max) {
+      List<Long> first = new ArrayList<Long>(invalid.keySet());
+      throw new IOException("nih_publications: " + invalid.size() + " invalid appl_ids in one "
+          + "slice exceeds maxInvalidRecordsPerSlice=" + max + " (first: "
+          + first.subList(0, Math.min(5, first.size())) + "); treating as an API outage, "
+          + "not committing invalid markers", cause);
+    }
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row = toRow(applId, null, null, year);
+    row.put("record_status", STATUS_INVALID);
+    row.put("record_issue", issue);
+    rows.add(row);
+    return rows;
   }
 
   private void sleepBackoff(int attempt) throws IOException {
