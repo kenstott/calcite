@@ -11,7 +11,6 @@
 package org.apache.calcite.adapter.govdata.research;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -68,11 +67,12 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String PROJECTS_ENDPOINT = "https://api.reporter.nih.gov/v2/projects/search";
   private static final String PUBLICATIONS_ENDPOINT = "https://api.reporter.nih.gov/v2/publications/search";
-  private static final String TABLE_PATH = "research.partitionedTables.nih_publications";
-  /** Schema YAML: invalid appl_ids tolerated per slice before the run is treated as an outage. */
-  static final String MAX_INVALID_PATH = TABLE_PATH + ".maxInvalidRecordsPerSlice";
-  /** Schema YAML: retries of a failing single-appl_id request before it is declared invalid. */
-  static final String MAX_RETRIES_PATH = TABLE_PATH + ".source.maxRetries";
+  /** Source keys in the schema YAML: invalid appl_ids tolerated per slice before the run is
+   *  treated as an outage, and retries of a failing single-appl_id request before it is declared
+   *  invalid. Read from the pipeline's own source block: ModelOperand is not captured until after
+   *  the ETL phase, so it reads back empty while this provider runs. */
+  static final String MAX_INVALID_KEY = "maxInvalidRecordsPerSlice";
+  static final String MAX_RETRIES_KEY = "maxRetries";
   static final String STATUS_VALID = "valid";
   static final String STATUS_INVALID = "invalid_source_record";
   // The publications endpoint rejects offset + limit above 10000.
@@ -122,11 +122,29 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     }
   }
 
-  private static int requireInt(String path) {
-    if (!ModelOperand.has(path)) {
-      throw new IllegalStateException("Required setting missing from the model: " + path);
+  /** The two required source settings, read once per fetch. */
+  static final class Limits {
+    final int maxRetries;
+    final int maxInvalid;
+
+    Limits(int maxRetries, int maxInvalid) {
+      this.maxRetries = maxRetries;
+      this.maxInvalid = maxInvalid;
     }
-    return ModelOperand.getInt(path, 0);
+
+    static Limits from(EtlPipelineConfig config) {
+      Map<String, Object> source = config.getRawSourceConfig();
+      return new Limits(require(source, MAX_RETRIES_KEY), require(source, MAX_INVALID_KEY));
+    }
+
+    private static int require(Map<String, Object> source, String key) {
+      Object v = source == null ? null : source.get(key);
+      if (!(v instanceof Number)) {
+        throw new IllegalStateException(
+            "nih_publications: source." + key + " is required in the schema YAML, got " + v);
+      }
+      return ((Number) v).intValue();
+    }
   }
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -138,6 +156,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       return java.util.Collections.emptyIterator();
     }
 
+    Limits limits = Limits.from(config);
     List<Long> applIds = fetchApplIds(year, ic, rawCache);
     // Offset paging over an unsorted result set can return the same link on more than one page,
     // so (appl_id, pmid) is deduplicated to keep it unique within the slice.
@@ -147,7 +166,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     for (int i = 0; i < applIds.size(); i += PAGE_SIZE) {
       List<Long> batch = applIds.subList(i, Math.min(i + PAGE_SIZE, applIds.size()));
       for (Map<String, Object> row : fetchPublicationsForBatch(batch, year, rawCache,
-          i / PAGE_SIZE, invalid)) {
+          i / PAGE_SIZE, invalid, limits)) {
         byLink.putIfAbsent(row.get("appl_id") + ":" + row.get("pmid"), row);
       }
     }
@@ -235,9 +254,10 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    * walked instead.
    */
   List<Map<String, Object>> fetchPublicationsForBatch(List<Long> applIdBatch, String year,
-      RawCache rawCache, int batchIndex, Map<Long, String> invalid) throws IOException {
+      RawCache rawCache, int batchIndex, Map<Long, String> invalid, Limits limits)
+      throws IOException {
     return fetchPublicationsForBatchPart(applIdBatch, year, rawCache,
-        String.valueOf(batchIndex), invalid);
+        String.valueOf(batchIndex), invalid, limits);
   }
 
   /**
@@ -248,9 +268,10 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    * window throws.
    */
   private List<Map<String, Object>> fetchPublicationsForBatchPart(List<Long> ids, String year,
-      RawCache rawCache, String label, Map<Long, String> invalid) throws IOException {
+      RawCache rawCache, String label, Map<Long, String> invalid, Limits limits)
+      throws IOException {
     if (ids.size() == 1) {
-      return fetchSingleId(ids.get(0), year, rawCache, label, invalid);
+      return fetchSingleId(ids.get(0), year, rawCache, label, invalid, limits);
     }
     try {
       return fetchPublicationsPages(ids, year, rawCache, "batch" + label);
@@ -263,16 +284,16 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
           e.getMessage(), label, ids.size(), year, mid, ids.size() - mid);
       List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
       rows.addAll(fetchPublicationsForBatchPart(ids.subList(0, mid), year, rawCache,
-          label + "a", invalid));
+          label + "a", invalid, limits));
       rows.addAll(fetchPublicationsForBatchPart(ids.subList(mid, ids.size()), year, rawCache,
-          label + "b", invalid));
+          label + "b", invalid, limits));
       return rows;
     }
   }
 
   private List<Map<String, Object>> fetchSingleId(Long applId, String year, RawCache rawCache,
-      String label, Map<Long, String> invalid) throws IOException {
-    int maxRetries = requireInt(MAX_RETRIES_PATH);
+      String label, Map<Long, String> invalid, Limits limits) throws IOException {
+    int maxRetries = limits.maxRetries;
     List<Long> single = java.util.Collections.singletonList(applId);
     for (int attempt = 1;; attempt++) {
       try {
@@ -294,7 +315,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
             + " for this appl_id alone after " + attempt + " attempts";
         LOGGER.warn("nih_publications: appl_id {} fy={} is INVALID: {}", applId, year, issue);
         invalid.put(applId, issue);
-        int max = requireInt(MAX_INVALID_PATH);
+        int max = limits.maxInvalid;
         if (invalid.size() > max) {
           List<Long> first = new ArrayList<Long>(invalid.keySet());
           throw new IOException("nih_publications: " + invalid.size() + " invalid appl_ids in one "

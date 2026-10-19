@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.research;
 
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import com.sun.net.httpserver.HttpServer;
@@ -112,20 +111,12 @@ class NihReporterPublicationsProviderTest {
 
   @AfterEach void stop() {
     server.stop(0);
-    ModelOperand.clear();
   }
 
+  private static NihReporterPublicationsProvider.Limits limits = null;
+
   private static void configure(int maxInvalid, int maxRetries) {
-    Map<String, Object> source = new HashMap<String, Object>();
-    source.put("maxRetries", maxRetries);
-    Map<String, Object> nih = new HashMap<String, Object>();
-    nih.put("maxInvalidRecordsPerSlice", maxInvalid);
-    nih.put("source", source);
-    Map<String, Object> tables = new HashMap<String, Object>();
-    tables.put("nih_publications", nih);
-    Map<String, Object> schema = new HashMap<String, Object>();
-    schema.put("partitionedTables", tables);
-    ModelOperand.capture("research", schema);
+    limits = new NihReporterPublicationsProvider.Limits(maxRetries, maxInvalid);
   }
 
   private NihReporterPublicationsProvider provider() {
@@ -139,7 +130,7 @@ class NihReporterPublicationsProviderTest {
 
   private List<Map<String, Object>> fetch(List<Long> ids, Map<Long, String> invalid)
       throws IOException {
-    return provider().fetchPublicationsForBatch(ids, "2026", RawCache.passthrough(), 0, invalid);
+    return provider().fetchPublicationsForBatch(ids, "2026", RawCache.passthrough(), 0, invalid, limits);
   }
 
   @Test void poisonIdYieldsOneInvalidRowAndOthersStayValid() throws IOException {
@@ -211,10 +202,37 @@ class NihReporterPublicationsProviderTest {
     assertTrue(requestSizes.contains(3) && requestSizes.contains(1), requestSizes.toString());
   }
 
+  private static org.apache.calcite.adapter.file.etl.EtlPipelineConfig configWith(
+      Map<String, Object> extraSource) {
+    Map<String, Object> source = new HashMap<String, Object>();
+    source.put("type", "http");
+    source.put("url", "http://127.0.0.1/pubs");
+    source.putAll(extraSource);
+    Map<String, Object> table = new HashMap<String, Object>();
+    table.put("name", "nih_publications");
+    table.put("source", source);
+    Map<String, Object> output = new HashMap<String, Object>();
+    output.put("pattern", "type=nih_publications/year=*/");
+    Map<String, Object> materialize = new HashMap<String, Object>();
+    materialize.put("format", "iceberg");
+    materialize.put("output", output);
+    table.put("materialize", materialize);
+    return org.apache.calcite.adapter.file.etl.EtlPipelineConfig.fromMap(table);
+  }
+
+  @Test void limitsAreReadFromTheSourceBlock() {
+    Map<String, Object> extra = new HashMap<String, Object>();
+    extra.put("maxRetries", 3);
+    extra.put("maxInvalidRecordsPerSlice", 25);
+    NihReporterPublicationsProvider.Limits l =
+        NihReporterPublicationsProvider.Limits.from(configWith(extra));
+    assertEquals(3, l.maxRetries);
+    assertEquals(25, l.maxInvalid);
+  }
+
   @Test void missingRequiredSettingFailsLoudly() {
-    ModelOperand.clear();
-    poison.add(2L);
     assertThrows(IllegalStateException.class,
-        () -> fetch(Arrays.asList(1L, 2L), new LinkedHashMap<Long, String>()));
+        () -> NihReporterPublicationsProvider.Limits.from(
+            configWith(new HashMap<String, Object>())));
   }
 }
