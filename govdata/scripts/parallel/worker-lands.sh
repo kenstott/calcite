@@ -236,7 +236,7 @@ case "$MODE" in
       run_lands_model "lands-historical-fia" \
         '"fia_plots", "fia_seedlings", "fia_invasives", "fia_down_woody_debris", "fia_pop_evaluations", "fia_tree_grm", "fia_pop_stratum", "fia_pop_plot_stratum_assgn", "fia_pop_estn_unit", "fia_pop_eval_grp", "fia_pop_eval_attribute"' \
         "$START" "$END"
-      run_ungrouped_lands_tables "$START" "$END"
+      [ "$MODE" = "historical" ] && run_ungrouped_lands_tables "$START" "$END"
     fi
     ;;
 
