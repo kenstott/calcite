@@ -2067,6 +2067,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/km4m-vcsb.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -3898,6 +3901,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/bi63-dtpu.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -4036,6 +4042,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/dttw-5yxu.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -5191,6 +5200,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/gb4e-yj24.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -5329,6 +5341,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/swc5-untb.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -5442,6 +5457,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/xkb8-kh2a.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -5544,6 +5562,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/8hzs-zshh.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -5846,6 +5867,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/psx4-wq38.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -5933,6 +5957,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/hmz2-vwda.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
@@ -6089,6 +6116,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/x9gk-5huc.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "5000"
       response:
         format: json
@@ -6211,6 +6241,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/ijqb-a7ye.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "5000"
       response:
         format: json
@@ -6306,6 +6339,9 @@ partitionedTables:
       url: "https://data.cdc.gov/resource/3h58-x6cd.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$limit": "1000"
       response:
         format: json
