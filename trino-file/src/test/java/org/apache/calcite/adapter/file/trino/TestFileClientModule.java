@@ -259,6 +259,23 @@ class TestFileClientModule
     }
 
     @Test
+    void testExcelHintsFlowIntoOperandAsTheAdaptersOwnSettings()
+            throws Exception
+    {
+        FileConfig config = new FileConfig().setGlob("/mnt/books").setExcelHints(
+                "{\"maxHeaderRows\":1,\"tables\":{\"book__s\":{\"range\":\"s!A1:C9\"}}}");
+        Map<String, Object> operand = firstSchemaOperand(FileClientModule.buildModelJson(config, NO_ENV));
+        Map<?, ?> hints = (Map<?, ?>) operand.get("excelHints");
+        assertEquals(1, hints.get("maxHeaderRows"));
+        assertEquals("s!A1:C9", ((Map<?, ?>) ((Map<?, ?>) hints.get("tables")).get("book__s")).get("range"));
+
+        assertFalse(firstSchemaOperand(FileClientModule.buildModelJson(new FileConfig().setGlob("/mnt/books"), NO_ENV))
+                .containsKey("excelHints"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> FileClientModule.buildModelJson(new FileConfig().setGlob("/mnt/books").setExcelHints("[1]"), NO_ENV));
+    }
+
+    @Test
     void testNoRefreshIntervalOmitsOperand()
             throws Exception
     {
