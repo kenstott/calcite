@@ -3,7 +3,7 @@
 # ============================================================================
 # Data Source:
 #   - Office of the Law Revision Counsel (OLRC), U.S. House of Representatives
-#     https://uscode.house.gov/download/download.shtml — USLM XML release points
+#     https://uscode.house.gov/currency.html (release point) — USLM XML release points
 #   - One zip per title: xml_usc{title}@{congress}-{release}.zip, one XML file per zip.
 #     The current release point (e.g. 119-111 = current through Public Law 119-111) is
 #     read from the xml_uscAll link on the download page at run time.
@@ -406,7 +406,7 @@ partitionedTables:
     # for the title dimension value and streams its XML; the url below is only the anchor page.
     source:
       type: http
-      url: "https://uscode.house.gov/download/download.shtml"
+      url: "https://uscode.house.gov/currency.html"
       method: GET
       response:
         format: json
@@ -500,7 +500,7 @@ partitionedTables:
     # off it and streams the same per-title XML.
     source:
       type: http
-      url: "https://uscode.house.gov/download/download.shtml"
+      url: "https://uscode.house.gov/currency.html"
       method: GET
       response:
         format: json

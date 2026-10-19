@@ -65,7 +65,7 @@ import javax.xml.stream.XMLStreamReader;
  * subparagraph, clause...) into units small enough to embed as one chunk, so no paragraph is cut.
  *
  * <p>The current release point ({@code congress}-{@code release}, e.g. {@code 119-111}) is
- * scraped once per provider instance from the {@code xml_uscAll} link on the OLRC download
+ * read once per provider instance from the "current through Public Law" line on the OLRC currency
  * page and then pinned, so every title fetched by one run comes from the same release point
  * even if OLRC publishes a new one mid-run.
  *
@@ -77,14 +77,14 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UsCodeXmlDataProvider.class);
 
-  private static final String RELEASE_PAGE_URL = "https://uscode.house.gov/download/download.shtml";
+  private static final String RELEASE_PAGE_URL = "https://uscode.house.gov/currency.html";
 
   @SuppressWarnings("InlineFormatString")
   private static final String ZIP_URL_TEMPLATE =
       "https://uscode.house.gov/download/releasepoints/us/pl/%s/%s/xml_usc%s@%s-%s.zip";
 
   private static final Pattern RELEASE_POINT_PATTERN =
-      Pattern.compile("releasepoints/us/pl/(\\d+)/([^/\"]+)/xml_uscAll@");
+      Pattern.compile("current through Public Law (\\d+)-(\\d+)");
 
   private static final String USLM_NS = "http://xml.house.gov/schemas/uslm/1.0";
 
@@ -193,8 +193,16 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     return new UnitRows(new SectionStream(xmlFile, tempDir, releasePoint));
   }
 
-  /** Reads the OLRC download page line by line straight off the HTTP response and pins the
-   *  current release point. Not routed through {@link ZipDownloadUtils#downloadToFile}: that
+  /** {congress, release} from a page line stating "current through Public Law N-M", else null. */
+  static String[] releasePointIn(String line) {
+    Matcher m = RELEASE_POINT_PATTERN.matcher(line);
+    return m.find() ? new String[] {m.group(1), m.group(2)} : null;
+  }
+
+  /** Reads the OLRC currency page line by line straight off the HTTP response and pins the
+   *  current release point (the page states "current through Public Law {congress}-{release}").
+   *  The old download page, which linked {@code xml_uscAll}, was withdrawn in 2026-10 when the
+   *  site moved to a temporary format; the per-title zips are still served at the same paths. Not routed through {@link ZipDownloadUtils#downloadToFile}: that
    *  helper rejects text/html responses by design (WAF-block detection), and this page is HTML. */
   private synchronized void resolveReleasePoint() throws IOException {
     if (release != null) {
@@ -214,10 +222,10 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
           new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
         String line;
         while ((line = reader.readLine()) != null) {
-          Matcher m = RELEASE_POINT_PATTERN.matcher(line);
-          if (m.find()) {
-            congress = m.group(1);
-            release = m.group(2);
+          String[] point = releasePointIn(line);
+          if (point != null) {
+            congress = point[0];
+            release = point[1];
             LOGGER.info("{}: current release point is {}-{}", tableName(), congress, release);
             return;
           }
@@ -226,7 +234,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     } finally {
       conn.disconnect();
     }
-    throw new IOException(tableName() + ": no xml_uscAll release point link found on "
+    throw new IOException(tableName() + ": no current-through-Public-Law release point found on "
         + RELEASE_PAGE_URL);
   }
 
