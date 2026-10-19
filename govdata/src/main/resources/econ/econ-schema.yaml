@@ -10585,6 +10585,9 @@ views:
       GROUP BY country_code, year
 
   - name: state_economic_snapshot
+    # year passes through state_wages.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       State-month economic snapshot joining BLS QCEW annual state wages with JOLTS
       monthly state labor-market data, enriched with geographic identifiers. Restricted
@@ -10619,6 +10622,9 @@ views:
       WHERE w.own_code = '0' AND w.industry_code = '10'
 
   - name: fdi_data
+    # year passes through fdi_direct_investment.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Unified tall view over the two BEA MNE foreign-direct-investment tables:
       fdi_direct_investment (stat_type='DI' — position, income, financial
@@ -10639,6 +10645,9 @@ views:
       FROM fdi_activities
 
   - name: fdi_by_country
+    # year passes through fdi_direct_investment.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Country-level wide pivot of BEA foreign direct investment: one row per
       direction (inward/outward) x partner country x year, with the headline DI

@@ -64,6 +64,10 @@ public class IcebergDeclaredPartitionTypeTest extends BaseFileTest {
 
   private static final Pattern FILES_READ = Pattern.compile("Total Files Read: (\\d+)");
 
+  /** A view over spending that passes its stored-text year through. */
+  private static final String SPENDING_BY_YEAR =
+      "SELECT year, SUM(amount) AS total FROM spending GROUP BY year";
+
   @TempDir Path tempDir;
 
   private String warehousePath;
@@ -149,7 +153,13 @@ public class IcebergDeclaredPartitionTypeTest extends BaseFileTest {
         + table("spending", "{\"name\": \"year\", \"type\": \"INTEGER\", \"storedDigits\": 4}")
         + ", "
         + table("monthly", "{\"name\": \"month\", \"type\": \"INTEGER\"}")
-        + "]}}]}";
+        + "],"
+        // A view passing the stored-text year through, as govdata's
+        // disasters_storm_impact_by_county does from storm_events.
+        + "\"views\": [{\"name\": \"spending_by_year\", \"sql\": \"" + SPENDING_BY_YEAR + "\","
+        + "\"columnDefinitions\": [{\"name\": \"year\", \"type\": \"INTEGER\","
+        + " \"storedDigits\": 4}]}]"
+        + "}}]}";
     Properties info = new Properties();
     info.setProperty("model", "inline:" + model);
     info.setProperty("lex", "ORACLE");
@@ -208,6 +218,8 @@ public class IcebergDeclaredPartitionTypeTest extends BaseFileTest {
             + catalog.loadTable(TableIdentifier.of(table)).location()
             + "', allow_moved_paths=true)");
       }
+      s.execute("CREATE VIEW \"TEST\".\"spending_by_year\" AS "
+          + SPENDING_BY_YEAR.replace("FROM spending", "FROM \"TEST\".\"spending\""));
       StringBuilder plan = new StringBuilder();
       try (ResultSet rs = s.executeQuery("EXPLAIN ANALYZE " + sql)) {
         while (rs.next()) {
@@ -293,6 +305,40 @@ public class IcebergDeclaredPartitionTypeTest extends BaseFileTest {
       assertEquals(List.of(), answer.partitions, where);
       assertTrue(answer.sql.get(0).contains("WHERE CAST"),
           where + " keeps the cast: " + answer.sql.get(0));
+    }
+  }
+
+  @Test public void aViewDeclaringAStoredTextYearServesItAndPrunes() throws Exception {
+    try (Connection connection = connect(true); Statement statement = connection.createStatement();
+         ResultSet rs = statement.executeQuery(
+             "SELECT \"year\", \"total\" FROM \"spending_by_year\" ORDER BY \"year\"")) {
+      assertEquals(java.sql.Types.INTEGER, rs.getMetaData().getColumnType(1),
+          rs.getMetaData().getColumnTypeName(1));
+      List<Object> years = new ArrayList<>();
+      while (rs.next()) {
+        years.add(rs.getObject(1));
+      }
+      assertEquals(each(2010, 2014, 1), years);
+    }
+    for (Object[] c : new Object[][] {
+        {"\"year\" = 2012", List.of(2012), 1},
+        {"\"year\" >= 2013", List.of(2013, 2014), 2}}) {
+      String where = (String) c[0];
+      Answer answer = new Answer();
+      try (Connection connection = connect(true);
+           Statement statement = connection.createStatement();
+           Hook.Closeable hook = Hook.QUERY_PLAN.addThread(
+               (Consumer<Object>) o -> answer.sql.add(String.valueOf(o)));
+           ResultSet rs = statement.executeQuery("SELECT \"year\" FROM \"spending_by_year\" WHERE "
+               + where + " ORDER BY \"year\"")) {
+        while (rs.next()) {
+          answer.partitions.add(rs.getObject(1));
+        }
+      }
+      assertEquals(c[1], answer.partitions, where);
+      String sql = answer.sql.get(0);
+      assertFalse(sql.contains("WHERE CAST"), where + " reaches DuckDB on the stored text: " + sql);
+      assertEquals(c[2], filesRead(sql), where + ": " + sql);
     }
   }
 }

@@ -2613,6 +2613,9 @@ constraints:
 views:
 
   - name: disasters_declarations_by_state_year
+    # year passes through disaster_declarations.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Annual disaster-declaration counts by state, incident_type, and year —
       disaster_count plus counts of declarations with IA (Individual
@@ -2634,6 +2637,9 @@ views:
       GROUP BY d.year, d.state_fips, d.incident_type
 
   - name: disasters_pa_obligated_by_county
+    # year passes through public_assistance_projects.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Public Assistance federal obligations aggregated by county, incident_type,
       and declaration year — project_count, total_project_amount, and
@@ -2653,6 +2659,9 @@ views:
       GROUP BY p.year, p.state_fips, p.county_fips, p.incident_type
 
   - name: disasters_nfip_claims_by_county
+    # year passes through nfip_claims.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Paid NFIP flood claims aggregated by county and year of loss —
       claim_count, total_paid_building, total_paid_contents, and total_paid
@@ -2671,6 +2680,9 @@ views:
       GROUP BY c.year, c.state_fips, c.county_fips
 
   - name: disasters_storm_impact_by_county
+    # year passes through storm_events.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Storm-event human and economic impact aggregated by county and year —
       event_count, total_deaths, total_injuries, total_property_damage, and

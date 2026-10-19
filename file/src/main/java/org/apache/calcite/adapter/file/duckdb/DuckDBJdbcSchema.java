@@ -386,6 +386,18 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
     return tableNames;
   }
 
+  /** The columnDefinitions of each declared SQL view, by view name (see StoredTextViewWrapper). */
+  private java.util.Map<String,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>>
+      declaredViewColumns = java.util.Collections.emptyMap();
+
+  /** Sets the columnDefinitions the schema's declared SQL views give their output columns. */
+  void setDeclaredViewColumns(java.util.Map<String,
+      java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>>
+      declaredViewColumns) {
+    this.declaredViewColumns = declaredViewColumns;
+  }
+
   @Override public Table getTable(String name) {
     LOGGER.info("Looking for table: '{}'", name);
     // Create this one deferred view on demand — not the whole backlog — the first time
@@ -411,6 +423,11 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
         // FILE-697: resolves just this one declared table (running its own discovery/
         // materialization the first time it's needed) instead of fileSchema.tables(), which
         // forces every declared table in the schema through FileSchema.getTableMap() at once.
+        java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>
+            viewColumns = declaredViewColumns.get(name);
+        if (viewColumns != null) {
+          return new StoredTextViewWrapper(table, viewColumns);
+        }
         Table originalTable = fileSchema.getDeclaredTable(name);
         if (originalTable == null) {
           originalTable = fileSchema.getDeclaredTable(name.toLowerCase());
@@ -511,6 +528,83 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
   }
 
   /**
+   * A DuckDB view whose {@code columnDefinitions} declare a column it passes through from a
+   * stored-text partition column (govdata's disasters_storm_impact_by_county: {@code year}, from
+   * storm_events). DuckDB runs the view over the stored table, so the column reads as text; this
+   * serves it as the declared type and lets {@link StoredTextPartitionFilter} compare a filter on
+   * it with the stored text, which DuckDB pushes through the view to prune its source's partitions.
+   */
+  private static final class StoredTextViewWrapper
+      implements Table, org.apache.calcite.schema.TranslatableTable,
+          org.apache.calcite.schema.Wrapper {
+    private final Table jdbcTable;
+    private final java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>
+        declared;
+    /** The stored-text columns of the last scan {@link #toRel} built. */
+    private volatile StoredTextPartitions scannedPartitions = StoredTextPartitions.NONE;
+
+    StoredTextViewWrapper(Table jdbcTable,
+        java.util.List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>
+            declared) {
+      this.jdbcTable = jdbcTable;
+      this.declared = declared;
+    }
+
+    @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+      RelDataType stored = jdbcTable.getRowType(typeFactory);
+      return StoredTextPartitions.of(stored, declared).declaredRowType(typeFactory, stored);
+    }
+
+    @Override public org.apache.calcite.rel.RelNode toRel(
+        org.apache.calcite.plan.RelOptTable.ToRelContext context,
+        org.apache.calcite.plan.RelOptTable relOptTable) {
+      if (!(jdbcTable instanceof org.apache.calcite.schema.TranslatableTable)) {
+        throw new IllegalStateException("Wrapped view is not TranslatableTable: " + jdbcTable.getClass());
+      }
+      org.apache.calcite.schema.TranslatableTable scannable =
+          (org.apache.calcite.schema.TranslatableTable) jdbcTable;
+      RelDataType stored = jdbcTable.getRowType(context.getCluster().getTypeFactory());
+      StoredTextPartitions partitions = StoredTextPartitions.of(stored, declared);
+      scannedPartitions = partitions;
+      return partitions.isEmpty()
+          ? scannable.toRel(context, relOptTable)
+          : partitions.castScan(scannable, context, relOptTable, stored);
+    }
+
+    @Override public org.apache.calcite.schema.Statistic getStatistic() {
+      return jdbcTable.getStatistic();
+    }
+
+    @Override public org.apache.calcite.schema.Schema.TableType getJdbcTableType() {
+      return jdbcTable.getJdbcTableType();
+    }
+
+    @Override public boolean isRolledUp(String column) {
+      return jdbcTable.isRolledUp(column);
+    }
+
+    @Override public boolean rolledUpColumnValidInsideAgg(String column,
+        org.apache.calcite.sql.SqlCall call, org.apache.calcite.sql.@org.checkerframework.checker.nullness.qual.Nullable SqlNode parent,
+        org.apache.calcite.config.@org.checkerframework.checker.nullness.qual.Nullable CalciteConnectionConfig config) {
+      return jdbcTable.rolledUpColumnValidInsideAgg(column, call, parent, config);
+    }
+
+    @Override public <C extends Object> @org.checkerframework.checker.nullness.qual.Nullable C
+        unwrap(Class<C> clazz) {
+      if (clazz == StoredTextPartitions.class) {
+        return clazz.cast(scannedPartitions);
+      }
+      if (clazz.isInstance(jdbcTable)) {
+        return clazz.cast(jdbcTable);
+      }
+      if (jdbcTable instanceof org.apache.calcite.schema.Wrapper) {
+        return ((org.apache.calcite.schema.Wrapper) jdbcTable).unwrap(clazz);
+      }
+      return null;
+    }
+  }
+
+  /**
    * Wrapper that delegates CommentableTable methods to the original FileSchema table
    * while maintaining JdbcTable behavior for query execution.
    * This allows INFORMATION_SCHEMA queries to see table/column comments
@@ -550,26 +644,8 @@ public class DuckDBJdbcSchema extends JdbcSchema implements CommentableSchema {
       }
       // DuckDB reads each stored-text partition column as the text it stores; the scan carries
       // that type, and a projection casts it to the type this table declares.
-      if (!(relOptTable instanceof org.apache.calcite.prepare.RelOptTableImpl)) {
-        throw new IllegalStateException("Stored-text partition columns of '"
-            + relOptTable.getQualifiedName() + "' need a RelOptTableImpl, got "
-            + relOptTable.getClass());
-      }
-      RelDataType stored = ((IcebergTable) commentableTable).getRowType(typeFactory);
-      org.apache.calcite.rel.RelNode scan = scannable.toRel(context,
-          ((org.apache.calcite.prepare.RelOptTableImpl) relOptTable).copy(stored));
-      RelDataType declared = partitions.declaredRowType(typeFactory, stored);
-      org.apache.calcite.rex.RexBuilder rexBuilder = context.getCluster().getRexBuilder();
-      java.util.List<org.apache.calcite.rex.RexNode> projects = new java.util.ArrayList<>();
-      for (org.apache.calcite.rel.type.RelDataTypeField field : stored.getFieldList()) {
-        org.apache.calcite.rex.RexNode ref = rexBuilder.makeInputRef(scan, field.getIndex());
-        projects.add(partitions.column(field.getIndex()) == null
-            ? ref
-            : rexBuilder.makeCast(declared.getFieldList().get(field.getIndex()).getType(), ref));
-      }
-      return org.apache.calcite.rel.logical.LogicalProject.create(scan,
-          com.google.common.collect.ImmutableList.of(), projects, declared.getFieldNames(),
-          com.google.common.collect.ImmutableSet.of());
+      return partitions.castScan(scannable, context, relOptTable,
+          ((IcebergTable) commentableTable).getRowType(typeFactory));
     }
 
     /**

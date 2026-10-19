@@ -28,8 +28,9 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The partition columns of an Iceberg table that the table stores as text and its schema
- * declares as an integer (a {@code year} written {@code '2023'}).
+ * The columns of a table that it stores as text and that are declared as an integer: an Iceberg
+ * table's partition column (a {@code year} written {@code '2023'}), or a view's column passed
+ * through from one, which the view declares in its {@code columnDefinitions}.
  *
  * <p>The DuckDB engine serves each as its declared type, cast from the stored text. A filter on
  * the cast value is rewritten to the stored text ({@link StoredTextPartitionFilter}),
@@ -125,6 +126,34 @@ public final class StoredTextPartitions {
 
   @Nullable Column column(int index) {
     return byIndex.get(index);
+  }
+
+  /**
+   * The scan of {@code table} with each of these columns cast to its declared type: the scan
+   * carries {@code stored}, the type DuckDB reads, and a projection over it the declared types.
+   */
+  org.apache.calcite.rel.RelNode castScan(org.apache.calcite.schema.TranslatableTable table,
+      org.apache.calcite.plan.RelOptTable.ToRelContext context,
+      org.apache.calcite.plan.RelOptTable relOptTable, RelDataType stored) {
+    if (!(relOptTable instanceof org.apache.calcite.prepare.RelOptTableImpl)) {
+      throw new IllegalStateException("Stored-text columns of '"
+          + relOptTable.getQualifiedName() + "' need a RelOptTableImpl, got "
+          + relOptTable.getClass());
+    }
+    org.apache.calcite.rel.RelNode scan = table.toRel(context,
+        ((org.apache.calcite.prepare.RelOptTableImpl) relOptTable).copy(stored));
+    RelDataType declared = declaredRowType(context.getCluster().getTypeFactory(), stored);
+    org.apache.calcite.rex.RexBuilder rexBuilder = context.getCluster().getRexBuilder();
+    java.util.List<org.apache.calcite.rex.RexNode> projects = new java.util.ArrayList<>();
+    for (RelDataTypeField field : stored.getFieldList()) {
+      org.apache.calcite.rex.RexNode ref = rexBuilder.makeInputRef(scan, field.getIndex());
+      projects.add(byIndex.get(field.getIndex()) == null
+          ? ref
+          : rexBuilder.makeCast(declared.getFieldList().get(field.getIndex()).getType(), ref));
+    }
+    return org.apache.calcite.rel.logical.LogicalProject.create(scan,
+        com.google.common.collect.ImmutableList.of(), projects, declared.getFieldNames(),
+        com.google.common.collect.ImmutableSet.of());
   }
 
   /** {@code stored} with each of these columns at its declared type. */

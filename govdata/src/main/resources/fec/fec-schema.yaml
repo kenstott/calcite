@@ -3695,6 +3695,9 @@ views:
       FROM independent_expenditures t
 
   - name: active_candidates
+    # year passes through candidates.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Federal candidates flagged as certified active (candidate_status = 'C') in
       fec.candidates. Not filtered to a single cycle — rows span every loaded
@@ -3715,6 +3718,9 @@ views:
       WHERE candidate_status = 'C'
 
   - name: candidate_district_profile
+    # year passes through candidates.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Enriches FEC candidates with geographic state and congressional district data.
       House candidates (office=H) are matched to their TIGER district boundary via

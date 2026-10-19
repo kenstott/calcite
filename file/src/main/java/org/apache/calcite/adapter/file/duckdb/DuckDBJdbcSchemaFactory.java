@@ -348,6 +348,48 @@ public class DuckDBJdbcSchemaFactory {
    * Creates a JDBC schema for DuckDB with files registered as views.
    * Configures with Oracle Lex and unquoted casing to lower.
    */
+  /**
+   * The {@code columnDefinitions} each declared SQL view gives its output columns, by view name:
+   * from the operand's {@code views:} entries and its {@code tables:} entries of type view. A
+   * view declares a column it passes through from a column its source stores as text and
+   * declares as an integer, so the engine serves it as that type (see StoredTextPartitions).
+   */
+  @SuppressWarnings("unchecked")
+  static Map<String, List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>>
+      declaredViewColumns(@Nullable Map<String, Object> operand) {
+    Map<String, List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>>
+        result = new HashMap<>();
+    if (operand == null) {
+      return result;
+    }
+    List<Map<String, Object>> entries = new ArrayList<>();
+    Object views = operand.get("views");
+    if (views instanceof List) {
+      entries.addAll((List<Map<String, Object>>) views);
+    }
+    Object tables = operand.get("tables");
+    if (tables instanceof List) {
+      for (Map<String, Object> table : (List<Map<String, Object>>) tables) {
+        if ("view".equals(table.get("type"))) {
+          entries.add(table);
+        }
+      }
+    }
+    for (Map<String, Object> view : entries) {
+      Object definitions = view.get("columnDefinitions");
+      if (view.get("name") instanceof String && definitions instanceof List) {
+        List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>
+            columns = new ArrayList<>();
+        for (Object definition : (List<Object>) definitions) {
+          columns.add(org.apache.calcite.adapter.file.partition.PartitionedTableConfig
+              .ColumnDefinition.fromMap((Map<String, Object>) definition));
+        }
+        result.put((String) view.get("name"), columns);
+      }
+    }
+    return result;
+  }
+
   public static JdbcSchema create(SchemaPlus parentSchema, String schemaName, File directory) {
     return create(parentSchema, schemaName, directory.getPath(), false, null);
   }
@@ -849,6 +891,7 @@ public class DuckDBJdbcSchemaFactory {
           new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema,
               directoryPath, recursive, EtagRetryConnection.wrap(setupConn, fileSchema),
               fileSchema, catalogPath);
+      schema.setDeclaredViewColumns(declaredViewColumns(operand));
 
       // Add to connection pool if this is a persistent database (for future schema sharing)
       if (catalogPath != null) {
@@ -940,6 +983,7 @@ public class DuckDBJdbcSchemaFactory {
           new DuckDBJdbcSchema(sharedInfo.dataSource, dialect, convention, null, duckdbSchema,
               directoryPath, recursive, EtagRetryConnection.wrap(setupConn, fileSchema),
               fileSchema, sharedInfo.catalogPath);
+      schema.setDeclaredViewColumns(declaredViewColumns(operand));
 
       return schema;
 

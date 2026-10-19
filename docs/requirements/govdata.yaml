@@ -1173,7 +1173,10 @@
     type, with one WARN per table and column naming both types and pointing to
     govdata/docs/operations/stored-text-columns-to-rewrite.md, until it is purged and
     reprocessed. The DuckDB engine serves such a column as its declared type and compares a
-    filter on it with the stored text, so partition pruning is kept.
+    filter on it with the stored text, so partition pruning is kept. A view that passes such a
+    column through declares it in its own columnDefinitions, and is served the same way: DuckDB
+    runs the view over the stored text, and a filter on the column still prunes the view's
+    source.
   source: "IcebergMaterializationWriter.keepStoredTextTypes; EtlPipelineConfig.withDeclaredPartitionTypes; StoredTextPartitions; StoredTextPartitionFilter"
   tests:
     - file/StoredTextPartitionTransitionTest
