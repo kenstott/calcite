@@ -284,6 +284,7 @@ Additionally, some settings can be configured directly via environment variables
 | `executionEngine` | String | Execution engine selection | `parquet` | No | - |
 | `tableNameCasing` | String | Table name transformation strategy | `SMART_CASING` | No | - |
 | `columnNameCasing` | String | Column name transformation strategy | `SMART_CASING` | No | - |
+| `excelHints` | Object | How the Excel reader finds a workbook's tables; see [Reading Excel workbooks](excel-tables.md#hints) | unset (detected) | No | - |
 | `enableStatistics` | Boolean | Generate column statistics for optimization | `true` | No | `CALCITE_STATISTICS_HLL_ENABLED` |
 
 ### Name Casing Strategies

@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.ExcelReadHints;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
 import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
@@ -223,6 +224,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private final @Nullable String canonicalSchemaName;  // Canonical name for .aperio directory (e.g., "econ" vs user-assigned "ECON")
   /** How the schema's HTML files are read: their lists as tables, and their content (REQ-2186). */
   private final CrawlerConfiguration pages;
+  private ExcelReadHints excelReadHints = ExcelReadHints.AUTO;
   // Schema-level materialize default (FILE-186), set post-construction by FileSchemaFactory. When
   // present, getTableMap materializes every discovered table to Iceberg under warehousePath. Not a
   // constructor param — FileSchema has many delegating overloads and getTableMap runs lazily after
@@ -1323,7 +1325,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 tableNameCasing,
                 operatingCacheDirectory,
                 relativePath,
-                pages);
+                pages,
+                excelReadHints);
 
             if (converted) {
               LOGGER.debug("Converted storage provider file: {}", entry.getName());
@@ -6817,6 +6820,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private SourceFileConversion sourceFileConversion() {
     File conversionDir = baseDirectory != null ? new File(operatingCacheDirectory, "conversions") : null;
     return new SourceFileConversion(baseDirectory, conversionDir, operatingCacheDirectory,
-        columnNameCasing, tableNameCasing, pages);
+        columnNameCasing, tableNameCasing, pages, excelReadHints);
+  }
+
+  /**
+   * How the Excel reader finds the tables of this schema's workbooks, where the operator says
+   * (the operand {@code excelHints}); set before the schema's tables are first listed.
+   */
+  public void setExcelReadHints(ExcelReadHints excelReadHints) {
+    this.excelReadHints = excelReadHints;
   }
 }

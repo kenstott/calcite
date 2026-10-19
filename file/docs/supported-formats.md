@@ -108,24 +108,7 @@ Results in table with columns: `id`, `name`, `profile_age`, `profile_city`
 
 **File Extensions:** `.xlsx`, `.xls`
 
-**Features:**
-- Multi-sheet support (each sheet becomes a table)
-- Header detection
-- Formula evaluation
-- Data type inference
-- Merged cell handling
-
-**Configuration Options:**
-```json
-{
-  "excelConfig": {
-    "evaluateFormulas": true,
-    "skipEmptyRows": true,
-    "headerRowIndex": 0,
-    "sheets": ["Sheet1", "Data", "Summary"]
-  }
-}
-```
+Each sheet can hold several tables. The reader finds them from the workbook's own Excel tables and named ranges, then by searching for blocks of cells. It finds each table's title, header rows and data rows, and you can steer it with hints when a workbook defeats it. See [Reading Excel workbooks](excel-tables.md).
 
 ### Microsoft Word Documents
 

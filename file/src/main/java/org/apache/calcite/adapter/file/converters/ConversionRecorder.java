@@ -77,7 +77,15 @@ public class ConversionRecorder {
    * Records an Excel to JSON conversion with specified base directory.
    */
   public static void recordExcelConversion(File excelFile, File jsonFile, File baseDirectory) {
-    recordConversion(excelFile, jsonFile, "EXCEL_TO_JSON", baseDirectory);
+    recordExcelConversion(excelFile, jsonFile, baseDirectory, ExcelReadHints.AUTO);
+  }
+
+  /**
+   * Records an Excel to JSON conversion made under the operator's read hints.
+   */
+  public static void recordExcelConversion(File excelFile, File jsonFile, File baseDirectory,
+      ExcelReadHints hints) {
+    recordConversion(excelFile, jsonFile, hints.conversionType(), baseDirectory);
   }
 
 
