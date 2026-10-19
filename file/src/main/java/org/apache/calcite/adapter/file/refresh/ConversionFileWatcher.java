@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.refresh;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.converters.DocxTableScanner;
+import org.apache.calcite.adapter.file.converters.ExcelReadHints;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
 import org.apache.calcite.adapter.file.converters.PptxTableScanner;
@@ -46,6 +47,7 @@ public class ConversionFileWatcher {
   private final Map<String, Map<File, FileInfo>> schemaWatchedFiles = new ConcurrentHashMap<>();
   // Schema base directories for conversion output
   private final Map<String, File> schemaBaseDirectories = new ConcurrentHashMap<>();
+  private final Map<String, ExcelReadHints> schemaExcelReadHints = new ConcurrentHashMap<>();
 
   private static class FileInfo {
     final FileType type;
@@ -90,7 +92,17 @@ public class ConversionFileWatcher {
    * @param baseDirectory The base directory for conversion output
    */
   public void registerSchemaBaseDirectory(String schemaName, File baseDirectory) {
+    registerSchemaBaseDirectory(schemaName, baseDirectory, ExcelReadHints.AUTO);
+  }
+
+  /**
+   * Registers the base directory for a schema, and how the Excel reader finds the tables of its
+   * workbooks when it converts them again.
+   */
+  public void registerSchemaBaseDirectory(String schemaName, File baseDirectory,
+      ExcelReadHints excelReadHints) {
     if (schemaName != null && baseDirectory != null) {
+      schemaExcelReadHints.put(schemaName, excelReadHints);
       schemaBaseDirectories.put(schemaName, baseDirectory);
       LOGGER.debug("Registered base directory for schema '{}': {}",
                   schemaName, baseDirectory.getAbsolutePath());
@@ -247,7 +259,9 @@ public class ConversionFileWatcher {
             outputDirExcel = file.getParentFile();
           }
           SafeExcelToJsonConverter.convertIfNeeded(
-              file, outputDirExcel, true, "SMART_CASING", "SMART_CASING", baseDirExcel != null ? baseDirExcel : outputDirExcel.getParentFile());
+              file, outputDirExcel, true, "SMART_CASING", "SMART_CASING", baseDirExcel != null ? baseDirExcel : outputDirExcel.getParentFile(),
+              // A schema registered no hints (a file watched outside one): the reader's own rules.
+              schemaExcelReadHints.getOrDefault(schemaName, ExcelReadHints.AUTO));
           LOGGER.info("Re-converted Excel file to JSON: {}", file.getName());
           break;
 

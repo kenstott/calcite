@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.refresh;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.DataContext;
+import org.apache.calcite.adapter.file.converters.ExcelReadHints;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.table.CsvTranslatableTable;
@@ -52,6 +53,7 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
   private final boolean typeInferenceEnabled;
   private final String columnNameCasing;
   private final String tableNameCasing;
+  private ExcelReadHints excelReadHints = ExcelReadHints.AUTO;
   private final @Nullable RelProtoDataType protoRowType;
   @SuppressWarnings("UnusedVariable")
   private final ExecutionEngineConfig.ExecutionEngineType engineType;
@@ -130,6 +132,11 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
   /**
    * Sets the schema and table names for DuckDB queries.
    */
+  /** How the Excel reader finds the tables of the workbook this table is converted from. */
+  public void setExcelReadHints(ExcelReadHints excelReadHints) {
+    this.excelReadHints = excelReadHints;
+  }
+
   public void setDuckDBNames(String schemaName, String tableName) {
     this.schemaName = schemaName;
     this.duckdbTableName = tableName;
@@ -220,7 +227,7 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
 
       // First, try standard conversion (for format conversions like HTML->JSON)
       boolean converted =
-          org.apache.calcite.adapter.file.converters.FileConversionManager.convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing);
+          org.apache.calcite.adapter.file.converters.FileConversionManager.convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, null, null, excelReadHints);
 
       if (converted) {
         LOGGER.debug("Re-converted source file: {}", sourceFile.getName());
@@ -310,7 +317,8 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
         // Get the proper output directory from the parent directory structure
         File outputDir = cacheDir != null ? cacheDir : excelFile.getParentFile();
         org.apache.calcite.adapter.file.converters.SafeExcelToJsonConverter.convertIfNeeded(
-            excelFile, outputDir, true, tableNameCasing, columnNameCasing, outputDir.getParentFile());
+            excelFile, outputDir, true, tableNameCasing, columnNameCasing, outputDir.getParentFile(),
+            excelReadHints);
 
         // The source should already point to the correct JSON file
         // as it was set up during initial table discovery

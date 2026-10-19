@@ -1159,6 +1159,38 @@ public class ConversionMetadata {
   }
 
   /**
+   * Forgets every conversion of {@code sourceFile} of the type {@code conversionType} or one of
+   * its forms ({@code EXCEL_TO_JSON[...]}), before the file is converted again: what it was
+   * converted to, under other hints or from an earlier version of it, is not left standing.
+   *
+   * @return the files those conversions wrote
+   */
+  public java.util.List<File> forgetConversionsOf(File sourceFile, String conversionType)
+      throws IOException {
+    // Records hold the source's canonical path or its absolute one (symlinks intact): both.
+    String canonical = sourceFile.getCanonicalPath();
+    String absolute = sourceFile.getAbsolutePath();
+    java.util.List<File> converted = new java.util.ArrayList<>();
+    java.util.Iterator<Map.Entry<String, ConversionRecord>> entries =
+        conversions.entrySet().iterator();
+    while (entries.hasNext()) {
+      ConversionRecord record = entries.next().getValue();
+      if ((canonical.equals(record.originalFile) || absolute.equals(record.originalFile))
+          && record.conversionType != null
+          && (record.conversionType.equals(conversionType)
+              || record.conversionType.startsWith(conversionType + "["))
+          && record.convertedFile != null) {
+        converted.add(new File(record.convertedFile));
+        entries.remove();
+      }
+    }
+    if (!converted.isEmpty()) {
+      saveMetadata();
+    }
+    return converted;
+  }
+
+  /**
    * Gets the conversion record for a converted file.
    *
    * @param convertedFile The converted file

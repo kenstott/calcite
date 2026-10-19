@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.converters.ExcelReadHints;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
@@ -211,6 +212,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private final @Nullable List<Map<String, Object>> partitionedTables;
   private final @Nullable String refreshInterval;
   private final String tableNameCasing;
+  private ExcelReadHints excelReadHints = ExcelReadHints.AUTO;
   private final String columnNameCasing;
   private final @Nullable String storageType;
   private final @Nullable Map<String, Object> storageConfig;
@@ -1105,7 +1107,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     final java.time.Duration conversionWatchInterval =
         refreshInterval != null ? RefreshInterval.parse(refreshInterval) : null;
     if (conversionWatchInterval != null) {
-      ConversionFileWatcher.getInstance().registerSchemaBaseDirectory(name, operatingCacheDirectory);
+      ConversionFileWatcher.getInstance().registerSchemaBaseDirectory(name, operatingCacheDirectory,
+          excelReadHints);
     }
 
     // Get list of source files that have already been processed via tableDef
@@ -1170,7 +1173,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // Pass baseDirectory for metadata storage and relativePath for directory preservation
         boolean converted =
             FileConversionManager.convertIfNeeded(file, outputDir, columnNameCasing, tableNameCasing,
-                operatingCacheDirectory, relativePath);
+                operatingCacheDirectory, relativePath, excelReadHints);
         if (converted) {
           LOGGER.debug("Converted file: {} to directory: {}", file.getName(), outputDir.getAbsolutePath());
         }
@@ -1283,7 +1286,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 columnNameCasing,
                 tableNameCasing,
                 operatingCacheDirectory,
-                relativePath);
+                relativePath,
+                excelReadHints);
 
             if (converted) {
               LOGGER.debug("Converted storage provider file: {}", entry.getName());
@@ -2887,8 +2891,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.debug("RefreshableParquetCacheTable - source: {}, originalSource: {}", source.path(), (originalSource != null ? originalSource.path() : "null"));
 
         RefreshableParquetCacheTable refreshableTable =
-            new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir, refreshInterval, typeInferenceEnabled,
-            columnNameCasing, tableNameCasing, null, engineConfig.getEngineType(), parentSchema, name);
+            excelHinted(new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir, refreshInterval, typeInferenceEnabled,
+            columnNameCasing, tableNameCasing, null, engineConfig.getEngineType(), parentSchema, name));
 
         String finalName = applyCasing(tableName, tableNameCasing);
 
@@ -2999,8 +3003,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                   : false;
 
               parquetTable =
-                  new RefreshableParquetCacheTable(source, parquetFile, cacheDir, effectiveInterval, typeInferenceEnabled,
-                  columnNameCasing, tableNameCasing, null, engineConfig.getEngineType(), parentSchema, name);
+                  excelHinted(new RefreshableParquetCacheTable(source, parquetFile, cacheDir, effectiveInterval, typeInferenceEnabled,
+                  columnNameCasing, tableNameCasing, null, engineConfig.getEngineType(), parentSchema, name));
             } else {
               // Use standard Parquet table for non-refresh cases
               parquetTable = new ParquetTranslatableTable(parquetFile, name);
@@ -3848,9 +3852,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               cacheDir, parentSchema, name, tableNameCasing);
           boolean typeInferenceEnabled = csvTypeInferenceConfig != null && csvTypeInferenceConfig.isEnabled();
           // Use standard RefreshableParquetCacheTable for PARQUET engine
-          return new RefreshableParquetCacheTable(source, parquetFile, cacheDir,
+          return excelHinted(new RefreshableParquetCacheTable(source, parquetFile, cacheDir,
               effectiveInterval, typeInferenceEnabled, columnNameCasing, tableNameCasing, protoRowType,
-              engineConfig.getEngineType(), parentSchema, name);
+              engineConfig.getEngineType(), parentSchema, name));
         } catch (Exception e) {
           throw new RuntimeException("Failed to create refreshable Parquet table for " + source.path(), e);
         }
@@ -3914,7 +3918,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
         // JSONPath extractions should use regular JSON tables that can be refreshed via re-extraction
         if (isJsonPathExtraction) {
-          return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory);
+          return excelHinted(new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory));
         }
 
         try {
@@ -3951,9 +3955,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Use RefreshableParquetCacheTable with original source if found
-          return new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir,
+          return excelHinted(new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir,
               effectiveInterval, false, columnNameCasing, tableNameCasing, null,
-              engineConfig.getEngineType(), parentSchema, name);
+              engineConfig.getEngineType(), parentSchema, name));
         } catch (Exception e) {
           throw new RuntimeException("Failed to create refreshable Parquet table for " + source.path(), e);
         }
@@ -3993,7 +3997,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     case LINQ4J:
     default:
       if (effectiveInterval != null && tableName != null) {
-        return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory);
+        return excelHinted(new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory));
       }
       return new JsonScannableTable(source, options, columnNameCasing);
     }
@@ -6340,7 +6344,25 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * converted to Parquet through the Hadoop ParquetWriter (which cannot run on JDK 25). Set by
    * {@link FileSchemaFactory} on the internal conversion FileSchema when the DuckDB engine is used.
    */
-  public void setDuckdbNativeFormats(boolean duckdbNativeFormats) {
+  /**
+   * How the Excel reader finds the tables of this schema's workbooks, where the operator says
+   * (the operand {@code excelHints}); set before the schema's tables are first listed.
+   */
+  public void setExcelReadHints(ExcelReadHints excelReadHints) {
+    this.excelReadHints = excelReadHints;
+  }
+
+  private RefreshableJsonTable excelHinted(RefreshableJsonTable table) {
+    table.setExcelReadHints(excelReadHints);
+    return table;
+  }
+
+  private RefreshableParquetCacheTable excelHinted(RefreshableParquetCacheTable table) {
+    table.setExcelReadHints(excelReadHints);
+    return table;
+  }
+
+    public void setDuckdbNativeFormats(boolean duckdbNativeFormats) {
     this.duckdbNativeFormats = duckdbNativeFormats;
   }
 

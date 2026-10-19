@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.refresh;
 
 import org.apache.calcite.DataContext;
+import org.apache.calcite.adapter.file.converters.ExcelReadHints;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.converters.MultiTableExcelToJsonConverter;
 import org.apache.calcite.adapter.file.converters.XmlToJsonConverter;
@@ -44,6 +45,7 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
 
   private final Source source;
   private final String columnNameCasing;
+  private ExcelReadHints excelReadHints = ExcelReadHints.AUTO;
   private final @Nullable File operatingCacheDirectory;
   private @Nullable RelDataType rowType;
   private @Nullable List<Object> dataList;
@@ -153,7 +155,7 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
         } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
           // Re-convert Excel to JSON
           // Use the columnNameCasing configured for this table
-          MultiTableExcelToJsonConverter.convertFileToJson(originalSource, outputDir, true, columnNameCasing, columnNameCasing, outputDir.getParentFile());
+          MultiTableExcelToJsonConverter.convertFileToJson(originalSource, outputDir, true, columnNameCasing, columnNameCasing, outputDir.getParentFile(), null, excelReadHints);
           LOGGER.debug("Re-converted Excel file {}", originalSource.getName());
         } else if (fileName.endsWith(".xml")) {
           // Re-convert XML to JSON
@@ -185,6 +187,11 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
 
   @Override public RefreshBehavior getRefreshBehavior() {
     return RefreshBehavior.SINGLE_FILE;
+  }
+
+  /** How the Excel reader finds the tables of the workbook this table is converted from. */
+  public void setExcelReadHints(ExcelReadHints excelReadHints) {
+    this.excelReadHints = excelReadHints;
   }
 
   @Override public String toString() {
