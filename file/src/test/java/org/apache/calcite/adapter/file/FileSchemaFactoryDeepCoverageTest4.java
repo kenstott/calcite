@@ -1747,22 +1747,33 @@ public class FileSchemaFactoryDeepCoverageTest4 {
   // FileSchemaFactory: setTableConstraints
   // =======================================================================
 
-  @Test void testSetTableConstraintsStoresValues() throws Exception {
-    FileSchemaFactory factory = FileSchemaFactory.INSTANCE;
+  /**
+   * Constraints handed to the shared factory for one schema do not reach another schema it
+   * creates. They used to be kept on INSTANCE and applied to any later schema whose own operand
+   * had none, so tests running in parallel (and concurrent model loads) saw each other's.
+   */
+  @Test void testSetTableConstraintsLeavesNoStateForTheNextSchema() throws Exception {
+    File dir = tempDir.resolve("no_leaked_constraints").toFile();
+    assertTrue(dir.mkdirs());
+    java.nio.file.Files.write(new File(dir, "t1.csv").toPath(),
+        "id,name\n1,a\n2,b\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
     Map<String, Map<String, Object>> constraints = new HashMap<>();
-    constraints.put("t1", new HashMap<>());
-    factory.setTableConstraints(constraints, null);
+    Map<String, Object> t1 = new HashMap<>();
+    t1.put("primaryKey", java.util.Arrays.asList("id"));
+    constraints.put("t1", t1);
+    FileSchemaFactory.INSTANCE.setTableConstraints(constraints, null);
 
-    // Read back via reflection
-    Field field = FileSchemaFactory.class.getDeclaredField("tableConstraints");
-    field.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    Map<String, Map<String, Object>> stored = (Map<String, Map<String, Object>>) field.get(factory);
-    assertEquals(constraints, stored);
-
-    // Clean up
-    factory.setTableConstraints(null, null);
+    Map<String, Object> operand = new HashMap<>();
+    operand.put("directory", dir.getAbsolutePath());
+    operand.put("baseDirectory", dir.getAbsolutePath());
+    operand.put("storageType", "local");
+    Schema schema =
+        FileSchemaFactory.INSTANCE.create(mockParentSchema, uniqueSchemaName(), operand);
+    assertTrue(schema instanceof FileSchema, "the schema is a FileSchema: " + schema.getClass());
+    assertEquals(null, ((FileSchema) schema).getTableConstraints("t1"),
+        "the schema's operand declares no constraints, so t1 has none");
   }
+
 
   // =======================================================================
   // FileSchemaFactory: INSTANCE singleton
