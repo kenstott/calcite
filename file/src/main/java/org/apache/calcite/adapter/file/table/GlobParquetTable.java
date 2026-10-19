@@ -314,6 +314,9 @@ public class GlobParquetTable extends AbstractTable
       }
     }
 
+    // In path order: a directory lists its files in whatever order its filesystem keeps, and the
+    // first file is the column set every other one is checked against (requireSameColumns).
+    files.sort(java.util.Comparator.comparing(File::getPath));
     return files;
   }
 
