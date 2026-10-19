@@ -107,7 +107,13 @@ public class BeaResponseTransformer implements ResponseTransformer {
 
         // Some error codes are expected (e.g., no data for requested parameters)
         // Error code 101 with "Unknown error" typically means invalid parameter combination
-        boolean isNoDataError = "NO_DATA".equals(errorCode)
+        // BEA answers a year it has not published yet with {"number":"1","error":"no data found"}:
+        // no APIErrorCode at all, just that text. Matched exactly so any other uncoded error
+        // still throws; the "not yet published" period then stays empty and is asked again on
+        // the next run instead of failing the schema.
+        boolean isNotYetPublished = codeNode.isMissingNode()
+            && "no data found".equalsIgnoreCase(error.path("error").asText(""));
+        boolean isNoDataError = isNotYetPublished || "NO_DATA".equals(errorCode)
             || "PARAMETER_EMPTY".equals(errorCode)
             || ("101".equals(errorCode) && errorDesc.toLowerCase().contains("unknown error"));
         if (isNoDataError) {

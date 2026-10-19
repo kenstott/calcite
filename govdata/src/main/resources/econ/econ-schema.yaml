@@ -358,18 +358,6 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
-  # BEA's Activities of Multinational Enterprises (fdi_activities) publishes year N late in N+1
-  # (observed 2026-10-19: 2024 present, 2025 answers "no data found"). A plain dataLag 1 asks for
-  # 2025 all through 2026 and fails every attempt. dataLag 1 + releaseMonth 12 requests year N
-  # only from December of N+1; before that the end year is N-1. releaseMonth is an estimate of
-  # BEA's release month - if a December run answers "no data found", move it later.
-  year_range_fdi_activities: &year_range_fdi_activities
-    type: yearRange
-    start: "${GOVDATA_START_YEAR:2010}"
-    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
-    dataLag: 1
-    releaseMonth: 12
-
   # --- BEA Frequencies ---
   bea_frequencies: &bea_frequencies
     - A   # Annual
@@ -7625,7 +7613,8 @@ partitionedTables:
         - fdi_activities
       direction: *fdi_directions
       classification: *fdi_classifications
-      year: *year_range_fdi_activities
+      year: *year_range_from_2000  # BEA answers an unpublished year "no data found"; the
+      # transformer treats that as an empty period, so the newest year is asked each run
 
     materialize:
       enabled: true
