@@ -6363,6 +6363,9 @@ partitionedTables:
 views:
 
   - name: scotus_cases
+    # term passes through scotus_reports_cases.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: term, type: INTEGER, storedDigits: 4}
     comment: >
       Every decided U.S. Supreme Court case from the bound United States Reports and from
       supremecourt.gov, in one table with one row per case: the rows of scotus_reports_cases

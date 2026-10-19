@@ -195,7 +195,7 @@ public class PartitionedTableConfig {
     }
 
     /** A definition read from a {@code columnDefinitions} entry of a schema's YAML or JSON. */
-    static ColumnDefinition fromMap(Map<String, Object> m) {
+    public static ColumnDefinition fromMap(Map<String, Object> m) {
       Object digits = m.get("storedDigits");
       return new ColumnDefinition((String) m.get("name"), (String) m.get("type"),
           (String) m.get("sourceColumn"),

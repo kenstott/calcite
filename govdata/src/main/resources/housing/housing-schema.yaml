@@ -2418,6 +2418,9 @@ views:
       GROUP BY h.data_year, h.place_id, h.place_name
 
   - name: housing_permits_by_county
+    # year passes through building_permits.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       County-year rollup of building_permits: total_units (all structure
       sizes), single_family_units (1-unit only), multifamily_units (2-unit
@@ -2441,6 +2444,9 @@ views:
       FROM building_permits b
 
   - name: housing_affordability_by_state
+    # year passes through fair_market_rents.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       State-level rental affordability: average 2-bedroom Fair Market Rent
       against the HUD income limits for the same state and year. Bridges the
@@ -2462,6 +2468,9 @@ views:
                i.il50_4person, i.il80_4person
 
   - name: housing_mortgage_originations
+    # year passes through hmda_loans.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Originated mortgages (HMDA action_taken = 1) by state, year, and loan
       purpose — the housing-market volume cut. Joins to geo.state_ref via
@@ -2492,6 +2501,9 @@ views:
       GROUP BY o.state_abbr, o.state_name
 
   - name: housing_hmda_denial_rate_by_race
+    # year passes through hmda_applicant_demographics.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       HMDA denial funnel by state, year, and applicant race — originated
       (action_taken = 1) vs denied (action_taken = 3) loan counts, the core
@@ -2529,6 +2541,9 @@ views:
       GROUP BY s.county_fips, s.state_abbr
 
   - name: housing_subsidized_profile_by_county
+    # year passes through hud_subsidized_county.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       County-year resident profile for all HUD programs combined
       (program_code = '1') from hud_subsidized_county, across all loaded
