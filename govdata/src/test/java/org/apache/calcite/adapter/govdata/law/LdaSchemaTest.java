@@ -91,6 +91,9 @@ class LdaSchemaTest {
       return "constants_filing_types.json";
     case LdaApiProvider.CONTRIBUTION_ITEM_TYPES:
       return "constants_item_types.json";
+    case LdaApiProvider.ACTIVITY_BILLS:
+      // The recorded page's activities name no bill: one filing of it whose activity does.
+      return "filings_with_bills_page.json";
     default:
       return "filings_page.json";
     }
