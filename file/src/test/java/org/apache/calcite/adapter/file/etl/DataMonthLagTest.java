@@ -163,6 +163,20 @@ public class DataMonthLagTest {
     assertTrue(e.getMessage().contains("rather than setting it to 0"), e.getMessage());
   }
 
+  @Test void aFractionalYearLagIsRejectedNotTruncated() {
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> yearRange(map("dataLag", 1.9)));
+    assertTrue(e.getMessage().contains("dataMonthLag"), e.getMessage());
+  }
+
+  /** A 23-month lag reaches year N from December of N+1: 11 months after the year ends. */
+  @Test void aTwentyThreeMonthLagLandsTheNewestYearInDecember() {
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 11, 15));
+    assertEquals("2024", dataYears(yearRange(map("dataMonthLag", 23))).get(0));
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 12, 1));
+    assertEquals("2025", dataYears(yearRange(map("dataMonthLag", 23))).get(0));
+  }
+
   @Test void negativeMonthLagIsRejected() {
     assertThrows(IllegalArgumentException.class, () -> yearRange(map("dataMonthLag", -1)));
   }

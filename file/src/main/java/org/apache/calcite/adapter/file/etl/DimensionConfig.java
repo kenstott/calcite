@@ -520,7 +520,13 @@ public class DimensionConfig {
 
     Object dataLagObj = map.get("dataLag");
     if (dataLagObj instanceof Number) {
-      builder.dataLag(((Number) dataLagObj).intValue());
+      Number lagYears = (Number) dataLagObj;
+      if (lagYears.doubleValue() != lagYears.intValue()) {
+        throw new IllegalArgumentException("Dimension '" + builder.name + "': dataLag is whole "
+            + "years, got " + dataLagObj + " (it would be truncated to " + lagYears.intValue()
+            + "). Use dataMonthLag for a lag that is not a whole number of years.");
+      }
+      builder.dataLag(lagYears.intValue());
     } else if (dataLagObj instanceof String) {
       Integer resolved = VariableResolver.resolveInteger((String) dataLagObj);
       if (resolved != null) {
