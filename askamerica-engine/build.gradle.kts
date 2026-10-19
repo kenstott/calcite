@@ -85,7 +85,7 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17")
     implementation("org.slf4j:slf4j-api")
     // ClaimsServer keeps the browser extension's reports in a local DuckDB file.
-    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
+    implementation("org.duckdb:duckdb_jdbc:1.5.6.0")
     // Babel's SqlBabelParserImpl accepts the Postgres/DuckDB-shell "expr::type" infix cast
     // syntax that Calcite's default core parser has no grammar production for at all — a
     // parser-factory connection property (see McpServer's connection setup), not a dialect
@@ -128,7 +128,7 @@ dependencies {
     implementation("com.github.haifengl:smile-core:4.3.0") {
         // smile-base strictly pins duckdb_jdbc:1.2.0 (its own optional DataFrame-from-DuckDB
         // reader, unused here — StatsMlEngine builds DataFrames directly from extracted
-        // columns) which conflicts with this module's actual duckdb_jdbc:1.4.4.0 and fails
+        // columns) which conflicts with this module's actual duckdb_jdbc:1.5.6.0 and fails
         // Gradle's consistent-resolution check on the test classpath. Excluding it leaves
         // the project's own duckdb_jdbc version in charge everywhere.
         exclude(group = "org.duckdb", module = "duckdb_jdbc")

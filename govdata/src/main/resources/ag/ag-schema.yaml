@@ -50,6 +50,7 @@ column_templates:
         type: VARCHAR
       - name: year
         type: INTEGER
+        storedDigits: 4
 
   # Canonical NASS QuickStats output columns (shared by crop + livestock; NASS
   # returns a uniform record shape across sectors). Emitted by NassQuickStatsTransformer.

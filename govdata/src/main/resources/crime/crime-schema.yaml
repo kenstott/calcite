@@ -72,6 +72,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_state: &partition_state
     name: state_abbr
@@ -2193,7 +2194,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2342,7 +2343,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2481,7 +2482,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2607,7 +2608,7 @@ partitionedTables:
 
     columns:
       - name: year
-        type: string
+        type: integer
         nullable: true
         comment: Survey year
       - name: yearq
@@ -2793,6 +2794,9 @@ constraints:
 views:
 
   - name: crime_enforcement_equity
+    # year passes through cde_offenses.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Correlates FBI CDE monthly offense and clearance rates — averaged across each
       year's reported months, NOT summed to a true annual rate (see

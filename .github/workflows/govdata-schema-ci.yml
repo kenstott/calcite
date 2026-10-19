@@ -1,0 +1,36 @@
+name: GovData Schema CI
+
+# A govdata view that passes a stored-text integer column through (a year partition the
+# published table stores as text) must declare it in its columnDefinitions, or the DuckDB engine
+# serves the view's copy as text (GOV-075). Fails naming each view that does not.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'govdata/src/main/resources/**/*-schema.yaml'
+      - 'govdata/src/main/resources/duckdb/seed/iceberg-schema-cache.json'
+      - 'govdata/scripts/view_stored_text_check.py'
+      - '.github/workflows/govdata-schema-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  views:
+    name: Views declare their stored-text columns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install pyyaml==6.0.3 sqlglot==30.23.0
+
+      - name: Check views
+        run: python3 govdata/scripts/view_stored_text_check.py

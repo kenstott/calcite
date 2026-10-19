@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.etl;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -492,7 +493,60 @@ public class EtlPipelineConfig {
         materializeMap.put("columnComments", columnComments);
       }
     }
-    return materializeMap;
+    return withDeclaredPartitionTypes(tableMap, materializeMap);
+  }
+
+  /**
+   * Returns {@code materializeMap} with its partition columns typed as the table declares them.
+   *
+   * <p>The table's {@code partitions.columnDefinitions} is what readers serve; the writer types a
+   * partition column from {@code materialize.partition.columnDefinitions}, and wrote STRING for
+   * one that names none (govdata's year, declared INTEGER, stored as text). A materialize block
+   * that names no column definitions takes the table's; one that names a column the table also
+   * declares must give it the same type.
+   *
+   * @throws IllegalArgumentException if the two give a column different types
+   */
+  private static Map<String, Object> withDeclaredPartitionTypes(Map<String, Object> tableMap,
+      Map<String, Object> materializeMap) {
+    Map<String, Object> partitions = toMap(tableMap.get("partitions"));
+    Map<String, Object> partition = toMap(materializeMap.get("partition"));
+    if (partitions == null || partition == null
+        || !(partitions.get("columnDefinitions") instanceof List)) {
+      return materializeMap;
+    }
+    List<?> declared = (List<?>) partitions.get("columnDefinitions");
+    Object written = partition.get("columnDefinitions");
+    if (written instanceof List) {
+      Map<String, String> declaredTypes = new LinkedHashMap<>();
+      for (Object definition : declared) {
+        Map<String, Object> d = toMap(definition);
+        if (d != null && d.get("name") instanceof String && d.get("type") instanceof String) {
+          declaredTypes.put(((String) d.get("name")).toLowerCase(Locale.ROOT),
+              ((String) d.get("type")).toUpperCase(Locale.ROOT));
+        }
+      }
+      for (Object definition : (List<?>) written) {
+        Map<String, Object> w = toMap(definition);
+        if (w == null || !(w.get("name") instanceof String) || !(w.get("type") instanceof String)) {
+          continue;
+        }
+        String name = (String) w.get("name");
+        String declaredType = declaredTypes.get(name.toLowerCase(Locale.ROOT));
+        String writtenType = ((String) w.get("type")).toUpperCase(Locale.ROOT);
+        if (declaredType != null && !declaredType.equals(writtenType)) {
+          throw new IllegalArgumentException("Table '" + tableMap.get("name")
+              + "' declares partition column '" + name + "' as " + declaredType
+              + " but its materialize.partition.columnDefinitions writes it as " + writtenType);
+        }
+      }
+      return materializeMap;
+    }
+    Map<String, Object> typedPartition = new LinkedHashMap<>(partition);
+    typedPartition.put("columnDefinitions", declared);
+    Map<String, Object> typed = new LinkedHashMap<>(materializeMap);
+    typed.put("partition", typedPartition);
+    return typed;
   }
 
   /**

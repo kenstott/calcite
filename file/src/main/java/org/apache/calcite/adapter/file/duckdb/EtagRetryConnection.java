@@ -135,9 +135,20 @@ final class EtagRetryConnection {
   private static final Pattern ETAG_DRIFT = Pattern.compile(
       "ETag on reading file \"([^\"]+)\".*likely means the remote file has changed");
 
-  /** Matches DuckDB's view-on-view type-binding drift message (see class javadoc, mode 2). No file path is embedded, so recovery purges the whole cache_httpfs cache rather than one path. */
+  /**
+   * Matches DuckDB's view drift messages (see class javadoc, mode 2). No file path is embedded,
+   * so recovery purges the whole cache_httpfs cache rather than one path.
+   *
+   * <p>A same-count type change reads "Contents of view were altered: types don't match". A
+   * column-count change reads, on DuckDB 1.4, {@code Binder Error: table "unnamed_subquery" has
+   * 12 columns available but 13 columns specified}: a view keeps the column names it was bound
+   * with, so once the live table has fewer columns than that view was created over, every read of
+   * it fails this way (govdata's health.cdc_county_injury_mortality: a 13-column view over a
+   * 12-column live table). The same heal applies: recreate the view over the live table.
+   */
   private static final Pattern VIEW_TYPE_DRIFT = Pattern.compile(
-      "Contents of view were altered: types don't match");
+      "Contents of view were altered: types don't match"
+          + "|table \"unnamed_subquery\" has \\d+ columns available but \\d+ columns specified");
 
   /**
    * Matches a transient network failure from DuckDB's httpfs client (WAN endpoints like R2 see
@@ -200,7 +211,8 @@ final class EtagRetryConnection {
    *     cache (view-type drift — no path is embedded in that message), or {@code null} if this
    *     is not a recognized transient race and should propagate without a retry.
    */
-  private static String transientRaceTarget(Throwable t) {
+  // Package-private for EtagRetryViewColumnDriftTest.
+  static String transientRaceTarget(Throwable t) {
     for (Throwable cur = t; cur != null; cur = cur.getCause()) {
       String msg = cur.getMessage();
       if (msg == null) {

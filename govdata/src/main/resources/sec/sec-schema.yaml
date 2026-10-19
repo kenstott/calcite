@@ -202,6 +202,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_ticker: &partition_ticker
     name: ticker
@@ -1637,6 +1638,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INT
+          storedDigits: 4
     hooks:
       enabled: false
 

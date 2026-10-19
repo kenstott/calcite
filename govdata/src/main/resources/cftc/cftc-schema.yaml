@@ -118,6 +118,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: month
           type: INTEGER
     comment: >
@@ -1192,6 +1193,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       CFTC Commitments of Traders — Disaggregated Futures-Only report. Weekly (Tuesday)
       open interest and long/short/spread positions by trader category — producer/

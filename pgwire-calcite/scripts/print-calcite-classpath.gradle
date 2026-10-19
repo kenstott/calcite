@@ -34,7 +34,7 @@ rootProject {
         // the driver compileOnly so it is absent from runtimeClasspath. Without it the bundle
         // fails at startup with ClassNotFoundException: org.duckdb.DuckDBDriver (caught by the
         // adapters smoke job). Version matches file/build.gradle.kts.
-        dependencies.create("org.duckdb:duckdb_jdbc:1.4.4.0"))
+        dependencies.create("org.duckdb:duckdb_jdbc:1.5.6.0"))
       new File("/tmp/pgw-arrow-cp.txt").text = cfg.asPath
       println "WROTE /tmp/pgw-arrow-cp.txt (" + cfg.files.size() + " entries)"
     }

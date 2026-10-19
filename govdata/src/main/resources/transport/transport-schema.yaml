@@ -67,6 +67,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_month: &partition_month
     name: month
@@ -5116,6 +5117,9 @@ constraints:
 views:
 
   - name: airline_ontime_by_carrier_month
+    # year passes through airline_ontime.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Monthly on-time summary by reporting carrier (nationwide, not by route):
       flight counts, average arrival delay, cancellation rate, and the share of
@@ -5135,6 +5139,9 @@ views:
       GROUP BY o.year, o.month, o.reporting_airline
 
   - name: fatal_crashes_by_state_year
+    # year passes through fatal_crashes.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Fatal crashes, total fatalities, and pedestrians involved by state and
       year — the core FARS rollup over fatal_crashes, joinable to geo.state_ref

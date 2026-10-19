@@ -196,11 +196,14 @@ public class EntityBridgeListener implements TableLifecycleListener {
   static final String HONOREE_FIRST =
       "CASE WHEN " + HONOREE_COMMA + " THEN list_element(" + HONOREE_AFTER_COMMA + ", 1) "
       + "ELSE list_element(" + HONOREE_TOKENS + ", 1) END";
+  // Each middle name below is NULLIF(array_to_string(..), ''): no middle name is NULL, not ''.
+  // DuckDB 1.4 gave NULL for an empty list; 1.5 gives '', and any_value(middle_name) in
+  // stagePersonSource skips a NULL but not an '', so another row's real middle name would lose.
   static final String HONOREE_MIDDLE =
-      "CASE WHEN " + HONOREE_COMMA + " THEN array_to_string(list_slice(" + HONOREE_AFTER_COMMA
-      + ", 2, len(" + HONOREE_AFTER_COMMA + ")), ' ') "
-      + "ELSE array_to_string(list_slice(" + HONOREE_TOKENS + ", 2, len(" + HONOREE_TOKENS
-      + ") - 1), ' ') END";
+      "CASE WHEN " + HONOREE_COMMA + " THEN NULLIF(array_to_string(list_slice("
+      + HONOREE_AFTER_COMMA + ", 2, len(" + HONOREE_AFTER_COMMA + ")), ' '), '') "
+      + "ELSE NULLIF(array_to_string(list_slice(" + HONOREE_TOKENS + ", 2, len(" + HONOREE_TOKENS
+      + ") - 1), ' '), '') END";
 
   /** Person-shaped: not committee-shaped, and at least two name tokens once titles are stripped
    *  (a bare surname such as "Sen. Boozman" cannot be matched on first and last name). */
@@ -214,7 +217,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
   static final String JUSTICE_LAST = "list_element(" + JUSTICE_TOKENS + ", -1)";
   static final String JUSTICE_FIRST = "list_element(" + JUSTICE_TOKENS + ", 1)";
   static final String JUSTICE_MIDDLE =
-      "array_to_string(list_slice(" + JUSTICE_TOKENS + ", 2, len(" + JUSTICE_TOKENS + ") - 1), ' ')";
+      "NULLIF(array_to_string(list_slice(" + JUSTICE_TOKENS + ", 2, len(" + JUSTICE_TOKENS
+      + ") - 1), ' '), '')";
   static final String JUSTICE_FILTER = JUSTICE_CLEAN + " LIKE '% %'";
 
   /** One row per org-type entry in entity-resolution-plan.md's "Org-type sources" table. */
@@ -381,17 +385,17 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "s.candidate_id", "s.candidate_name",
           "split_part(s.candidate_name, ',', 1)",
           "list_element(string_split(trim(split_part(s.candidate_name, ',', 2)), ' '), 1)",
-          "array_to_string(list_slice(string_split("
+          "NULLIF(array_to_string(list_slice(string_split("
               + "trim(split_part(s.candidate_name, ',', 2)), ' '), 2, "
-              + "len(string_split(trim(split_part(s.candidate_name, ',', 2)), ' '))), ' ')",
+              + "len(string_split(trim(split_part(s.candidate_name, ',', 2)), ' '))), ' '), '')",
           null, "s.year", "fec_candidate_id"),
       new PersonSource(
           "sec", "insider_transactions", null,
           "s.reporting_person_cik", "s.reporting_person_name",
           "list_element(string_split(trim(s.reporting_person_name), ' '), 1)",
           "list_element(string_split(trim(s.reporting_person_name), ' '), 2)",
-          "array_to_string(list_slice(string_split(trim(s.reporting_person_name), ' '), 3, "
-              + "len(string_split(trim(s.reporting_person_name), ' '))), ' ')",
+          "NULLIF(array_to_string(list_slice(string_split(trim(s.reporting_person_name), ' '), 3, "
+              + "len(string_split(trim(s.reporting_person_name), ' '))), ' '), '')",
           SEC_PERSON_FILTER, null, "sec_reporting_person_cik"),
       new PersonSource(
           "health", "cms_open_payments", null,
@@ -407,8 +411,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
           null, "s.registrant_name",
           "list_element(string_split(trim(s.registrant_name), ' '), 1)",
           "list_element(string_split(trim(s.registrant_name), ' '), 2)",
-          "array_to_string(list_slice(string_split(trim(s.registrant_name), ' '), 3, "
-              + "len(string_split(trim(s.registrant_name), ' '))), ' ')",
+          "NULLIF(array_to_string(list_slice(string_split(trim(s.registrant_name), ' '), 3, "
+              + "len(string_split(trim(s.registrant_name), ' '))), ' '), '')",
           FAA_PERSON_FILTER, null, "faa_registrant_name"),
       // assignee_type '4'/'5' (US/foreign individual) — a patent assigned directly to a person
       // rather than a company; distinct from and excluded by the org-track's patents entry
@@ -429,9 +433,9 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "s.bioguide_id", "s.name_last_first",
           "split_part(s.name_last_first, ',', 1)",
           "list_element(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '), 1)",
-          "array_to_string(list_slice(string_split("
+          "NULLIF(array_to_string(list_slice(string_split("
               + "trim(split_part(s.name_last_first, ',', 2)), ' '), 2, "
-              + "len(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '))), ' ')",
+              + "len(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '))), ' '), '')",
           null, "s.congress", "officials_member_bioguide_id"),
       new PersonSource(
           "officials", "federal_judges", null,

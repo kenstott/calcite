@@ -4396,6 +4396,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             tableConfig.put("hadoopConfig", hadoopConfig);
           }
 
+          if (config.getPartitions() != null
+              && config.getPartitions().getColumnDefinitions() != null) {
+            tableConfig.put(IcebergTable.DECLARED_PARTITION_COLUMNS,
+                config.getPartitions().getColumnDefinitions());
+          }
           Source icebergSource = Sources.of(tablePath);
           IcebergTable icebergTableObj = new IcebergTable(icebergSource, tableConfig);
           Map<String, Object> constraintConfig = getTableConstraints(config.getName());

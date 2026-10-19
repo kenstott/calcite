@@ -78,6 +78,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_program: &partition_program
     name: program
@@ -4367,6 +4368,9 @@ partitionedTables:
       url: "https://opendata.usac.org/resource/r59r-rpip.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$where": "fund_type in('CAF II','CAF II Auc') AND filing_year='{year}'"
         "$limit": "50000"
       response:
@@ -4502,6 +4506,9 @@ partitionedTables:
       url: "https://opendata.usac.org/resource/w6qn-gx72.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$where": "year='{year}'"
         "$limit": "50000"
       response:
@@ -6775,6 +6782,9 @@ constraints:
 views:
 
   - name: soi_income_by_county_year
+    # year passes through soi_income_by_county.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       County-level revenue rollup: return counts, individual/exemption counts,
       adjusted gross income, and total income tax by county and tax year, summed
@@ -6795,6 +6805,9 @@ views:
       GROUP BY c.year, c.state_fips, c.county_fips, c.county_name
 
   - name: federal_spending_vs_income_tax_by_state_year
+    # year passes through usaspending_by_state.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Places each usaspending_by_state row (state, fiscal year, obligated_amount)
       beside its same-state, same-year SOI total-income-tax figure summed from
@@ -6832,6 +6845,9 @@ views:
         ON r.year = s.year AND r.state_abbr = s.state_abbr
 
   - name: nonprofit_financials
+    # year passes through exempt_org_990.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       One row per Form 990 filing: exempt_org_990's total_revenue, total_expenses,
       total_assets, return_type (990/990-EZ/990-PF), and tax_year, left-joined to
@@ -6855,6 +6871,9 @@ views:
         ON m.ein = f.ein
 
   - name: state_social_infrastructure_index
+    # year passes through govt_finance_by_unit.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Social Infrastructure Investment Index (SIII), per state per year, on a
       0-100 scale: 100 * (0.30*pct_capex + 0.20*pct_opex + 0.15*pct_beds +
@@ -7085,6 +7104,9 @@ views:
        AND u.year = a.audit_year
 
   - name: usaspending_assistance_by_county
+    # year passes through usaspending_assistance.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Federal assistance obligations by place-of-performance county x Assistance Listing (ALN,
       formerly CFDA number) x federal fiscal year (Oct-Sep; year = fiscal year of action_date):

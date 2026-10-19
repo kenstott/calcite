@@ -60,6 +60,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_state: &partition_state
     name: state

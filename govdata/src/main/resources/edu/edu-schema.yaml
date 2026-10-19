@@ -49,6 +49,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES Common Core of Data — Local Education Agency (district) directory.
@@ -263,6 +264,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES Common Core of Data — individual school directory.
@@ -506,6 +508,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NAEP (National Assessment of Educational Progress) state-level mean scale scores for
@@ -639,6 +642,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NAEP proficiency level distributions sourced from GetAdhocData ALD stattype calls.
@@ -796,6 +800,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: crdc_topic
           type: VARCHAR
 
@@ -1048,6 +1053,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES IPEDS Institutional Characteristics (HD survey) directory.
@@ -1260,6 +1266,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     # DQ sample cap (GOVDATA_DQ mode): completions is ~4.2M rows/year fully disaggregated.
     # Each year is a separate ZIP fetch-unit, so the cap samples every year while bounding
@@ -1496,6 +1503,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: form_type
           type: VARCHAR
 
@@ -1748,6 +1756,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES IPEDS IC_AY (Institutional Characteristics — Academic Year) survey.
@@ -1877,6 +1886,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Dept of Ed College Scorecard institution-level outcomes. Earnings, debt,
@@ -2079,6 +2089,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     # DQ sample cap (GOVDATA_DQ mode): ~150k program rows/year, paginated 100/page (~1,500
     # API calls/year). Each year is a separate fetch-unit, so the cap samples every year and
@@ -2221,6 +2232,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       IMLS Public Libraries Survey (PLS), outlet-level file — one row per
@@ -2377,6 +2389,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Census Bureau Annual Survey of School System Finances ("F-33"),
@@ -2602,6 +2615,7 @@ partitionedTables:
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: grade
           type: INTEGER
 

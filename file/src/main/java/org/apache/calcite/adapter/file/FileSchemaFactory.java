@@ -25,7 +25,6 @@ import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.materialize.MaterializationService;
-import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.model.ModelHandler;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.runtime.Hook;
@@ -81,9 +80,6 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
 
   /** Public singleton, per factory contract. */
   public static final FileSchemaFactory INSTANCE = new FileSchemaFactory();
-
-  // Store constraint metadata from model files
-  private Map<String, Map<String, Object>> tableConstraints;
 
   /** Name of the column that is implicitly created in a CSV stream table
    * to hold the data arrival time. */
@@ -735,17 +731,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.debug("FileSchemaFactory: Checking DuckDB conditions for schema '{}': engineConfig.getEngineType()={}, directoryPath={}, storageType={}",
                 name, engineConfig.getEngineType(), directoryPath, storageType);
 
-    // Prepare constraint metadata - used for both DuckDB and regular FileSchema
-    // Support both instance field (from setTableConstraints) and operand
-    Map<String, Map<String, Object>> constraintsToPass = this.tableConstraints;
-    LOGGER.info("FileSchemaFactory: instance tableConstraints = {}",
-        this.tableConstraints != null ? this.tableConstraints.size() + " tables" : "null");
+    // Constraint metadata, used for both DuckDB and regular FileSchema, comes from the operand
+    // alone: ModelHandler puts a model's table constraints there. INSTANCE is shared by every
+    // schema, so constraints kept on it could reach a schema created alongside or after.
+    Map<String, Map<String, Object>> constraintsToPass = operandTableConstraints;
     LOGGER.info("FileSchemaFactory: operand tableConstraints = {}",
         operandTableConstraints != null ? operandTableConstraints.size() + " tables" : "null");
-    if (operandTableConstraints != null && !operandTableConstraints.isEmpty()) {
-      // Operand constraints take precedence
-      constraintsToPass = operandTableConstraints;
-    }
 
     // Rewrite FK schema names if declaredSchemaName differs from actual schema name
     // Uses the literal schema name from YAML; by convention YAML uses lowercase.
@@ -1526,12 +1517,6 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     return true;
   }
 
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
-      List<JsonTable> tableDefinitions) {
-    this.tableConstraints = tableConstraints;
-    LOGGER.debug("Received constraint metadata for {} tables",
-        tableConstraints != null ? tableConstraints.size() : 0);
-  }
 
   /**
    * Registers SQL views as Calcite ViewTableMacro objects in the schema.
