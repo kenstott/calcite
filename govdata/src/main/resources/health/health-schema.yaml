@@ -5192,6 +5192,9 @@ partitionedTables:
       method: GET
       parameters:
         "$limit": "1000"
+        # Offset paging needs a total order: without one Socrata may repeat a row on a later page
+        # and skip another, so :id (the row's stable system id) fixes the order.
+        "$order": ":id"
       response:
         format: json
         pagination:
@@ -5847,6 +5850,9 @@ partitionedTables:
       method: GET
       parameters:
         "$limit": "1000"
+        # Offset paging needs a total order: without one Socrata may repeat a row on a later page
+        # and skip another, so :id (the row's stable system id) fixes the order.
+        "$order": ":id"
       response:
         format: json
         pagination:
