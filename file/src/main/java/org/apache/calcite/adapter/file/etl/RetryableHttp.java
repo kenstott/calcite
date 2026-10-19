@@ -175,6 +175,20 @@ public final class RetryableHttp {
         : new IOException("retries exhausted for " + SecretRedaction.redact(url));
   }
 
+  /**
+   * Waits before re-running a whole request whose response body failed mid-stream, using the same
+   * exponential backoff (from the source's {@code retryBackoffMs}) as {@link #openWithRetry}.
+   *
+   * @param attempt   zero-based number of the attempt that just failed
+   * @param rateLimit the source's declared rate-limit config
+   */
+  public static void backoffBeforeRetry(int attempt,
+      HttpSourceConfig.RateLimitConfig rateLimit) {
+    long baseBackoffMs = rateLimit.getRetryBackoffMs() > 0
+        ? rateLimit.getRetryBackoffMs() : DEFAULT_BASE_BACKOFF_MS;
+    backoff(attempt, -1L, baseBackoffMs);
+  }
+
   /** Enforces a minimum spacing of {@code 1000/requestsPerSecond} ms between calls, JVM-wide. */
   private static void throttle(int requestsPerSecond) {
     if (requestsPerSecond <= 0) {

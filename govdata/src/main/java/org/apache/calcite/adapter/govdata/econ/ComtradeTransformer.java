@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SecretRedaction;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import com.fasterxml.jackson.core.JsonFactory;
@@ -65,57 +66,127 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     if (url == null || url.isEmpty()) {
       throw new IllegalStateException("ComtradeTransformer: no URL in context");
     }
-    Map<String, String> reqHeaders = new LinkedHashMap<String, String>(context.getHeaders());
-    reqHeaders.put("Accept", "application/json");
-    HttpURLConnection conn =
-        RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
-    InputStream in = conn.getInputStream();
-    JsonParser parser = JSON_FACTORY.createParser(in);
+    if (context.getRateLimit() == null) {
+      throw new IllegalStateException(
+          "ComtradeTransformer: source declares no rateLimit, so maxRetries is unknown for "
+              + SecretRedaction.redact(url));
+    }
+    Fetch fetch = new Fetch(context, url);
+    if (!fetch.open()) {
+      return Collections.<Map<String, Object>>emptyList().iterator();
+    }
+    return new RecordIterator(fetch);
+  }
 
-    if (parser.nextToken() != JsonToken.START_OBJECT) {
-      close(parser, conn);
-      throw new IOException("Comtrade: expected top-level object for " + url);
+  /**
+   * One Comtrade request: opens the URL and positions a parser inside the {@code data} array. A
+   * connection reset or truncated body is a transport fault on an idempotent GET, so the whole
+   * fetch (open + body read) is re-run, up to the source's {@code rateLimit.maxRetries} in total,
+   * for as long as no row has been handed to the caller (a retry after that would duplicate rows).
+   */
+  private static final class Fetch {
+    private final RequestContext context;
+    private final String url;
+    private final String safeUrl;
+    private final Map<String, String> reqHeaders;
+    private final int maxRetries;
+    private int attempt;
+    JsonParser parser;
+    HttpURLConnection conn;
+
+    Fetch(RequestContext context, String url) {
+      this.context = context;
+      this.url = url;
+      this.safeUrl = SecretRedaction.redact(url);
+      this.reqHeaders = new LinkedHashMap<String, String>(context.getHeaders());
+      this.reqHeaders.put("Accept", "application/json");
+      this.maxRetries = context.getRateLimit().getMaxRetries();
     }
-    // Walk top-level fields until the "data" array; capture any error message on the way.
-    String errorMessage = null;
-    JsonToken t;
-    while ((t = parser.nextToken()) != null && t != JsonToken.END_OBJECT) {
-      if (t != JsonToken.FIELD_NAME) {
-        continue;
+
+    /**
+     * Opens the request, retrying transport faults while locating the {@code data} array.
+     *
+     * @return true with {@link #parser} inside the array; false when the response has no rows
+     */
+    boolean open() throws IOException {
+      while (true) {
+        try {
+          return openOnce();
+        } catch (IOException e) {
+          retryOrThrow(e);
+        }
       }
-      String field = parser.currentName();
-      if ("data".equals(field)) {
-        JsonToken arr = parser.nextToken();
-        if (arr == JsonToken.START_ARRAY) {
-          return new RecordIterator(parser, conn, url);
+    }
+
+    /** Prepares a re-run after a mid-body fault, or throws once retries are exhausted. */
+    void retryOrThrow(IOException cause) throws IOException {
+      closeQuietly();
+      if (attempt >= maxRetries) {
+        throw new IOException("Comtrade: read failed for " + safeUrl + " after "
+            + (attempt + 1) + " attempts", cause);
+      }
+      LOGGER.warn("Comtrade: {} while reading response (attempt {}/{}), retrying whole fetch of {}",
+          cause.toString(), attempt + 1, maxRetries + 1, safeUrl);
+      RetryableHttp.backoffBeforeRetry(attempt, context.getRateLimit());
+      attempt++;
+    }
+
+    void closeQuietly() {
+      if (conn != null) {
+        close(parser, conn);
+        conn = null;
+        parser = null;
+      }
+    }
+
+    private boolean openOnce() throws IOException {
+      conn = RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
+      parser = JSON_FACTORY.createParser(conn.getInputStream());
+      if (parser.nextToken() != JsonToken.START_OBJECT) {
+        closeQuietly();
+        throw new IllegalStateException("Comtrade: expected top-level object for " + safeUrl);
+      }
+      // Walk top-level fields until the "data" array; capture any error message on the way.
+      String errorMessage = null;
+      JsonToken t;
+      while ((t = parser.nextToken()) != null && t != JsonToken.END_OBJECT) {
+        if (t != JsonToken.FIELD_NAME) {
+          continue;
         }
-        // data present but null/empty object — no rows.
-        if (arr == JsonToken.VALUE_NULL) {
-          close(parser, conn);
-          return Collections.<Map<String, Object>>emptyList().iterator();
-        }
-        parser.skipChildren();
-      } else {
-        parser.nextToken();
-        if (("statusCode".equals(field) || "message".equals(field) || "error".equals(field))
-            && parser.currentToken().isScalarValue()) {
-          String v = parser.getValueAsString();
-          if (v != null && !v.isEmpty() && !"200".equals(v)) {
-            errorMessage = field + "=" + v;
+        String field = parser.currentName();
+        if ("data".equals(field)) {
+          JsonToken arr = parser.nextToken();
+          if (arr == JsonToken.START_ARRAY) {
+            return true;
           }
-        } else if (parser.currentToken().isStructStart()) {
+          // data present but null/empty object — no rows.
+          if (arr == JsonToken.VALUE_NULL) {
+            closeQuietly();
+            return false;
+          }
           parser.skipChildren();
+        } else {
+          parser.nextToken();
+          if (("statusCode".equals(field) || "message".equals(field) || "error".equals(field))
+              && parser.currentToken().isScalarValue()) {
+            String v = parser.getValueAsString();
+            if (v != null && !v.isEmpty() && !"200".equals(v)) {
+              errorMessage = field + "=" + v;
+            }
+          } else if (parser.currentToken().isStructStart()) {
+            parser.skipChildren();
+          }
         }
       }
+      closeQuietly();
+      String dims = context.getDimensionValues().isEmpty()
+          ? "" : " [dimensions: " + context.getDimensionValues() + "]";
+      if (errorMessage != null) {
+        throw new RuntimeException("Comtrade API error: " + errorMessage + dims);
+      }
+      LOGGER.debug("Comtrade: no data array for {}{}", safeUrl, dims);
+      return false;
     }
-    close(parser, conn);
-    String dims = context.getDimensionValues().isEmpty()
-        ? "" : " [dimensions: " + context.getDimensionValues() + "]";
-    if (errorMessage != null) {
-      throw new RuntimeException("Comtrade API error: " + errorMessage + dims);
-    }
-    LOGGER.debug("Comtrade: no data array for {}{}", url, dims);
-    return Collections.<Map<String, Object>>emptyList().iterator();
   }
 
   private static void close(JsonParser parser, HttpURLConnection conn) {
@@ -156,34 +227,48 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
 
   /** Lazy iterator over the {@code data} array; maps each Comtrade record to a clean row. */
   private static final class RecordIterator implements Iterator<Map<String, Object>> {
-    private final JsonParser parser;
-    private final HttpURLConnection conn;
-    private final String url;
+    private final Fetch fetch;
     private Map<String, Object> pending;
     private boolean closed;
     private long rowCount;
 
-    RecordIterator(JsonParser parser, HttpURLConnection conn, String url) {
-      this.parser = parser;
-      this.conn = conn;
-      this.url = url;
+    RecordIterator(Fetch fetch) {
+      this.fetch = fetch;
       advance();
     }
 
     @SuppressWarnings("unchecked")
     private void advance() {
-      try {
-        JsonToken t = parser.nextToken();
-        if (t == JsonToken.START_OBJECT) {
-          Map<String, Object> rec = MAPPER.readValue(parser, Map.class);
-          pending = map(rec);
-        } else {
-          pending = null;
-          finish();
+      while (true) {
+        try {
+          JsonToken t = fetch.parser.nextToken();
+          if (t == JsonToken.START_OBJECT) {
+            Map<String, Object> rec = MAPPER.readValue(fetch.parser, Map.class);
+            pending = map(rec);
+          } else {
+            pending = null;
+            finish();
+          }
+          return;
+        } catch (IOException e) {
+          if (rowCount > 0) {
+            // Rows already reached the caller: a re-fetch would duplicate them.
+            finish();
+            throw new RuntimeException("Comtrade: read failed for "
+                + SecretRedaction.redact(fetch.url) + " after " + rowCount + " rows", e);
+          }
+          try {
+            fetch.retryOrThrow(e);
+            if (!fetch.open()) {
+              pending = null;
+              closed = true;
+              return;
+            }
+          } catch (IOException exhausted) {
+            closed = true;
+            throw new RuntimeException(exhausted.getMessage(), exhausted.getCause());
+          }
         }
-      } catch (IOException e) {
-        finish();
-        throw new RuntimeException("Comtrade: read failed for " + url, e);
       }
     }
 
@@ -245,8 +330,9 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
         return;
       }
       closed = true;
-      close(parser, conn);
-      LOGGER.debug("Comtrade: streamed {} records from {}", rowCount, url);
+      fetch.closeQuietly();
+      LOGGER.debug("Comtrade: streamed {} records from {}", rowCount,
+          SecretRedaction.redact(fetch.url));
     }
 
     @Override public boolean hasNext() {
