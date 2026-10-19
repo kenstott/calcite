@@ -26,6 +26,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -79,10 +82,13 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
   }
 
   /**
-   * One Comtrade request: opens the URL and positions a parser inside the {@code data} array. A
-   * connection reset or truncated body is a transport fault on an idempotent GET, so the whole
-   * fetch (open + body read) is re-run, up to the source's {@code rateLimit.maxRetries} in total,
-   * for as long as no row has been handed to the caller (a retry after that would duplicate rows).
+   * One Comtrade request. The whole response body is first spooled to a temp file, and only then
+   * parsed, so a connection reset or truncated body is always seen before any row reaches the
+   * caller. That makes a re-fetch safe at any point in the body (there is nothing to duplicate):
+   * the fetch (open + body download) is re-run up to the source's {@code rateLimit.maxRetries}
+   * times. Streaming straight off the socket could only retry before the first row, which missed
+   * every reset that arrived a few hundred rows in. The spool is on disk, not in memory, because
+   * a big-reporter response runs to hundreds of thousands of records.
    */
   private static final class Fetch {
     private final RequestContext context;
@@ -92,7 +98,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     private final int maxRetries;
     private int attempt;
     JsonParser parser;
-    SharedHttpClient.Response conn;
+    private Path spool;
 
     Fetch(RequestContext context, String url) {
       this.context = context;
@@ -132,16 +138,36 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     }
 
     void closeQuietly() {
-      if (conn != null) {
-        close(parser, conn);
-        conn = null;
+      if (parser != null) {
+        try {
+          parser.close();
+        } catch (IOException ignored) {
+          // best-effort
+        }
         parser = null;
+      }
+      if (spool != null) {
+        try {
+          Files.deleteIfExists(spool);
+        } catch (IOException e) {
+          LOGGER.warn("Comtrade: could not delete spool file {}: {}", spool, e.toString());
+        }
+        spool = null;
       }
     }
 
     private boolean openOnce() throws IOException {
-      conn = RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
-      parser = JSON_FACTORY.createParser(conn.getInputStream());
+      SharedHttpClient.Response conn =
+          RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
+      try {
+        spool = Files.createTempFile("comtrade-", ".json");
+        try (InputStream in = conn.getInputStream()) {
+          Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
+        }
+      } finally {
+        conn.disconnect();
+      }
+      parser = JSON_FACTORY.createParser(Files.newInputStream(spool));
       if (parser.nextToken() != JsonToken.START_OBJECT) {
         closeQuietly();
         throw new IllegalStateException("Comtrade: expected top-level object for " + safeUrl);
@@ -187,15 +213,6 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
       LOGGER.debug("Comtrade: no data array for {}{}", safeUrl, dims);
       return false;
     }
-  }
-
-  private static void close(JsonParser parser, SharedHttpClient.Response conn) {
-    try {
-      parser.close();
-    } catch (IOException ignored) {
-      // best-effort
-    }
-    conn.disconnect();
   }
 
   private static Double toDouble(Object v) {
@@ -251,23 +268,11 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
           }
           return;
         } catch (IOException e) {
-          if (rowCount > 0) {
-            // Rows already reached the caller: a re-fetch would duplicate them.
-            finish();
-            throw new RuntimeException("Comtrade: read failed for "
-                + SecretRedaction.redact(fetch.url) + " after " + rowCount + " rows", e);
-          }
-          try {
-            fetch.retryOrThrow(e);
-            if (!fetch.open()) {
-              pending = null;
-              closed = true;
-              return;
-            }
-          } catch (IOException exhausted) {
-            closed = true;
-            throw new RuntimeException(exhausted.getMessage(), exhausted.getCause());
-          }
+          // The body is already complete on local disk, so this is malformed JSON, not a
+          // transport fault: retrying would fetch the same bytes.
+          finish();
+          throw new RuntimeException("Comtrade: unreadable response for "
+              + SecretRedaction.redact(fetch.url) + " after " + rowCount + " rows", e);
         }
       }
     }
