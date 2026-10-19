@@ -199,12 +199,29 @@ public class DimensionConfig {
   }
 
   /**
-   * Returns the data lag in years for YEAR_RANGE dimensions.
-   * When set, the end year is reduced by this amount (e.g., dataLag=1
-   * means data ends at current year - 1). Defaults to 0.
+   * Returns the WHOLE-YEAR part of the publication lag for YEAR_RANGE dimensions: the shift
+   * between the publish year ({@code year}) and the data year ({@code effective_year}).
+   *
+   * <p>The lag is one quantity however it was declared. {@code dataLag: 2} is 24 months and
+   * {@code dataMonthLag: 30} is 2 years 6 months; both are normalised into whole years (this
+   * method) plus a remainder under 12 months ({@link #getLagRemainderMonths()}). So
+   * {@code dataLag: 1} and {@code dataMonthLag: 12} are the same lag, label included. Null only
+   * when neither key was declared.
    */
   public Integer getDataLag() {
+    if (dataMonthLag != null) {
+      return dataMonthLag / 12;
+    }
     return dataLag;
+  }
+
+  /**
+   * The months of the publication lag beyond its whole years, always under 12. They cap the
+   * newest publish year (a 2-month lag stops the axis at last month's year) rather than shift it,
+   * because a part-year lag is not a constant offset from the publish year.
+   */
+  public int getLagRemainderMonths() {
+    return dataMonthLag != null ? dataMonthLag % 12 : 0;
   }
 
   /**

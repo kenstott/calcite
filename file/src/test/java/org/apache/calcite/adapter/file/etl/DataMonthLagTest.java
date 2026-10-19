@@ -177,6 +177,28 @@ public class DataMonthLagTest {
     assertTrue(e.getMessage().contains("whole number of months"), e.getMessage());
   }
 
+  /** A lag is one quantity: dataLag 1 and dataMonthLag 12 agree on the year label as well. */
+  @Test void aTwelveMonthLagIsAOneYearLagLabelIncluded() {
+    for (LocalDate d : new LocalDate[] {LocalDate.of(2026, 1, 15), LocalDate.of(2026, 10, 19),
+        LocalDate.of(2026, 12, 31)}) {
+      PipelineClock.setOverrideForTest(d);
+      assertEquals(years(yearRange(map("dataLag", 1))), years(yearRange(map("dataMonthLag", 12))),
+          "publish years on " + d);
+      assertEquals(dataYears(yearRange(map("dataLag", 1))),
+          dataYears(yearRange(map("dataMonthLag", 12))), "data years on " + d);
+    }
+  }
+
+  /** 30 months = 2 whole years (shift) + 6 months (cap): year stays the publish year. */
+  @Test void aThirtyMonthLagShiftsTwoYearsAndCapsBySixMonths() {
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 10, 19)); // minus 6 months = April 2026
+    assertEquals("2026", years(yearRange(map("dataMonthLag", 30))).get(0));
+    assertEquals("2024", dataYears(yearRange(map("dataMonthLag", 30))).get(0));
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 5, 19)); // minus 6 months = Nov 2025
+    assertEquals("2025", years(yearRange(map("dataMonthLag", 30))).get(0));
+    assertEquals("2023", dataYears(yearRange(map("dataMonthLag", 30))).get(0));
+  }
+
   /** A 23-month lag reaches year N from December of N+1: 11 months after the year ends. */
   @Test void aTwentyThreeMonthLagLandsTheNewestYearInDecember() {
     PipelineClock.setOverrideForTest(LocalDate.of(2026, 11, 15));

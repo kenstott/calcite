@@ -698,8 +698,9 @@ public class DimensionIterator {
     Integer maxYear = config.getMaxYear();
     Integer dataLag = config.getDataLag();
     int effectiveMax = (maxYear != null) ? maxYear : Integer.MAX_VALUE;
-    if (dataLag != null && dataLag > 0) {
-      int lagYear = PipelineClock.currentYear() - dataLag;
+    if ((dataLag != null && dataLag > 0) || config.getLagRemainderMonths() > 0) {
+      int lagYear = PipelineClock.today().withDayOfMonth(1)
+          .minusMonths(config.getLagRemainderMonths()).getYear() - (dataLag != null ? dataLag : 0);
       effectiveMax = Math.min(effectiveMax, lagYear);
     }
     boolean hasFilter = minYear != null || effectiveMax != Integer.MAX_VALUE;
@@ -798,12 +799,12 @@ public class DimensionIterator {
       step = 1;
     }
 
-    // Latest available data period = now minus the publication lag, in whichever unit declared it.
-    // Going through Period rather than subtracting years keeps the month case ordinary arithmetic:
-    // two months before January is the prior November, and the year falls out of that rather than
-    // needing a boundary special-case.
+    // Latest available data year = now minus the publication lag, however it was declared.
+    // Whole years of lag shift effective_year (applied via injectEffectiveYear); the remainder
+    // under a year caps the newest publish year.
     int latestEffectiveYear =
-        PipelineClock.today().withDayOfMonth(1).minus(config.getLagOffset()).getYear();
+        PipelineClock.today().withDayOfMonth(1).minusMonths(config.getLagRemainderMonths())
+            .getYear() - lag;
     Integer releaseMonth = config.getReleaseMonth();
     if (releaseMonth != null && releaseMonth >= 1 && releaseMonth <= 12) {
       int currentMonth = PipelineClock.currentMonth();
