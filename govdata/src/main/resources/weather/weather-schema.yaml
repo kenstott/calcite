@@ -1097,7 +1097,7 @@ partitionedTables:
       url: "https://usdmdataservices.unl.edu/api/CountyStatistics/GetDroughtSeverityStatisticsByAreaPercent?aoi={state_abbr}&startdate=1/1/{year}&enddate=12/31/{year}&statisticsType=1"
       method: GET
       response:
-        format: json
+        format: csv
       rateLimit:
         requestsPerSecond: 2.0
         retryOn: [429, 503]
