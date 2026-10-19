@@ -40,6 +40,17 @@ public final class SafeExcelToJsonConverter {
   public static void convertIfNeeded(File excelFile, File outputDir, boolean detectMultipleTables,
       String tableNameCasing, String columnNameCasing, File baseDirectory)
       throws IOException {
+    convertIfNeeded(excelFile, outputDir, detectMultipleTables, tableNameCasing, columnNameCasing,
+        baseDirectory, ExcelReadHints.AUTO);
+  }
+
+  /**
+   * Converts Excel file to JSON only if not already converted or if Excel file is newer, finding
+   * its tables as the operator's {@code hints} say.
+   */
+  public static void convertIfNeeded(File excelFile, File outputDir, boolean detectMultipleTables,
+      String tableNameCasing, String columnNameCasing, File baseDirectory, ExcelReadHints hints)
+      throws IOException {
     String canonicalPath = excelFile.getCanonicalPath();
     long excelLastModified = excelFile.lastModified();
 
@@ -70,7 +81,7 @@ public final class SafeExcelToJsonConverter {
     // Only convert if needed and not already converted in this session
     if (needsConversion && !CONVERTED_FILES.contains(canonicalPath)) {
       if (detectMultipleTables) {
-        MultiTableExcelToJsonConverter.convertFileToJson(excelFile, outputDir, true, tableNameCasing, columnNameCasing, baseDirectory);
+        MultiTableExcelToJsonConverter.convertFileToJson(excelFile, outputDir, true, tableNameCasing, columnNameCasing, baseDirectory, null, hints);
       } else {
         ExcelToJsonConverter.convertFileToJson(excelFile, outputDir, tableNameCasing, columnNameCasing, baseDirectory);
       }

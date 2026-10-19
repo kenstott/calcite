@@ -31,6 +31,7 @@ public final class SourceFileConversion {
   private final String columnNameCasing;
   private final String tableNameCasing;
   private final CrawlerConfiguration pages;
+  private final ExcelReadHints excelReadHints;
 
   /**
    * @param sourceRoot The schema's data directory: a file's path under it is kept in the names
@@ -40,16 +41,18 @@ public final class SourceFileConversion {
    * @param columnNameCasing The casing of column names
    * @param tableNameCasing The casing of table names
    * @param pages How an HTML page is read: its content, and whether its lists are tables
+   * @param excelReadHints How an Excel workbook's tables are found, where the operator says
    */
   public SourceFileConversion(@Nullable String sourceRoot, @Nullable File outputDirectory,
       @Nullable File baseDirectory, String columnNameCasing, String tableNameCasing,
-      CrawlerConfiguration pages) {
+      CrawlerConfiguration pages, ExcelReadHints excelReadHints) {
     this.sourceRoot = sourceRoot;
     this.outputDirectory = outputDirectory;
     this.baseDirectory = baseDirectory;
     this.columnNameCasing = columnNameCasing;
     this.tableNameCasing = tableNameCasing;
     this.pages = pages;
+    this.excelReadHints = excelReadHints;
   }
 
   public String columnNameCasing() {
@@ -58,6 +61,10 @@ public final class SourceFileConversion {
 
   public String tableNameCasing() {
     return tableNameCasing;
+  }
+
+  public ExcelReadHints excelReadHints() {
+    return excelReadHints;
   }
 
   public @Nullable File baseDirectory() {
@@ -96,7 +103,7 @@ public final class SourceFileConversion {
    */
   public boolean convertIfNeeded(File file) throws IOException {
     return FileConversionManager.convertIfNeeded(file, outputDirectoryOf(file), columnNameCasing,
-        tableNameCasing, baseDirectory, relativePathOf(file), pages);
+        tableNameCasing, baseDirectory, relativePathOf(file), pages, excelReadHints);
   }
 
   /**
@@ -108,6 +115,6 @@ public final class SourceFileConversion {
    */
   public boolean reconvert(File file, File outputDirectory) throws Exception {
     return FileConversionManager.convert(file, outputDirectory, columnNameCasing,
-        tableNameCasing, baseDirectory, relativePathOf(file), pages);
+        tableNameCasing, baseDirectory, relativePathOf(file), pages, excelReadHints);
   }
 }

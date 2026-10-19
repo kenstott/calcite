@@ -313,7 +313,8 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
         // Get the proper output directory from the parent directory structure
         File outputDir = cacheDir != null ? cacheDir : excelFile.getParentFile();
         org.apache.calcite.adapter.file.converters.SafeExcelToJsonConverter.convertIfNeeded(
-            excelFile, outputDir, true, tableNameCasing, columnNameCasing, outputDir.getParentFile());
+            excelFile, outputDir, true, tableNameCasing, columnNameCasing, outputDir.getParentFile(),
+            conversion.excelReadHints());
 
         // The source should already point to the correct JSON file
         // as it was set up during initial table discovery
