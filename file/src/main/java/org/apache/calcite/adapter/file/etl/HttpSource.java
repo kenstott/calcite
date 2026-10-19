@@ -36,7 +36,6 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -53,13 +52,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
@@ -107,88 +99,6 @@ public class HttpSource implements DataSource {
   private static final Pattern VAR_PATTERN = Pattern.compile("\\{([^}]+)\\}");
   @SuppressWarnings("UnusedVariable")
   private static final Pattern ENV_PATTERN = Pattern.compile("env:(.+)");
-
-  // DNS resolution for HttpURLConnection happens before the socket-level connect that
-  // setConnectTimeout bounds, and has no JDK-level timeout of its own - a stalled/blackholed
-  // resolver blocks the calling thread indefinitely with zero CPU and no log output, regardless
-  // of connectTimeout/readTimeout. Confirmed live across three unrelated upstream hosts
-  // (kenstott/govdata-ops#236/#139/#121): identical near-zero-CPU, multi-hour hangs that
-  // outlasted every configured timeout, which is what a DNS-layer stall looks like rather than
-  // upstream-specific slowness. connectWithDeadline wraps the connect+status-line call (the one
-  // call that triggers DNS resolution) with a hard deadline covering DNS through connect+read as
-  // one unit, using a daemon thread pool so an abandoned connect attempt never blocks JVM exit.
-  private static final ExecutorService CONNECT_DEADLINE_EXECUTOR =
-      Executors.newCachedThreadPool(new ThreadFactory() {
-        @Override public Thread newThread(Runnable r) {
-          Thread t = new Thread(r, "http-source-connect-deadline");
-          t.setDaemon(true);
-          return t;
-        }
-      });
-
-  // Added to connectTimeout+readTimeout to derive each call's deadline: DNS resolution isn't
-  // bounded by either of those, so the wrapper needs its own margin on top of them rather than
-  // reusing readTimeout's value (which would leave DNS with no budget of its own).
-  private static final long DNS_DEADLINE_BUFFER_MS = 30_000L;
-
-  /**
-   * Connects {@code conn} and returns its response code with a hard deadline covering DNS
-   * resolution through connect and the response status line as one unit - see
-   * {@link #CONNECT_DEADLINE_EXECUTOR}'s field doc for why this exists. The deadline is derived
-   * from {@code conn}'s own already-configured {@code connectTimeout}/{@code readTimeout}
-   * (call site's single source of truth) plus {@link #DNS_DEADLINE_BUFFER_MS} for the otherwise
-   * unbounded DNS step.
-   *
-   * <p>{@link HttpURLConnection#getResponseCode()} implicitly connects if not already connected,
-   * so this replaces both a standalone {@code conn.connect()} and the {@code getResponseCode()}
-   * call that follows it — for a request with no body to send. A POST/PUT request that writes a
-   * body first must instead call {@link #connectOnlyWithDeadline} before
-   * {@code conn.getOutputStream()}, since that call implicitly connects too, earlier than this
-   * one — see that method's doc.
-   */
-  private static int connectWithDeadline(HttpURLConnection conn) throws IOException {
-    return runWithConnectDeadline(conn, conn::getResponseCode);
-  }
-
-  /**
-   * Connects {@code conn} alone (no response read) with the same hard deadline as
-   * {@link #connectWithDeadline}. Required before {@code conn.getOutputStream()} on a POST/PUT
-   * request: writing the body implicitly connects first (DNS resolution included), which would
-   * otherwise happen with no deadline at all before {@link #connectWithDeadline}'s later
-   * {@code getResponseCode()} call ever runs. Calling {@code connect()} here first means
-   * {@code getOutputStream()} and the subsequent {@code getResponseCode()} both run against an
-   * already-connected connection, so neither re-triggers DNS resolution.
-   */
-  private static void connectOnlyWithDeadline(HttpURLConnection conn) throws IOException {
-    runWithConnectDeadline(conn, () -> {
-      conn.connect();
-      return null;
-    });
-  }
-
-  private static <T> T runWithConnectDeadline(HttpURLConnection conn,
-      java.util.concurrent.Callable<T> task) throws IOException {
-    long deadlineMs = conn.getConnectTimeout() + conn.getReadTimeout() + DNS_DEADLINE_BUFFER_MS;
-    Future<T> future = CONNECT_DEADLINE_EXECUTOR.submit(task);
-    try {
-      return future.get(deadlineMs, TimeUnit.MILLISECONDS);
-    } catch (TimeoutException e) {
-      future.cancel(true);
-      conn.disconnect();
-      throw new IOException("Connection deadline exceeded (" + deadlineMs + "ms) for "
-          + conn.getURL() + " - likely a stalled DNS resolution or blackholed connect, neither "
-          + "bounded by connectTimeout/readTimeout", e);
-    } catch (ExecutionException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof IOException) {
-        throw (IOException) cause;
-      }
-      throw new IOException("Connection failed: " + conn.getURL(), cause);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IOException("Interrupted while connecting: " + conn.getURL(), e);
-    }
-  }
 
   private final HttpSourceConfig config;
   private final Map<String, CacheEntry> cache;
@@ -678,7 +588,7 @@ public class HttpSource implements DataSource {
     // Live connection for a CSV_STREAM pull; disconnected on close() so an early stop
     // (e.g. dqRowLimit) aborts the download instead of transferring the whole (often huge)
     // body.
-    private HttpURLConnection csvConn = null;
+    private SharedHttpClient.Response csvConn = null;
 
     // Raw-cache accumulation: stream result records from each page to a temp file so
     // we never hold more than one page of Jackson nodes in heap at a time.
@@ -1141,9 +1051,9 @@ public class HttpSource implements DataSource {
 
   /** A live CSV stream opened from a CSV_STREAM source, with its owning connection. */
   private static final class CsvStream {
-    final HttpURLConnection conn;
+    final SharedHttpClient.Response conn;
     final InputStream stream;
-    CsvStream(HttpURLConnection conn, InputStream stream) {
+    CsvStream(SharedHttpClient.Response conn, InputStream stream) {
       this.conn = conn;
       this.stream = stream;
     }
@@ -1157,17 +1067,15 @@ public class HttpSource implements DataSource {
    */
   private CsvStream openCsvStream(String fullUrl, Map<String, String> variables) throws IOException {
     failFastIfKnown404(fullUrl);
-    HttpURLConnection conn =
-        (HttpURLConnection) java.net.URI.create(fullUrl).toURL().openConnection();
-    conn.setRequestMethod("GET");
-    conn.setConnectTimeout(30000);
-    conn.setReadTimeout(300000); // 5 min for large CSV files
-    conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
+    SharedHttpClient.Request request = new SharedHttpClient.Request("GET", fullUrl)
+        .setReadTimeoutMs(300000) // 5 min for large CSV files
+        .setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
     for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
-      conn.setRequestProperty(e.getKey(), e.getValue());
+      request.setRequestProperty(e.getKey(), e.getValue());
     }
-    applyAuth(conn, variables);
-    int status = connectWithDeadline(conn);
+    applyAuth(request, variables);
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
+    int status = conn.getResponseCode();
     if (status >= 400) {
       // A 403 from an S3-backed source can mean two very different things: a genuine gap
       // (weekend/holiday/future date — safe to skip via skipOn) or InvalidObjectState — the
@@ -1448,36 +1356,27 @@ public class HttpSource implements DataSource {
   private String doRequestWithBody(String urlString, Map<String, String> variables,
       Map<String, Object> body) throws IOException {
     failFastIfKnown404(urlString);
-    java.net.URL url = java.net.URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    SharedHttpClient.Request request = new SharedHttpClient.Request(config.getMethod().name(),
+        urlString).setReadTimeoutMs(120000);
+    applyHeadersAndAuth(request, variables);
 
-    try {
-      conn.setRequestMethod(config.getMethod().name());
-      conn.setConnectTimeout(30000);
-      conn.setReadTimeout(120000);
-
-      applyHeadersAndAuth(conn, variables);
-
-      // Send body
-      if (config.getMethod() == HttpSourceConfig.HttpMethod.POST
-          || config.getMethod() == HttpSourceConfig.HttpMethod.PUT) {
-        conn.setDoOutput(true);
-        String bodyContent = serializeBody(body, config.getBodyFormat(), variables);
-        String contentType = config.getBodyFormat() == HttpSourceConfig.BodyFormat.JSON
-            ? "application/json"
-            : "application/x-www-form-urlencoded";
-        if (conn.getRequestProperty("Content-Type") == null) {
-          conn.setRequestProperty("Content-Type", contentType);
-        }
-        LOGGER.debug("Sending batched body: {} bytes", bodyContent.length());
-        connectOnlyWithDeadline(conn);
-        try (OutputStream os = conn.getOutputStream()) {
-          os.write(bodyContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-          os.flush();
-        }
+    // Send body
+    if (config.getMethod() == HttpSourceConfig.HttpMethod.POST
+        || config.getMethod() == HttpSourceConfig.HttpMethod.PUT) {
+      String bodyContent = serializeBody(body, config.getBodyFormat(), variables);
+      String contentType = config.getBodyFormat() == HttpSourceConfig.BodyFormat.JSON
+          ? "application/json"
+          : "application/x-www-form-urlencoded";
+      if (request.getRequestProperty("Content-Type") == null) {
+        request.setRequestProperty("Content-Type", contentType);
       }
+      LOGGER.debug("Sending batched body: {} bytes", bodyContent.length());
+      request.setBody(bodyContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
 
-      int responseCode = connectWithDeadline(conn);
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
+    try {
+      int responseCode = conn.getResponseCode();
       LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
@@ -1608,29 +1507,16 @@ public class HttpSource implements DataSource {
   }
 
   /** Parses a Retry-After header (delta-seconds or HTTP-date) to ms, capped; -1 if absent. */
-  private static long parseRetryAfter(HttpURLConnection conn) {
-    String ra = conn.getHeaderField("Retry-After");
-    if (ra == null || ra.trim().isEmpty()) {
-      return -1L;
-    }
-    try {
-      return Math.min(RETRY_AFTER_CAP_MS, Long.parseLong(ra.trim()) * 1000L);
-    // fallback-guard: allow Retry-After parsing tries delta-seconds first and, on NumberFormatException, retries with HTTP-date parsing via conn.getHeaderFieldDate — a genuine alternate-format parse strategy, not a masked failure.
-    } catch (NumberFormatException notSeconds) {
-      long when = conn.getHeaderFieldDate("Retry-After", -1L);
-      if (when > 0L) {
-        long delta = when - System.currentTimeMillis();
-        return delta <= 0L ? 0L : Math.min(RETRY_AFTER_CAP_MS, delta);
-      }
-      return -1L;
-    }
+  private static long parseRetryAfter(SharedHttpClient.Response conn) {
+    long ms = RetryableHttp.parseRetryAfterMs(conn);
+    return ms < 0L ? -1L : Math.min(RETRY_AFTER_CAP_MS, ms);
   }
 
   /**
    * Sets the default User-Agent (when not overridden), the configured headers (skipping
    * values that are empty after substitution), and authentication on the connection.
    */
-  private void applyHeadersAndAuth(HttpURLConnection conn, Map<String, String> variables) {
+  private void applyHeadersAndAuth(SharedHttpClient.Request conn, Map<String, String> variables) {
     if (config.getHeaders().get("User-Agent") == null) {
       conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
     }
@@ -1660,15 +1546,12 @@ public class HttpSource implements DataSource {
   private String resolveDownloadUrl(String resolverUrl,
       HttpSourceConfig.UrlResolverConfig resolver, Map<String, String> variables)
       throws IOException {
-    URL url = java.net.URI.create(resolverUrl).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    SharedHttpClient.Request request =
+        new SharedHttpClient.Request("GET", resolverUrl).setReadTimeoutMs(120000);
+    applyHeadersAndAuth(request, variables);
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(30000);
-      conn.setReadTimeout(120000);
-      applyHeadersAndAuth(conn, variables);
-
-      int responseCode = connectWithDeadline(conn);
+      int responseCode = conn.getResponseCode();
       if (responseCode < 200 || responseCode >= 300) {
         String errorBody = readResponse(conn.getErrorStream());
         throw new IOException("URL resolver HTTP " + responseCode + " for " + resolverUrl
@@ -1701,14 +1584,9 @@ public class HttpSource implements DataSource {
   private String doRequest(String urlString, Map<String, String> variables,
       String rawCachePath, Map<String, Object> bodyOverride) throws IOException {
     failFastIfKnown404(urlString);
-    URL url = java.net.URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-    try {
-      conn.setRequestMethod(config.getMethod().name());
-      conn.setConnectTimeout(30000);
-      conn.setReadTimeout(120000);
-
+    SharedHttpClient.Request request = new SharedHttpClient.Request(config.getMethod().name(),
+        urlString).setReadTimeoutMs(120000);
+    {
       // Log headers being used for debugging
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("HTTP {} {} with {} custom headers",
@@ -1719,12 +1597,11 @@ public class HttpSource implements DataSource {
         }
       }
 
-      applyHeadersAndAuth(conn, variables);
+      applyHeadersAndAuth(request, variables);
 
       // Handle POST/PUT body if needed
       if (config.getMethod() == HttpSourceConfig.HttpMethod.POST
           || config.getMethod() == HttpSourceConfig.HttpMethod.PUT) {
-        conn.setDoOutput(true);
         Map<String, Object> requestBody = bodyOverride != null ? bodyOverride : config.getBody();
         if (requestBody != null && !requestBody.isEmpty()) {
           String bodyContent = serializeBody(requestBody, config.getBodyFormat(), variables);
@@ -1732,19 +1609,18 @@ public class HttpSource implements DataSource {
           String contentType = config.getBodyFormat() == HttpSourceConfig.BodyFormat.JSON
               ? "application/json"
               : "application/x-www-form-urlencoded";
-          if (conn.getRequestProperty("Content-Type") == null) {
-            conn.setRequestProperty("Content-Type", contentType);
+          if (request.getRequestProperty("Content-Type") == null) {
+            request.setRequestProperty("Content-Type", contentType);
           }
           LOGGER.debug("Sending body: {}", bodyContent);
-          connectOnlyWithDeadline(conn);
-          try (OutputStream os = conn.getOutputStream()) {
-            os.write(bodyContent.getBytes(StandardCharsets.UTF_8));
-            os.flush();
-          }
+          request.setBody(bodyContent.getBytes(StandardCharsets.UTF_8));
         }
       }
+    }
 
-      int responseCode = connectWithDeadline(conn);
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
+    try {
+      int responseCode = conn.getResponseCode();
       LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
@@ -2295,7 +2171,7 @@ public class HttpSource implements DataSource {
   /**
    * Applies authentication to the connection.
    */
-  private void applyAuth(HttpURLConnection conn, Map<String, String> variables) {
+  private void applyAuth(SharedHttpClient.Request conn, Map<String, String> variables) {
     HttpSourceConfig.AuthConfig auth = config.getAuth();
     if (auth.getType() == HttpSourceConfig.AuthType.NONE) {
       return;
@@ -3521,7 +3397,11 @@ public class HttpSource implements DataSource {
     if (e instanceof java.io.EOFException
         || (e.getMessage() != null
             && (e.getMessage().contains("Premature EOF")
-                || e.getMessage().contains("Connection reset")))) {
+                || e.getMessage().contains("Connection reset")
+                // java.net.http: "fixed content-length: N, bytes received: M" and
+                // "chunked transfer encoding, state: READING_DATA"
+                || e.getMessage().contains("bytes received")
+                || e.getMessage().contains("chunked transfer encoding, state")))) {
       return true;
     }
 
@@ -3769,20 +3649,17 @@ public class HttpSource implements DataSource {
    * Reuses the source's User-Agent and auth configuration.
    */
   private ProbeResult probeHead(String urlString, Map<String, String> vars) throws IOException {
-    URL url = java.net.URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    // Throttled upstreams (e.g. the USDA FIA datamart, ~800 KB/s) can take well over 15s just
+    // to answer a HEAD. A short read timeout here makes the per-unit freshness probe fail and
+    // fall back to a full fetch + re-materialise on every run — the exact re-write this gate is
+    // meant to prevent. Match FiaStateArchive's 60s HEAD; a HEAD body is tiny, so this only ever
+    // waits longer for slow servers and never delays fast ones.
+    SharedHttpClient.Request request =
+        new SharedHttpClient.Request("HEAD", urlString).setReadTimeoutMs(60000);
+    applyProbeHeaders(request, vars);
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
-      conn.setRequestMethod("HEAD");
-      conn.setConnectTimeout(30000);
-      // Throttled upstreams (e.g. the USDA FIA datamart, ~800 KB/s) can take well over 15s just
-      // to answer a HEAD. A short read timeout here makes the per-unit freshness probe fail and
-      // fall back to a full fetch + re-materialise on every run — the exact re-write this gate is
-      // meant to prevent. Match FiaStateArchive's 60s HEAD; a HEAD body is tiny, so this only ever
-      // waits longer for slow servers and never delays fast ones.
-      conn.setReadTimeout(60000);
-      conn.setInstanceFollowRedirects(true);
-      applyProbeHeaders(conn, vars);
-      int code = connectWithDeadline(conn);
+      int code = conn.getResponseCode();
       LOGGER.debug("Freshness HEAD {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       return new ProbeResult(headers, null);
@@ -3796,15 +3673,12 @@ public class HttpSource implements DataSource {
    * Used for VERSION, COUNT, and sidecar-CHECKSUM probes.
    */
   private ProbeResult probeGet(String urlString, Map<String, String> vars) throws IOException {
-    URL url = java.net.URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    SharedHttpClient.Request request =
+        new SharedHttpClient.Request("GET", urlString).setReadTimeoutMs(30000);
+    applyProbeHeaders(request, vars);
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
-      conn.setRequestMethod("GET");
-      conn.setConnectTimeout(15000);
-      conn.setReadTimeout(30000);
-      conn.setInstanceFollowRedirects(true);
-      applyProbeHeaders(conn, vars);
-      int code = connectWithDeadline(conn);
+      int code = conn.getResponseCode();
       LOGGER.debug("Freshness GET {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
@@ -3830,24 +3704,16 @@ public class HttpSource implements DataSource {
     }
     String requestBody =
         OBJECT_MAPPER.writeValueAsString(Collections.singletonMap("query", query));
-    URL url = java.net.URI.create(urlString).toURL();
-    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    SharedHttpClient.Request request = new SharedHttpClient.Request("POST", urlString)
+        .setReadTimeoutMs(30000)
+        .setBody(requestBody.getBytes(StandardCharsets.UTF_8));
+    applyProbeHeaders(request, vars);
+    if (request.getRequestProperty("Content-Type") == null) {
+      request.setRequestProperty("Content-Type", "application/json");
+    }
+    SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
-      conn.setRequestMethod("POST");
-      conn.setConnectTimeout(15000);
-      conn.setReadTimeout(30000);
-      conn.setInstanceFollowRedirects(true);
-      conn.setDoOutput(true);
-      applyProbeHeaders(conn, vars);
-      if (conn.getRequestProperty("Content-Type") == null) {
-        conn.setRequestProperty("Content-Type", "application/json");
-      }
-      connectOnlyWithDeadline(conn);
-      try (OutputStream os = conn.getOutputStream()) {
-        os.write(requestBody.getBytes(StandardCharsets.UTF_8));
-        os.flush();
-      }
-      int code = connectWithDeadline(conn);
+      int code = conn.getResponseCode();
       LOGGER.debug("Freshness GraphQL POST {} -> {}", urlString, code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
@@ -3864,7 +3730,7 @@ public class HttpSource implements DataSource {
    * Applies the configured User-Agent, custom headers, and auth to a probe connection.
    * Mirrors the header/auth logic in {@link #doRequest} without the body handling.
    */
-  private void applyProbeHeaders(HttpURLConnection conn, Map<String, String> vars) {
+  private void applyProbeHeaders(SharedHttpClient.Request conn, Map<String, String> vars) {
     if (config.getHeaders().get("User-Agent") == null) {
       conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
     }
@@ -3881,7 +3747,7 @@ public class HttpSource implements DataSource {
    * Collects all response headers from a connection into a plain {@code Map<String,String>}.
    * The first entry in each header field list is used (standard HTTP behaviour).
    */
-  private Map<String, String> captureHeaders(HttpURLConnection conn) {
+  private Map<String, String> captureHeaders(SharedHttpClient.Response conn) {
     Map<String, String> result = new LinkedHashMap<String, String>();
     Map<String, List<String>> fields = conn.getHeaderFields();
     if (fields != null) {

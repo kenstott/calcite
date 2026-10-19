@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.SecretRedaction;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -25,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -92,7 +92,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     private final int maxRetries;
     private int attempt;
     JsonParser parser;
-    HttpURLConnection conn;
+    SharedHttpClient.Response conn;
 
     Fetch(RequestContext context, String url) {
       this.context = context;
@@ -189,7 +189,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     }
   }
 
-  private static void close(JsonParser parser, HttpURLConnection conn) {
+  private static void close(JsonParser parser, SharedHttpClient.Response conn) {
     try {
       parser.close();
     } catch (IOException ignored) {
