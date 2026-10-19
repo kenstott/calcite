@@ -112,6 +112,22 @@ public final class ModelOperand {
     return s != null ? "true".equalsIgnoreCase(s.trim()) : defaultValue;
   }
 
+  /**
+   * List value at {@code path}; an empty list when the key is absent (an absent list means
+   * "none configured"). A present value that is not a list is a configuration error.
+   */
+  public static List<?> getList(String path) {
+    Object v = navigate(path);
+    if (v == null) {
+      return java.util.Collections.emptyList();
+    }
+    if (!(v instanceof List)) {
+      throw new IllegalArgumentException("Model operand '" + path + "' must be a list but is "
+          + v.getClass().getSimpleName());
+    }
+    return (List<?>) v;
+  }
+
   /** True if a non-null value exists at {@code path}. */
   public static boolean has(String path) {
     return navigate(path) != null;

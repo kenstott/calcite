@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.research;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -67,6 +68,9 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String PROJECTS_ENDPOINT = "https://api.reporter.nih.gov/v2/projects/search";
   private static final String PUBLICATIONS_ENDPOINT = "https://api.reporter.nih.gov/v2/publications/search";
+  /** Model path of the confirmed-broken appl_id list (schema YAML {@code excludeApplIds}). */
+  static final String EXCLUDE_APPL_IDS_PATH =
+      "research.partitionedTables.nih_publications.excludeApplIds";
   private static final String ICITE_ENDPOINT = "https://icite.od.nih.gov/api/pubs";
   private static final int PAGE_SIZE = 500;
   // iCite is a GET with pmids in the query string; 400 ids stays well under its URL-size limit
@@ -78,6 +82,18 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   // Confirmed live via curl: offset=9500 succeeds, offset=10000 returns HTTP 400.
   private static final int MAX_PUBLICATIONS_OFFSET = 9500;
 
+  private final String publicationsEndpoint;
+
+  /** Production constructor: the live RePORTER publications endpoint. */
+  public NihReporterPublicationsProvider() {
+    this(PUBLICATIONS_ENDPOINT);
+  }
+
+  /** Test seam: points the publications calls at another endpoint. */
+  NihReporterPublicationsProvider(String publicationsEndpoint) {
+    this.publicationsEndpoint = publicationsEndpoint;
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
     String year = variables.get("year");
@@ -87,7 +103,20 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       return java.util.Collections.emptyIterator();
     }
 
-    List<Long> applIds = fetchApplIds(year, ic, rawCache);
+    List<Long> allApplIds = fetchApplIds(year, ic, rawCache);
+    Set<Long> excluded = loadExcludedApplIds();
+    List<Long> applIds = new ArrayList<Long>(allApplIds.size());
+    int excludedCount = 0;
+    for (Long id : allApplIds) {
+      if (excluded.contains(id)) {
+        excludedCount++;
+        LOGGER.warn("nih_publications: excluding appl_id {} for fy={} ic={} (listed in "
+            + "excludeApplIds: RePORTER publications/search returns HTTP 500 for it)",
+            id, year, ic);
+      } else {
+        applIds.add(id);
+      }
+    }
     // Offset paging over an unsorted result set can return the same link on more than one page,
     // so (appl_id, pmid) is deduplicated to keep it unique within the slice.
     java.util.Map<String, Map<String, Object>> byLink =
@@ -101,9 +130,19 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     }
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(byLink.values());
     attachPublicationYears(rows, rawCache);
-    LOGGER.info("nih_publications: {} publication links for fy={} ic={} ({} appl_ids)",
-        rows.size(), year, ic, applIds.size());
+    LOGGER.info("nih_publications: {} publication links for fy={} ic={} ({} appl_ids, "
+        + "{} excluded via excludeApplIds)", rows.size(), year, ic, applIds.size(),
+        excludedCount);
     return rows.iterator();
+  }
+
+  /** Reads the schema-level list of confirmed-broken appl_ids. */
+  static Set<Long> loadExcludedApplIds() {
+    Set<Long> ids = new LinkedHashSet<Long>();
+    for (Object o : ModelOperand.getList(EXCLUDE_APPL_IDS_PATH)) {
+      ids.add(Long.valueOf(String.valueOf(o).trim()));
+    }
+    return ids;
   }
 
   /** Sets {@code pub_year} on every row from iCite, one batched lookup per {@link #ICITE_BATCH} pmids. */
@@ -179,8 +218,53 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    * appl_ids from other slices are captured correctly when their own (year, agency_ic) combo is
    * walked instead.
    */
-  private List<Map<String, Object>> fetchPublicationsForBatch(List<Long> applIdBatch, String year,
+  List<Map<String, Object>> fetchPublicationsForBatch(List<Long> applIdBatch, String year,
       RawCache rawCache, int batchIndex) throws IOException {
+    return fetchPublicationsForBatchPart(applIdBatch, year, rawCache,
+        String.valueOf(batchIndex));
+  }
+
+  /**
+   * Fetches one id list; on HTTP 500 splits it in half and recurses ({@code label} names the
+   * split path), and a single id that still fails 500 throws naming it.
+   */
+  private List<Map<String, Object>> fetchPublicationsForBatchPart(List<Long> ids, String year,
+      RawCache rawCache, String label) throws IOException {
+    try {
+      return fetchPublicationsPages(ids, year, rawCache, "batch" + label);
+    } catch (IOException e) {
+      if (!isHttp500(e)) {
+        throw e;
+      }
+      if (ids.size() == 1) {
+        throw new IOException("NIH RePORTER publications/search returns HTTP 500 for appl_id "
+            + ids.get(0) + " (fy=" + year + "); confirm it is poison and add it to "
+            + "excludeApplIds in research-schema.yaml nih_publications", e);
+      }
+      int mid = ids.size() / 2;
+      LOGGER.warn("nih_publications: HTTP 500 for batch{} of {} appl_ids (fy={}); splitting "
+          + "into {} + {}", label, ids.size(), year, mid, ids.size() - mid);
+      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+      rows.addAll(fetchPublicationsForBatchPart(ids.subList(0, mid), year, rawCache,
+          label + "a"));
+      rows.addAll(fetchPublicationsForBatchPart(ids.subList(mid, ids.size()), year, rawCache,
+          label + "b"));
+      return rows;
+    }
+  }
+
+  private static boolean isHttp500(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      String m = t.getMessage();
+      if (m != null && m.startsWith("NIH RePORTER HTTP 500")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private List<Map<String, Object>> fetchPublicationsPages(List<Long> applIdBatch, String year,
+      RawCache rawCache, String batchLabel) throws IOException {
     java.util.Set<Long> batchSet = new java.util.HashSet<Long>(applIdBatch);
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     StringBuilder idsJson = new StringBuilder();
@@ -194,8 +278,8 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     while (offset <= MAX_PUBLICATIONS_OFFSET) {
       String body = "{\"criteria\":{\"appl_ids\":[" + idsJson + "]},\"offset\":" + offset
           + ",\"limit\":" + PAGE_SIZE + "}";
-      JsonNode root = postJson(PUBLICATIONS_ENDPOINT, body, rawCache,
-          "pubs-batch" + batchIndex + "-offset-" + offset);
+      JsonNode root = postJson(publicationsEndpoint, body, rawCache,
+          "pubs-" + batchLabel + "-offset-" + offset);
       JsonNode results = root.path("results");
       if (!results.isArray() || results.size() == 0) {
         break;
