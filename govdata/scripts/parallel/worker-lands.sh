@@ -81,6 +81,14 @@ LANDS_SCHEMA_YAML="$GOVDATA_ROOT/src/main/resources/lands/lands-schema.yaml"
 run_lands_model() {
   local model_name=$1 enabled_tables=$2 start_year=$3 end_year=${4:-}
 
+  # Every group funnels through here, so GOVDATA_TABLES (force-reprocess.sh --tables) is
+  # applied once: a group with none of the requested tables is skipped, not run.
+  enabled_tables="$(filter_enabled_tables "$(echo "$enabled_tables" | tr -d '" ')")"
+  if [ -z "$enabled_tables" ]; then
+    log_info "$WORKER_ID: skipping $model_name — no tables in GOVDATA_TABLES=${GOVDATA_TABLES:-}"
+    return 0
+  fi
+
   local model_file="$MODEL_DIR/${model_name}.json"
   local parquet_dir="${GOVDATA_PARQUET_DIR}/lands"
   local cache_dir="${GOVDATA_CACHE_DIR}/lands"
@@ -214,9 +222,11 @@ case "$MODE" in
     # va_facilities above, dispatched unconditionally so a scoped force-reprocess.sh reaches it.
     run_lands_model "lands-historical-blm-oil-gas-acreage" \
       '"blm_oil_gas_acreage"' "$START" "$END"
-    if [ "$MODE" = "historical" ]; then
+    if [ "$MODE" = "historical" ] || [ -n "${GOVDATA_TABLES:-}" ]; then
       # Full manual/`all` backfill: also do the remaining non-period tables (the per-year pool
-      # slots do not; blm_field_offices is now covered unconditionally above).
+      # slots do not; blm_field_offices is now covered unconditionally above). A scoped
+      # --tables run always arrives as a numeric year range, so it reaches these groups too;
+      # run_lands_model drops every group that holds none of the requested tables.
       run_lands_model "lands-historical-static" \
         '"national_forests", "nps_units", "padus_federal_fee_lands"' "$START" "$END"
       run_lands_model "lands-historical-inventory" \
