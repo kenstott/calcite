@@ -163,10 +163,18 @@ public class DataMonthLagTest {
     assertTrue(e.getMessage().contains("rather than setting it to 0"), e.getMessage());
   }
 
-  @Test void aFractionalYearLagIsRejectedNotTruncated() {
+  /** 2.5 years is 2 years 6 months: a fractional dataLag is a month lag, not a truncated one. */
+  @Test void aFractionalYearLagIsAMonthLag() {
+    assertEquals(java.time.Period.ofMonths(30), yearRange(map("dataLag", 2.5)).getLagOffset());
+    assertEquals(java.time.Period.ofMonths(23),
+        yearRange(map("dataLag", 23.0 / 12)).getLagOffset());
+  }
+
+  /** 1.9 years is 22.8 months: refused rather than rounded to a lag nobody wrote. */
+  @Test void aFractionalYearLagThatIsNotWholeMonthsIsRejected() {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
         () -> yearRange(map("dataLag", 1.9)));
-    assertTrue(e.getMessage().contains("dataMonthLag"), e.getMessage());
+    assertTrue(e.getMessage().contains("whole number of months"), e.getMessage());
   }
 
   /** A 23-month lag reaches year N from December of N+1: 11 months after the year ends. */

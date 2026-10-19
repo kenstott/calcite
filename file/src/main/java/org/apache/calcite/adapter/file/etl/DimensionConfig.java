@@ -521,12 +521,20 @@ public class DimensionConfig {
     Object dataLagObj = map.get("dataLag");
     if (dataLagObj instanceof Number) {
       Number lagYears = (Number) dataLagObj;
-      if (lagYears.doubleValue() != lagYears.intValue()) {
-        throw new IllegalArgumentException("Dimension '" + builder.name + "': dataLag is whole "
-            + "years, got " + dataLagObj + " (it would be truncated to " + lagYears.intValue()
-            + "). Use dataMonthLag for a lag that is not a whole number of years.");
+      if (lagYears.doubleValue() == lagYears.intValue()) {
+        builder.dataLag(lagYears.intValue());
+      } else {
+        // A fractional year lag is a lag in months: 2.5 is 2 years 6 months = 30 months. It
+        // must come to a whole number of months (1.9 is 22.8, so it is refused, not rounded),
+        // and from here on it is exactly a dataMonthLag.
+        double months = lagYears.doubleValue() * 12;
+        if (Math.abs(months - Math.rint(months)) > 1e-6 || months < 0) {
+          throw new IllegalArgumentException("Dimension '" + builder.name + "': dataLag "
+              + dataLagObj + " is not a whole number of months (" + months + "). A fractional "
+              + "year lag is read as years with a decimal fraction, e.g. 2.5 = 2 years 6 months.");
+        }
+        builder.dataMonthLag((int) Math.rint(months));
       }
-      builder.dataLag(lagYears.intValue());
     } else if (dataLagObj instanceof String) {
       Integer resolved = VariableResolver.resolveInteger((String) dataLagObj);
       if (resolved != null) {
