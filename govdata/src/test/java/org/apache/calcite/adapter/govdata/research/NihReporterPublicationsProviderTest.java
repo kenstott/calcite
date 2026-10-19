@@ -31,12 +31,15 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +51,11 @@ class NihReporterPublicationsProviderTest {
 
   private HttpServer server;
   private final List<Integer> requestSizes = new CopyOnWriteArrayList<Integer>();
+  /** Ids that always return HTTP 500 when present in a request. */
+  private final Set<Long> poison = ConcurrentHashMap.newKeySet();
+  /** Remaining transient 500s per id (decremented on each request that contains the id alone). */
+  private final Map<Long, Integer> transientFailures = new ConcurrentHashMap<Long, Integer>();
+  private volatile int reportedTotal = -1;
 
   @BeforeEach void start() throws IOException {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -65,26 +73,33 @@ class NihReporterPublicationsProviderTest {
       }
       String[] ids = m.group(1).split(",");
       requestSizes.add(ids.length);
-      boolean poison = false;
+      boolean fail = false;
       StringBuilder results = new StringBuilder();
       for (String id : ids) {
-        if (Long.parseLong(id) == POISON) {
-          poison = true;
+        long l = Long.parseLong(id);
+        if (poison.contains(l)) {
+          fail = true;
+        }
+        Integer left = transientFailures.get(l);
+        if (ids.length == 1 && left != null && left > 0) {
+          transientFailures.put(l, left - 1);
+          fail = true;
         }
         if (results.length() > 0) {
           results.append(',');
         }
         results.append("{\"applid\":").append(id).append(",\"coreproject\":\"C").append(id)
-            .append("\",\"pmid\":").append(Long.parseLong(id) + 1).append('}');
+            .append("\",\"pmid\":").append(l + 1).append('}');
       }
       byte[] out;
       int status;
-      if (poison) {
+      if (fail) {
         status = 500;
         out = "{\"error\":\"boom\"}".getBytes(StandardCharsets.UTF_8);
       } else {
         status = 200;
-        out = ("{\"meta\":{\"total\":" + ids.length + "},\"results\":[" + results + "]}")
+        int total = reportedTotal >= 0 ? reportedTotal : ids.length;
+        out = ("{\"meta\":{\"total\":" + total + "},\"results\":[" + results + "]}")
             .getBytes(StandardCharsets.UTF_8);
       }
       ex.sendResponseHeaders(status, out.length);
@@ -92,6 +107,7 @@ class NihReporterPublicationsProviderTest {
       ex.close();
     });
     server.start();
+    configure(25, 2);
   }
 
   @AfterEach void stop() {
@@ -99,45 +115,106 @@ class NihReporterPublicationsProviderTest {
     ModelOperand.clear();
   }
 
+  private static void configure(int maxInvalid, int maxRetries) {
+    Map<String, Object> source = new HashMap<String, Object>();
+    source.put("maxRetries", maxRetries);
+    Map<String, Object> nih = new HashMap<String, Object>();
+    nih.put("maxInvalidRecordsPerSlice", maxInvalid);
+    nih.put("source", source);
+    Map<String, Object> tables = new HashMap<String, Object>();
+    tables.put("nih_publications", nih);
+    Map<String, Object> schema = new HashMap<String, Object>();
+    schema.put("partitionedTables", tables);
+    ModelOperand.capture("research", schema);
+  }
+
   private NihReporterPublicationsProvider provider() {
     return new NihReporterPublicationsProvider(
-        "http://127.0.0.1:" + server.getAddress().getPort() + "/pubs");
+        "http://127.0.0.1:" + server.getAddress().getPort() + "/pubs", 1L);
   }
 
   private static List<Long> ids() {
     return new ArrayList<Long>(Arrays.asList(1L, 2L, 3L, POISON, 5L, 6L, 7L, 8L));
   }
 
-  @Test void poisonIdSplitsDownAndThrowsNamingTheSingleId() {
+  private List<Map<String, Object>> fetch(List<Long> ids, Map<Long, String> invalid)
+      throws IOException {
+    return provider().fetchPublicationsForBatch(ids, "2026", RawCache.passthrough(), 0, invalid);
+  }
+
+  @Test void poisonIdYieldsOneInvalidRowAndOthersStayValid() throws IOException {
+    poison.add(POISON);
+    Map<Long, String> invalid = new LinkedHashMap<Long, String>();
+    List<Map<String, Object>> rows = fetch(ids(), invalid);
+    assertEquals(8, rows.size());
+    int invalidRows = 0;
+    for (Map<String, Object> row : rows) {
+      if ((Long) row.get("appl_id") == POISON) {
+        invalidRows++;
+        assertEquals("invalid_source_record", row.get("record_status"));
+        assertNull(row.get("pmid"));
+        assertTrue(((String) row.get("record_issue")).contains("HTTP 500"));
+        assertTrue(((String) row.get("record_issue")).contains("3 attempts"));
+      } else {
+        assertEquals("valid", row.get("record_status"));
+        assertNull(row.get("record_issue"));
+      }
+    }
+    assertEquals(1, invalidRows);
+    assertEquals(Collections.singleton(POISON), invalid.keySet());
+  }
+
+  @Test void transientSingleIdFailureRetriesToAValidRow() throws IOException {
+    transientFailures.put(2L, 2);
+    Map<Long, String> invalid = new LinkedHashMap<Long, String>();
+    List<Map<String, Object>> rows = fetch(Collections.singletonList(2L), invalid);
+    assertEquals(1, rows.size());
+    assertEquals("valid", rows.get(0).get("record_status"));
+    assertEquals(3L, rows.get(0).get("pmid"));
+    assertTrue(invalid.isEmpty());
+    assertEquals(Arrays.asList(1, 1, 1), requestSizes);
+  }
+
+  @Test void moreInvalidIdsThanTheCapThrows() {
+    configure(1, 0);
+    poison.add(2L);
+    poison.add(3L);
     IOException e = assertThrows(IOException.class,
-        () -> provider().fetchPublicationsForBatch(ids(), "2026", RawCache.passthrough(), 0));
-    assertTrue(e.getMessage().contains("appl_id " + POISON), e.getMessage());
-    // 8 -> 4 (500) -> 2 (500) -> 1 (500): the full batch was split, not retried whole.
-    assertTrue(requestSizes.contains(8) && requestSizes.contains(4) && requestSizes.contains(2)
-        && requestSizes.contains(1), requestSizes.toString());
+        () -> fetch(Arrays.asList(1L, 2L, 3L, 4L), new LinkedHashMap<Long, String>()));
+    assertTrue(e.getMessage().contains("maxInvalidRecordsPerSlice=1"), e.getMessage());
+    assertTrue(e.getMessage().contains("2 invalid appl_ids"), e.getMessage());
+    assertTrue(e.getMessage().contains("2") && e.getMessage().contains("3"), e.getMessage());
   }
 
-  @Test void excludedIdIsFilteredAndRestOfBatchSucceeds() throws IOException {
-    Map<String, Object> schema = new HashMap<String, Object>();
-    Map<String, Object> tables = new HashMap<String, Object>();
-    Map<String, Object> nih = new HashMap<String, Object>();
-    nih.put("excludeApplIds", Collections.singletonList(POISON));
-    tables.put("nih_publications", nih);
-    schema.put("partitionedTables", tables);
-    ModelOperand.capture("research", schema);
-
-    Set<Long> excluded = NihReporterPublicationsProvider.loadExcludedApplIds();
-    assertEquals(Collections.singleton(POISON), excluded);
-
-    List<Long> kept = new ArrayList<Long>(ids());
-    kept.removeAll(excluded);
-    List<Map<String, Object>> rows =
-        provider().fetchPublicationsForBatch(kept, "2026", RawCache.passthrough(), 0);
-    assertEquals(7, rows.size());
-    assertEquals(Collections.singletonList(7), requestSizes);
+  @Test void twoPoisonIdsInOneBatchAreBothFound() throws IOException {
+    poison.add(POISON);
+    poison.add(6L);
+    Map<Long, String> invalid = new LinkedHashMap<Long, String>();
+    List<Map<String, Object>> rows = fetch(ids(), invalid);
+    assertEquals(8, rows.size());
+    assertEquals(new java.util.HashSet<Long>(Arrays.asList(POISON, 6L)), invalid.keySet());
+    int valid = 0;
+    for (Map<String, Object> row : rows) {
+      if ("valid".equals(row.get("record_status"))) {
+        valid++;
+      }
+    }
+    assertEquals(6, valid);
   }
 
-  @Test void noExclusionConfiguredMeansEmptySet() {
-    assertTrue(NihReporterPublicationsProvider.loadExcludedApplIds().isEmpty());
+  @Test void oversizedResultWindowSplitsAndSingleIdOverCapThrows() {
+    reportedTotal = 10001;
+    IOException e = assertThrows(IOException.class,
+        () -> fetch(Arrays.asList(1L, 2L, 3L), new LinkedHashMap<Long, String>()));
+    assertTrue(e.getMessage().contains("appl_id"), e.getMessage());
+    assertTrue(e.getMessage().contains("exceeds"), e.getMessage());
+    assertTrue(requestSizes.contains(3) && requestSizes.contains(1), requestSizes.toString());
+  }
+
+  @Test void missingRequiredSettingFailsLoudly() {
+    ModelOperand.clear();
+    poison.add(2L);
+    assertThrows(IllegalStateException.class,
+        () -> fetch(Arrays.asList(1L, 2L), new LinkedHashMap<Long, String>()));
   }
 }
