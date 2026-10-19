@@ -149,6 +149,15 @@ public class FileClientModule
                 throw new IllegalArgumentException("The crawl property is not a JSON object", e);
             }
         }
+        if (config.getExcelHints() != null) {
+            // The catalog property is the file adapter's excelHints operand, as JSON.
+            try {
+                operand.put("excelHints", MAPPER.readValue(config.getExcelHints(), LinkedHashMap.class));
+            }
+            catch (JsonProcessingException e) {
+                throw new IllegalArgumentException("The excel-hints property is not a JSON object", e);
+            }
+        }
 
         // Derive the storage backend from the URI scheme. The file adapter only auto-detects
         // s3/http/hdfs from the directory, so ftp/ftps/sftp must be set explicitly here.
