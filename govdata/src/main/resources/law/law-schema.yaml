@@ -6827,6 +6827,19 @@ constraints:
         targetTable: lobbying_government_entity_codes
         targetColumns: [government_entity_id]
 
+  lobbying_activity_bills:
+    # No primary key: congress is null on an unresolved_tag row, and two such rows of one activity
+    # differ only in the tag that could not be right. A row is one (activity, congress, bill_type,
+    # bill_number) otherwise.
+    foreignKeys:
+      - columns: [filing_uuid, activity_seq]
+        targetTable: lobbying_activities
+        targetColumns: [filing_uuid, activity_seq]
+      - columns: [congress, bill_type, bill_number]
+        targetTable: bills
+        targetColumns: [congress, bill_type, bill_number]
+        comment: "Non-enforcing: an inferred_from_posted_date row names the bill of that number in the Congress in session when the filing was posted, which the bills table may not hold."
+
   lobbying_foreign_entities:
     primaryKey: [filing_uuid, entity_seq]
     foreignKeys:
