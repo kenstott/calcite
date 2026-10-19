@@ -391,3 +391,42 @@ remaining columns work. The question for this device:
 
 In both cases the seed catalog and the schema cache take the 13 or 12 columns at the next seed
 build (`govdata/scripts/build-seed.sh`), which reads them from the live table.
+
+## Tables fetched by unordered Socrata paging
+
+These tables page a Socrata API by `$offset` and, until this change, sent no `$order`. Socrata
+returns pages in a stable order only when the request orders them, so a fetch could return a row
+on two pages and leave another out with the row count unchanged.
+
+Measured on `health.cdc_county_injury_mortality`, paging all 131,934 rows the way the ETL did:
+1,346 rows came back twice and 1,346 others were missing. With `$order=:id`, every row came back
+once. The published table holds a second Van Wert County, Ohio row (geoid 39161) for 2023 `Drug_OD`
+(89 rows for Ohio's 88 counties), and CDC serves it once.
+
+Every source below now sends `"$order": ":id"`. Its published files still come from an unordered
+fetch, so they may hold duplicated and missing rows.
+
+The tables' freshness checks (ETag or response hash) skip a fetch while the source is unchanged.
+So for each table:
+
+1. Force a full reprocess: purge, then fetch with the freshness check bypassed. An ordinary run
+   keeps the current files.
+2. Check it with a short download through the bundle: no key repeats, and the row count matches
+   the source's own `$select=count(*)`.
+
+| Schema | Table | Published rows |
+|---|---|---|
+| fiscal | broadband_caf_deployment_locations | 4,800,271 |
+| fiscal | broadband_high_cost_disbursements | 1,048,660 |
+| health | cdc_brfss | 2,996,473 |
+| health | cdc_county_injury_mortality | 131,934 |
+| health | cdc_county_overdose_deaths | 226,368 |
+| health | cdc_covid_vaccinations | 29,886 |
+| health | cdc_drug_overdose_deaths_by_drug | 11,088 |
+| health | cdc_mortality | 48,722 |
+| health | cdc_nndss_weekly | 2,008,440 |
+| health | cdc_places_county | 229,298 |
+| health | cdc_school_vaccination_coverage | 8,753 |
+| health | cdc_state_drug_overdose_deaths | 86,904 |
+| health | cdc_state_vital_provisional | 1,980 |
+| health | cdc_teen_birth_rates_county | 56,466 |

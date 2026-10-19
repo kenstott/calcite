@@ -4363,6 +4363,9 @@ partitionedTables:
       url: "https://opendata.usac.org/resource/r59r-rpip.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$where": "fund_type in('CAF II','CAF II Auc') AND filing_year='{year}'"
         "$limit": "50000"
       response:
@@ -4498,6 +4501,9 @@ partitionedTables:
       url: "https://opendata.usac.org/resource/w6qn-gx72.json"
       method: GET
       parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
         "$where": "year='{year}'"
         "$limit": "50000"
       response:
