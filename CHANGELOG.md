@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.119.4](https://github.com/kenstott/calcite/compare/engine-v0.119.3...engine-v0.119.4) (2026-10-19)
+
+
+### Bug Fixes
+
+* **file,govdata:** a view passing a stored-text year through serves it as INTEGER ([#605](https://github.com/kenstott/calcite/issues/605)) ([d9fdfd1](https://github.com/kenstott/calcite/commit/d9fdfd1dcc4079d5b3a6b01c6b2fbcb4bcb527c3))
+* **govdata:** Socrata sources paged by offset send $order, so no row repeats or drops ([#607](https://github.com/kenstott/calcite/issues/607)) ([ca1dee7](https://github.com/kenstott/calcite/commit/ca1dee78ff2f5fafeb974049eb5f8b14ecbc31a1))
+
 ## [0.119.3](https://github.com/kenstott/calcite/compare/engine-v0.119.2...engine-v0.119.3) (2026-10-18)
 
 
