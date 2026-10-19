@@ -2402,6 +2402,10 @@ partitionedTables:
       type: http
       url: "https://api.ojp.gov/bjsdataset/v1/r4j4-fdwx.json?$where=year='{effective_year}'"
       method: GET
+      parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
       response:
         format: json
         # SODA caps a single request at 50k rows; page through $offset for the full year.
@@ -2639,6 +2643,10 @@ partitionedTables:
       type: http
       url: "https://api.ojp.gov/bjsdataset/v1/ya4e-n9zp.json?$where=year='{effective_year}'"
       method: GET
+      parameters:
+        # Socrata pages stably only in a total order; without it a page can repeat a
+        # row another page already returned and skip one (CDC MIOV: 1,346 of 131,934).
+        "$order": ":id"
       response:
         format: json
         # SODA caps a single request at 50k rows; page through $offset for the full year.
