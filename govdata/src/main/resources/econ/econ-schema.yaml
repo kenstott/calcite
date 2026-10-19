@@ -358,6 +358,16 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
+  # BEA's Activities of Multinational Enterprises (fdi_activities) publishes year N only late in
+  # N+1 or after (observed 2026-10-19: 2024 present, 2025 answers "no data found"). With the
+  # usual dataLag 1 the run asks for 2025 all year and fails on every attempt, so the year is
+  # not requested until it can exist.
+  year_range_fdi_activities: &year_range_fdi_activities
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 2
+
   # --- BEA Frequencies ---
   bea_frequencies: &bea_frequencies
     - A   # Annual
@@ -7613,7 +7623,7 @@ partitionedTables:
         - fdi_activities
       direction: *fdi_directions
       classification: *fdi_classifications
-      year: *year_range_from_2000
+      year: *year_range_fdi_activities
 
     materialize:
       enabled: true
