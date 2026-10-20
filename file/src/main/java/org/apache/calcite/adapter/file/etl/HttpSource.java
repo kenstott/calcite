@@ -3353,12 +3353,15 @@ public class HttpSource implements DataSource {
       long now = System.nanoTime();
       long next = Math.max(now, current) + intervalNanos;
       if (nextAllowedNanos.compareAndSet(current, next)) {
-        long sleepNanos = Math.max(0, current - now);
-        if (sleepNanos > 0) {
+        // Sleep until the slot opens by nanoTime, however early the clock behind sleep wakes:
+        // on Windows Thread.sleep can return before nanoTime reaches its end.
+        long remaining;
+        while ((remaining = current - System.nanoTime()) > 0) {
           try {
-            Thread.sleep(sleepNanos / 1000000, (int) (sleepNanos % 1000000));
+            Thread.sleep(remaining / 1000000, (int) (remaining % 1000000));
           } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return;
           }
         }
         return;
