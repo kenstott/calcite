@@ -16,17 +16,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -279,12 +277,22 @@ class PostProcessExecutorTest {
       return script;
     }
     Path script = tempDir.resolve(name + ".sh");
-    Files.write(script, ("#!/bin/bash\n" + bashBody).getBytes(StandardCharsets.UTF_8));
-    Set<PosixFilePermission> perms = new HashSet<PosixFilePermission>();
-    perms.add(PosixFilePermission.OWNER_READ);
-    perms.add(PosixFilePermission.OWNER_WRITE);
-    perms.add(PosixFilePermission.OWNER_EXECUTE);
-    Files.setPosixFilePermissions(script, perms);
+    // Written by a child process, never held open for writing by this JVM: a process another
+    // test forks meanwhile inherits every descriptor this JVM holds, and while it holds one
+    // open for writing on the script, executing the script fails with ETXTBSY
+    // ("Text file busy").
+    Process writer =
+        new ProcessBuilder("/bin/sh", "-c", "cat > \"$0\" && chmod 700 \"$0\"",
+            script.toString()).start();
+    try (OutputStream in = writer.getOutputStream()) {
+      in.write(("#!/bin/bash\n" + bashBody).getBytes(StandardCharsets.UTF_8));
+    }
+    try {
+      assertEquals(0, writer.waitFor(), "writing " + script);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("interrupted writing " + script, e);
+    }
     return script;
   }
 }
