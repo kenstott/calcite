@@ -1038,9 +1038,11 @@ partitionedTables:
       # maxRetries retries, is an invalid source record: it is emitted as one row with pmid NULL
       # and record_status=invalid_source_record rather than dropped. More invalid ids in one
       # (year, agency_ic) slice than maxInvalidRecordsPerSlice means an API outage, not bad
-      # records: the run fails. Both are read by the provider from this block.
+      # records: the run fails. 25 was too low: 2026 NCI and NIA each had 26+ intramural
+      # ids the API answers without honouring the appl_id filter. Both are read by the
+      # provider from this block.
       maxRetries: 3
-      maxInvalidRecordsPerSlice: 25
+      maxInvalidRecordsPerSlice: 100
       rawCache:
         enabled: true
     hooks:
