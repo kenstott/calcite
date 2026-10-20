@@ -469,6 +469,36 @@ public class AzureProvider implements CloudProvider {
   +
         ")\n"
   +
+        // A disk's size and VM; the key of a customer-managed encryption: a storage account's
+        // Key Vault key, a disk's through its disk encryption set's active key
+        "| extend SizeBytes = iff(type == 'microsoft.compute/disks', tolong(properties.diskSizeBytes), long(null))\n"
+  +
+        "| extend AttachedInstanceId = iff(type == 'microsoft.compute/disks', tostring(managedBy), '')\n"
+  +
+        "| extend DesId = tolower(tostring(properties.encryption.diskEncryptionSetId))\n"
+  +
+        "| extend AccountKeyId = iff(type == 'microsoft.storage/storageaccounts'\n"
+  +
+        "    and properties.encryption.keySource == 'Microsoft.Keyvault',\n"
+  +
+        "    strcat(trim_end('/', tostring(properties.encryption.keyvaultproperties.keyvaulturi)),\n"
+  +
+        "        '/keys/', tostring(properties.encryption.keyvaultproperties.keyname),\n"
+  +
+        "        iff(isempty(tostring(properties.encryption.keyvaultproperties.keyversion)), '',\n"
+  +
+        "            strcat('/', tostring(properties.encryption.keyvaultproperties.keyversion)))),\n"
+  +
+        "    '')\n"
+  +
+        "| join kind=leftouter (Resources\n"
+  +
+        "    | where type == 'microsoft.compute/diskencryptionsets'\n"
+  +
+        "    | project DesId = tolower(id), DesKeyUrl = tostring(properties.activeKey.keyUrl)) on DesId\n"
+  +
+        "| extend KeyId = iff(isnotempty(AccountKeyId), AccountKeyId, tostring(DesKeyUrl))\n"
+  +
         "| project\n"
   +
         "    SubscriptionId = subscriptionId,\n"
@@ -495,7 +525,13 @@ public class AzureProvider implements CloudProvider {
   +
         "    NetworkDefaultAction,\n"
   +
-        "    PublicNetworkAccess\n"
+        "    PublicNetworkAccess,\n"
+  +
+        "    SizeBytes,\n"
+  +
+        "    KeyId,\n"
+  +
+        "    AttachedInstanceId\n"
   +
         "| order by Application, StorageType, StorageResource";
 

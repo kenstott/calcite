@@ -18,14 +18,20 @@ import org.apache.calcite.adapter.ops.util.CloudOpsFilterHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsPaginationHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsProjectionHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
+import org.apache.calcite.rel.RelReferentialConstraint;
+import org.apache.calcite.rel.RelReferentialConstraintImpl;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.util.mapping.IntPair;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +43,28 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
   private static final Logger LOGGER = LoggerFactory.getLogger(StorageResourcesTable.class);
   public StorageResourcesTable(CloudOpsConfig config) {
     super(config);
+  }
+
+  public StorageResourcesTable(CloudOpsConfig config, String schemaName) {
+    super(config, schemaName);
+  }
+
+  /**
+   * One foreign key: {@code attached_instance_id} -&gt; compute_resources.resource_id, the VM a
+   * disk is attached to. It is null for an unattached disk and for every row that is not a disk.
+   */
+  @Override protected List<RelReferentialConstraint> referentialConstraints(List<String> columnNames) {
+    final List<String> computeColumns =
+        new ComputeResourcesTable(config).getRowType(METADATA_TYPE_FACTORY).getFieldNames();
+    final int srcInstance = columnNames.indexOf("attached_instance_id");
+    final int tgtResourceId = computeColumns.indexOf("resource_id");
+    if (srcInstance < 0 || tgtResourceId < 0) {
+      return Collections.emptyList();
+    }
+    return Collections.singletonList(RelReferentialConstraintImpl.of(
+        Arrays.asList(schemaName, "storage_resources"),
+        Arrays.asList(schemaName, "compute_resources"),
+        Collections.singletonList(IntPair.of(srcInstance, tgtResourceId))));
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
@@ -80,7 +108,12 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
 
         // Metadata
         .add("tags", SqlTypeName.VARCHAR) // JSON string
-
+        // The key a customer-managed encryption uses: a KMS key ARN, a Cloud KMS key name or a
+        // Key Vault key URL; null when the cloud manages the key
+        .add("key_id", SqlTypeName.VARCHAR)
+        // A disk's VM, as compute_resources.resource_id names it; null when unattached or not a
+        // disk
+        .add("attached_instance_id", SqlTypeName.VARCHAR)
         .build();
   }
 
@@ -110,7 +143,7 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Location"),
             storage.get("ResourceGroup"),
             storage.get("ResourceId"),
-            null, // size_bytes - not in current query
+            CloudOpsDataConverter.convertValue(storage.get("SizeBytes"), SqlTypeName.BIGINT),
             null, // storage_class - Azure specific
             getAzureReplicationType(storageType),
             storage.get("EncryptionEnabled"),
@@ -130,7 +163,9 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // last_access_time
             null, // created_date
             null, // modified_date
-            null  // tags
+            null, // tags
+            emptyToNull(storage.get("KeyId")),
+            emptyToNull(storage.get("AttachedInstanceId"))
         });
       }
     } catch (Exception e) {
@@ -161,13 +196,13 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Location"),
             null, // resource_group - GCP doesn't have this concept
             storage.get("ResourceId"),
-            null, // size_bytes - not in current query
+            CloudOpsDataConverter.convertValue(storage.get("SizeBytes"), SqlTypeName.BIGINT),
             storage.get("StorageClass"),
             null, // replication_type
             storage.get("EncryptionEnabled"),
             storage.get("EncryptionEnabled") != null && (Boolean) storage.get("EncryptionEnabled") ?
                 (storage.get("EncryptionKeyName") != null ? "customer-managed" : "service-managed") : "none",
-            storage.get("EncryptionKeyName") != null ? "customer-managed" : "service-managed",
+            storage.get("EncryptionKeyType"),
             false, // public_access_enabled - would need to check IAM
             storage.get("PublicAccessPrevention"),
             null, // network_restrictions
@@ -181,7 +216,9 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // last_access_time
             CloudOpsDataConverter.convertValue(storage.get("TimeCreated"), SqlTypeName.TIMESTAMP),
             CloudOpsDataConverter.convertValue(storage.get("Updated"), SqlTypeName.TIMESTAMP),
-            null  // tags - would need to convert labels map to JSON
+            null, // tags - would need to convert labels map to JSON
+            storage.get("EncryptionKeyName"),
+            storage.get("AttachedInstanceId")
         });
       }
     } catch (Exception e) {
@@ -218,13 +255,12 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             storage.get("Location"),
             null, // resource_group - AWS doesn't use this concept for S3
             storage.get("ResourceId"),
-            null, // size_bytes - would need CloudWatch metrics
-            null, // storage_class - in S3 this is per object
+            CloudOpsDataConverter.convertValue(storage.get("SizeBytes"), SqlTypeName.BIGINT),
+            storage.get("StorageClass"), // an EBS volume's type; per object in S3
             null, // replication_type - would need to check replication rules
             storage.get("EncryptionEnabled"),
             storage.get("EncryptionType"),
-            storage.get("KmsKeyId") != null ? "customer-managed" :
-                (storage.get("EncryptionEnabled") != null ? "service-managed" : null),
+            storage.get("EncryptionKeyType"),
             publicAccessBlocked != null ? !publicAccessBlocked : null,
             publicAccessBlocked != null ? (publicAccessBlocked ? "blocked" : "allowed") : null,
             null, // network_restrictions - would need to check bucket policy
@@ -238,7 +274,9 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
             null, // last_access_time - would need CloudWatch
             CloudOpsDataConverter.convertValue(storage.get("CreationDate"), SqlTypeName.TIMESTAMP),
             null, // modified_date - S3 doesn't track bucket modification
-            null  // tags - would need to convert tag map to JSON
+            null, // tags - would need to convert tag map to JSON
+            storage.get("KeyId"),
+            storage.get("AttachedInstanceId")
         });
       }
     } catch (Exception e) {
@@ -246,6 +284,11 @@ public class StorageResourcesTable extends AbstractCloudOpsTable {
     }
 
     return results;
+  }
+
+  /** Resource Graph projects an absent string as an empty one. */
+  private static @Nullable Object emptyToNull(@Nullable Object value) {
+    return "".equals(value) ? null : value;
   }
 
   private String getAzureReplicationType(String storageType) {

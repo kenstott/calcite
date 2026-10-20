@@ -26,7 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -38,6 +40,8 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.TableDescription;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.kms.KmsClient;
+import software.amazon.awssdk.services.kms.model.DescribeKeyRequest;
 import software.amazon.awssdk.services.ecr.EcrClient;
 import software.amazon.awssdk.services.ecr.model.Repository;
 import software.amazon.awssdk.services.eks.EksClient;
@@ -414,7 +418,7 @@ public class AWSProvider implements CloudProvider {
     boolean needsLocation = isFieldProjected(projectionHandler, "region", "Location");
     boolean needsTags = isFieldProjected(projectionHandler, "application", "Application", "tags");
     boolean needsEncryption =
-                                              isFieldProjected(projectionHandler, "encryption_enabled", "encryption_type", "encryption_key_type", "EncryptionEnabled", "EncryptionType", "KmsKeyId");
+                                              isFieldProjected(projectionHandler, "encryption_enabled", "encryption_type", "encryption_key_type", "key_id", "EncryptionEnabled", "EncryptionType", "KmsKeyId");
     boolean needsPublicAccess =
                                                 isFieldProjected(projectionHandler, "public_access_enabled", "public_access_level", "PublicAccessBlocked");
     boolean needsVersioning = isFieldProjected(projectionHandler, "versioning_enabled", "VersioningEnabled");
@@ -438,6 +442,11 @@ public class AWSProvider implements CloudProvider {
             .region(region)
             .credentialsProvider(StaticCredentialsProvider.create(credentials))
             .build();
+        KmsClient kmsClient = KmsClient.builder()
+            .region(region)
+            .credentialsProvider(StaticCredentialsProvider.create(credentials))
+            .build();
+        Function<String, @Nullable String> keyManager = keyManagers(kmsClient);
 
         // List buckets with pagination support
         ListBucketsRequest listRequest = ListBucketsRequest.builder().build();
@@ -506,11 +515,13 @@ public class AWSProvider implements CloudProvider {
               try {
                 GetBucketEncryptionResponse encryptionResponse = s3Client.getBucketEncryption(encryptionRequest);
                 storageData.put("EncryptionEnabled", true);
+                putKey(storageData, null, keyManager);
                 if (encryptionResponse.serverSideEncryptionConfiguration() != null &&
                     !encryptionResponse.serverSideEncryptionConfiguration().rules().isEmpty()) {
                   ServerSideEncryptionRule rule = encryptionResponse.serverSideEncryptionConfiguration().rules().get(0);
                   storageData.put("EncryptionType", rule.applyServerSideEncryptionByDefault().sseAlgorithmAsString());
-                  storageData.put("KmsKeyId", rule.applyServerSideEncryptionByDefault().kmsMasterKeyID());
+                  putKey(storageData, rule.applyServerSideEncryptionByDefault().kmsMasterKeyID(),
+                      keyManager);
                 }
               } catch (Exception e) {
                 storageData.put("EncryptionEnabled", false);
@@ -518,7 +529,8 @@ public class AWSProvider implements CloudProvider {
             } else {
               storageData.put("EncryptionEnabled", null);
               storageData.put("EncryptionType", null);
-              storageData.put("KmsKeyId", null);
+              storageData.put("KeyId", null);
+              storageData.put("EncryptionKeyType", null);
             }
 
             // Only fetch public access block if needed
@@ -606,6 +618,36 @@ public class AWSProvider implements CloudProvider {
       }
     }
 
+    // EBS volumes: one DescribeVolumes listing per account carries every column a volume has
+    for (String accountId : accountIds) {
+      AwsCredentials credentials = accountCredentials.get(accountId);
+      if (credentials == null) continue;
+      try (Ec2Client ec2Client = Ec2Client.builder()
+          .region(region)
+          .credentialsProvider(StaticCredentialsProvider.create(credentials))
+          .build();
+           KmsClient kmsClient = KmsClient.builder()
+          .region(region)
+          .credentialsProvider(StaticCredentialsProvider.create(credentials))
+          .build()) {
+        Function<String, @Nullable String> keyManager = keyManagers(kmsClient);
+        for (Volume volume : ec2Client.describeVolumesPaginator().volumes()) {
+          results.add(ebsVolume(accountId, region.toString(), volume, keyManager));
+        }
+      } catch (Exception e) {
+        String errorMessage = e.getMessage();
+        if (errorMessage != null && (errorMessage.contains("not authorized") ||
+                                     errorMessage.contains("AccessDenied") ||
+                                     errorMessage.contains("UnauthorizedOperation") ||
+                                     errorMessage.contains("Forbidden"))) {
+          LOGGER.warn("Authorization denied for EBS volumes in account {} - results may be incomplete: {}",
+                     accountId, errorMessage);
+        } else {
+          LOGGER.debug("Error querying EBS volumes in account {}: {}", accountId, e.getMessage());
+        }
+      }
+    }
+
     // Log performance metrics
     if (LOGGER.isDebugEnabled()) {
       int totalApiCalls = results.size() *
@@ -620,6 +662,77 @@ public class AWSProvider implements CloudProvider {
     }
 
     return results;
+  }
+
+  /**
+   * Who manages each KMS key ({@code CUSTOMER} or {@code AWS}), read once per key with
+   * DescribeKey; null for a key whose description cannot be read.
+   */
+  private static Function<String, @Nullable String> keyManagers(KmsClient kmsClient) {
+    Map<String, Optional<String>> managers = new HashMap<>();
+    return keyId -> managers.computeIfAbsent(keyId, id -> {
+      try {
+        return Optional.ofNullable(kmsClient.describeKey(
+            DescribeKeyRequest.builder().keyId(id).build()).keyMetadata().keyManagerAsString());
+      } catch (Exception e) {
+        LOGGER.warn("Cannot read who manages KMS key {}: {}", id, e.getMessage());
+        return Optional.empty();
+      }
+    }).orElse(null);
+  }
+
+  /**
+   * Puts a resource's encryption key: {@code KeyId} is null only for a key AWS manages, and
+   * {@code EncryptionKeyType} is null when who manages it cannot be read.
+   */
+  static void putKey(Map<String, Object> resource, @Nullable String keyId,
+      Function<String, @Nullable String> keyManager) {
+    if (keyId == null) {
+      resource.put("KeyId", null);
+      resource.put("EncryptionKeyType", "service-managed");
+      return;
+    }
+    String manager = keyManager.apply(keyId);
+    resource.put("KeyId", "AWS".equals(manager) ? null : keyId);
+    resource.put("EncryptionKeyType", manager == null ? null
+        : "CUSTOMER".equals(manager) ? "customer-managed" : "service-managed");
+  }
+
+  /**
+   * The storage row of an EBS volume. {@code AttachedInstanceId} is the instance it is attached
+   * to, as {@code compute_resources.resource_id} names it (the first attachment of a Multi-Attach
+   * volume).
+   */
+  static Map<String, Object> ebsVolume(String accountId, String region, Volume volume,
+      Function<String, @Nullable String> keyManager) {
+    Map<String, Object> disk = new HashMap<>();
+    disk.put("AccountId", accountId);
+    Map<String, String> tags = new HashMap<>();
+    volume.tags().forEach(tag -> tags.put(tag.key(), tag.value()));
+    disk.put("StorageResource", tags.getOrDefault("Name", volume.volumeId()));
+    disk.put("StorageType", "EBS Volume");
+    disk.put("Application",
+        tags.getOrDefault("Application", tags.getOrDefault("app", "Untagged/Orphaned")));
+    disk.put("Location", region);
+    disk.put("ResourceId",
+        String.format(Locale.ROOT, "arn:aws:ec2:%s:%s:volume/%s", region, accountId,
+            volume.volumeId()));
+    disk.put("AttachedInstanceId", volume.attachments().isEmpty() ? null
+        : String.format(Locale.ROOT, "arn:aws:ec2:%s:%s:instance/%s", region, accountId,
+            volume.attachments().get(0).instanceId()));
+    disk.put("SizeBytes", volume.size() == null ? null : volume.size() * 1024L * 1024L * 1024L);
+    disk.put("StorageClass", volume.volumeTypeAsString());
+    boolean encrypted = Boolean.TRUE.equals(volume.encrypted());
+    disk.put("EncryptionEnabled", encrypted);
+    disk.put("EncryptionType", encrypted ? "aws:kms" : null);
+    if (encrypted) {
+      putKey(disk, volume.kmsKeyId(), keyManager);
+    } else {
+      disk.put("KeyId", null);
+      disk.put("EncryptionKeyType", null);
+    }
+    disk.put("CreationDate", volume.createTime());
+    return disk;
   }
 
   /**

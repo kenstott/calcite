@@ -51,7 +51,7 @@ public class CloudOpsSchema extends AbstractSchema {
 
     // Core resource tables
     builder.put("compute_resources", new ComputeResourcesTable(config, schemaName));
-    builder.put("storage_resources", new StorageResourcesTable(config));
+    builder.put("storage_resources", new StorageResourcesTable(config, schemaName));
     builder.put("kubernetes_clusters", new KubernetesClustersTable(config));
     builder.put("container_registries", new ContainerRegistriesTable(config));
     builder.put("network_resources", new NetworkResourcesTable(config));
