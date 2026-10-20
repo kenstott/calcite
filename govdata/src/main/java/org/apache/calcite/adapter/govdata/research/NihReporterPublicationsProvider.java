@@ -171,15 +171,15 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       }
     }
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(byLink.values());
-    attachPublicationYears(rows, rawCache);
+    attachPublicationYears(rows, rawCache, limits);
     LOGGER.info("nih_publications: {} publication links for fy={} ic={} ({} appl_ids, "
         + "{} invalid_source_record)", rows.size(), year, ic, applIds.size(), invalid.size());
     return rows.iterator();
   }
 
   /** Sets {@code pub_year} on every row from iCite, one batched lookup per {@link #ICITE_BATCH} pmids. */
-  private void attachPublicationYears(List<Map<String, Object>> rows, RawCache rawCache)
-      throws IOException {
+  private void attachPublicationYears(List<Map<String, Object>> rows, RawCache rawCache,
+      Limits limits) throws IOException {
     Set<Long> pmidSet = new LinkedHashSet<Long>();
     for (Map<String, Object> row : rows) {
       Long pmid = (Long) row.get("pmid");
@@ -199,7 +199,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
         ids.append(pmid);
       }
       String url = ICITE_ENDPOINT + "?fl=pmid,year&pmids=" + ids;
-      try (InputStream in = rawCache.openStream(url, () -> rawGet(url))) {
+      try (InputStream in = rawCache.openStream(url, () -> rawGetWithRetry(url, limits.maxRetries))) {
         for (JsonNode d : MAPPER.readTree(in).path("data")) {
           Long pmid = longOrNull(d, "pmid");
           JsonNode y = d.get("year");
@@ -463,6 +463,41 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     return conn.getInputStream();
   }
 
+  /** An iCite non-2xx; {@code status} decides whether the GET is worth repeating. */
+  private static final class IciteHttpException extends IOException {
+    final int status;
+
+    IciteHttpException(int status, String url) {
+      super("NIH iCite HTTP " + status + " for " + url);
+      this.status = status;
+    }
+  }
+
+  /**
+   * {@link #rawGet}, repeated up to {@code maxRetries} times when iCite answers 429 or 5xx or the
+   * connection fails; any other status is a real answer and fails at once.
+   */
+  private InputStream rawGetWithRetry(String url, int maxRetries) throws IOException {
+    for (int attempt = 1; ; attempt++) {
+      try {
+        return rawGet(url);
+      } catch (IciteHttpException e) {
+        if (attempt > maxRetries || !(e.status == 429 || e.status >= 500)) {
+          throw e;
+        }
+        LOGGER.warn("nih_publications: iCite HTTP {} (attempt {}/{}), retrying", e.status, attempt,
+            maxRetries + 1);
+      } catch (java.net.SocketException | java.net.SocketTimeoutException e) {
+        if (attempt > maxRetries) {
+          throw e;
+        }
+        LOGGER.warn("nih_publications: iCite {} (attempt {}/{}), retrying", e, attempt,
+            maxRetries + 1);
+      }
+      sleepBackoff(attempt);
+    }
+  }
+
   /** Issues the GET, failing on a non-2xx rather than returning the error body as content. */
   private InputStream rawGet(String url) throws IOException {
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
@@ -471,7 +506,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     conn.setReadTimeout(60000);
     int status = conn.getResponseCode();
     if (status < 200 || status >= 300) {
-      throw new IOException("NIH iCite HTTP " + status + " for " + url);
+      throw new IciteHttpException(status, url);
     }
     return conn.getInputStream();
   }
