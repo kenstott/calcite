@@ -1694,6 +1694,77 @@ FROM (SELECT COUNT(*) AS bad FROM (
 -- RESULTS SUMMARY
 -- ============================================================================
 
+-- ─────────────────────────────────────────────────────────────
+-- comtrade_flows / fdi_activities: period completeness and duplicates
+-- (added after 24 Comtrade periods were lost to mid-body resets and FDI years were
+-- requested before BEA published them; T1/T2 alone pass with periods missing)
+-- ─────────────────────────────────────────────────────────────
+-- A failed (reporter, flow, year) period leaves a gap: seen in an earlier year, absent in a later one.
+INSERT INTO dq_results
+SELECT 'econ', 'comtrade_flows', 'T7_reporter_flow_gaps',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Reporter/flow pairs present in the previous year but absent from a later year up to the newest year (a missing period): ' || COALESCE(ex, '')
+FROM (SELECT COUNT(*) AS n, STRING_AGG(reporter || '/' || flow || '@' || (py + 1), ', ' ORDER BY py, reporter, flow) AS ex FROM (
+  SELECT p.reporter, p.flow, p.year::INT AS py
+  FROM (SELECT DISTINCT reporter, flow, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true)) p
+  WHERE p.year::INT < (SELECT MAX(year::INT) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true))
+    AND NOT EXISTS (SELECT 1 FROM (SELECT DISTINCT reporter, flow, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true)) c
+                    WHERE c.reporter = p.reporter AND c.flow = p.flow AND c.year::INT = p.year::INT + 1)
+    AND EXISTS (SELECT 1 FROM (SELECT DISTINCT reporter, flow, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true)) c
+                WHERE c.reporter = p.reporter AND c.flow = p.flow AND c.year::INT > p.year::INT + 1)
+));
+
+-- A reporter/flow that has data in the previous year but none in the newest year is either a reporter that has
+-- not published yet or a failed period; warn rather than fail since Comtrade reporters publish at different times.
+INSERT INTO dq_results
+SELECT 'econ', 'comtrade_flows', 'T7_newest_year_missing_pairs',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'Reporter/flow pairs present in the year before the newest but absent from the newest year: ' || COALESCE(ex, '')
+FROM (SELECT COUNT(*) AS n, STRING_AGG(reporter || '/' || flow, ', ' ORDER BY reporter, flow) AS ex FROM (
+  SELECT DISTINCT reporter, flow FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) WHERE year::INT = (SELECT MAX(year::INT) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true)) - 1
+  EXCEPT
+  SELECT DISTINCT reporter, flow FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) WHERE year::INT = (SELECT MAX(year::INT) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true))
+));
+
+-- Imports and exports are fetched as separate periods; one flow present without the other is a lost period.
+INSERT INTO dq_results
+SELECT 'econ', 'comtrade_flows', 'T7_both_flows_per_reporter_year',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Reporter/year combinations with only one of the M and X flows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT reporter, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) GROUP BY reporter, year HAVING COUNT(DISTINCT flow) < 2));
+
+-- A truncated period (cut body that still parsed) shows as a year far below its predecessor.
+INSERT INTO dq_results
+SELECT 'econ', 'comtrade_flows', 'T7_year_rows_vs_previous',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Years whose row count is under 70% of the previous year (reporter-set changes excluded by using per-reporter averages)'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year::INT AS y, COUNT(*) * 1.0 / COUNT(DISTINCT reporter) AS per_rep
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) GROUP BY year) a
+  JOIN (SELECT year::INT AS y, COUNT(*) * 1.0 / COUNT(DISTINCT reporter) AS per_rep
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) GROUP BY year) b ON a.y = b.y + 1
+  WHERE a.per_rep < 0.7 * b.per_rep);
+
+-- BEA "no data found" for an unpublished year is expected and not an error, so this is the only check that
+-- notices a real year silently dropped: every year from 2008 to the newest must have rows.
+INSERT INTO dq_results
+SELECT 'econ', 'fdi_activities', 'T7_no_period_gaps',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Years between 2008 and the newest year present with no rows'
+FROM (SELECT COUNT(*) AS n FROM generate_series(2008, (SELECT MAX(substr(time_period, 1, 4)::INT) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true))) g(y)
+      WHERE g.y NOT IN (SELECT DISTINCT substr(time_period, 1, 4)::INT FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true)));
+
+-- A published year has roughly the same number of series as its neighbours; a partial year is a lost batch.
+INSERT INTO dq_results
+SELECT 'econ', 'fdi_activities', 'T7_year_rows_vs_median',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'Years (2009 onwards, excluding the newest) with under 70% of the median yearly row count'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT substr(time_period, 1, 4)::INT AS y, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true) GROUP BY 1) t
+  WHERE y >= 2009 AND y < (SELECT MAX(substr(time_period, 1, 4)::INT) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true))
+    AND c < 0.7 * (SELECT MEDIAN(c2) FROM (SELECT COUNT(*) AS c2 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true) GROUP BY substr(time_period, 1, 4))));
+
 SELECT * FROM dq_results ORDER BY tbl, test;
 
 -- Per-table summary
