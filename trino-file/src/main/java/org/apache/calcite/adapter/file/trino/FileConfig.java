@@ -54,6 +54,7 @@ public class FileConfig
     private String refreshInterval;
     private Duration catalogRefreshInterval;
     private String crawl;
+    private String excelHints;
 
     @NotNull
     public String getGlob()
@@ -277,6 +278,22 @@ public class FileConfig
     public FileConfig setCrawl(String crawl)
     {
         this.crawl = crawl;
+        return this;
+    }
+
+    public String getExcelHints()
+    {
+        return excelHints;
+    }
+
+    @Config("excel-hints")
+    @ConfigDescription("How the reader finds the tables of the catalog's Excel workbooks, as a "
+            + "JSON object of the file adapter's excelHints operand: headerRows, maxHeaderRows, "
+            + "tableGapRows, columnGap, minColumns, minDataRows, and per workbook (workbooks) "
+            + "and per table (tables, which also take range).")
+    public FileConfig setExcelHints(String excelHints)
+    {
+        this.excelHints = excelHints;
         return this;
     }
 }

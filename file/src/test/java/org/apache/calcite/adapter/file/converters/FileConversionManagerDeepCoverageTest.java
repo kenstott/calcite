@@ -617,13 +617,14 @@ public class FileConversionManagerDeepCoverageTest {
 
   @Test void testIsConversionNeededWithNoRecord() throws Exception {
     Method method =
-        FileConversionManager.class.getDeclaredMethod("isConversionNeeded", File.class, File.class);
+        FileConversionManager.class.getDeclaredMethod("isConversionNeeded", File.class, File.class,
+            String.class);
     method.setAccessible(true);
 
     File sourceFile = new File(tempDir.toFile(), "new_file.html");
     File baseDir = createOutputDir("base_new");
 
-    boolean result = (Boolean) method.invoke(null, sourceFile, baseDir);
+    boolean result = (Boolean) method.invoke(null, sourceFile, baseDir, null);
     assertTrue(result, "File without conversion record should need conversion");
   }
 

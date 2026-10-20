@@ -16,11 +16,13 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 import org.apache.calcite.adapter.file.util.LocalPaths;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -154,18 +156,33 @@ public class FileConversionManager {
    * @return true if conversion was performed, false if no conversion needed
    */
   public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath) {
+    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory,
+        relativePath, ExcelReadHints.AUTO);
+  }
+
+  /**
+   * Identifies the source file type and runs the appropriate conversion if needed, an Excel
+   * workbook's under the operator's read hints: a workbook converted under other hints is
+   * converted again.
+   *
+   * @param excelReadHints The operator's hints for how an Excel workbook's tables are found
+   */
+  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath, ExcelReadHints excelReadHints) {
     String path = sourceFile.getPath().toLowerCase();
+    boolean excel = path.endsWith(".xlsx") || path.endsWith(".xls");
 
     // First check if conversion is needed using metadata-based change detection
-    if (baseDirectory != null && !isConversionNeeded(sourceFile, baseDirectory)) {
+    if (baseDirectory != null
+        && !isConversionNeeded(sourceFile, baseDirectory,
+            excel ? excelReadHints.conversionType() : null)) {
       LOGGER.debug("File {} has not changed, skipping conversion", sourceFile.getName());
       return false;
     }
 
     try {
       // Excel files
-      if (path.endsWith(".xlsx") || path.endsWith(".xls")) {
-        boolean converted = convertExcelFile(sourceFile, outputDir, baseDirectory, tableNameCasing, columnNameCasing, relativePath);
+      if (excel) {
+        boolean converted = convertExcelFile(sourceFile, outputDir, baseDirectory, tableNameCasing, columnNameCasing, relativePath, excelReadHints);
         LOGGER.debug("Converted Excel file to JSON: {}", sourceFile.getName());
         return converted;
       }
@@ -368,7 +385,8 @@ public class FileConversionManager {
    * Checks if conversion is needed by comparing current file state with stored metadata.
    * Uses appropriate change detection (ETag for HTTP/S3, timestamp for local files).
    */
-  private static boolean isConversionNeeded(File sourceFile, File baseDirectory) {
+  private static boolean isConversionNeeded(File sourceFile, File baseDirectory,
+      @Nullable String conversionType) {
     try {
       ConversionMetadata metadata = new ConversionMetadata(baseDirectory);
       ConversionMetadata.ConversionRecord record = metadata.findRecordBySourceFile(sourceFile);
@@ -376,6 +394,13 @@ public class FileConversionManager {
       if (record == null) {
         LOGGER.debug("No conversion record found for {}, conversion needed", sourceFile.getName());
         return true; // No record exists, need to convert
+      }
+
+      // Converted another way (an Excel workbook under other read hints)
+      if (conversionType != null && !conversionType.equals(record.conversionType)) {
+        LOGGER.debug("{} was converted as {}, not {}: conversion needed", sourceFile.getName(),
+            record.conversionType, conversionType);
+        return true;
       }
 
       // Check if source file has changed
@@ -463,10 +488,18 @@ public class FileConversionManager {
   /**
    * Converts an Excel file and records metadata.
    */
-  private static boolean convertExcelFile(File sourceFile, File outputDir, File baseDirectory, String tableNameCasing, String columnNameCasing, String relativePath) {
+  private static boolean convertExcelFile(File sourceFile, File outputDir, File baseDirectory, String tableNameCasing, String columnNameCasing, String relativePath, ExcelReadHints excelReadHints) {
     try {
+      // The tables an earlier conversion found (under other hints, or in an earlier version of
+      // the workbook) go first: the workbook's tables are those this conversion finds.
+      if (baseDirectory != null) {
+        for (File previous : new ConversionMetadata(baseDirectory)
+            .forgetConversionsOf(sourceFile, "EXCEL_TO_JSON")) {
+          Files.deleteIfExists(previous.toPath());
+        }
+      }
       // Convert Excel file to the specified output directory with relative path for directory preservation
-      MultiTableExcelToJsonConverter.convertFileToJson(sourceFile, outputDir, true, tableNameCasing, columnNameCasing, baseDirectory, relativePath);
+      MultiTableExcelToJsonConverter.convertFileToJson(sourceFile, outputDir, true, tableNameCasing, columnNameCasing, baseDirectory, relativePath, excelReadHints);
 
       // Record conversion for each sheet that was converted
       // Excel converter creates files like "filename__sheetname.json" or "dir_filename__sheetname.json" if relativePath is provided
@@ -490,7 +523,7 @@ public class FileConversionManager {
 
       if (jsonFiles != null && baseDirectory != null) {
         for (File jsonFile : jsonFiles) {
-          recordConversion(sourceFile, jsonFile, "EXCEL_TO_JSON", baseDirectory);
+          recordConversion(sourceFile, jsonFile, excelReadHints.conversionType(), baseDirectory);
         }
       }
 

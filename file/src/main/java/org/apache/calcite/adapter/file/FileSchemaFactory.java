@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.clickhouse.ClickHouseJdbcSchemaFactory;
+import org.apache.calcite.adapter.file.converters.ExcelReadHints;
 import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
@@ -639,6 +640,8 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // Legitimate default: casing is an optional knob; SMART_CASING is the project-wide
     // documented default (see file/CLAUDE.md "Name generation: SMART_CASING"), so an
     // omitted operand is a supported, specified case rather than a missing-required value.
+    // How the Excel reader finds a workbook's tables, where the operator says (ExcelReadHints).
+    final ExcelReadHints excelReadHints = ExcelReadHints.fromOperand(operand.get("excelHints"));
     String tableNameCasing = (String) operand.get("tableNameCasing");
     if (tableNameCasing == null) {
       tableNameCasing = (String) operand.getOrDefault("table_name_casing", "SMART_CASING");
@@ -782,6 +785,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, isPrimeCacheEnabled(operand, true), comment,
           canonicalSchemaName);
+      fileSchema.setExcelReadHints(excelReadHints);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -911,6 +915,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+      fileSchema.setExcelReadHints(excelReadHints);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1009,6 +1014,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+      fileSchema.setExcelReadHints(excelReadHints);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1107,6 +1113,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+      fileSchema.setExcelReadHints(excelReadHints);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1200,6 +1207,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
         columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+    fileSchema.setExcelReadHints(excelReadHints);
 
     if (materializeConfig != null) {
       fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
