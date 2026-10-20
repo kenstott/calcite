@@ -116,29 +116,34 @@ class ComtradeTransformerRetryTest {
 
   @Test void exhaustedRetriesFailWithUrlAndOriginalCause() throws Exception {
     String url = serve(100, "{\"count\":3,\"data\":[" + REC1.substring(0, 30));
-    RuntimeException e = assertThrows(RuntimeException.class,
-        () -> drain(new ComtradeTransformer().fetchAndTransform(context(url, 2))));
+    IOException e = assertThrows(IOException.class,
+        () -> new ComtradeTransformer().fetchAndTransform(context(url, 2)));
     assertTrue(e.getMessage().contains(url), e.getMessage());
     assertNotNull(e.getCause());
-    assertTrue(e.getCause() instanceof IOException, e.getCause().toString());
     assertEquals(3, requests.get());
   }
 
-  @Test void doesNotRetryOnceRowsWereEmitted() throws Exception {
-    String url = serve(100,
+  /**
+   * The case the 2026-10-19 daily lost 18 periods to: a reset a few hundred rows into the body.
+   * The body is spooled before any row is returned, so the whole fetch is re-run and no row from
+   * the cut attempt reaches the caller.
+   */
+  @Test void retriesWholeFetchWhenBodyCutAfterRows() throws Exception {
+    String url = serve(2,
         "{\"count\":3,\"data\":[" + REC1 + "," + REC2 + "," + REC3.substring(0, 30));
-    Iterator<Map<String, Object>> it =
-        new ComtradeTransformer().fetchAndTransform(context(url, 3));
-    List<Map<String, Object>> seen = new ArrayList<Map<String, Object>>();
-    RuntimeException e = assertThrows(RuntimeException.class, () -> {
-      while (it.hasNext()) {
-        seen.add(it.next());
-      }
-    });
-    // The fault surfaces while advancing past the second record, so only the first was returned.
-    assertEquals(1, seen.size());
-    assertTrue(e.getMessage().contains(url), e.getMessage());
-    assertTrue(e.getCause() instanceof IOException, e.getCause().toString());
-    assertEquals(1, requests.get());
+    List<Map<String, Object>> rows =
+        drain(new ComtradeTransformer().fetchAndTransform(context(url, 3)));
+    assertEquals(3, rows.size());
+    assertEquals("CHN", rows.get(0).get("partner_code"));
+    assertEquals("MEX", rows.get(2).get("partner_code"));
+    assertEquals(3, requests.get());
+  }
+
+  @Test void spoolFileIsRemovedOnceTheRowsAreDrained() throws Exception {
+    java.io.File tmp = new java.io.File(System.getProperty("java.io.tmpdir"));
+    int before = tmp.listFiles((d, n) -> n.startsWith("comtrade-")).length;
+    String url = serve(0, "");
+    drain(new ComtradeTransformer().fetchAndTransform(context(url, 1)));
+    assertEquals(before, tmp.listFiles((d, n) -> n.startsWith("comtrade-")).length);
   }
 }

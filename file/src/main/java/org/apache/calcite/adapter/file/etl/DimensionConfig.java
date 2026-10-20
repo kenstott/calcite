@@ -199,12 +199,29 @@ public class DimensionConfig {
   }
 
   /**
-   * Returns the data lag in years for YEAR_RANGE dimensions.
-   * When set, the end year is reduced by this amount (e.g., dataLag=1
-   * means data ends at current year - 1). Defaults to 0.
+   * Returns the WHOLE-YEAR part of the publication lag for YEAR_RANGE dimensions: the shift
+   * between the publish year ({@code year}) and the data year ({@code effective_year}).
+   *
+   * <p>The lag is one quantity however it was declared. {@code dataLag: 2} is 24 months and
+   * {@code dataMonthLag: 30} is 2 years 6 months; both are normalised into whole years (this
+   * method) plus a remainder under 12 months ({@link #getLagRemainderMonths()}). So
+   * {@code dataLag: 1} and {@code dataMonthLag: 12} are the same lag, label included. Null only
+   * when neither key was declared.
    */
   public Integer getDataLag() {
+    if (dataMonthLag != null) {
+      return dataMonthLag / 12;
+    }
     return dataLag;
+  }
+
+  /**
+   * The months of the publication lag beyond its whole years, always under 12. They cap the
+   * newest publish year (a 2-month lag stops the axis at last month's year) rather than shift it,
+   * because a part-year lag is not a constant offset from the publish year.
+   */
+  public int getLagRemainderMonths() {
+    return dataMonthLag != null ? dataMonthLag % 12 : 0;
   }
 
   /**
@@ -520,7 +537,21 @@ public class DimensionConfig {
 
     Object dataLagObj = map.get("dataLag");
     if (dataLagObj instanceof Number) {
-      builder.dataLag(((Number) dataLagObj).intValue());
+      Number lagYears = (Number) dataLagObj;
+      if (lagYears.doubleValue() == lagYears.intValue()) {
+        builder.dataLag(lagYears.intValue());
+      } else {
+        // A fractional year lag is a lag in months: 2.5 is 2 years 6 months = 30 months. It
+        // must come to a whole number of months (1.9 is 22.8, so it is refused, not rounded),
+        // and from here on it is exactly a dataMonthLag.
+        double months = lagYears.doubleValue() * 12;
+        if (Math.abs(months - Math.rint(months)) > 1e-6 || months < 0) {
+          throw new IllegalArgumentException("Dimension '" + builder.name + "': dataLag "
+              + dataLagObj + " is not a whole number of months (" + months + "). A fractional "
+              + "year lag is read as years with a decimal fraction, e.g. 2.5 = 2 years 6 months.");
+        }
+        builder.dataMonthLag((int) Math.rint(months));
+      }
     } else if (dataLagObj instanceof String) {
       Integer resolved = VariableResolver.resolveInteger((String) dataLagObj);
       if (resolved != null) {

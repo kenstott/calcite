@@ -3,7 +3,7 @@
 # ============================================================================
 # Data Source:
 #   - Office of the Law Revision Counsel (OLRC), U.S. House of Representatives
-#     https://uscode.house.gov/download/download.shtml — USLM XML release points
+#     https://uscode.house.gov/currency.html (release point) — USLM XML release points
 #   - One zip per title: xml_usc{title}@{congress}-{release}.zip, one XML file per zip.
 #     The current release point (e.g. 119-111 = current through Public Law 119-111) is
 #     read from the xml_uscAll link on the download page at run time.
@@ -406,7 +406,7 @@ partitionedTables:
     # for the title dimension value and streams its XML; the url below is only the anchor page.
     source:
       type: http
-      url: "https://uscode.house.gov/download/download.shtml"
+      url: "https://uscode.house.gov/currency.html"
       method: GET
       response:
         format: json
@@ -500,7 +500,7 @@ partitionedTables:
     # off it and streams the same per-title XML.
     source:
       type: http
-      url: "https://uscode.house.gov/download/download.shtml"
+      url: "https://uscode.house.gov/currency.html"
       method: GET
       response:
         format: json
@@ -2200,7 +2200,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 645
-      checkedAt: "2026-10-18T12:56:58Z"
+      checkedAt: "2026-10-19T13:48:36Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -2421,7 +2421,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1380144
-      checkedAt: "2026-10-18T12:57:04Z"
+      checkedAt: "2026-10-19T13:48:56Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -2706,7 +2706,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2742367
-      checkedAt: "2026-10-18T12:57:11Z"
+      checkedAt: "2026-10-19T13:49:15Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -2832,7 +2832,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 7107778
-      checkedAt: "2026-10-18T12:57:16Z"
+      checkedAt: "2026-10-19T13:49:32Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -2970,7 +2970,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 9838519
-      checkedAt: "2026-10-18T12:57:19Z"
+      checkedAt: "2026-10-19T13:49:44Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3200,7 +3200,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 12204
-      checkedAt: "2026-10-18T12:57:20Z"
+      checkedAt: "2026-10-19T13:49:50Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3345,7 +3345,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 20125
-      checkedAt: "2026-10-18T12:57:22Z"
+      checkedAt: "2026-10-19T13:49:59Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3489,7 +3489,7 @@ partitionedTables:
       distinctYears: 8
       contiguous: true
       rowCount: 1534
-      checkedAt: "2026-10-18T12:57:23Z"
+      checkedAt: "2026-10-19T13:50:02Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3623,7 +3623,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 620511
-      checkedAt: "2026-10-18T12:57:26Z"
+      checkedAt: "2026-10-19T13:50:16Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3836,7 +3836,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2796637
-      checkedAt: "2026-10-18T12:57:29Z"
+      checkedAt: "2026-10-19T13:50:27Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -3964,7 +3964,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 94737
-      checkedAt: "2026-10-18T12:57:30Z"
+      checkedAt: "2026-10-19T13:50:34Z"
     dataset_type: delta
     backfill_period: quarterly
     # No lookbackPeriods: the engine always reopens the most recent completed period on every run.
@@ -4699,7 +4699,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 585
-      checkedAt: "2026-10-18T12:57:31Z"
+      checkedAt: "2026-10-19T13:50:38Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -4842,7 +4842,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 576
-      checkedAt: "2026-10-18T12:57:32Z"
+      checkedAt: "2026-10-19T13:50:42Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -4973,7 +4973,7 @@ partitionedTables:
       distinctYears: 9
       contiguous: true
       rowCount: 26536
-      checkedAt: "2026-10-18T12:57:33Z"
+      checkedAt: "2026-10-19T13:50:45Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5060,8 +5060,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 12
       contiguous: true
-      rowCount: 54267
-      checkedAt: "2026-10-18T12:57:34Z"
+      rowCount: 54379
+      checkedAt: "2026-10-19T13:50:48Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5208,7 +5208,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 4612
-      checkedAt: "2026-10-18T12:57:35Z"
+      checkedAt: "2026-10-19T13:50:52Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5336,7 +5336,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 137003
-      checkedAt: "2026-10-18T12:57:36Z"
+      checkedAt: "2026-10-19T13:50:56Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5489,7 +5489,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 6074
-      checkedAt: "2026-10-18T12:57:36Z"
+      checkedAt: "2026-10-19T13:50:58Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5623,7 +5623,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 55143
-      checkedAt: "2026-10-18T12:57:37Z"
+      checkedAt: "2026-10-19T13:51:01Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5774,7 +5774,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 3786
-      checkedAt: "2026-10-18T12:57:37Z"
+      checkedAt: "2026-10-19T13:51:02Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -5910,7 +5910,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 102
-      checkedAt: "2026-10-18T12:57:38Z"
+      checkedAt: "2026-10-19T13:51:05Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -6036,7 +6036,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 326
-      checkedAt: "2026-10-18T12:57:38Z"
+      checkedAt: "2026-10-19T13:51:08Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -6159,7 +6159,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 4430
-      checkedAt: "2026-10-18T12:57:39Z"
+      checkedAt: "2026-10-19T13:51:13Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -6275,7 +6275,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 2429
-      checkedAt: "2026-10-18T12:57:40Z"
+      checkedAt: "2026-10-19T13:51:15Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >
@@ -6390,7 +6390,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 1703
-      checkedAt: "2026-10-18T12:57:40Z"
+      checkedAt: "2026-10-19T13:51:17Z"
     partitions: *scotus_year_partitions
     dataset_type: delta
     comment: >

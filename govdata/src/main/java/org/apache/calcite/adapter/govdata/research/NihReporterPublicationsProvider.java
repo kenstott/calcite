@@ -11,7 +11,6 @@
 package org.apache.calcite.adapter.govdata.research;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -68,9 +67,16 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String PROJECTS_ENDPOINT = "https://api.reporter.nih.gov/v2/projects/search";
   private static final String PUBLICATIONS_ENDPOINT = "https://api.reporter.nih.gov/v2/publications/search";
-  /** Model path of the confirmed-broken appl_id list (schema YAML {@code excludeApplIds}). */
-  static final String EXCLUDE_APPL_IDS_PATH =
-      "research.partitionedTables.nih_publications.excludeApplIds";
+  /** Source keys in the schema YAML: invalid appl_ids tolerated per slice before the run is
+   *  treated as an outage, and retries of a failing single-appl_id request before it is declared
+   *  invalid. Read from the pipeline's own source block: ModelOperand is not captured until after
+   *  the ETL phase, so it reads back empty while this provider runs. */
+  static final String MAX_INVALID_KEY = "maxInvalidRecordsPerSlice";
+  static final String MAX_RETRIES_KEY = "maxRetries";
+  static final String STATUS_VALID = "valid";
+  static final String STATUS_INVALID = "invalid_source_record";
+  // The publications endpoint rejects offset + limit above 10000.
+  private static final int MAX_REACHABLE_ROWS = 10000;
   private static final String ICITE_ENDPOINT = "https://icite.od.nih.gov/api/pubs";
   private static final int PAGE_SIZE = 500;
   // iCite is a GET with pmids in the query string; 400 ids stays well under its URL-size limit
@@ -82,16 +88,63 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   // Confirmed live via curl: offset=9500 succeeds, offset=10000 returns HTTP 400.
   private static final int MAX_PUBLICATIONS_OFFSET = 9500;
 
+  private static final long RETRY_BACKOFF_MS = 2000L;
+
   private final String publicationsEndpoint;
+  private final long retryBackoffMs;
 
   /** Production constructor: the live RePORTER publications endpoint. */
   public NihReporterPublicationsProvider() {
-    this(PUBLICATIONS_ENDPOINT);
+    this(PUBLICATIONS_ENDPOINT, RETRY_BACKOFF_MS);
   }
 
-  /** Test seam: points the publications calls at another endpoint. */
-  NihReporterPublicationsProvider(String publicationsEndpoint) {
+  /** Test seam: points the publications calls at another endpoint, with its own backoff. */
+  NihReporterPublicationsProvider(String publicationsEndpoint, long retryBackoffMs) {
     this.publicationsEndpoint = publicationsEndpoint;
+    this.retryBackoffMs = retryBackoffMs;
+  }
+
+  /** HTTP failure from the RePORTER API, carrying the status code. */
+  static final class NihHttpException extends IOException {
+    final int status;
+
+    NihHttpException(int status, String body) {
+      super("NIH RePORTER HTTP " + status + ": " + body);
+      this.status = status;
+    }
+  }
+
+  /** A request's result set is larger than the endpoint's offset cap can page through. */
+  static final class ResultWindowExceededException extends IOException {
+    ResultWindowExceededException(int total) {
+      super("publications/search meta.total " + total + " exceeds the " + MAX_REACHABLE_ROWS
+          + "-row offset window");
+    }
+  }
+
+  /** The two required source settings, read once per fetch. */
+  static final class Limits {
+    final int maxRetries;
+    final int maxInvalid;
+
+    Limits(int maxRetries, int maxInvalid) {
+      this.maxRetries = maxRetries;
+      this.maxInvalid = maxInvalid;
+    }
+
+    static Limits from(EtlPipelineConfig config) {
+      Map<String, Object> source = config.getRawSourceConfig();
+      return new Limits(require(source, MAX_RETRIES_KEY), require(source, MAX_INVALID_KEY));
+    }
+
+    private static int require(Map<String, Object> source, String key) {
+      Object v = source == null ? null : source.get(key);
+      if (!(v instanceof Number)) {
+        throw new IllegalStateException(
+            "nih_publications: source." + key + " is required in the schema YAML, got " + v);
+      }
+      return ((Number) v).intValue();
+    }
   }
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
@@ -103,46 +156,25 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       return java.util.Collections.emptyIterator();
     }
 
-    List<Long> allApplIds = fetchApplIds(year, ic, rawCache);
-    Set<Long> excluded = loadExcludedApplIds();
-    List<Long> applIds = new ArrayList<Long>(allApplIds.size());
-    int excludedCount = 0;
-    for (Long id : allApplIds) {
-      if (excluded.contains(id)) {
-        excludedCount++;
-        LOGGER.warn("nih_publications: excluding appl_id {} for fy={} ic={} (listed in "
-            + "excludeApplIds: RePORTER publications/search returns HTTP 500 for it)",
-            id, year, ic);
-      } else {
-        applIds.add(id);
-      }
-    }
+    Limits limits = Limits.from(config);
+    List<Long> applIds = fetchApplIds(year, ic, rawCache);
     // Offset paging over an unsorted result set can return the same link on more than one page,
     // so (appl_id, pmid) is deduplicated to keep it unique within the slice.
     java.util.Map<String, Map<String, Object>> byLink =
         new LinkedHashMap<String, Map<String, Object>>();
+    Map<Long, String> invalid = new LinkedHashMap<Long, String>();
     for (int i = 0; i < applIds.size(); i += PAGE_SIZE) {
       List<Long> batch = applIds.subList(i, Math.min(i + PAGE_SIZE, applIds.size()));
       for (Map<String, Object> row : fetchPublicationsForBatch(batch, year, rawCache,
-          i / PAGE_SIZE)) {
+          i / PAGE_SIZE, invalid, limits)) {
         byLink.putIfAbsent(row.get("appl_id") + ":" + row.get("pmid"), row);
       }
     }
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>(byLink.values());
     attachPublicationYears(rows, rawCache);
     LOGGER.info("nih_publications: {} publication links for fy={} ic={} ({} appl_ids, "
-        + "{} excluded via excludeApplIds)", rows.size(), year, ic, applIds.size(),
-        excludedCount);
+        + "{} invalid_source_record)", rows.size(), year, ic, applIds.size(), invalid.size());
     return rows.iterator();
-  }
-
-  /** Reads the schema-level list of confirmed-broken appl_ids. */
-  static Set<Long> loadExcludedApplIds() {
-    Set<Long> ids = new LinkedHashSet<Long>();
-    for (Object o : ModelOperand.getList(EXCLUDE_APPL_IDS_PATH)) {
-      ids.add(Long.valueOf(String.valueOf(o).trim()));
-    }
-    return ids;
   }
 
   /** Sets {@code pub_year} on every row from iCite, one batched lookup per {@link #ICITE_BATCH} pmids. */
@@ -150,7 +182,10 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       throws IOException {
     Set<Long> pmidSet = new LinkedHashSet<Long>();
     for (Map<String, Object> row : rows) {
-      pmidSet.add((Long) row.get("pmid"));
+      Long pmid = (Long) row.get("pmid");
+      if (pmid != null) {
+        pmidSet.add(pmid);
+      }
     }
     List<Long> pmids = new ArrayList<Long>(pmidSet);
     Map<Long, Integer> years = new HashMap<Long, Integer>();
@@ -219,48 +254,116 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    * walked instead.
    */
   List<Map<String, Object>> fetchPublicationsForBatch(List<Long> applIdBatch, String year,
-      RawCache rawCache, int batchIndex) throws IOException {
+      RawCache rawCache, int batchIndex, Map<Long, String> invalid, Limits limits)
+      throws IOException {
     return fetchPublicationsForBatchPart(applIdBatch, year, rawCache,
-        String.valueOf(batchIndex));
+        String.valueOf(batchIndex), invalid, limits);
   }
 
   /**
-   * Fetches one id list; on HTTP 500 splits it in half and recurses ({@code label} names the
-   * split path), and a single id that still fails 500 throws naming it.
+   * Fetches one id list. A multi-id list that fails with HTTP 5xx, or whose result set exceeds the
+   * endpoint's offset window, is split in half and each half recursed. A single id that still
+   * returns 5xx after the configured retries is an invalid source record: one marker row is
+   * emitted and the id is recorded in {@code invalid}. A single id whose result set exceeds the
+   * window throws.
    */
   private List<Map<String, Object>> fetchPublicationsForBatchPart(List<Long> ids, String year,
-      RawCache rawCache, String label) throws IOException {
+      RawCache rawCache, String label, Map<Long, String> invalid, Limits limits)
+      throws IOException {
+    if (ids.size() == 1) {
+      return fetchSingleId(ids.get(0), year, rawCache, label, invalid, limits);
+    }
     try {
       return fetchPublicationsPages(ids, year, rawCache, "batch" + label);
     } catch (IOException e) {
-      if (!isHttp500(e)) {
+      if (!(e instanceof ResultWindowExceededException) && !isHttp5xx(e)) {
         throw e;
       }
-      if (ids.size() == 1) {
-        throw new IOException("NIH RePORTER publications/search returns HTTP 500 for appl_id "
-            + ids.get(0) + " (fy=" + year + "); confirm it is poison and add it to "
-            + "excludeApplIds in research-schema.yaml nih_publications", e);
-      }
       int mid = ids.size() / 2;
-      LOGGER.warn("nih_publications: HTTP 500 for batch{} of {} appl_ids (fy={}); splitting "
-          + "into {} + {}", label, ids.size(), year, mid, ids.size() - mid);
+      LOGGER.warn("nih_publications: {} for batch{} of {} appl_ids (fy={}); splitting into {} + {}",
+          e.getMessage(), label, ids.size(), year, mid, ids.size() - mid);
       List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
       rows.addAll(fetchPublicationsForBatchPart(ids.subList(0, mid), year, rawCache,
-          label + "a"));
+          label + "a", invalid, limits));
       rows.addAll(fetchPublicationsForBatchPart(ids.subList(mid, ids.size()), year, rawCache,
-          label + "b"));
+          label + "b", invalid, limits));
       return rows;
     }
   }
 
-  private static boolean isHttp500(Throwable e) {
-    for (Throwable t = e; t != null; t = t.getCause()) {
-      String m = t.getMessage();
-      if (m != null && m.startsWith("NIH RePORTER HTTP 500")) {
-        return true;
+  private List<Map<String, Object>> fetchSingleId(Long applId, String year, RawCache rawCache,
+      String label, Map<Long, String> invalid, Limits limits) throws IOException {
+    int maxRetries = limits.maxRetries;
+    List<Long> single = java.util.Collections.singletonList(applId);
+    for (int attempt = 1;; attempt++) {
+      try {
+        return fetchPublicationsPages(single, year, rawCache, "batch" + label);
+      } catch (ResultWindowExceededException e) {
+        // One grant does not have >10000 publications: for these ids the endpoint ignores the
+        // appl_id filter and answers with an unrelated set of projects' papers (observed for
+        // intramural appl_ids, e.g. 11333657 -> ZIDBC011317), so the response says nothing
+        // about this appl_id. Retrying returns the same thing; it is an invalid source record.
+        String issue = "NIH publications API ignored the appl_id filter: " + e.getMessage()
+            + " for this appl_id alone";
+        return invalidMarker(applId, year, issue, invalid, limits, e);
+      } catch (IOException e) {
+        if (!isHttp5xx(e)) {
+          throw e;
+        }
+        if (attempt <= maxRetries) {
+          LOGGER.warn("nih_publications: appl_id {} alone failed attempt {} of {} ({}); retrying",
+              applId, attempt, maxRetries + 1, e.getMessage());
+          sleepBackoff(attempt);
+          continue;
+        }
+        String issue = "NIH publications API returned HTTP " + httpStatus(e)
+            + " for this appl_id alone after " + attempt + " attempts";
+        return invalidMarker(applId, year, issue, invalid, limits, e);
       }
     }
-    return false;
+  }
+
+  /** Records {@code applId} as invalid and returns its single marker row; fails past the cap. */
+  private List<Map<String, Object>> invalidMarker(Long applId, String year, String issue,
+      Map<Long, String> invalid, Limits limits, IOException cause) throws IOException {
+    LOGGER.warn("nih_publications: appl_id {} fy={} is INVALID: {}", applId, year, issue);
+    invalid.put(applId, issue);
+    int max = limits.maxInvalid;
+    if (invalid.size() > max) {
+      List<Long> first = new ArrayList<Long>(invalid.keySet());
+      throw new IOException("nih_publications: " + invalid.size() + " invalid appl_ids in one "
+          + "slice exceeds maxInvalidRecordsPerSlice=" + max + " (first: "
+          + first.subList(0, Math.min(5, first.size())) + "); treating as an API outage, "
+          + "not committing invalid markers", cause);
+    }
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    Map<String, Object> row = toRow(applId, null, null, year);
+    row.put("record_status", STATUS_INVALID);
+    row.put("record_issue", issue);
+    rows.add(row);
+    return rows;
+  }
+
+  private void sleepBackoff(int attempt) throws IOException {
+    try {
+      Thread.sleep(retryBackoffMs * attempt);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while backing off a NIH retry", ie);
+    }
+  }
+
+  private static boolean isHttp5xx(Throwable e) {
+    return httpStatus(e) >= 500;
+  }
+
+  private static int httpStatus(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause()) {
+      if (t instanceof NihHttpException) {
+        return ((NihHttpException) t).status;
+      }
+    }
+    return -1;
   }
 
   private List<Map<String, Object>> fetchPublicationsPages(List<Long> applIdBatch, String year,
@@ -281,16 +384,23 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       JsonNode root = postJson(publicationsEndpoint, body, rawCache,
           "pubs-" + batchLabel + "-offset-" + offset);
       JsonNode results = root.path("results");
+      int total = root.path("meta").path("total").asInt(0);
+      if (total > MAX_REACHABLE_ROWS) {
+        throw new ResultWindowExceededException(total);
+      }
       if (!results.isArray() || results.size() == 0) {
         break;
       }
       for (JsonNode r : results) {
         Long applId = longOrNull(r, "applid");
         if (applId != null && batchSet.contains(applId)) {
-          rows.add(toRow(r, year));
+          Map<String, Object> row = toRow(applId, text(r, "coreproject"), longOrNull(r, "pmid"),
+              year);
+          row.put("record_status", STATUS_VALID);
+          row.put("record_issue", null);
+          rows.add(row);
         }
       }
-      int total = root.path("meta").path("total").asInt(0);
       offset += PAGE_SIZE;
       if (offset >= total || results.size() < PAGE_SIZE) {
         break;
@@ -299,12 +409,12 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     return rows;
   }
 
-  private Map<String, Object> toRow(JsonNode r, String year) {
+  private Map<String, Object> toRow(Long applId, String coreProjectNum, Long pmid, String year) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
-    row.put("appl_id", longOrNull(r, "applid"));
+    row.put("appl_id", applId);
     row.put("fiscal_year", year);
-    row.put("core_project_num", text(r, "coreproject"));
-    row.put("pmid", longOrNull(r, "pmid"));
+    row.put("core_project_num", coreProjectNum);
+    row.put("pmid", pmid);
     return row;
   }
 
@@ -348,7 +458,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
           }
         }
       }
-      throw new IOException("NIH RePORTER HTTP " + status + ": " + err);
+      throw new NihHttpException(status, err.toString());
     }
     return conn.getInputStream();
   }

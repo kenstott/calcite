@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.law;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -30,7 +31,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -398,7 +398,7 @@ public class LdaApiProvider implements StorageAwareDataProvider {
 
   private static JsonNode fetchNode(String url, Map<String, String> headers,
       HttpSourceConfig.RateLimitConfig rateLimit) throws IOException {
-    HttpURLConnection conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
+    SharedHttpClient.Response conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
     try (InputStream in = conn.getInputStream()) {
       return MAPPER.readTree(in);
     } finally {
@@ -580,7 +580,7 @@ public class LdaApiProvider implements StorageAwareDataProvider {
         }
       }
       String url = n == 1 ? firstUrl : nextUrl;
-      HttpURLConnection conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
+      SharedHttpClient.Response conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
       byte[] body;
       try (InputStream in = conn.getInputStream()) {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();

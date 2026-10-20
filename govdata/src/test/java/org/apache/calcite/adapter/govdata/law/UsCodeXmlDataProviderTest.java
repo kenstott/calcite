@@ -96,6 +96,14 @@ class UsCodeXmlDataProviderTest {
     return Files.createTempDirectory("us-code-test-").toFile();
   }
 
+  @Test void testReleasePointIsReadFromTheCurrencyPageLine() {
+    String[] p = UsCodeXmlDataProvider.releasePointIn("<p>The United States Code Online is "
+        + "current through Public Law 119-121 (October 9, 2026).</p>");
+    assertEquals("119", p[0]);
+    assertEquals("121", p[1]);
+    assertNull(UsCodeXmlDataProvider.releasePointIn("<p>Page Not Found</p>"));
+  }
+
   @Test void testTitleSectionsAreStreamedWithTextAndMetadata() throws Exception {
     File dir = tempDir();
     List<Map<String, Object>> rows = parse(TITLE_XML, dir);

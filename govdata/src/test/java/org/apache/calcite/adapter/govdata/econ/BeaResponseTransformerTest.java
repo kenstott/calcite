@@ -133,6 +133,23 @@ class BeaResponseTransformerTest {
     assertEquals("[]", result);
   }
 
+  @Test void testUncodedNoDataFoundIsAnEmptyPeriod() {
+    // The shape BEA returns for fdi_activities when the year is not yet published.
+    String response = "{\"BEAAPI\": {\"Results\": {\"Error\": "
+        + "{\"number\": \"1\", \"error\": \"no data found\"}}}}";
+
+    assertEquals("[]", transformer.transform(response, context));
+  }
+
+  @Test void testOtherUncodedErrorStillThrows() {
+    String response = "{\"BEAAPI\": {\"Results\": {\"Error\": "
+        + "{\"number\": \"2\", \"error\": \"invalid key\"}}}}";
+
+    RuntimeException ex = assertThrows(RuntimeException.class, () ->
+        transformer.transform(response, context));
+    assertTrue(ex.getMessage().contains("invalid key"), ex.getMessage());
+  }
+
   @Test void testEmptyResponse() {
     String result = transformer.transform("", context);
 

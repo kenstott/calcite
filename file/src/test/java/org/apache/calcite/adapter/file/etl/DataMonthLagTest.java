@@ -163,6 +163,50 @@ public class DataMonthLagTest {
     assertTrue(e.getMessage().contains("rather than setting it to 0"), e.getMessage());
   }
 
+  /** 2.5 years is 2 years 6 months: a fractional dataLag is a month lag, not a truncated one. */
+  @Test void aFractionalYearLagIsAMonthLag() {
+    assertEquals(java.time.Period.ofMonths(30), yearRange(map("dataLag", 2.5)).getLagOffset());
+    assertEquals(java.time.Period.ofMonths(23),
+        yearRange(map("dataLag", 23.0 / 12)).getLagOffset());
+  }
+
+  /** 1.9 years is 22.8 months: refused rather than rounded to a lag nobody wrote. */
+  @Test void aFractionalYearLagThatIsNotWholeMonthsIsRejected() {
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> yearRange(map("dataLag", 1.9)));
+    assertTrue(e.getMessage().contains("whole number of months"), e.getMessage());
+  }
+
+  /** A lag is one quantity: dataLag 1 and dataMonthLag 12 agree on the year label as well. */
+  @Test void aTwelveMonthLagIsAOneYearLagLabelIncluded() {
+    for (LocalDate d : new LocalDate[] {LocalDate.of(2026, 1, 15), LocalDate.of(2026, 10, 19),
+        LocalDate.of(2026, 12, 31)}) {
+      PipelineClock.setOverrideForTest(d);
+      assertEquals(years(yearRange(map("dataLag", 1))), years(yearRange(map("dataMonthLag", 12))),
+          "publish years on " + d);
+      assertEquals(dataYears(yearRange(map("dataLag", 1))),
+          dataYears(yearRange(map("dataMonthLag", 12))), "data years on " + d);
+    }
+  }
+
+  /** 30 months = 2 whole years (shift) + 6 months (cap): year stays the publish year. */
+  @Test void aThirtyMonthLagShiftsTwoYearsAndCapsBySixMonths() {
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 10, 19)); // minus 6 months = April 2026
+    assertEquals("2026", years(yearRange(map("dataMonthLag", 30))).get(0));
+    assertEquals("2024", dataYears(yearRange(map("dataMonthLag", 30))).get(0));
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 5, 19)); // minus 6 months = Nov 2025
+    assertEquals("2025", years(yearRange(map("dataMonthLag", 30))).get(0));
+    assertEquals("2023", dataYears(yearRange(map("dataMonthLag", 30))).get(0));
+  }
+
+  /** A 23-month lag reaches year N from December of N+1: 11 months after the year ends. */
+  @Test void aTwentyThreeMonthLagLandsTheNewestYearInDecember() {
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 11, 15));
+    assertEquals("2024", dataYears(yearRange(map("dataMonthLag", 23))).get(0));
+    PipelineClock.setOverrideForTest(LocalDate.of(2026, 12, 1));
+    assertEquals("2025", dataYears(yearRange(map("dataMonthLag", 23))).get(0));
+  }
+
   @Test void negativeMonthLagIsRejected() {
     assertThrows(IllegalArgumentException.class, () -> yearRange(map("dataMonthLag", -1)));
   }

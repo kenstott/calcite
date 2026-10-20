@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.econ;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -74,7 +75,7 @@ public class IlostatTransformer implements StreamingResponseTransformer {
     }
     LOGGER.info("ilostat[{}]: streaming {}", indicator, url);
 
-    HttpURLConnection conn;
+    SharedHttpClient.Response conn;
     try {
       // Shared retryable open (Retry-After + backoff + declared rateLimit); default UA is GovData/1.0.
       conn = RetryableHttp.openWithRetry(url, null, context.getRateLimit(), false);
@@ -153,14 +154,14 @@ public class IlostatTransformer implements StreamingResponseTransformer {
   /** Lazy row iterator over the gzip CSV; closes the stream on exhaustion. */
   private static final class IloRowIterator implements Iterator<Map<String, Object>> {
     private final BufferedReader reader;
-    private final HttpURLConnection conn;
+    private final SharedHttpClient.Response conn;
     private final Map<String, Integer> idx;
     private final String indicator;
     private final String indicatorName;
     private Map<String, Object> mapped;
     private boolean done;
 
-    IloRowIterator(BufferedReader reader, HttpURLConnection conn, Map<String, Integer> idx,
+    IloRowIterator(BufferedReader reader, SharedHttpClient.Response conn, Map<String, Integer> idx,
         String indicator, String indicatorName, String url) {
       this.reader = reader;
       this.conn = conn;
