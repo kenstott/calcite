@@ -52,7 +52,10 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -338,8 +341,12 @@ class SharedHttpClientTest {
       }
       ex.close();
     });
-    SharedHttpClient.Response r = SharedHttpClient.execute(
-        new SharedHttpClient.Request("GET", http11Url + "/stall").setReadTimeoutMs(500));
+    // The headers are awaited without a bound, so only the body read meets the 500ms guard;
+    // execute() would apply the same 500ms to connect plus headers too.
+    HttpResponse<InputStream> answered = SharedHttpClient.client(false).send(
+        HttpRequest.newBuilder(URI.create(http11Url + "/stall")).build(),
+        HttpResponse.BodyHandlers.ofInputStream());
+    SharedHttpClient.Response r = new SharedHttpClient.Response(answered, 500);
     InputStream in = r.getInputStream();
     byte[] buf = new byte[4];
     assertEquals(4, in.read(buf));
