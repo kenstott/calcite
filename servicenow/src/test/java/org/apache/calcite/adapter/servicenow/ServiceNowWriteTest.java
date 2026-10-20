@@ -28,6 +28,7 @@ import java.util.List;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -161,6 +162,30 @@ class ServiceNowWriteTest {
       assertThat(server.writes().get(0).method, is("DELETE"));
       assertThat(strings(conn, "SELECT number FROM incident WHERE number = 'INC0000003'")
           .isEmpty(), is(true));
+    }
+  }
+
+  /**
+   * An UPDATE or DELETE reads only the sys_id of each row it writes and the fields its filter
+   * reads: a field the instance does not return to this user (sys_user's accumulated_roles on
+   * dev453859) is never asked for, so it cannot fail the write.
+   */
+  @Test void anUpdateOrDeleteReadsOnlyTheSysIdAndItsFilter() throws Exception {
+    for (String sql : new String[] {
+        "UPDATE incident SET priority = 4 WHERE number = 'INC0000001'",
+        "DELETE FROM incident WHERE number = 'INC0000003'"}) {
+      try (FixtureServer server = new FixtureServer(); Connection conn = connect(server, "")) {
+        assertThat(update(conn, sql), is(1));
+        final List<String> read = new ArrayList<>();
+        for (FixtureServer.Seen seen : server.requests("incident")) {
+          if (seen.method.equals("GET")) {
+            read.add(seen.params.get("sysparm_fields"));
+          }
+        }
+        // Every page of the scan
+        assertThat(sql, read.isEmpty(), is(false));
+        assertThat(sql, read, everyItem(is("sys_id,number")));
+      }
     }
   }
 
