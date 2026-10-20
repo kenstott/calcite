@@ -231,15 +231,28 @@ class NihReporterPublicationsProviderTest {
     Map<String, Object> extra = new HashMap<String, Object>();
     extra.put("maxRetries", 3);
     extra.put("maxInvalidRecordsPerSlice", 25);
+    extra.put("requestsPerMinute", 150);
     NihReporterPublicationsProvider.Limits l =
         NihReporterPublicationsProvider.Limits.from(configWith(extra));
     assertEquals(3, l.maxRetries);
     assertEquals(25, l.maxInvalid);
+    assertEquals(150, l.requestsPerMinute);
   }
 
   @Test void missingRequiredSettingFailsLoudly() {
     assertThrows(IllegalStateException.class,
         () -> NihReporterPublicationsProvider.Limits.from(
             configWith(new HashMap<String, Object>())));
+  }
+
+  @Test void pacerSpacesCallsByTheQuotaInterval() throws Exception {
+    NihReporterPublicationsProvider.CallPacer pacer = new NihReporterPublicationsProvider.CallPacer();
+    pacer.configure(600, 3); // 100 ms apart
+    long t0 = System.currentTimeMillis();
+    for (int i = 0; i < 4; i++) {
+      pacer.await();
+    }
+    long elapsed = System.currentTimeMillis() - t0;
+    assertTrue(elapsed >= 290, "4 calls at 100 ms spacing took " + elapsed + " ms");
   }
 }

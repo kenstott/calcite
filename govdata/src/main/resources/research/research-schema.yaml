@@ -1039,6 +1039,9 @@ partitionedTables:
       # provider from this block.
       maxRetries: 3
       maxInvalidRecordsPerSlice: 100
+      # RePORTER admits 200 calls per minute per client and answers 429 beyond that; slices run
+      # concurrently, so the provider spaces uncached calls to stay under this together.
+      requestsPerMinute: 150
       rawCache:
         enabled: true
     hooks:

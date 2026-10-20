@@ -73,6 +73,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
    *  the ETL phase, so it reads back empty while this provider runs. */
   static final String MAX_INVALID_KEY = "maxInvalidRecordsPerSlice";
   static final String MAX_RETRIES_KEY = "maxRetries";
+  static final String REQUESTS_PER_MINUTE_KEY = "requestsPerMinute";
   static final String STATUS_VALID = "valid";
   static final String STATUS_INVALID = "invalid_source_record";
   // The publications endpoint rejects offset + limit above 10000.
@@ -126,15 +127,23 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   static final class Limits {
     final int maxRetries;
     final int maxInvalid;
+    /** RePORTER admits 200 calls per minute per client; 0 means the caller does not pace. */
+    final int requestsPerMinute;
 
     Limits(int maxRetries, int maxInvalid) {
+      this(maxRetries, maxInvalid, 0);
+    }
+
+    Limits(int maxRetries, int maxInvalid, int requestsPerMinute) {
       this.maxRetries = maxRetries;
       this.maxInvalid = maxInvalid;
+      this.requestsPerMinute = requestsPerMinute;
     }
 
     static Limits from(EtlPipelineConfig config) {
       Map<String, Object> source = config.getRawSourceConfig();
-      return new Limits(require(source, MAX_RETRIES_KEY), require(source, MAX_INVALID_KEY));
+      return new Limits(require(source, MAX_RETRIES_KEY), require(source, MAX_INVALID_KEY),
+          require(source, REQUESTS_PER_MINUTE_KEY));
     }
 
     private static int require(Map<String, Object> source, String key) {
@@ -157,6 +166,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     }
 
     Limits limits = Limits.from(config);
+    PACER.configure(limits.requestsPerMinute, limits.maxRetries);
     List<Long> applIds = fetchApplIds(year, ic, rawCache);
     // Offset paging over an unsorted result set can return the same link on more than one page,
     // so (appl_id, pmid) is deduplicated to keep it unique within the slice.
@@ -428,8 +438,72 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
   private JsonNode postJson(String url, String jsonBody, RawCache rawCache, String pageLabel)
       throws IOException {
     String key = url + "/" + pageLabel + "?" + jsonBody;
-    try (InputStream in = rawCache.openStream(key, () -> rawPost(url, jsonBody))) {
+    try (InputStream in = rawCache.openStream(key, () -> rawPostPaced(url, jsonBody))) {
       return MAPPER.readTree(in);
+    }
+  }
+
+  /**
+   * Spaces uncached RePORTER calls so every slice running in this JVM together stays under the
+   * per-minute quota, and waits out one quota window and retries when a 429 gets through anyway.
+   */
+  private InputStream rawPostPaced(String url, String jsonBody) throws IOException {
+    for (int attempt = 1;; attempt++) {
+      PACER.await();
+      try {
+        return rawPost(url, jsonBody);
+      } catch (NihHttpException e) {
+        if (e.status != 429 || attempt > PACER.maxRetries()) {
+          throw e;
+        }
+        LOGGER.warn("nih_publications: RePORTER quota hit (attempt {}/{}); waiting {} ms for the "
+            + "window to reset", attempt, PACER.maxRetries() + 1, QUOTA_WINDOW_MS);
+        sleepFor(QUOTA_WINDOW_MS);
+      }
+    }
+  }
+
+  private static void sleepFor(long ms) throws IOException {
+    try {
+      Thread.sleep(ms);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while waiting out a NIH quota window", ie);
+    }
+  }
+
+  /** One minute: the window the RePORTER quota message names ("maximum admitted 200 per 1m"). */
+  private static final long QUOTA_WINDOW_MS = 60000L;
+
+  /** Process-wide: slices run on several threads but share one quota. */
+  private static final CallPacer PACER = new CallPacer();
+
+  /** Hands out call start times at least {@code 60000 / requestsPerMinute} ms apart. */
+  static final class CallPacer {
+    private long intervalMs;
+    private int maxRetries;
+    private long nextStart;
+
+    synchronized void configure(int requestsPerMinute, int maxRetries) {
+      this.intervalMs = requestsPerMinute <= 0 ? 0 : QUOTA_WINDOW_MS / requestsPerMinute;
+      this.maxRetries = maxRetries;
+    }
+
+    synchronized int maxRetries() {
+      return maxRetries;
+    }
+
+    void await() throws IOException {
+      long wait;
+      synchronized (this) {
+        long now = System.currentTimeMillis();
+        long start = Math.max(now, nextStart);
+        nextStart = start + intervalMs;
+        wait = start - now;
+      }
+      if (wait > 0) {
+        sleepFor(wait);
+      }
     }
   }
 
