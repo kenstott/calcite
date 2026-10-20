@@ -459,6 +459,16 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
         LOGGER.warn("nih_publications: RePORTER quota hit (attempt {}/{}); waiting {} ms for the "
             + "window to reset", attempt, PACER.maxRetries() + 1, QUOTA_WINDOW_MS);
         sleepFor(QUOTA_WINDOW_MS);
+      } catch (java.net.SocketException | java.net.UnknownHostException
+          | java.net.SocketTimeoutException e) {
+        // "Network is unreachable", a reset or a timeout: the link, not the answer. Wait out a
+        // minute (outages here last longer than the 2 s HTTP backoff) and ask again.
+        if (attempt > PACER.maxRetries()) {
+          throw e;
+        }
+        LOGGER.warn("nih_publications: RePORTER connection failed ({}) (attempt {}/{}); waiting "
+            + "{} ms", e, attempt, PACER.maxRetries() + 1, QUOTA_WINDOW_MS);
+        sleepFor(QUOTA_WINDOW_MS);
       }
     }
   }
