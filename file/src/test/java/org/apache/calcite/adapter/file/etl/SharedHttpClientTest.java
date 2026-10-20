@@ -476,6 +476,11 @@ class SharedHttpClientTest {
 
   /** Serves one raw response then closes (optionally with a TCP reset); returns the thrown read. */
   private IOException readTruncated(String rawResponse, boolean reset) throws Exception {
+    // The connection is cut only once the client has its response: cut before, the reset races
+    // the headers -- Windows drops received bytes the client has not read yet, and the JDK
+    // client may already have failed reading the body inside execute.
+    final java.util.concurrent.CountDownLatch responded =
+        new java.util.concurrent.CountDownLatch(1);
     try (java.net.ServerSocket raw = new java.net.ServerSocket(0, 1,
         java.net.InetAddress.getByName("localhost"))) {
       Thread t = new Thread(() -> {
@@ -483,16 +488,22 @@ class SharedHttpClientTest {
           sock.getInputStream().read(new byte[4096]);
           sock.getOutputStream().write(rawResponse.getBytes(StandardCharsets.UTF_8));
           sock.getOutputStream().flush();
+          if (!responded.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+            throw new IllegalStateException("the client never had its response");
+          }
           if (reset) {
             sock.setSoLinger(true, 0);
           }
         } catch (IOException ex) {
           throw new java.io.UncheckedIOException(ex);
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
         }
       });
       t.start();
       SharedHttpClient.Response r = SharedHttpClient.execute(new SharedHttpClient.Request(
           "GET", "http://localhost:" + raw.getLocalPort() + "/t"));
+      responded.countDown();
       IOException e = assertThrows(IOException.class, () -> readAll(r.getInputStream()));
       t.join();
       return e;

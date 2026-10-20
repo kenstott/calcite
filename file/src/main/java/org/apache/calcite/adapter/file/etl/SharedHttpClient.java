@@ -63,7 +63,7 @@ import java.util.concurrent.TimeoutException;
  * Gzip is not negotiated here, exactly as before: no {@code Accept-Encoding} is added and callers
  * that declare a gzip response (the {@code compressed} setting) unwrap the stream themselves.
  *
- * <h3>Timeouts</h3>
+ * <h2>Timeouts</h2>
  * <ul>
  *   <li><b>Response headers:</b> {@link Request#setReadTimeoutMs} bounds connect plus time to
  *       the response headers (the JDK {@code HttpRequest.timeout}). A per-request connect timeout
