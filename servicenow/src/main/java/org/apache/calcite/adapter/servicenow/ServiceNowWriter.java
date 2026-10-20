@@ -105,7 +105,7 @@ final class ServiceNowWriter {
   }
 
   /**
-   * Updates the rows, each holding the table row followed by one new value per update column.
+   * Updates the rows, each holding its sys_id followed by one new value per update column.
    *
    * @return the number of records written
    */
@@ -123,7 +123,7 @@ final class ServiceNowWriter {
         for (int u = 0; u < updateColumns.size(); u++) {
           final ServiceNowColumn column = writable(byName.get(updateColumns.get(u)));
           fields.put(column.field,
-              ValueConverter.toText(column, row[columns.size() + u], table));
+              ValueConverter.toText(column, row[1 + u], table));
         }
         connection.updateRecord(table, sysId, fields);
         written++;
@@ -135,7 +135,7 @@ final class ServiceNowWriter {
   }
 
   /**
-   * Deletes the rows, each the table row.
+   * Deletes the rows, each holding its sys_id.
    *
    * @return the number of records deleted
    */
