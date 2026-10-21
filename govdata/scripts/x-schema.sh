@@ -82,10 +82,14 @@ echo "[x-schema] claimed exclusive pool budget (MAX_WORKERS=0) — restored on e
 run_step() {
   local label="$1" limit="$2" main_class="$3"
   echo "[x-schema] $label (jar: $JAR)"
+  # The file adapter refuses to start without a staging directory (REQ-1992); common.sh gives that
+  # to the pool workers through GOVDATA_JAVA_OPTS, but the heap/direct-memory limits in that
+  # variable are sized for a worker, so only the two directory properties are passed here.
+  local dirs=("-Djava.io.tmpdir=$GOVDATA_TMPDIR" "-Dcalcite.file.staging.directory=$GOVDATA_TMPDIR")
   if [ -n "$limit" ]; then
-    timeout "$limit" "$GOVDATA_JAVA_BIN" -cp "$JAR" "$main_class"
+    timeout "$limit" "$GOVDATA_JAVA_BIN" "${dirs[@]}" -cp "$JAR" "$main_class"
   else
-    "$GOVDATA_JAVA_BIN" -cp "$JAR" "$main_class"
+    "$GOVDATA_JAVA_BIN" "${dirs[@]}" -cp "$JAR" "$main_class"
   fi
 }
 
