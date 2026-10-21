@@ -106,7 +106,7 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
   // Discovery: data.json catalog -> matching dataset -> per-quarter CSVs
   // ---------------------------------------------------------------------
 
-  private static final class QuarterFile {
+  static final class QuarterFile {
     final int year;
     final int quarter;
     final String csvUrl;
@@ -120,40 +120,70 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
 
   private List<QuarterFile> resolveQuarters(String catalogUrl, String userAgent)
       throws IOException {
-    JsonNode datasets = MAPPER.readTree(getText(catalogUrl, userAgent)).path("dataset");
+    return quartersIn(MAPPER.readTree(getText(catalogUrl, userAgent)));
+  }
+
+  /**
+   * Picks the quarterly CSVs out of the data.json catalog. data.cms.gov publishes each quarter as
+   * its own dataset titled "{@value #DATASET_TITLE} : {date}" (not one dataset with a distribution
+   * per quarter), and gives a distribution's {@code temporal} as a list of
+   * {@code {startDate, endDate}} objects. Distributions without a download URL are placeholders.
+   */
+  static List<QuarterFile> quartersIn(JsonNode catalog) {
+    JsonNode datasets = catalog.path("dataset");
     List<QuarterFile> quarters = new ArrayList<>();
     if (!datasets.isArray()) {
       return quarters;
     }
+    java.util.Set<Integer> seen = new java.util.HashSet<>();
     for (JsonNode dataset : datasets) {
-      if (!DATASET_TITLE.equals(dataset.path("title").asText(""))) {
+      String title = dataset.path("title").asText("");
+      if (!DATASET_TITLE.equals(title) && !title.startsWith(DATASET_TITLE + " : ")) {
         continue;
       }
       for (JsonNode dist : dataset.path("distribution")) {
-        String downloadUrl = dist.path("downloadURL").asText(null);
-        String temporal = dist.path("temporal").asText(null);
-        if (downloadUrl == null || temporal == null || !temporal.contains("/")) {
+        String downloadUrl = dist.path("downloadURL").asText("");
+        if (downloadUrl.isEmpty()) {
           continue;
         }
-        String startDate = temporal.substring(0, temporal.indexOf('/'));
+        String startDate = startDateOf(dist.path("temporal"));
+        if (startDate == null) {
+          LOGGER.info("CMS PBJ nurse staffing: no usable temporal on distribution {} — skipping",
+              downloadUrl);
+          continue;
+        }
         LocalDate start;
         try {
           start = LocalDate.parse(startDate);
         } catch (RuntimeException e) {
-          LOGGER.info("CMS PBJ nurse staffing: unparseable temporal '{}' on distribution {} "
-              + "— skipping", temporal, downloadUrl);
+          LOGGER.info("CMS PBJ nurse staffing: unparseable start date '{}' on distribution {} "
+              + "— skipping", startDate, downloadUrl);
           continue;
         }
         int quarter = ((start.getMonthValue() - 1) / 3) + 1;
+        if (!seen.add(start.getYear() * 10 + quarter)) {
+          LOGGER.warn("CMS PBJ nurse staffing: second distribution for {}Q{} ({}) — keeping the "
+              + "first", start.getYear(), quarter, downloadUrl);
+          continue;
+        }
         quarters.add(new QuarterFile(start.getYear(), quarter, downloadUrl));
       }
-      break;
     }
     // Newest first: a dqRowLimit-capped DQ sample then exercises the current CSV shape,
     // not the earliest (aliased-header) vintage.
     quarters.sort(Comparator.<QuarterFile>comparingInt(q -> q.year)
         .thenComparingInt(q -> q.quarter).reversed());
     return quarters;
+  }
+
+  /** Start date from a list of {startDate,endDate} objects, or from a "start/end" string. */
+  private static String startDateOf(JsonNode temporal) {
+    if (temporal.isArray() && temporal.size() > 0) {
+      String d = temporal.get(0).path("startDate").asText("");
+      return d.isEmpty() ? null : d;
+    }
+    String text = temporal.asText("");
+    return text.contains("/") ? text.substring(0, text.indexOf('/')) : null;
   }
 
   // ---------------------------------------------------------------------
