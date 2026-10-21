@@ -127,7 +127,14 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
           return null;
         }
         if (status == HttpURLConnection.HTTP_OK) {
-          return readBody(conn.getInputStream());
+          String body = readBody(conn.getInputStream());
+          // HttpURLConnection ends a body the server cut short at the declared length without
+          // raising; compare explicitly so a truncated body is retried, not parsed.
+          long declared = conn.getContentLengthLong();
+          if (declared >= 0 && body.getBytes(StandardCharsets.UTF_8).length != declared) {
+            throw new java.net.SocketException("truncated body from " + url);
+          }
+          return body;
         }
         if (status != 429 && status < 500) {
           throw new IOException("HTTP " + status + " from " + url);
@@ -136,6 +143,14 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
         // Read Retry-After before disconnect: when HUD states how long its rate-limit window
         // has left, obey it. Guessing shorter just burns an attempt and returns another 429.
         waitMs = retryAfterMs(conn, attempt);
+      } catch (java.net.SocketException | java.net.SocketTimeoutException
+          | java.net.UnknownHostException e) {
+        // "Network is unreachable", a reset or a timeout: the link dropped, not HUD's answer
+        // (2026-10-20: AL and AK failed this way and sank the whole 56-batch table).
+        last = e;
+        LOGGER.warn("income_limits_county: connection failed (attempt {}/{}) for {}: {}", attempt,
+            MAX_RETRIES, url, e.toString());
+        waitMs = Math.min(BASE_BACKOFF_MS << (attempt - 1), MAX_BACKOFF_MS);
       } finally {
         conn.disconnect();
       }
