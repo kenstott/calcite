@@ -85,6 +85,17 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
 
   private static final String[] REQUIRED_HEADERS = {"provnum", "workdate", "mdscensus"};
 
+  /** Retry count for a quarterly CSV that fails mid-download; required in the schema YAML. */
+  private static int maxRetries(EtlPipelineConfig config) {
+    Map<String, Object> source = config.getRawSourceConfig();
+    Object v = source == null ? null : source.get("maxRetries");
+    if (!(v instanceof Number)) {
+      throw new IllegalStateException(
+          "cms_pbj_nurse_staffing: source.maxRetries is required in the schema YAML, got " + v);
+    }
+    return ((Number) v).intValue();
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
     String catalogUrl = config.getSource() != null ? config.getSource().getUrl() : null;
@@ -100,7 +111,8 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
     }
     LOGGER.info("CMS PBJ nurse staffing: resolved {} quarterly distribution(s)", quarters.size());
 
-    return new MultiQuarterRowIterator(quarters, userAgent, rawCache);
+    return new MultiQuarterRowIterator(quarters, userAgent, rawCache, maxRetries(config),
+        10_000L);
   }
 
   // ---------------------------------------------------------------------
@@ -191,20 +203,51 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
   // Row streaming: one quarter's CSV at a time, one row at a time
   // ---------------------------------------------------------------------
 
-  private static final class MultiQuarterRowIterator implements Iterator<Map<String, Object>> {
+  static final class MultiQuarterRowIterator implements Iterator<Map<String, Object>> {
     private final List<QuarterFile> quarters;
     private final String userAgent;
     private final RawCache rawCache;
+    private final int maxRetries;
+    private final long retryPauseMs;
     private int quarterIndex;
     private BufferedReader reader;
     private Map<String, Integer> headerIndex;
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiQuarterRowIterator(List<QuarterFile> quarters, String userAgent, RawCache rawCache) {
+    MultiQuarterRowIterator(List<QuarterFile> quarters, String userAgent, RawCache rawCache,
+        int maxRetries, long retryPauseMs) {
+      this.retryPauseMs = retryPauseMs;
       this.quarters = quarters;
       this.userAgent = userAgent;
       this.rawCache = rawCache;
+      this.maxRetries = maxRetries;
+    }
+
+    /**
+     * Opens the quarter's CSV through the raw cache, which downloads it whole before returning.
+     * A TLS, reset or timeout failure part-way (seen 2026-10-21: bad_record_mac on 2023Q1 after
+     * three quarters had been cached) repeats the download; completed quarters stay cached.
+     */
+    private InputStream openWithRetry(String csvUrl, String ua) throws IOException {
+      for (int attempt = 1;; attempt++) {
+        try {
+          return rawCache.openStream(csvUrl, () -> openWithUserAgent(csvUrl, ua));
+        } catch (javax.net.ssl.SSLException | java.net.SocketException
+            | java.net.SocketTimeoutException | java.io.EOFException e) {
+          if (attempt > maxRetries) {
+            throw e;
+          }
+          LOGGER.warn("CMS PBJ nurse staffing: download of {} failed (attempt {}/{}): {}", csvUrl,
+              attempt, maxRetries + 1, e.toString());
+          try {
+            Thread.sleep(retryPauseMs * attempt);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while backing off a CMS PBJ download retry", ie);
+          }
+        }
+      }
     }
 
     private void advance() throws IOException {
@@ -237,8 +280,7 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
           quarter.csvUrl);
       final String csvUrl = quarter.csvUrl;
       final String ua = userAgent;
-      reader = new BufferedReader(new InputStreamReader(
-          rawCache.openStream(csvUrl, () -> openWithUserAgent(csvUrl, ua)),
+      reader = new BufferedReader(new InputStreamReader(openWithRetry(csvUrl, ua),
           StandardCharsets.UTF_8));
       String header = CsvRecordReader.readRecord(reader);
       if (header == null) {

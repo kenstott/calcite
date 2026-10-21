@@ -3470,6 +3470,9 @@ partitionedTables:
         User-Agent: "Apache-Calcite-GovData/1.0"
       response:
         format: json  # ignored: CmsPbjNurseStaffingProvider discovers and streams the files itself
+      # A quarterly CSV that fails mid-download (TLS bad_record_mac, reset, timeout) is fetched
+      # again up to this many times before the batch fails; read by the provider from this block.
+      maxRetries: 3
       rawCache:
         enabled: true
 

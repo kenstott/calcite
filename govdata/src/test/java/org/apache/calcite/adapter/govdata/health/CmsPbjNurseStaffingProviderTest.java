@@ -16,7 +16,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.calcite.adapter.file.etl.RawCache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -75,5 +82,56 @@ class CmsPbjNurseStaffingProviderTest {
 
   @Test void unrelatedCatalogYieldsNothing() throws Exception {
     assertTrue(parse(dataset("Something else", "2025-01-01", "http://h/x.csv")).isEmpty());
+  }
+
+  /** Fails the first {@code failures} downloads the way a TLS record error does, then serves a CSV. */
+  private static RawCache flaky(final int failures, final AtomicInteger calls) {
+    return new RawCache() {
+      @Override public InputStream openStream(String url) throws java.io.IOException {
+        return openStream(url, null);
+      }
+
+      @Override public InputStream openStream(String key, ContentSupplier onMiss)
+          throws java.io.IOException {
+        if (calls.incrementAndGet() <= failures) {
+          throw new javax.net.ssl.SSLException("(bad_record_mac) Tag mismatch");
+        }
+        return new ByteArrayInputStream(
+            "provnum,workdate,mdscensus\n015009,20260101,40\n".getBytes("UTF-8"));
+      }
+
+      @Override public boolean isEnabled() {
+        return true;
+      }
+    };
+  }
+
+  private static List<Map<String, Object>> drain(int failures, int maxRetries, AtomicInteger calls) {
+    CmsPbjNurseStaffingProvider.MultiQuarterRowIterator it =
+        new CmsPbjNurseStaffingProvider.MultiQuarterRowIterator(
+            java.util.Collections.singletonList(
+                new CmsPbjNurseStaffingProvider.QuarterFile(2026, 1, "http://h/q1.csv")),
+            "ua", flaky(failures, calls), maxRetries, 1L);
+    List<Map<String, Object>> rows = new ArrayList<>();
+    while (it.hasNext()) {
+      rows.add(it.next());
+    }
+    return rows;
+  }
+
+  @Test void aQuarterDownloadThatFailsMidwayIsFetchedAgain() {
+    AtomicInteger calls = new AtomicInteger();
+    List<Map<String, Object>> rows = drain(2, 3, calls);
+    assertEquals(1, rows.size());
+    assertEquals("015009", rows.get(0).get("ccn"));
+    assertEquals(3, calls.get());
+  }
+
+  @Test void retriesAreBoundedAndThenFailLoudly() {
+    AtomicInteger calls = new AtomicInteger();
+    RuntimeException e = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+        () -> drain(100, 2, calls));
+    assertTrue(e.getCause() instanceof javax.net.ssl.SSLException, String.valueOf(e.getCause()));
+    assertEquals(3, calls.get());
   }
 }
