@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.120.0](https://github.com/kenstott/calcite/compare/engine-v0.119.4...engine-v0.120.0) (2026-10-20)
+
+
+### Features
+
+* **file:** read a fractional dataLag as a month lag ([e639eee](https://github.com/kenstott/calcite/commit/e639eee7f630bf5cd91556c97ecf1a1cd15be150))
+* **file:** route ETL HTTP through a shared HTTP/2-preferring HttpClient ([1a3e557](https://github.com/kenstott/calcite/commit/1a3e55779b6a61653e3dea098afa7422fb20a6cc))
+
+
+### Bug Fixes
+
+* **file:** a glob table's files are read in path order ([#612](https://github.com/kenstott/calcite/issues/612)) ([f38d8d6](https://github.com/kenstott/calcite/commit/f38d8d6eba7029ee285d187481449ac9abb91e93))
+* **file:** a rate-limited request never goes before its slot opens ([#613](https://github.com/kenstott/calcite/issues/613)) ([503408d](https://github.com/kenstott/calcite/commit/503408d13c1a67dff80cc5755226c1e759e0cf56))
+* **file:** reject a fractional dataLag instead of truncating it ([75051fa](https://github.com/kenstott/calcite/commit/75051fab75993a7a2f47cf9b41d8ad65d4c312aa))
+* **govdata/econ:** Comtrade re-fetches a response body the server reset mid-stream ([0b9d359](https://github.com/kenstott/calcite/commit/0b9d35912e101aee1421c1e067a0f1dfb2e3ef4a))
+* **govdata/health:** CDC county overdose tables page Socrata in :id order ([c7c2f7c](https://github.com/kenstott/calcite/commit/c7c2f7c3dd15258697057778a0128d089d705b1b))
+* **govdata/lands:** ungrouped-table safety net stays on the full historical backfill ([437ba4d](https://github.com/kenstott/calcite/commit/437ba4ddec2b07656550c98e04f0537bed72a972))
+* **govdata/lands:** worker-lands.sh honours GOVDATA_TABLES so a scoped force-reprocess runs only the requested tables ([e6ae748](https://github.com/kenstott/calcite/commit/e6ae748679c0badd916b4b5ca8a5e70e1800937e))
+* **govdata/research:** nih_publications bisects HTTP 500 batches and honours excludeApplIds ([fd4bf6b](https://github.com/kenstott/calcite/commit/fd4bf6bfda7ba3a5bddc95a6f15d83852d8f2ce9))
+* **govdata/research:** nih_publications marks invalid source appl_ids instead of excluding them ([ad71c09](https://github.com/kenstott/calcite/commit/ad71c09f0b6992f0a4d4b5827c71721ff37a4720))
+* **govdata/weather:** drought_monitor_weekly declares the CSV the USDM API returns ([ef3e26e](https://github.com/kenstott/calcite/commit/ef3e26e91f7043fd2bcb2243b393da6fe622e8aa))
+* **govdata:** accept four-digit years in SCOTUS slip-opinion dates ([708cc5f](https://github.com/kenstott/calcite/commit/708cc5f7961d3e53d4188acab7e5868c8f513bfd))
+* **govdata:** crime Socrata tables page in :id order ([7d9ba2a](https://github.com/kenstott/calcite/commit/7d9ba2ab38dbf7a9a09aa05718c02398b1197c81))
+* **govdata:** do not request fdi_activities years BEA has not published ([e37e266](https://github.com/kenstott/calcite/commit/e37e266ef442c69f6446482c1e3e1208ab687612))
+* **govdata:** lobbying_activity_bills has its constraints, its spec count and a fixture naming bills ([#611](https://github.com/kenstott/calcite/issues/611)) ([63bdc49](https://github.com/kenstott/calcite/commit/63bdc49aecad32a5e396d66ea42e97d3b4c4846e))
+* **govdata:** mark an unscoped single-appl_id NIH response invalid instead of failing the slice ([81eeb46](https://github.com/kenstott/calcite/commit/81eeb467363735a83ea80a23431d499b3a2f8f64))
+* **govdata:** pace NIH RePORTER calls under the per-minute quota and wait out a 429 ([30e82ac](https://github.com/kenstott/calcite/commit/30e82acad34dd14623a38f6d5c239fbda841dec8))
+* **govdata:** raise the NIH invalid-record cap to 100 per slice ([4927d8b](https://github.com/kenstott/calcite/commit/4927d8b191e1ceb7fa152dde65e39f26675e210b))
+* **govdata:** read the NIH invalid-record limits from the pipeline's source block ([431d7a8](https://github.com/kenstott/calcite/commit/431d7a8f6ca534a8d96da37855aa1571f8573a13))
+* **govdata:** read the USC release point from currency.html ([8b73035](https://github.com/kenstott/calcite/commit/8b7303542242c4459d00c0fff981619872cf77b7))
+* **govdata:** request fdi_activities year N from December of N+1, not all year ([81997e2](https://github.com/kenstott/calcite/commit/81997e28e1238feb8b740c4142b34230e05d5cd2))
+* **govdata:** retry a RePORTER connection failure after a minute instead of failing the slice ([1aeea70](https://github.com/kenstott/calcite/commit/1aeea7095f5d20a4e97b406df44a26e31bfe4a1f))
+* **govdata:** retry a transient iCite failure in nih_publications instead of failing the slice ([0dd6bdf](https://github.com/kenstott/calcite/commit/0dd6bdf50ff02de5bd9978f66b457d87693c3376))
+* **govdata:** spool the Comtrade body to disk so a mid-body reset is retried ([05531bb](https://github.com/kenstott/calcite/commit/05531bbc18ed882907059448431f95b315cb7c12))
+* **govdata:** treat BEA 'no data found' as an unpublished (empty) period ([40aaf94](https://github.com/kenstott/calcite/commit/40aaf94cc3fa7f67daaa319e91cd386cd5f0b4ef))
+
 ## [0.119.4](https://github.com/kenstott/calcite/compare/engine-v0.119.3...engine-v0.119.4) (2026-10-19)
 
 
