@@ -3278,7 +3278,7 @@ econ.metro_food_cpi.year:VARCHAR
 econ.metro_industry.footnotes:VARCHAR
 econ.metro_industry.frequency:VARCHAR
 econ.metro_industry.period:VARCHAR
-econ.metro_industry.periodName:VARCHAR
+econ.metro_industry.period_name:VARCHAR
 econ.metro_industry.series:VARCHAR
 econ.metro_industry.type:VARCHAR
 econ.metro_industry.value:DOUBLE
@@ -3481,7 +3481,7 @@ econ.state_gdp.year:INTEGER
 econ.state_industry.footnotes:VARCHAR
 econ.state_industry.frequency:VARCHAR
 econ.state_industry.period:VARCHAR
-econ.state_industry.periodName:VARCHAR
+econ.state_industry.period_name:VARCHAR
 econ.state_industry.series:VARCHAR
 econ.state_industry.type:VARCHAR
 econ.state_industry.value:DOUBLE
