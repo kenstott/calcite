@@ -195,7 +195,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 4865652
-      checkedAt: "2026-10-20T14:13:03Z"
+      checkedAt: "2026-10-21T14:26:39Z"
     partitions: *standard_partitions
     comment: >
       One row per granted patent (patent_type utility or plant by default; design patents
@@ -795,7 +795,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 80700233
-      checkedAt: "2026-10-20T14:13:05Z"
+      checkedAt: "2026-10-21T14:26:41Z"
     partitions: *standard_partitions
     comment: >
       One row per patent claim. Claims define the legal scope of the patent —
@@ -883,7 +883,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 4865183
-      checkedAt: "2026-10-20T14:13:14Z"
+      checkedAt: "2026-10-21T14:26:49Z"
     partitions: *standard_partitions
     comment: >
       One row per patent. Brief summary section text from the patent specification.
@@ -958,7 +958,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 1619139
-      checkedAt: "2026-10-20T14:13:16Z"
+      checkedAt: "2026-10-21T14:26:51Z"
     partitions: *standard_partitions
     comment: >
       Faithful landing of USPTO TRCFECO2 case_file.csv — one row per trademark application
@@ -1118,7 +1118,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 481605
-      checkedAt: "2026-10-20T14:13:18Z"
+      checkedAt: "2026-10-21T14:26:52Z"
     partitions: *standard_partitions
     comment: >
       Faithful landing of USPTO TRCFECO2 owner.csv — applicant/owner identity, one row per
@@ -1190,7 +1190,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 2122068
-      checkedAt: "2026-10-20T14:13:20Z"
+      checkedAt: "2026-10-21T14:26:53Z"
     partitions: *standard_partitions
     comment: >
       Faithful landing of USPTO TRCFECO2 classification.csv — US class + first-use dates + status,
@@ -1248,7 +1248,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 2131072
-      checkedAt: "2026-10-20T14:13:21Z"
+      checkedAt: "2026-10-21T14:26:54Z"
     partitions: *standard_partitions
     comment: >
       Faithful landing of USPTO TRCFECO2 intl_class.csv — international (Nice) class codes,
@@ -1298,7 +1298,7 @@ partitionedTables:
       distinctYears: 13
       contiguous: true
       rowCount: 2201896
-      checkedAt: "2026-10-20T14:13:22Z"
+      checkedAt: "2026-10-21T14:26:55Z"
     partitions: *standard_partitions
     comment: >
       Faithful landing of USPTO TRCFECO2 statement.csv — goods/services and other statement text,
