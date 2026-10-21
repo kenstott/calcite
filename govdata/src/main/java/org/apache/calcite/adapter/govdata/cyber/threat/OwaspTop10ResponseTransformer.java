@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.threat;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -222,7 +223,7 @@ public class OwaspTop10ResponseTransformer implements ResponseTransformer {
       }
 
       BufferedReader reader = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+          new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8));
       StringBuilder sb = new StringBuilder();
       String line;
       while ((line = reader.readLine()) != null) {

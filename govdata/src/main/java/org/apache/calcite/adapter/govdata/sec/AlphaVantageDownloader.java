@@ -17,6 +17,7 @@
 package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
@@ -286,7 +287,7 @@ public class AlphaVantageDownloader {
 
     JsonNode root;
     try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+        new BufferedReader(new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
       root = objectMapper.readTree(reader);
     }
 

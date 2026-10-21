@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -205,7 +206,7 @@ public class EdgarDownloader {
       String lastModified = conn.getHeaderField("Last-Modified");
 
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+          new BufferedReader(new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
 
         // Read response into string for both parsing and caching
         StringBuilder responseBuilder = new StringBuilder();
@@ -419,7 +420,7 @@ public class EdgarDownloader {
         int responseCode = conn.getResponseCode();
         if (responseCode == 200) {
           // Download the file
-          try (InputStream in = conn.getInputStream();
+          try (InputStream in = CompleteBody.of(conn);
                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             byte[] buffer = new byte[8192];
@@ -510,7 +511,7 @@ public class EdgarDownloader {
       if (conn.getResponseCode() != 200) {
         return null;
       }
-      try (InputStream in = conn.getInputStream();
+      try (InputStream in = CompleteBody.of(conn);
            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
         byte[] buffer = new byte[8192];
         int bytesRead;

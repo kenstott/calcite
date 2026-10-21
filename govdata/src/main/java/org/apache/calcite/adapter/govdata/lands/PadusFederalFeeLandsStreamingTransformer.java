@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.lands;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -125,7 +126,7 @@ public class PadusFederalFeeLandsStreamingTransformer implements StreamingRespon
         }
         Future<JsonNode> future = fetchExecutor.submit(() -> {
           try (BufferedReader r = new BufferedReader(
-              new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+              new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
             return MAPPER.readTree(r);
           }
         });

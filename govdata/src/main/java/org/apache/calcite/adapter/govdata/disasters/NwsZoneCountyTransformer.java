@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.disasters;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -171,7 +172,7 @@ public class NwsZoneCountyTransformer implements StreamingResponseTransformer {
       throw new IOException("NWS zone-county: HTTP " + code + " from " + url);
     }
     StringBuilder sb = new StringBuilder();
-    try (InputStream in = c.getInputStream();
+    try (InputStream in = CompleteBody.of(c);
          BufferedReader r = new BufferedReader(
              new InputStreamReader(in, StandardCharsets.ISO_8859_1))) {
       char[] buf = new char[8192];

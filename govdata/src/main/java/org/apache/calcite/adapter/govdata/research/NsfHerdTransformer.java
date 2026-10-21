@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.research;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -186,7 +187,7 @@ public class NsfHerdTransformer implements StreamingResponseTransformer {
       throw new IOException("HTTP " + status + " from " + url);
     }
 
-    InputStream raw = conn.getInputStream();
+    InputStream raw = CompleteBody.of(conn);
     ZipInputStream zis = new ZipInputStream(raw);
     ZipEntry entry = zis.getNextEntry();
     while (entry != null && !entry.getName().toLowerCase().endsWith(".csv")) {

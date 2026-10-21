@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.transport;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.RawCache;
@@ -227,7 +228,7 @@ public class BtsT100DataProvider implements CachingDataProvider {
       }
     }
     String body;
-    try (InputStream in = conn.getInputStream()) {
+    try (InputStream in = CompleteBody.of(conn)) {
       body = readAll(in);
     }
     return new GetResult(body, cookies.toString());
@@ -256,7 +257,7 @@ public class BtsT100DataProvider implements CachingDataProvider {
       throw new IOException("t100_segments: HTTP " + status + " on POST " + url);
     }
     String contentType = conn.getContentType();
-    try (InputStream in = conn.getInputStream()) {
+    try (InputStream in = CompleteBody.of(conn)) {
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
       byte[] buf = new byte[65536];
       int n;

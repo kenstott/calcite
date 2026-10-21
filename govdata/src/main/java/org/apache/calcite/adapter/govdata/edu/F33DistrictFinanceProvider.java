@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
@@ -242,7 +243,7 @@ public class F33DistrictFinanceProvider implements DataProvider {
     if (status != HttpURLConnection.HTTP_OK) {
       throw new IOException("HTTP " + status + " from " + url);
     }
-    try (InputStream is = conn.getInputStream();
+    try (InputStream is = CompleteBody.of(conn);
          ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
       byte[] buf = new byte[65536];
       int len;

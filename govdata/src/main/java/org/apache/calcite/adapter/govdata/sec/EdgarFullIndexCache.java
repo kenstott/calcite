@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.FilingIndexProvider;
 import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -465,7 +466,7 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
         return null;
       }
       if (responseCode == 200) {
-        try (InputStream is = conn.getInputStream();
+        try (InputStream is = CompleteBody.of(conn);
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
           byte[] buf = new byte[8192];
           int n;

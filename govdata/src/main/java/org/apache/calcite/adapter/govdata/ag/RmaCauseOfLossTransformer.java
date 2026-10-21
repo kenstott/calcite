@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.ag;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -212,7 +213,7 @@ public class RmaCauseOfLossTransformer implements StreamingResponseTransformer {
     if (code < 200 || code >= 300) {
       throw new IOException("RMA Cause of Loss download HTTP " + code + ": " + url);
     }
-    ZipInputStream zis = new ZipInputStream(conn.getInputStream());
+    ZipInputStream zis = new ZipInputStream(CompleteBody.of(conn));
     if (zis.getNextEntry() == null) {
       zis.close();
       throw new IOException("RMA Cause of Loss zip is empty: " + url);

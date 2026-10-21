@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.health;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -143,7 +144,7 @@ public class CountyHealthRankingsPrematureDeathTransformer implements ResponseTr
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);
     }
-    InputStream is = conn.getInputStream();
+    InputStream is = CompleteBody.of(conn);
     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
     try {
       byte[] buf = new byte[65536];

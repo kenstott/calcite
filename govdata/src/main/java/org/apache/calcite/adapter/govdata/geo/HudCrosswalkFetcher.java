@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 // storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -441,7 +442,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
 
     int responseCode = conn.getResponseCode();
     if (responseCode == HttpURLConnection.HTTP_OK) {
-      try (InputStream is = conn.getInputStream()) {
+      try (InputStream is = CompleteBody.of(conn)) {
         return objectMapper.readTree(is);
       }
     } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {

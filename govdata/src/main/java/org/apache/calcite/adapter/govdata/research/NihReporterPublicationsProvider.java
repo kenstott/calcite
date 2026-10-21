@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.research;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -544,7 +545,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
       }
       throw new NihHttpException(status, err.toString());
     }
-    return conn.getInputStream();
+    return CompleteBody.of(conn);
   }
 
   /** An iCite non-2xx; {@code status} decides whether the GET is worth repeating. */
@@ -592,7 +593,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     if (status < 200 || status >= 300) {
       throw new IciteHttpException(status, url);
     }
-    return conn.getInputStream();
+    return CompleteBody.of(conn);
   }
 
   private static String text(JsonNode node, String field) {

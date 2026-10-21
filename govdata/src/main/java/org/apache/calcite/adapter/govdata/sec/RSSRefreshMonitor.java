@@ -10,6 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -212,7 +215,7 @@ public class RSSRefreshMonitor {
     conn.setReadTimeout(30000);
 
     try (BufferedReader reader = new BufferedReader(
-        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+        new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         Matcher matcher = FILING_ID_PATTERN.matcher(line);

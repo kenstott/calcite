@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.IncompleteFetchException;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -4452,7 +4453,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
         try (BufferedReader reader =
             new BufferedReader(
-                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
           StringBuilder content = new StringBuilder();
           String line;
           while ((line = reader.readLine()) != null) {

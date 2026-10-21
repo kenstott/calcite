@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.disasters;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -82,7 +83,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       conn.disconnect();
       throw new IOException("HTTP " + status + " from " + fileUrl);
     }
-    InputStream raw = conn.getInputStream();
+    InputStream raw = CompleteBody.of(conn);
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(new GZIPInputStream(raw), StandardCharsets.UTF_8));
 
@@ -111,7 +112,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       String best = null;
       long bestProc = -1L;
       try (BufferedReader r = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+          new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
         String line;
         while ((line = r.readLine()) != null) {
           Matcher m = p.matcher(line);

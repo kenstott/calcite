@@ -265,7 +265,7 @@ public class DocumentSource {
         }
 
         // Handle gzip encoding
-        InputStream inputStream = conn.getInputStream();
+        InputStream inputStream = CompleteBody.of(conn);
         String encoding = conn.getContentEncoding();
         if ("gzip".equalsIgnoreCase(encoding)) {
           inputStream = new GZIPInputStream(inputStream);
@@ -345,7 +345,7 @@ public class DocumentSource {
         }
 
         // Handle gzip encoding
-        InputStream inputStream = conn.getInputStream();
+        InputStream inputStream = CompleteBody.of(conn);
         String encoding = conn.getContentEncoding();
         if ("gzip".equalsIgnoreCase(encoding)) {
           inputStream = new GZIPInputStream(inputStream);

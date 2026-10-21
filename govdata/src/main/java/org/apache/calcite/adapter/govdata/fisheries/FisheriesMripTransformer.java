@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.fisheries;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -321,7 +322,7 @@ public class FisheriesMripTransformer implements StreamingResponseTransformer {
       conn.disconnect();
       throw new IOException("MRIP: HTTP " + status + " for " + url);
     }
-    return conn.getInputStream();
+    return CompleteBody.of(conn);
   }
 
   /** Opens the per-year CSV inside the decade bundle that holds the given pre-2020 year. */

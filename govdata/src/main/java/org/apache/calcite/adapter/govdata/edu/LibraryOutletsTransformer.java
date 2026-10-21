@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.edu;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
@@ -279,7 +280,7 @@ public class LibraryOutletsTransformer implements ResponseTransformer {
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);
     }
-    try (InputStream is = conn.getInputStream();
+    try (InputStream is = CompleteBody.of(conn);
          ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
       byte[] buf = new byte[65536];
       int len;

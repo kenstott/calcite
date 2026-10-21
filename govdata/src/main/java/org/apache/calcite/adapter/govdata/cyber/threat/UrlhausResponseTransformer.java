@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.threat;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
@@ -187,7 +188,7 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
       }
 
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      try (InputStream in = conn.getInputStream()) {
+      try (InputStream in = CompleteBody.of(conn)) {
         byte[] buf = new byte[65536];
         int len;
         while ((len = in.read(buf)) > 0) {

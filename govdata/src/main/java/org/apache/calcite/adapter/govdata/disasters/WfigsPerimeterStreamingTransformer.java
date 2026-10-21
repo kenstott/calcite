@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.disasters;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -140,7 +141,7 @@ public class WfigsPerimeterStreamingTransformer implements StreamingResponseTran
         }
         JsonNode root;
         try (BufferedReader r = new BufferedReader(
-            new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+            new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
           root = MAPPER.readTree(r);
         }
         if (root.path("error").isObject()) {

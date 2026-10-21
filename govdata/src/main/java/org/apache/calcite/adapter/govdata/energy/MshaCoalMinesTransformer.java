@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.energy;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -349,7 +350,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);
     }
-    InputStream is = conn.getInputStream();
+    InputStream is = CompleteBody.of(conn);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try {
       byte[] buf = new byte[65536];

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.banking;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -192,7 +193,7 @@ public class NcuaBranchLocationsTransformer implements StreamingResponseTransfor
     if (code < 200 || code >= 300) {
       throw new IOException("NCUA call report download HTTP " + code + ": " + url);
     }
-    ZipInputStream zis = new ZipInputStream(conn.getInputStream());
+    ZipInputStream zis = new ZipInputStream(CompleteBody.of(conn));
     ZipEntry entry;
     while ((entry = zis.getNextEntry()) != null) {
       if (entryName.equals(entry.getName())) {

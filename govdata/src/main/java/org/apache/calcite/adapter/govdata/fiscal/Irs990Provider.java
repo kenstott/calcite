@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.RawCache;
@@ -272,7 +273,7 @@ public class Irs990Provider implements CachingDataProvider {
   private static Index readIndex(String indexUrl) throws IOException {
     HttpURLConnection conn = FiscalHttp.openGetWithRetry(indexUrl);
     BufferedReader reader =
-        new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+        new BufferedReader(new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8));
     try {
       return parseIndex(reader, indexUrl);
     } finally {
