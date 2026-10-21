@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.120.1](https://github.com/kenstott/calcite/compare/engine-v0.120.0...engine-v0.120.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **pgwire-govdata:** regenerate the catalog cache (757 tables) and give the coverage check PyYAML ([947410c](https://github.com/kenstott/calcite/commit/947410c79f819d78b0938cc9f1756e16e5a80aa5))
+
 ## [0.120.0](https://github.com/kenstott/calcite/compare/engine-v0.119.4...engine-v0.120.0) (2026-10-20)
 
 
