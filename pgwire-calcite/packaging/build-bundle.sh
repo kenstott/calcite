@@ -175,7 +175,8 @@ print('embedder model cached')
       fi
     done
     if [ "$ADAPTER" = "govdata" ]; then
-      PYTHONPATH=pgwire-calcite/src python3 pgwire-calcite/scripts/check_catalog_cache_coverage.py \
+      # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
+      PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python3 pgwire-calcite/scripts/check_catalog_cache_coverage.py \
         "$expected" govdata/src/main/resources/*/*-schema.yaml
     fi
     cp "$expected" "$bundle/model/$(basename "$expected")"
