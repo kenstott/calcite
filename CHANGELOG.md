@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.121.1](https://github.com/kenstott/calcite/compare/engine-v0.121.0...engine-v0.121.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **govdata:** give every year-range dimension a 2010 start and a minYear floor where the source cannot reach back ([6878425](https://github.com/kenstott/calcite/commit/68784256de97681f4cbbac01cde8c9aca9340baf))
+
 ## [0.121.0](https://github.com/kenstott/calcite/compare/engine-v0.120.2...engine-v0.121.0) (2026-10-22)
 
 
