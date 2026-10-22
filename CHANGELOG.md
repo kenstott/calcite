@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.121.0](https://github.com/kenstott/calcite/compare/engine-v0.120.2...engine-v0.121.0) (2026-10-22)
+
+
+### Features
+
+* **govdata:** skip the all-partners Comtrade request for a reporter already seen at the cap, and add a year-by-year reload script ([c5e7836](https://github.com/kenstott/calcite/commit/c5e7836ce42def25b95b2cca4893398c1d135d63))
+
+
+### Bug Fixes
+
+* **govdata:** fetch a capped Comtrade response again split by partner instead of keeping the first 100000 records ([212120e](https://github.com/kenstott/calcite/commit/212120eff08c6862013042cfd1c5a8421b874871))
+
 ## [0.120.2](https://github.com/kenstott/calcite/compare/engine-v0.120.1...engine-v0.120.2) (2026-10-22)
 
 
