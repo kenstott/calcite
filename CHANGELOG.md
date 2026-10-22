@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.120.2](https://github.com/kenstott/calcite/compare/engine-v0.120.1...engine-v0.120.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **pgwire-govdata:** install Pillow 13 in the bundle and run the coverage check on a Python that has PyYAML ([90c392e](https://github.com/kenstott/calcite/commit/90c392e93b019ffd51257b061999670ad12498e9))
+
 ## [0.120.1](https://github.com/kenstott/calcite/compare/engine-v0.120.0...engine-v0.120.1) (2026-10-21)
 
 
