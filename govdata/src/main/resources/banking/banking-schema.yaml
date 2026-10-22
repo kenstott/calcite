@@ -138,7 +138,8 @@ dimension_values:
   # CFPB complaint data starts ~2011/2012.
   complaints_year_range: &complaints_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2011}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2011  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 

@@ -102,7 +102,7 @@ dimension_values:
   # data year (effective_year = publish_year - 2) and never 404-poisons.
   fars_year_range: &fars_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 1975
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
@@ -114,7 +114,7 @@ dimension_values:
   # it completes (acceptable: the table is a historical punctuality series).
   ontime_year_range: &ontime_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 1987
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -124,7 +124,7 @@ dimension_values:
   # filtered per year. dataLag 1 keeps to complete prior years (T-100 lags ~3-4mo).
   t100_year_range: &t100_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 1990
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -135,7 +135,7 @@ dimension_values:
   # data year (effective_year = year - 2) and never 404-poisons.
   fhwa_year_range: &fhwa_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2016
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
@@ -153,7 +153,7 @@ dimension_values:
   # than depending on a releaseMonth gate for a same-year release.
   nbi_year_range: &nbi_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 1992
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -164,7 +164,7 @@ dimension_values:
   # 2 days old). dataLag 0 means year == effective_year; no {effective_year} templating below.
   ep724_year_range: &ep724_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2017}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2017
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0

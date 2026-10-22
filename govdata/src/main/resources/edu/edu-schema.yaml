@@ -2572,7 +2572,7 @@ partitionedTables:
         # lookbackPeriods is set, so already-fresh years are skipped on subsequent runs.
         # minYear: 2000 caps a low operator override at the pattern's own verified floor
         # (elsec{yy}t.txt resolves back to FY2000; earlier is unverified).
-        start: "${GOVDATA_START_YEAR:2013}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2000
         dataLag: 2
 

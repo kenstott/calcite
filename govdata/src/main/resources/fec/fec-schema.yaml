@@ -47,7 +47,7 @@ dimension_templates:
 
   fec_year_dimension: &fec_year_dimension
     type: yearRange
-    start: 2010
+    start: "${GOVDATA_START_YEAR:2010}"
     cadenceStart: 2010
     cadenceLength: 2
     # A literal, not "${GOVDATA_START_YEAR:...}" - minYear is a floor describing what the

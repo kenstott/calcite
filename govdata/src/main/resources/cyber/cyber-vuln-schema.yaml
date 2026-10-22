@@ -1096,7 +1096,8 @@ partitionedTables:
         - advisories
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2017}"   # CSAF coverage begins 2017; DQ narrows via GOVDATA_START_YEAR
+        start: "${GOVDATA_START_YEAR:2010}"   # CSAF coverage begins 2017; DQ narrows via GOVDATA_START_YEAR
+        minYear: 2024  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       advisory_path:
         type: custom                # CsafAdvisoryDimensionResolver filters index.txt by year context

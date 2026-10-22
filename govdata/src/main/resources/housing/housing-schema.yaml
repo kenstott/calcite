@@ -107,7 +107,7 @@ dimension_values:
   # published ahead of the fiscal year so dataLag 0 is correct.
   hud_year_range: &hud_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2017}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2017
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
@@ -142,7 +142,7 @@ dimension_values:
   # data year (2018) is in the post-reform format.
   hmda_year_range: &hmda_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2019}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2019
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -163,7 +163,7 @@ dimension_values:
   # the newest confirmed vintage.
   psh_year_range: &psh_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2022}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2022
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1

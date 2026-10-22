@@ -152,7 +152,7 @@ dimension_values:
   # decennial source. (Previously dataLag:2 stored the 2020 census under year=2018.)
   decennial_years: &decennial_years
     type: yearRange
-    start: 2000            # cadence anchor (feed-began): aligns the decennial step at 2000/2010/2020
+    start: "${GOVDATA_START_YEAR:2010}"            # cadence anchor (feed-began): aligns the decennial step at 2000/2010/2020
     # Literal, not "${GOVDATA_START_YEAR:...}" - minYear only ever raises `start` (never
     # lowers it), so binding it to the operator run-window variable meant any process that
     # exported GOVDATA_START_YEAR above 2000 (its unset default resolves to 2010) silently
@@ -4213,7 +4213,8 @@ partitionedTables:
         # 2020-2023; pep/population for 2019). Pre-2019 vintages use different variable
         # names and are intentionally excluded. Bump the floor when CURRENT_VINTAGE advances in
         # the resolver.
-        start: 2022
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2022  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 3
         descending: true
@@ -4339,7 +4340,7 @@ partitionedTables:
       # first year of the 2010-2019 vintage; the newest year is the prior calendar year.
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2011}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2011
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1
@@ -4701,7 +4702,7 @@ partitionedTables:
       # although earlier variable lists show them (verified by request 2026-10-17).
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2013}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2013
         dataLag: 1
         releaseMonth: 12
@@ -4944,6 +4945,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2020  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 3
         descending: true
@@ -5265,7 +5267,7 @@ partitionedTables:
       # on the source. (Previously dataLag:3 stored the 2022 census under year=2019.)
       year:
         type: yearRange
-        start: 2017            # cadence anchor (feed-began): quinquennial step 2017/2022/2027
+        start: "${GOVDATA_START_YEAR:2010}"            # cadence anchor (feed-began): quinquennial step 2017/2022/2027
         # Literal, not "${GOVDATA_START_YEAR:...}" - see decennial_years above for why binding
         # this to the run-window variable is a live risk (kenstott/govdata-ops#104). 2017 is
         # this table's own feed-began anchor.
@@ -5659,6 +5661,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2020  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 3
         descending: true
@@ -5757,6 +5760,7 @@ partitionedTables:
       year:
         type: yearRange
         start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2015  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:current}"
         dataLag: 3
         descending: true
@@ -7288,7 +7292,7 @@ partitionedTables:
         - uscis_i765
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2025}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2025
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0

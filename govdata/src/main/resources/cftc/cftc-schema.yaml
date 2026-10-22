@@ -1079,7 +1079,7 @@ partitionedTables:
         - COMMODITIES
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2024}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         minYear: 2024
         dataLag: 0

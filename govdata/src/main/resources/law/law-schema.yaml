@@ -186,7 +186,8 @@ dimension_values:
   # current one. A term is included from October, when it begins.
   scotus_slip_term_range: &scotus_slip_term_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2017}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2017  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
     releaseMonth: 10
@@ -226,7 +227,8 @@ dimension_values:
   # PTRs continuously through the year.
   member_stock_transactions_year_range: &member_stock_transactions_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2015  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
@@ -237,7 +239,8 @@ dimension_values:
   # whose listing gains reports continuously.
   senate_fd_year_range: &senate_fd_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2014}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2014  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 

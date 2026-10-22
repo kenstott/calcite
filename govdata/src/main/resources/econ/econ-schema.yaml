@@ -465,7 +465,8 @@ bulkDownloads:
     dimensions:
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2020  # earliest year the source has data (old-default(no observed)); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1      # QCEW annual data is released with ~1 year lag
         releaseMonth: 9  # Released in September (with Q1 data of following year)
@@ -567,7 +568,7 @@ partitionedTables:
       frequency: *monthly_frequency  # Reference YAML anchor
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -1080,7 +1081,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -1183,7 +1184,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -1672,7 +1673,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -1773,7 +1774,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -2300,7 +2301,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # BLS SM-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
@@ -2453,7 +2454,7 @@ partitionedTables:
         type: yearRange
         # OEWS reference year 2010 is published in 2011 (dataLag 1 maps publish year to
         # reference year), so the first publish year is 2011.
-        start: "${GOVDATA_START_YEAR:2011}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2011
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1
@@ -2584,7 +2585,7 @@ partitionedTables:
         # Reference year 2018 is the first state-by-industry page BLS serves (earlier years
         # redirect to the BLS home page); dataLag 1 maps publish year to reference year, so the
         # first publish year is 2019.
-        start: "${GOVDATA_START_YEAR:2019}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2019
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1
@@ -3179,7 +3180,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # BLS SM-program flat-file columns (TSV): series_id, year, period, value, footnote_codes.
@@ -3877,7 +3878,7 @@ partitionedTables:
         - monthly
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       metric:
         - "2.JobOpenings"
@@ -4031,7 +4032,7 @@ partitionedTables:
         - monthly
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       metric:
         - "2.JobOpenings"
@@ -4190,7 +4191,7 @@ partitionedTables:
         - monthly
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
       metric:
         - "2.JobOpenings"
@@ -4301,7 +4302,7 @@ partitionedTables:
       frequency: *monthly_frequency
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # API Configuration
@@ -4430,7 +4431,7 @@ partitionedTables:
       frequency: *quarterly_frequency
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # HTTP Source configuration for EtlPipeline
@@ -4539,7 +4540,7 @@ partitionedTables:
         # server, which never runs ETL and has no reason to have this ETL-time variable
         # exported) previously declared a coverage window ten years narrower than what was
         # actually loaded, until the async observed-window probe caught up.
-        start: "{env:GOVDATA_START_YEAR:2010}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # BLS monthly data complete by mid-January
@@ -4761,7 +4762,7 @@ partitionedTables:
         - daily
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # Materialization configuration
@@ -4870,7 +4871,7 @@ partitionedTables:
         - daily
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
 
     # Materialization configuration
@@ -4948,7 +4949,8 @@ partitionedTables:
         - mts_outlays_by_function
       year:
         type: yearRange
-        start: "{env:GOVDATA_START_YEAR:2015}"  # API confirmed live back to CY2015 (covers FY2016's Oct-Dec 2015 months)
+        start: "${GOVDATA_START_YEAR:2010}"  # API confirmed live back to CY2015 (covers FY2016's Oct-Dec 2015 months)
+        minYear: 2015  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 1  # Current year has partial-year data all year; no full-year release gate
@@ -8185,7 +8187,7 @@ partitionedTables:
       # if GOVDATA_START_YEAR is set lower for other schemas.
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2014
         dataLag: 1
@@ -8336,7 +8338,7 @@ partitionedTables:
       # publish - dataLag is the data year; intltrade HS timeseries begins 2013.
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2014
         dataLag: 1
@@ -8491,7 +8493,7 @@ partitionedTables:
       # 2013; minYear hard-floors the publish year at 2014 (=> data floor 2013).
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2014
         dataLag: 1
@@ -8678,7 +8680,7 @@ partitionedTables:
       # (the intltrade HS timeseries begins in 2013 -> publish floor 2014, dataLag 1).
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2014
         dataLag: 1
@@ -8830,7 +8832,7 @@ partitionedTables:
         values: ['25', '26', '28', '72', '73', '74', '75', '76', '81']
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2014
         dataLag: 1
@@ -8985,7 +8987,7 @@ partitionedTables:
       # annual data is thin before 2000; minYear hard-floors the data year.
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2000
         dataLag: 1
@@ -9257,7 +9259,7 @@ partitionedTables:
       # prior year publishes ~months 3-6; minYear hard-floors the data year.
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2014}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:current}"
         minYear: 2000
         dataLag: 1

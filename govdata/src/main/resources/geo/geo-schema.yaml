@@ -121,6 +121,7 @@ dimension_values:
   tiger_year_range: &tiger_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2021  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     dataLag: 1
 
   # --- Year Range for HUD crosswalk data ---
@@ -128,6 +129,7 @@ dimension_values:
   hud_year_range: &hud_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2013  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     dataLag: 3
 
   # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)
@@ -1081,7 +1083,8 @@ partitionedTables:
         - boundary
       year:
         type: yearRange
-        start: "2023"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2023  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
       # No state_fips fan-out here even though 2022-and-later vintages ARE published per state:
@@ -2452,7 +2455,8 @@ partitionedTables:
         - classification
       year:
         type: yearRange
-        start: "2023"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2023  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "2023"
 
     source:
@@ -2549,7 +2553,8 @@ partitionedTables:
         - classification
       year:
         type: yearRange
-        start: "2020"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2020  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "2020"
 
     source:
@@ -3272,7 +3277,7 @@ partitionedTables:
         # dispatch modes (2025 = historical, 2026 = daily/current-year) on this table rather
         # than a full historical backfill. No dataLag/minYear: the source is a single evergreen
         # file with no real per-year availability constraint to model.
-        start: "${GOVDATA_START_YEAR:2025}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:2026}"
 
     materialize:

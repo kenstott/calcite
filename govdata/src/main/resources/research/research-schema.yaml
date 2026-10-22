@@ -965,7 +965,7 @@ partitionedTables:
         - nih_publications
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2022}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         minYear: 2022
         dataLag: 0

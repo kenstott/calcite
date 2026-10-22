@@ -152,6 +152,7 @@ dimension_values:
   eia_utility_years: &eia_utility_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2015  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
 
@@ -160,7 +161,8 @@ dimension_values:
   # of the EIA-861 archive (see eia_utility_years).
   eia_reliability_years: &eia_reliability_years
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2013}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2016  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
 
@@ -171,6 +173,7 @@ dimension_values:
   eia_plant_years: &eia_plant_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2015  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
 
@@ -181,6 +184,7 @@ dimension_values:
   eia_capacity_years: &eia_capacity_years
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2016  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
 
@@ -194,7 +198,8 @@ dimension_values:
   # later auctions clear.
   pjm_bra_years: &pjm_bra_years
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2021}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2021  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "2028"
 
   # EIA fossil fuel production (crude API) year range

@@ -128,7 +128,7 @@ dimension_values:
   # targets the newest generally-available data year and never mislabels.
   epa_year_range: &epa_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2010
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
@@ -144,7 +144,7 @@ dimension_values:
   # tri_releases keeps epa_year_range: its maxYear 2024 is real, so its 2-year lag is correct.
   ghgrp_year_range: &ghgrp_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2012}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2010
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
@@ -157,7 +157,8 @@ dimension_values:
   # a nominal current-2 that could 404 in early January before that year's release lands.
   egrid_year_range: &egrid_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2020  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
     releaseMonth: 2
@@ -167,7 +168,7 @@ dimension_values:
   # current year each run and overwrites the partition.
   usgs_year_range: &usgs_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
     descending: true

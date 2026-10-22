@@ -134,7 +134,7 @@ dimension_values:
   # that's what caused this (govdata/fiscal, 25 Aug 2026).
   soi_county_year_range: &soi_county_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2011
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
@@ -142,7 +142,7 @@ dimension_values:
 
   soi_zip_year_range: &soi_zip_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2011
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 4
@@ -157,7 +157,7 @@ dimension_values:
   # semantics 2026-10-16); start 2012 reaches them in a default run.
   migration_year_range: &migration_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2012}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2012
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 4
@@ -167,7 +167,7 @@ dimension_values:
   # actively updated. dataLag 1 keeps to complete prior receipt years.
   efile990_year_range: &efile990_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2020}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2019
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -177,7 +177,7 @@ dimension_values:
   # complete prior fiscal years (the provider requests period 12 / Oct-Sep).
   usaspending_year_range: &usaspending_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2018}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2001
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -188,7 +188,7 @@ dimension_values:
   # through the year, so there is no publication lag and the current year stays live.
   omb_apportionment_year_range: &omb_apportionment_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2022}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2022
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     descending: true
@@ -200,7 +200,7 @@ dimension_values:
   # overrides for a wider backfill.
   usaspending_recipient_district_year_range: &usaspending_recipient_district_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2024}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2018
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -219,7 +219,7 @@ dimension_values:
   # lower this to 2 once the current report is archived.
   ssa_year_range: &ssa_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2020}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2020
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 3
@@ -229,7 +229,7 @@ dimension_values:
   # Dec 2024). dataLag 2 targets the newest fully-released vintage.
   acs_year_range: &acs_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2015}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2010
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 2
@@ -255,7 +255,7 @@ dimension_values:
   # reaches it without a hardcoded end year.
   state_corp_tax_year_range: &state_corp_tax_year_range
     type: yearRange
-    start: "${GOVDATA_START_YEAR:2016}"
+    start: "${GOVDATA_START_YEAR:2010}"
     minYear: 2016
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -2194,7 +2194,7 @@ partitionedTables:
         # column both resolve from effective_year = year - dataLag, so minYear=2020 here reaches
         # back to FY2019 (the oldest year in the modern combined-workbook format this table is
         # scoped to), not FY2020.
-        start: "${GOVDATA_START_YEAR:2020}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2020
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 1
@@ -4280,7 +4280,7 @@ partitionedTables:
         - broadband_caf_deployment_locations
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2015}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2015
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
@@ -4442,7 +4442,7 @@ partitionedTables:
         - broadband_high_cost_disbursements
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2016}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2016
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
@@ -6236,7 +6236,7 @@ partitionedTables:
       # 2016), so the range is closed on both ends; GOVDATA_START_YEAR must not narrow it.
       year:
         type: yearRange
-        start: "1998"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 1998
         end: "2015"
         descending: true
@@ -6436,7 +6436,7 @@ partitionedTables:
       # 2016), so the range is closed on both ends; GOVDATA_START_YEAR must not narrow it.
       year:
         type: yearRange
-        start: "1998"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 1998
         end: "2015"
         descending: true
