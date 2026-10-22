@@ -26,12 +26,18 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
@@ -52,6 +58,15 @@ import java.util.NoSuchElementException;
  * {@code partner_code = 'WLD'} with {@code is_aggregate = true}; {@code cmdCode} is split into
  * {@code hs2}/{@code hs6}; and {@code primaryValue}/{@code netWgt}/{@code qty} are coerced to
  * doubles.
+ *
+ * <p><b>Record cap.</b> The API silently truncates every response at the subscription tier's
+ * per-call limit (100,000 records on the free Basic tier, 250,000 on Premium) and reports no true
+ * total: {@code count} is the number of records returned, so a response with {@code count} equal
+ * to the cap is cut off. The source URL therefore states {@code maxRecords=<cap>}, and a response
+ * that reaches it is discarded and requested again as two halves of the Comtrade partner list
+ * ({@code partnerCode=a,b,c}), recursively, until every slice comes back under the cap. The
+ * partners are disjoint, so the slices concatenate without duplicates. A single partner that still
+ * reaches the cap cannot be split further and fails the fetch.
  *
  * <p>NOTE: Comtrade field names follow the documented v1 schema; verify against a live keyed
  * response before relying on this table (requires {@code COMTRADE_API_KEY}).
@@ -74,11 +89,158 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
           "ComtradeTransformer: source declares no rateLimit, so maxRetries is unknown for "
               + SecretRedaction.redact(url));
     }
-    Fetch fetch = new Fetch(context, url);
-    if (!fetch.open()) {
-      return Collections.<Map<String, Object>>emptyList().iterator();
+    long cap = recordCap(url);
+    if (queryParam(url, "partnerCode") != null) {
+      throw new IllegalStateException("ComtradeTransformer: the source URL must not set "
+          + "partnerCode, the transformer slices by partner itself: " + SecretRedaction.redact(url));
     }
-    return new RecordIterator(fetch);
+    return new SliceIterator(context, url, cap, partners());
+  }
+
+  /** The request's {@code maxRecords}: the per-call limit a response must stay below. */
+  static long recordCap(String url) {
+    String v = queryParam(url, "maxRecords");
+    if (v == null) {
+      throw new IllegalStateException("ComtradeTransformer: the source URL must declare "
+          + "maxRecords=<the subscription tier's per-call record limit> so a truncated response "
+          + "can be told from a complete one: " + SecretRedaction.redact(url));
+    }
+    try {
+      long cap = Long.parseLong(v);
+      if (cap < 2) {
+        throw new NumberFormatException(v);
+      }
+      return cap;
+    } catch (NumberFormatException e) {
+      throw new IllegalStateException("ComtradeTransformer: maxRecords must be an integer of at "
+          + "least 2, got '" + v + "' in " + SecretRedaction.redact(url), e);
+    }
+  }
+
+  private static String queryParam(String url, String name) {
+    String query = URI.create(url).getRawQuery();
+    if (query == null) {
+      return null;
+    }
+    for (String pair : query.split("&")) {
+      int eq = pair.indexOf('=');
+      if (eq > 0 && pair.substring(0, eq).equals(name)) {
+        try {
+          return URLDecoder.decode(pair.substring(eq + 1), "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+          throw new IllegalStateException(e);
+        }
+      }
+    }
+    return null;
+  }
+
+  private static volatile List<String> partnerCodes;
+
+  /** Every partner code Comtrade accepts, from {@code /comtrade/comtrade-partners.json}. */
+  static List<String> partners() throws IOException {
+    List<String> p = partnerCodes;
+    if (p == null) {
+      try (InputStream in =
+          ComtradeTransformer.class.getResourceAsStream("/comtrade/comtrade-partners.json")) {
+        if (in == null) {
+          throw new IOException("ComtradeTransformer: /comtrade/comtrade-partners.json is not on "
+              + "the classpath");
+        }
+        List<String> codes = new ArrayList<String>();
+        for (com.fasterxml.jackson.databind.JsonNode n : MAPPER.readTree(in).get("partners")) {
+          codes.add(n.get("m49").asText());
+        }
+        if (codes.size() < 2) {
+          throw new IOException("ComtradeTransformer: comtrade-partners.json lists "
+              + codes.size() + " partners");
+        }
+        p = Collections.unmodifiableList(codes);
+      }
+      partnerCodes = p;
+    }
+    return p;
+  }
+
+  /**
+   * Streams the rows of a (reporter, period, flow) fetch across as many partner slices as the
+   * record cap requires. A slice is opened only when the previous one is drained, so one spooled
+   * response is on disk at a time. Every slice is fully read before its rows are used, so a
+   * capped slice is dropped whole and none of its rows reach the caller.
+   */
+  private static final class SliceIterator implements Iterator<Map<String, Object>> {
+    private final RequestContext context;
+    private final String url;
+    private final long cap;
+    private final List<String> partners;
+    /** Pending slices as [first, last] indices into {@link #partners}; null bounds = all. */
+    private final Deque<int[]> pending = new ArrayDeque<int[]>();
+    private Iterator<Map<String, Object>> current;
+    private int calls;
+
+    SliceIterator(RequestContext context, String url, long cap, List<String> partners)
+        throws IOException {
+      this.context = context;
+      this.url = url;
+      this.cap = cap;
+      this.partners = partners;
+      pending.push(new int[0]);
+      advance();
+    }
+
+    private void advance() throws IOException {
+      while (current == null || !current.hasNext()) {
+        current = null;
+        if (pending.isEmpty()) {
+          return;
+        }
+        int[] slice = pending.pop();
+        boolean all = slice.length == 0;
+        String sliceUrl = all ? url : url + "&partnerCode="
+            + String.join(",", partners.subList(slice[0], slice[1] + 1));
+        Fetch fetch = new Fetch(context, sliceUrl);
+        calls++;
+        if (!fetch.open()) {
+          continue;
+        }
+        if (fetch.count >= cap) {
+          fetch.closeQuietly();
+          int lo = all ? 0 : slice[0];
+          int hi = all ? partners.size() - 1 : slice[1];
+          if (lo == hi) {
+            throw new IOException("Comtrade: partner " + partners.get(lo) + " alone returned "
+                + fetch.count + " records, the " + cap + "-record cap, and cannot be split "
+                + "further: " + SecretRedaction.redact(sliceUrl));
+          }
+          int mid = (lo + hi) >>> 1;
+          LOGGER.info("Comtrade: {} returned the {}-record cap; splitting partners [{}..{}] in two "
+              + "(call {})", SecretRedaction.redact(sliceUrl), cap, lo, hi, calls);
+          pending.push(new int[] {mid + 1, hi});
+          pending.push(new int[] {lo, mid});
+          continue;
+        }
+        current = new RecordIterator(fetch);
+      }
+    }
+
+    @Override public boolean hasNext() {
+      return current != null && current.hasNext();
+    }
+
+    @Override public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      Map<String, Object> row = current.next();
+      if (!current.hasNext()) {
+        try {
+          advance();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return row;
+    }
   }
 
   /**
@@ -98,6 +260,8 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     private final int maxRetries;
     private int attempt;
     JsonParser parser;
+    /** The response's {@code count}: records returned, which equals the cap when cut off. */
+    long count = -1;
     private Path spool;
 
     Fetch(RequestContext context, String url) {
@@ -181,6 +345,11 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
         }
         String field = parser.currentName();
         if ("data".equals(field)) {
+          if (count < 0) {
+            closeQuietly();
+            throw new IllegalStateException("Comtrade: response for " + safeUrl + " has no count "
+                + "before its data array, so a cut-off response cannot be detected");
+          }
           JsonToken arr = parser.nextToken();
           if (arr == JsonToken.START_ARRAY) {
             return true;
@@ -191,6 +360,9 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
             return false;
           }
           parser.skipChildren();
+        } else if ("count".equals(field)) {
+          parser.nextToken();
+          count = parser.getLongValue();
         } else {
           parser.nextToken();
           if (("statusCode".equals(field) || "message".equals(field) || "error".equals(field))

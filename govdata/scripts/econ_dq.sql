@@ -1734,6 +1734,22 @@ SELECT 'econ', 'comtrade_flows', 'T7_both_flows_per_reporter_year',
 FROM (SELECT COUNT(*) AS n FROM (
   SELECT reporter, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true) GROUP BY reporter, year HAVING COUNT(DISTINCT flow) < 2));
 
+-- The Comtrade API cuts every response off at the subscription tier's record limit (100000 on the
+-- free Basic tier, 250000 on Premium) and reports no total, so a (reporter, flow, year) partition
+-- holding exactly that many rows is truncated: an arbitrary subset of its partners x HS-6 rows.
+-- (After the partner split a complete partition can exceed the limit, so only exactly the limit
+-- signals truncation.)
+-- ComtradeTransformer now splits such a response by partner; any partition still at the limit was
+-- loaded before that and needs a reprocess. Adjust the limit here together with maxRecords in
+-- econ-schema.yaml.
+INSERT INTO dq_results
+SELECT 'econ', 'comtrade_flows', 'T7_partitions_at_record_cap',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Reporter/flow/year partitions holding exactly the API record limit (truncated): ' || COALESCE(ex, '')
+FROM (SELECT COUNT(*) AS n, SUBSTR(STRING_AGG(reporter || '/' || flow || '@' || year, ', ' ORDER BY reporter, flow, year), 1, 300) AS ex FROM (
+  SELECT reporter, flow, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/comtrade_flows', allow_moved_paths := true)
+  GROUP BY reporter, flow, year HAVING COUNT(*) = 100000));
+
 -- A truncated period (cut body that still parsed) shows as a year far below its predecessor.
 INSERT INTO dq_results
 SELECT 'econ', 'comtrade_flows', 'T7_year_rows_vs_previous',

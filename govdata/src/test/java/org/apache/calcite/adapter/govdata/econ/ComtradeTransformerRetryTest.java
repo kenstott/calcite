@@ -82,7 +82,8 @@ class ComtradeTransformerRetryTest {
       out.flush();
       exchange.close();
     });
-    return "http://127.0.0.1:" + server.getAddress().getPort() + "/data?reporterCode=842";
+    return "http://127.0.0.1:" + server.getAddress().getPort()
+        + "/data?reporterCode=842&maxRecords=1000";
   }
 
   private static RequestContext context(String url, int maxRetries) {
