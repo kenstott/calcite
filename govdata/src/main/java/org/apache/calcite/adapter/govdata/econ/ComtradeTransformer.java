@@ -40,6 +40,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Streaming transformer for {@code econ.comtrade_flows} (UN Comtrade bilateral merchandise trade).
@@ -135,6 +137,18 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     return null;
   }
 
+  /**
+   * Reporters whose all-partners request has come back at the cap in this JVM. A reporter's
+   * other years and flows are the same size order, so they skip that request and start from the
+   * two halves; the probe is a full-size download (about 100 MB) that is thrown away.
+   */
+  private static final Set<String> CAPPED_REPORTERS = ConcurrentHashMap.newKeySet();
+
+  /** Forgets which reporters were seen at the cap (tests). */
+  static void resetCappedReporters() {
+    CAPPED_REPORTERS.clear();
+  }
+
   private static volatile List<String> partnerCodes;
 
   /** Every partner code Comtrade accepts, from {@code /comtrade/comtrade-partners.json}. */
@@ -177,6 +191,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     private final Deque<int[]> pending = new ArrayDeque<int[]>();
     private Iterator<Map<String, Object>> current;
     private int calls;
+    private final String reporter;
 
     SliceIterator(RequestContext context, String url, long cap, List<String> partners)
         throws IOException {
@@ -184,7 +199,14 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
       this.url = url;
       this.cap = cap;
       this.partners = partners;
-      pending.push(new int[0]);
+      this.reporter = queryParam(url, "reporterCode");
+      if (reporter != null && CAPPED_REPORTERS.contains(reporter)) {
+        int mid = (partners.size() - 1) >>> 1;
+        pending.push(new int[] {mid + 1, partners.size() - 1});
+        pending.push(new int[] {0, mid});
+      } else {
+        pending.push(new int[0]);
+      }
       advance();
     }
 
@@ -205,6 +227,9 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
         }
         if (fetch.count >= cap) {
           fetch.closeQuietly();
+          if (all && reporter != null) {
+            CAPPED_REPORTERS.add(reporter);
+          }
           int lo = all ? 0 : slice[0];
           int hi = all ? partners.size() - 1 : slice[1];
           if (lo == hi) {

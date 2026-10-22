@@ -54,6 +54,7 @@ class ComtradeTransformerSplitTest {
   private final Map<String, Integer> dataset = new LinkedHashMap<String, Integer>();
 
   @BeforeEach void startServer() throws IOException {
+    ComtradeTransformer.resetCappedReporters();
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/data", exchange -> {
       String query = exchange.getRequestURI().getRawQuery();
@@ -152,6 +153,19 @@ class ComtradeTransformerSplitTest {
         assertTrue(seen.add(r), "partner " + r + " requested twice");
       }
     }
+  }
+
+  @Test void aReporterSeenAtTheCapSkipsTheAllPartnersRequestNextTime() throws Exception {
+    dataset.put("4", 3);
+    dataset.put("156", 4);
+    dataset.put("842", 1);
+    drain(new ComtradeTransformer().fetchAndTransform(context(url("&maxRecords=5"))));
+    assertEquals("", requests.get(0));
+    requests.clear();
+    List<Map<String, Object>> rows = drain(
+        new ComtradeTransformer().fetchAndTransform(context(url("&maxRecords=5"))));
+    assertEquals(8, rows.size());
+    assertFalse(requests.contains(""), "all-partners request repeated: " + requests);
   }
 
   @Test void aSinglePartnerAtTheCapFailsLoudly() {
