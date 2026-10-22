@@ -1,0 +1,4 @@
+# fastembed caps pillow<13, but pillow <=12.3.0 carries GHSA-8g5g-8vmr-9782 (JPEG decode heap overflow,
+# fixed in 13.0.0) and the release CVE scan fails on it. fastembed uses PIL only for image embedding;
+# the bundle serves text embeddings. Drop this once fastembed lifts its cap.
+pillow>=13.0.0

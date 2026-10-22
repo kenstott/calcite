@@ -127,7 +127,7 @@ stage_bundle() {
   # install. EMBED() needs fastembed, and only govdata has any use for it.
   local extras=".[oidc]"
   [ "$ADAPTER" = "govdata" ] && extras=".[oidc,embed]"
-  (cd pgwire-calcite && uv pip install --python "$bundle/cpython" --no-editable ./vendor/buenavista "$extras")
+  (cd pgwire-calcite && uv pip install --python "$bundle/cpython" --no-editable --override packaging/uv-overrides.txt ./vendor/buenavista "$extras")
   # `uv venv` makes cpython/bin/python an absolute symlink; make it relative so the bundle can be
   # moved anywhere. CPython 3.11+ derives its prefix from the link's real path, so pyvenv.cfg's
   # build-machine `home` line is harmless.
@@ -176,7 +176,7 @@ print('embedder model cached')
     done
     if [ "$ADAPTER" = "govdata" ]; then
       # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
-      PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python3 pgwire-calcite/scripts/check_catalog_cache_coverage.py \
+      PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \
         "$expected" govdata/src/main/resources/*/*-schema.yaml
     fi
     cp "$expected" "$bundle/model/$(basename "$expected")"

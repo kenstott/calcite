@@ -256,7 +256,7 @@ jobs:
           if [[ "${{ matrix.adapter.name }}" == "govdata" ]]; then
             EXTRAS=".[oidc,embed]"
           fi
-          uv pip install --python ../bundle/cpython --no-editable ./vendor/buenavista "$EXTRAS"
+          uv pip install --python ../bundle/cpython --no-editable --override packaging/uv-overrides.txt ./vendor/buenavista "$EXTRAS"
           # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
           # Rewrite it relative so the whole bundle (cpython/ + python/ together)
           # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
@@ -347,7 +347,7 @@ jobs:
             done
             if [ "${{ matrix.adapter.name }}" = "govdata" ]; then
               # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
-              PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python3 pgwire-calcite/scripts/check_catalog_cache_coverage.py \
+              PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \
                 "$expected" govdata/src/main/resources/*/*-schema.yaml
             fi
             cp "$expected" "bundle/model/$(basename "$expected")"
