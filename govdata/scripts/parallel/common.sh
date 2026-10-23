@@ -75,6 +75,31 @@ _resolve_java21() {
 GOVDATA_JAVA_BIN="$(_resolve_java21)"
 export GOVDATA_JAVA_BIN
 
+# ── Worker truststore: the JDK's cacerts plus the extra anchors in certs/ ───────
+# Some sources chain to roots the JDK does not ship yet (www.cbr.washington.edu -> emSign ECC
+# Root CA - G3). Rather than edit the system JDK, build a private copy of its cacerts with the
+# extra anchors and point only the worker JVMs at it. Rebuilt whenever the JDK's cacerts or a
+# cert in certs/ is newer than the truststore.
+_build_worker_truststore() {
+  local jhome certs_dir ts cacerts keytool f
+  jhome="$("$GOVDATA_JAVA_BIN" -XshowSettings:properties -version 2>&1 | sed -n 's/^ *java.home = //p')"
+  [ -n "$jhome" ] && [ -f "$jhome/lib/security/cacerts" ] || return 0
+  certs_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/certs"
+  ls "$certs_dir"/*.pem >/dev/null 2>&1 || return 0
+  cacerts="$jhome/lib/security/cacerts"
+  keytool="$jhome/bin/keytool"
+  ts="$GOVDATA_TMPDIR/worker-truststore.jks"
+  if [ -f "$ts" ] && [ "$ts" -nt "$cacerts" ] && [ -z "$(find "$certs_dir" -name '*.pem' -newer "$ts")" ]; then
+    echo "$ts"; return
+  fi
+  cp -f "$cacerts" "$ts.tmp.$$" && chmod u+w "$ts.tmp.$$" || return 1
+  for f in "$certs_dir"/*.pem; do
+    "$keytool" -importcert -noprompt -trustcacerts -keystore "$ts.tmp.$$" -storepass changeit \
+        -alias "extra-$(basename "$f" .pem)" -file "$f" >/dev/null || { rm -f "$ts.tmp.$$"; return 1; }
+  done
+  mv -f "$ts.tmp.$$" "$ts" && echo "$ts"
+}
+
 # ── rclone on PATH regardless of invocation context ─────────────────────────────
 # sync-to-r2.sh shells out to `rclone` directly (no absolute path, unlike
 # GOVDATA_JAVA_BIN above). That resolves fine from an interactive login shell, but
@@ -102,6 +127,11 @@ GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djava.io.tmpdir=$GOVDATA_TMPDIR"
 # The file adapter and the ETL never read java.io.tmpdir for their own temporary files; they
 # stage in the directory this property names, which they require (REQ-1992).
 GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Dcalcite.file.staging.directory=$GOVDATA_TMPDIR"
+GOVDATA_WORKER_TRUSTSTORE="$(_build_worker_truststore)" \
+  || { echo "ERROR: could not build the worker truststore" >&2; return 1 2>/dev/null || exit 1; }
+if [ -n "$GOVDATA_WORKER_TRUSTSTORE" ]; then
+  GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djavax.net.ssl.trustStore=$GOVDATA_WORKER_TRUSTSTORE -Djavax.net.ssl.trustStorePassword=changeit"
+fi
 
 # Load base credentials from govdata/.env.prod, then parallel overrides.
 # Caller-exported variables take precedence: if GOVDATA_START_YEAR or
