@@ -71,7 +71,7 @@ _xschema_restore_budget() {
 }
 trap _xschema_restore_budget EXIT
 _xschema_total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
-{ echo "RESERVE_MB=$((_xschema_total_mem_mb - 2000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
+{ echo "RESERVE_MB=$((_xschema_total_mem_mb - 2000 - 5000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
 echo "[x-schema] claimed pool budget (MAX_WORKERS=1, minimal ETL kept) — restored on exit"
 
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"

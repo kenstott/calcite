@@ -88,7 +88,7 @@ _vss_claim_exclusive_budget() {
   }
   trap _vss_restore_budget EXIT
   _vss_total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
-  { echo "RESERVE_MB=$((_vss_total_mem_mb - 2000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
+  { echo "RESERVE_MB=$((_vss_total_mem_mb - 2000 - 5000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
   echo "[vss-local] claimed pool budget (MAX_WORKERS=1, minimal ETL kept) — restored on exit"
 
   # The unified backlog query needs real headroom and the right number depends on what the pool
@@ -97,9 +97,9 @@ _vss_claim_exclusive_budget() {
   # rather than run the query into an OOM.
   if [ -z "${VSS_MEM_LIMIT:-}" ]; then
     _vss_avail_mb=$(free -m | awk '/^Mem:/{print $7}')
-    _vss_limit_mb=$((_vss_avail_mb - 2000))
+    _vss_limit_mb=$((_vss_avail_mb - 2000 - 5000))  # OS + the one ETL worker the claim leaves room for
     if [ "$_vss_limit_mb" -lt 8000 ]; then
-      echo "[vss-local] only ${_vss_avail_mb}MB available — need >=10000MB; not starting" >&2
+      echo "[vss-local] only ${_vss_avail_mb}MB available — need >=15000MB; not starting" >&2
       exit 1
     fi
     export VSS_MEM_LIMIT="${_vss_limit_mb}MB"
