@@ -2224,6 +2224,11 @@ partitionedTables:
       type: http
       url: "https://data.cms.gov/provider-data/api/1/datastore/query/xubh-q36u/0"
       method: GET
+      # data.cms.gov sits behind Akamai, which answers 403 "Access Denied" to browser-style and
+      # Java default User-Agents (the pipeline default is a Chrome string) but admits an
+      # identified client.
+      headers:
+        User-Agent: "govdata-etl/1.0 (+https://github.com/kenstott/calcite)"
       parameters:
         "limit": "1500"
       response:
@@ -3052,6 +3057,11 @@ partitionedTables:
       type: http
       url: "https://data.cms.gov/provider-data/api/1/datastore/query/4pq5-n9py/0"
       method: GET
+      # data.cms.gov sits behind Akamai, which answers 403 "Access Denied" to browser-style and
+      # Java default User-Agents (the pipeline default is a Chrome string) but admits an
+      # identified client.
+      headers:
+        User-Agent: "govdata-etl/1.0 (+https://github.com/kenstott/calcite)"
       parameters:
         "limit": "1500"
       response:
@@ -3222,6 +3232,11 @@ partitionedTables:
       type: http
       url: "https://data.cms.gov/provider-data/api/1/datastore/query/r5ix-sfxw/0"
       method: GET
+      # data.cms.gov sits behind Akamai, which answers 403 "Access Denied" to browser-style and
+      # Java default User-Agents (the pipeline default is a Chrome string) but admits an
+      # identified client.
+      headers:
+        User-Agent: "govdata-etl/1.0 (+https://github.com/kenstott/calcite)"
       parameters:
         "limit": "1500"
       response:
