@@ -235,9 +235,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://urlhaus.abuse.ch/downloads/csv/"
+      url: "https://urlhaus-api.abuse.ch/v2/files/exports/${CYBER_THREATFOX_API_KEY:}/recent.csv"
       method: GET
-      extractPattern: "*.txt"
       response:
         format: csv
         hasHeader: false
@@ -366,7 +365,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://bazaar.abuse.ch/export/csv/recent/"
+      url: "https://mb-api.abuse.ch/v2/files/exports/${CYBER_THREATFOX_API_KEY:}/recent.csv"
       method: GET
       response:
         format: csv

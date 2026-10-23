@@ -31,22 +31,21 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 /**
- * Transforms URLhaus malicious URL feed (ZIP archive containing CSV) into
- * flat {@code ioc_urls} rows.
+ * Transforms the URLhaus malicious URL feed (plain CSV export) into flat {@code ioc_urls} rows.
  *
- * <p>The ZIP from {@code https://urlhaus.abuse.ch/downloads/csv/} contains a
- * single {@code .txt} file. Lines starting with {@code #} are comments and are
- * skipped. Data lines are CSV with the format:
+ * <p>The export is {@code https://urlhaus-api.abuse.ch/v2/files/exports/<Auth-Key>/recent.csv}
+ * (abuse.ch retired the anonymous {@code urlhaus.abuse.ch/downloads/csv/} ZIP, which now answers
+ * 410). Lines starting with {@code #} are comments and are skipped. Data lines are CSV with the
+ * format:
  * <pre>
  * id,dateadded,url,url_status,last_online,threat,tags,urlhaus_link,reporter
  * </pre>
  *
- * <p>The response bytes passed to this transformer may be corrupt when passed as a
- * String (ZIP is binary), so the ZIP is fetched directly from {@code context.getUrl()}.
+ * <p>The body is fetched directly from {@code context.getUrl()} so it is streamed as bytes
+ * rather than decoded into the String this transformer is handed. The URL embeds the Auth-Key,
+ * so it is never logged or placed in an exception message — only {@link #redact}ed.
  *
  * <p>{@code first_seen} (partition column) is the date portion of {@code dateadded}.
  * {@code source} is set to {@code "urlhaus"}.
@@ -71,11 +70,11 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
 
   @Override public String transform(String response, RequestContext context) {
     String url = context.getUrl();
-    LOGGER.info("URLhaus: fetching ZIP from {}", url);
+    LOGGER.info("URLhaus: fetching CSV export from {}", redact(url));
 
-    byte[] zipBytes = fetchBytes(url);
-    if (zipBytes.length == 0) {
-      LOGGER.warn("URLhaus: empty ZIP response body");
+    byte[] csvBytes = fetchBytes(url);
+    if (csvBytes.length == 0) {
+      LOGGER.warn("URLhaus: empty response body");
       return "[]";
     }
 
@@ -85,7 +84,7 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
       gen.writeStartArray();
 
       int[] count = {0};
-      processCsvFromZip(zipBytes, gen, count);
+      parseCsv(new ByteArrayInputStream(csvBytes), gen, count);
 
       gen.writeEndArray();
       gen.close();
@@ -94,23 +93,8 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
       return baos.toString("UTF-8");
 
     } catch (Exception e) {
-      LOGGER.error("URLhaus: failed to process ZIP: {}", e.getMessage());
-      throw new RuntimeException("Failed to process URLhaus ZIP: " + e.getMessage(), e);
-    }
-  }
-
-  private void processCsvFromZip(byte[] zipBytes, JsonGenerator gen, int[] count)
-      throws Exception {
-    try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
-      ZipEntry entry;
-      while ((entry = zis.getNextEntry()) != null) {
-        String name = entry.getName();
-        if (!entry.isDirectory() && (name.endsWith(".txt") || name.endsWith(".csv"))) {
-          LOGGER.info("URLhaus: processing ZIP entry {}", name);
-          parseCsv(zis, gen, count);
-        }
-        zis.closeEntry();
-      }
+      LOGGER.error("URLhaus: failed to process CSV: {}", e.getMessage());
+      throw new RuntimeException("Failed to process URLhaus CSV: " + e.getMessage(), e);
     }
   }
 
@@ -184,7 +168,7 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
       int status = conn.getResponseCode();
       if (status != 200) {
         conn.disconnect();
-        throw new RuntimeException("URLhaus: HTTP " + status + " fetching ZIP");
+        throw new RuntimeException("URLhaus: HTTP " + status + " fetching " + redact(url));
       }
 
       ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -201,7 +185,16 @@ public class UrlhausResponseTransformer implements ResponseTransformer {
       // A network/HTTP failure here previously became a masked "[]" success one call up
       // (transform() checked for a null/empty zipBytes and silently returned an empty feed) —
       // indistinguishable from "URLhaus genuinely published zero entries today."
-      throw new RuntimeException("URLhaus: error fetching ZIP: " + e.getMessage(), e);
+      throw new RuntimeException("URLhaus: error fetching " + redact(url) + ": "
+          + String.valueOf(e.getMessage()).replace(url, redact(url)), e);
     }
+  }
+
+  /** Scheme, host and file name only: the path segment before the file name is the Auth-Key. */
+  static String redact(String url) {
+    URI u = URI.create(url);
+    String path = u.getPath();
+    int slash = path.lastIndexOf('/');
+    return u.getScheme() + "://" + u.getHost() + "/.../" + path.substring(slash + 1);
   }
 }
