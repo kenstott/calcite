@@ -3280,7 +3280,7 @@ partitionedTables:
       distinctYears: 10
       contiguous: true
       rowCount: 49202720
-      checkedAt: "2026-10-22T14:39:53Z"
+      checkedAt: "2026-10-23T15:25:45Z"
     partitions:
       style: hive
       columns:
@@ -3693,7 +3693,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 5326586
-      checkedAt: "2026-10-22T14:39:54Z"
+      checkedAt: "2026-10-23T15:25:47Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -7650,7 +7650,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 49344
-      checkedAt: "2026-10-22T14:39:56Z"
+      checkedAt: "2026-10-23T15:25:50Z"
     partitions:
       style: hive
       columnDefinitions:
