@@ -7023,11 +7023,11 @@ partitionedTables:
       # {effective_year} (= publish year - dataLag) is the program/data year — one file per
       # year (PGYR2018..PGYR2024) so the year dimension drives the URL instead of being inert.
       # The publication/reload segment (P{pubdate}_{reldate}) is assigned by CMS at release time,
-      # is NOT derivable from the year, and is SHARED across all program years (CMS republishes
-      # every year together). Refresh the literal below when CMS republishes (~annually) — the
+      # is NOT derivable from the year, and is shared by the program years CMS republishes together
+      # (PGYR2019-2025 under P06302026_06032026; older segments 404 for the newest year). Refresh the literal below when CMS republishes (~annually) — the
       # current segment is the distribution.downloadURL path from the catalog API:
       #   https://openpaymentsdata.cms.gov/api/1/metastore/schemas/dataset/items
-      url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_GNRL_PGYR{effective_year}_P01232026_01102026.csv"
+      url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P06302026_06032026/OP_DTL_GNRL_PGYR{effective_year}_P06302026_06032026.csv"
       method: GET
       response:
         format: csv
@@ -7036,10 +7036,10 @@ partitionedTables:
           type: CSV_STREAM
           pageSize: 5000
       urlRules:
-        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_RSRCH_PGYR{effective_year}_P01232026_01102026.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P06302026_06032026/OP_DTL_RSRCH_PGYR{effective_year}_P06302026_06032026.csv"
           variableMatch:
             payment_type: research
-        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P01232026_01102026/OP_DTL_OWNRSHP_PGYR{effective_year}_P01232026_01102026.csv"
+        - url: "https://download.cms.gov/openpayments/PGYR{effective_year}_P06302026_06032026/OP_DTL_OWNRSHP_PGYR{effective_year}_P06302026_06032026.csv"
           variableMatch:
             payment_type: ownership
       rateLimit:
