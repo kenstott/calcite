@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.121.2](https://github.com/kenstott/calcite/compare/engine-v0.121.1...engine-v0.121.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* **govdata:** keep one ETL worker during vss/x-schema and derive VSS_MEM_LIMIT ([224af75](https://github.com/kenstott/calcite/commit/224af75938b273411f4c656490a1c30f39d6b554))
+* **govdata:** point CMS Open Payments at the June 2026 republication ([a315a66](https://github.com/kenstott/calcite/commit/a315a660bc52a2ca603cb4233e42b3477b86642c))
+* **govdata:** read URLhaus and MalwareBazaar from the keyed abuse.ch v2 exports ([a220c59](https://github.com/kenstott/calcite/commit/a220c5928b08b2b737deb8beec61f23cd2322464))
+* **govdata:** trust the emSign ECC root for worker JVMs ([49bbc4a](https://github.com/kenstott/calcite/commit/49bbc4adeb37eb5975d2c75c535441ff8bbd996a))
+
 ## [0.121.1](https://github.com/kenstott/calcite/compare/engine-v0.121.0...engine-v0.121.1) (2026-10-22)
 
 
