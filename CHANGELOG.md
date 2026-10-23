@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.121.3](https://github.com/kenstott/calcite/compare/engine-v0.121.2...engine-v0.121.3) (2026-10-23)
+
+
+### Bug Fixes
+
+* **govdata:** identify the ETL to data.cms.gov so Akamai admits the provider-data queries ([707ed66](https://github.com/kenstott/calcite/commit/707ed6647a1fd55737aebc3d4f69c1733c0055a0))
+* **govdata:** leave room for one ETL worker while vss or x-schema holds the box ([31ba1b3](https://github.com/kenstott/calcite/commit/31ba1b329d52f3ab30697cef9b51650d36ccced4))
+
 ## [0.121.2](https://github.com/kenstott/calcite/compare/engine-v0.121.1...engine-v0.121.2) (2026-10-23)
 
 
