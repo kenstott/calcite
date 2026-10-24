@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 @ResourceLock("askamerica.pgwire.startState")
+@Isolated("tracks the start in PgwireGovDataConnector's static state, which the message reads")
 class PgwireGovDataConnectorStartStateTest {
   @TempDir File dir;
 
