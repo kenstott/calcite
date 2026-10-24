@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.121.4](https://github.com/kenstott/calcite/compare/engine-v0.121.3...engine-v0.121.4) (2026-10-24)
+
+
+### Bug Fixes
+
+* **govdata/ops:** comtrade reload driver waits for the daily quota refill instead of burning attempts ([e2f0f92](https://github.com/kenstott/calcite/commit/e2f0f927ef7a161803c6ec53b8ade79f099ba9b9))
+* **govdata/sec:** route plain-text filings with no XBRL structure to the no-XBRL path ([a983fde](https://github.com/kenstott/calcite/commit/a983fde6eeb79bd0c5d353c24ece703092ecb6f8))
+
 ## [0.121.3](https://github.com/kenstott/calcite/compare/engine-v0.121.2...engine-v0.121.3) (2026-10-23)
 
 
