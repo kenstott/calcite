@@ -75,8 +75,68 @@ def test_pg_depend_refclassid_join_parses_and_runs(calcite_state):
 
 
 def test_regclass_literal_still_matches_pg_description_classoid(calcite_state):
-    """KEEP: the short-name mapping the removed regex pre-pass used to provide."""
-    assert _scalar(calcite_state, "SELECT 'pg_catalog.pg_class'::regclass") == "pg_class"
+    """KEEP: DataGrip's comment queries filter `classoid = 'pg_catalog.pg_X'::regclass`; a
+    catalog class's reg-cast is its real oid, the value pg_description.classoid holds."""
+    assert _scalar(calcite_state, "SELECT 'pg_catalog.pg_class'::regclass") == 1259
+    state = _described_state()
+    assert _rows(
+        state,
+        "SELECT objsubid, description FROM pg_catalog.pg_description "
+        "WHERE classoid = 'pg_catalog.pg_class'::regclass ORDER BY objsubid",
+    ) == [(0, "Orders placed"), (1, "Order id")]
+    catalog.invalidate_catalog_cache()
+
+
+def test_a_relation_regclass_keeps_its_unqualified_name(calcite_state):
+    assert _scalar(calcite_state, "SELECT 'public.emps'::regclass") == "emps"
+
+
+#: PostgreSQL JDBC 42.7's DatabaseMetaData.getColumns -- what Trino's postgresql connector runs
+#: to describe a table. It joins pg_class ON dc.oid = dsc.classoid, so a pg_description
+#: classoid that is not an oid failed it outright.
+_PGJDBC_GET_COLUMNS = (
+    "SELECT * FROM (SELECT n.nspname,c.relname,a.attname,a.atttypid,a.attnotnull OR "
+    "(t.typtype = 'd' AND t.typnotnull) AS attnotnull,a.atttypmod,a.attlen,t.typtypmod,"
+    "row_number() OVER (PARTITION BY a.attrelid ORDER BY a.attnum) AS attnum, "
+    "nullif(a.attidentity, '') as attidentity,nullif(a.attgenerated, '') as attgenerated,"
+    "pg_catalog.pg_get_expr(def.adbin, def.adrelid) AS adsrc,dsc.description,t.typbasetype,"
+    "t.typtype  FROM pg_catalog.pg_namespace n  JOIN pg_catalog.pg_class c ON "
+    "(c.relnamespace = n.oid)  JOIN pg_catalog.pg_attribute a ON (a.attrelid=c.oid)  JOIN "
+    "pg_catalog.pg_type t ON (a.atttypid = t.oid)  LEFT JOIN pg_catalog.pg_attrdef def ON "
+    "(a.attrelid=def.adrelid AND a.attnum = def.adnum)  LEFT JOIN pg_catalog.pg_description dsc "
+    "ON (c.oid=dsc.objoid AND a.attnum = dsc.objsubid)  LEFT JOIN pg_catalog.pg_class dc ON "
+    "(dc.oid=dsc.classoid AND dc.relname='pg_class')  LEFT JOIN pg_catalog.pg_namespace dn ON "
+    "(dc.relnamespace=dn.oid AND dn.nspname='pg_catalog')  WHERE c.relkind in "
+    "('r','p','v','f','m') and a.attnum > 0 AND NOT a.attisdropped  AND c.relname LIKE 'emps') "
+    "c WHERE true  ORDER BY nspname,c.relname,attnum"
+)
+
+
+def _described_state():
+    """A catalog whose one table, and one of its columns, carry a comment."""
+    emps = TableMeta(2, "db", "SALES", "emps", "SALES.emps", comment="Orders placed")
+    ctx = CompilationContext(tables={emps.type_name: emps})
+    column_types = {
+        2: [
+            ColumnMeta("empno", "INTEGER", False, comment="Order id"),
+            ColumnMeta("ename", "VARCHAR"),
+            ColumnMeta("year", "INTEGER"),
+        ]
+    }
+    state = launcher.build_state(backend=StubBackend())
+    install_catalog(state, ctx, column_types)
+    return state
+
+
+def test_pgjdbc_get_columns_answers_every_column_and_its_comment():
+    rows = _rows(_described_state(), _PGJDBC_GET_COLUMNS)
+    catalog.invalidate_catalog_cache()
+    # (attname, atttypid, description)
+    assert [(r[2], r[3], r[12]) for r in rows] == [
+        ("empno", 23, "Order id"),
+        ("ename", 1043, None),
+        ("year", 23, None),
+    ]
 
 
 # --------------------------------------------------------------------------- 2
