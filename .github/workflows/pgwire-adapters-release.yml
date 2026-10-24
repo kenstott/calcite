@@ -226,6 +226,13 @@ jobs:
           GOVDATA_PARQUET_DIR:   ${{ secrets.GOVDATA_PARQUET_DIR }}
           PGWIRE_CALCITE_CLASSPATH_DIR: ${{ github.workspace }}/cache-jars/jars
           PGWIRE_CALCITE_STATE_DIR: ${{ github.workspace }}/catalog-cache
+          # An absolute catalog, as the AskAmerica engine gives every server it spawns
+          # (PgwireGovDataConnector): the jar's seed is installed at this path and every schema
+          # opens it, so the walk reads the views the seed holds. Left relative, each schema
+          # resolves it under its own directory, opens an empty catalog beside the seed, and
+          # re-creates every view over the warehouse: from a runner eight timed out, and the 35
+          # views on them were left out of the cache.
+          GOVDATA_DUCKDB_CATALOG: ${{ github.workspace }}/catalog-walk/.duckdb/govdata.duckdb
         run: |
           set -euo pipefail
           # Keyed as the bundle's stamped package will key it at runtime.
