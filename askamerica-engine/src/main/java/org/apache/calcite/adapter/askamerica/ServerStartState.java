@@ -160,7 +160,8 @@ final class ServerStartState {
 
   private static String missText(String detail) {
     String hash = field(detail, "hash");
-    return "looked for catalog-cache-" + hash + ".pkl (model hash " + hash + ") at: "
+    return "looked for catalog-cache-" + hash + ".pkl (cache key " + hash
+        + ", model.json and engine release) at: "
         + field(detail, "looked") + "; files that existed but could not be loaded: "
         + field(detail, "unloadable");
   }

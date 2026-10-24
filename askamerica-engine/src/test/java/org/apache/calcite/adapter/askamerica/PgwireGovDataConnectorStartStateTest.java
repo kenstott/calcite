@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.File;
 import java.io.InputStream;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * start takes.
  */
 @Tag("unit")
+@Isolated("tracks the start in PgwireGovDataConnector's static state, which the message reads")
 class PgwireGovDataConnectorStartStateTest {
   @TempDir File dir;
 
@@ -125,7 +127,9 @@ class PgwireGovDataConnectorStartStateTest {
         + "/m/catalog-cache-661fbeeb8f49070b.pkl unloadable=none -- walking the catalog live\n",
         3, true);
     assertTrue(m.contains("DEFECT - CATALOG CACHE MISS"), m);
-    assertTrue(m.contains("catalog-cache-661fbeeb8f49070b.pkl (model hash 661fbeeb8f49070b)"), m);
+    assertTrue(
+        m.contains("catalog-cache-661fbeeb8f49070b.pkl (cache key 661fbeeb8f49070b, "
+            + "model.json and engine release)"), m);
     assertTrue(m.contains("/s/catalog-cache-661fbeeb8f49070b.pkl,/m/"), m);
   }
 
