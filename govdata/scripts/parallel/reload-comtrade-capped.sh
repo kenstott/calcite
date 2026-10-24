@@ -54,6 +54,29 @@ wait_for_idle() {
   done
 }
 
+# The free tier is a per-day call quota (500), not just a per-second rate: once it is spent every
+# call answers 403 "Out of call volume quota. Quota will be replenished in HH:MM:SS" with a
+# Retry-After. Probe with one call (a refused call costs nothing) and sleep until the refill, so a
+# spent day waits for the next one instead of using up this script's attempts.
+QUOTA_PROBE_URL="https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode=842&period=2025&flowCode=X&maxRecords=1"
+quota_exhausted() {
+  QUOTA_WAIT=0
+  local out
+  out="$(curl -si -m 60 -H "Ocp-Apim-Subscription-Key: ${COMTRADE_API_KEY:?COMTRADE_API_KEY is not set}" "$QUOTA_PROBE_URL")"
+  if echo "$out" | grep -q "Out of call volume quota"; then
+    QUOTA_WAIT="$(echo "$out" | tr -d '\r' | awk -F': ' 'tolower($1)=="retry-after"{print int($2); exit}')"
+    [[ "$QUOTA_WAIT" =~ ^[0-9]+$ ]] || { log "quota refused but no Retry-After in the response; stopping"; exit 1; }
+    return 0
+  fi
+  return 1
+}
+wait_for_quota() {
+  while quota_exhausted; do
+    log "Comtrade daily quota is spent; sleeping $((QUOTA_WAIT + 60))s until it is replenished"
+    sleep $((QUOTA_WAIT + 60))
+  done
+}
+
 for ((year = FROM; year >= TO; year--)); do
   attempt=0
   while true; do
@@ -67,16 +90,23 @@ for ((year = FROM; year >= TO; year--)); do
       log "data year $year: $left partition(s) still at the limit after $ATTEMPTS runs; stopping"
       exit 1
     fi
-    attempt=$((attempt + 1))
     wait_for_idle
+    wait_for_quota
+    attempt=$((attempt + 1))
     log "data year $year: $left partition(s) at the limit; run $attempt/$ATTEMPTS (pipeline year $((year + 1)))"
     (cd "$HERE" && ./force-reprocess.sh --schema econ --tables comtrade_flows \
         --start $((year + 1)) --end $((year + 1)) --skip-daily >> "$LOG" 2>&1)
     log "data year $year: run $attempt exited $?"
     left="$(capped_in_year "$year")"
     if [[ "$left" =~ ^[0-9]+$ ]] && [ "$left" -gt 0 ]; then
-      log "data year $year: $left partition(s) still at the limit; waiting an hour (quota or upstream error)"
-      sleep 3600
+      if quota_exhausted; then
+        # the run ended because the day's quota ran out: not a failed attempt
+        attempt=$((attempt - 1))
+        log "data year $year: $left partition(s) still at the limit; quota spent, waiting for the refill"
+      else
+        log "data year $year: $left partition(s) still at the limit; waiting an hour (upstream error)"
+        sleep 3600
+      fi
     fi
   done
 done
