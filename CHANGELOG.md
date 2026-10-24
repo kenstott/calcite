@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.121.5](https://github.com/kenstott/calcite/compare/engine-v0.121.4...engine-v0.121.5) (2026-10-24)
+
+
+### Bug Fixes
+
+* **govdata/econ:** Comtrade 4xx refusals fail at once; the quota reload waits for the daily to run first ([0feffc9](https://github.com/kenstott/calcite/commit/0feffc98eedb4a9d5088765f5f92889a3d9afb67))
+
 ## [0.121.4](https://github.com/kenstott/calcite/compare/engine-v0.121.3...engine-v0.121.4) (2026-10-24)
 
 
