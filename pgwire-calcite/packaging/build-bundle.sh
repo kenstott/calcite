@@ -20,7 +20,10 @@
 # downloads from Maven, PyPI and python-build-standalone.
 #
 # Environment:
-#   PGWIRE_BUNDLE_VERSION  version in the bundle's name; default "dev"
+#   PGWIRE_BUNDLE_VERSION  version in the bundle's name, and the engine release stamped into its
+#                          installed package (the catalog cache's key); default "dev"
+#   CATALOG_CACHE_DIR      a directory holding the catalog cache for this model.json and version,
+#                          written by scripts/build_catalog_cache.py; shipped beside the model
 set -euo pipefail
 
 ADAPTER="${1:?usage: build-bundle.sh <adapter> <variant> <out-dir>}"
@@ -128,6 +131,11 @@ stage_bundle() {
   local extras=".[oidc]"
   [ "$ADAPTER" = "govdata" ] && extras=".[oidc,embed]"
   (cd pgwire-calcite && uv pip install --python "$bundle/cpython" --no-editable --override packaging/uv-overrides.txt ./vendor/buenavista "$extras")
+  # The engine release this bundle belongs to, in the installed package: the catalog cache is
+  # keyed by it (catalog_populate.engine_version)
+  local pkg
+  pkg="$("$bundle/cpython/bin/python" -c 'import os, pgwire_calcite; print(os.path.dirname(pgwire_calcite.__file__))')"
+  echo "$VERSION" > "$pkg/ENGINE_VERSION"
   # `uv venv` makes cpython/bin/python an absolute symlink; make it relative so the bundle can be
   # moved anywhere. CPython 3.11+ derives its prefix from the link's real path, so pyvenv.cfg's
   # build-machine `home` line is harmless.
@@ -158,22 +166,16 @@ print('embedder model cached')
 
   mkdir -p "$bundle/model" "$bundle/bin"
   cp "pgwire-$ADAPTER/model.json" "$bundle/model/model.json"
-  # A pre-built catalog cache is keyed by model.json's content hash; one that does not match the
-  # current model.json would never be used, so it fails the build instead of shipping
-  shopt -s nullglob
-  local caches=("pgwire-$ADAPTER"/catalog-cache-*.pkl)
-  shopt -u nullglob
-  if [ "${#caches[@]}" -gt 0 ]; then
-    local model_hash expected
-    model_hash=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest()[:16])' \
-      "pgwire-$ADAPTER/model.json")
-    expected="pgwire-$ADAPTER/catalog-cache-${model_hash}.pkl"
-    for cache_file in "${caches[@]}"; do
-      if [ "$cache_file" != "$expected" ]; then
-        echo "$cache_file does not match model.json (expected $expected); regenerate the catalog cache and delete the stale one" >&2
-        exit 1
-      fi
-    done
+  # A catalog cache is keyed by model.json and the engine release, so none is committed: one walked
+  # by scripts/build_catalog_cache.py with this build's jars and PGWIRE_BUNDLE_VERSION as the stamp,
+  # in CATALOG_CACHE_DIR, ships beside the model; without it, an install walks the catalog live on
+  # its first start. A directory that holds no cache under this build's key fails the build.
+  if [ -n "${CATALOG_CACHE_DIR:-}" ]; then
+    local key expected
+    key="$(PYTHONPATH=pgwire-calcite/src python3 -c 'import sys; from pgwire_calcite.catalog_populate import cache_key; print(cache_key(sys.argv[1], sys.argv[2]))' \
+      "pgwire-$ADAPTER/model.json" "$VERSION")"
+    expected="$CATALOG_CACHE_DIR/catalog-cache-${key}.pkl"
+    [ -f "$expected" ] || { echo "no catalog cache $expected for this model.json and engine $VERSION" >&2; exit 1; }
     if [ "$ADAPTER" = "govdata" ]; then
       # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
       PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \

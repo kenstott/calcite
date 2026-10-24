@@ -1823,16 +1823,16 @@ def _populate_pg_description(
             continue
         ns_oid = idx.ns_map.get(domain_to_sql_name(_did))
         if ns_oid is not None:
-            desc_rows.append((ns_oid, "pg_namespace", 0, _ddesc))
+            desc_rows.append((ns_oid, _CATALOG_CLASS_OIDS["pg_namespace"], 0, _ddesc))
 
     for _, _, _, table_id, toid in idx.tables:
         tdesc = tid_desc.get(table_id)
         if tdesc:
-            desc_rows.append((toid, "pg_class", 0, tdesc))
+            desc_rows.append((toid, _CATALOG_CLASS_OIDS["pg_class"], 0, tdesc))
         for cname, cdesc_val in (tid_col_desc.get(table_id) or {}).items():
             attnum = idx.col_attnum.get((toid, cname))
             if attnum is not None:
-                desc_rows.append((toid, "pg_class", attnum, cdesc_val))
+                desc_rows.append((toid, _CATALOG_CLASS_OIDS["pg_class"], attnum, cdesc_val))
 
     if desc_rows:
         db.executemany("INSERT INTO _pg_description VALUES (?,?,?,?)", desc_rows)
@@ -2040,7 +2040,9 @@ def _populate_empty_system_tables(db) -> None:
         "CREATE TABLE _pg_attrdef (oid INTEGER, adrelid INTEGER, adnum SMALLINT, adbin VARCHAR)"
     )
     db.execute(
-        "CREATE TABLE _pg_description (objoid INTEGER, classoid VARCHAR, objsubid INTEGER, description VARCHAR)"
+        # classoid is the class's real oid, as PG has it: pgjdbc's getColumns joins
+        # pg_class dc ON dc.oid = dsc.classoid, which a class NAME here cannot satisfy.
+        "CREATE TABLE _pg_description (objoid INTEGER, classoid INTEGER, objsubid INTEGER, description VARCHAR)"
     )
     db.execute("""CREATE TABLE _pg_index (
         indexrelid INTEGER, indrelid INTEGER, indnatts SMALLINT, indnkeyatts SMALLINT,
@@ -2963,8 +2965,8 @@ def _populate_pg_extension(db, state) -> None:
     # PG keeps an extension's description in pg_description, not in pg_extension; that is
     # where obj_description(oid, 'pg_extension') and DataGrip's extension node read it.
     db.executemany(
-        "INSERT INTO _pg_description VALUES (?, 'pg_extension', 0, ?)",
-        [(oid, comment) for oid, _n, _v, comment in rows],
+        "INSERT INTO _pg_description VALUES (?, ?, 0, ?)",
+        [(oid, _CATALOG_CLASS_OIDS["pg_extension"], comment) for oid, _n, _v, comment in rows],
     )
 
 
@@ -3133,13 +3135,16 @@ def _rewrite_pg_cast(node, _transform):
     dtype = node.args.get("to")
     dtype_str = str(dtype).lower() if dtype else ""
     if dtype_str in _REG_CAST_TYPES:
-        # `'[schema.]name'::regclass` -> unqualified `'name'`. The synthetic pg_description
-        # stores classoid as the short relation name (e.g. 'pg_class'), and DataGrip's comment
-        # queries filter `classoid = 'pg_catalog.pg_class'::regclass`. Map the literal to its
-        # last dotted component so the comparison matches — else every description drops.
+        # `'[schema.]name'::regclass` on a catalog class -> its real oid, as PG compares it:
+        # pg_description.classoid holds class oids, and DataGrip's comment queries filter
+        # `classoid = 'pg_catalog.pg_class'::regclass`. Any other name -> unqualified `'name'`.
         inner = node.this
         if isinstance(inner, exp.Literal) and inner.is_string:
-            return exp.Literal.string(inner.this.rsplit(".", 1)[-1])
+            name = inner.this.rsplit(".", 1)[-1]
+            class_oid = _CATALOG_CLASS_OIDS.get(name)
+            if class_oid is not None:
+                return exp.Literal.number(class_oid)
+            return exp.Literal.string(name)
         return inner.transform(_transform)
     if dtype_str in ("oid", "xid", "xid8", "tid", "cid"):
         # DuckDB has no oid/xid/tid/cid types. Preserve the operand's VALUE by re-casting to

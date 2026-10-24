@@ -151,3 +151,8 @@ comparative-test-results/
 
 # Pinned, immutable jar copies (govdata/scripts/pin-jar.sh)
 govdata/.jars/
+
+# Catalog caches are keyed by the engine release and built by each release (pgwire-adapters-release.yml), never committed.
+pgwire-*/catalog-cache-*.pkl
+pgwire-calcite/src/pgwire_calcite/ENGINE_VERSION
+pgwire-calcite/tests/fixtures/catalog-cache-*.pkl

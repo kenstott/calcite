@@ -485,10 +485,36 @@ STAGE_MARKER = "STAGE"
 STATE_DIR_ENV = "PGWIRE_CALCITE_STATE_DIR"
 
 
-def _cache_file_name(model_path: str) -> str:
+#: The engine release a bundle belongs to, written into the installed package by the bundle
+#: build (build-bundle.sh, pgwire-adapters-release.yml). A checkout has no stamp; its engine
+#: release is the repo's version.txt, the one release-please keeps.
+ENGINE_VERSION_STAMP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ENGINE_VERSION")
+_CHECKOUT_VERSION = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, "version.txt"
+)
+
+
+def engine_version() -> str:
+    """The engine release this server belongs to (see ENGINE_VERSION_STAMP)."""
+    path = ENGINE_VERSION_STAMP if os.path.isfile(ENGINE_VERSION_STAMP) else _CHECKOUT_VERSION
+    with open(path, encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def cache_key(model_path: str, version: str) -> str:
+    """A catalog cache's key: the model AND the engine release that walked it. The catalog's
+    column types come from the engine as much as from model.json -- a fix that serves a column
+    as a new type changes them with model.json untouched -- so a cache another engine wrote
+    must never match."""
+    digest = hashlib.sha256()
     with open(model_path, "rb") as f:
-        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
-    return f"catalog-cache-{model_hash}.pkl"
+        digest.update(f.read())
+    digest.update(b"\0engine=" + version.encode("utf-8"))
+    return digest.hexdigest()[:16]
+
+
+def _cache_file_name(model_path: str) -> str:
+    return f"catalog-cache-{cache_key(model_path, engine_version())}.pkl"
 
 
 def catalog_cache_write_path(model_path: str) -> str:
@@ -505,14 +531,12 @@ def catalog_cache_write_path(model_path: str) -> str:
 
 
 def catalog_cache_path(model_path: str) -> str:
-    """Deterministic cache filename next to ``model_path``, keyed by its content hash.
+    """Deterministic cache filename next to ``model_path``, keyed by :func:`cache_key`.
 
-    A schema change (a table added/removed/edited in model.json) changes the hash and
-    therefore the filename, so a stale cache is simply never matched -- no separate
-    invalidation bookkeeping needed. Shipping a pre-built cache file is then just
-    shipping it alongside model.json in the same directory: the runtime path
-    computation independently lands on the identical name, so the bundled release
-    tarball needs no extra wiring at either build or install time.
+    A model.json change or another engine release changes the key and therefore the
+    filename, so a stale cache is simply never matched -- no separate invalidation
+    bookkeeping needed. The release builds the shipped cache with its own engine and puts it
+    beside model.json; the runtime path computation independently lands on the same name.
     """
     return os.path.join(
         os.path.dirname(os.path.abspath(model_path)),
@@ -525,8 +549,8 @@ def build_and_cache_context(conn, model_path: str):
     :func:`catalog_cache_path`'s file -- always regenerating, never trusting a stale
     file on disk.
 
-    Only a complete walk is written. The cache has no invalidation other than a
-    model.json change, so a walk that had to leave a schema or table out (a
+    Only a complete walk is written. The cache has no invalidation other than its
+    key (model.json and the engine release), so a walk that had to leave a schema or table out (a
     server still warming up, a schema whose listing threw) would otherwise be
     served as the whole catalog on every later launch. A partial result is still
     returned for this launch, and the next launch walks live again."""
@@ -592,7 +616,7 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
             log.exception(
                 "Catalog cache at %s failed to load -- rebuilding live", cache_path)
     # A production install ships the cache, so reaching here is a defect: the engine reads this
-    # marker from the server's log and says so, naming the files looked for and the model hash.
+    # marker from the server's log and says so, naming the files looked for and the cache key.
     log.warning(
         "%s catalog-cache-miss hash=%s looked=%s unloadable=%s -- walking the catalog live",
         STAGE_MARKER, _cache_file_name(model_path)[len("catalog-cache-"):-len(".pkl")],

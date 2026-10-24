@@ -73,10 +73,17 @@ jobs:
       os: ${{ steps.plan.outputs.os }}
       smoke_os: ${{ steps.plan.outputs.smoke_os }}
       smoke_windows: ${{ steps.plan.outputs.smoke_windows }}
+      engine_version: ${{ steps.version.outputs.engine_version }}
     steps:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: pgwire-calcite/packaging
+      # The engine release the bundles belong to: the tarball names carry it, each bundle's
+      # installed pgwire_calcite is stamped with it, and the catalog cache is keyed by it.
+      - id: version
+        run: |
+          VER="${{ github.event.inputs.version || github.ref_name }}"
+          echo "engine_version=${VER#engine-v}" >> "$GITHUB_OUTPUT"
       - id: plan
         env:
           SCOPE: ${{ inputs.scope || 'all' }}
@@ -187,8 +194,64 @@ jobs:
           name: adapter-jars-${{ matrix.adapter.name }}
           path: out
 
-  bundle:
+  # govdata's catalog cache, walked live by this release's own engine and jars. The cache is
+  # keyed by model.json AND the engine release (catalog_populate.cache_key): the catalog's
+  # column types come from the engine too, and a cache an earlier engine walked for the same
+  # model.json served govdata's year partitions as VARCHAR while 0.119.4's engine sent them as
+  # INTEGER (DuckDB: "Invalid unicode"). So it is never committed; each release builds its own.
+  # It is the first query's speed: without it every fresh install walks hundreds of tables live.
+  catalog-cache:
     needs: [plan, jars]
+    if: contains(needs.plan.outputs.adapters, '"govdata"')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: adapter-jars-govdata
+          path: cache-jars
+      - name: Walk the govdata catalog live and write its cache
+        working-directory: pgwire-calcite
+        env:
+          # The same warehouse credentials askamerica-engine.yml's live JDBC smoke test reads.
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_OVERRIDE: ${{ secrets.AWS_ENDPOINT_OVERRIDE }}
+          AWS_REGION:            auto
+          GOVDATA_PARQUET_DIR:   ${{ secrets.GOVDATA_PARQUET_DIR }}
+          PGWIRE_CALCITE_CLASSPATH_DIR: ${{ github.workspace }}/cache-jars/jars
+          PGWIRE_CALCITE_STATE_DIR: ${{ github.workspace }}/catalog-cache
+          # An absolute catalog, as the AskAmerica engine gives every server it spawns
+          # (PgwireGovDataConnector): the jar's seed is installed at this path and every schema
+          # opens it, so the walk reads the views the seed holds. Left relative, each schema
+          # resolves it under its own directory, opens an empty catalog beside the seed, and
+          # re-creates every view over the warehouse: from a runner eight timed out, and the 35
+          # views on them were left out of the cache.
+          GOVDATA_DUCKDB_CATALOG: ${{ github.workspace }}/catalog-walk/.duckdb/govdata.duckdb
+        run: |
+          set -euo pipefail
+          # Keyed as the bundle's stamped package will key it at runtime.
+          echo "${{ needs.plan.outputs.engine_version }}" > src/pgwire_calcite/ENGINE_VERSION
+          uv run --python "${PY_VERSION}" python scripts/build_catalog_cache.py ../pgwire-govdata/model.json
+          cd ..
+          # A cache that lacks a table a schema YAML declares would be served as the whole catalog.
+          PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \
+            catalog-cache/catalog-cache-*.pkl govdata/src/main/resources/*/*-schema.yaml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog-cache-govdata
+          path: catalog-cache/catalog-cache-*.pkl
+          if-no-files-found: error
+
+  bundle:
+    needs: [plan, jars, catalog-cache]
+    # catalog-cache is skipped when this run builds no govdata bundle.
+    if: ${{ !cancelled() && needs.jars.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.catalog-cache.result) }}
     strategy:
       fail-fast: false
       matrix:
@@ -257,6 +320,11 @@ jobs:
             EXTRAS=".[oidc,embed]"
           fi
           uv pip install --python ../bundle/cpython --no-editable --override packaging/uv-overrides.txt ./vendor/buenavista "$EXTRAS"
+          # The engine release this bundle belongs to, in the installed package: the catalog
+          # cache is keyed by it (catalog_populate.engine_version).
+          if [[ "$RUNNER_OS" == "Windows" ]]; then VENVPY=../bundle/cpython/Scripts/python.exe; else VENVPY=../bundle/cpython/bin/python; fi
+          PKG="$("$VENVPY" -c 'import os, pgwire_calcite; print(os.path.dirname(pgwire_calcite.__file__))')"
+          echo "${{ needs.plan.outputs.engine_version }}" > "$PKG/ENGINE_VERSION"
           # `uv venv` makes cpython/bin/python an ABSOLUTE symlink to $PYBIN.
           # Rewrite it relative so the whole bundle (cpython/ + python/ together)
           # is relocatable to any absolute path. pyvenv.cfg's `home` line stays
@@ -315,41 +383,26 @@ jobs:
           "$JAVA_HOME/bin/jlink" --add-modules ALL-MODULE-PATH \
             --strip-debug --no-header-files --no-man-pages --compress=2 --output bundle/jre
 
+      - uses: actions/download-artifact@v4
+        if: matrix.adapter.name == 'govdata'
+        with:
+          name: catalog-cache-govdata
+          path: catalog-cache
       - name: Stage adapter model + launcher
         run: |
           mkdir -p bundle/model bundle/bin
           cp "pgwire-${{ matrix.adapter.name }}/model.json" bundle/model/model.json
-          # Pre-built catalog cache (populate_state_cached in pgwire_calcite/catalog_populate.py):
-          # skips the live JDBC/Iceberg walk of every table on first connect, which otherwise
-          # costs minutes on a schema this size and made every fresh install's first query time
-          # out client-side (confirmed live, 2026-09-18). Its filename is keyed by model.json's
-          # own content hash, so shipping it alongside model.json here is the only wiring
-          # needed -- the runtime path computation independently lands on the same name. Only
-          # present for adapters that have generated one; not every adapter's schema is large
-          # enough to need it.
-          #
-          # An adapter that ships a cache must ship the one for ITS CURRENT model.json: a cache
-          # left behind by an older model.json is never matched at runtime, so every install
-          # silently cold-walks again (shipped that way in engine-v0.100.0 -- the only cache was
-          # for a model.json three commits old). Fail the build rather than ship a dead file.
-          shopt -s nullglob
-          caches=("pgwire-${{ matrix.adapter.name }}"/catalog-cache-*.pkl)
-          shopt -u nullglob
-          if [ "${#caches[@]}" -gt 0 ]; then
-            model_hash=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest()[:16])' \
-              "pgwire-${{ matrix.adapter.name }}/model.json")
-            expected="pgwire-${{ matrix.adapter.name }}/catalog-cache-${model_hash}.pkl"
-            for cache_file in "${caches[@]}"; do
-              if [ "$cache_file" != "$expected" ]; then
-                echo "::error::$cache_file does not match model.json (expected $expected) -- regenerate the catalog cache and delete the stale one"
-                exit 1
-              fi
-            done
-            if [ "${{ matrix.adapter.name }}" = "govdata" ]; then
-              # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
-              PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \
-                "$expected" govdata/src/main/resources/*/*-schema.yaml
-            fi
+          # The catalog cache the catalog-cache job walked with this release's engine
+          # (populate_state_cached in pgwire_calcite/catalog_populate.py): it skips the live walk of
+          # every table on first connect, which costs minutes on a schema this size and made every
+          # fresh install's first query time out client-side (confirmed live, 2026-09-18). Its name
+          # is keyed by model.json and the engine release, the key the stamped package computes at
+          # runtime; one under any other name would never be loaded, so it fails the build.
+          if [ "${{ matrix.adapter.name }}" = "govdata" ]; then
+            key="$(PYTHONPATH=pgwire-calcite/src python3 -c 'import sys; from pgwire_calcite.catalog_populate import cache_key; print(cache_key(sys.argv[1], sys.argv[2]))' \
+              pgwire-govdata/model.json "${{ needs.plan.outputs.engine_version }}")"
+            expected="catalog-cache/catalog-cache-${key}.pkl"
+            test -f "$expected" || { echo "::error::no catalog cache $expected for this model.json and engine ${{ needs.plan.outputs.engine_version }}: $(ls catalog-cache)"; exit 1; }
             cp "$expected" "bundle/model/$(basename "$expected")"
           fi
           # Adapter-specific entry: starts the calcite backend against this adapter's model.

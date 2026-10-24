@@ -3,9 +3,9 @@
 # Licensed under the Business Source License 1.1 (see ../../LICENSE, ../../NOTICE).
 """Fail when a shipped catalog cache lacks a table or view a govdata schema YAML declares.
 
-The cache file is keyed by model.json's content hash, and adding a table to a schema YAML never
-changes model.json -- so a cache built before the table existed keeps matching and is served as
-the whole catalog. This compares the cache against the YAMLs instead.
+A cache is written only from a complete walk, but a walk sees only the tables the warehouse
+serves; a table a schema YAML declares and the walk did not reach would be missing from the
+catalog every install serves. This compares the cache against the YAMLs.
 
     PYTHONPATH=pgwire-calcite/src python3 check_catalog_cache_coverage.py <cache.pkl> <schema-yaml>...
 """
