@@ -109,8 +109,9 @@ for ((year = FROM; year >= TO; year--)); do
       exit 1
     fi
     wait_for_idle
-    wait_for_daily_econ
     wait_for_quota
+    # after the quota wait, so a wake at the refill still holds for the daily
+    wait_for_daily_econ
     attempt=$((attempt + 1))
     log "data year $year: $left partition(s) at the limit; run $attempt/$ATTEMPTS (pipeline year $((year + 1)))"
     (cd "$HERE" && ./force-reprocess.sh --schema econ --tables comtrade_flows \
