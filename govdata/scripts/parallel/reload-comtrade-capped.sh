@@ -77,6 +77,24 @@ wait_for_quota() {
   done
 }
 
+# The daily econ run's comtrade_flows draws on the same 500-call day. The quota refills at 00:00 UTC,
+# ten hours before the daily starts, so a reload that resumes at the refill spends the whole day
+# first and the daily's own 2026 periods all answer 403. Hold the reload until the daily's
+# comtrade_flows has run in this UTC day (it needs well under 100 calls), with a late-day cutoff
+# so a missed daily does not hold the reload for a whole day.
+wait_for_daily_econ() {
+  local day_start
+  day_start="$(date -u -d 'today 00:00' +%s)"
+  while [ "$(date -u +%-H)" -lt 18 ]; do
+    if find "$HERE/runs/worker-econ-daily" -name 'launch_*.log' -newermt "@$day_start" 2>/dev/null \
+        | xargs -r grep -l "Table 'comtrade_flows' complete" 2>/dev/null | grep -q .; then
+      return 0
+    fi
+    log "waiting for today's daily econ comtrade_flows to run first (it shares the day's quota)"
+    sleep 900
+  done
+}
+
 for ((year = FROM; year >= TO; year--)); do
   attempt=0
   while true; do
@@ -91,6 +109,7 @@ for ((year = FROM; year >= TO; year--)); do
       exit 1
     fi
     wait_for_idle
+    wait_for_daily_econ
     wait_for_quota
     attempt=$((attempt + 1))
     log "data year $year: $left partition(s) at the limit; run $attempt/$ATTEMPTS (pipeline year $((year + 1)))"

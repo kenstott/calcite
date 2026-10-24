@@ -147,4 +147,18 @@ class ComtradeTransformerRetryTest {
     drain(new ComtradeTransformer().fetchAndTransform(context(url, 1)));
     assertEquals(before, tmp.listFiles((d, n) -> n.startsWith("comtrade-")).length);
   }
+
+  /** A 403 is Comtrade refusing the call (quota spent): one request, no retries. */
+  @Test void refusedCallIsNotRetried() throws Exception {
+    server.createContext("/data", exchange -> {
+      requests.incrementAndGet();
+      exchange.sendResponseHeaders(403, -1);
+      exchange.close();
+    });
+    String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/data?reporterCode=842&maxRecords=1000";
+    IOException e = assertThrows(IOException.class,
+        () -> new ComtradeTransformer().fetchAndTransform(context(url, 3)));
+    assertTrue(e.getMessage().contains("refused"), e.getMessage());
+    assertEquals(1, requests.get());
+  }
 }

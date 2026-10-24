@@ -308,9 +308,25 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
         try {
           return openOnce();
         } catch (IOException e) {
+          if (isRefusal(e)) {
+            // A 4xx other than 429 is Comtrade refusing the call (403 once the day's 500-call
+            // quota is spent, or a rejected key): the same call cannot succeed on a retry, and
+            // retrying a whole day's batches only spends minutes on it.
+            closeQuietly();
+            throw new IOException("Comtrade: refused " + safeUrl + " (" + e.getMessage()
+                + "): the daily call quota is spent or the key is rejected; not retrying", e);
+          }
           retryOrThrow(e);
         }
       }
+    }
+
+    private static boolean isRefusal(IOException e) {
+      if (!(e instanceof RetryableHttp.HttpStatusException)) {
+        return false;
+      }
+      int status = ((RetryableHttp.HttpStatusException) e).getStatus();
+      return status >= 400 && status < 500 && status != 429 && status != 408;
     }
 
     /** Prepares a re-run after a mid-body fault, or throws once retries are exhausted. */
