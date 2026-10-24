@@ -408,6 +408,15 @@ public class XbrlToParquetConverter implements FileConverter {
         }
       }
 
+      // A plain-text main document (e.g. r10q-0325.txt from a small filer with no XBRL) fails the strict
+      // XML parse, and JSoup then returns a tree for it anyway. That tree is not "malformed XBRL": it
+      // has no XBRL structure at all, so it is a filing with no XBRL and goes the no-XBRL route, not on
+      // to fail on a CIK/period end date that only an XBRL document carries.
+      if (usedJsoupFallback && doc != null && !hasXbrlStructure(doc)) {
+        LOGGER.info("{} has no XBRL structure (plain-text or non-XBRL document)", fileName);
+        doc = null;
+      }
+
       // No XBRL (inline or companion) found — common for DEF 14A and older-style filings.
       // Still ingest what doesn't depend on XBRL: basic filing_metadata from hints/EDGAR
       // submissions data, plus an MD&A/text-section extraction pass over the raw HTML.
@@ -4078,6 +4087,24 @@ public class XbrlToParquetConverter implements FileConverter {
    * @param filePath Path to the file (local or S3)
    * @return W3C DOM Document, or null if parsing fails
    */
+  /**
+   * True when the document carries XBRL structure: an {@code xbrl} root or any {@code context}
+   * element, with or without a namespace prefix. A JSoup tree built from a plain-text filing has
+   * neither.
+   */
+  static boolean hasXbrlStructure(Document doc) {
+    NodeList all = doc.getElementsByTagName("*");
+    for (int i = 0; i < all.getLength(); i++) {
+      String name = all.item(i).getNodeName().toLowerCase(java.util.Locale.ROOT);
+      int colon = name.indexOf(':');
+      String local = colon >= 0 ? name.substring(colon + 1) : name;
+      if (local.equals("xbrl") || local.equals("context")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private Document parseWithJsoupFallback(String filePath) {
     try {
       String content;
