@@ -2533,7 +2533,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Parse inline XBRL from HTML file.
    * Inline XBRL uses ix: namespace tags embedded in HTML.
    */
-  private Document parseInlineXbrl(String htmlPath) {
+  Document parseInlineXbrl(String htmlPath) {
     String fileName = htmlPath.substring(htmlPath.lastIndexOf('/') + 1);
     LOGGER.debug("========== PARSE INLINE XBRL START for: " + fileName + " ==========");
     LOGGER.debug("parseInlineXbrl START for: " + htmlPath);
@@ -2650,6 +2650,10 @@ public class XbrlToParquetConverter implements FileConverter {
           factsSkippedNoName++;
           continue;
         }
+
+        // A concept QName cannot contain whitespace; some filers hard-wrap the name attribute
+        // mid-token (e.g. "us-g\naap:PropertyPlantAnd\nEquipmentGross"), which createElementNS rejects.
+        name = name.replaceAll("\\s+", "");
 
         String value = ixElement.text().trim();
 

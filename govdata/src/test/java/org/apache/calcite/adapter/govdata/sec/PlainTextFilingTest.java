@@ -79,6 +79,26 @@ class PlainTextFilingTest {
     assertFalse(parse("<html><body><table><tr><td>Assets</td></tr></table></body></html>"));
   }
 
+  /** Filers sometimes hard-wrap an ix:nonFraction name mid-token; that must not fail the filing. */
+  @Test void wrappedFactNameDoesNotFailInlineXbrl() throws IOException {
+    String htm = "<html xmlns:ix=\"http://www.xbrl.org/2013/inlineXBRL\">"
+        + "<body><ix:header><ix:resources>"
+        + "<xbrli:context id=\"c1\"><xbrli:entity><xbrli:identifier scheme=\"http://www.sec.gov/CIK\">"
+        + "0001579241</xbrli:identifier></xbrli:entity><xbrli:period><xbrli:instant>2024-12-31"
+        + "</xbrli:instant></xbrli:period></xbrli:context></ix:resources></ix:header>"
+        + "<ix:nonNumeric name=\"dei:EntityCentralIndexKey\" contextRef=\"c1\">0001579241</ix:nonNumeric>"
+        + "<ix:nonFraction name=\"us-gaap:PropertyPlantAnd\nEquipmentGross\" contextRef=\"c1\""
+        + " unitRef=\"usd\" decimals=\"-5\" scale=\"6\">1,234</ix:nonFraction>"
+        + "</body></html>";
+    Path src = tempDir.resolve("alle-20241231.htm");
+    Files.write(src, htm.getBytes(StandardCharsets.UTF_8));
+
+    Document doc = new XbrlToParquetConverter(new LocalFileStorageProvider())
+        .parseInlineXbrl(src.toString());
+
+    assertTrue(doc.getElementsByTagName("us-gaap:PropertyPlantAndEquipmentGross").getLength() > 0);
+  }
+
   private static boolean parse(String xml) throws Exception {
     Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
         .parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
