@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.121.6](https://github.com/kenstott/calcite/compare/engine-v0.121.5...engine-v0.121.6) (2026-10-24)
+
+
+### Bug Fixes
+
+* **govdata/ops:** comtrade reload holds for the daily after the quota wait, not before it ([c2af16b](https://github.com/kenstott/calcite/commit/c2af16b93834924a26dc409987e36314f71660c7))
+
 ## [0.121.5](https://github.com/kenstott/calcite/compare/engine-v0.121.4...engine-v0.121.5) (2026-10-24)
 
 
