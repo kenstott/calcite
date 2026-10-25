@@ -61,7 +61,8 @@ command -v ionice >/dev/null && runner+=(ionice -c3)
 # day) and each has its own done marker. A failed day (e.g. HTTP 429/403) is reported and left
 # unmarked so a rerun retries it; the other days continue.
 PARALLEL="${PARALLEL:-1}"
-export FEED_DIR JAR
+FEED_UA="Apache Calcite SEC Adapter apache-calcite@apache.org"
+export FEED_DIR JAR FEED_UA
 export RUNNER="${runner[*]:-}"
 fetch_day() {
   local day="$1"
@@ -72,8 +73,23 @@ fetch_day() {
   local y="${day:0:4}" m="${day:4:2}" q
   q=$(( (10#$m - 1) / 3 + 1 ))
   local url="https://www.sec.gov/Archives/edgar/Feed/$y/QTR$q/$day.nc.tar.gz"
+  # A busy day is several GB and SEC drops long connections ("Premature EOF", "Connection reset"),
+  # which lost the whole day when the unpacker streamed it. Download to disk with resume instead, then
+  # unpack the local file. An HTTP error (curl 22: a holiday, weekend or unpublished day) is left to
+  # the unpacker, which reports "no file" and skips it.
+  local dl="$FEED_DIR/.dl" src="$url" rc=0
+  mkdir -p "$dl"
+  $RUNNER curl -sS -f -C - --retry 20 --retry-delay 30 --retry-all-errors -A "$FEED_UA" \
+      -o "$dl/$day.nc.tar.gz" "$url" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    src="$dl/$day.nc.tar.gz"
+  elif [ "$rc" -ne 22 ]; then
+    echo "[edgar-feed] $day: download failed (curl $rc), partial file kept for resume" >&2
+    return 1
+  fi
   if $RUNNER java -Xmx3g -cp "$JAR" org.apache.calcite.adapter.govdata.sec.EdgarFeedUnpacker \
-      "$FEED_DIR" "$url"; then
+      "$FEED_DIR" "$src"; then
+    rm -f "$dl/$day.nc.tar.gz"
     touch "$FEED_DIR/.done/$day"
   else
     echo "[edgar-feed] $day: FAILED (left unmarked, rerun retries it)" >&2
