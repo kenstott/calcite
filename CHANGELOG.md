@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.121.7](https://github.com/kenstott/calcite/compare/engine-v0.121.6...engine-v0.121.7) (2026-10-25)
+
+
+### Bug Fixes
+
+* **govdata/ops:** EDGAR feed days download to disk with resume before unpacking ([d945642](https://github.com/kenstott/calcite/commit/d9456420937fc445f369532e4f197061cefdb4c5))
+* **govdata/sec:** inline XBRL facts are collected once, not twice ([8a150fa](https://github.com/kenstott/calcite/commit/8a150fa42ffa1b76d3f529a2e09dd37334e60c87))
+
 ## [0.121.6](https://github.com/kenstott/calcite/compare/engine-v0.121.5...engine-v0.121.6) (2026-10-24)
 
 
