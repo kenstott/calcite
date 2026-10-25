@@ -96,7 +96,7 @@ class PlainTextFilingTest {
     Document doc = new XbrlToParquetConverter(new LocalFileStorageProvider())
         .parseInlineXbrl(src.toString());
 
-    assertTrue(doc.getElementsByTagName("us-gaap:PropertyPlantAndEquipmentGross").getLength() > 0);
+    assertEquals(1, doc.getElementsByTagName("us-gaap:PropertyPlantAndEquipmentGross").getLength());
   }
 
   private static boolean parse(String xml) throws Exception {

@@ -2098,11 +2098,17 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    // Scan all elements for ix: prefixed tags with contextRef (most robust)
+    // Scan all elements for ix: prefixed tags with contextRef (most robust). The selectors above
+    // already matched most of them, so add only elements not yet collected (by identity) or every
+    // fact would be emitted twice.
+    java.util.Set<org.jsoup.nodes.Element> collected =
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    collected.addAll(ixElements);
     for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
       String tagName = elem.tagName().toLowerCase(Locale.ROOT);
       if (tagName.startsWith("ix:")
-          && (elem.hasAttr("contextRef") || elem.hasAttr("contextref"))) {
+          && (elem.hasAttr("contextRef") || elem.hasAttr("contextref"))
+          && collected.add(elem)) {
         ixElements.add(elem);
       }
     }
