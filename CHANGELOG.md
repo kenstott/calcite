@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.122.0](https://github.com/kenstott/calcite/compare/engine-v0.121.7...engine-v0.122.0) (2026-10-26)
+
+
+### Features
+
+* **govdata:** the bundled catalog seed carries table and column descriptions ([cd3c38f](https://github.com/kenstott/calcite/commit/cd3c38fc66b7d4d27d134b78512fb924ee239aaa))
+
 ## [0.121.7](https://github.com/kenstott/calcite/compare/engine-v0.121.6...engine-v0.121.7) (2026-10-25)
 
 
