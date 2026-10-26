@@ -10308,6 +10308,9 @@ ref.sec_company_tickers.cik:VARCHAR
 ref.sec_company_tickers.ticker:VARCHAR
 ref.sec_company_tickers.title:VARCHAR
 ref.sec_company_tickers.type:VARCHAR
+ref.sic.ad_office:VARCHAR
+ref.sic.industry_title:VARCHAR
+ref.sic.sic_code:VARCHAR
 ref.ticker_instrument_map.cik:VARCHAR
 ref.ticker_instrument_map.company_name:VARCHAR
 ref.ticker_instrument_map.exchange_code:VARCHAR

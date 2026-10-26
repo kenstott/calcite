@@ -246,6 +246,14 @@ if ! command -v duckdb >/dev/null 2>&1; then
     echo "       Install: https://duckdb.org/docs/installation/" >&2
     exit 1
 fi
+# Write the schema YAMLs' table and column descriptions into the catalog as DuckDB comments, so the
+# seed carries the metadata (DuckDB cannot comment a schema; those are skipped). Uses the same
+# seedless jar generation ran with. A failure aborts: a seed without descriptions is the defect this
+# step exists to prevent.
+echo "=== build-seed: writing YAML descriptions into the staged catalog ==="
+java -cp "$GENERATE_JAR" org.apache.calcite.adapter.govdata.GovDataSeedComments "$CATALOG" \
+    || { echo "ERROR: could not write descriptions into $CATALOG" >&2; exit 1; }
+
 echo "=== build-seed: checkpointing staged catalog ==="
 if ! duckdb "$CATALOG" -c "CHECKPOINT;"; then
     echo "ERROR: CHECKPOINT of $CATALOG failed — refusing to bundle a torn catalog." >&2
