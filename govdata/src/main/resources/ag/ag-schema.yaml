@@ -342,7 +342,7 @@ partitionedTables:
       distinctYears: 33
       contiguous: true
       rowCount: 7663434
-      checkedAt: "2026-10-25T16:18:09Z"
+      checkedAt: "2026-10-26T16:52:47Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats field-crop statistics — production, area planted, area
@@ -484,7 +484,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 788294
-      checkedAt: "2026-10-25T16:18:14Z"
+      checkedAt: "2026-10-26T16:52:48Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS weekly Crop Progress report, national and by state, for field crops —
@@ -703,7 +703,7 @@ partitionedTables:
       distinctYears: 32
       contiguous: true
       rowCount: 2820854
-      checkedAt: "2026-10-25T16:18:20Z"
+      checkedAt: "2026-10-26T16:52:55Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats livestock and poultry inventory head counts by county and
@@ -807,7 +807,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 583056
-      checkedAt: "2026-10-25T16:18:22Z"
+      checkedAt: "2026-10-26T16:52:57Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats farm counts and farm-size distribution — Census of
@@ -902,7 +902,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 926
-      checkedAt: "2026-10-25T16:18:24Z"
+      checkedAt: "2026-10-26T16:52:58Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats aquaculture (farmed fish and shellfish): number of operations,
@@ -1149,7 +1149,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1528264
-      checkedAt: "2026-10-25T16:18:27Z"
+      checkedAt: "2026-10-26T16:53:01Z"
     partitions: *nass_partitions
     comment: >
       USDA NASS QuickStats agricultural land value and tenure statistics. The
@@ -1249,7 +1249,7 @@ partitionedTables:
       distinctYears: 31
       contiguous: true
       rowCount: 3798374
-      checkedAt: "2026-10-25T16:18:36Z"
+      checkedAt: "2026-10-26T16:53:07Z"
     partitions: *nass_partitions
     comment: >
       USDA RMA Summary of Business — crop insurance experience by state, county,
@@ -1467,8 +1467,8 @@ partitionedTables:
       maxYear: 2025
       distinctYears: 17
       contiguous: true
-      rowCount: 2252770
-      checkedAt: "2026-10-25T16:18:43Z"
+      rowCount: 2252823
+      checkedAt: "2026-10-26T16:53:14Z"
     partitions: *nass_partitions
     comment: >
       USDA RMA Cause of Loss — crop insurance experience by state, county, crop,
@@ -1708,7 +1708,7 @@ partitionedTables:
       distinctYears: 117
       contiguous: true
       rowCount: 468214
-      checkedAt: "2026-10-25T16:18:51Z"
+      checkedAt: "2026-10-26T16:53:19Z"
     partitions: *nass_partitions
     comment: >
       USDA ERS Farm Income and Wealth Statistics by state and US total: cash
@@ -1833,7 +1833,7 @@ partitionedTables:
       distinctYears: 22
       contiguous: true
       rowCount: 985328
-      checkedAt: "2026-10-25T16:18:55Z"
+      checkedAt: "2026-10-26T16:53:22Z"
     partitions: *nass_partitions
     comment: >
       USDA FSA program and conservation payments aggregated by county, program,
@@ -1945,7 +1945,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 832448
-      checkedAt: "2026-10-25T16:19:01Z"
+      checkedAt: "2026-10-26T16:53:26Z"
     partitions: *nass_partitions
     comment: >
       USDA FAS Export Sales Reporting (ESR) — weekly net sales, outstanding
@@ -2294,7 +2294,7 @@ partitionedTables:
       distinctYears: 28
       contiguous: true
       rowCount: 9562214
-      checkedAt: "2026-10-25T16:19:08Z"
+      checkedAt: "2026-10-26T16:53:31Z"
     partitions: *nass_partitions
     comment: >
       USGS NAWQA Pesticide National Synthesis Project estimated annual agricultural
