@@ -105,6 +105,14 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
   /** Max source keys per bulk {@code = ANY(?)} query — bounds the array parameter size. */
   private static final int BULK_CHUNK_SIZE = 10_000;
 
+  /**
+   * Smallest key count for which one pass over the tracker (filtered by key suffix) beats looking
+   * keys up through the primary key. A lookup costs roughly a millisecond per key on a warm disk
+   * and far more on a busy one, while the pass reads the table once at sequential speed; below
+   * this size the lookups win.
+   */
+  private static final int SUFFIX_SCAN_MIN_KEYS = 50_000;
+
   public PGPipelineTracker(String jdbcUrl, String user, String password) {
     this(jdbcUrl, user, password, null);
   }
@@ -362,6 +370,69 @@ public class PGPipelineTracker implements PipelineTracker, AutoCloseable {
         uncached.size(), phase, queries, seen.size() - uncached.size(),
         System.currentTimeMillis() - start);
     return result;
+  }
+
+  /**
+   * Reads every completed table of a large key set in one pass over the tracker, selecting rows by
+   * the keys' common suffix. For a year of SEC accessions (~560k keys, ~630k completed rows) this
+   * replaces ~110 primary-key lookup queries that each took minutes once the table outgrew the
+   * Postgres cache.
+   */
+  @Override public Map<String, Set<String>> bulkGetCompletedTablesByKeySuffix(
+      Collection<String> sourceKeys, String phase, String keySuffix) {
+    if (sourceKeys.size() < SUFFIX_SCAN_MIN_KEYS) {
+      return bulkGetCompletedTables(sourceKeys, phase);
+    }
+    Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+    Set<String> wanted = new HashSet<String>();
+    for (String sourceKey : sourceKeys) {
+      if (!sourceKey.endsWith(keySuffix)) {
+        throw new IllegalArgumentException(
+            "source key '" + sourceKey + "' does not end with '" + keySuffix + "'");
+      }
+      if (!stageCache.containsKey(stageCacheKey(sourceKey, phase))) {
+        wanted.add(sourceKey);
+      }
+    }
+    if (wanted.isEmpty()) {
+      return bulkGetCompletedTables(sourceKeys, phase);
+    }
+    long start = System.currentTimeMillis();
+    String sql = "SELECT source_key, table_name FROM pipeline_tracker "
+        + "WHERE phase = ? AND state = 'complete' AND right(source_key, ?) = ?";
+    try (PreparedStatement stmt = getConnection().prepareStatement(sql)) {
+      stmt.setString(1, phase);
+      stmt.setInt(2, keySuffix.length());
+      stmt.setString(3, keySuffix);
+      try (ResultSet rs = stmt.executeQuery()) {
+        while (rs.next()) {
+          String sourceKey = rs.getString(1);
+          if (!wanted.contains(sourceKey)) {
+            continue;
+          }
+          Set<String> tables = result.get(sourceKey);
+          if (tables == null) {
+            tables = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+            result.put(sourceKey, tables);
+          }
+          tables.add(rs.getString(2));
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("PG tracker suffix read failed (phase=" + phase
+          + ", suffix=" + keySuffix + "): " + e.getMessage(), e);
+    }
+    // The pass is authoritative for every wanted key, so absence means no completed tables.
+    for (String sourceKey : wanted) {
+      Set<String> tables = result.get(sourceKey);
+      stageCache.put(stageCacheKey(sourceKey, phase), tables != null ? tables
+          : Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>()));
+    }
+    LOGGER.info("Bulk-loaded completed tables for {} source keys (phase={}, suffix={}, "
+        + "1 pass, {} already cached) in {}ms",
+        wanted.size(), phase, keySuffix, sourceKeys.size() - wanted.size(),
+        System.currentTimeMillis() - start);
+    return bulkGetCompletedTables(sourceKeys, phase);
   }
 
   @Override public Map<String, Set<String>> bulkGetCompletedTablesFresh(

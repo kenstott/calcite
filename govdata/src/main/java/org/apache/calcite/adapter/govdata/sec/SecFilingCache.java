@@ -93,15 +93,22 @@ public class SecFilingCache implements AutoCloseable {
       return;
     }
     long start = System.currentTimeMillis();
-    // Chunk into batches to avoid DuckDB glob list OOM
-    List<String> accessionList = new ArrayList<String>(accessions);
-    int chunkSize = 5000;
+    // One tracker read per year: every filing key ends with its "__year=YYYY" tag, so the tracker
+    // can answer a whole year in a single pass instead of one lookup per key.
+    Map<String, List<String>> keysByYear = new java.util.TreeMap<String, List<String>>();
+    for (String key : filingKeys(accessions)) {
+      String yearTag = key.substring(key.lastIndexOf("__year="));
+      List<String> keys = keysByYear.get(yearTag);
+      if (keys == null) {
+        keys = new ArrayList<String>();
+        keysByYear.put(yearTag, keys);
+      }
+      keys.add(key);
+    }
     int loaded = 0;
-    for (int offset = 0; offset < accessionList.size(); offset += chunkSize) {
-      int end = Math.min(offset + chunkSize, accessionList.size());
-      List<String> chunk = accessionList.subList(offset, end);
-      tracker.bulkGetCompletedTables(filingKeys(chunk), PHASE_STAGING);
-      loaded += chunk.size();
+    for (Map.Entry<String, List<String>> year : keysByYear.entrySet()) {
+      tracker.bulkGetCompletedTablesByKeySuffix(year.getValue(), PHASE_STAGING, year.getKey());
+      loaded += year.getValue().size();
     }
     long elapsed = System.currentTimeMillis() - start;
     LOGGER.info("Preloaded tracker state for {} accessions in {}ms", loaded, elapsed);
