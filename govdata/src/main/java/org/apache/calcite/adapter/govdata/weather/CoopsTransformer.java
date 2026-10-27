@@ -38,14 +38,17 @@ import java.util.Map;
  * </ul>
  *
  * <p>The Data API signals a station/year with no data as an {@code error} object whose message
- * starts with "No data was found"; that is a legitimate empty result. Every other {@code error}
- * object is a request failure and throws.
+ * starts with "No data was found" (observed products) or "No Predictions data was found"
+ * (predictions); that is a legitimate empty result. Every other {@code error} object is a request
+ * failure and throws.
  */
 public class CoopsTransformer implements ResponseTransformer {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private static final String NO_DATA = "No data was found";
+  /** "No data was found" or "No <Product> data was found", anywhere in the message. */
+  private static final java.util.regex.Pattern NO_DATA =
+      java.util.regex.Pattern.compile("No (?:\\w+ )?data was found");
 
   private static final Map<String, String> STATE_FIPS;
   static {
@@ -85,7 +88,7 @@ public class CoopsTransformer implements ResponseTransformer {
     JsonNode error = root.get("error");
     if (error != null) {
       String message = error.path("message").asText();
-      if (message.contains(NO_DATA)) {
+      if (NO_DATA.matcher(message).find()) {
         return MAPPER.createArrayNode().toString();
       }
       throw new IllegalStateException("CO-OPS " + type + " request failed: " + message);
