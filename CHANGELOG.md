@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.122.3](https://github.com/kenstott/calcite/compare/engine-v0.122.2...engine-v0.122.3) (2026-10-27)
+
+
+### Bug Fixes
+
+* **pgwire-calcite:** close the catalog conformance gaps against PostgreSQL 16 ([10df093](https://github.com/kenstott/calcite/commit/10df0939363819ebec7b071cefd5791c0acd5eab))
+
 ## [0.122.2](https://github.com/kenstott/calcite/compare/engine-v0.122.1...engine-v0.122.2) (2026-10-27)
 
 
