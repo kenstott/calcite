@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.122.1](https://github.com/kenstott/calcite/compare/engine-v0.122.0...engine-v0.122.1) (2026-10-27)
+
+
+### Performance Improvements
+
+* **govdata/sec:** preload a year of tracker state in one pass instead of ~120 key lookups ([8e6477a](https://github.com/kenstott/calcite/commit/8e6477ad380ca75a2d91ecdb50fbabdee311d801))
+
 ## [0.122.0](https://github.com/kenstott/calcite/compare/engine-v0.121.7...engine-v0.122.0) (2026-10-26)
 
 
