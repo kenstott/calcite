@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.122.5](https://github.com/kenstott/calcite/compare/engine-v0.122.4...engine-v0.122.5) (2026-10-27)
+
+
+### Bug Fixes
+
+* **govdata/sync:** publish closure-verified R2 pointers when a data slice fails ([1887266](https://github.com/kenstott/calcite/commit/188726689ada0e1a726da9bc7c68e00bebadb2a4))
+
 ## [0.122.4](https://github.com/kenstott/calcite/compare/engine-v0.122.3...engine-v0.122.4) (2026-10-27)
 
 
