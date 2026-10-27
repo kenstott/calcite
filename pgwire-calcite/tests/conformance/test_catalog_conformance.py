@@ -107,6 +107,9 @@ def build_served() -> dict[str, tuple[list[str], list[str | None]]]:
         state, ctx, {1: [ColumnMeta("deptno", "INTEGER", False), ColumnMeta("dname", "VARCHAR")]}
     )
     out: dict[str, tuple[list[str], list[str | None]]] = {}
+    # A catalog that cannot be built answers nothing; that is a failure of the build, not 209
+    # unserved relations, so build it outside the loop that treats an error as a finding.
+    assert catalog.answer("SELECT * FROM pg_catalog.pg_class LIMIT 0", "conformance", state)
     # An unserved relation is a finding, and the catalog logs each one it cannot answer.
     logging.disable(logging.ERROR)
     for rel in REFERENCE["relations"]:

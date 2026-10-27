@@ -336,6 +336,53 @@ def test_no_extensions_declared_means_no_rows():
 # information_schema.referential_constraints populated from the FK metadata.
 
 
+def test_pg_get_constraintdef_writes_each_definition_as_postgres_does():
+    """SQLAlchemy reflects a table's foreign keys by matching FOREIGN KEY (a) REFERENCES t(b);
+    the function answered NULL, so Superset's table metadata failed."""
+    state = _keyed_state(StubBackend())
+    rows = _rows(
+        state,
+        "SELECT contype, pg_get_constraintdef(oid) FROM pg_catalog.pg_constraint "
+        "ORDER BY contype, oid",
+    )
+    by_type = {contype: definition for contype, definition in rows}
+    assert by_type["p"] in ("PRIMARY KEY (deptno)", "PRIMARY KEY (empno)")
+    assert by_type["f"] == 'FOREIGN KEY (deptno) REFERENCES "SALES".depts(deptno)'
+    catalog.invalidate_catalog_cache()
+
+
+def test_a_join_to_a_column_that_is_no_key_is_not_published_as_a_foreign_key():
+    """A PostgreSQL foreign key always references a primary or unique key; a semantic join to
+    any other column would leave referential_constraints with no key to name."""
+    depts = TableMeta(1, "postgres", "SALES", "depts", "SALES.depts")
+    emps = TableMeta(2, "postgres", "SALES", "emps", "SALES.emps")
+    ctx = CompilationContext(
+        tables={depts.type_name: depts, emps.type_name: emps},
+        pk_columns={1: ["deptno"], 2: ["empno"]},
+        joins={
+            ("SALES.emps", "dname"): JoinMeta(
+                source_column="dname",
+                target_column="dname",
+                target=depts,
+                cardinality="many-to-one",
+            )
+        },
+    )
+    column_types = {
+        1: [ColumnMeta("deptno", "INTEGER", False), ColumnMeta("dname", "VARCHAR")],
+        2: [ColumnMeta("empno", "INTEGER", False), ColumnMeta("dname", "VARCHAR")],
+    }
+    state = launcher.build_state(backend=StubBackend())
+    install_catalog(state, ctx, column_types)
+    assert _rows(state, "SELECT count(*) FROM pg_catalog.pg_constraint WHERE contype = 'f'") == [
+        (0,)
+    ]
+    assert _rows(state, "SELECT count(*) FROM information_schema.referential_constraints") == [
+        (0,)
+    ]
+    catalog.invalidate_catalog_cache()
+
+
 def test_referential_constraints_link_each_fk_to_the_referenced_key():
     state = _keyed_state(StubBackend())
     rows = _rows(
