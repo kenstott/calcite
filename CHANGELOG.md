@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.122.2](https://github.com/kenstott/calcite/compare/engine-v0.122.1...engine-v0.122.2) (2026-10-27)
+
+
+### Bug Fixes
+
+* **govdata/geo:** the watershed loader loads the spatial extension of the duckdb it runs ([f86b48d](https://github.com/kenstott/calcite/commit/f86b48df133c1bde8b21800692d93288ab003839))
+* **govdata/weather:** CO-OPS "No Predictions data was found" is an empty result ([b19a282](https://github.com/kenstott/calcite/commit/b19a28215f1954ebdb8baaec9748f3f3d6918291))
+* **pgwire-calcite:** pg_description.classoid is the catalog class oid, not its name ([8bdbfd3](https://github.com/kenstott/calcite/commit/8bdbfd310254fad2fa2ad7d09679d9e3dafcf268))
+
 ## [0.122.1](https://github.com/kenstott/calcite/compare/engine-v0.122.0...engine-v0.122.1) (2026-10-27)
 
 
