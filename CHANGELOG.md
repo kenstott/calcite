@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.122.4](https://github.com/kenstott/calcite/compare/engine-v0.122.3...engine-v0.122.4) (2026-10-27)
+
+
+### Bug Fixes
+
+* **govdata/sec:** the feed store serves a linkbase without its SGML envelope ([6936b03](https://github.com/kenstott/calcite/commit/6936b0329c87c9c28e3b4b15ed921eb170a11ec4))
+
 ## [0.122.3](https://github.com/kenstott/calcite/compare/engine-v0.122.2...engine-v0.122.3) (2026-10-27)
 
 
