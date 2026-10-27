@@ -1,0 +1,874 @@
+{
+ "about": "Differences between this server's catalog and PostgreSQL 16.11 (reference/pg16-catalog.json), each with a reason. status 'accepted' follows from what the server is: a Calcite-backed SQL front end for BI and IDE clients, with no storage engine, replication, statistics collector, foreign data wrappers or full-text search, and with exotic types flattened to text. status 'gap' is a defect to fix; remove its entry when fixed. The server declares PostgreSQL 14, so a column PostgreSQL added in 15 or 16 is accepted, and one added in 14 or earlier is a gap.",
+ "unserved": [
+  {
+   "match": "pg_catalog.pg_stat_*",
+   "status": "accepted",
+   "reason": "No statistics collector, WAL, replication or background workers: the server is a SQL front end over Calcite adapters, so these views have nothing to report."
+  },
+  {
+   "match": "pg_catalog.pg_statio_*",
+   "status": "accepted",
+   "reason": "No statistics collector, WAL, replication or background workers: the server is a SQL front end over Calcite adapters, so these views have nothing to report."
+  },
+  {
+   "match": "pg_catalog.pg_replication_*",
+   "status": "accepted",
+   "reason": "No statistics collector, WAL, replication or background workers: the server is a SQL front end over Calcite adapters, so these views have nothing to report."
+  },
+  {
+   "match": "pg_catalog.pg_publication_*",
+   "status": "accepted",
+   "reason": "No logical replication."
+  },
+  {
+   "match": "pg_catalog.pg_subscription_rel",
+   "status": "accepted",
+   "reason": "No logical replication."
+  },
+  {
+   "match": "pg_catalog.pg_ts_*",
+   "status": "accepted",
+   "reason": "No full-text search configuration catalog."
+  },
+  {
+   "match": "pg_catalog.pg_largeobject*",
+   "status": "accepted",
+   "reason": "No large objects."
+  },
+  {
+   "match": "pg_catalog.pg_*seclabel*",
+   "status": "accepted",
+   "reason": "No security labels."
+  },
+  {
+   "match": "pg_catalog.pg_statistic*",
+   "status": "accepted",
+   "reason": "No planner statistics; the catalog never counts rows (pg_class.reltuples is 0)."
+  },
+  {
+   "match": "pg_catalog.pg_stats*",
+   "status": "accepted",
+   "reason": "No planner statistics; the catalog never counts rows (pg_class.reltuples is 0)."
+  },
+  {
+   "match": "pg_catalog.pg_hba_file_rules",
+   "status": "accepted",
+   "reason": "Authentication is configured by the launcher, not a pg_hba file."
+  },
+  {
+   "match": "pg_catalog.pg_ident_file_mappings",
+   "status": "accepted",
+   "reason": "Authentication is configured by the launcher, not a pg_ident file."
+  },
+  {
+   "match": "pg_catalog.pg_file_settings",
+   "status": "accepted",
+   "reason": "No postgresql.conf."
+  },
+  {
+   "match": "pg_catalog.pg_shmem_allocations*",
+   "status": "accepted",
+   "reason": "No shared memory segment."
+  },
+  {
+   "match": "pg_catalog.pg_backend_memory_contexts",
+   "status": "accepted",
+   "reason": "No PostgreSQL backend memory contexts."
+  },
+  {
+   "match": "pg_catalog.pg_config",
+   "status": "accepted",
+   "reason": "No PostgreSQL build configuration."
+  },
+  {
+   "match": "pg_catalog.pg_prepared_xacts",
+   "status": "accepted",
+   "reason": "No two-phase commit."
+  },
+  {
+   "match": "pg_catalog.pg_cursors",
+   "status": "accepted",
+   "reason": "Cursors are held by the wire layer, not in a PostgreSQL backend."
+  },
+  {
+   "match": "pg_catalog.pg_transform",
+   "status": "accepted",
+   "reason": "No transforms in this server."
+  },
+  {
+   "match": "pg_catalog.pg_parameter_acl",
+   "status": "accepted",
+   "reason": "No per-parameter privileges."
+  },
+  {
+   "match": "pg_catalog.pg_db_role_setting",
+   "status": "accepted",
+   "reason": "No per-role settings."
+  },
+  {
+   "match": "pg_catalog.pg_authid",
+   "status": "accepted",
+   "reason": "Role password hashes are never exposed."
+  },
+  {
+   "match": "pg_catalog.pg_shadow",
+   "status": "accepted",
+   "reason": "Role password hashes are never exposed."
+  },
+  {
+   "match": "pg_catalog.pg_init_privs",
+   "status": "accepted",
+   "reason": "No initial privileges recorded: nothing is created by CREATE EXTENSION."
+  },
+  {
+   "match": "pg_catalog.pg_default_acl",
+   "status": "gap",
+   "reason": "IDE introspection (DataGrip) reads default privileges; serve it empty."
+  },
+  {
+   "match": "pg_catalog.pg_group",
+   "status": "gap",
+   "reason": "Legacy role-membership view some tools still read; serve it from pg_auth_members."
+  },
+  {
+   "match": "pg_catalog.pg_available_extensions",
+   "status": "gap",
+   "reason": "The pg_available_extension_versions() function is served; the view over it is not."
+  },
+  {
+   "match": "pg_catalog.pg_available_extension_versions",
+   "status": "gap",
+   "reason": "The pg_available_extension_versions() function is served; the view over it is not."
+  },
+  {
+   "match": "pg_catalog.pg_matviews",
+   "status": "gap",
+   "reason": "Materialized views are not listed; serve it empty until adapters declare them."
+  },
+  {
+   "match": "pg_catalog.pg_rules",
+   "status": "accepted",
+   "reason": "No rewrite rules."
+  },
+  {
+   "match": "pg_catalog.pg_policies",
+   "status": "accepted",
+   "reason": "No row-level-security policies; access is governed by the adapter."
+  },
+  {
+   "match": "information_schema._pg_*",
+   "status": "accepted",
+   "reason": "No foreign data wrappers."
+  },
+  {
+   "match": "information_schema.foreign_*",
+   "status": "accepted",
+   "reason": "No foreign data wrappers."
+  },
+  {
+   "match": "information_schema.user_mapping*",
+   "status": "accepted",
+   "reason": "No foreign data wrappers."
+  },
+  {
+   "match": "information_schema.column_options",
+   "status": "accepted",
+   "reason": "No foreign data wrappers."
+  },
+  {
+   "match": "information_schema.sql_*",
+   "status": "accepted",
+   "reason": "SQL conformance-package tables describe a PostgreSQL build; nothing reads them."
+  },
+  {
+   "match": "information_schema.transforms",
+   "status": "accepted",
+   "reason": "No transforms in this server."
+  },
+  {
+   "match": "information_schema.domain*",
+   "status": "accepted",
+   "reason": "No user-defined domains."
+  },
+  {
+   "match": "information_schema.column_domain_usage",
+   "status": "accepted",
+   "reason": "No user-defined domains."
+  },
+  {
+   "match": "information_schema.attributes",
+   "status": "accepted",
+   "reason": "No composite types."
+  },
+  {
+   "match": "information_schema.user_defined_types",
+   "status": "accepted",
+   "reason": "No user-defined types."
+  },
+  {
+   "match": "information_schema.element_types",
+   "status": "accepted",
+   "reason": "No array element type catalog."
+  },
+  {
+   "match": "information_schema.*_udt_*",
+   "status": "accepted",
+   "reason": "No user-defined types."
+  },
+  {
+   "match": "information_schema.udt_privileges",
+   "status": "accepted",
+   "reason": "No user-defined types."
+  },
+  {
+   "match": "information_schema.triggered_update_columns",
+   "status": "accepted",
+   "reason": "No triggers in this server."
+  },
+  {
+   "match": "information_schema.information_schema_catalog_name",
+   "status": "gap",
+   "reason": "One-row view some tools read to name the database."
+  },
+  {
+   "match": "information_schema.*_privileges",
+   "status": "gap",
+   "reason": "BI tools read table/column privileges to decide what to show; serve them from the adapter's access rules."
+  },
+  {
+   "match": "information_schema.role_*_grants",
+   "status": "gap",
+   "reason": "BI tools read role grants; serve them from the adapter's access rules."
+  },
+  {
+   "match": "information_schema.administrable_role_authorizations",
+   "status": "accepted",
+   "reason": "No GRANT OPTION."
+  },
+  {
+   "match": "information_schema.collation*",
+   "status": "gap",
+   "reason": "Collation lists are read by some schema tools; serve the built-in ones."
+  },
+  {
+   "match": "information_schema.view_*_usage",
+   "status": "gap",
+   "reason": "Lineage tools read view dependencies; serve them from the view definitions."
+  },
+  {
+   "match": "information_schema.routine_*_usage",
+   "status": "accepted",
+   "reason": "Routine dependencies are not tracked."
+  },
+  {
+   "match": "information_schema.check_constraint_routine_usage",
+   "status": "accepted",
+   "reason": "No CHECK constraints call routines."
+  },
+  {
+   "match": "information_schema.column_column_usage",
+   "status": "accepted",
+   "reason": "No generated columns."
+  }
+ ],
+ "missing": [
+  {
+   "match": "pg_catalog.pg_attribute.attcompression",
+   "status": "gap",
+   "reason": "PostgreSQL 14 column (TOAST compression); clients that SELECT * and read by position get a short row."
+  },
+  {
+   "match": "pg_catalog.pg_attribute.attmissingval",
+   "status": "gap",
+   "reason": "PostgreSQL 11 column."
+  },
+  {
+   "match": "pg_catalog.pg_auth_members.oid",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_auth_members.inherit_option",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_auth_members.set_option",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_collation.colliculocale",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_collation.collicurules",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_constraint.confdelsetcols",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_database.daticulocale",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_database.daticurules",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_database.datcollversion",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_index.indnullsnotdistinct",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_stat_activity.leader_pid",
+   "status": "gap",
+   "reason": "PostgreSQL 13 column."
+  },
+  {
+   "match": "pg_catalog.pg_stat_activity.query_id",
+   "status": "gap",
+   "reason": "PostgreSQL 14 column."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_indexes.last_idx_scan",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.last_seq_scan",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.last_idx_scan",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.n_tup_newpage_upd",
+   "status": "accepted",
+   "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.heap_blks_read",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.heap_blks_hit",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.idx_blks_read",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.idx_blks_hit",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.toast_blks_read",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.toast_blks_hit",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.tidx_blks_read",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.tidx_blks_hit",
+   "status": "gap",
+   "reason": "pg_statio_user_tables is built from the wrong column set; see the extra entries."
+  },
+  {
+   "match": "pg_catalog.pg_type.typsubscript",
+   "status": "gap",
+   "reason": "PostgreSQL 14 column."
+  }
+ ],
+ "extra": [
+  {
+   "match": "information_schema.constraint_column_usage.constraint_type",
+   "status": "gap",
+   "reason": "Not a PostgreSQL column; SELECT * by position is shifted."
+  },
+  {
+   "match": "information_schema.constraint_column_usage.constraint_text",
+   "status": "gap",
+   "reason": "Not a PostgreSQL column; SELECT * by position is shifted."
+  },
+  {
+   "match": "information_schema.constraint_table_usage.constraint_type",
+   "status": "gap",
+   "reason": "Not a PostgreSQL column; SELECT * by position is shifted."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.seq_scan",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.seq_tup_read",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.idx_scan",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.idx_tup_fetch",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_tup_ins",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_tup_upd",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_tup_del",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_tup_hot_upd",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_live_tup",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_dead_tup",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_mod_since_analyze",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.n_ins_since_vacuum",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.last_vacuum",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.last_autovacuum",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.last_analyze",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.last_autoanalyze",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.vacuum_count",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.autovacuum_count",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.analyze_count",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  },
+  {
+   "match": "pg_catalog.pg_statio_user_tables.autoanalyze_count",
+   "status": "gap",
+   "reason": "pg_statio_user_tables carries pg_stat_user_tables' columns instead of the heap_blks_*/idx_blks_* set."
+  }
+ ],
+ "order": [
+  {
+   "match": "pg_catalog.pg_attribute",
+   "status": "gap",
+   "reason": "Shared columns are in a different order from PostgreSQL; clients that read by position misread."
+  },
+  {
+   "match": "pg_catalog.pg_roles",
+   "status": "gap",
+   "reason": "Shared columns are in a different order from PostgreSQL; clients that read by position misread."
+  },
+  {
+   "match": "pg_catalog.pg_user",
+   "status": "gap",
+   "reason": "Shared columns are in a different order from PostgreSQL; clients that read by position misread."
+  }
+ ],
+ "type": [
+  {
+   "match": "information_schema.routines.created",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "information_schema.routines.last_altered",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "information_schema.triggers.created",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_am.amhandler",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_attribute.attacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_attribute.attoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_attribute.attfdwoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_class.relacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_class.reloptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_database.datacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_event_trigger.evttags",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_foreign_data_wrapper.fdwacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_foreign_data_wrapper.fdwoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_foreign_server.srvacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_foreign_server.srvoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_foreign_table.ftoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_indexes.tablespace",
+   "status": "gap",
+   "reason": "Always-NULL column served with the untyped NULL type; PostgreSQL gives it a concrete type (name (text))."
+  },
+  {
+   "match": "pg_catalog.pg_language.lanacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_locks.waitstart",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_namespace.nspacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_partitioned_table.partattrs",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_partitioned_table.partclass",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_partitioned_table.partcollation",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_policy.polroles",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_prepared_statements.prepare_time",
+   "status": "gap",
+   "reason": "Always-NULL column served with the untyped NULL type; PostgreSQL gives it a concrete type (timestamptz (temporal))."
+  },
+  {
+   "match": "pg_catalog.pg_prepared_statements.from_sql",
+   "status": "gap",
+   "reason": "Always-NULL column served with the untyped NULL type; PostgreSQL gives it a concrete type (bool (bool))."
+  },
+  {
+   "match": "pg_catalog.pg_prepared_statements.generic_plans",
+   "status": "gap",
+   "reason": "Always-NULL column served with the untyped NULL type; PostgreSQL gives it a concrete type (int8 (int))."
+  },
+  {
+   "match": "pg_catalog.pg_prepared_statements.custom_plans",
+   "status": "gap",
+   "reason": "Always-NULL column served with the untyped NULL type; PostgreSQL gives it a concrete type (int8 (int))."
+  },
+  {
+   "match": "pg_catalog.pg_proc.prosupport",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_proc.proargnames",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_proc.protrftypes",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_proc.proconfig",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_proc.proacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_roles.rolvaliduntil",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_roles.rolconfig",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_settings.enumvals",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_stat_activity.backend_start",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_activity.xact_start",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_activity.query_start",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_activity.state_change",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_ssl.client_serial",
+   "status": "accepted",
+   "reason": "Exotic catalog type (numeric/bytea/pg_lsn) flattened to text; informational columns."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.last_vacuum",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.last_autovacuum",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.last_analyze",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_stat_user_tables.last_autoanalyze",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_subscription.subskiplsn",
+   "status": "accepted",
+   "reason": "Exotic catalog type (numeric/bytea/pg_lsn) flattened to text; informational columns."
+  },
+  {
+   "match": "pg_catalog.pg_subscription.subpublications",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_tablespace.spcacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_tablespace.spcoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_timezone_abbrevs.utc_offset",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_timezone_names.utc_offset",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_trigger.tgattr",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_trigger.tgargs",
+   "status": "accepted",
+   "reason": "Exotic catalog type (numeric/bytea/pg_lsn) flattened to text; informational columns."
+  },
+  {
+   "match": "pg_catalog.pg_type.typinput",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typoutput",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typreceive",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typsend",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typmodin",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typmodout",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typanalyze",
+   "status": "gap",
+   "reason": "regproc column served as text; PostgreSQL clients cast it to oid or regproc (Provisa serves pg_am.amhandler as a numeric regproc oid)."
+  },
+  {
+   "match": "pg_catalog.pg_type.typacl",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_user.valuntil",
+   "status": "accepted",
+   "reason": "Timestamp/interval catalog column served as text; it is NULL or informational."
+  },
+  {
+   "match": "pg_catalog.pg_user.useconfig",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_user_mapping.umoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  },
+  {
+   "match": "pg_catalog.pg_user_mappings.umoptions",
+   "status": "accepted",
+   "reason": "Array catalog columns are served as their text form; nothing reads them as arrays."
+  }
+ ],
+ "extra_relation": []
+}
