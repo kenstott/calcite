@@ -115,10 +115,22 @@ public class DuckDbExtensionInstaller {
   public static String getLocalExtensionPath(String extensionName) {
     // Default to the version we have bundled
     // In air-gapped mode this should match the bundled extensions version
-    String version = "1.5.6";
+    return getLocalExtensionPath(extensionName, "1.5.6");
+  }
 
-    String platform = detectPlatform();
-    return getInstalledPath(version, platform, extensionName).toString();
+  /**
+   * Returns the local filesystem path of an installed extension for a given DuckDB version.
+   *
+   * <p>An extension binary loads only into the DuckDB release it was built for, so a caller that
+   * hands the path to a DuckDB it did not bundle (for example the {@code duckdb} command-line
+   * tool on the PATH) must pass that tool's own version, not the bundled one.
+   *
+   * @param extensionName Name of the extension (e.g., "spatial")
+   * @param duckdbVersion Version of the DuckDB that will load it, without the leading "v"
+   * @return Absolute path to the extension file (may not exist)
+   */
+  public static String getLocalExtensionPath(String extensionName, String duckdbVersion) {
+    return getInstalledPath(duckdbVersion, detectPlatform(), extensionName).toString();
   }
 
   /**
