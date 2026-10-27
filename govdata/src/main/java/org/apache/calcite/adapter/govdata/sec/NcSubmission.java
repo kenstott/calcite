@@ -129,30 +129,70 @@ final class NcSubmission {
     return new Doc(type, sequence, filename, stripped.getBytes(StandardCharsets.ISO_8859_1));
   }
 
-  /** The document content without its {@code <XML>}/{@code <PDF>} wrapper; null for a PDF. */
-  private static String stripWrapper(String body) {
-    String t = body;
-    if (t.startsWith("\r\n")) {
-      t = t.substring(2);
-    } else if (t.startsWith("\n")) {
-      t = t.substring(1);
-    }
+  /** The envelopes a submission puts around a text document's content. */
+  private static final String[] ENVELOPES = {"XML", "XBRL"};
+
+  /**
+   * The document content without its {@code <XML>}/{@code <XBRL>}/{@code <PDF>} envelope; null for
+   * a PDF. {@code <XBRL>} wraps the linkbases and the instance of many filings, and a submission's
+   * line ending is {@code \r\n}, {@code \n} or a bare {@code \r}; sec.gov serves the content
+   * alone, with the XML declaration first, and an XML parser rejects anything before it.
+   */
+  static String stripWrapper(String body) {
+    String t = dropLineEnding(body);
     if (t.startsWith("<PDF>")) {
       return null;
     }
-    if (t.startsWith("<XML>")) {
-      t = t.substring("<XML>".length());
-      int close = t.lastIndexOf("</XML>");
-      if (close >= 0) {
-        t = t.substring(0, close);
-      }
-      if (t.startsWith("\r\n")) {
-        t = t.substring(2);
-      } else if (t.startsWith("\n")) {
-        t = t.substring(1);
+    for (String tag : ENVELOPES) {
+      String open = "<" + tag + ">";
+      if (t.startsWith(open)) {
+        t = t.substring(open.length());
+        int close = t.lastIndexOf("</" + tag + ">");
+        if (close >= 0) {
+          t = t.substring(0, close);
+        }
+        return dropLineEnding(t);
       }
     }
     return t;
+  }
+
+  private static String dropLineEnding(String s) {
+    if (s.startsWith("\r\n")) {
+      return s.substring(2);
+    }
+    if (s.startsWith("\n") || s.startsWith("\r")) {
+      return s.substring(1);
+    }
+    return s;
+  }
+
+  /**
+   * {@code content} without a leading envelope, for a document unpacked before the envelope was
+   * stripped correctly (the tree on disk holds years of them); the same bytes when it has none.
+   */
+  static byte[] unwrapEnvelope(byte[] content) {
+    int i = 0;
+    while (i < content.length && i < 2 && (content[i] == '\r' || content[i] == '\n')) {
+      i++;
+    }
+    if (!startsWith(content, i, "<XML>") && !startsWith(content, i, "<XBRL>")) {
+      return content;
+    }
+    String stripped = stripWrapper(new String(content, StandardCharsets.ISO_8859_1));
+    return stripped == null ? content : stripped.getBytes(StandardCharsets.ISO_8859_1);
+  }
+
+  private static boolean startsWith(byte[] content, int offset, String prefix) {
+    if (content.length - offset < prefix.length()) {
+      return false;
+    }
+    for (int k = 0; k < prefix.length(); k++) {
+      if (content[offset + k] != prefix.charAt(k)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static String first(Pattern p, String s) {

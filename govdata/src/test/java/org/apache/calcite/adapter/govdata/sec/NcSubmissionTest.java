@@ -66,6 +66,32 @@ class NcSubmissionTest {
         new String(d.content, StandardCharsets.ISO_8859_1));
   }
 
+  /** sec.gov serves the content alone; an XML parser rejects anything before the declaration. */
+  @Test void everyEnvelopeAndLineEndingIsStrippedToTheContent() {
+    String xml = "<?xml version=\"1.0\"?><linkbase/>";
+    for (String tag : new String[] {"XML", "XBRL"}) {
+      for (String eol : new String[] {"\n", "\r\n", "\r"}) {
+        String body = eol + "<" + tag + ">" + eol + xml + eol + "</" + tag + ">" + eol;
+        String got = NcSubmission.stripWrapper(body);
+        assertTrue(got.startsWith("<?xml"), tag + " with " + eol.length() + "-char eol: " + got);
+        assertTrue(got.contains("<linkbase/>") && !got.contains("</" + tag + ">"), got);
+      }
+    }
+  }
+
+  @Test void aDocumentWithNoEnvelopeIsLeftAlone() {
+    assertEquals("<html>x</html>\n", NcSubmission.stripWrapper("\n<html>x</html>\n"));
+  }
+
+  @Test void aFileUnpackedWithItsEnvelopeIsUnwrappedOnRead() {
+    byte[] legacy = "\r<XBRL>\r<?xml version=\"1.0\"?><linkbase/>\r</XBRL>\r"
+        .getBytes(StandardCharsets.ISO_8859_1);
+    assertEquals("<?xml version=\"1.0\"?><linkbase/>\r",
+        new String(NcSubmission.unwrapEnvelope(legacy), StandardCharsets.ISO_8859_1));
+    byte[] plain = "<html/>".getBytes(StandardCharsets.ISO_8859_1);
+    assertTrue(NcSubmission.unwrapEnvelope(plain) == plain, "an unwrapped file is returned as is");
+  }
+
   @Test void textBinaryAndXmlDocumentsAreSeparated() {
     NcSubmission s = NcSubmission.parse(EIGHT_K.getBytes(StandardCharsets.ISO_8859_1));
     assertEquals("8-K", s.formType);

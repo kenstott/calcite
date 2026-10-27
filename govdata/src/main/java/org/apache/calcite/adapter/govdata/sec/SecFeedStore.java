@@ -128,7 +128,9 @@ final class SecFeedStore {
       return null;
     }
     store.hits.incrementAndGet();
-    return Files.readAllBytes(f.toPath());
+    // Days unpacked before the envelope was stripped correctly still hold <XML>/<XBRL> around the
+    // content, which sec.gov never serves and the converter's strict XML parse rejects.
+    return NcSubmission.unwrapEnvelope(Files.readAllBytes(f.toPath()));
   }
 
   /**
