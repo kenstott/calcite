@@ -406,11 +406,13 @@ sync_iceberg_table_closure() {
   echo "$resolved" | grep -v '^VERSION ' > "$files_list"
   local file_count
   file_count=$(wc -l < "$files_list" | tr -d ' ')
-  log_info "sync-to-r2: [$schema/$table] resolved v$version, $file_count files in closure — verifying/copying"
+  # Everything but the version goes to stderr: the caller captures stdout as the version, and a
+  # log line captured with it was being stamped as the "verified version" (garbage stamps).
+  log_info "sync-to-r2: [$schema/$table] resolved v$version, $file_count files in closure — verifying/copying" >&2
 
   if ! rclone copy "${minio_remote}:${bucket}/${schema}/${table}" "${r2_remote}:${bucket}/${schema}/${table}" \
       --files-from "$files_list" --transfers 16 --checkers 32 2>&1 \
-      | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line"; done; then
+      | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line" >&2; done; then
     log_error "sync-to-r2: [$schema/$table] closure copy FAILED — version-hint.text NOT advanced"
     rm -f "$files_list"
     return 1
