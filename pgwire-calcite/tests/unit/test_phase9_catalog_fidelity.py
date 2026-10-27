@@ -74,9 +74,24 @@ def test_pg_depend_refclassid_join_parses_and_runs(calcite_state):
     )
 
 
-def test_regclass_literal_still_matches_pg_description_classoid(calcite_state):
-    """KEEP: the short-name mapping the removed regex pre-pass used to provide."""
-    assert _scalar(calcite_state, "SELECT 'pg_catalog.pg_class'::regclass") == "pg_class"
+def test_regclass_literal_of_a_system_catalog_is_its_class_oid(calcite_state):
+    """pg_description.classoid holds the class oid, so a catalog regclass literal is that oid."""
+    assert _scalar(calcite_state, "SELECT 'pg_catalog.pg_class'::regclass") == 1259
+
+
+def test_pgjdbc_get_columns_description_join_runs():
+    """PgJDBC's getColumns LEFT JOINs pg_class on `dc.oid = dsc.classoid`; with any description
+    row present a text classoid made DuckDB fail the cast ("Could not convert string 'pg_class'
+    to INT32"), so every table looked column-less to JDBC clients such as Trino."""
+    state = _keyed_state(_JsonBackend())
+    assert _rows(
+        state,
+        "SELECT dsc.description FROM pg_catalog.pg_extension e "
+        "LEFT JOIN pg_catalog.pg_description dsc ON (e.oid = dsc.objoid) "
+        "LEFT JOIN pg_catalog.pg_class dc ON (dc.oid = dsc.classoid AND dc.relname = 'pg_class') "
+        "WHERE e.extname = 'json'",
+    ) == [("JSON operators -> Calcite JSON_VALUE/JSON_QUERY",)]
+    catalog.invalidate_catalog_cache()
 
 
 # --------------------------------------------------------------------------- 2
