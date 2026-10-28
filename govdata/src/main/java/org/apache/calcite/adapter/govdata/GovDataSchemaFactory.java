@@ -267,6 +267,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         .incrementalTracker(tracker)
         .addSchema(name, factory, enrichedOperand);
 
+    // Publish this schema's operand to ModelOperand before ETL runs. FileSchemaFactory captures the
+    // fully-derived operand only after the ETL phase, so an ETL-time reader (a DataProvider that
+    // opens its own DuckDB connection, for one) otherwise reads every model path back as absent.
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture(name, enrichedOperand);
+
     // Run ETL for all schemas; retry once with refreshed R2 credentials on S3 auth failure
     ModelLifecycleProcessor.ProcessResult result;
     try {
