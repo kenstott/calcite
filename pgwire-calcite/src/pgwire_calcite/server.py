@@ -463,7 +463,9 @@ def _peer_closed(sock) -> bool:
     """
     try:
         return socket.socket.recv(sock, 1, socket.MSG_PEEK | socket.MSG_DONTWAIT) == b""
-    except BlockingIOError:
+    except (BlockingIOError, socket.timeout):
+        # A socket that still carries a timeout waits for readability before the
+        # MSG_DONTWAIT peek; a silent but connected client then raises TimeoutError.
         return False
     except OSError:
         return True
@@ -1139,6 +1141,10 @@ class CalciteHandler(BuenaVistaHandler):  # PGW-002, PGW-007
         ``_send_pg_notice``) so query results are never modified or gated.
         """
         super().handle_post_auth(ctx)
+        # Every sign-in path (trust, md5, SCRAM) ends here. Drop the startup timeout so
+        # an idle-but-connected session is not cut off, and _peer_closed's peek sees
+        # BlockingIOError (alive) rather than a timeout. See _STARTUP_TIMEOUT_SECONDS.
+        self.request.settimeout(None)
 
     def _send_lockout(self, locked: LockedOut) -> None:
         # A lockout ends the connection, so it is a FATAL ErrorResponse with SQLSTATE 28000

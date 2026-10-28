@@ -642,3 +642,21 @@ def test_stream_without_a_cancel_scope_still_bounds_the_lock_wait(monkeypatch):
     finally:
         release.set()
         t.join(2)
+
+
+def test_a_silent_client_on_a_socket_with_a_timeout_is_not_reported_gone():
+    import socket
+
+    a, b = socket.socketpair()
+    try:
+        a.settimeout(0.2)
+        started = time.monotonic()
+        assert _peer_closed(a) is False
+        assert time.monotonic() - started >= 0.15  # the peek waited out the timeout, as CPython does
+        a.settimeout(None)
+        assert _peer_closed(a) is False
+        b.close()
+        assert _peer_closed(a) is True
+    finally:
+        a.close()
+        b.close()
