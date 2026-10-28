@@ -427,3 +427,75 @@ def test_keyless_catalog_reports_no_referential_constraints(calcite_state):
     assert _rows(
         calcite_state, "SELECT count(*) FROM information_schema.referential_constraints"
     ) == [(0,)]
+
+
+# Provisa's foreign-key read (provisa/discovery/fk_introspect.py): the standard constraint views
+# joined to each other, the referenced columns paired by position_in_unique_constraint.
+_FK_PAIRS = """
+FROM information_schema.table_constraints      AS tc
+JOIN information_schema.key_column_usage       AS kcu
+    ON kcu.constraint_schema = tc.constraint_schema
+   AND kcu.constraint_name   = tc.constraint_name
+   AND kcu.table_schema      = tc.table_schema
+   AND kcu.table_name        = tc.table_name
+JOIN information_schema.referential_constraints AS rc
+    ON rc.constraint_schema = tc.constraint_schema
+   AND rc.constraint_name   = tc.constraint_name
+JOIN information_schema.key_column_usage       AS ref
+    ON ref.constraint_schema = rc.unique_constraint_schema
+   AND ref.constraint_name   = rc.unique_constraint_name
+   AND ref.ordinal_position  = kcu.position_in_unique_constraint
+WHERE tc.constraint_type = 'FOREIGN KEY'
+"""
+_FK_OUTBOUND = (
+    "SELECT kcu.column_name AS fk_column, ref.table_name AS ref_table, "
+    "ref.column_name AS ref_column " + _FK_PAIRS + " AND tc.table_schema = 'SALES' "
+    "AND tc.table_name = 'emps' ORDER BY tc.constraint_name, kcu.ordinal_position"
+)
+_FK_INBOUND = (
+    "SELECT kcu.table_name AS fk_table, kcu.column_name AS fk_column, "
+    "ref.column_name AS ref_column " + _FK_PAIRS + " AND ref.table_schema = 'SALES' "
+    "AND ref.table_name = 'depts' ORDER BY tc.constraint_name, kcu.ordinal_position"
+)
+
+
+def test_the_constraint_views_are_answered_by_the_catalog_not_forwarded():
+    """Calcite's own information_schema has no referential_constraints (or table_constraints, or
+    key_column_usage), so a statement that reads one cannot be forwarded to it."""
+    for sql in (_FK_OUTBOUND, _FK_INBOUND):
+        assert catalog.classify(sql) == "INTERCEPT"
+    for view in (
+        "table_constraints",
+        "key_column_usage",
+        "referential_constraints",
+        "constraint_column_usage",
+        "check_constraints",
+    ):
+        assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "INTERCEPT", view
+
+
+def test_the_four_views_calcite_answers_are_still_forwarded():
+    for view in ("schemata", "tables", "columns", "views"):
+        assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "PASS_THROUGH", view
+
+
+def test_provisas_foreign_key_read_pairs_the_declared_keys_both_ways():
+    state = _keyed_state(StubBackend())
+    assert _rows(state, _FK_OUTBOUND) == [("deptno", "depts", "deptno")]
+    assert _rows(state, _FK_INBOUND) == [("emps", "deptno", "deptno")]
+    catalog.invalidate_catalog_cache()
+
+
+def test_a_source_that_declares_no_keys_gets_empty_results_not_an_error():
+    state = launcher.build_state(backend=StubBackend())
+    depts = TableMeta(1, "postgres", "SALES", "depts", "SALES.depts")
+    emps = TableMeta(2, "postgres", "SALES", "emps", "SALES.emps")
+    ctx = CompilationContext(tables={depts.type_name: depts, emps.type_name: emps})
+    install_catalog(
+        state,
+        ctx,
+        {1: [ColumnMeta("deptno", "INTEGER")], 2: [ColumnMeta("empno", "INTEGER")]},
+    )
+    assert _rows(state, _FK_OUTBOUND) == []
+    assert _rows(state, _FK_INBOUND) == []
+    catalog.invalidate_catalog_cache()

@@ -152,6 +152,11 @@ _SCALAR_FN_RE = re.compile(
 )
 
 _INTERCEPT_SCHEMAS = frozenset({"pg_catalog"})
+#: The information_schema views Calcite's own InformationSchema answers, which info_schema.py
+#: scopes to the role. Every other information_schema relation this module serves (the constraint
+#: views, the grants, routines, ...) does not exist there, so a statement that reads one is
+#: answered here: forwarded, it fails with "Object 'referential_constraints' not found".
+CALCITE_INFORMATION_SCHEMA_VIEWS = frozenset({"schemata", "tables", "views", "columns"})
 # information_schema was intercepted here too until 2026-09-18. It is standard SQL that
 # Calcite's own InformationSchema.java answers directly, filter-pushed-down, so PASS_THROUGH
 # sends it to the real Calcite connection instead of this module's memoized DuckDB catalog.
@@ -1676,6 +1681,12 @@ def classify(sql: str) -> str:  # REQ-127, REQ-128, REQ-363
             db = tbl.db.lower() if tbl.db else ""
             tname = tbl.name.lower() if tbl.name else ""
             if db in _INTERCEPT_SCHEMAS:
+                return "INTERCEPT"
+            if (
+                db == "information_schema"
+                and tname not in CALCITE_INFORMATION_SCHEMA_VIEWS
+                and (db, tname) in _TABLE_MAP
+            ):
                 return "INTERCEPT"
             if not db and tname in _CATALOG_TABLE_NAMES:
                 return "INTERCEPT"
@@ -3280,9 +3291,11 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
     # referencing a non-PK unique column links to the correct key (counties.state_fips ->
     # state_ref UNIQUE(state_fips)), not blindly the target's primary key.
     key_name_by_relid_cols: dict[tuple[int, frozenset], str] = {}
+    key_order_by_relid_cols: dict[tuple[int, frozenset], list[int]] = {}
     for row in constraint_rows:
         if row[3] in ("p", "u"):
             key_name_by_relid_cols[(row[7], frozenset(row[18] or []))] = row[1]
+            key_order_by_relid_cols[(row[7], frozenset(row[18] or []))] = list(row[18] or [])
     is_tc_rows: list[tuple] = []
     is_kcu_rows: list[tuple] = []
     is_rc_rows: list[tuple] = []
@@ -3353,6 +3366,15 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                 )
         conkeys_raw = con_row[18]
         conkeys_list: list[int] = list(conkeys_raw) if conkeys_raw else []
+        # PostgreSQL: NULL for a primary or unique key; for a foreign key, the position (in the
+        # referenced key's own column order) of the column this one references. A client pairs
+        # a foreign key's columns with the key's by joining on it.
+        fk_targets: list[int] = list(con_row[19] or []) if contype_v == "f" else []
+        ref_order: list[int] = (
+            key_order_by_relid_cols.get((con_row[11], frozenset(fk_targets)), [])
+            if contype_v == "f"
+            else []
+        )
         for pos, attnum_v in enumerate(conkeys_list, 1):
             col_name_v = idx.attnum_to_col.get((conrelid_v, int(attnum_v)), "")
             if col_name_v:
@@ -3366,7 +3388,7 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                         c_tname_v,
                         col_name_v,
                         pos,
-                        pos if contype_v in ("p", "u") else None,
+                        ref_order.index(fk_targets[pos - 1]) + 1 if contype_v == "f" else None,
                     )
                 )
     if is_tc_rows:

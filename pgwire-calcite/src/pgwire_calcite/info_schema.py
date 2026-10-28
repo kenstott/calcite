@@ -31,11 +31,11 @@ from typing import Callable, Iterable
 import sqlglot
 import sqlglot.expressions as exp
 
-from pgwire_calcite.catalog import _PG_TYPE_DISPLAY_NAMES
+from pgwire_calcite.catalog import _PG_TYPE_DISPLAY_NAMES, CALCITE_INFORMATION_SCHEMA_VIEWS
 from pgwire_calcite.normalize import _DEFAULT_MAPPING, _TYPE_TABLE
 
 SCHEMA = "information_schema"
-VIEWS = frozenset({"schemata", "tables", "views", "columns"})
+VIEWS = CALCITE_INFORMATION_SCHEMA_VIEWS
 
 
 def references(pg_sql: str) -> bool:
