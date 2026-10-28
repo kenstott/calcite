@@ -324,9 +324,11 @@ resolve_classpath() {
 }
 
 # Slots (schemas) that are NOT part of the scheduled production rotation: run-pool.sh leaves them out of
-# its daily and historical queues on purpose (sec_secondary: its runs take multiple days). Keep this
-# list equal to those schemas; remove a schema when it is added back to the schedule.
-UNSCHEDULED_SLOTS="sec_secondary"
+# its daily and historical queues on purpose. Keep this list equal to those schemas; remove a schema when
+# it is added to the schedule. Empty today: sec_secondary joined the daily (current year) and historical
+# (2010..current-1) queues, so it is remediated against production like the other SEC slots.
+# GOVDATA_UNSCHEDULED_SLOTS sets the list for a run (and for the guard test).
+UNSCHEDULED_SLOTS="${GOVDATA_UNSCHEDULED_SLOTS:-}"
 
 # is_unscheduled_slot <schema> -- true when the schema is outside the scheduled production rotation.
 is_unscheduled_slot() {

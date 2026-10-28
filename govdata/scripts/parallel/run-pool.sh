@@ -46,7 +46,7 @@ WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-1024}"
 # Hard cap on concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers, whatever else is
 # queued: SEC's historical slot count (up to 16 years x 3 sub-schemas) would otherwise take every
 # worker slot, and the workers all hit sec.gov.
-SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-3}"
+SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-5}"
 # Swap-used threshold (percent) above which fill_pool holds new admissions. MemAvailable alone
 # doesn't carry this signal: it only reports free/reclaimable RAM, so it stays "healthy" even once
 # swap has absorbed most of the pressure — right up until swap itself runs out, at which point
@@ -281,10 +281,10 @@ for arg in "$@"; do
       # sequential :serial worker over all years; the per-year housing slots below skip them.
       hcy_enqueue housing serial
       # Year loop (current year is daily's slot, so start at cy-1).
-      # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
-      # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
+      # sec_secondary runs a year over several days (the tracker resumes it after each window),
+      # and SEC_FAMILY_CAP bounds how many SEC-family years run at once.
       _year_schemas=(
-        sec_primary sec_13f
+        sec_primary sec_secondary sec_13f
         econ census geo crime weather energy
         fec fedregister cftc fisheries
         health edu patents lands
@@ -361,6 +361,7 @@ for arg in "$@"; do
         disasters:daily               # 44m
         ag:daily                      # 43m
         "sec_primary:${_cy}"          # 41m
+        "sec_secondary:${_cy}"        # multi-day for a full year: restarts across windows, the tracker resumes it
         census:daily crime:daily      # 33m
         "sec_13f:${_cy}"              # 33m
         banking:daily                 # 27m
@@ -370,8 +371,6 @@ for arg in "$@"; do
         fiscal:daily                  # 16m
         econ_reference:daily          # 12m
         research:daily                # 10m
-        # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
-        # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
         officials:daily cyber_vuln:daily edu:daily
         fedregister:daily "sec_prices:daily" patents:daily
         fisheries:daily
