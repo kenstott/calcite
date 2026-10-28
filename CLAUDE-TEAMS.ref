@@ -1,8 +1,62 @@
 # Claude Development Guidelines - Teams
 
-Team definitions, agent mappings, and coordination workflows for the Calcite project.
+How work is assigned, run and promoted on the Calcite project, and which guidelines each
+module area follows.
 
-## 👥 TEAM DEFINITIONS
+## 🧭 OPERATING MODEL (lead + short-lived workers)
+
+**Status: being introduced in phases. Sections marked (not yet enforced) describe the
+target; until the hooks land, they are the rule that people and agents follow by hand.**
+
+### Roles
+
+| Role | Lifetime | Does | Never does |
+|------|----------|------|------------|
+| **Lead** | long-lived session | triage and typing of issues, lock assignment, admission, maintainer questions, merging, playbook updates | the workers' build / DQ / fix work; editing a worker's worktree |
+| **Worker** | one issue, then ends | investigates or fixes one issue on its own branch in its own worktree, pushes WIP, reports on the issue | merge, apply data changes, close issues, touch another worker's worktree |
+| **Remediation runner** | one job | applies data changes (purge / reprocess) after the lead has admitted the job | start without admission; delete or overwrite without `needs:approval` |
+| **Verifier** | one check | independent read of a worker's branch (CI, DQ) | change the branch it verifies |
+| **Maintainer** | the human | decides destructive changes, product questions and playbook changes | - |
+
+The long-lived specialist agents (`architect`, `data-engine-dev`, `debugger`, ...) remain
+available as tools a worker may call. They are no longer standing "team members".
+
+### Dispatch
+- `runner-daemon` polls the ops repo (`kenstott/govdata-ops`) every 60s at zero token cost,
+  matches an issue to a worker type from its `type:` label and spawns one `claude -p` per issue
+  (up to `MAX_CONCURRENT`). It owns the respawn floor, orphan reaping and memory checks.
+- A worker is told its role, issue and locks through `CLAUDE_ROLE`, `CLAUDE_ISSUE` and
+  `CLAUDE_LOCKS` (not yet enforced; hooks will read these).
+
+### Promotion to main
+1. Worker pushes a branch (`fix/<issue>`), worktree under `/home/kstott/calcite-fixes/`, and
+   reports on the issue. Work-in-progress is pushed, never left only in the worktree.
+2. The lead merges with `govdata/scripts/fix-branch.sh merge`, one at a time, only when CI
+   and DQ are green for that exact commit. Workers never merge.
+3. Conventional-commit rules and the release flow are unchanged (release-please PR, tag
+   `engine-vX.Y.Z`).
+
+### Applying data changes
+- Remediation stays on MinIO only; R2 follows from the sync.
+- Admission (phase of the daily schedule, free memory, locks on the schema and year) must pass
+  before a remediation runner starts. The same schema and year never run concurrently.
+- Only deletes and overwrites need a `needs:approval` label from the maintainer.
+
+### What the lead asks the maintainer
+Only: destructive changes, product decisions, and playbook changes. Everything else the lead
+decides and logs as a comment on the issue. A decision that only the maintainer can make is
+brought to them in the lead conversation as a choice with a recommendation, never parked on an
+issue as `status:blocked`.
+
+### Labels (ops repo)
+`type:` defect / sourcing / remediation / infra, `kind:` core / gap / wrong, `status:` open /
+investigating / ready-to-run / running / blocked / pending-etl / watch / on-hold / ..., `schema:`.
+
+## 🗺️ MODULE OWNERSHIP (who knows what, not who works when)
+
+These groupings say which guidelines and modules a piece of work touches. They no longer
+decide who runs it: a worker is spawned per issue (see OPERATING MODEL) and reads the
+guidelines for the modules the issue names.
 
 ### Core Engine Team
 **Scope**: Calcite internals, query planning, adapter framework, SQL parsing
@@ -36,23 +90,7 @@ Team definitions, agent mappings, and coordination workflows for the Calcite pro
 **Commands**: `/project:test:all`, `/project:regression`, `/project:reconstitute-commits`
 **Guidelines**: CLAUDE-TESTING.md, CLAUDE-CORE.md (verification checklist)
 
-## 📊 AGENT-TO-TEAM MATRIX
-
-| Agent | Core Engine | Data | Infrastructure | Quality |
-|-------|:-----------:|:----:|:--------------:|:-------:|
-| architect | **P** | | **P** | |
-| data-engine-dev | **P** | **P** | | |
-| sql-analyst | **P** | S | | |
-| debugger | | **P** | **P** | S |
-| test-strategist | | S | | **P** |
-| code-reviewer | S | | | **P** |
-| doc-writer | | | S | **P** |
-| refactorer | S | | | **P** |
-| marketer | — | — | — | — |
-
-**P** = Primary, **S** = Secondary, **—** = Available to all teams on demand
-
-## 🎯 TASK ROUTING
+## 🎯 TASK ROUTING (which guidelines apply)
 
 ```
 New task?
@@ -65,7 +103,7 @@ New task?
 ├─ tests, docs, code review, refactoring?
 │  └─ Quality Team
 └─ Spans multiple teams?
-   └─ architect agent triages → assigns owning team
+   └─ the lead splits it into one issue per area (architect agent may advise)
 ```
 
 ## 🔄 INTER-TEAM WORKFLOWS
@@ -98,10 +136,10 @@ New task?
 
 ## 📏 COORDINATION RULES
 
-1. **One owner per task** — every task has exactly one owning team
-2. **Cross-cutting work** — owning team leads, others contribute via secondary agents
+1. **One owner per task** — every task has exactly one worker (one issue, one branch, one worktree)
+2. **Cross-cutting work** — the lead splits it into one issue per owning module area; workers do not edit each other's worktrees
 3. **Universal rules** — all teams follow CLAUDE-CORE.md unconditionally (Java 8, honesty, completion)
-4. **Review authority** — Quality team has final say on merge readiness
+4. **Review authority** — the lead merges, and only when CI and DQ are green for that commit; code-reviewer and test-strategist findings are inputs to that decision
 5. **Escalation** — use architect agent to resolve cross-team design disputes
 6. **Market viability** — use marketer agent when evaluating feature ROI for any team
 

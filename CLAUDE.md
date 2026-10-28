@@ -16,6 +16,9 @@
 5. **No Memory Answers** - Before answering any question about what existing code does, run a Grep or Read tool call first. No exceptions. Do not answer from memory.
 6. **No Fallback Values / Silent Error Handling** - Never add fallback values or silent error handling. Caused repeated production issues. When a value might be missing, find the design guarantee or fix the upstream source — never patch around it.
 
+## Operating Model
+Work on the ops queue runs as a lead plus short-lived workers (see CLAUDE-TEAMS.ref). A worker handles one issue on its own branch and worktree and never merges, applies data changes or closes issues; the lead merges only when CI and DQ are green for that commit, and asks the maintainer only about destructive changes, product decisions and playbook changes. Rolling out in phases; until hooks enforce it, follow it by hand.
+
 ## Common Commands
 ```bash
 ./gradlew :module:test                                              # unit tests
@@ -30,7 +33,7 @@ duckdb -c "DESCRIBE SELECT * FROM read_parquet('/path/file.parquet')" # check Du
 - @CLAUDE-TESTING.ref - Test execution patterns, tag system, debugging workflows, anti-patterns
 - @CLAUDE-ADAPTERS.ref - Adapter env vars, engine commands, error patterns (File, GovData, Splunk, SharePoint)
 - @CLAUDE-TROUBLESHOOTING.ref - Systematic debug workflows, error pattern matching, cleanup protocols
-- @CLAUDE-TEAMS.ref - Team definitions, agent-to-team mapping, coordination workflows
+- @CLAUDE-TEAMS.ref - Operating model (lead + short-lived workers, promotion to main, what the lead asks), module ownership, coordination workflows
 
 ## Commit Checklist
 - [ ] Builds without errors
