@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.123.2](https://github.com/kenstott/calcite/compare/engine-v0.123.1...engine-v0.123.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* **pgwire-calcite:** clear the startup timeout after every sign-in so a silent client is not cancelled as gone ([8d6b296](https://github.com/kenstott/calcite/commit/8d6b296ef098a42a8878330117847cb9a3b79059))
+
 ## [0.123.1](https://github.com/kenstott/calcite/compare/engine-v0.123.0...engine-v0.123.1) (2026-10-28)
 
 
