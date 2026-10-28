@@ -1436,6 +1436,11 @@ public class HttpSource implements DataSource {
           + " consecutive 503s, fast-skipping: " + baseUri(fullUrl));
     }
 
+    String quotaMessage = QUOTA_EXHAUSTED.get(originOf(fullUrl));
+    if (quotaMessage != null) {
+      throw new QuotaExhaustedException(quotaMessage);
+    }
+
     HttpSourceConfig.RateLimitConfig rateLimit = config.getRateLimit();
     int retries = 0;
     IOException lastException = null;
@@ -1487,6 +1492,26 @@ public class HttpSource implements DataSource {
       CONSECUTIVE_503 =
           new java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>();
   private static final int CIRCUIT_503_THRESHOLD = 5;
+
+  /** Origins (scheme://host) whose API said the token's per-day request limit is spent, with the
+   *  server's message. Kept for the life of the process: a daily quota does not reset mid-run. */
+  private static final java.util.concurrent.ConcurrentMap<String, String> QUOTA_EXHAUSTED =
+      new java.util.concurrent.ConcurrentHashMap<String, String>();
+  /** NOAA CDO: "This token has reached its temporary request limit of 10000 per day." */
+  private static final java.util.regex.Pattern DAILY_QUOTA =
+      java.util.regex.Pattern.compile("request limit of \\d+ per day");
+
+  /** A request failed, or was not sent, because the API's per-day request limit is spent. */
+  static final class QuotaExhaustedException extends IOException {
+    QuotaExhaustedException(String message) {
+      super(message);
+    }
+  }
+
+  private static String originOf(String url) {
+    java.net.URI uri = java.net.URI.create(url);
+    return uri.getScheme() + "://" + uri.getAuthority();
+  }
   /** Cap on how long we honor a server-provided Retry-After — a maintenance window can be hours,
    *  and we must not block a worker indefinitely. */
   private static final long RETRY_AFTER_CAP_MS = 300_000L;
@@ -1687,6 +1712,15 @@ public class HttpSource implements DataSource {
         }
         // 503/429: capture any Retry-After so the retry honors it. Count consecutive 503s per base
         // URI so a persistently-down origin trips the circuit breaker (subsequent calls fast-skip).
+        if (responseCode == 429 && DAILY_QUOTA.matcher(errorBody).find()) {
+          String message = "daily request quota exhausted for " + originOf(urlString)
+              + " (status 429): " + errorBody.trim();
+          if (QUOTA_EXHAUSTED.putIfAbsent(originOf(urlString), message) == null) {
+            LOGGER.warn("Quota exhausted: {} -- failing further calls to this origin without "
+                + "retrying, for the rest of this run", message);
+          }
+          throw new QuotaExhaustedException(message);
+        }
         if (responseCode == 503 || responseCode == 429) {
           long retryAfterMs = parseRetryAfter(conn);
           if (responseCode == 503) {
@@ -3386,6 +3420,11 @@ public class HttpSource implements DataSource {
    * Checks if we should retry based on the error.
    */
   private boolean shouldRetry(IOException e, HttpSourceConfig.RateLimitConfig rateLimit) {
+    // A spent daily quota does not come back within a retry's backoff; retrying only spends more
+    // of the quota other callers of the same token share.
+    if (e instanceof QuotaExhaustedException) {
+      return false;
+    }
     // Socket-level timeouts (SocketTimeoutException) are always retryable — the server
     // may be temporarily slow or the connection was idle-closed between pages.
     if (e instanceof java.net.SocketTimeoutException) {
