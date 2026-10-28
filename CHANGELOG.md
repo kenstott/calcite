@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.123.0](https://github.com/kenstott/calcite/compare/engine-v0.122.5...engine-v0.123.0) (2026-10-28)
+
+
+### Features
+
+* **govdata/schedule:** sec_secondary joins the daily and historical queues ([d97d531](https://github.com/kenstott/calcite/commit/d97d5311ecfd86ab65683d4e0c8f6e885f8ff33b))
+
+
+### Bug Fixes
+
+* **file/etl:** a spent daily request quota is not retried ([b9d2520](https://github.com/kenstott/calcite/commit/b9d25204e41e00a700d6927e6498d44476e8f5f8))
+* **govdata/ref:** FIGI reads sec_company_tickers with the model's S3 credentials ([bea3938](https://github.com/kenstott/calcite/commit/bea3938611fa85e64f0a82029dc42ee162989643))
+* **govdata/weather:** weather_daily_by_county exposes the year partition column ([6f104cb](https://github.com/kenstott/calcite/commit/6f104cb2a9152857714bb5fbf3a58cd362b4ae95))
+
 ## [0.122.5](https://github.com/kenstott/calcite/compare/engine-v0.122.4...engine-v0.122.5) (2026-10-27)
 
 
