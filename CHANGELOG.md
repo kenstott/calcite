@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.123.1](https://github.com/kenstott/calcite/compare/engine-v0.123.0...engine-v0.123.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **pgwire-calcite:** answer the constraint views a client joins, and pair a foreign key's columns ([bc8f50d](https://github.com/kenstott/calcite/commit/bc8f50d36a30abcd499bfe6f444dedfee55b18e6))
+
 ## [0.123.0](https://github.com/kenstott/calcite/compare/engine-v0.122.5...engine-v0.123.0) (2026-10-28)
 
 
