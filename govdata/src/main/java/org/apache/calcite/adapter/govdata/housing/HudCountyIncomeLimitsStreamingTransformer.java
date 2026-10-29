@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.housing;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -112,6 +113,10 @@ public class HudCountyIncomeLimitsStreamingTransformer implements StreamingRespo
 
   /** Performs an authenticated GET, retrying 429/5xx; returns the body, or null on 404. */
   private String get(String url, String auth) throws IOException {
+    return NetworkOutageWait.call("GET " + url, () -> getOnce(url, auth));
+  }
+
+  private String getOnce(String url, String auth) throws IOException {
     IOException last = null;
     for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();

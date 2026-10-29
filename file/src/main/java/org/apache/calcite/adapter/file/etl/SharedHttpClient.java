@@ -150,10 +150,18 @@ public final class SharedHttpClient {
   /**
    * Sends {@code request} and returns once the response headers have arrived.
    *
+   * <p>A name-resolution or connection failure is waited out per {@link NetworkOutageWait}
+   * before it is reported.
+   *
    * @throws IOException on connection failure, on a response-header timeout
    *                     ({@link SocketTimeoutException}) or when the hard deadline passes
    */
   public static Response execute(Request request) throws IOException {
+    return NetworkOutageWait.call(request.method + " " + SecretRedaction.redact(request.uri.toString()),
+        () -> executeOnce(request));
+  }
+
+  private static Response executeOnce(Request request) throws IOException {
     HttpRequest.Builder builder = HttpRequest.newBuilder(request.uri)
         .timeout(Duration.ofMillis(request.readTimeoutMs));
     for (Map.Entry<String, String> h : request.headers.entrySet()) {

@@ -332,6 +332,11 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // top-level YAML operand (e.g. a table's own config, a schema-level feature flag) would
     // silently read back as absent/default no matter what the YAML or environment said.
     org.apache.calcite.adapter.file.etl.ModelOperand.capture(name, operand);
+    if (operand.get("networkOutageWaitMinutes") != null) {
+      org.apache.calcite.adapter.file.etl.NetworkOutageWait.configureMinutes(
+          org.apache.calcite.adapter.file.etl.ModelOperand.getLong(
+              name + ".networkOutageWaitMinutes", 0L));
+    }
 
     @SuppressWarnings("unchecked") List<Map<String, Object>> tables =
         (List) operand.get("tables");
