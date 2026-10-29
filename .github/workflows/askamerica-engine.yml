@@ -747,9 +747,12 @@ jobs:
           path: askamerica-engine/build/jpackage/${{ matrix.artifact_glob }}
           retention-days: 30
 
-  # ── Publish to Maven Central (Sonatype Central Portal) ───────────────────
+  # ── Maven Central bundle (built and signed here; uploaded only by promote-maven-central.yml) ──
+  # Central's free tier caps monthly publishing, so a tag no longer uploads to Central. This job
+  # builds the signed bundle and hands it to the release job, which attaches it to the release;
+  # the "Promote to Maven Central" workflow uploads it from there when the maintainer chooses.
   publish:
-    name: Publish to Maven Central
+    name: Build Maven Central bundle
     runs-on: ubuntu-latest
     needs: [jar, test]
     if: startsWith(github.ref, 'refs/tags/')
@@ -853,31 +856,24 @@ jobs:
           (cd bundle && zip -r "../askamerica-engine-bundle.zip" .)
           echo "Bundle: $(du -sh askamerica-engine-bundle.zip | cut -f1)"
 
-      - name: Upload to Sonatype Central Portal
+      - name: Name the bundle for the release, with its sha256
         env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          VERSION:           ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
-            -H "Authorization: Bearer ${AUTH}" \
-            -H "Accept: application/json" \
-            -F "bundle=@askamerica-engine-bundle.zip;type=application/zip" \
-            -F "name=askamerica-engine-${VERSION}" \
-            -F "publishingType=AUTOMATIC")
+          mkdir -p central
+          BUNDLE="askamerica-engine-${VERSION}-central-bundle.zip"
+          mv askamerica-engine-bundle.zip "central/${BUNDLE}"
+          (cd central && sha256sum "${BUNDLE}" > "${BUNDLE}.sha256")
+          ls -l central
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "Response ($HTTP_CODE): $BODY"
+      - name: Upload Central bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: askamerica-engine-central-bundle
+          path: central/
+          retention-days: 30
 
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "ERROR: Maven Central upload failed"
-            exit 1
-          fi
-
-  # ── Publish to GitHub Packages (temporary — remove once Maven Central namespace verified) ──
+  # ── Publish to GitHub Packages (every tag; Maven Central only through promote-maven-central.yml) ──
   publish-github:
     name: Publish to GitHub Packages
     runs-on: ubuntu-latest
@@ -1070,6 +1066,18 @@ jobs:
         with:
           name: askamerica-extension
           path: release-assets/
+
+      # The signed bundle that "Promote to Maven Central" uploads, and its sha256.
+      - name: Download Central bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: askamerica-engine-central-bundle
+          path: release-assets/
+
+      # Central carried ai.askamerica:askamerica-engine; the same jar is the release asset
+      # askamerica-engine.jar, and its sha256 lets a consumer verify the unauthenticated download.
+      - name: Checksum the engine jar
+        run: (cd release-assets && sha256sum askamerica-engine.jar > askamerica-engine.jar.sha256)
 
       # softprops/action-gh-release's own "fetch existing release by tag" API call fails here
       # with "Resource not accessible by integration" even though the job's GITHUB_TOKEN

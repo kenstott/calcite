@@ -1,11 +1,14 @@
 # Publish the Trino connectors on an engine-v<version> release.
 #
-#   * Maven artifacts (io.simpleishard:trino-*)      -> GitHub Packages + Maven Central
+#   * Maven artifacts (io.simpleishard:trino-*)      -> GitHub Packages, and the jar + its sha256
+#                                                       as GitHub-release assets
+#   * Signed Maven Central bundles                    -> GitHub-release assets; uploaded to Central
+#                                                       only by promote-maven-central.yml
 #   * Deployable Trino plugin zips (trino-*-plugin)   -> attached as GitHub-release assets
 #
 # The Maven jar is what JVM consumers depend on; the plugin zip is the directory-of-jars an
 # operator unzips into <trino>/plugin/<name>/. trino-calcite-base is a shared library (jar only,
-# no plugin zip). Central uploads are publishingType=AUTOMATIC — mirrors publish-govdata.yml.
+# no plugin zip). A tag never uploads to Central (its free tier caps monthly publishing).
 name: publish-trino
 
 on:
@@ -19,11 +22,11 @@ on:
         required: true
 
 jobs:
-  # ── Maven artifacts: GitHub Packages + Maven Central ────────────────────────
+  # ── Maven artifacts: GitHub Packages + release assets (Central bundle for promotion) ──
   maven:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # attaches the jar and the Central bundle to the engine-v release
       packages: write
     strategy:
       fail-fast: false
@@ -192,31 +195,21 @@ jobs:
           (cd bundle && zip -r "../${ARTIFACT_ID}-bundle.zip" .)
           echo "Bundle: $(du -sh ${ARTIFACT_ID}-bundle.zip | cut -f1)"
 
-      - name: Upload to Sonatype Central Portal
+      - name: Attach the jar and the Central bundle to the release
         env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          ARTIFACT_ID:       ${{ matrix.artifact }}
-          VERSION:           ${{ steps.version.outputs.version }}
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_ID: ${{ matrix.artifact }}
+          VERSION:     ${{ steps.version.outputs.version }}
         run: |
-          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
-            -H "Authorization: Bearer ${AUTH}" \
-            -H "Accept: application/json" \
-            -F "bundle=@${ARTIFACT_ID}-bundle.zip;type=application/zip" \
-            -F "name=${ARTIFACT_ID}-${VERSION}" \
-            -F "publishingType=AUTOMATIC")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "Response ($HTTP_CODE): $BODY"
-
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "ERROR: Maven Central upload failed for ${ARTIFACT_ID}"
-            exit 1
-          fi
+          mkdir -p central
+          JAR="${ARTIFACT_ID}-${VERSION}.jar"
+          BUNDLE="${ARTIFACT_ID}-${VERSION}-central-bundle.zip"
+          cp "bundle/io/simpleishard/${ARTIFACT_ID}/${VERSION}/${JAR}" "central/${JAR}"
+          cp "${ARTIFACT_ID}-bundle.zip" "central/${BUNDLE}"
+          (cd central && sha256sum "${JAR}" > "${JAR}.sha256" && sha256sum "${BUNDLE}" > "${BUNDLE}.sha256")
+          gh release upload "engine-v${VERSION}" --repo "${{ github.repository }}" --clobber \
+            "central/${JAR}" "central/${JAR}.sha256" "central/${BUNDLE}" "central/${BUNDLE}.sha256"
 
   # Note: the deployable Trino plugin zips are built and attached to the engine-v release by the
-  # AskAmerica Engine workflow (its trino-plugins + release jobs), so this workflow publishes only
-  # the Maven artifacts and does not touch the release object.
+  # AskAmerica Engine workflow (its trino-plugins + release jobs); this workflow attaches only each
+  # module's jar and Central bundle.
