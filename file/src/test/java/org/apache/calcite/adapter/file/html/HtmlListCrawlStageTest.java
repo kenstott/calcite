@@ -58,6 +58,8 @@ public class HtmlListCrawlStageTest {
       + "<h3>Pairs</h3>"
       + "<ul><li>Left</li><li>Right</li></ul>"
       + "<div class='navbox'><ul><li>x</li><li>y</li><li>z</li></ul></div>"
+      + "<aside><ul><li>See</li><li>also</li><li>this</li></ul></aside>"
+      + "<header><ul><li>Top</li><li>of</li><li>content</li></ul></header>"
       + "</div>"
       + "<footer><ul><li>Terms</li><li>Privacy</li><li>Contact</li></ul></footer>"
       + "</body></html>";
@@ -126,8 +128,9 @@ public class HtmlListCrawlStageTest {
     HtmlCrawlStage.run("lists", crawl(true), directory.getPath(), "local", "SMART_CASING",
         crawlerWorkDir);
 
-    // The navigation, footer and navigation-box lists are outside the content; the two-item
-    // list is too short; two lists under one heading are numbered.
+    // The navigation, footer and navigation-box lists are outside the content; the aside and
+    // header lists inside it are never content; the two-item list is too short; two lists
+    // under one heading are numbered.
     assertEquals(
         Arrays.asList("start__colours.json", "start__colours_2.json",
             "start__member_states.json"),

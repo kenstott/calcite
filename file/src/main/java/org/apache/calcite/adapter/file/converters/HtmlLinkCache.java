@@ -73,7 +73,7 @@ public class HtmlLinkCache {
       }
 
       Document doc = Jsoup.parse(htmlContent, url);
-      Element region = contentOf(doc, config);
+      Element region = config.contentOf(doc);
       this.content = region;
       this.dataFileLinks = extractDataLinks(region, url, config);
       this.htmlLinks = extractHtmlLinks(region, url, config);
@@ -112,20 +112,6 @@ public class HtmlLinkCache {
     public ExtractedLinks withHttpMetadata(@Nullable String etag, @Nullable String lastModified) {
       return new ExtractedLinks(dataFileLinks, htmlLinks, tables, content, contentHash, etag,
           lastModified);
-    }
-
-    /**
-     * The part of the page that is read: the page with the configured elements dropped, cut to
-     * the configured region. A page that has no such region has nothing to read.
-     */
-    private static @Nullable Element contentOf(Document doc, CrawlerConfiguration config) {
-      for (String selector : config.getRemoveSelectors()) {
-        doc.select(selector).remove();
-      }
-      if (config.getContentSelector() == null) {
-        return doc.body();
-      }
-      return doc.selectFirst(config.getContentSelector());
     }
 
     /** The region of the page that was read, or null when the page had none. */

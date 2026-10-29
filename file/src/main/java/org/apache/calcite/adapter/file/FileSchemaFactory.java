@@ -664,6 +664,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // This is set by GovDataSchemaFactory to ensure paths like .aperio/econ are used
     // regardless of the user-assigned schema name (e.g., "ECON", "Econ")
     final String canonicalSchemaName = (String) operand.get("canonicalSchemaName");
+    // How the schema's own HTML files are read: their content's lists as tables (REQ-2186).
+    final org.apache.calcite.adapter.file.converters.CrawlerConfiguration pages =
+        org.apache.calcite.adapter.file.converters.CrawlerConfiguration.pagesOf(operand);
 
     // All paths are strings - StorageProvider handles both local and cloud storage
     String directoryPath = null;
@@ -781,7 +784,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, isPrimeCacheEnabled(operand, true), comment,
-          canonicalSchemaName);
+          canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -910,7 +913,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       FileSchema fileSchema =
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1008,7 +1011,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       FileSchema fileSchema =
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1106,7 +1109,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       FileSchema fileSchema =
           new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1199,7 +1202,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     FileSchema fileSchema =
         new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
-        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
     if (materializeConfig != null) {
       fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);

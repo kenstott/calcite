@@ -154,6 +154,17 @@ public class FileConversionManager {
    * @return true if conversion was performed, false if no conversion needed
    */
   public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath) {
+    // A caller that states no page options reads HTML tables only: lists are off by default (REQ-2186).
+    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory,
+        relativePath, new CrawlerConfiguration());
+  }
+
+  /**
+   * As {@link #convertIfNeeded(File, File, String, String, File, String)}, reading an HTML file
+   * as {@code pages} says: its content's lists as tables when that option is on (REQ-2186).
+   */
+  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath,
+      CrawlerConfiguration pages) {
     String path = sourceFile.getPath().toLowerCase();
 
     // First check if conversion is needed using metadata-based change detection
@@ -189,7 +200,7 @@ public class FileConversionManager {
           }
         }
 
-        List<File> jsonFiles = HtmlToJsonConverter.convert(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory, relativePath, existingTableName);
+        List<File> jsonFiles = HtmlToJsonConverter.convert(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory, relativePath, existingTableName, pages);
         LOGGER.debug("Converted HTML file to {} JSON files: {}", jsonFiles.size(), sourceFile.getName());
         return true;
       }

@@ -104,6 +104,21 @@ public class HtmlToJsonConverter {
    */
   public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing,
                                    String tableNameCasing, String explicitTableName, File baseDirectory, String relativePath) throws IOException {
+    // A caller that states no page options reads tables only: lists are off by default (REQ-2186).
+    return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, explicitTableName,
+        baseDirectory, relativePath, new CrawlerConfiguration());
+  }
+
+  /**
+   * Converts an HTML file's tables, and with {@code pages}' list option its content's lists
+   * (REQ-2186), to JSON files.
+   *
+   * @param pages How the page is read: whether its lists are tables, and which part of it is
+   *     content
+   */
+  public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing,
+                                   String tableNameCasing, String explicitTableName, File baseDirectory, String relativePath,
+                                   CrawlerConfiguration pages) throws IOException {
     List<File> jsonFiles = new ArrayList<>();
     // Use HtmlTableScanner to find tables - make sure we re-scan each time
     Source source = Sources.of(htmlFile);
@@ -194,8 +209,45 @@ public class HtmlToJsonConverter {
 
         LOGGER.info("Wrote table to " + jsonFile.getAbsolutePath());
       }
+      if (pages.isGenerateTablesFromHtmlLists()) {
+        jsonFiles.addAll(writeLists(htmlFile, outputDir, baseDirectory, relativePath, pages, jsonFiles));
+      }
     }
 
+    return jsonFiles;
+  }
+
+  /**
+   * Writes the lists of the page's content as JSON files, named as a crawled page's lists are,
+   * after the page's tables so a name a table took is numbered.
+   */
+  private static List<File> writeLists(File htmlFile, File outputDir, File baseDirectory,
+      String relativePath, CrawlerConfiguration pages, List<File> tableFiles) throws IOException {
+    List<File> jsonFiles = new ArrayList<>();
+    // The page's address is its file's, so a link's uri is absolute against it.
+    Document doc = Jsoup.parse(htmlFile, "UTF-8", htmlFile.toURI().toString());
+    Element content = pages.contentOf(doc);
+    if (content == null) {
+      return jsonFiles;
+    }
+    String baseFileName = ConverterUtils.getBaseFileName(htmlFile.getName(), ".html", ".htm");
+    String dirPrefix = relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
+    if (dirPrefix != null) {
+      baseFileName = dirPrefix + "_" + baseFileName;
+    }
+    Set<String> names = new HashSet<>();
+    for (File table : tableFiles) {
+      names.add(table.getName());
+    }
+    for (HtmlListScanner.ListTable list : HtmlListScanner.scan(content)) {
+      String jsonFileName = HtmlCrawlStage.unique(baseFileName + "__" + list.name + ".json", names);
+      File jsonFile = new File(outputDir, jsonFileName);
+      MAPPER.writerWithDefaultPrettyPrinter().writeValue(jsonFile, HtmlCrawlStage.jsonOf(list.rows));
+      jsonFiles.add(jsonFile);
+      ConversionRecorder.recordConversion(htmlFile, jsonFile, "HTML_TO_JSON", baseDirectory,
+          jsonFileName.substring(0, jsonFileName.lastIndexOf(".json")));
+      LOGGER.info("Wrote list to " + jsonFile.getAbsolutePath());
+    }
     return jsonFiles;
   }
 
@@ -312,6 +364,15 @@ public class HtmlToJsonConverter {
    */
   public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath, String existingTableName) throws IOException {
     return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, existingTableName, baseDirectory, relativePath);
+  }
+
+  /**
+   * As {@link #convert(File, File, String, String, File, String, String)}, reading the page as
+   * {@code pages} says: its lists as tables when that option is on (REQ-2186).
+   */
+  public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath, String existingTableName,
+      CrawlerConfiguration pages) throws IOException {
+    return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, existingTableName, baseDirectory, relativePath, pages);
   }
 
 

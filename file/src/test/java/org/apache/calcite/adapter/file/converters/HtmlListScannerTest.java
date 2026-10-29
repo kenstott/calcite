@@ -119,4 +119,40 @@ public class HtmlListScannerTest {
     assertTrue(HtmlListScanner.isTable(doc.getElementById("outer"), content));
     assertFalse(HtmlListScanner.isTable(doc.getElementById("inner"), content));
   }
+
+  @Test void aListInANavigationHeaderFooterOrAsideIsNeverATable() {
+    for (String landmark : Arrays.asList("nav", "header", "footer", "aside")) {
+      Document doc = Jsoup.parse("<html><body><div id='c'><h2>Links</h2>"
+          + "<" + landmark + "><div><ul id='l'><li>a</li><li>b</li><li>c</li></ul></div></"
+          + landmark + ">"
+          + "</div></body></html>", PAGE);
+      Element content = doc.getElementById("c");
+      assertFalse(HtmlListScanner.isTable(doc.getElementById("l"), content), landmark);
+      assertTrue(HtmlListScanner.scan(content).isEmpty(), landmark);
+    }
+  }
+
+  @Test void aLandmarkHoldingTheWholeContentStillHoldsNoTable() {
+    // Whatever the content selector picks, a list inside a landmark is not content.
+    Document doc = Jsoup.parse("<html><body><nav><div id='c'>"
+        + "<ul id='l'><li>a</li><li>b</li><li>c</li></ul></div></nav></body></html>", PAGE);
+    assertFalse(
+        HtmlListScanner.isTable(doc.getElementById("l"), doc.getElementById("c")));
+  }
+
+  @Test void scanNamesEachListForTheHeadingAboveItInDocumentOrder() {
+    Document doc = Jsoup.parse("<html><body><div id='c'>"
+        + "<ul><li>1</li><li>2</li><li>3</li></ul>"
+        + "<h2>Member states</h2><p>text</p>"
+        + "<ol><li>a</li><li>b</li><li>c</li></ol>"
+        + "<h3>!!</h3>"
+        + "<ul><li>x</li><li>y</li><li>z</li></ul>"
+        + "</div></body></html>", PAGE);
+    List<String> names = new ArrayList<>();
+    for (HtmlListScanner.ListTable table : HtmlListScanner.scan(doc.getElementById("c"))) {
+      names.add(table.name);
+    }
+    // A heading that leaves nothing in a name names no list.
+    assertEquals(Arrays.asList("list_1", "member_states", "list_2"), names);
+  }
 }

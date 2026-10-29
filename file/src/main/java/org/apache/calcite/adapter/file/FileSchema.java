@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
@@ -219,6 +220,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private final CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig;
   private final @Nullable String comment;
   private final @Nullable String canonicalSchemaName;  // Canonical name for .aperio directory (e.g., "econ" vs user-assigned "ECON")
+  /** How the schema's HTML files are read: their lists as tables, and their content (REQ-2186). */
+  private final CrawlerConfiguration pages;
   // Schema-level materialize default (FILE-186), set post-construction by FileSchemaFactory. When
   // present, getTableMap materializes every discovered table to Iceberg under warehousePath. Not a
   // constructor param — FileSchema has many delegating overloads and getTableMap runs lazily after
@@ -440,6 +443,40 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       boolean primeCache,
       @Nullable String comment,
       @Nullable String canonicalSchemaName) {
+    // A schema that states no page options reads HTML tables only: lists are off by default
+    // (REQ-2186).
+    this(parentSchema, name, sourceDirectory, userConfiguredBaseDirectory, directoryPath,
+        directoryPattern, tables, engineConfig, recursive, materializations, views,
+        partitionedTables, refreshInterval, tableNameCasing, columnNameCasing, storageType,
+        storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName,
+        new CrawlerConfiguration());
+  }
+
+  /**
+   * The full constructor, with how the schema reads its HTML files: whether their content's
+   * lists are tables, and which part of a page is content (REQ-2186).
+   */
+  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
+      @Nullable File userConfiguredBaseDirectory,
+      @Nullable String directoryPath,
+      @Nullable String directoryPattern,
+      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
+      boolean recursive,
+      @Nullable List<Map<String, Object>> materializations,
+      @Nullable List<Map<String, Object>> views,
+      @Nullable List<Map<String, Object>> partitionedTables,
+      @Nullable String refreshInterval,
+      String tableNameCasing,
+      String columnNameCasing,
+      @Nullable String storageType,
+      @Nullable Map<String, Object> storageConfig,
+      @Nullable Boolean flatten,
+      @Nullable Map<String, Object> csvTypeInference,
+      boolean primeCache,
+      @Nullable String comment,
+      @Nullable String canonicalSchemaName,
+      CrawlerConfiguration pages) {
+    this.pages = pages;
     this.tables =
         tables == null ? ImmutableList.of()
             : ImmutableList.copyOf(tables);
@@ -1170,7 +1207,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // Pass baseDirectory for metadata storage and relativePath for directory preservation
         boolean converted =
             FileConversionManager.convertIfNeeded(file, outputDir, columnNameCasing, tableNameCasing,
-                operatingCacheDirectory, relativePath);
+                operatingCacheDirectory, relativePath, pages);
         if (converted) {
           LOGGER.debug("Converted file: {} to directory: {}", file.getName(), outputDir.getAbsolutePath());
         }
@@ -1283,7 +1320,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 columnNameCasing,
                 tableNameCasing,
                 operatingCacheDirectory,
-                relativePath);
+                relativePath,
+                pages);
 
             if (converted) {
               LOGGER.debug("Converted storage provider file: {}", entry.getName());

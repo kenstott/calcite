@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.file.converters;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -220,6 +222,41 @@ public class CrawlerConfiguration {
   }
 
   /** One string or a list of them, as a list. */
+  /**
+   * How a file schema reads the HTML files of its directory, from its operand: whether their
+   * lists are tables ({@code generateTablesFromHtmlLists}) and which part of a page is read
+   * ({@code contentSelector}, {@code removeSelectors}), as a crawl reads its pages (REQ-2186).
+   * Only these keys are read; the operand's other keys are the schema's own.
+   */
+  public static CrawlerConfiguration pagesOf(Map<String, Object> operand) {
+    CrawlerConfiguration config = new CrawlerConfiguration();
+    if (operand.containsKey("generateTablesFromHtmlLists")) {
+      config.setGenerateTablesFromHtmlLists(
+          Boolean.parseBoolean(operand.get("generateTablesFromHtmlLists").toString()));
+    }
+    if (operand.containsKey("contentSelector")) {
+      config.setContentSelector(operand.get("contentSelector").toString());
+    }
+    if (operand.containsKey("removeSelectors")) {
+      config.setRemoveSelectors(strings(operand.get("removeSelectors")));
+    }
+    return config;
+  }
+
+  /**
+   * The part of {@code doc} that is read: the page with the configured elements dropped, cut to
+   * the configured region. A page that has no such region has nothing to read.
+   */
+  public @Nullable Element contentOf(Document doc) {
+    for (String selector : removeSelectors) {
+      doc.select(selector).remove();
+    }
+    if (contentSelector == null) {
+      return doc.body();
+    }
+    return doc.selectFirst(contentSelector);
+  }
+
   private static List<String> strings(Object value) {
     List<String> list = new ArrayList<>();
     if (value instanceof Iterable) {

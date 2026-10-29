@@ -38,6 +38,44 @@ public final class HtmlListScanner {
   private HtmlListScanner() {
   }
 
+  /** The elements that are never a page's content: a list in one is never a table. */
+  private static final String LANDMARKS = "nav, header, footer, aside";
+
+  /** A list read as a table: the name its heading gives it, and its rows. */
+  public static final class ListTable {
+    /** The slug of the heading above the list, or {@code list_N} for the Nth list with none. */
+    public final String name;
+    public final List<Map<String, Object>> rows;
+
+    ListTable(String name, List<Map<String, Object>> rows) {
+      this.name = name;
+      this.rows = rows;
+    }
+  }
+
+  /**
+   * The lists of {@code content} that are tables, in document order, each named for the last
+   * heading before it, as a page's tables are.
+   */
+  public static List<ListTable> scan(Element content) {
+    List<ListTable> tables = new ArrayList<>();
+    String heading = null;
+    int unnamed = 0;
+    for (Element element : content.select("h1, h2, h3, h4, h5, h6, " + LIST_TAGS)) {
+      if (!isList(element)) {
+        heading = element.text().trim();
+        continue;
+      }
+      if (!isTable(element, content)) {
+        continue;
+      }
+      String name = heading != null && !HtmlCrawlStage.slug(heading).isEmpty()
+          ? HtmlCrawlStage.slug(heading) : "list_" + ++unnamed;
+      tables.add(new ListTable(name, rows(element)));
+    }
+    return tables;
+  }
+
   /** Whether {@code element} is a list. */
   public static boolean isList(Element element) {
     return "ul".equals(element.tagName()) || "ol".equals(element.tagName());
@@ -45,7 +83,8 @@ public final class HtmlListScanner {
 
   /**
    * Whether {@code list}, a list inside {@code content}, is read as a table: it is in no other
-   * list of the content and has at least {@link #MIN_ITEMS} items.
+   * list of the content, in no navigation, header, footer or aside of the page, and has at
+   * least {@link #MIN_ITEMS} items.
    */
   public static boolean isTable(Element list, Element content) {
     for (Element parent = list.parent(); parent != null && parent != content;
@@ -53,6 +92,9 @@ public final class HtmlListScanner {
       if (isList(parent)) {
         return false;
       }
+    }
+    if (list.closest(LANDMARKS) != null) {
+      return false;
     }
     return items(list).size() >= MIN_ITEMS;
   }

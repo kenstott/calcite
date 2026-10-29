@@ -280,7 +280,7 @@ public final class HtmlCrawlStage {
   }
 
   /** {@code name}, or the first of name_2, name_3... the crawl has not used; and marks it used. */
-  private static String unique(String name, Set<String> used) {
+  static String unique(String name, Set<String> used) {
     int dot = name.lastIndexOf('.');
     String stem = name.substring(0, dot);
     String candidate = name;
@@ -296,25 +296,12 @@ public final class HtmlCrawlStage {
       CrawlerConfiguration config, String columnNameCasing, Set<String> names) throws IOException {
     List<String> files = new ArrayList<>();
     String page = slug(lastSegment(url));
-    boolean lists = config.isGenerateTablesFromHtmlLists();
-    // In document order, so a table or list is named for the last heading before it.
+    // In document order, so a table is named for the last heading before it.
     String heading = null;
-    int unnamedTables = 0;
-    int unnamedLists = 0;
-    String select = "h1, h2, h3, h4, h5, h6, table"
-        + (lists ? ", " + HtmlListScanner.LIST_TAGS : "");
-    for (Element element : content.select(select)) {
-      if (element.tagName().matches("h[1-6]")) {
+    int unnamed = 0;
+    for (Element element : content.select("h1, h2, h3, h4, h5, h6, table")) {
+      if (!"table".equals(element.tagName())) {
         heading = element.text().trim();
-        continue;
-      }
-      if (HtmlListScanner.isList(element)) {
-        if (!HtmlListScanner.isTable(element, content)) {
-          continue;
-        }
-        String table = named(heading) ? slug(heading) : "list_" + ++unnamedLists;
-        files.add(write(directory, unique(page + "__" + table + ".json", names),
-            jsonOf(HtmlListScanner.rows(element))));
         continue;
       }
       if (!element.is(config.getTableSelector())) {
@@ -327,7 +314,7 @@ public final class HtmlCrawlStage {
       Element caption = element.selectFirst("caption");
       String title = caption != null && !caption.text().trim().isEmpty()
           ? caption.text().trim() : heading;
-      String table = named(title) ? slug(title) : "table_" + ++unnamedTables;
+      String table = title == null || slug(title).isEmpty() ? "table_" + ++unnamed : slug(title);
       ArrayNode json = MAPPER.createArrayNode();
       for (Map<String, String> row : rows) {
         ObjectNode object = MAPPER.createObjectNode();
@@ -338,16 +325,17 @@ public final class HtmlCrawlStage {
       }
       files.add(write(directory, unique(page + "__" + table + ".json", names), json));
     }
+    if (config.isGenerateTablesFromHtmlLists()) {
+      for (HtmlListScanner.ListTable list : HtmlListScanner.scan(content)) {
+        files.add(
+            write(directory, unique(page + "__" + list.name + ".json", names), jsonOf(list.rows)));
+      }
+    }
     return files;
   }
 
-  /** Whether {@code title} names a table: it is there and leaves something in a file name. */
-  private static boolean named(String title) {
-    return title != null && !slug(title).isEmpty();
-  }
-
   /** A list's rows as JSON: each value as it is, a list item's text never read as a number. */
-  private static ArrayNode jsonOf(List<Map<String, Object>> rows) {
+  static ArrayNode jsonOf(List<Map<String, Object>> rows) {
     ArrayNode json = MAPPER.createArrayNode();
     for (Map<String, Object> row : rows) {
       json.add(MAPPER.valueToTree(row));
