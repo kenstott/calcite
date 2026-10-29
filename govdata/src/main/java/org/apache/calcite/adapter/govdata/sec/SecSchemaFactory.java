@@ -1626,12 +1626,10 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     // buildSelectSqlForFileList — the same fact would re-append with a new id on every run. Exclude
     // it from the dedup key for any table that carries it (currently financial_line_items).
     List<String> dedupIgnoreColumns = new ArrayList<>();
-    boolean keyedByAccession = false;
     for (IcebergCatalogManager.ColumnDef col : tableColumns) {
       if ("element_id".equals(col.getName())) {
         dedupIgnoreColumns.add("element_id");
-      } else if ("accession_number".equals(col.getName())) {
-        keyedByAccession = true;
+        break;
       }
     }
 
@@ -1712,11 +1710,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .fixedPartitionValues(fixedPartitionValues)
-        // Forced accessions delete rows by accession_number; tables with no such column (stock_prices)
-        // have nothing to force.
-        .forceAccessions(keyedByAccession ? forceAccessions : Collections.<String>emptySet())
+        .forceAccessions(forceAccessionsFor(tableColumns, forceAccessions))
         .description(tableName)
         .build();
+  }
+
+  /**
+   * Forced accessions delete rows by {@code accession_number}; a table with no such column
+   * (stock_prices) has nothing to force, and handing it the set fails its materialization.
+   */
+  static Set<String> forceAccessionsFor(List<IcebergCatalogManager.ColumnDef> tableColumns,
+      Set<String> forceAccessions) {
+    for (IcebergCatalogManager.ColumnDef col : tableColumns) {
+      if ("accession_number".equals(col.getName())) {
+        return forceAccessions;
+      }
+    }
+    return Collections.<String>emptySet();
   }
 
   /**
