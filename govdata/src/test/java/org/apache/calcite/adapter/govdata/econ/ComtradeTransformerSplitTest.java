@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -194,5 +195,31 @@ class ComtradeTransformerSplitTest {
     assertTrue(p.contains("842") && p.contains("156") && p.contains("124"));
     assertEquals(p.size(), new HashSet<String>(p).size(), "duplicate partner code");
     assertFalse(p.isEmpty());
+  }
+
+  @Test void theSchemaUrlPinsEveryBreakdownBelowTheTableGrain() throws Exception {
+    String yaml;
+    try (InputStream in = ComtradeTransformer.class.getResourceAsStream(
+        "/econ/econ-schema.yaml")) {
+      assertTrue(in != null, "econ-schema.yaml is not on the classpath");
+      yaml = new String(readAll(in), StandardCharsets.UTF_8);
+    }
+    java.util.regex.Matcher m = java.util.regex.Pattern
+        .compile("url: \"(https://comtradeapi\\.un\\.org/[^\"]*)\"").matcher(yaml);
+    assertTrue(m.find(), "comtrade source url");
+    String url = m.group(1);
+    for (String pin : new String[] {"cmdCode=AG6", "motCode=0", "customsCode=C00",
+        "partner2Code=0"}) {
+      assertTrue(url.contains("&" + pin + "&"), url + " must pin " + pin);
+    }
+  }
+
+  private static byte[] readAll(InputStream in) throws IOException {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buf = new byte[8192];
+    for (int n = in.read(buf); n >= 0; n = in.read(buf)) {
+      out.write(buf, 0, n);
+    }
+    return out.toByteArray();
   }
 }
