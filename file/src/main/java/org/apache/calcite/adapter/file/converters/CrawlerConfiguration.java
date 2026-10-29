@@ -56,6 +56,8 @@ public class CrawlerConfiguration {
 
   // HTML table configuration
   private boolean generateTablesFromHtml = true; // Whether to extract HTML tables
+  // Whether the lists (ul, ol) of a page's content are read as tables too (REQ-2186); off by default
+  private boolean generateTablesFromHtmlLists = false;
   private int htmlTableMinRows = 1; // Minimum rows for HTML table extraction
   private int htmlTableMaxRows = Integer.MAX_VALUE; // Maximum rows to extract from HTML tables
 
@@ -159,6 +161,11 @@ public class CrawlerConfiguration {
 
     if (options.containsKey("generateTablesFromHtml")) {
       config.setGenerateTablesFromHtml(Boolean.parseBoolean(options.get("generateTablesFromHtml").toString()));
+    }
+
+    if (options.containsKey("generateTablesFromHtmlLists")) {
+      config.setGenerateTablesFromHtmlLists(
+          Boolean.parseBoolean(options.get("generateTablesFromHtmlLists").toString()));
     }
 
     if (options.containsKey("htmlTableMinRows")) {
@@ -474,6 +481,14 @@ public class CrawlerConfiguration {
 
   public void setGenerateTablesFromHtml(boolean generateTablesFromHtml) {
     this.generateTablesFromHtml = generateTablesFromHtml;
+  }
+
+  public boolean isGenerateTablesFromHtmlLists() {
+    return generateTablesFromHtmlLists;
+  }
+
+  public void setGenerateTablesFromHtmlLists(boolean generateTablesFromHtmlLists) {
+    this.generateTablesFromHtmlLists = generateTablesFromHtmlLists;
   }
 
   public int getHtmlTableMinRows() {

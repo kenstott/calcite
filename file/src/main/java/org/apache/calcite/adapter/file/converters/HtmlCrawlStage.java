@@ -52,7 +52,8 @@ import java.util.TreeMap;
  *
  * <p>The pages reached from the start URLs are read, and what they hold lands in the schema's
  * directory as ordinary files: each HTML table as a JSON file, each linked data file (CSV, TSV,
- * Excel, JSON, Parquet) as itself. The schema then discovers them like any other file of the
+ * Excel, JSON, Parquet) as itself. With {@code generateTablesFromHtmlLists}, each list of a
+ * page's content is a JSON file too, read by {@link HtmlListScanner}. The schema then discovers them like any other file of the
  * directory, so a crawled table is a table of the schema with nothing else to know about it.
  *
  * <p>A crawl is kept for the configured HTML cache lifetime: a schema made again within it,
@@ -295,12 +296,25 @@ public final class HtmlCrawlStage {
       CrawlerConfiguration config, String columnNameCasing, Set<String> names) throws IOException {
     List<String> files = new ArrayList<>();
     String page = slug(lastSegment(url));
-    // In document order, so a table is named for the last heading before it.
+    boolean lists = config.isGenerateTablesFromHtmlLists();
+    // In document order, so a table or list is named for the last heading before it.
     String heading = null;
-    int unnamed = 0;
-    for (Element element : content.select("h1, h2, h3, h4, h5, h6, table")) {
-      if (!"table".equals(element.tagName())) {
+    int unnamedTables = 0;
+    int unnamedLists = 0;
+    String select = "h1, h2, h3, h4, h5, h6, table"
+        + (lists ? ", " + HtmlListScanner.LIST_TAGS : "");
+    for (Element element : content.select(select)) {
+      if (element.tagName().matches("h[1-6]")) {
         heading = element.text().trim();
+        continue;
+      }
+      if (HtmlListScanner.isList(element)) {
+        if (!HtmlListScanner.isTable(element, content)) {
+          continue;
+        }
+        String table = named(heading) ? slug(heading) : "list_" + ++unnamedLists;
+        files.add(write(directory, unique(page + "__" + table + ".json", names),
+            jsonOf(HtmlListScanner.rows(element))));
         continue;
       }
       if (!element.is(config.getTableSelector())) {
@@ -313,8 +327,7 @@ public final class HtmlCrawlStage {
       Element caption = element.selectFirst("caption");
       String title = caption != null && !caption.text().trim().isEmpty()
           ? caption.text().trim() : heading;
-      String table = title == null || slug(title).isEmpty() ? "table_" + ++unnamed : slug(title);
-      String name = unique(page + "__" + table + ".json", names);
+      String table = named(title) ? slug(title) : "table_" + ++unnamedTables;
       ArrayNode json = MAPPER.createArrayNode();
       for (Map<String, String> row : rows) {
         ObjectNode object = MAPPER.createObjectNode();
@@ -323,11 +336,29 @@ public final class HtmlCrawlStage {
         }
         json.add(object);
       }
-      atomicWrite(new File(directory, name),
-          MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(json));
-      files.add(name);
+      files.add(write(directory, unique(page + "__" + table + ".json", names), json));
     }
     return files;
+  }
+
+  /** Whether {@code title} names a table: it is there and leaves something in a file name. */
+  private static boolean named(String title) {
+    return title != null && !slug(title).isEmpty();
+  }
+
+  /** A list's rows as JSON: each value as it is, a list item's text never read as a number. */
+  private static ArrayNode jsonOf(List<Map<String, Object>> rows) {
+    ArrayNode json = MAPPER.createArrayNode();
+    for (Map<String, Object> row : rows) {
+      json.add(MAPPER.valueToTree(row));
+    }
+    return json;
+  }
+
+  private static String write(File directory, String name, ArrayNode json) throws IOException {
+    atomicWrite(new File(directory, name),
+        MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(json));
+    return name;
   }
 
   /** One cell of a table's grid: its text, and whether it is a header cell. */
