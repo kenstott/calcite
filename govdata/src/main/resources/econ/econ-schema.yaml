@@ -9063,7 +9063,12 @@ partitionedTables:
       # response off at that limit without saying so, and its count is the records returned, so
       # ComtradeTransformer treats a response with count >= maxRecords as truncated and re-requests
       # it split by partner. Raise it together with the tier.
-      url: "https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode={reporter}&period={effective_year}&flowCode={flow}&includeDesc=TRUE&maxRecords=100000"
+      # The table's grain is reporter x partner x HS-6 x flow, so the request pins the total
+      # rows of every other breakdown the API returns by default: motCode=0 (all transport
+      # modes), customsCode=C00 (all customs procedures), partner2Code=0 (all second partners),
+      # and cmdCode=AG6 (HS-6 lines only, not the HS-2/HS-4 roll-ups). Without them a single
+      # partner for a large reporter runs past the cap and cannot be split by partner.
+      url: "https://comtradeapi.un.org/data/v1/get/C/A/HS?reporterCode={reporter}&period={effective_year}&flowCode={flow}&cmdCode=AG6&motCode=0&customsCode=C00&partner2Code=0&includeDesc=TRUE&maxRecords=100000"
       method: GET
       headers:
         Ocp-Apim-Subscription-Key: "${COMTRADE_API_KEY}"
