@@ -7607,8 +7607,8 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("manager_name", managerName);
     data.put("manager_cik", managerCik);
     data.put("report_period", reportPeriod);
-    data.put("issuer_name", issuer);
-    data.put("title_of_class", titleOfClass);
+    data.put("issuer_name", Sec13fText.normalize(issuer));
+    data.put("title_of_class", Sec13fText.normalize(titleOfClass));
     data.put("cusip", cusip);
     Double value = parseDoubleOrNull(valueText);
     data.put("value_thousands",
