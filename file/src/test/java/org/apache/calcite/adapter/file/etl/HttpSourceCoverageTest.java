@@ -1178,10 +1178,11 @@ public class HttpSourceCoverageTest {
     Method method = HttpSource.class.getDeclaredMethod("enforceRateLimit");
     method.setAccessible(true);
 
-    Field next = HttpSource.class.getDeclaredField("nextAllowedNanos");
-    next.setAccessible(true);
+    // The slot is shared by every source on the origin, so read it through the source.
+    Method slotOf = HttpSource.class.getDeclaredMethod("rateLimitSlot");
+    slotOf.setAccessible(true);
     java.util.concurrent.atomic.AtomicLong nextAllowed =
-        (java.util.concurrent.atomic.AtomicLong) next.get(source);
+        (java.util.concurrent.atomic.AtomicLong) slotOf.invoke(source);
     long intervalNanos = 1_000_000_000L / 100;
 
     // Each call reserves the next slot, one interval after the previous one, and returns no

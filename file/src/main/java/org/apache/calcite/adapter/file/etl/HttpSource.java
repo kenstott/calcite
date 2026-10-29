@@ -54,6 +54,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -123,8 +124,33 @@ public class HttpSource implements DataSource {
    * authoritative over that inference: a key in this set is never coerced.
    */
   private final Set<String> textualSourceKeys;
-  /** CAS-based slot reservation for lock-free rate limiting across parallel threads. */
-  private final AtomicLong nextAllowedNanos = new AtomicLong();
+  /**
+   * CAS-based slot reservation for lock-free rate limiting across parallel threads, one per origin
+   * and shared by every source that calls it. An API token's limit applies to the origin, not to a
+   * table: tables that each ran their own limiter at the limit together sent several times the
+   * limit (NOAA CDO answered 429 "5 per second" with four tables at 5.0 requests per second each).
+   */
+  private static final java.util.concurrent.ConcurrentMap<String, AtomicLong> ORIGIN_SLOTS =
+      new ConcurrentHashMap<String, AtomicLong>();
+  private static final Pattern URL_ORIGIN = Pattern.compile("^(https?://[^/?#]+)");
+  /** Slot for a source whose configured URL names no http(s) origin to share. */
+  private final AtomicLong ownSlot = new AtomicLong();
+
+  private AtomicLong rateLimitSlot() {
+    String url = config.getUrl();
+    Matcher m = url == null ? null : URL_ORIGIN.matcher(url);
+    if (m != null && m.find()) {
+      AtomicLong slot = ORIGIN_SLOTS.get(m.group(1));
+      return slot != null ? slot : putIfAbsentSlot(m.group(1));
+    }
+    return ownSlot;
+  }
+
+  private static AtomicLong putIfAbsentSlot(String origin) {
+    AtomicLong fresh = new AtomicLong();
+    AtomicLong prior = ORIGIN_SLOTS.putIfAbsent(origin, fresh);
+    return prior != null ? prior : fresh;
+  }
 
   /**
    * DQ sample row cap (0 = uncapped). When &gt; 0 the source runs in capped mode: the raw-cache
@@ -221,7 +247,7 @@ public class HttpSource implements DataSource {
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
-    // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
+    // Rate limiting uses a CAS-based slot per origin (see ORIGIN_SLOTS, no init needed)
     this.responseTransformer = loadResponseTransformer(hooksConfig);
     this.variableNormalizer = loadVariableNormalizer(hooksConfig);
     // A raw cache path names a location only storageProvider knows how to write. EtlPipeline
@@ -250,7 +276,7 @@ public class HttpSource implements DataSource {
     this.cache = config.getCache().isEnabled()
         ? new ConcurrentHashMap<String, CacheEntry>()
         : null;
-    // Rate limiting uses AtomicLong nextAllowedNanos (CAS-based, no init needed)
+    // Rate limiting uses a CAS-based slot per origin (see ORIGIN_SLOTS, no init needed)
     this.responseTransformer = responseTransformer;
     this.variableNormalizer = null;
     this.storageProvider = null;
@@ -3382,11 +3408,12 @@ public class HttpSource implements DataSource {
     }
 
     long intervalNanos = 1000000000L / rps;
+    AtomicLong slot = rateLimitSlot();
     while (true) {
-      long current = nextAllowedNanos.get();
+      long current = slot.get();
       long now = System.nanoTime();
       long next = Math.max(now, current) + intervalNanos;
-      if (nextAllowedNanos.compareAndSet(current, next)) {
+      if (slot.compareAndSet(current, next)) {
         // Sleep until the slot opens by nanoTime, however early the clock behind sleep wakes:
         // on Windows Thread.sleep can return before nanoTime reaches its end.
         long remaining;

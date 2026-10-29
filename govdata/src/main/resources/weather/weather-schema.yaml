@@ -548,7 +548,7 @@ partitionedTables:
       headers:
         token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
-        requestsPerSecond: 5.0
+        requestsPerSecond: 4.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -654,7 +654,7 @@ partitionedTables:
       headers:
         token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
-        requestsPerSecond: 5.0
+        requestsPerSecond: 4.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -754,7 +754,7 @@ partitionedTables:
       headers:
         token: "{env:NOAA_CDO_TOKEN}"
       rateLimit:
-        requestsPerSecond: 5.0
+        requestsPerSecond: 4.0
         retryOn: [429, 503]
         maxRetries: 3
       rawCache:
@@ -1397,7 +1397,7 @@ partitionedTables:
       headers:
         token: "${NOAA_CDO_TOKEN}"
       rateLimit:
-        requestsPerSecond: 5.0
+        requestsPerSecond: 4.0
         retryOn: [429, 503]
         maxRetries: 3
 
