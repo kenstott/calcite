@@ -78,10 +78,12 @@ class HttpSourceRateLimitTest {
   @Test @Tag("unit") void sourcesOnOneOriginSharePace() throws Exception {
     // 10 per second is a 100 ms interval. Two sources taking turns, six requests in all, must
     // span five intervals when they share the pace; separate limiters would finish in about half.
+    // The clock starts before the first request: its slot opens at once, so the last one opens
+    // five intervals later however long the first request itself takes.
     HttpSource a = source(baseUrl + "/data?x=1", 10.0);
     HttpSource b = source(baseUrl + "/data?x=2", 10.0);
-    fetch(a);  // first request pays nothing; time the rest
     long start = System.nanoTime();
+    fetch(a);
     fetch(b);
     fetch(a);
     fetch(b);
