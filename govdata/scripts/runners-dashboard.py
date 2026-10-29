@@ -4,7 +4,7 @@
     runners-dashboard.py              print once
     runners-dashboard.py --watch 30   redraw every 30 seconds (Ctrl-C to stop)
 
-Sources: the runner daemon (systemd + journal), the live `claude -p` agents, the
+Sources: the runner daemon (process table + its own log), the live `claude -p` agents, the
 kenstott/govdata-ops issues (gh), the fix branches and merged commits (git), the ETL pool
 and scheduled-window logs, and /proc/meminfo. A source that cannot be read is shown as an
 error in its own section, never left out.
@@ -124,12 +124,18 @@ def issues(ttl):
 
 
 def daemon():
-    show = run(["systemctl", "show", "govdata-runner", "-p", "ActiveState,MainPID"])
-    kv = dict(line.split("=", 1) for line in show.splitlines() if "=" in line)
-    up = None
-    if kv.get("MainPID", "0") != "0":
-        up = int(run(["ps", "-o", "etimes=", "-p", kv["MainPID"]]).strip())
-    return kv["ActiveState"], kv["MainPID"], up
+    """(state, pid, uptime seconds) of the runner daemon, found in the process table so it is right
+    however it was started (service, shell, wrapper script)."""
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open("/proc/%s/cmdline" % pid, "rb") as f:
+                argv = f.read().decode(errors="replace").split("\0")
+        except OSError:
+            continue  # the process exited while we scanned
+        if len(argv) > 1 and os.path.basename(argv[0]).startswith("python") and \
+                any(a.endswith("runner-daemon.py") for a in argv[1:3]):
+            return "active", pid, int(run(["ps", "-o", "etimes=", "-p", pid]).strip())
+    return "stopped", "0", None
 
 
 def agents():
@@ -239,10 +245,26 @@ def resources():
     return mem["MemAvailable"], mem["MemTotal"], swap_used, mem["SwapTotal"]
 
 
+DAEMON_LOG = os.environ.get("RUNNER_DAEMON_LOG", os.path.expanduser("~/.govdata-runner-logs/daemon.log"))
+
+
 def journal():
-    out = run(["journalctl", "-u", "govdata-runner", "--since", JOURNAL_WINDOW, "--no-pager",
-               "-o", "short-iso"], timeout=30)
-    return out.splitlines()
+    """[(epoch, message)] from the daemon's log within JOURNAL_WINDOW. The daemon stamps every line
+    "YYYY-MM-DD HH:MM:SS message"; unstamped (older) lines carry no time and are skipped."""
+    hours = int(JOURNAL_WINDOW.strip("-h"))
+    cutoff = time.time() - hours * 3600
+    with open(DAEMON_LOG, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        f.seek(max(0, f.tell() - 2000000))
+        lines = f.read().decode(errors="replace").splitlines()
+    out = []
+    for l in lines:
+        m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) (.*)$", l)
+        if m:
+            ts = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+            if ts >= cutoff:
+                out.append((ts, m.group(2)))
+    return out
 
 
 # ── rendering ──
@@ -425,15 +447,10 @@ def render(ttl):
     else:
         recent = time.time() - 600
         resumes = {}
-        for l in jl:
-            m = re.match(r"(\S+)\s+\S+\s+\S+\[\d+\]:\s+\[[!+]\] Resuming (?:stale status:running |waiting-resources: )?(\w+#\d+)", l)
-            if m:
-                try:
-                    ts = datetime.fromisoformat(m.group(1)).timestamp()
-                except ValueError:
-                    continue
-                if ts > recent:
-                    resumes[m.group(2)] = resumes.get(m.group(2), 0) + 1
+        for ts, msg in jl:
+            m = re.match(r"\[[!+]\] Resuming (?:stale status:running |waiting-resources: )?(\w+#\d+)", msg)
+            if m and ts > recent:
+                resumes[m.group(1)] = resumes.get(m.group(1), 0) + 1
         repeated = {k: v for k, v in resumes.items() if v >= 5}
         if repeated:
             out.append(yellow("  daemon retried %s in the last 10 min without an agent to show for it" %
@@ -441,13 +458,11 @@ def render(ttl):
 
         # daemon activity
         out.append(section("DAEMON ACTIVITY (spawns, last 6h)", width))
-        spawns = [l for l in jl if "Spawning agent" in l or "Orphan found" in l
-                  or "Orphan reaped" in l or "Unreaped orphan" in l][-8:]
-        for l in spawns:
-            m = re.match(r"(\S+)\s+\S+\s+\S+\[\d+\]:\s+(.*)$", l)
-            if m:
-                ts = datetime.fromisoformat(m.group(1)).astimezone().strftime("%H:%M")
-                out.append("  %s  %s" % (ts, clip(re.sub(r"^\[[^]]\]\s*", "", m.group(2)), width - 9)))
+        spawns = [(ts, msg) for ts, msg in jl if "Spawning agent" in msg or "Orphan found" in msg
+                  or "Orphan reaped" in msg or "Unreaped orphan" in msg][-8:]
+        for ts, msg in spawns:
+            out.append("  %s  %s" % (datetime.fromtimestamp(ts).strftime("%H:%M"),
+                                     clip(re.sub(r"^\[[^]]\]\s*", "", msg), width - 9)))
         if not spawns:
             out.append(dim("  none"))
 
@@ -460,7 +475,7 @@ def main():
                     help="redraw every SECONDS (15 when given without a value; minimum 5)")
     args = ap.parse_args()
     if args.watch is not None and args.watch < 5:
-        ap.error("--watch must be at least 5 seconds: each redraw forks git, ps, systemctl and journalctl")
+        ap.error("--watch must be at least 5 seconds: each redraw forks git and ps and reads the daemon log")
     if not args.watch:
         print(render(ttl=GH_TTL))
         return 0
