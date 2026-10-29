@@ -5,8 +5,12 @@ module area follows.
 
 ## 🧭 OPERATING MODEL (lead + short-lived workers)
 
-**Status: being introduced in phases. Sections marked (not yet enforced) describe the
-target; until the hooks land, they are the rule that people and agents follow by hand.**
+**Status: all phases are in place (2026-10-28), switched by one file.** `.claude/lead/mode` is
+`shadow` (log only), `guard` (hooks and the merge gate refuse role violations; admission advisory) or
+`enforce` (admission binding; workers confined to their worktree). It is `enforce` now; write `shadow` to
+roll everything back. `.claude/` is not tracked in git, so the hooks, skills, agents and mode file exist on
+this machine only; the tools under `govdata/scripts/lead/` and the daemon (`kenstott/govdata-ops`, `daemon/`)
+are tracked.
 
 ### Roles
 
@@ -25,14 +29,32 @@ available as tools a worker may call. They are no longer standing "team members"
 - `runner-daemon` polls the ops repo (`kenstott/govdata-ops`) every 60s at zero token cost,
   matches an issue to a worker type from its `type:` label and spawns one `claude -p` per issue
   (up to `MAX_CONCURRENT`). It owns the respawn floor, orphan reaping and memory checks.
-- A worker is told its role, issue and locks through `CLAUDE_ROLE`, `CLAUDE_ISSUE` and
-  `CLAUDE_LOCKS` (not yet enforced; hooks will read these).
+- Before each spawn the daemon runs `govdata/scripts/lead/admit.py` (free memory with headroom, one owner per
+  schema and year, one heavy slot for data-applying jobs). In `shadow` it only logs `[shadow-admit]`; otherwise a
+  WAIT skips the spawn until the next poll. An admission tool that cannot run counts as WAIT, never ADMIT.
+- Each agent is started with `CLAUDE_ROLE` (`worker` or `remediation`), `CLAUDE_ISSUE`, `CLAUDE_SPAWNED_AT`,
+  `CLAUDE_MAIN_TREE`, and `CLAUDE_ADMITTED=1` / `CLAUDE_APPROVED=1` when they apply. A schema lock
+  (`.claude/lead/locks/<schema>`, owned by the agent's pid; stale when the pid is dead) is taken at spawn.
+
+### Enforcement (hooks; they run even under `--dangerously-skip-permissions`)
+- `role-guard.py` (PreToolUse Bash, Edit, Write): no role merges, releases, tags, pushes to main or closes
+  issues; a worker cannot apply data; the remediation runner applies only when admitted; deletes need the
+  `approved` label; in `enforce`, edits inside the shared main tree are refused. Violations are logged to
+  `.claude/lead/role-guard.log`.
+- `worker-stop-guard.py` (Stop): a worker or remediation runner cannot end with an unpushed or dirty worktree or
+  without commenting on its issue since it started (blocks once).
+- `lead-session-context.sh` (SessionStart): tells an agent its contract, and shows the lead the live state.
+- Lead tools: `etl-status.py`, `phase-memory.py`, `admit.py`, `heavy.sh` in `govdata/scripts/lead/`; the lead's
+  procedure is the `/start-lead` skill. The old self-selecting loop (`monitor-gh-issues`) is retired.
 
 ### Promotion to main
 1. Worker pushes a branch (`fix/<issue>`), worktree under `/home/kstott/calcite-fixes/`, and
    reports on the issue. Work-in-progress is pushed, never left only in the worktree.
-2. The lead merges with `govdata/scripts/fix-branch.sh merge`, one at a time, only when CI
-   and DQ are green for that exact commit. Workers never merge.
+2. The worker opens a draft PR: a push to `fix/<slug>` does not start the main CI (its branch filter `*` skips
+   names containing a slash), a pull request does.
+   The lead merges with `govdata/scripts/fix-branch.sh merge <slug>`, one at a time. Outside `shadow` it refuses
+   unless the required CI check (`Linux (JDK 21)`, override with `FIX_BRANCH_REQUIRED_CHECK`) and every other
+   check on the pushed tip are green, DQ was recorded for that change, and the rebase leaves the commit unchanged.
 3. Conventional-commit rules and the release flow are unchanged (release-please PR, tag
    `engine-vX.Y.Z`).
 

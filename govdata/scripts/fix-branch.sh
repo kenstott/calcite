@@ -8,6 +8,10 @@
 # All edits, builds and DQ runs for a fix happen in the worktree, so nothing unvalidated ever
 # reaches the shared working tree. `merge` refuses unless the change that DQ validated is
 # byte-for-byte the change being merged (compared by patch-id, which survives a rebase).
+# In guard/enforce mode (.claude/lead/mode) `merge` is also lead-only and needs CI green for the exact
+# commit being merged: the branch must be pushed, every check run on its tip must have succeeded, and
+# the rebase onto main must leave the commit unchanged (otherwise push and let CI run again). In
+# shadow mode each of these only warns.
 # A fix whose DQ does not pass is simply never merged: the branch and worktree stay as the
 # resume point.
 set -euo pipefail
@@ -39,6 +43,29 @@ require_worktree() {
   fi
 }
 
+lead_mode() { cat "$MAIN_TREE/.claude/lead/mode" 2>/dev/null || echo shadow; }
+gate_fail() {
+  if [ "$(lead_mode)" = shadow ]; then echo "WARN (shadow mode): $1" >&2; else echo "$1" >&2; exit 1; fi
+}
+
+# CI must be green for the exact tip being merged.
+require_ci_green() {
+  local sha remote_sha repo runs bad
+  sha="$(git -C "$WT" rev-parse HEAD)"
+  remote_sha="$(git -C "$WT" ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
+  [ "$remote_sha" = "$sha" ] || { gate_fail "$BRANCH is not pushed at $sha (remote: ${remote_sha:-none}); push it so CI runs"; return 0; }
+  repo="$(git -C "$MAIN_TREE" remote get-url origin | sed -E 's#.*github\.com[:/]##; s#\.git$##')"
+  runs="$(gh api "repos/$repo/commits/$sha/check-runs" --jq '.check_runs[] | "\(.name)\t\(.conclusion // "pending")"')" \
+    || { gate_fail "could not read CI check runs for $sha"; return 0; }
+  # A push to fix/<slug> does not start the main CI (its branch filter '*' skips names with a slash);
+  # a pull request does. Require the real CI job, not just whichever light check ran on the push.
+  printf '%s\n' "$runs" | grep -Eq "^${FIX_BRANCH_REQUIRED_CHECK:-Linux \(JDK 21\)}" \
+    || { gate_fail "the required CI check is not on $sha; open a pull request for $BRANCH so CI runs"; return 0; }
+  bad="$(printf '%s\n' "$runs" | awk -F'\t' '$2 != "success" && $2 != "skipped" && $2 != "neutral" {print $1 ": " $2}')"
+  [ -z "$bad" ] || { gate_fail "CI is not green on $sha: $(echo "$bad" | head -3 | tr '\n' ';')"; return 0; }
+  echo "$sha"
+}
+
 case "$cmd" in
   start)
     if [ ! -d "$WT" ]; then
@@ -62,10 +89,15 @@ case "$cmd" in
   merge)
     require_worktree
     [ -f "$MARK_DIR/$slug" ] || { echo "DQ pass not recorded for $BRANCH; run DQ then: $0 dq-passed $slug" >&2; exit 1; }
+    [ -z "${CLAUDE_ROLE:-}" ] || gate_fail "merge is the lead's step (CLAUDE_ROLE=$CLAUDE_ROLE)"
+    ci_sha="$(require_ci_green)"
     if ! git -C "$WT" rebase main >&2; then
       git -C "$WT" rebase --abort >&2 || true
       echo "rebase of $BRANCH onto main conflicts; resolve it in $WT, re-run DQ, then dq-passed again" >&2
       exit 1
+    fi
+    if [ -n "$ci_sha" ] && [ "$(git -C "$WT" rev-parse HEAD)" != "$ci_sha" ]; then
+      gate_fail "the rebase onto main changed the commit CI validated; push $BRANCH and wait for CI again"
     fi
     if [ "$(patch_id)" != "$(cat "$MARK_DIR/$slug")" ]; then
       echo "the change on $BRANCH differs from the one DQ validated; re-run DQ, then: $0 dq-passed $slug" >&2
