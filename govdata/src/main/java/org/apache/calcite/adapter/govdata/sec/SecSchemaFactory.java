@@ -837,9 +837,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               new LocalStagingStorageProvider(storageProvider);
           final SecStagedFileLedger stagedFileLedger = new SecStagedFileLedger(
               PipelineTrackerFactory.createFromOperand(operand, this.secOperatingDirectory));
+          final List<String> forcedTables = forceReprocessTables(operand);
           stagingProvider.setUploadRecorder(new LocalStagingStorageProvider.UploadRecorder() {
             @Override public void recordUpload(String objectPath, String tableType) {
               stagedFileLedger.recordUpload(objectPath, tableType);
+              stagedFileLedger.recordForcedUpload(objectPath, forcedTables);
             }
           });
 
@@ -1307,15 +1309,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           LOGGER.info("Table '{}': {} staged source files claimed for absorption ({} uploaded by this pass)",
               icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
           Set<String> forced = parseForceAccessions(operand);
-          if (isForceReprocessed(operand, tableName) && !pendingSourceFiles.isEmpty()) {
+          // Which files replace rather than add is decided by how they were staged, not by how
+          // this pass was launched: workers side by side absorb each other's files, and a pass
+          // without the force would exclude every accession the table already holds, write
+          // nothing, and still mark the files absorbed.
+          List<String> replacementFiles = isForceReprocessed(operand, tableName)
+              ? pendingSourceFiles : stagedFileLedger.forcedFor(tableName, pendingSourceFiles);
+          if (!replacementFiles.isEmpty()) {
             // A table-level force re-stages accessions the table already holds. Delete exactly
             // those accessions' rows, in every year partition, before the replacements are
             // appended: an accession is one filing, and a forced reprocess replaces it, it does
             // not add a second copy.
-            Set<String> restaged = materializer.distinctValuesInFiles(pendingSourceFiles,
+            Set<String> restaged = materializer.distinctValuesInFiles(replacementFiles,
                 config.getAccessionColumn());
             LOGGER.info("Table '{}' is force-reprocessed: replacing {} accession(s) from {} staged "
-                + "file(s)", icebergTableName, restaged.size(), pendingSourceFiles.size());
+                + "file(s)", icebergTableName, restaged.size(), replacementFiles.size());
             forced = new HashSet<String>(forced);
             forced.addAll(restaged);
           }
@@ -1742,15 +1750,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
    * table-level force request) lists {@code table}.
    */
   private boolean isForceReprocessed(Map<String, Object> operand, String table) {
+    return forceReprocessTables(operand).contains(table);
+  }
+
+  /** The {@code forceReprocessTables} operand as table names; empty when it is absent. */
+  private List<String> forceReprocessTables(Map<String, Object> operand) {
+    List<String> tables = new ArrayList<String>();
     Object raw = operand.get("forceReprocessTables");
     if (raw instanceof List) {
       for (Object name : (List<?>) raw) {
-        if (table.equals(String.valueOf(name))) {
-          return true;
-        }
+        tables.add(String.valueOf(name));
       }
     }
-    return false;
+    return tables;
   }
 
   /**
