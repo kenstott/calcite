@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.124.0](https://github.com/kenstott/calcite/compare/engine-v0.123.2...engine-v0.124.0) (2026-10-29)
+
+
+### Features
+
+* **govdata/scripts:** lead tools and the merge gate for the lead and worker operating model ([de04d1d](https://github.com/kenstott/calcite/commit/de04d1d51a135ea9f76326b1f3d0e2a6ef076f46))
+
+
+### Bug Fixes
+
+* **file:** one rate-limit pace per origin, and NOAA CDO tables at 4 requests a second ([6616bef](https://github.com/kenstott/calcite/commit/6616bef2b0ff9004b1c5dcfb08004ac6c806443c))
+* **govdata/econ:** industry_gdp partitions by type and year, not by frequency and industry ([c37254b](https://github.com/kenstott/calcite/commit/c37254bbd7f2ca6eebdf1af92d3b1c87ce20642d))
+
 ## [0.123.2](https://github.com/kenstott/calcite/compare/engine-v0.123.1...engine-v0.123.2) (2026-10-28)
 
 
