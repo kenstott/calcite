@@ -80,8 +80,11 @@ class HttpSourceRateLimitTest {
     // span five intervals when they share the pace; separate limiters would finish in about half.
     HttpSource a = source(baseUrl + "/data?x=1", 10.0);
     HttpSource b = source(baseUrl + "/data?x=2", 10.0);
-    fetch(a);  // first request pays nothing; time the rest
+    // The clock starts before the first request: its slot opens at once, so the sixth opens five intervals
+    // later however long the first request itself takes (starting after it let a slow first request, JIT and
+    // client warm-up, shorten the measured span below the threshold).
     long start = System.nanoTime();
+    fetch(a);
     fetch(b);
     fetch(a);
     fetch(b);
@@ -95,8 +98,9 @@ class HttpSourceRateLimitTest {
     HttpSource busy = source(baseUrl + "/data", 2.0);  // 500 ms interval
     fetch(busy);
     fetch(busy);   // the slot for this origin is now ~1 s ahead
-    // 127.0.0.2 reaches the same local server (it listens on all interfaces) but is another origin.
-    HttpSource other = source("http://127.0.0.2:" + server.getAddress().getPort() + "/data", 2.0);
+    // The same local server under another host spelling is another origin. 127.0.0.1 is loopback on every
+    // OS; 127.0.0.2 is not routed on macOS, which made this test hang there.
+    HttpSource other = source("http://127.0.0.1:" + server.getAddress().getPort() + "/data", 2.0);
     long start = System.nanoTime();
     fetch(other);
     long elapsedMs = (System.nanoTime() - start) / 1000000L;
