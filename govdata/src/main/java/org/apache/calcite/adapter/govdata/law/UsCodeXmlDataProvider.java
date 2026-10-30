@@ -66,7 +66,7 @@ import javax.xml.stream.XMLStreamReader;
  *
  * <p>The current release point ({@code congress}-{@code release}, e.g. {@code 119-111}) is
  * read once per provider instance from the "current through Public Law" line on the OLRC currency
- * page and then pinned, so every title fetched by one run comes from the same release point
+ * page, stepped down to the newest release point whose zips are published, and then pinned, so every title fetched by one run comes from the same release point
  * even if OLRC publishes a new one mid-run.
  *
  * <p>Statutory notes ({@code <notes>}/{@code <note>}) and tables of contents are not part of
@@ -85,6 +85,9 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
 
   private static final Pattern RELEASE_POINT_PATTERN =
       Pattern.compile("current through Public Law (\\d+)-(\\d+)");
+
+  /** How many release numbers below the stated one are probed for published zips. */
+  private static final int MAX_RELEASE_STEP_BACK = 40;
 
   private static final String USLM_NS = "http://xml.house.gov/schemas/uslm/1.0";
 
@@ -201,8 +204,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
 
   /** Reads the OLRC currency page line by line straight off the HTTP response and pins the
    *  current release point (the page states "current through Public Law {congress}-{release}").
-   *  The old download page, which linked {@code xml_uscAll}, was withdrawn in 2026-10 when the
-   *  site moved to a temporary format; the per-title zips are still served at the same paths. Not routed through {@link ZipDownloadUtils#downloadToFile}: that
+   *  The per-title zips are served at the paths in {@link #ZIP_URL_TEMPLATE}. Not routed through {@link ZipDownloadUtils#downloadToFile}: that
    *  helper rejects text/html responses by design (WAF-block detection), and this page is HTML. */
   private synchronized void resolveReleasePoint() throws IOException {
     if (release != null) {
@@ -225,8 +227,9 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
           String[] point = releasePointIn(line);
           if (point != null) {
             congress = point[0];
-            release = point[1];
-            LOGGER.info("{}: current release point is {}-{}", tableName(), congress, release);
+            release = latestPublishedRelease(point[0], Integer.parseInt(point[1]));
+            LOGGER.info("{}: current release point is {}-{} (currency page states {}-{})",
+                tableName(), congress, release, point[0], point[1]);
             return;
           }
         }
@@ -236,6 +239,50 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     }
     throw new IOException(tableName() + ": no current-through-Public-Law release point found on "
         + RELEASE_PAGE_URL);
+  }
+
+  /** The newest release number at or below {@code stated} whose zips are published. The currency
+   *  page states the latest Public Law before OLRC has built a release point for it, and OLRC
+   *  does not build one for every Public Law number, so the stated number can have no zips.
+   *  Title 1 is probed with HEAD, stepping down at most {@link #MAX_RELEASE_STEP_BACK} numbers;
+   *  throws when none is published within that range. */
+  private String latestPublishedRelease(String congressNumber, int stated) throws IOException {
+    for (int candidate = stated; candidate > stated - MAX_RELEASE_STEP_BACK && candidate > 0;
+        candidate--) {
+      String probe = String.format(Locale.US, ZIP_URL_TEMPLATE, congressNumber, candidate, "01",
+          congressNumber, candidate);
+      if (isPublished(probe)) {
+        if (candidate != stated) {
+          LOGGER.warn("{}: release point {}-{} has no published zips; using {}-{}", tableName(),
+              congressNumber, stated, congressNumber, candidate);
+        }
+        return Integer.toString(candidate);
+      }
+    }
+    throw new IOException(tableName() + ": no published release point from " + congressNumber
+        + "-" + stated + " down to " + congressNumber + "-"
+        + (stated - MAX_RELEASE_STEP_BACK + 1));
+  }
+
+  /** True on HTTP 200 for a HEAD of {@code url}, false on 404; any other status is an error. */
+  private boolean isPublished(String url) throws IOException {
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+    conn.setRequestMethod("HEAD");
+    conn.setConnectTimeout(30000);
+    conn.setReadTimeout(120000);
+    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+    try {
+      int status = conn.getResponseCode();
+      if (status == HttpURLConnection.HTTP_OK) {
+        return true;
+      }
+      if (status == HttpURLConnection.HTTP_NOT_FOUND) {
+        return false;
+      }
+      throw new IOException(tableName() + ": HTTP " + status + " from " + url);
+    } finally {
+      conn.disconnect();
+    }
   }
 
   /** Which text buffer element characters are currently routed to. */
