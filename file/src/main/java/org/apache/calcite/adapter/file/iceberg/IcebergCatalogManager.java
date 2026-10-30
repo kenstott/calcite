@@ -579,6 +579,8 @@ public class IcebergCatalogManager {
    * @return true if the table was dropped, false if it didn't exist
    */
   public static boolean dropTable(Map<String, Object> config, String tableId, boolean purge) {
+    // A dropped table's version numbers are reused by its successor, so no pin may survive it.
+    org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidateAll();
     if (isS3Warehouse(config)) {
       String path = s3TablePath(config, tableId);
       Map<String, String> creds = s3Creds(config);

@@ -107,6 +107,15 @@ public class S3FileIOTableOperations implements TableOperations {
   private static final long SLOW_STEP_MS = 3000;
 
   @Override public void commit(TableMetadata base, TableMetadata metadata) {
+    try {
+      commitMetadata(base, metadata);
+    } finally {
+      // A pinned metadata path is stale the moment this process moves the table, committed or not.
+      org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidate(location);
+    }
+  }
+
+  private void commitMetadata(TableMetadata base, TableMetadata metadata) {
     final String hintPath = location + "/metadata/version-hint.text";
 
     // Stale-base guard. Every stock TableOperations opens with this check -- Iceberg's own

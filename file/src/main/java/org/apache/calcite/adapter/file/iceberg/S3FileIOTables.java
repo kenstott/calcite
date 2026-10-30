@@ -219,6 +219,7 @@ public final class S3FileIOTables {
    * @param s3Config the credential map (may be null)
    */
   public static void drop(String tablePath, Map<String, String> s3Config) {
+    org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidate(tablePath);
     withAppClassLoader(() -> {
       String prefix = stripTrailingSlash(tablePath) + "/";
       try (S3FileIO io = newIO(s3Config, DROP_SOCKET_TIMEOUT_MS)) {

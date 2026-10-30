@@ -812,6 +812,7 @@ public class DuckDBJdbcSchemaFactory {
 
       // Create a DataSource that creates new connections to the named database
       final String finalJdbcUrl = jdbcUrl;
+      final long metadataPinTtlMillis = metadataPinTtlMillis(operand);
       DataSource dataSource = new DataSource() {
         @Override public Connection getConnection() throws SQLException {
           // Create a new connection to the named in-memory database
@@ -854,7 +855,7 @@ public class DuckDBJdbcSchemaFactory {
           // DataSource. Wrap it so a live Iceberg commit racing a read (version-hint.text
           // advancing mid-session — see EtagRetryConnection) is retried once instead of failing
           // the query outright.
-          return EtagRetryConnection.wrap(conn, fileSchema);
+          return EtagRetryConnection.wrap(conn, fileSchema, metadataPinTtlMillis);
         }
 
         @Override public Connection getConnection(String username, String password) throws SQLException {
@@ -990,6 +991,26 @@ public class DuckDBJdbcSchemaFactory {
     } catch (Exception e) {
       throw new RuntimeException("Failed to create schema in shared DuckDB database", e);
     }
+  }
+
+  /** Model operand naming the Iceberg metadata pin lifetime in seconds; 0 turns pinning off. */
+  static final String METADATA_PIN_TTL_OPERAND = "icebergMetadataPinTtlSeconds";
+
+  /** Default pin lifetime: the longest a read may lag a commit made by another process. */
+  static final long DEFAULT_METADATA_PIN_TTL_SECONDS = 30;
+
+  /** The pin lifetime in milliseconds from the model operand, {@link #DEFAULT_METADATA_PIN_TTL_SECONDS} when it is not set. */
+  static long metadataPinTtlMillis(Map<String, Object> operand) {
+    Object value = operand == null ? null : operand.get(METADATA_PIN_TTL_OPERAND);
+    if (value == null) {
+      return DEFAULT_METADATA_PIN_TTL_SECONDS * 1000L;
+    }
+    long seconds = value instanceof Number ? ((Number) value).longValue()
+        : Long.parseLong(value.toString().trim());
+    if (seconds < 0) {
+      throw new IllegalArgumentException(METADATA_PIN_TTL_OPERAND + " must be >= 0, got " + seconds);
+    }
+    return seconds * 1000L;
   }
 
   /**

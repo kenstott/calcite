@@ -3943,6 +3943,7 @@ public class EtlPipeline {
           LOGGER.warn("Iceberg table '{}' schema mismatch: missing columns {}. "
               + "Dropping table for recreation.",
               tableLocation, missingColumns);
+          org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidateAll();
           catalog.dropTable(tableId, true);
           return 0;
         }

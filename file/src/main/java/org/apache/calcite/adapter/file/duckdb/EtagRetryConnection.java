@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.duckdb;
 import org.apache.calcite.adapter.file.FileSchema;
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.storage.S3StorageProvider;
 import org.apache.calcite.schema.Table;
 
 import org.slf4j.Logger;
@@ -198,10 +199,120 @@ final class EtagRetryConnection {
 
   /** Wraps {@code conn} so every {@link Statement}/{@link PreparedStatement} it creates retries once on a live-commit race. {@code fileSchema} (nullable) is used only to repair view-type drift (mode 2) — resolving a failing view back to its base Iceberg table(s) so both DuckDB's catalog and the Java-side schema cache can be refreshed before the retry. */
   static Connection wrap(Connection conn, FileSchema fileSchema) {
+    return wrap(conn, fileSchema, 0);
+  }
+
+  /**
+   * As {@link #wrap(Connection, FileSchema)}, and when {@code pinTtlMillis} is positive every
+   * SELECT issued through the connection has its base Iceberg table references rewritten to the
+   * table's pinned {@code v{N}.metadata.json} (see {@link IcebergMetadataPins}). DDL is never
+   * rewritten, so a pinned path cannot reach a persisted view definition.
+   */
+  static Connection wrap(Connection conn, FileSchema fileSchema, long pinTtlMillis) {
     return (Connection) Proxy.newProxyInstance(
         EtagRetryConnection.class.getClassLoader(),
         new Class<?>[] {Connection.class},
-        new ConnectionHandler(conn, fileSchema));
+        new ConnectionHandler(conn, fileSchema, new PinRewriter(fileSchema, pinTtlMillis)));
+  }
+
+  /** Rewrites base Iceberg table references in SELECT statements to pinned metadata files. */
+  static final class PinRewriter {
+    private static final String PINNED_SCAN =
+        "(SELECT * FROM iceberg_scan('%s', allow_moved_paths=true))";
+    private static final Pattern QUALIFIED_REF = Pattern.compile(
+        "(FROM|JOIN)(\\s+)\"([^\"]+)\"\\s*\\.\\s*\"([^\"]+)\"(\\s+AS\\b)?",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern SELECT_START =
+        Pattern.compile("^\\s*(SELECT|WITH)\\b", Pattern.CASE_INSENSITIVE);
+
+    private final FileSchema fileSchema;
+    private final long ttlMillis;
+    private final IcebergMetadataPins.PointerReader reader;
+    private final java.util.function.LongSupplier clock;
+
+    PinRewriter(FileSchema fileSchema, long ttlMillis) {
+      this(fileSchema, ttlMillis, null, System::nanoTime);
+    }
+
+    PinRewriter(FileSchema fileSchema, long ttlMillis,
+        IcebergMetadataPins.PointerReader reader, java.util.function.LongSupplier clock) {
+      this.fileSchema = fileSchema;
+      this.ttlMillis = ttlMillis;
+      this.reader = reader != null ? reader : this::readVersionHint;
+      this.clock = clock;
+    }
+
+    boolean enabled() {
+      return ttlMillis > 0 && fileSchema != null;
+    }
+
+    /** {@code sql} with each pinnable table reference replaced, or {@code sql} itself when none is. */
+    String rewrite(String sql) {
+      if (!enabled() || sql == null || !SELECT_START.matcher(sql).find()) {
+        return sql;
+      }
+      ConversionMetadata meta = fileSchema.getConversionMetadata();
+      if (meta == null) {
+        return sql;
+      }
+      Matcher m = QUALIFIED_REF.matcher(sql);
+      StringBuffer out = new StringBuffer();
+      boolean changed = false;
+      while (m.find()) {
+        String table = m.group(4);
+        String pinned = pinnedLocation(meta, table);
+        if (pinned == null) {
+          m.appendReplacement(out, Matcher.quoteReplacement(m.group()));
+          continue;
+        }
+        changed = true;
+        String alias = m.group(5) != null ? m.group(5) : " AS \"" + table + "\"";
+        m.appendReplacement(out, Matcher.quoteReplacement(m.group(1) + m.group(2)
+            + String.format(PINNED_SCAN, pinned.replace("'", "''")) + alias));
+      }
+      if (!changed) {
+        return sql;
+      }
+      m.appendTail(out);
+      return out.toString();
+    }
+
+    private String pinnedLocation(ConversionMetadata meta, String table) {
+      ConversionMetadata.ConversionRecord record = meta.getAllConversions().get(table);
+      if (record == null) {
+        record = meta.getAllConversions().get(table.toLowerCase(java.util.Locale.ROOT));
+      }
+      if (record == null || !"ICEBERG_PARQUET".equals(record.conversionType)
+          || record.sourceFile == null || record.sourceFile.endsWith(".parquet")
+          || !(fileSchema.getStorageProvider() instanceof S3StorageProvider)) {
+        return null;
+      }
+      try {
+        return IcebergMetadataPins.resolve(record.sourceFile, ttlMillis, reader, clock);
+      } catch (java.io.IOException | RuntimeException e) {
+        LOGGER.warn("Metadata pin: could not resolve {}; reading it unpinned: {}",
+            record.sourceFile, e.toString());
+        return null;
+      }
+    }
+
+    private String readVersionHint(String tableLocation) throws java.io.IOException {
+      try (java.io.InputStream in = fileSchema.getStorageProvider()
+          .openInputStream(tableLocation + "/metadata/version-hint.text")) {
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        byte[] chunk = new byte[256];
+        for (int n = in.read(chunk); n >= 0; n = in.read(chunk)) {
+          buf.write(chunk, 0, n);
+        }
+        String hint = new String(buf.toByteArray(), java.nio.charset.StandardCharsets.UTF_8).trim();
+        return tableLocation + "/metadata/v" + Integer.parseInt(hint) + ".metadata.json";
+      }
+    }
+
+    /** Called when a statement failed while pinned: the pins may be what is wrong, so drop them. */
+    void dropPins() {
+      IcebergMetadataPins.invalidateAll();
+    }
   }
 
   /**
@@ -370,15 +481,38 @@ final class EtagRetryConnection {
   private static final class ConnectionHandler implements InvocationHandler {
     private final Connection real;
     private final FileSchema fileSchema;
+    private final PinRewriter pins;
 
-    ConnectionHandler(Connection real, FileSchema fileSchema) {
+    ConnectionHandler(Connection real, FileSchema fileSchema, PinRewriter pins) {
       this.real = real;
       this.fileSchema = fileSchema;
+      this.pins = pins;
     }
 
     @Override public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       try {
-        Object result = method.invoke(real, args);
+        Object[] originalArgs = args;
+        Object[] usedArgs = args;
+        Object result;
+        if ("prepareStatement".equals(method.getName()) && args != null && args.length > 0
+            && args[0] instanceof String && pins.enabled()) {
+          Object[] pinnedArgs = args.clone();
+          pinnedArgs[0] = pins.rewrite((String) args[0]);
+          try {
+            result = method.invoke(real, pinnedArgs);
+            usedArgs = pinnedArgs;
+          } catch (InvocationTargetException e) {
+            if (!(e.getCause() instanceof SQLException) || pinnedArgs[0].equals(originalArgs[0])) {
+              throw e;
+            }
+            pins.dropPins();
+            LOGGER.info("Metadata pin: prepare failed against pinned metadata, preparing unpinned: {}",
+                e.getCause().getMessage());
+            result = method.invoke(real, originalArgs);
+          }
+        } else {
+          result = method.invoke(real, args);
+        }
         if (result instanceof Statement) {
           // Records exactly how this statement was created (createStatement()/prepareStatement()
           // and its args) so a retry can recreate an equivalent fresh one on the same connection.
@@ -386,7 +520,8 @@ final class EtagRetryConnection {
           return Proxy.newProxyInstance(
               EtagRetryConnection.class.getClassLoader(),
               new Class<?>[] {iface},
-              new StatementHandler((Statement) result, real, method, args, fileSchema));
+              new StatementHandler((Statement) result, real, method, originalArgs, usedArgs,
+                  fileSchema, pins));
         }
         return result;
       } catch (InvocationTargetException e) {
@@ -406,18 +541,22 @@ final class EtagRetryConnection {
   private static final class StatementHandler implements InvocationHandler {
     private final Connection realConn;
     private final Method creator;   // Connection.createStatement / prepareStatement
-    private final Object[] creatorArgs;
+    private Object[] creatorArgs;
+    private final Object[] pinnedCreatorArgs;
     private final boolean isPrepared;
     private final FileSchema fileSchema;
+    private final PinRewriter pins;
     private Statement real;
     private final List<Object[]> paramCalls = new ArrayList<>();  // [Method, args] in call order, prepared only
 
     StatementHandler(Statement real, Connection realConn, Method creator, Object[] creatorArgs,
-        FileSchema fileSchema) {
+        Object[] pinnedCreatorArgs, FileSchema fileSchema, PinRewriter pins) {
       this.real = real;
       this.realConn = realConn;
       this.creator = creator;
       this.creatorArgs = creatorArgs;
+      this.pinnedCreatorArgs = pinnedCreatorArgs;
+      this.pins = pins;
       this.isPrepared = real instanceof PreparedStatement;
       this.fileSchema = fileSchema;
     }
@@ -442,6 +581,37 @@ final class EtagRetryConnection {
           return result;
         } catch (InvocationTargetException e) {
           throw e.getCause();
+        }
+      }
+
+      Object[] callArgs = args;
+      boolean pinned = false;
+      if (pins.enabled()) {
+        if (args != null && args.length > 0 && args[0] instanceof String) {
+          String rewritten = pins.rewrite((String) args[0]);
+          pinned = !rewritten.equals(args[0]);
+          if (pinned) {
+            callArgs = args.clone();
+            callArgs[0] = rewritten;
+          }
+        } else {
+          pinned = isPrepared && pinnedCreatorArgs != creatorArgs
+              && !java.util.Arrays.equals(pinnedCreatorArgs, creatorArgs);
+        }
+      }
+      if (pinned) {
+        try {
+          return method.invoke(real, callArgs);
+        } catch (InvocationTargetException e) {
+          if (!(e.getCause() instanceof SQLException)) {
+            throw e.getCause();
+          }
+          pins.dropPins();
+          LOGGER.info("Metadata pin: statement failed against pinned metadata, retrying unpinned: {}",
+              e.getCause().getMessage());
+          if (!recreate()) {
+            throw e.getCause();
+          }
         }
       }
 
