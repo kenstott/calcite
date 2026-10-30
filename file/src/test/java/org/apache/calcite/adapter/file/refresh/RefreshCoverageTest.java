@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.util.Source;
 
 import org.junit.jupiter.api.Tag;
@@ -563,8 +565,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNotNull(table);
     assertEquals(RefreshableTable.RefreshBehavior.SINGLE_FILE, table.getRefreshBehavior());
@@ -576,8 +577,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofMinutes(5), "SMART_CASING");
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNotNull(table);
     assertEquals("RefreshableJsonTable(json_table)", table.toString());
@@ -589,8 +589,7 @@ class RefreshCoverageTest {
     Source source = createFileSource(jsonFile);
     File cacheDir = Files.createDirectories(tempDir.resolve("cache")).toFile();
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofMinutes(5), "SMART_CASING", cacheDir);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, cacheDir, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNotNull(table);
   }
@@ -599,7 +598,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertFalse(table.needsRefresh());
   }
@@ -609,8 +608,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertTrue(table.needsRefresh());
   }
@@ -619,8 +617,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNull(table.getLastRefreshTime());
     table.refresh();
@@ -632,8 +629,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofHours(1));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofHours(1), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     table.refresh();
     Instant first = table.getLastRefreshTime();
@@ -647,8 +643,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "json_table", Duration.ofMillis(1));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "json_table", Duration.ofMillis(1), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     table.refresh();
     Instant first = table.getLastRefreshTime();
@@ -666,8 +661,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "data.json", "[{\"id\": 1}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "my_json_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "my_json_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertEquals("RefreshableJsonTable(my_json_table)", table.toString());
   }
@@ -780,8 +774,7 @@ class RefreshCoverageTest {
         "[{\"id\": 1, \"name\": \"Alice\"}]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "lifecycle", Duration.ofMillis(1));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "lifecycle", Duration.ofMillis(1), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertTrue(table.needsRefresh());
     table.refresh();
@@ -845,8 +838,7 @@ class RefreshCoverageTest {
     File jsonFile = createJsonFile(tempDir, "behavior.json", "[]");
     Source source = createFileSource(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "behavior_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "behavior_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertEquals(RefreshableTable.RefreshBehavior.SINGLE_FILE, table.getRefreshBehavior());
   }

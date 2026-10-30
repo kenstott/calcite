@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
 import org.apache.calcite.adapter.file.converters.MultiTableExcelToJsonConverter;
@@ -129,7 +130,7 @@ public class TableExtractionRequirementsTest {
 
     File outDir = Files.createDirectories(root.resolve("out")).toFile();
     // Signature: convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory)
-    HtmlToJsonConverter.convert(htmlFile, outDir, "UNCHANGED", "UNCHANGED", outDir);
+    HtmlToJsonConverter.convert(htmlFile, outDir, "UNCHANGED", "UNCHANGED", null, outDir, null, new CrawlerConfiguration());
 
     // Two HTML tables, no ids/captions/headings => default names T1, T2 =>
     // file name is baseName + "__" + tableName.

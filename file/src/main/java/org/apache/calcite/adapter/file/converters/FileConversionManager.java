@@ -100,71 +100,38 @@ public class FileConversionManager {
 
   /**
    * Identifies the source file type and runs the appropriate conversion if needed.
-   * This method is smart enough to:
-   * - Handle direct source files (CSV, Parquet) that don't need conversion
-   * - Handle files that need conversion (Excel, HTML, XML)
-   * - Handle derived files (JSON from JSONPath extraction)
-   * - Track the original source through conversion chains
-   *
-   * @param sourceFile The file to potentially convert
-   * @param outputDir The directory for output files
-   * @param columnNameCasing Column name casing strategy
-   * @return true if conversion was performed, false if no conversion needed
-   */
-  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing) {
-    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, "SMART_CASING");
-  }
-
-  /**
-   * Identifies the source file type and runs the appropriate conversion if needed.
    *
    * @param sourceFile The file to potentially convert
    * @param outputDir The directory for output files
    * @param columnNameCasing Column name casing strategy
    * @param tableNameCasing Table name casing strategy
+   * @param baseDirectory The base directory for metadata storage; null for none
+   * @param relativePath The file's path under the source directory, kept in output names
+   * @param pages How an HTML file is read: its content, and whether its lists are tables
+   *     (REQ-2186)
    * @return true if conversion was performed, false if no conversion needed
-   */
-  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing) {
-    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, null);
-  }
-
-  /**
-   * Identifies the source file type and runs the appropriate conversion if needed.
-   *
-   * @param sourceFile The file to potentially convert
-   * @param outputDir The directory for output files
-   * @param columnNameCasing Column name casing strategy
-   * @param tableNameCasing Table name casing strategy
-   * @param baseDirectory The base directory for metadata storage (if null, uses outputDir)
-   * @return true if conversion was performed, false if no conversion needed
-   */
-  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory) {
-    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory, null);
-  }
-
-  /**
-   * Identifies the source file type and runs the appropriate conversion if needed.
-   *
-   * @param sourceFile The file to potentially convert
-   * @param outputDir The directory for output files
-   * @param columnNameCasing Column name casing strategy
-   * @param tableNameCasing Table name casing strategy
-   * @param baseDirectory The base directory for metadata storage (if null, uses outputDir)
-   * @param relativePath The relative path from source directory to the file (for preserving directory structure)
-   * @return true if conversion was performed, false if no conversion needed
-   */
-  public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath) {
-    // A caller that states no page options reads HTML tables only: lists are off by default (REQ-2186).
-    return convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory,
-        relativePath, new CrawlerConfiguration());
-  }
-
-  /**
-   * As {@link #convertIfNeeded(File, File, String, String, File, String)}, reading an HTML file
-   * as {@code pages} says: its content's lists as tables when that option is on (REQ-2186).
    */
   public static boolean convertIfNeeded(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath,
       CrawlerConfiguration pages) {
+    try {
+      return convert(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory,
+          relativePath, pages);
+    // fallback-guard: allow logs the conversion failure at ERROR and returns false, a legitimate 'not converted' signal, not a fabricated success
+    } catch (Exception e) {
+      LOGGER.error("Failed to convert file {}: {}", sourceFile.getName(), e.getMessage(), e);
+      return false;
+    }
+  }
+
+  /**
+   * As {@link #convertIfNeeded}, but a conversion that fails throws: a re-conversion has to
+   * know it failed, to try again.
+   *
+   * @return true if conversion was performed, false if no conversion needed
+   * @throws Exception if the conversion fails
+   */
+  public static boolean convert(File sourceFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath,
+      CrawlerConfiguration pages) throws Exception {
     String path = sourceFile.getPath().toLowerCase();
 
     // First check if conversion is needed using metadata-based change detection
@@ -173,84 +140,81 @@ public class FileConversionManager {
       return false;
     }
 
-    try {
-      // Excel files
-      if (path.endsWith(".xlsx") || path.endsWith(".xls")) {
-        boolean converted = convertExcelFile(sourceFile, outputDir, baseDirectory, tableNameCasing, columnNameCasing, relativePath);
-        LOGGER.debug("Converted Excel file to JSON: {}", sourceFile.getName());
-        return converted;
-      }
-
-      // HTML files
-      if (path.endsWith(".html") || path.endsWith(".htm")) {
-        // Check if there's an existing conversion record for this source file
-        // This preserves explicit table names from tableDef processing
-        String existingTableName = null;
-        if (baseDirectory != null) {
-          try {
-            ConversionMetadata metadata = new ConversionMetadata(baseDirectory);
-            ConversionMetadata.ConversionRecord existingRecord = metadata.findRecordBySourceFile(sourceFile);
-            if (existingRecord != null) {
-              existingTableName = existingRecord.tableName;
-              LOGGER.debug("Found existing conversion record for {}, preserving table name: {}",
-                  sourceFile.getName(), existingTableName);
-            }
-          } catch (Exception e) {
-            LOGGER.warn("Failed to check for existing conversion record: {}", e.getMessage());
-          }
-        }
-
-        List<File> jsonFiles = HtmlToJsonConverter.convert(sourceFile, outputDir, columnNameCasing, tableNameCasing, baseDirectory, relativePath, existingTableName, pages);
-        LOGGER.debug("Converted HTML file to {} JSON files: {}", jsonFiles.size(), sourceFile.getName());
-        return true;
-      }
-
-      // XML files
-      if (path.endsWith(".xml")) {
-        List<File> jsonFiles = XmlToJsonConverter.convert(sourceFile, outputDir, null, columnNameCasing, baseDirectory, relativePath);
-        LOGGER.debug("Converted XML file to {} JSON files: {}", jsonFiles.size(), sourceFile.getName());
-        return true;
-      }
-
-      // Markdown files
-      if (path.endsWith(".md")) {
-        MarkdownTableScanner.scanAndConvertTables(sourceFile, outputDir, relativePath);
-        LOGGER.debug("Converted Markdown file to JSON: {}", sourceFile.getName());
-        return true;
-      }
-
-      // DOCX files
-      if (path.endsWith(".docx")) {
-        DocxTableScanner.scanAndConvertTables(sourceFile, outputDir, relativePath);
-        LOGGER.debug("Converted DOCX file to JSON: {}", sourceFile.getName());
-        return true;
-      }
-
-      // PPTX files
-      if (path.endsWith(".pptx")) {
-        PptxTableScanner.scanAndConvertTables(sourceFile, outputDir, relativePath);
-        LOGGER.debug("Converted PPTX file to JSON: {}", sourceFile.getName());
-        return true;
-      }
-
-      // JSON files - check if they're derived via JSONPath
-      if (path.endsWith(".json") || path.endsWith(".json.gz")) {
-        return handleJsonFile(sourceFile, outputDir, baseDirectory);
-      }
-
-      // YAML files - check if they're derived via JSONPath
-      if (path.endsWith(".yaml") || path.endsWith(".yml")) {
-        return handleYamlFile(sourceFile, outputDir, baseDirectory);
-      }
-
-      // CSV, Parquet, and other direct-use files don't need conversion
-      return false;
-
-    // fallback-guard: allow logs the conversion failure at ERROR and returns false, a legitimate 'not converted' signal, not a fabricated success
-    } catch (Exception e) {
-      LOGGER.error("Failed to convert file {}: {}", sourceFile.getName(), e.getMessage(), e);
-      return false;
+    // Excel files
+    if (path.endsWith(".xlsx") || path.endsWith(".xls")) {
+      boolean converted = convertExcelFile(sourceFile, outputDir, baseDirectory, tableNameCasing, columnNameCasing, relativePath);
+      LOGGER.debug("Converted Excel file to JSON: {}", sourceFile.getName());
+      return converted;
     }
+
+    // HTML files
+    if (path.endsWith(".html") || path.endsWith(".htm")) {
+      // Check if there's an existing conversion record for this source file
+      // This preserves explicit table names from tableDef processing
+      String existingTableName = null;
+      if (baseDirectory != null) {
+        try {
+          ConversionMetadata metadata = new ConversionMetadata(baseDirectory);
+          ConversionMetadata.ConversionRecord existingRecord = metadata.findRecordBySourceFile(sourceFile);
+          // A record the page's own conversion wrote is named <base>__<name>, one of the several
+          // its tables and lists give; only a name given to the page's one table is kept.
+          if (existingRecord != null && existingRecord.tableName != null
+              && !existingRecord.tableName.startsWith(
+                  HtmlToJsonConverter.baseFileName(sourceFile, relativePath) + "__")) {
+            existingTableName = existingRecord.tableName;
+            LOGGER.debug("Found existing conversion record for {}, preserving table name: {}",
+                sourceFile.getName(), existingTableName);
+          }
+        } catch (Exception e) {
+          LOGGER.warn("Failed to check for existing conversion record: {}", e.getMessage());
+        }
+      }
+
+      List<File> jsonFiles = HtmlToJsonConverter.convert(sourceFile, outputDir, columnNameCasing, tableNameCasing, existingTableName, baseDirectory, relativePath, pages);
+      LOGGER.debug("Converted HTML file to {} JSON files: {}", jsonFiles.size(), sourceFile.getName());
+      return true;
+    }
+
+    // XML files
+    if (path.endsWith(".xml")) {
+      List<File> jsonFiles = XmlToJsonConverter.convert(sourceFile, outputDir, null, columnNameCasing, baseDirectory, relativePath);
+      LOGGER.debug("Converted XML file to {} JSON files: {}", jsonFiles.size(), sourceFile.getName());
+      return true;
+    }
+
+    // Markdown files
+    if (path.endsWith(".md")) {
+      MarkdownTableScanner.scanAndConvertTables(sourceFile, outputDir, relativePath);
+      LOGGER.debug("Converted Markdown file to JSON: {}", sourceFile.getName());
+      return true;
+    }
+
+    // DOCX files
+    if (path.endsWith(".docx")) {
+      DocxTableScanner.scanAndConvertTables(sourceFile, outputDir, relativePath);
+      LOGGER.debug("Converted DOCX file to JSON: {}", sourceFile.getName());
+      return true;
+    }
+
+    // PPTX files
+    if (path.endsWith(".pptx")) {
+      PptxTableScanner.scanAndConvertTables(sourceFile, outputDir, relativePath);
+      LOGGER.debug("Converted PPTX file to JSON: {}", sourceFile.getName());
+      return true;
+    }
+
+    // JSON files - check if they're derived via JSONPath
+    if (path.endsWith(".json") || path.endsWith(".json.gz")) {
+      return handleJsonFile(sourceFile, outputDir, baseDirectory);
+    }
+
+    // YAML files - check if they're derived via JSONPath
+    if (path.endsWith(".yaml") || path.endsWith(".yml")) {
+      return handleYamlFile(sourceFile, outputDir, baseDirectory);
+    }
+
+    // CSV, Parquet, and other direct-use files don't need conversion
+    return false;
   }
 
   /**
@@ -472,45 +436,39 @@ public class FileConversionManager {
   }
 
   /**
-   * Converts an Excel file and records metadata.
+   * Converts an Excel file and records metadata; a failure throws, for the caller to report.
    */
-  private static boolean convertExcelFile(File sourceFile, File outputDir, File baseDirectory, String tableNameCasing, String columnNameCasing, String relativePath) {
-    try {
-      // Convert Excel file to the specified output directory with relative path for directory preservation
-      MultiTableExcelToJsonConverter.convertFileToJson(sourceFile, outputDir, true, tableNameCasing, columnNameCasing, baseDirectory, relativePath);
+  private static boolean convertExcelFile(File sourceFile, File outputDir, File baseDirectory, String tableNameCasing, String columnNameCasing, String relativePath) throws IOException {
+    // Convert Excel file to the specified output directory with relative path for directory preservation
+    MultiTableExcelToJsonConverter.convertFileToJson(sourceFile, outputDir, true, tableNameCasing, columnNameCasing, baseDirectory, relativePath);
 
-      // Record conversion for each sheet that was converted
-      // Excel converter creates files like "filename__sheetname.json" or "dir_filename__sheetname.json" if relativePath is provided
-      String fileName = sourceFile.getName();
-      String baseName = fileName.contains(".") ?
-          fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+    // Record conversion for each sheet that was converted
+    // Excel converter creates files like "filename__sheetname.json" or "dir_filename__sheetname.json" if relativePath is provided
+    String fileName = sourceFile.getName();
+    String baseName = fileName.contains(".") ?
+        fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
 
-      // If relativePath is provided, include directory prefix in the pattern
-      String dirPrefix =
-          relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
-      if (dirPrefix != null) {
-        baseName = dirPrefix + "_" + baseName;
-      }
-
-      // Make baseName final for use in lambda
-      final String filePrefix = baseName;
-
-      // Find generated JSON files in the output directory
-      File[] jsonFiles = outputDir.listFiles((dir, name) ->
-          name.startsWith(filePrefix + "__") && name.endsWith(".json"));
-
-      if (jsonFiles != null && baseDirectory != null) {
-        for (File jsonFile : jsonFiles) {
-          recordConversion(sourceFile, jsonFile, "EXCEL_TO_JSON", baseDirectory);
-        }
-      }
-
-      return true;
-    // fallback-guard: allow logs the conversion failure at ERROR and returns false, a legitimate 'not converted' signal, not a fabricated success
-    } catch (Exception e) {
-      LOGGER.error("Failed to convert Excel file {}: {}", sourceFile.getName(), e.getMessage());
-      return false;
+    // If relativePath is provided, include directory prefix in the pattern
+    String dirPrefix =
+        relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
+    if (dirPrefix != null) {
+      baseName = dirPrefix + "_" + baseName;
     }
+
+    // Make baseName final for use in lambda
+    final String filePrefix = baseName;
+
+    // Find generated JSON files in the output directory
+    File[] jsonFiles = outputDir.listFiles((dir, name) ->
+        name.startsWith(filePrefix + "__") && name.endsWith(".json"));
+
+    if (jsonFiles != null && baseDirectory != null) {
+      for (File jsonFile : jsonFiles) {
+        recordConversion(sourceFile, jsonFile, "EXCEL_TO_JSON", baseDirectory);
+      }
+    }
+
+    return true;
   }
 
   /**

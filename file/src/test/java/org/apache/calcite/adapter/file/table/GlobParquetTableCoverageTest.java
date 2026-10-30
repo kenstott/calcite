@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.table;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.refresh.RefreshableTable;
 
@@ -49,13 +50,7 @@ class GlobParquetTableCoverageTest {
   // ===== Constructor and basic accessors =====
 
   @Test void testConstructorAndToString() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     String str = table.toString();
     assertNotNull(str);
@@ -65,25 +60,13 @@ class GlobParquetTableCoverageTest {
 
   @Test void testConstructorWithRefreshInterval() {
     Duration interval = Duration.ofMinutes(5);
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        interval,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, interval, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertEquals(interval, table.getRefreshInterval());
   }
 
   @Test void testConstructorNullRefreshInterval() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertNull(table.getRefreshInterval());
   }
@@ -92,13 +75,7 @@ class GlobParquetTableCoverageTest {
 
   @Test void testGetRefreshInterval() {
     Duration interval = Duration.ofHours(1);
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        interval,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, interval, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertEquals(interval, table.getRefreshInterval());
   }
@@ -106,13 +83,7 @@ class GlobParquetTableCoverageTest {
   // ===== getLastRefreshTime =====
 
   @Test void testGetLastRefreshTimeInitiallyNull() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertNull(table.getLastRefreshTime());
   }
@@ -120,25 +91,13 @@ class GlobParquetTableCoverageTest {
   // ===== needsRefresh =====
 
   @Test void testNeedsRefreshNoInterval() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertFalse(table.needsRefresh());
   }
 
   @Test void testNeedsRefreshNeverRefreshed() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        Duration.ofMinutes(5),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, Duration.ofMinutes(5), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertTrue(table.needsRefresh());
   }
@@ -146,13 +105,7 @@ class GlobParquetTableCoverageTest {
   // ===== getRefreshBehavior =====
 
   @Test void testGetRefreshBehavior() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertEquals(RefreshableTable.RefreshBehavior.DIRECTORY_SCAN,
         table.getRefreshBehavior());
@@ -161,13 +114,7 @@ class GlobParquetTableCoverageTest {
   // ===== generateCacheFileName =====
 
   @Test void testCacheFileNameGenerated() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // The cache file should be created inside cacheDir
     // It uses MD5 hash of pattern + table name
@@ -177,13 +124,7 @@ class GlobParquetTableCoverageTest {
   // ===== refresh with no interval =====
 
   @Test void testRefreshWithNoInterval() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // Should not throw - refresh is a no-op when no interval
     table.refresh();
@@ -193,13 +134,7 @@ class GlobParquetTableCoverageTest {
   // ===== refresh with interval but no files =====
 
   @Test void testRefreshWithIntervalNoFiles() {
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        Duration.ofMinutes(5),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, Duration.ofMinutes(5), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // refresh should work without error even with no files
     table.refresh();
@@ -235,13 +170,7 @@ class GlobParquetTableCoverageTest {
       writer.write("col1,col2\nval3,val4\n");
     }
 
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        Duration.ofMinutes(5),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, Duration.ofMinutes(5), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // This exercises findMatchingFiles and refresh path
     table.refresh();
@@ -251,13 +180,7 @@ class GlobParquetTableCoverageTest {
   // ===== Pattern without directory separator =====
 
   @Test void testRefreshPatternWithoutSeparator() throws IOException {
-    GlobParquetTable table = new GlobParquetTable(
-        "*.csv",
-        "test_table",
-        cacheDir,
-        Duration.ofMinutes(5),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable("*.csv", "test_table", cacheDir, Duration.ofMinutes(5), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // Should handle pattern without directory separator
     table.refresh();
@@ -276,13 +199,7 @@ class GlobParquetTableCoverageTest {
           + "</table></body></html>");
     }
 
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.html",
-        "html_table",
-        cacheDir,
-        Duration.ofMinutes(5),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.html", "html_table", cacheDir, Duration.ofMinutes(5), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // This exercises the HTML preprocessing code path
     table.refresh();
@@ -296,13 +213,7 @@ class GlobParquetTableCoverageTest {
       writer.write("dummy");
     }
 
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.xlsx",
-        "excel_table",
-        cacheDir,
-        Duration.ofMinutes(5),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.xlsx", "excel_table", cacheDir, Duration.ofMinutes(5), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     // refresh() catches the IOException for unsupported format gracefully
     table.refresh();
@@ -319,13 +230,7 @@ class GlobParquetTableCoverageTest {
       writer.write("col1,col2\nval1,val2\n");
     }
 
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        Duration.ofHours(1),
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, Duration.ofHours(1), null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertTrue(table.needsRefresh());
 
@@ -342,13 +247,7 @@ class GlobParquetTableCoverageTest {
         new CsvTypeInferrer.TypeInferenceConfig(
             true, 1.0, 1000, 0.8, true, true, true, true, 0.5);
 
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/*.csv",
-        "test_table",
-        cacheDir,
-        null,
-        typeConfig,
-        "TO_UPPER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/*.csv", "test_table", cacheDir, null, typeConfig, "TO_UPPER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     assertNotNull(table);
   }
@@ -362,13 +261,8 @@ class GlobParquetTableCoverageTest {
       writer.write("col1,col2\nval1,val2\n");
     }
 
-    GlobParquetTable table = new GlobParquetTable(
-        tempDir.getAbsolutePath() + "/changing*.csv",
-        "changing_table",
-        cacheDir,
-        Duration.ofMillis(1), // Very short interval for testing
-        null,
-        "TO_LOWER");
+    GlobParquetTable table = new GlobParquetTable(tempDir.getAbsolutePath() + "/changing*.csv", "changing_table", cacheDir, Duration.ofMillis(1), // Very short interval for testing
+        null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration(), null);
 
     table.refresh();
     Instant firstRefresh = table.getLastRefreshTime();

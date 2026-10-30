@@ -11,9 +11,7 @@
 package org.apache.calcite.adapter.file.refresh;
 
 import org.apache.calcite.DataContext;
-import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
-import org.apache.calcite.adapter.file.converters.MultiTableExcelToJsonConverter;
-import org.apache.calcite.adapter.file.converters.XmlToJsonConverter;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.execution.linq4j.JsonEnumerator;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
@@ -45,23 +43,23 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
   private final Source source;
   private final String columnNameCasing;
   private final @Nullable File operatingCacheDirectory;
+  // The conversion the schema ran on the table's original source, re-run on its change.
+  private final SourceFileConversion conversion;
   private @Nullable RelDataType rowType;
   private @Nullable List<Object> dataList;
   private @Nullable ConversionMetadata conversionMetadata;
 
-  public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval) {
-    this(source, tableName, refreshInterval, "UNCHANGED", null);
-  }
-
-  public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval, String columnNameCasing) {
-    this(source, tableName, refreshInterval, columnNameCasing, null);
-  }
-
-  public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval, String columnNameCasing, @Nullable File operatingCacheDirectory) {
+  /**
+   * @param conversion How the schema converts its source files; the table's JSON is read with
+   *     its column casing, and its original source is re-converted with it when it changes
+   */
+  public RefreshableJsonTable(Source source, String tableName, @Nullable Duration refreshInterval,
+      SourceFileConversion conversion) {
     super(tableName, refreshInterval);
     this.source = source;
-    this.columnNameCasing = columnNameCasing;
-    this.operatingCacheDirectory = operatingCacheDirectory;
+    this.conversion = conversion;
+    this.columnNameCasing = conversion.columnNameCasing();
+    this.operatingCacheDirectory = conversion.baseDirectory();
   }
 
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
@@ -130,7 +128,6 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
     // If original source changed, re-convert it
     if (needsReconversion && originalSource != null) {
       try {
-        String fileName = originalSource.getName().toLowerCase();
         File outputDir = jsonFile.getParentFile();
 
         // Check if this is a JSONPath extraction
@@ -145,21 +142,11 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
               originalSource, jsonFile, jsonPath, outputDir.getParentFile());
           LOGGER.debug("Re-extracted JSONPath {} from {} to {}",
               jsonPath, originalSource.getName(), jsonFile.getName());
-        } else if (fileName.endsWith(".html") || fileName.endsWith(".htm")) {
-          // Re-convert HTML to JSON
-          List<File> newJsonFiles = HtmlToJsonConverter.convert(originalSource, outputDir, columnNameCasing, outputDir.getParentFile());
-          LOGGER.debug("Re-converted HTML file {} to {} JSON files",
-              originalSource.getName(), newJsonFiles.size());
-        } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
-          // Re-convert Excel to JSON
-          // Use the columnNameCasing configured for this table
-          MultiTableExcelToJsonConverter.convertFileToJson(originalSource, outputDir, true, columnNameCasing, columnNameCasing, outputDir.getParentFile());
-          LOGGER.debug("Re-converted Excel file {}", originalSource.getName());
-        } else if (fileName.endsWith(".xml")) {
-          // Re-convert XML to JSON
-          List<File> newJsonFiles = XmlToJsonConverter.convert(originalSource, outputDir, columnNameCasing, outputDir.getParentFile());
-          LOGGER.debug("Re-converted XML file {} to {} JSON files",
-              originalSource.getName(), newJsonFiles.size());
+        } else {
+          // Re-run the conversion the schema first ran, so it writes what that one wrote.
+          // Into the directory of the JSON this table reads: where the first conversion wrote it.
+          conversion.reconvert(originalSource, outputDir);
+          LOGGER.debug("Re-converted {}", originalSource.getName());
         }
 
         // Update the last modified time of the original source
@@ -168,7 +155,7 @@ public class RefreshableJsonTable extends AbstractRefreshableTable implements Sc
         // Clear cached data to force re-read of new JSON
         dataList = null;
         rowType = null;
-      } catch (IOException e) {
+      } catch (Exception e) {
         LOGGER.warn("Failed to re-convert original source {}: {}",
             originalSource.getName(), e.getMessage());
       }

@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.DirectFileSource;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
@@ -67,9 +69,7 @@ class RefreshableParquetCacheReplaceTest {
     File parquetFile =
         ParquetConversionUtil.convertToParquet(source, sourceFile.getName(),
             new JsonScannableTable(source), cacheDir, null, "replace_test", "SMART_CASING");
-    return new RefreshableParquetCacheTable(source, parquetFile, cacheDir,
-        Duration.ofSeconds(1), false, "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "replace_test");
+    return new RefreshableParquetCacheTable(source, parquetFile, cacheDir, Duration.ofSeconds(1), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "replace_test");
   }
 
   private void writeSource(String json) throws IOException {

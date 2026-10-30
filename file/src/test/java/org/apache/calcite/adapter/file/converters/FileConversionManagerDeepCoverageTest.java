@@ -224,13 +224,13 @@ public class FileConversionManagerDeepCoverageTest {
   @Test void testConvertIfNeededCsvReturnsNoConversion() {
     File csvFile = new File(tempDir.toFile(), "data.csv");
     File outputDir = tempDir.toFile();
-    assertFalse(FileConversionManager.convertIfNeeded(csvFile, outputDir, "UNCHANGED"));
+    assertFalse(FileConversionManager.convertIfNeeded(csvFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration()));
   }
 
   @Test void testConvertIfNeededParquetReturnsNoConversion() {
     File parquetFile = new File(tempDir.toFile(), "data.parquet");
     File outputDir = tempDir.toFile();
-    assertFalse(FileConversionManager.convertIfNeeded(parquetFile, outputDir, "UNCHANGED"));
+    assertFalse(FileConversionManager.convertIfNeeded(parquetFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration()));
   }
 
   @Test void testConvertIfNeededHtmlFile() throws IOException {
@@ -242,7 +242,7 @@ public class FileConversionManagerDeepCoverageTest {
     File htmlFile = createTempFile("data.html", html);
     File outputDir = createOutputDir("out_html");
 
-    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "HTML file should require conversion");
   }
 
@@ -255,7 +255,7 @@ public class FileConversionManagerDeepCoverageTest {
     File htmFile = createTempFile("data.htm", html);
     File outputDir = createOutputDir("out_htm");
 
-    boolean result = FileConversionManager.convertIfNeeded(htmFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(htmFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "HTM file should require conversion");
   }
 
@@ -269,7 +269,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_casing");
 
     boolean result =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING");
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result);
   }
 
@@ -283,7 +283,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_basedir");
 
     boolean result =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertTrue(result);
   }
 
@@ -298,7 +298,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     String relativePath = "subdir" + File.separator + "relpath.html";
     boolean result =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), relativePath, new CrawlerConfiguration());
     assertTrue(result);
   }
 
@@ -306,35 +306,35 @@ public class FileConversionManagerDeepCoverageTest {
     // A plain JSON file without JSONPath history should not be converted
     File jsonFile = new File(tempDir.toFile(), "plain.json");
     File outputDir = tempDir.toFile();
-    boolean result = FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
   @Test void testConvertIfNeededJsonGzFileReturnsNoConversion() {
     File jsonGzFile = new File(tempDir.toFile(), "data.json.gz");
     File outputDir = tempDir.toFile();
-    boolean result = FileConversionManager.convertIfNeeded(jsonGzFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(jsonGzFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
   @Test void testConvertIfNeededYamlFileReturnsNoConversion() {
     File yamlFile = new File(tempDir.toFile(), "config.yaml");
     File outputDir = tempDir.toFile();
-    boolean result = FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
   @Test void testConvertIfNeededYmlFileReturnsNoConversion() {
     File ymlFile = new File(tempDir.toFile(), "config.yml");
     File outputDir = tempDir.toFile();
-    boolean result = FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
   @Test void testConvertIfNeededArrowFileReturnsNoConversion() {
     File arrowFile = new File(tempDir.toFile(), "data.arrow");
     File outputDir = tempDir.toFile();
-    assertFalse(FileConversionManager.convertIfNeeded(arrowFile, outputDir, "UNCHANGED"));
+    assertFalse(FileConversionManager.convertIfNeeded(arrowFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration()));
   }
 
   // ========== convertIfNeeded exception handling ==========
@@ -345,7 +345,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_corrupt");
 
     // Should not throw, should handle gracefully
-    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     // May return true (attempted conversion) or false depending on error handling
     // Main point is it should not throw
   }
@@ -355,7 +355,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_nonexist");
 
     // Should handle the file not existing gracefully
-    boolean result = FileConversionManager.convertIfNeeded(xlsxFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(xlsxFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     // convertExcelFile should catch the exception and return false
     assertFalse(result, "Nonexistent xlsx file should return false");
   }
@@ -427,7 +427,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     // First conversion
     boolean result1 =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir, null, new CrawlerConfiguration());
     assertTrue(result1);
 
     // Modify file timestamp to trigger re-conversion
@@ -435,7 +435,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     // Second conversion should pick up existing record
     boolean result2 =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", baseDir, null, new CrawlerConfiguration());
     // Result depends on change detection
   }
 
@@ -450,7 +450,7 @@ public class FileConversionManagerDeepCoverageTest {
     File htmlFile = createTempFile("two_arg.html", html);
     File outputDir = createOutputDir("out_two_arg");
 
-    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result);
   }
 
@@ -462,7 +462,7 @@ public class FileConversionManagerDeepCoverageTest {
     File mdFile = createTempFile("data.md", md);
     File outputDir = createOutputDir("out_md");
 
-    boolean result = FileConversionManager.convertIfNeeded(mdFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(mdFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "Markdown file should require conversion");
   }
 
@@ -474,7 +474,7 @@ public class FileConversionManagerDeepCoverageTest {
     File xmlFile = createTempFile("data.xml", xml);
     File outputDir = createOutputDir("out_xml");
 
-    boolean result = FileConversionManager.convertIfNeeded(xmlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(xmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "XML file should require conversion");
   }
 
@@ -498,7 +498,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     File outputDir = createOutputDir("out_docx");
 
-    boolean result = FileConversionManager.convertIfNeeded(docxFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(docxFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "DOCX file should require conversion");
   }
 
@@ -524,7 +524,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     File outputDir = createOutputDir("out_pptx");
 
-    boolean result = FileConversionManager.convertIfNeeded(pptxFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(pptxFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "PPTX file should require conversion");
   }
 
@@ -541,7 +541,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     // null baseDirectory - should skip change detection and just convert
     boolean result =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result);
   }
 
@@ -553,7 +553,7 @@ public class FileConversionManagerDeepCoverageTest {
 
     // Plain JSON should not trigger conversion
     boolean result =
-        FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+        FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
@@ -564,7 +564,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_yaml");
 
     boolean result =
-        FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+        FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
@@ -573,7 +573,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_yml");
 
     boolean result =
-        FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile());
+        FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(result);
   }
 
@@ -585,7 +585,7 @@ public class FileConversionManagerDeepCoverageTest {
     File outputDir = createOutputDir("out_corrupt_xl");
 
     // Should handle the corrupt file gracefully (catch exception, return false)
-    boolean result = FileConversionManager.convertIfNeeded(xlsxFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(xlsxFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(result, "Corrupt xlsx file should fail gracefully and return false");
   }
 
@@ -593,7 +593,7 @@ public class FileConversionManagerDeepCoverageTest {
     File xlsFile = createTempFile("corrupt.xls", "not an xls file");
     File outputDir = createOutputDir("out_corrupt_xls");
 
-    boolean result = FileConversionManager.convertIfNeeded(xlsFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(xlsFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(result, "Corrupt xls file should fail gracefully and return false");
   }
 
@@ -609,7 +609,7 @@ public class FileConversionManagerDeepCoverageTest {
     File htmlFile = createTempFile("upper.HTML", html);
     File outputDir = createOutputDir("out_upper");
 
-    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED");
+    boolean result = FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "Uppercase .HTML extension should be recognized");
   }
 

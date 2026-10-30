@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
@@ -119,7 +120,7 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert using FileConversionManager
-    boolean converted = FileConversionManager.convertIfNeeded(excelFile, schemaDir, "TO_LOWER");
+    boolean converted = FileConversionManager.convertIfNeeded(excelFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted, "Excel file should be converted");
 
     // Verify JSON file was created (Excel creates one file per sheet). The sheet name goes
@@ -184,7 +185,7 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert using FileConversionManager
-    boolean converted = FileConversionManager.convertIfNeeded(xmlFile, schemaDir, "TO_LOWER");
+    boolean converted = FileConversionManager.convertIfNeeded(xmlFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted, "XML file should be converted");
 
     // Check if XML created any JSON files (it might find repeating patterns)
@@ -249,7 +250,7 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert using FileConversionManager
-    boolean converted = FileConversionManager.convertIfNeeded(docxFile, schemaDir, "TO_LOWER");
+    boolean converted = FileConversionManager.convertIfNeeded(docxFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted, "DOCX file should be converted");
 
     // Verify JSON files were created (DOCX converter may create multiple tables)
@@ -308,7 +309,7 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert using FileConversionManager
-    boolean converted = FileConversionManager.convertIfNeeded(pptxFile, schemaDir, "TO_LOWER");
+    boolean converted = FileConversionManager.convertIfNeeded(pptxFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted, "PPTX file should be converted");
 
     // Verify JSON files were created
@@ -344,7 +345,7 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert using FileConversionManager
-    boolean converted = FileConversionManager.convertIfNeeded(mdFile, schemaDir, "TO_LOWER");
+    boolean converted = FileConversionManager.convertIfNeeded(mdFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted, "Markdown file should be converted");
 
     // Verify JSON files were created (Markdown scanner creates table-specific files)
@@ -388,8 +389,8 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert both files
-    boolean htmlConverted = FileConversionManager.convertIfNeeded(htmlFile, schemaDir, "TO_LOWER");
-    boolean xmlConverted = FileConversionManager.convertIfNeeded(xmlFile, schemaDir, "TO_LOWER");
+    boolean htmlConverted = FileConversionManager.convertIfNeeded(htmlFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
+    boolean xmlConverted = FileConversionManager.convertIfNeeded(xmlFile, schemaDir, "TO_LOWER", "SMART_CASING", null, null, new CrawlerConfiguration());
 
     assertTrue(htmlConverted, "HTML should be converted");
     assertTrue(xmlConverted, "XML should be converted");
@@ -441,7 +442,7 @@ public class FileConversionEndToEndTest {
     }
 
     // Convert
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, schemaDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, "UNCHANGED", "SMART_CASING", null, schemaDir, null, new CrawlerConfiguration());
     assertFalse(jsonFiles.isEmpty());
     File jsonFile = jsonFiles.get(0);
 

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.BaseFileTest;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
@@ -110,7 +111,7 @@ public class RefreshEndToEndTest extends BaseFileTest {
     }
 
     // Convert HTML to JSON using the converter directly
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, schemaDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, "UNCHANGED", "SMART_CASING", null, schemaDir, null, new CrawlerConfiguration());
     assertFalse(jsonFiles.isEmpty(), "Should create at least one JSON file");
 
     File jsonFile = jsonFiles.get(0);
@@ -220,7 +221,7 @@ public class RefreshEndToEndTest extends BaseFileTest {
     }
 
     // Convert HTML to JSON
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, schemaDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, "UNCHANGED", "SMART_CASING", null, schemaDir, null, new CrawlerConfiguration());
     assertFalse(jsonFiles.isEmpty(), "Should create at least one JSON file");
     File jsonFile = jsonFiles.get(0);
     System.out.println("Generated JSON file: " + jsonFile.getName());
