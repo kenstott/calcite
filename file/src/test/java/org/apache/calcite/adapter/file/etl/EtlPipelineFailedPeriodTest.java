@@ -13,9 +13,11 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,10 +41,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * tracker or a skipOn status legitimately excludes.
  */
 @Tag("unit")
+@Isolated
 class EtlPipelineFailedPeriodTest {
 
   @TempDir
   File tempDir;
+
+  @AfterEach void leaveLedgerDisabled() {
+    EtlFailureLedger.disable();
+  }
 
   private static EtlPipelineConfig config(File warehouseDir) {
     List<ColumnConfig> columns = Arrays.asList(

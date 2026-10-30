@@ -36,6 +36,12 @@ public final class EtlFailureLedger {
     ENTRIES.clear();
   }
 
+  /** Stops recording and clears the entries, so a test can restore the process-wide ledger. */
+  static synchronized void disable() {
+    enabled = false;
+    ENTRIES.clear();
+  }
+
   static synchronized void record(String schema, String table, EtlResult result) {
     if (!enabled) {
       return;
