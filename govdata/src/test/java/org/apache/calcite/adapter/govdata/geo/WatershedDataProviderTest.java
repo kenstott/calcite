@@ -46,8 +46,11 @@ class WatershedDataProviderTest {
   @Test void extensionPathFollowsTheDuckDbReleaseThatLoadsIt() {
     String p155 = DuckDbExtensionInstaller.getLocalExtensionPath("spatial", "1.5.5");
     String p156 = DuckDbExtensionInstaller.getLocalExtensionPath("spatial", "1.5.6");
-    assertTrue(p155.contains("/v1.5.5/") && p155.endsWith("spatial.duckdb_extension"), p155);
-    assertTrue(p156.contains("/v1.5.6/"), p156);
+    // The path uses the platform's separator (backslashes on Windows); the release directory is what is checked.
+    String s155 = p155.replace('\\', '/');
+    String s156 = p156.replace('\\', '/');
+    assertTrue(s155.contains("/v1.5.5/") && s155.endsWith("spatial.duckdb_extension"), p155);
+    assertTrue(s156.contains("/v1.5.6/"), p156);
     assertEquals(p156, DuckDbExtensionInstaller.getLocalExtensionPath("spatial"));
   }
 }
