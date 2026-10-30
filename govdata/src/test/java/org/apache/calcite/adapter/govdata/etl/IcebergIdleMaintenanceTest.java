@@ -229,4 +229,65 @@ public class IcebergIdleMaintenanceTest {
     assertEquals(14, targets.get(0).retentionDays);
     assertEquals("s3://b/econ", targets.get(0).warehouse);
   }
+
+  @Test void tableWithoutWarehousePathResolvesToTheSchemasMaterializeDirectory() throws Exception {
+    String yaml = "schemaName: \"ag\"\n"
+        + "materializeDirectory: \"s3://b\"\n"
+        + "partitionedTables:\n"
+        + "  - name: plain\n"
+        + "    materialize:\n"
+        + "      iceberg:\n"
+        + "        runMaintenance: true\n"
+        + "  - name: explicit\n"
+        + "    materialize:\n"
+        + "      iceberg:\n"
+        + "        warehousePath: s3://b/other\n"
+        + "        runMaintenance: true\n";
+    JsonNode root = YamlUtils.parseYamlOrJson(
+        new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)), "t.yaml");
+
+    List<IcebergIdleMaintenance.Target> targets = IcebergIdleMaintenance.targetsOf(root, "t.yaml");
+
+    assertEquals("s3://b/ag", targets.get(0).warehouse);
+    assertEquals("s3://b/other", targets.get(1).warehouse);
+  }
+
+  @Test void tableWithNoWarehouseAnywhereIsRejected() throws Exception {
+    String yaml = "partitionedTables:\n"
+        + "  - name: orphan\n"
+        + "    materialize:\n"
+        + "      iceberg:\n"
+        + "        runMaintenance: true\n";
+    JsonNode root = YamlUtils.parseYamlOrJson(
+        new ByteArrayInputStream(yaml.getBytes(StandardCharsets.UTF_8)), "t.yaml");
+
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+        () -> IcebergIdleMaintenance.targetsOf(root, "t.yaml"));
+  }
+
+  @Test void everyShippedSchemaResolvesItsMaintenanceTargets() throws Exception {
+    Path resources = Path.of(IcebergIdleMaintenance.class.getResource("/ag/ag-schema.yaml").toURI())
+        .getParent().getParent();
+    int tables = 0;
+    try (DirectoryStream<Path> dirs = Files.newDirectoryStream(resources)) {
+      for (Path dir : dirs) {
+        if (!Files.isDirectory(dir)) {
+          continue;
+        }
+        try (DirectoryStream<Path> yamls = Files.newDirectoryStream(dir, "*-schema.yaml")) {
+          for (Path yaml : yamls) {
+            JsonNode root = YamlUtils.parseYamlOrJson(Files.newInputStream(yaml), yaml.toString());
+            try {
+              tables += IcebergIdleMaintenance.targetsOf(root, yaml.toString()).size();
+            } catch (IllegalStateException e) {
+              // GOVDATA_PARQUET_DIR is the one variable the script requires the caller to supply
+              assertTrue(e.getMessage().contains("'${GOVDATA_PARQUET_DIR}"), e.getMessage());
+              tables++;
+            }
+          }
+        }
+      }
+    }
+    assertTrue(tables > 0, "no maintenance tables found");
+  }
 }
