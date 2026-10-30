@@ -66,8 +66,9 @@ import javax.xml.stream.XMLStreamReader;
  *
  * <p>The current release point ({@code congress}-{@code release}, e.g. {@code 119-111}) is
  * read once per provider instance from the "current through Public Law" line on the OLRC currency
- * page, stepped down to the newest release point whose zips are published, and then pinned, so every title fetched by one run comes from the same release point
- * even if OLRC publishes a new one mid-run.
+ * page, stepped down to the newest release point whose zips are published, and then pinned, so
+ * every title fetched by one run comes from the same release point even if OLRC publishes a
+ * new one mid-run.
  *
  * <p>Statutory notes ({@code <notes>}/{@code <note>}) and tables of contents are not part of
  * a section's operative text and are skipped; the section's enactment history
