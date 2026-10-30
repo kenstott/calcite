@@ -3169,7 +3169,7 @@ econ.industry_gdp.table_id:VARCHAR
 econ.industry_gdp.type:VARCHAR
 econ.industry_gdp.units:VARCHAR
 econ.industry_gdp.value:DOUBLE
-econ.industry_gdp.year:VARCHAR
+econ.industry_gdp.year:INTEGER
 econ.industry_occupation_employment.employment:DOUBLE
 econ.industry_occupation_employment.footnotes:VARCHAR
 econ.industry_occupation_employment.industry_code:VARCHAR
@@ -3330,7 +3330,7 @@ econ.national_accounts.type:VARCHAR
 econ.national_accounts.unit_mult:VARCHAR
 econ.national_accounts.units:VARCHAR
 econ.national_accounts.value:VARCHAR
-econ.national_accounts.year:VARCHAR
+econ.national_accounts.year:INTEGER
 econ.national_accounts_enriched.frequency:VARCHAR
 econ.national_accounts_enriched.line_description:VARCHAR
 econ.national_accounts_enriched.line_number:VARCHAR
@@ -3339,7 +3339,7 @@ econ.national_accounts_enriched.table_description:VARCHAR
 econ.national_accounts_enriched.table_id:VARCHAR
 econ.national_accounts_enriched.units:VARCHAR
 econ.national_accounts_enriched.value:VARCHAR
-econ.national_accounts_enriched.year:VARCHAR
+econ.national_accounts_enriched.year:INTEGER
 econ.national_accounts_tables.description:VARCHAR
 econ.national_accounts_tables.table_id:VARCHAR
 econ.national_wages.agglvl_code:VARCHAR
@@ -3549,7 +3549,7 @@ econ.trade_balance_summary.net_trade_balance:DOUBLE
 econ.trade_balance_summary.quarter:INTEGER
 econ.trade_balance_summary.total_exports:DOUBLE
 econ.trade_balance_summary.total_imports:DOUBLE
-econ.trade_balance_summary.year:VARCHAR
+econ.trade_balance_summary.year:INTEGER
 econ.trade_by_state.air_value_usd:BIGINT
 econ.trade_by_state.commodity_desc:VARCHAR
 econ.trade_by_state.container_value_usd:BIGINT
@@ -3622,7 +3622,7 @@ econ.trade_statistics.time_period:VARCHAR
 econ.trade_statistics.trade_type:VARCHAR
 econ.trade_statistics.units:VARCHAR
 econ.trade_statistics.value:VARCHAR
-econ.trade_statistics.year:VARCHAR
+econ.trade_statistics.year:INTEGER
 econ.treasury_yields.avg_interest_rate_amt:DOUBLE
 econ.treasury_yields.frequency:VARCHAR
 econ.treasury_yields.record_date:DATE
