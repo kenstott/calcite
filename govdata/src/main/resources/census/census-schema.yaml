@@ -6267,6 +6267,12 @@ partitionedTables:
       response:
         format: csv
         compressed: gzip
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        # LEHD publishes each state through its own last year (ak ends at 2016, mi at 2021),
+        # so a state-year beyond that has no file; skip that batch rather than fail the run.
+        skipOn: [404]
       rawCache:
         enabled: true
 
