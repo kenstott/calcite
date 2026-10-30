@@ -5834,7 +5834,7 @@ partitionedTables:
         type: string
         source: tablename
         nullable: true
-        comment: BEA NIPA table identifier requested for this row (e.g., 'T10101')
+        comment: BEA NIPA table identifier requested for this row (e.g., 'T10101'); equals table_name
 
     # API Configuration
     download:
@@ -7501,7 +7501,7 @@ partitionedTables:
         type: string
         source: classification
         nullable: true
-        comment: Partner breakdown requested ('country' or 'industry'); row_code is coded in this classification
+        comment: Partner breakdown requested ('Country' or 'Industry'); row_code is coded in this classification
 
     source:
       type: http
