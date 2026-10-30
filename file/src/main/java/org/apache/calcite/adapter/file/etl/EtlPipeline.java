@@ -3618,13 +3618,11 @@ public class EtlPipeline {
   }
 
   /**
-   * Removes from {@code unprocessedIndices} any combination whose period is already
-   * marked complete (authoritative per-period skip). Periods are deduplicated so each
-   * distinct period key is checked once even when many combos share it.
+   * Drops the combinations the table declares as {@code excludeCombinations}.
    *
-   * @param pipelineName       the pipeline name
-   * @param combinations       all combinations (indexed by the set entries)
-   * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
+   * @param combinations expanded dimension combinations
+   * @param config       the pipeline config
+   * @return the combinations that should be requested
    */
   private static List<Map<String, String>> withoutExcluded(List<Map<String, String>> combinations,
       EtlPipelineConfig config) {
@@ -3671,6 +3669,15 @@ public class EtlPipeline {
     return requested;
   }
 
+  /**
+   * Removes from {@code unprocessedIndices} any combination whose period is already
+   * marked complete (authoritative per-period skip). Periods are deduplicated so each
+   * distinct period key is checked once even when many combos share it.
+   *
+   * @param pipelineName       the pipeline name
+   * @param combinations       all combinations (indexed by the set entries)
+   * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
+   */
   private void removePeriodCompleteIndices(String pipelineName,
       List<Map<String, String>> combinations, Set<Integer> unprocessedIndices) {
     if (unprocessedIndices.isEmpty()) {
