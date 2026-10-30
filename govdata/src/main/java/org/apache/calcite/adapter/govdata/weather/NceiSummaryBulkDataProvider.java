@@ -196,7 +196,6 @@ public class NceiSummaryBulkDataProvider implements DataProvider {
    */
   private static final class ArchiveIterator implements Iterator<Map<String, Object>> {
     private final TarArchiveInputStream tar;
-    private final BufferedReader entryReader;
     private final String year;
     private final boolean monthly;
     private final HttpSourceConfig.RateLimitConfig rateLimit;
@@ -209,8 +208,6 @@ public class NceiSummaryBulkDataProvider implements DataProvider {
     ArchiveIterator(TarArchiveInputStream tar, String year, boolean monthly,
         HttpSourceConfig.RateLimitConfig rateLimit) {
       this.tar = tar;
-      // Reads the current tar entry only; closing it is deliberately never done per entry.
-      this.entryReader = new BufferedReader(new InputStreamReader(tar, StandardCharsets.UTF_8));
       this.year = year;
       this.monthly = monthly;
       this.rateLimit = rateLimit;
@@ -248,6 +245,10 @@ public class NceiSummaryBulkDataProvider implements DataProvider {
         return;
       }
       stations++;
+      // A reader per entry: read-ahead text buffered from a station file that is abandoned early
+      // must not reach the next file. It is not closed, as that would close the archive stream.
+      BufferedReader entryReader =
+          new BufferedReader(new InputStreamReader(tar, StandardCharsets.UTF_8));
       String headerLine = entryReader.readLine();
       if (headerLine == null) {
         return;
