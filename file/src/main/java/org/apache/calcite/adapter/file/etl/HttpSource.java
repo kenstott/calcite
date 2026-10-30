@@ -1455,10 +1455,10 @@ public class HttpSource implements DataSource {
 
     // Circuit breaker: if this origin has returned >= threshold consecutive 503s, treat it as down
     // and fast-skip (no request, no retries) until a success resets it. EtlPipeline catches
-    // SkippedBatchException and skips the batch gracefully.
+    // CircuitOpenSkipException and skips the batch; a replace-partitions commit is then blocked.
     java.util.concurrent.atomic.AtomicInteger open = CONSECUTIVE_503.get(baseUri(fullUrl));
     if (open != null && open.get() >= CIRCUIT_503_THRESHOLD) {
-      throw new SkippedBatchException("Circuit open — origin returned >= " + CIRCUIT_503_THRESHOLD
+      throw new CircuitOpenSkipException("Circuit open — origin returned >= " + CIRCUIT_503_THRESHOLD
           + " consecutive 503s, fast-skipping: " + baseUri(fullUrl));
     }
 

@@ -201,4 +201,14 @@ public class PartialPartitionGuardTest {
   @Test public void commitBlockingErrorsEmptyWhenNoFailures() {
     assertTrue(PartialPartitionGuard.commitBlockingErrors(new ArrayList<String>()).isEmpty());
   }
+
+  @Test public void commitBlockingErrorsCountsCircuitOpenSkips() {
+    CircuitOpenSkipException skip = new CircuitOpenSkipException("Circuit open: https://origin");
+    List<String> errors = Arrays.asList(
+        PartialPartitionGuard.circuitOpenError("4", skip, "{series=A}"),
+        "Batch 3/9 failed: HTTP 404: not published");
+    List<String> blocking = PartialPartitionGuard.commitBlockingErrors(errors);
+    assertEquals(1, blocking.size());
+    assertTrue(blocking.get(0).contains("Circuit open"));
+  }
 }
