@@ -19,6 +19,10 @@ import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
 
 import com.google.api.gax.core.FixedCredentialsProvider;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.compute.v1.Disk;
+import com.google.cloud.compute.v1.DisksClient;
+import com.google.cloud.compute.v1.DisksScopedList;
+import com.google.cloud.compute.v1.DisksSettings;
 import com.google.cloud.compute.v1.Instance;
 import com.google.cloud.compute.v1.InstancesClient;
 import com.google.cloud.compute.v1.InstancesScopedList;
@@ -45,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -316,6 +321,8 @@ public class GCPProvider implements CloudProvider {
           // Encryption facts - always enabled in GCS
           storageData.put("EncryptionEnabled", true);
           storageData.put("EncryptionKeyName", bucket.getDefaultKmsKeyName());
+          storageData.put("EncryptionKeyType",
+              bucket.getDefaultKmsKeyName() != null ? "customer-managed" : "service-managed");
 
           // Access control
           if (bucket.getIamConfiguration() != null) {
@@ -348,9 +355,61 @@ public class GCPProvider implements CloudProvider {
         LOGGER.debug("Error querying storage resources in project {}: {}",
             projectId, e.getMessage());
       }
+
+      try {
+        DisksSettings settings = DisksSettings.newBuilder()
+            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+            .build();
+        try (DisksClient client = DisksClient.create(settings)) {
+          for (Map.Entry<String, DisksScopedList> entry
+              : client.aggregatedList(projectId).iterateAll()) {
+            for (Disk disk : entry.getValue().getDisksList()) {
+              results.add(persistentDisk(projectId, disk));
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOGGER.debug("Error querying persistent disks in project {}: {}",
+            projectId, e.getMessage());
+      }
     }
 
     return results;
+  }
+
+  /**
+   * The storage row of a persistent disk. {@code EncryptionKeyName} is the Cloud KMS key of a
+   * disk encrypted with one, without the key version the disk records; {@code AttachedInstanceId}
+   * is the instance it is attached to, as {@code compute_resources.resource_id} names it (its
+   * selfLink; the first of a disk attached to several).
+   */
+  static Map<String, Object> persistentDisk(String projectId, Disk disk) {
+    Map<String, Object> row = new HashMap<>();
+    row.put("ProjectId", projectId);
+    row.put("StorageResource", disk.getName());
+    row.put("StorageType", "Persistent Disk");
+    row.put("Location", lastSegment(disk.hasZone() ? disk.getZone() : disk.getRegion()));
+    row.put("ResourceId", disk.getSelfLink());
+    Map<String, String> labels = disk.getLabelsMap();
+    row.put("Application",
+        labels.getOrDefault("application", labels.getOrDefault("app", "Untagged/Orphaned")));
+    row.put("AttachedInstanceId", disk.getUsersCount() == 0 ? null : disk.getUsers(0));
+    row.put("SizeBytes", disk.hasSizeGb() ? disk.getSizeGb() * 1024L * 1024L * 1024L : null);
+    row.put("StorageClass", lastSegment(disk.getType()));
+    // Every persistent disk is encrypted: by Google's key, a Cloud KMS key or a key the customer
+    // supplies with each use
+    row.put("EncryptionEnabled", true);
+    String kmsKeyName = disk.hasDiskEncryptionKey() && disk.getDiskEncryptionKey().hasKmsKeyName()
+        ? disk.getDiskEncryptionKey().getKmsKeyName().replaceFirst("/cryptoKeyVersions/.*$", "")
+        : null;
+    row.put("EncryptionKeyName", kmsKeyName);
+    row.put("EncryptionKeyType", kmsKeyName != null ? "customer-managed"
+        : disk.hasDiskEncryptionKey() ? "customer-supplied" : "service-managed");
+    row.put("TimeCreated", disk.hasCreationTimestamp()
+        ? OffsetDateTime.parse(disk.getCreationTimestamp()) : null);
+    row.put("VersioningEnabled", null);
+    row.put("LifecycleRuleCount", null);
+    return row;
   }
 
   /** Last path segment of a GCP resource URL (e.g. zone/machineType/region URLs). */

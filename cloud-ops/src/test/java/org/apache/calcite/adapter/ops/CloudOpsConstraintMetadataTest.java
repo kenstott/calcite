@@ -156,8 +156,24 @@ public class CloudOpsConstraintMetadataTest {
         "security_group_id FK");
   }
 
+  @Test void testStorageAttachedInstanceForeignKey() {
+    CloudOpsConfig config = config();
+    StorageResourcesTable storage = new StorageResourcesTable(config);
+    List<String> cols = columns(storage);
+    List<String> computeCols = columns(new ComputeResourcesTable(config));
+
+    List<RelReferentialConstraint> fks = storage.getStatistic().getReferentialConstraints();
+    assertNotNull(fks);
+    assertEquals(1, fks.size(), "attached_instance_id -> compute_resources");
+    RelReferentialConstraint fk = fks.get(0);
+    assertEquals(Arrays.asList("cloud", "compute_resources"), fk.getTargetQualifiedName());
+    assertEquals(Collections.singletonList(
+            IntPair.of(cols.indexOf("attached_instance_id"), computeCols.indexOf("resource_id"))),
+        fk.getColumnPairs());
+  }
+
   @Test void testTablesWithoutForeignKeysDeclareNone() {
-    Statistic stat = new StorageResourcesTable(config()).getStatistic();
+    Statistic stat = new KubernetesClustersTable(config()).getStatistic();
     // Default hook returns an empty list (not null) for tables with no FKs.
     assertNotNull(stat.getReferentialConstraints());
     assertTrue(stat.getReferentialConstraints().isEmpty());

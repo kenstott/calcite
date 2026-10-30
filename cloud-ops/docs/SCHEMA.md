@@ -111,7 +111,7 @@ The default schema is **`cloud`**, containing seven resource tables. Two metadat
 | Table | Resource kind | Azure | AWS | GCP |
 |-------|---------------|:-----:|:---:|:---:|
 | `compute_resources` | Virtual machines / instances | ✓ | ✓ | ✓ |
-| `storage_resources` | Object/blob storage, accounts | ✓ | ✓ | ✓ |
+| `storage_resources` | Object/blob storage, accounts, attached disks | ✓ | ✓ | ✓ |
 | `kubernetes_clusters` | AKS / EKS / GKE | ✓ | ✓ | ✓ |
 | `container_registries` | ACR / ECR / Artifact Registry | ✓ | ✓ | ✓ |
 | `network_resources` | VNets/VPCs, subnets, security groups | ✓ | ✓ | ✓ |
@@ -156,6 +156,7 @@ to every cloud's rows uniformly and only bite where the source column is populat
 | `compute_resources` → `network_resources` | `(cloud_provider, subnet_id)` → `(cloud_provider, native_id)` | subnet rows now emitted (`network_resource_type = 'Subnet'`) |
 | `compute_resources` → `iam_resources` | `iam_role` → `resource_id` | `iam_role` holds the attached identity's full ID (AWS instance-profile ARN / Azure managed identity / GCP service account) |
 | `compute_security_groups` → `compute_resources` | `compute_resource_id` → `resource_id` | junction side: the instance ARN |
+| `storage_resources` → `compute_resources` | `attached_instance_id` → `resource_id` | a disk's VM; null for an unattached disk and every non-disk row |
 | `compute_security_groups` → `network_resources` | `(cloud_provider, security_group_id)` → `(cloud_provider, native_id)` | junction side: the security-group native id |
 
 The many-to-many compute↔security-group relationship is modeled by the **`compute_security_groups`
@@ -246,6 +247,8 @@ erDiagram
         timestamp created_date
         timestamp modified_date
         varchar tags
+        varchar key_id
+        varchar attached_instance_id FK
     }
 
     KUBERNETES_CLUSTERS {
@@ -381,6 +384,7 @@ erDiagram
     NETWORK_RESOURCES ||--o{ COMPUTE_RESOURCES : "subnet_id"
     IAM_RESOURCES ||--o{ COMPUTE_RESOURCES : "iam_role"
     COMPUTE_RESOURCES ||--o{ COMPUTE_SECURITY_GROUPS : "compute_resource_id"
+    COMPUTE_RESOURCES ||--o{ STORAGE_RESOURCES : "attached_instance_id"
     NETWORK_RESOURCES ||--o{ COMPUTE_SECURITY_GROUPS : "security_group_id"
 ```
 
@@ -426,7 +430,8 @@ Virtual machines / compute instances (EC2, Azure VM, GCE).
 
 ### 5.2 `storage_resources`
 
-Object/blob storage and storage accounts (S3, Azure Storage, GCS).
+Object/blob storage and storage accounts (S3, Azure Storage, GCS), and the disks attached to VMs:
+`storage_type` `EBS Volume` (AWS), `Managed Disk` (Azure) and `Persistent Disk` (GCP).
 
 | Column | Type | Key | Description |
 |--------|------|:---:|-------------|
@@ -438,12 +443,12 @@ Object/blob storage and storage accounts (S3, Azure Storage, GCS).
 | `region` | VARCHAR | | Region / location |
 | `resource_group` | VARCHAR | | Azure resource group (null for AWS/GCP) |
 | `resource_id` | VARCHAR | 🔑 | Cloud-native unique ID (ARN / Resource ID) |
-| `size_bytes` | BIGINT | | Size in bytes (often null — needs metrics) |
-| `storage_class` | VARCHAR | | Storage class (GCP) |
+| `size_bytes` | BIGINT | | Size in bytes (a disk's provisioned size; a bucket's needs metrics) |
+| `storage_class` | VARCHAR | | Storage class (GCP bucket); a disk's type (`gp3`, `pd-balanced`) |
 | `replication_type` | VARCHAR | | Replication/redundancy (Azure-derived) |
 | `encryption_enabled` | BOOLEAN | | Encryption at rest on |
 | `encryption_type` | VARCHAR | | Encryption method/type |
-| `encryption_key_type` | VARCHAR | | `customer-managed` / `service-managed` / `none` |
+| `encryption_key_type` | VARCHAR | | `customer-managed` / `service-managed` / `none`; `customer-supplied` for a GCP disk under a key supplied with each use; null when AWS KMS does not say who manages the key |
 | `public_access_enabled` | BOOLEAN | | Public access allowed |
 | `public_access_level` | VARCHAR | | `blocked` / `allowed` (AWS); GCP prevention |
 | `network_restrictions` | VARCHAR | | Network default action (Azure) |
@@ -458,6 +463,8 @@ Object/blob storage and storage accounts (S3, Azure Storage, GCS).
 | `created_date` | TIMESTAMP | | Creation time (AWS, GCP) |
 | `modified_date` | TIMESTAMP | | Last modification (GCP) |
 | `tags` | VARCHAR | | JSON tags/labels |
+| `key_id` | VARCHAR | | The key of a customer-managed encryption: AWS KMS key ARN, Cloud KMS key name (`projects/…/cryptoKeys/…`, no version), Azure Key Vault key URL (a managed disk's through its disk encryption set). Null when the cloud manages the key |
+| `attached_instance_id` | VARCHAR | FK | The VM a disk is attached to, as `compute_resources.resource_id` names it; the first of a disk attached to several. Null for an unattached disk and every non-disk row |
 
 ### 5.3 `kubernetes_clusters`
 
