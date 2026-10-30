@@ -217,8 +217,6 @@ final class EtagRetryConnection {
 
   /** Rewrites base Iceberg table references in SELECT statements to pinned metadata files. */
   static final class PinRewriter {
-    private static final String PINNED_SCAN =
-        "(SELECT * FROM iceberg_scan('%s', version='%s', allow_moved_paths=true))";
     private static final Pattern QUALIFIED_REF = Pattern.compile(
         "(FROM|JOIN)(\\s+)\"([^\"]+)\"\\s*\\.\\s*\"([^\"]+)\"(\\s+AS\\b)?",
         Pattern.CASE_INSENSITIVE);
@@ -268,7 +266,10 @@ final class EtagRetryConnection {
         changed = true;
         String alias = m.group(5) != null ? m.group(5) : " AS \"" + table + "\"";
         m.appendReplacement(out, Matcher.quoteReplacement(m.group(1) + m.group(2)
-            + String.format(PINNED_SCAN, pinned[0].replace("'", "''"), pinned[1]) + alias));
+            + String.format(
+                "(SELECT * FROM iceberg_scan('%s', version='%s', allow_moved_paths=true))",
+                pinned[0].replace("'", "''"), pinned[1])
+            + alias));
       }
       if (!changed) {
         return sql;
