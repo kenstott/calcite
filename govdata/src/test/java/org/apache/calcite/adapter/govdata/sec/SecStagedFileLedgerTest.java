@@ -279,4 +279,18 @@ class SecStagedFileLedgerTest {
     assertEquals(Collections.<String>emptyList(),
         ledger.pendingFor("facts", "uuid-1", PATTERN));
   }
+
+  @Test void aForcedMarkTravelsWithTheFileForTheForcedTableOnly() {
+    SecStagedFileLedger staging = new SecStagedFileLedger(tracker());
+    staging.recordForcedUpload(A_2016, Collections.singletonList("facts"));
+    List<String> both = Arrays.asList(A_2016, B_2025);
+    assertEquals(Collections.singletonList(A_2016), staging.forcedFor("facts", both));
+    assertEquals(Collections.<String>emptyList(), staging.forcedFor("metadata", both));
+    assertEquals(Collections.<String>emptyList(),
+        staging.forcedFor("facts", Collections.<String>emptyList()));
+  }
+
+  private static PipelineTracker tracker() {
+    return new MapTracker();
+  }
 }

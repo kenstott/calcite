@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergMaterializer;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,8 @@ final class SecStagedFileLedger {
   static final String PHASE_ABSORBED = "absorbed_file";
   /** An in-progress absorption by one worker; see {@link #claimPendingFor}. */
   static final String PHASE_CLAIM = "absorb_claim";
+  /** A staged file that replaces, rather than adds to, its accessions' rows; see {@link #recordForcedUpload}. */
+  static final String PHASE_FORCED = "forced_file";
 
   private static final Pattern YEAR_PARTITION = Pattern.compile("year=(\\d+)/");
 
@@ -135,6 +138,33 @@ final class SecStagedFileLedger {
     for (String path : paths) {
       tracker.markCleared(path, absorbedBy, PHASE_CLAIM);
     }
+  }
+
+  /**
+   * Marks a staged file as the replacement for the accessions it carries in each of {@code
+   * forcedTables}. The mark travels with the file, so the pass that absorbs it applies replace
+   * semantics even when that pass is another worker that was not itself launched with a force.
+   */
+  void recordForcedUpload(String objectPath, Collection<String> forcedTables) {
+    for (String table : forcedTables) {
+      tracker.markComplete(objectPath, table, PHASE_FORCED, 1);
+    }
+  }
+
+  /** The subset of {@code paths} staged as replacements for {@code table}'s accessions. */
+  List<String> forcedFor(String table, List<String> paths) {
+    if (paths.isEmpty()) {
+      return Collections.<String>emptyList();
+    }
+    Map<String, Set<String>> forced = tracker.bulkGetCompletedTablesFresh(paths, PHASE_FORCED);
+    List<String> result = new ArrayList<String>();
+    for (String path : paths) {
+      Set<String> tables = forced.get(path);
+      if (tables != null && tables.contains(table)) {
+        result.add(path);
+      }
+    }
+    return Collections.unmodifiableList(result);
   }
 
   /** Records that {@code icebergTableId}'s current instance has absorbed these files. */
