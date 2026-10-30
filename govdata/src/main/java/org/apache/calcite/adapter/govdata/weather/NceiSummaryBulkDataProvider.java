@@ -98,9 +98,10 @@ public class NceiSummaryBulkDataProvider implements DataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(
       EtlPipelineConfig config, Map<String, String> variables) throws IOException {
-    String year = variables.get("year");
+    // effective_year is the data year once the dimension's publication lag is applied
+    String year = variables.get("effective_year");
     if (year == null) {
-      throw new IOException("NceiSummaryBulkDataProvider requires 'year' dimension");
+      throw new IOException("NceiSummaryBulkDataProvider requires 'effective_year'");
     }
     String type = variables.get("type");
     boolean monthly;
