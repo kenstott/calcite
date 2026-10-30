@@ -698,7 +698,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "BEAAPI.Results.ParamValue"
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       tableNamesList:
         - "SAINC1"
         - "SAINC30"
@@ -778,7 +778,7 @@ partitionedTables:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data.
         # BeaResponseTransformer returns the ParamValue array directly.
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]

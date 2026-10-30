@@ -340,14 +340,9 @@ dimension_values:
     # fetches). ita_data's BalGds indicator reaches 1960; gdp_statistics' T10101 reaches 1930
     # - both real floors deeper than the 1999 set here, left for a future pass rather than
     # fully mapped per-tablename now. A GetData call for a year before a given tablename's
-    # own start returns BEAAPI.Error (code 201, "No data exists"), NOT
-    # BEAAPI.Results.Error - BeaResponseTransformer's error check only looks under Results,
-    # so this top-level shape falls through to its "no Data array" branch and comes back as
-    # an empty result rather than a thrown error or a recognized skip. That fallthrough is
-    # what makes widening this floor safe today (a too-early request costs a wasted round
-    # trip, not a failure) - but it also means the code cannot currently distinguish "no data
-    # published for this year" from a genuinely malformed response, which is worth fixing on
-    # its own rather than relied upon.
+    # own start returns BEAAPI.Error (code 201, "No data exists"), which the BEA response
+    # check treats as an empty result, so a too-early request costs a wasted round trip, not a
+    # failure. Any other BEAAPI.Error fails the batch.
     start: "${GOVDATA_START_YEAR:1999}"
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
@@ -5866,7 +5861,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
@@ -5888,7 +5883,7 @@ partitionedTables:
       response:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -5930,6 +5925,10 @@ partitionedTables:
         - T61900D  # Corporate Profits After Tax by Industry (annual only)
         - T62100D  # Undistributed Corporate Profits by Industry (annual only)
         - T71600   # Corporate Profits, Taxes, and Dividends in the NIPA vs. IRS Measures (annual only)
+    # BEA answers a quarterly request for an annual-only table with error 201; never ask.
+    excludeCombinations:
+      - frequency: Q
+        tablename: [T61700D, T61900D, T62100D, T71600]
 
     # Materialization configuration
     materialize:
@@ -6054,7 +6053,7 @@ partitionedTables:
       response:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -7109,7 +7108,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
 
     # HTTP Source configuration for EtlPipeline
     source:
@@ -7128,7 +7127,7 @@ partitionedTables:
       response:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -7307,7 +7306,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
@@ -7329,7 +7328,7 @@ partitionedTables:
       response:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -7505,7 +7504,7 @@ partitionedTables:
       response:
         format: json
         # dataPath omitted: FdiDataTransformer extracts BEAAPI.Results.Data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -7599,7 +7598,7 @@ partitionedTables:
         ResultFormat: "JSON"
       response:
         format: json
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -7747,7 +7746,7 @@ partitionedTables:
       response:
         format: json
         # dataPath omitted: IipDataTransformer extracts BEAAPI.Results.Data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -7863,7 +7862,7 @@ partitionedTables:
       response:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]
@@ -8083,7 +8082,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "BEAAPI.Results.Data"
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
@@ -8106,7 +8105,7 @@ partitionedTables:
       response:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]

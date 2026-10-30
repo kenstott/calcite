@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,6 +85,7 @@ public class EtlPipelineConfig {
   private final Map<String, Object> rawSourceConfig;
   private final String bulkDownload;
   private final Map<String, DimensionConfig> dimensions;
+  private final List<Map<String, List<String>>> excludeCombinations;
   private final List<ColumnConfig> columns;
   private final MaterializeConfig materialize;
   private final ErrorHandlingConfig errorHandling;
@@ -105,6 +107,9 @@ public class EtlPipelineConfig {
     this.dimensions = builder.dimensions != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, DimensionConfig>(builder.dimensions))
         : Collections.<String, DimensionConfig>emptyMap();
+    this.excludeCombinations = builder.excludeCombinations != null
+        ? Collections.unmodifiableList(builder.excludeCombinations)
+        : Collections.<Map<String, List<String>>>emptyList();
     this.columns = builder.columns != null
         ? Collections.unmodifiableList(builder.columns)
         : Collections.<ColumnConfig>emptyList();
@@ -177,6 +182,37 @@ public class EtlPipelineConfig {
    */
   public Map<String, DimensionConfig> getDimensions() {
     return dimensions;
+  }
+
+  /**
+   * Returns the dimension-value combinations that are never requested.
+   *
+   * <p>Each entry maps dimension names to the values it matches; a combination is dropped when it
+   * matches every dimension of at least one entry.
+   */
+  public List<Map<String, List<String>>> getExcludeCombinations() {
+    return excludeCombinations;
+  }
+
+  /**
+   * Returns whether the combination matches an {@code excludeCombinations} entry.
+   *
+   * @param combination dimension name to value for one expanded batch
+   */
+  public boolean isExcluded(Map<String, String> combination) {
+    for (Map<String, List<String>> entry : excludeCombinations) {
+      boolean matches = true;
+      for (Map.Entry<String, List<String>> dim : entry.entrySet()) {
+        if (!dim.getValue().contains(combination.get(dim.getKey()))) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -299,6 +335,7 @@ public class EtlPipelineConfig {
         .rawSourceConfig(rawSourceConfig)
         .bulkDownload(bulkDownload)
         .dimensions(resolvedDimensions)
+        .excludeCombinations(excludeCombinations)
         .columns(columns)
         .materialize(materialize)
         .errorHandling(errorHandling)
@@ -310,6 +347,42 @@ public class EtlPipelineConfig {
         .dqRowLimit(dqRowLimit)
         .lookbackPeriods(lookbackPeriods)
         .build();
+  }
+
+  private static List<Map<String, List<String>>> parseExcludeCombinations(Object obj) {
+    if (obj == null) {
+      return null;
+    }
+    if (!(obj instanceof List)) {
+      throw new IllegalArgumentException("excludeCombinations must be a list of maps");
+    }
+    List<Map<String, List<String>>> result = new ArrayList<Map<String, List<String>>>();
+    for (Object entryObj : (List<?>) obj) {
+      Map<String, Object> entry = toMap(entryObj);
+      if (entry == null || entry.isEmpty()) {
+        throw new IllegalArgumentException(
+            "excludeCombinations entry must map dimension names to values: " + entryObj);
+      }
+      Map<String, List<String>> parsed = new LinkedHashMap<String, List<String>>();
+      for (Map.Entry<String, Object> dim : entry.entrySet()) {
+        Object value = dim.getValue();
+        List<String> values = new ArrayList<String>();
+        if (value instanceof List) {
+          for (Object v : (List<?>) value) {
+            values.add(String.valueOf(v));
+          }
+        } else if (value != null) {
+          values.add(String.valueOf(value));
+        }
+        if (values.isEmpty()) {
+          throw new IllegalArgumentException(
+              "excludeCombinations dimension '" + dim.getKey() + "' has no values");
+        }
+        parsed.put(dim.getKey(), values);
+      }
+      result.add(parsed);
+    }
+    return result;
   }
 
   /**
@@ -367,6 +440,8 @@ public class EtlPipelineConfig {
     if (dimensionsMap != null) {
       builder.dimensions(DimensionConfig.fromDimensionsMap(dimensionsMap));
     }
+
+    builder.excludeCombinations(parseExcludeCombinations(map.get("excludeCombinations")));
 
     Object columnsObj = map.get("columns");
     if (columnsObj instanceof List) {
@@ -867,6 +942,7 @@ public class EtlPipelineConfig {
     private Map<String, Object> rawSourceConfig;
     private String bulkDownload;
     private Map<String, DimensionConfig> dimensions;
+    private List<Map<String, List<String>>> excludeCombinations;
     private List<ColumnConfig> columns;
     private MaterializeConfig materialize;
     private ErrorHandlingConfig errorHandling;
@@ -910,6 +986,11 @@ public class EtlPipelineConfig {
 
     public Builder dimensions(Map<String, DimensionConfig> dimensions) {
       this.dimensions = dimensions;
+      return this;
+    }
+
+    public Builder excludeCombinations(List<Map<String, List<String>>> excludeCombinations) {
+      this.excludeCombinations = excludeCombinations;
       return this;
     }
 
