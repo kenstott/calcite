@@ -15,11 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
 /**
- * Process-wide, short-lived pins of an Iceberg table to the {@code v{N}.metadata.json} that
+ * Process-wide, short-lived pins of an Iceberg table to the metadata version that
  * {@code version-hint.text} named when the pin was taken.
  *
  * <p>{@code iceberg_scan('<table>')} re-reads {@code version-hint.text} and the metadata file it
- * names on every scan. Scanning {@code iceberg_scan('<table>/metadata/v{N}.metadata.json')}
+ * names on every scan. Scanning the table with an explicit {@code version} argument
  * instead skips the pointer read, and a metadata file is immutable for its version, so holding a
  * pin for a bounded time trades at most that long of read staleness for the saved requests.
  * Nothing here is persisted: pins live only in this map and are applied by rewriting the pushed-down
@@ -31,17 +31,17 @@ import java.util.function.LongSupplier;
  */
 public final class IcebergMetadataPins {
 
-  /** Resolves the current {@code v{N}.metadata.json} location for a table location. */
+  /** Resolves the current metadata version number, as text, for a table location. */
   public interface PointerReader {
-    String currentMetadataLocation(String tableLocation) throws java.io.IOException;
+    String currentVersion(String tableLocation) throws java.io.IOException;
   }
 
   private static final class Pin {
-    final String metadataLocation;
+    final String version;
     final long expiresAtNanos;
 
-    Pin(String metadataLocation, long expiresAtNanos) {
-      this.metadataLocation = metadataLocation;
+    Pin(String version, long expiresAtNanos) {
+      this.version = version;
       this.expiresAtNanos = expiresAtNanos;
     }
   }
@@ -52,7 +52,7 @@ public final class IcebergMetadataPins {
   }
 
   /**
-   * The pinned metadata location for {@code tableLocation}, reading the pointer through
+   * The pinned metadata version for {@code tableLocation}, reading the pointer through
    * {@code reader} when there is no live pin.
    *
    * @param ttlMillis pin lifetime; 0 or less disables pinning and returns null
@@ -67,11 +67,11 @@ public final class IcebergMetadataPins {
     long now = nanoClock.getAsLong();
     Pin pin = PINS.get(key);
     if (pin != null && now - pin.expiresAtNanos < 0) {
-      return pin.metadataLocation;
+      return pin.version;
     }
-    String metadataLocation = reader.currentMetadataLocation(tableLocation);
-    PINS.put(key, new Pin(metadataLocation, now + ttlMillis * 1_000_000L));
-    return metadataLocation;
+    String version = reader.currentVersion(tableLocation);
+    PINS.put(key, new Pin(version, now + ttlMillis * 1_000_000L));
+    return version;
   }
 
   /** Drops the pin for one table location (this process committed to it). */

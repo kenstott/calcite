@@ -205,7 +205,7 @@ final class EtagRetryConnection {
   /**
    * As {@link #wrap(Connection, FileSchema)}, and when {@code pinTtlMillis} is positive every
    * SELECT issued through the connection has its base Iceberg table references rewritten to the
-   * table's pinned {@code v{N}.metadata.json} (see {@link IcebergMetadataPins}). DDL is never
+   * table's pinned version (see {@link IcebergMetadataPins}). DDL is never
    * rewritten, so a pinned path cannot reach a persisted view definition.
    */
   static Connection wrap(Connection conn, FileSchema fileSchema, long pinTtlMillis) {
@@ -218,7 +218,7 @@ final class EtagRetryConnection {
   /** Rewrites base Iceberg table references in SELECT statements to pinned metadata files. */
   static final class PinRewriter {
     private static final String PINNED_SCAN =
-        "(SELECT * FROM iceberg_scan('%s', allow_moved_paths=true))";
+        "(SELECT * FROM iceberg_scan('%s', version='%s', allow_moved_paths=true))";
     private static final Pattern QUALIFIED_REF = Pattern.compile(
         "(FROM|JOIN)(\\s+)\"([^\"]+)\"\\s*\\.\\s*\"([^\"]+)\"(\\s+AS\\b)?",
         Pattern.CASE_INSENSITIVE);
@@ -260,7 +260,7 @@ final class EtagRetryConnection {
       boolean changed = false;
       while (m.find()) {
         String table = m.group(4);
-        String pinned = pinnedLocation(meta, table);
+        String[] pinned = pinnedVersion(meta, table);
         if (pinned == null) {
           m.appendReplacement(out, Matcher.quoteReplacement(m.group()));
           continue;
@@ -268,7 +268,7 @@ final class EtagRetryConnection {
         changed = true;
         String alias = m.group(5) != null ? m.group(5) : " AS \"" + table + "\"";
         m.appendReplacement(out, Matcher.quoteReplacement(m.group(1) + m.group(2)
-            + String.format(PINNED_SCAN, pinned.replace("'", "''")) + alias));
+            + String.format(PINNED_SCAN, pinned[0].replace("'", "''"), pinned[1]) + alias));
       }
       if (!changed) {
         return sql;
@@ -277,7 +277,8 @@ final class EtagRetryConnection {
       return out.toString();
     }
 
-    private String pinnedLocation(ConversionMetadata meta, String table) {
+    /** {table location, pinned version} for a base Iceberg table, or null when it is not pinnable. */
+    private String[] pinnedVersion(ConversionMetadata meta, String table) {
       ConversionMetadata.ConversionRecord record = meta.getAllConversions().get(table);
       if (record == null) {
         record = meta.getAllConversions().get(table.toLowerCase(java.util.Locale.ROOT));
@@ -288,7 +289,8 @@ final class EtagRetryConnection {
         return null;
       }
       try {
-        return IcebergMetadataPins.resolve(record.sourceFile, ttlMillis, reader, clock);
+        String version = IcebergMetadataPins.resolve(record.sourceFile, ttlMillis, reader, clock);
+        return new String[] {record.sourceFile, version};
       } catch (java.io.IOException | RuntimeException e) {
         LOGGER.warn("Metadata pin: could not resolve {}; reading it unpinned: {}",
             record.sourceFile, e.toString());
@@ -305,7 +307,7 @@ final class EtagRetryConnection {
           buf.write(chunk, 0, n);
         }
         String hint = new String(buf.toByteArray(), java.nio.charset.StandardCharsets.UTF_8).trim();
-        return tableLocation + "/metadata/v" + Integer.parseInt(hint) + ".metadata.json";
+        return String.valueOf(Integer.parseInt(hint));
       }
     }
 

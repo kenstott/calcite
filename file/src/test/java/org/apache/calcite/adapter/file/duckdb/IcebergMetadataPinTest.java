@@ -61,7 +61,7 @@ class IcebergMetadataPinTest {
     rewriter = new EtagRetryConnection.PinRewriter(fileSchema, TTL_MS,
         location -> {
           pointerReads.incrementAndGet();
-          return location + "/metadata/v" + version.get() + ".metadata.json";
+          return String.valueOf(version.get());
         },
         nanos::get);
   }
@@ -75,7 +75,7 @@ class IcebergMetadataPinTest {
 
   @Test void rewritesBaseTableToPinnedMetadataFile() {
     String out = rewriter.rewrite(SQL);
-    assertTrue(out.contains("iceberg_scan('" + TABLE + "/metadata/v5.metadata.json', "
+    assertTrue(out.contains("iceberg_scan('" + TABLE + "', version='5', "
         + "allow_moved_paths=true)"), out);
     assertTrue(out.contains(") AS \"t\" WHERE"), out);
     assertFalse(out.contains("\"econ\".\"average_prices\""), out);
@@ -101,17 +101,17 @@ class IcebergMetadataPinTest {
     String second = rewriter.rewrite(SQL);
     assertEquals(2, pointerReads.get());
     assertNotEquals(first, second);
-    assertTrue(second.contains("v6.metadata.json"), second);
+    assertTrue(second.contains("version='6'"), second);
   }
 
   @Test void invalidationIsSeenImmediately() {
     rewriter.rewrite(SQL);
     version.set(1);
     IcebergMetadataPins.invalidate(TABLE + "/");
-    assertTrue(rewriter.rewrite(SQL).contains("v1.metadata.json"));
+    assertTrue(rewriter.rewrite(SQL).contains("version='1'"));
     IcebergMetadataPins.invalidateAll();
     version.set(2);
-    assertTrue(rewriter.rewrite(SQL).contains("v2.metadata.json"));
+    assertTrue(rewriter.rewrite(SQL).contains("version='2'"));
     assertEquals(3, pointerReads.get());
   }
 
@@ -208,7 +208,7 @@ class IcebergMetadataPinTest {
         try (java.sql.ResultSet rs = raw.createStatement().executeQuery(
             "SELECT sql FROM duckdb_views() WHERE view_name = 'dependent'")) {
           assertTrue(rs.next());
-          assertFalse(rs.getString(1).contains("metadata.json"), rs.getString(1));
+          assertFalse(rs.getString(1).contains("version="), rs.getString(1));
         }
         assertFalse(IcebergMetadataPins.contains(WRAPPED_TABLE));
       }
