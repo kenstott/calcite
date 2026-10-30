@@ -410,23 +410,16 @@ fi
 # running, a repair racing a worker would lose the rows it just rewrote.
 # -------------------------------------------------------------------------------------
 
-_pid_dir="$SCRIPT_DIR/runs/pids"
-_live=""
-if [ -d "$_pid_dir" ]; then
-  for _pf in "$_pid_dir"/worker-sec*.pid; do
-    [ -e "$_pf" ] || continue
-    _id=$(basename "$_pf" .pid)
-    [ -f "$_pid_dir/${_id}.exit" ] && continue
-    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
-    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue
-    _live="$_live $_id"
-  done
-fi
-if [ -n "$_live" ]; then
-  echo "fix-sec: REFUSING to reprocess — live SEC worker(s):${_live}" >&2
-  echo "  These write the same sec/year=*/ partitions. Stop the pool" >&2
-  echo "  (stop-pool.sh) and re-run, or wait for them to finish." >&2
-  exit 1
+if target_is_dq_bucket; then
+  log_info "fix-sec: target ${GOVDATA_PARQUET_DIR} is a DQ bucket; skipping the live-writer guard (production writers do not touch it)"
+else
+  _live=$(live_sec_workers "$SCRIPT_DIR/runs/pids")
+  if [ -n "$_live" ]; then
+    echo "fix-sec: REFUSING to reprocess — live SEC worker(s):${_live}" >&2
+    echo "  These write the same sec/year=*/ partitions. Stop the pool" >&2
+    echo "  (stop-pool.sh) and re-run, or wait for them to finish." >&2
+    exit 1
+  fi
 fi
 
 # -------------------------------------------------------------------------------------
