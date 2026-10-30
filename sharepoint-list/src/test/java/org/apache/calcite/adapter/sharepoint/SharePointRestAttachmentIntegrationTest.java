@@ -22,7 +22,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -39,7 +38,6 @@ public class SharePointRestAttachmentIntegrationTest {
 
   private String tenantId;
   private String clientId;
-  private String clientSecret;
   private String siteUrl;
   private SharePointRestListClient restClient;
   private String testListName = "Shared Documents"; // Using Documents library that should exist
@@ -49,47 +47,21 @@ public class SharePointRestAttachmentIntegrationTest {
    * Check if integration test configuration is available.
    */
   static boolean isConfigured() {
-    try {
-      Properties props = new Properties();
-      props.load(new FileInputStream("local-test.properties"));
-
-      String tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
-      String clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
-      String clientSecret = props.getProperty("SHAREPOINT_CLIENT_SECRET");
-      String siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
-
-      boolean configured = tenantId != null && !tenantId.isEmpty() &&
-                          clientId != null && !clientId.isEmpty() &&
-                          clientSecret != null && !clientSecret.isEmpty() &&
-                          siteUrl != null && !siteUrl.isEmpty();
-
-      if (configured) {
-        System.out.println("SharePoint REST API integration tests enabled");
-        System.out.println("Site URL: " + siteUrl);
-      } else {
-        System.out.println("SharePoint REST API integration tests disabled - missing configuration");
-      }
-
-      return configured;
-    } catch (Exception e) {
-      System.out.println("SharePoint REST API integration tests disabled - " + e.getMessage());
-      return false;
-    }
+    // The live tests run on request; SharePointTestCredentials then requires the settings
+    return "true".equals(System.getenv("SHAREPOINT_INTEGRATION_TESTS"));
   }
 
   @BeforeEach
   public void setUp() throws Exception {
-    props = new Properties();
-    props.load(new FileInputStream("local-test.properties"));
+    props = SharePointTestCredentials.load().properties();
 
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
-    clientSecret = props.getProperty("SHAREPOINT_CLIENT_SECRET");
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     String certPassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
 
     // Use SharePointCertificateTokenManager directly like the file adapter
-    String certificatePath = "../file/src/test/resources/SharePointAppOnlyCert.pfx";
+    String certificatePath = props.getProperty("SHAREPOINT_CERT_PATH");
 
     org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager tokenManager =
         new org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager(
@@ -116,10 +88,7 @@ public class SharePointRestAttachmentIntegrationTest {
     try {
       // Test if we can get an access token
       java.util.Map<String, Object> authConfig = new java.util.HashMap<>();
-      authConfig.put("authType", "CLIENT_CREDENTIALS");
-      authConfig.put("tenantId", tenantId);
-      authConfig.put("clientId", clientId);
-      authConfig.put("clientSecret", clientSecret);
+      authConfig.putAll(SharePointTestCredentials.load().authConfig());
 
       SharePointAuth auth = org.apache.calcite.adapter.sharepoint.auth.SharePointAuthFactory.createAuth(authConfig);
       String token = auth.getAccessToken();
@@ -255,7 +224,7 @@ public class SharePointRestAttachmentIntegrationTest {
     // Get auth token from the client
     org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager tokenManager =
         new org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager(
-            tenantId, clientId, "../file/src/test/resources/SharePointAppOnlyCert.pfx",
+            tenantId, clientId, props.getProperty("SHAREPOINT_CERT_PATH"),
             props.getProperty("SHAREPOINT_CERT_PASSWORD"), siteUrl);
     return tokenManager.getAccessToken();
   }

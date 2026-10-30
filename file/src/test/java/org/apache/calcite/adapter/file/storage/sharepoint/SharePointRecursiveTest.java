@@ -58,10 +58,7 @@ public class SharePointRecursiveTest {
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
 
-    File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
-    if (certFile.exists()) {
-      certificatePath = certFile.getAbsolutePath();
-    }
+    certificatePath = props.getProperty("SHAREPOINT_CERT_PATH");
 
     System.out.println("SharePoint Test Configuration:");
     System.out.println("  Site URL: " + siteUrl);

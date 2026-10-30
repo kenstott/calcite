@@ -23,6 +23,9 @@ public class SharePointListSchemaFactory implements SchemaFactory {
 
   public static final SharePointListSchemaFactory INSTANCE = new SharePointListSchemaFactory();
 
+  /** The catalog every SharePoint table is reported in. */
+  static final String CATALOG_NAME = "SHAREPOINT";
+
   private SharePointListSchemaFactory() {
   }
 
@@ -45,7 +48,10 @@ public class SharePointListSchemaFactory implements SchemaFactory {
     SharePointListSchema sharePointSchema = new SharePointListSchema(siteUrl, config);
 
     // Add the metadata schemas as top-level schemas (not sub-schemas)
-    SharePointMetadataSchema metadataSchema = new SharePointMetadataSchema(sharePointSchema, null, name);
+    // The catalog name is what information_schema reports as table_catalog; a null there
+    // leaves clients that read the catalog of a table with nothing
+    SharePointMetadataSchema metadataSchema =
+        new SharePointMetadataSchema(sharePointSchema, CATALOG_NAME, name);
     parentSchema.add("pg_catalog", metadataSchema);
     parentSchema.add("information_schema", metadataSchema);
 

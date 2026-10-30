@@ -15,6 +15,7 @@ import org.apache.calcite.adapter.file.storage.MicrosoftGraphTokenManager;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -148,6 +149,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
     return (value != null && !value.isEmpty()) ? value : defaultValue;
   }
 
+  @Disabled("needs a client secret; the test tenant authenticates by certificate (owner decision 2026-10-08)")
   @Test void testSharePointConnection() {
     // Skip if no credentials
     assumeTrue(credentialsAvailable, "SharePoint credentials not available");

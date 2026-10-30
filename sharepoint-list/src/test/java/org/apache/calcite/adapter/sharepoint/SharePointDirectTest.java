@@ -22,10 +22,6 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.io.FileInputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -42,20 +38,7 @@ public class SharePointDirectTest {
 
   @Test public void testDirectConnection() throws Exception {
     // Load test configuration
-    Properties testConfig = new Properties();
-    Path configPath = Paths.get("/Users/kennethstott/calcite/sharepoint-list/local-test.properties");
-    if (!Files.exists(configPath)) {
-      configPath = Paths.get("sharepoint-list/local-test.properties");
-    }
-    if (!Files.exists(configPath)) {
-      configPath = Paths.get("local-test.properties");
-    }
-
-    if (Files.exists(configPath)) {
-      try (FileInputStream fis = new FileInputStream(configPath.toFile())) {
-        testConfig.load(fis);
-      }
-    }
+    Properties testConfig = SharePointTestCredentials.load().properties();
 
     // Create connection directly with proper casing configuration
     Properties info = new Properties();
@@ -68,10 +51,7 @@ public class SharePointDirectTest {
     // Create SharePoint schema
     Map<String, Object> operand = new HashMap<>();
     operand.put("siteUrl", testConfig.getProperty("SHAREPOINT_SITE_URL"));
-    operand.put("authType", "CLIENT_CREDENTIALS");
-    operand.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    operand.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    operand.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    operand.putAll(SharePointTestCredentials.load().authConfig());
 
     SharePointListSchema sharePointSchema =
         new SharePointListSchema(testConfig.getProperty("SHAREPOINT_SITE_URL"), operand);

@@ -51,12 +51,7 @@ public class SharePointDirectReadTest {
     siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
     certificatePassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
 
-    // Check if certificate file exists
-    File certFile = new File("src/test/resources/SharePointAppOnlyCert.pfx");
-    if (certFile.exists()) {
-      certificatePath = certFile.getAbsolutePath();
-      System.out.println("Found certificate at: " + certificatePath);
-    }
+    certificatePath = props.getProperty("SHAREPOINT_CERT_PATH");
 
     if (tenantId == null || clientId == null || siteUrl == null ||
         certificatePath == null || certificatePassword == null) {

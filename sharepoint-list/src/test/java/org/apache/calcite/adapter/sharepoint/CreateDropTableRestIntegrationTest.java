@@ -26,7 +26,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,34 +54,13 @@ public class CreateDropTableRestIntegrationTest {
    * Check if integration test configuration is available.
    */
   static boolean isConfigured() {
-    try {
-      Properties props = new Properties();
-      props.load(new FileInputStream("local-test.properties"));
-
-      String tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
-      String clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
-      String certPassword = props.getProperty("SHAREPOINT_CERT_PASSWORD");
-      String siteUrl = props.getProperty("SHAREPOINT_SITE_URL");
-
-      boolean configured = tenantId != null && !tenantId.isEmpty() &&
-                          clientId != null && !clientId.isEmpty() &&
-                          certPassword != null && !certPassword.isEmpty() &&
-                          siteUrl != null && !siteUrl.isEmpty();
-
-      if (configured) {
-        System.out.println("REST API CREATE/DROP TABLE integration tests enabled");
-      }
-
-      return configured;
-    } catch (Exception e) {
-      return false;
-    }
+    // The live tests run on request; SharePointTestCredentials then requires the settings
+    return "true".equals(System.getenv("SHAREPOINT_INTEGRATION_TESTS"));
   }
 
   @BeforeEach
   public void setUp() throws Exception {
-    props = new Properties();
-    props.load(new FileInputStream("local-test.properties"));
+    props = SharePointTestCredentials.load().properties();
 
     tenantId = props.getProperty("SHAREPOINT_TENANT_ID");
     clientId = props.getProperty("SHAREPOINT_CLIENT_ID");
@@ -92,7 +70,7 @@ public class CreateDropTableRestIntegrationTest {
     // Use certificate authentication for REST API
     org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager tokenManager =
         new org.apache.calcite.adapter.file.storage.SharePointCertificateTokenManager(
-            tenantId, clientId, "../file/src/test/resources/SharePointAppOnlyCert.pfx",
+            tenantId, clientId, props.getProperty("SHAREPOINT_CERT_PATH"),
             certPassword, siteUrl);
 
     SharePointAuth auth = new SharePointAuth() {
