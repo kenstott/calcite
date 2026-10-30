@@ -81,7 +81,9 @@ FROM (
 
 -- value_thousands is value/1000 for filings from 2023-01-03 (the filer-reported <value> became whole
 -- dollars), so value_thousands*1000/shares (an implied price) must not step ~1000x across that date.
--- Compared on the median implied price of rows with shares > 0 and equity-like units, per side.
+-- Filings for report periods up to 2022-09-30 are all filed before it and periods from 2022-12-31 on
+-- are filed after it, so the report period splits the two sides without needing filing_metadata.
+-- Compared on the median implied price of share rows, per side.
 INSERT INTO dq_results
 SELECT 'sec_13f', 'institutional_holdings', 'value_unit_continuity',
        CASE WHEN pre_n = 0 OR post_n = 0 THEN 'warn'
@@ -91,16 +93,14 @@ SELECT 'sec_13f', 'institutional_holdings', 'value_unit_continuity',
             ELSE 'median implied price after/before 2023-01-03 = ' || CAST(round(post_px / NULLIF(pre_px, 0), 3) AS VARCHAR) END
 FROM (
   SELECT
-    COUNT(*) FILTER (WHERE d < DATE '2023-01-03') AS pre_n,
-    COUNT(*) FILTER (WHERE d >= DATE '2023-01-03') AS post_n,
-    median(px) FILTER (WHERE d < DATE '2023-01-03') AS pre_px,
-    median(px) FILTER (WHERE d >= DATE '2023-01-03') AS post_px
+    COUNT(*) FILTER (WHERE d <= DATE '2022-09-30') AS pre_n,
+    COUNT(*) FILTER (WHERE d >= DATE '2022-12-31') AS post_n,
+    median(px) FILTER (WHERE d <= DATE '2022-09-30') AS pre_px,
+    median(px) FILTER (WHERE d >= DATE '2022-12-31') AS post_px
   FROM (
-    SELECT fm.filing_date AS d, h.value_thousands * 1000.0 / h.shares_or_principal AS px
-    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true) h
-    JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/filing_metadata', allow_moved_paths=true) fm
-      ON fm.accession_number = h.accession_number
-    WHERE h.shares_or_principal > 0 AND h.shares_or_principal_type = 'SH' AND h.value_thousands > 0
+    SELECT CAST(report_period AS DATE) AS d, value_thousands * 1000.0 / shares_or_principal AS px
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/sec/institutional_holdings', allow_moved_paths=true)
+    WHERE shares_or_principal > 0 AND shares_or_principal_type = 'SH' AND value_thousands > 0
   )
 ) t;
 
