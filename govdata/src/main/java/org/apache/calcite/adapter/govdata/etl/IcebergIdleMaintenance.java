@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.govdata.YamlUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -151,6 +152,20 @@ public final class IcebergIdleMaintenance {
   }
 
   /**
+   * The warehouse the materializer writes a table to when it sets no {@code iceberg.warehousePath}:
+   * the schema's {@code materializeDirectory} plus its schema name, as {@code FileSchema} derives
+   * it. Empty when the schema declares no {@code materializeDirectory}.
+   */
+  private static String schemaWarehouse(JsonNode schemaRoot) {
+    String directory = VariableResolver.resolveEnvVars(schemaRoot.path("materializeDirectory").asText());
+    String schemaName = VariableResolver.resolveEnvVars(schemaRoot.path("schemaName").asText());
+    if (directory.isEmpty() || schemaName.isEmpty()) {
+      return "";
+    }
+    return LocalPaths.normalize(directory + "/" + schemaName);
+  }
+
+  /**
    * Reads the tables a schema YAML marks {@code iceberg.runMaintenance: true}, each with its own
    * warehouse path and {@code snapshotRetentionDays}.
    */
@@ -170,9 +185,12 @@ public final class IcebergIdleMaintenance {
       }
       String name = tableNode.path("name").asText();
       String warehouse = VariableResolver.resolveEnvVars(iceberg.path("warehousePath").asText());
+      if (warehouse.isEmpty()) {
+        warehouse = schemaWarehouse(schemaRoot);
+      }
       if (name.isEmpty() || warehouse.isEmpty() || warehouse.contains("${")) {
         throw new IllegalStateException("Table '" + name + "' in " + source
-            + " has runMaintenance but no resolvable iceberg.warehousePath: '" + warehouse + "'");
+            + " has runMaintenance but no resolvable warehouse: '" + warehouse + "'");
       }
       targets.add(new Target(name, warehouse, iceberg.path("snapshotRetentionDays").asInt(7)));
     }
