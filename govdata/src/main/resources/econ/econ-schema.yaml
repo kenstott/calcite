@@ -5759,7 +5759,7 @@ partitionedTables:
         - name: tablename
           type: VARCHAR
     comment: >
-      National Income and Product Accounts (NIPA) data from BEA for a curated set of 18 tables, listed in the tablename dimension (query national_accounts_tables for the description of each table_id): GDP and its real/chained forms (T10101, T10105, T10301, T10303), personal income and consumption (T20100, T20200), government receipts and expenditures (T30100, T30200), foreign transactions (T40100, T40205B), national income by type of income including corporate profits with IVA and CCAdj and profits after tax (T11200), corporate-business gross value added and unit profit (T11400, T11500), corporate profits by industry (T61600D before/after adjustments, T61700D before tax, T61900D after tax, T62100D undistributed) and the NIPA-to-IRS profits reconciliation (T71600). T61700D, T61900D, T62100D and T71600 are annual only (frequency A). Other NIPA tables are not loaded.
+      National Income and Product Accounts (NIPA) data from BEA for a curated set of 18 tables, listed in the tablename dimension (query national_accounts_tables for the description of each table_id): GDP and its real/chained forms (T10101, T10105, T10301, T10303), personal income and consumption (T20100, T20305), government receipts and expenditures (T30100, T30200), foreign transactions (T40100, T40205B), national income by type of income including corporate profits with IVA and CCAdj and profits after tax (T11200), corporate-business gross value added and unit profit (T11400, T11500), corporate profits by industry (T61600D before/after adjustments, T61700D before tax, T61900D after tax, T62100D undistributed) and the NIPA-to-IRS profits reconciliation (T71600). T61700D, T61900D, T62100D and T71600 are annual only (frequency A). Other NIPA tables are not loaded.
     columns:
       # Source columns from NationalAccountsTransformer output (snake_case)
       - name: table_name
@@ -5909,7 +5909,7 @@ partitionedTables:
         - T10303   # Real Gross Domestic Product, Chained Dollars
         # Section 2: Personal Income and Outlays
         - T20100   # Personal Income and Its Disposition
-        - T20200   # Personal Consumption Expenditures by Major Type
+        - T20305   # Personal Consumption Expenditures by Major Type of Product
         # Section 3: Government
         - T30100   # Government Current Receipts and Expenditures (combined federal+state+local)
         - T30200   # Federal Government Current Receipts and Expenditures (federal only)
@@ -5928,7 +5928,9 @@ partitionedTables:
     # BEA answers a quarterly request for an annual-only table with error 201; never ask.
     excludeCombinations:
       - frequency: Q
-        tablename: [T61700D, T61900D, T62100D, T71600]
+        tablename: [T61700D, T61900D, T62100D]
+      # BEA returns "not currently available" for T71600 (A and Q) as of 2026-10-30; re-add when BEA serves it.
+      - tablename: [T71600]
 
     # Materialization configuration
     materialize:
