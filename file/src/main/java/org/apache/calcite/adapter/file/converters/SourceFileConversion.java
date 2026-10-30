@@ -20,9 +20,9 @@ import java.nio.file.Path;
  * How a file schema converts its source files (Excel, HTML, XML, Markdown, DOCX, PPTX) to JSON:
  * where the output goes, the casing of names, and how an HTML page is read.
  *
- * <p>A schema's first conversion of a file and every later re-conversion of it (its watcher,
- * its refreshable tables) run through {@link #convert(File)}, so a re-conversion writes exactly
- * what the first conversion wrote.
+ * <p>A schema's first conversion of a file ({@link #convertIfNeeded(File)}) and every later
+ * re-conversion of it (its watcher, its refreshable tables: {@link #reconvert(File, File)}) run
+ * through this class, so a re-conversion writes exactly what the first conversion wrote.
  */
 public final class SourceFileConversion {
   private final @Nullable String sourceRoot;
