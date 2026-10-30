@@ -43,7 +43,7 @@ public final class NetworkOutageWait {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NetworkOutageWait.class);
 
-  static final long DEFAULT_MAX_WAIT_MS = 10L * 60_000L;
+  static final long DEFAULT_MAX_WAIT_MS = 25L * 60_000L;
   static final long FIRST_BACKOFF_MS = 5_000L;
   static final long MAX_BACKOFF_MS = 60_000L;
 
