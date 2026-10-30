@@ -38,6 +38,9 @@ class EtlPipelineConfigExcludeCombinationsTest {
     table.put("name", "demo");
     table.put("source", source);
     table.put("dimensions", dims);
+    Map<String, Object> materialize = new HashMap<String, Object>();
+    materialize.put("enabled", false);
+    table.put("materialize", materialize);
     if (excludeCombinations != null) {
       table.put("excludeCombinations", excludeCombinations);
     }
