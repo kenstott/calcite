@@ -96,14 +96,17 @@ class HttpSourceRateLimitTest {
 
   @Test @Tag("unit") void aDifferentOriginIsNotSlowedByThem() throws Exception {
     HttpSource busy = source(baseUrl + "/data", 2.0);  // 500 ms interval
-    fetch(busy);
-    fetch(busy);   // the slot for this origin is now ~1 s ahead
+    busy.reserveRateLimitSlot();
+    long busyOpensAt = busy.reserveRateLimitSlot();
     // The same local server under another host spelling is another origin. 127.0.0.1 is loopback on every
     // OS; 127.0.0.2 is not routed on macOS, which made this test hang there.
     HttpSource other = source("http://127.0.0.1:" + server.getAddress().getPort() + "/data", 2.0);
-    long start = System.nanoTime();
-    fetch(other);
-    long elapsedMs = (System.nanoTime() - start) / 1000000L;
-    assertTrue(elapsedMs < 300, "another origin must not wait on this one's slot, took " + elapsedMs + " ms");
+    long otherOpensAt = other.reserveRateLimitSlot();
+    // Compares slots on the limiter's own timeline rather than timing a fetch, so connection setup
+    // and scheduling delays on a loaded machine cannot affect the result.
+    assertTrue(busyOpensAt - System.nanoTime() > 0,
+        "the busy origin's second slot must still be in the future");
+    assertTrue(otherOpensAt - System.nanoTime() <= 0,
+        "another origin must not wait on this one's slot");
   }
 }

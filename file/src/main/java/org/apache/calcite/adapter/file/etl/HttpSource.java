@@ -3402,30 +3402,42 @@ public class HttpSource implements DataSource {
    * to make concurrent requests while respecting the global rate limit.
    */
   private void enforceRateLimit() {
-    int rps = config.getRateLimit().getRequestsPerSecond();
-    if (rps <= 0) {
+    long slotOpensAt = reserveRateLimitSlot();
+    if (slotOpensAt == NO_RATE_LIMIT) {
       return;
     }
+    // Sleep until the slot opens by nanoTime, however early the clock behind sleep wakes:
+    // on Windows Thread.sleep can return before nanoTime reaches its end.
+    long remaining;
+    while ((remaining = slotOpensAt - System.nanoTime()) > 0) {
+      try {
+        Thread.sleep(remaining / 1000000, (int) (remaining % 1000000));
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
+    }
+  }
 
+  /** Returned by {@link #reserveRateLimitSlot()} when the source has no rate limit. */
+  static final long NO_RATE_LIMIT = Long.MIN_VALUE;
+
+  /**
+   * Claims the next slot on this source's origin timeline and returns the {@link System#nanoTime()}
+   * at which it opens, or {@link #NO_RATE_LIMIT} when the source is not limited.
+   */
+  long reserveRateLimitSlot() {
+    int rps = config.getRateLimit().getRequestsPerSecond();
+    if (rps <= 0) {
+      return NO_RATE_LIMIT;
+    }
     long intervalNanos = 1000000000L / rps;
     AtomicLong slot = rateLimitSlot();
     while (true) {
       long current = slot.get();
-      long now = System.nanoTime();
-      long next = Math.max(now, current) + intervalNanos;
+      long next = Math.max(System.nanoTime(), current) + intervalNanos;
       if (slot.compareAndSet(current, next)) {
-        // Sleep until the slot opens by nanoTime, however early the clock behind sleep wakes:
-        // on Windows Thread.sleep can return before nanoTime reaches its end.
-        long remaining;
-        while ((remaining = current - System.nanoTime()) > 0) {
-          try {
-            Thread.sleep(remaining / 1000000, (int) (remaining % 1000000));
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return;
-          }
-        }
-        return;
+        return current;
       }
       // CAS failed (another thread reserved a slot), retry
     }
