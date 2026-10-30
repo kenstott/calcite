@@ -373,6 +373,32 @@ refuse_bare_sec_remediation() {
   return 1
 }
 
+# target_is_dq_bucket
+# True when the loaded GOVDATA_PARQUET_DIR names a DQ bucket (suffix -dq). An unset dir is production.
+target_is_dq_bucket() {
+  case "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" in
+    *-dq|*-dq/*) return 0 ;;
+  esac
+  return 1
+}
+
+# live_sec_workers <pid_dir>
+# Prints the ids of worker-sec* pid files whose process is alive and has not recorded an exit.
+live_sec_workers() {
+  local _pid_dir="$1" _pf _id _wpid _live=""
+  if [ -d "$_pid_dir" ]; then
+    for _pf in "$_pid_dir"/worker-sec*.pid; do
+      [ -e "$_pf" ] || continue
+      _id=$(basename "$_pf" .pid)
+      [ -f "$_pid_dir/${_id}.exit" ] && continue
+      _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
+      { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue
+      _live="$_live $_id"
+    done
+  fi
+  printf '%s' "$_live"
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
 # Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
 # single read of version-hint.text, then metadata.json + manifest-list + every manifest +
