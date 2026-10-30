@@ -116,6 +116,26 @@ class BeaResponseTransformerTest {
     assertTrue(ex.getMessage().contains("Invalid TableName parameter"));
   }
 
+  @Test void testRequestLevelErrorFailsTheBatch() {
+    String response = "{\"BEAAPI\":{\"Request\":{},\"Error\":{"
+        + "\"APIErrorDescription\":\"Error retrieving NIPA data.\",\"APIErrorCode\":\"201\","
+        + "\"ErrorDetail\":{\"Description\":\"Data for this table and frequency are not"
+        + " currently available.\"}}}}";
+
+    RuntimeException ex = assertThrows(RuntimeException.class, () ->
+        transformer.transform(response, context));
+
+    assertTrue(ex.getMessage().contains("201"));
+    assertTrue(ex.getMessage().contains("Error retrieving NIPA data."));
+  }
+
+  @Test void testRequestLevelNoDataIsAnEmptyPeriod() {
+    String response = "{\"BEAAPI\":{\"Request\":{},\"Error\":{"
+        + "\"APIErrorCode\":\"201\",\"APIErrorDescription\":\"No data exists\"}}}";
+
+    assertEquals("[]", transformer.transform(response, context));
+  }
+
   @Test void testNoDataError() {
     // NO_DATA is a soft error - returns empty array
     String response = "{"

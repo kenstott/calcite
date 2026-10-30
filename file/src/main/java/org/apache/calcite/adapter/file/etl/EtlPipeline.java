@@ -474,6 +474,12 @@ public class EtlPipeline {
             totalBatches);
       } else {
         combinations = dimensionIterator.expand(effectiveDimensions, referencedCompanions(config));
+        int expanded = combinations.size();
+        combinations = withoutExcluded(combinations, config);
+        if (combinations.size() < expanded) {
+          LOGGER.info("excludeCombinations dropped {} of {} dimension combinations",
+              expanded - combinations.size(), expanded);
+        }
         totalBatches = combinations.size();
         dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
         LOGGER.info("Expanded to {} dimension combinations", totalBatches);
@@ -1004,7 +1010,8 @@ public class EtlPipeline {
                 pi + 1, partCount, partitionPlan.getContextKey(), contextValue);
             continue;
           }
-          List<Map<String, String>> partCombos = partition.getCombinations();
+          List<Map<String, String>> partCombos =
+              withoutExcluded(partition.getCombinations(), config);
           actualTotalBatches += partCombos.size();
 
           // Filter unprocessed within this partition
@@ -3619,6 +3626,20 @@ public class EtlPipeline {
    * @param combinations       all combinations (indexed by the set entries)
    * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
    */
+  private static List<Map<String, String>> withoutExcluded(List<Map<String, String>> combinations,
+      EtlPipelineConfig config) {
+    if (config.getExcludeCombinations().isEmpty()) {
+      return combinations;
+    }
+    List<Map<String, String>> kept = new ArrayList<Map<String, String>>(combinations.size());
+    for (Map<String, String> combination : combinations) {
+      if (!config.isExcluded(combination)) {
+        kept.add(combination);
+      }
+    }
+    return kept;
+  }
+
   /**
    * The opt-in derived companions this pipeline's templates actually reference.
    *

@@ -55,6 +55,7 @@ public class EtlPipelineConfigCopyTest {
         "download", map("bulkDownload", "demo_bulk"),
         "materialize", map("enabled", false),
         "dimensions", map("region", Arrays.asList("east", "west")),
+        "excludeCombinations", Collections.singletonList(map("region", "east")),
         "columns", Collections.singletonList(map("name", "c1", "type", "string")),
         "errorHandling", map("transientRetries", 5),
         "hooks", map("responseTransformer", "example.Transformer"),

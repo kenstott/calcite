@@ -84,7 +84,12 @@ public class BeaResponseTransformer implements ResponseTransformer {
       // Check for API error. Some BEA datasets (observed on MNE/FDI) wrap Error in a
       // single-element array rather than a bare object — unwrap it the same way Results
       // itself is unwrapped below for GDPbyIndustry-style array responses.
+      // A request-level failure (invalid table, data not available) sits at BEAAPI.Error, beside
+      // Request, rather than under Results.
       JsonNode error = results.path("Error");
+      if (error.isMissingNode()) {
+        error = beaApi.path("Error");
+      }
       if (error.isArray() && error.size() > 0) {
         error = error.get(0);
       }
@@ -115,7 +120,8 @@ public class BeaResponseTransformer implements ResponseTransformer {
             && "no data found".equalsIgnoreCase(error.path("error").asText(""));
         boolean isNoDataError = isNotYetPublished || "NO_DATA".equals(errorCode)
             || "PARAMETER_EMPTY".equals(errorCode)
-            || ("101".equals(errorCode) && errorDesc.toLowerCase().contains("unknown error"));
+            || ("101".equals(errorCode) && errorDesc.toLowerCase().contains("unknown error"))
+            || error.toString().toLowerCase().contains("no data");
         if (isNoDataError) {
           LOGGER.debug("BEA: No data available for request: {} - {}",
               errorCode, errorDesc);

@@ -1851,7 +1851,7 @@ public class HttpSource implements DataSource {
 
       // Check for API errors using errorPath if configured
       if (respConfig.getErrorPath() != null && !respConfig.getErrorPath().isEmpty()) {
-        JsonNode errorNode = navigateToPath(root, respConfig.getErrorPath());
+        JsonNode errorNode = navigateToErrorNode(root, respConfig.getErrorPath());
         // Skip if error node is missing, null, or an empty array (common API pattern for "no error")
         boolean hasError = errorNode != null && !errorNode.isMissingNode() && !errorNode.isNull()
             && !(errorNode.isArray() && errorNode.size() == 0);
@@ -2396,7 +2396,7 @@ public class HttpSource implements DataSource {
 
     // Check for API errors using errorPath if configured
     if (respConfig.getErrorPath() != null && !respConfig.getErrorPath().isEmpty()) {
-      JsonNode errorNode = navigateToPath(root, respConfig.getErrorPath());
+      JsonNode errorNode = navigateToErrorNode(root, respConfig.getErrorPath());
       // Skip if error node is missing, null, or an empty array (common API pattern for "no error")
       boolean hasError = errorNode != null && !errorNode.isMissingNode() && !errorNode.isNull()
           && !(errorNode.isArray() && errorNode.size() == 0);
@@ -3299,6 +3299,22 @@ public class HttpSource implements DataSource {
 
     // Return as string
     return value;
+  }
+
+  /**
+   * Finds the error node for an {@code errorPath}, which lists one path or several separated by
+   * {@code |} for APIs that report errors at more than one location. Returns the first node that
+   * is present, non-null and not an empty array, or null when none is.
+   */
+  private JsonNode navigateToErrorNode(JsonNode root, String errorPath) {
+    for (String path : errorPath.split("\\|")) {
+      JsonNode node = navigateToPath(root, path.trim());
+      if (node != null && !node.isMissingNode() && !node.isNull()
+          && !(node.isArray() && node.size() == 0)) {
+        return node;
+      }
+    }
+    return null;
   }
 
   /**
