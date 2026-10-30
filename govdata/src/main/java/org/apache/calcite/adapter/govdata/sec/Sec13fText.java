@@ -18,8 +18,8 @@ import java.util.regex.Pattern;
  * {@code title_of_class}).
  *
  * <p>Filers escape the XML text more than once, and the SEC data sets publish the text unparsed,
- * so a value can arrive as {@code PROCTER &amp;amp; GAMBLE} or with the {@code &} lost
- * ({@code Samp;P500}). Entity references are decoded until the text stops changing, and a bare
+ * so a value can arrive with its ampersand escaped two or three times, or with the {@code &}
+ * lost ({@code Samp;P500}). Entity references are decoded until the text stops changing, and a bare
  * {@code amp;} that follows an alphanumeric character is restored to {@code &}. Over the
  * distinct issuer and class names of the SEC data sets every such match is a damaged ampersand;
  * none is part of a word.
