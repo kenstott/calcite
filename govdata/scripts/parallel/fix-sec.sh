@@ -64,6 +64,7 @@
 #   fix-sec.sh --confirm                        # repair every gap, oldest year first
 #   fix-sec.sh --year 2026 --confirm            # repair one filing year
 #   fix-sec.sh --table metadata                 # report one staging table's gap
+#   fix-sec.sh --form 10-K,10-K/A               # report and repair only these form types
 #   fix-sec.sh --batch-size 1000 --confirm      # smaller worker invocations
 #   fix-sec.sh --max-accessions 500 --confirm   # cap the run (rehearsal)
 #   fix-sec.sh --threads 12 --heap 16 --confirm # push harder on an otherwise idle box
@@ -131,6 +132,7 @@ VECTORIZATION_ENABLED="${GOVDATA_VECTORIZATION_ENABLED:-true}"
 CONFIRM=false
 ONLY_TABLE=""
 ONLY_YEAR=""
+ONLY_FORMS=""
 BATCH_SIZE=2000
 MAX_ACCESSIONS=0
 # Reprocessing is a bulk backfill, not the steady-state pipeline, so it is sized for the
@@ -148,11 +150,12 @@ while [ $# -gt 0 ]; do
     --confirm)        CONFIRM=true ;;
     --table)          shift; ONLY_TABLE="${1:-}" ;;
     --year)           shift; ONLY_YEAR="${1:-}" ;;
+    --form)           shift; ONLY_FORMS="${1:-}" ;;
     --batch-size)     shift; BATCH_SIZE="${1:-}" ;;
     --max-accessions) shift; MAX_ACCESSIONS="${1:-}" ;;
     --threads)        shift; THREADS="${1:-}" ;;
     --heap)           shift; HEAP_GB="${1:-}" ;;
-    -h|--help)        sed -n '18,62p' "$0" >&2; exit 0 ;;
+    -h|--help)        sed -n '18,63p' "$0" >&2; exit 0 ;;
     *) echo "fix-sec: unknown argument '$1'" >&2; exit 2 ;;
   esac
   shift
@@ -234,6 +237,17 @@ STAMP="$(date +%Y%m%d_%H%M%S)"
 ACC_FILE="$WORK_DIR/missing-$STAMP.txt"
 REPORT_FILE="$WORK_DIR/report-$STAMP.txt"
 
+# --form: every requested form must be one the matrix defines, so a typo is refused rather than
+# silently reporting an empty gap.
+if [ -n "$ONLY_FORMS" ]; then
+  _known_forms=$(printf '%s\n' "${FORM_TABLES[@]}" | cut -d: -f1)
+  IFS=',' read -ra _req_forms <<< "$ONLY_FORMS"
+  for _f in "${_req_forms[@]}"; do
+    printf '%s\n' "$_known_forms" | grep -qxF -- "$_f" \
+      || { echo "fix-sec: --form '$_f' is not a form in FORM_TABLES" >&2; exit 2; }
+  done
+fi
+
 # Expand FORM_TABLES into (form, table) rows, dropping vectorized_chunks when vectorization is
 # off so a table nobody asked for is never reported missing.
 _matrix_sql=""
@@ -243,10 +257,11 @@ for entry in "${FORM_TABLES[@]}"; do
   for tbl in "${_t[@]}"; do
     [ "$tbl" = "vectorized_chunks" ] && [ "$VECTORIZATION_ENABLED" != "true" ] && continue
     [ -z "$ONLY_TABLE" ] || [ "$ONLY_TABLE" = "$tbl" ] || continue
+    [ -z "$ONLY_FORMS" ] || [[ ",${ONLY_FORMS}," == *",${form},"* ]] || continue
     _matrix_sql="${_matrix_sql}${_matrix_sql:+,}('${form//\'/\'\'}','${tbl}')"
   done
 done
-[ -n "$_matrix_sql" ] || { echo "fix-sec: --table '$ONLY_TABLE' is not a SEC Iceberg table" >&2; exit 2; }
+[ -n "$_matrix_sql" ] || { echo "fix-sec: no (form, table) pair matches --table '$ONLY_TABLE' --form '$ONLY_FORMS'" >&2; exit 2; }
 
 # Distinct Iceberg tables the matrix references — one scan each, no more.
 _scanned=$(printf '%s\n' "${FORM_TABLES[@]}" | cut -d: -f2- | tr ',' '\n' | sort -u)
