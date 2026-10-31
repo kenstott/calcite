@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.askamerica;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the next call.
  */
 @Tag("unit")
+@ResourceLock("askamerica.pgwire.startState")
 class PgwireGovDataConnectorStartTest {
 
   /** This test's own starter: the connector's is shared by the whole process, and another
