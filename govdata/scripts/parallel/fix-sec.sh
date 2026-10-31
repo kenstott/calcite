@@ -251,6 +251,7 @@ fi
 # Expand FORM_TABLES into (form, table) rows, dropping vectorized_chunks when vectorization is
 # off so a table nobody asked for is never reported missing.
 _matrix_sql=""
+_matrix_tables=""
 for entry in "${FORM_TABLES[@]}"; do
   form="${entry%%:*}"; tbls="${entry##*:}"
   IFS=',' read -ra _t <<< "$tbls"
@@ -259,14 +260,13 @@ for entry in "${FORM_TABLES[@]}"; do
     [ -z "$ONLY_TABLE" ] || [ "$ONLY_TABLE" = "$tbl" ] || continue
     [ -z "$ONLY_FORMS" ] || [[ ",${ONLY_FORMS}," == *",${form},"* ]] || continue
     _matrix_sql="${_matrix_sql}${_matrix_sql:+,}('${form//\'/\'\'}','${tbl}')"
+    _matrix_tables="${_matrix_tables}${tbl}"$'\n'
   done
 done
 [ -n "$_matrix_sql" ] || { echo "fix-sec: no (form, table) pair matches --table '$ONLY_TABLE' --form '$ONLY_FORMS'" >&2; exit 2; }
 
-# Distinct Iceberg tables the matrix references — one scan each, no more.
-_scanned=$(printf '%s\n' "${FORM_TABLES[@]}" | cut -d: -f2- | tr ',' '\n' | sort -u)
-[ "$VECTORIZATION_ENABLED" = "true" ] || _scanned=$(printf '%s\n' "$_scanned" | grep -v '^vectorized_chunks$')
-[ -z "$ONLY_TABLE" ] || _scanned="$ONLY_TABLE"
+# Distinct Iceberg tables the (filtered) matrix references — one scan each, no more.
+_scanned=$(printf '%s' "$_matrix_tables" | sort -u)
 
 _year_filter=""
 [ -z "$ONLY_YEAR" ] || _year_filter="AND acc LIKE '%-${ONLY_YEAR:2:2}-%'"
