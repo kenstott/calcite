@@ -50,6 +50,10 @@ class HttpSourceTruncatedBodyRetryTest {
     assertTrue(shouldRetry(new SocketException("Connection reset")));
   }
 
+  @Test void tlsStreamTruncatedMidRecordIsRetried() throws Exception {
+    assertTrue(shouldRetry(new IOException("BUFFER_UNDERFLOW with EOF, 7481 bytes non decrypted.")));
+  }
+
   @Test void configuredStatusIsStillRetried() throws Exception {
     assertTrue(shouldRetry(new IOException("HTTP 503: unavailable")));
   }

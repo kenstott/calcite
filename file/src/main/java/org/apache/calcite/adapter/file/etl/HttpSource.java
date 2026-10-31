@@ -3498,7 +3498,10 @@ public class HttpSource implements DataSource {
                 // java.net.http: "fixed content-length: N, bytes received: M" and
                 // "chunked transfer encoding, state: READING_DATA"
                 || e.getMessage().contains("bytes received")
-                || e.getMessage().contains("chunked transfer encoding, state")))) {
+                || e.getMessage().contains("chunked transfer encoding, state")
+                // java.net.http: TLS connection closed mid-record, "BUFFER_UNDERFLOW with EOF,
+                // N bytes non decrypted."
+                || e.getMessage().contains("BUFFER_UNDERFLOW with EOF")))) {
       return true;
     }
 
