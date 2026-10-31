@@ -1710,9 +1710,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .fixedPartitionValues(fixedPartitionValues)
-        .forceAccessions(forceAccessions)
+        .forceAccessions(forceAccessionsFor(tableColumns, forceAccessions))
         .description(tableName)
         .build();
+  }
+
+  /**
+   * Forced accessions delete rows by {@code accession_number}; a table with no such column
+   * (stock_prices) has nothing to force, and handing it the set fails its materialization.
+   */
+  static Set<String> forceAccessionsFor(List<IcebergCatalogManager.ColumnDef> tableColumns,
+      Set<String> forceAccessions) {
+    for (IcebergCatalogManager.ColumnDef col : tableColumns) {
+      if ("accession_number".equals(col.getName())) {
+        return forceAccessions;
+      }
+    }
+    return Collections.<String>emptySet();
   }
 
   /**
