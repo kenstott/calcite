@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.lands;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
@@ -220,6 +221,7 @@ final class FiaStateArchive {
       conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
       conn.setReadTimeout(CONNECT_TIMEOUT_MS);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
         return validatorOf(conn);
       }

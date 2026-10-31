@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.geo;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.OperationType;
 
@@ -1231,6 +1232,7 @@ public class CensusApiClient extends AbstractGeoDataDownloader {
       conn.setConnectTimeout(10000);
       conn.setReadTimeout(30000);
 
+      NetworkOutageWait.connect(conn);
       int responseCode = conn.getResponseCode();
       if (responseCode == HttpURLConnection.HTTP_OK) {
         return objectMapper.readTree(CompleteBody.of(conn));

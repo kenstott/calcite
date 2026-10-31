@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.disasters;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -78,6 +79,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
     conn.setReadTimeout(READ_TIMEOUT_MS);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
       conn.disconnect();
@@ -104,6 +106,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     conn.setReadTimeout(CONNECT_TIMEOUT_MS);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
     try {
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
         throw new IOException("HTTP " + conn.getResponseCode() + " listing " + dirUrl);
       }

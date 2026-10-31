@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -105,6 +106,7 @@ public class UsitcHtsScheduleTransformer implements StreamingResponseTransformer
       }
       int status;
       try {
+        NetworkOutageWait.connect(conn);
         status = conn.getResponseCode();
       } catch (IOException e) {
         conn.disconnect();

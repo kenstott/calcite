@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.officials;
 
 import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RowContext;
 import org.apache.calcite.adapter.file.etl.RowTransformer;
 
@@ -111,6 +112,7 @@ public class CongressMemberCurrentEnricher implements RowTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);

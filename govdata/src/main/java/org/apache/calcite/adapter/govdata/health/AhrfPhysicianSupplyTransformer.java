@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.health;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -401,6 +402,7 @@ public class AhrfPhysicianSupplyTransformer implements ResponseTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(180000);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);

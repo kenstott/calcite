@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
 
@@ -184,6 +185,7 @@ public final class ZipDownloadUtils {
         conn.setRequestProperty(h.getKey(), h.getValue());
       }
     }
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
       // 404/410 are permanent — the file is not published. Signal non-retryable so the wrapper

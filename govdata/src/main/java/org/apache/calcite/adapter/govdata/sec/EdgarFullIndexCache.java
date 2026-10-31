@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.FilingIndexProvider;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.ProcessedDocumentTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -460,6 +461,7 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
       conn.setConnectTimeout(60000);
       conn.setReadTimeout(120000);
 
+      NetworkOutageWait.connect(conn);
       int responseCode = conn.getResponseCode();
       if (responseCode == 404) {
         LOGGER.debug("Index not found (404): {}", url);
