@@ -28,6 +28,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
+import org.apache.iceberg.exceptions.CommitStateUnknownException;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
@@ -2512,7 +2513,8 @@ public class IcebergTableWriter {
   /**
    * Commits a compaction rewrite swapping {@code filesToDelete} for {@code newFiles}. When the
    * commit fails, the replacement files it wrote are unreferenced by any snapshot and are
-   * deleted, so a re-planned attempt does not leave them behind.
+   * deleted, so a re-planned attempt does not leave them behind. A commit whose outcome is
+   * unknown keeps them, since the snapshot may already reference them.
    */
   private void commitCompactionRewrite(Set<DataFile> filesToDelete, List<DataFile> newFiles) {
     try {
@@ -2529,6 +2531,8 @@ public class IcebergTableWriter {
         }
         rewrite.commit();
       });
+    } catch (CommitStateUnknownException e) {
+      throw e;
     } catch (RuntimeException e) {
       for (DataFile newFile : newFiles) {
         table.io().deleteFile(newFile.path().toString());
@@ -2547,7 +2551,7 @@ public class IcebergTableWriter {
    *
    * @return true when the partition was rewritten entirely, in sorted order
    */
-  private boolean compactPartitionAgainstCurrentState(String partitionKey,
+  boolean compactPartitionAgainstCurrentState(String partitionKey,
       List<FileScanTask> plannedTasks, List<FileScanTask> plannedSmallFiles, int minFilesToCompact,
       long smallFileSizeBytes, long targetFileSizeBytes, java.util.List<String> sortOrder)
       throws IOException {
