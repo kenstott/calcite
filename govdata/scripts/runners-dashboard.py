@@ -345,7 +345,7 @@ def pool():
                 lines = [l for l in f.read().splitlines()[-400:] if "Running:" in l]
             last = lines[-1] if lines else None
         mg["log"], mg["last"] = log, last
-        mg["dq_issue"] = next((n for n, r in dq_runs.items() if mg["pid"] in ancestors(r["pid"])), None)
+        mg["dq_issue"] = next((n for n, r in dq_runs.items() if mg["pid"] in ancestors(r["pid"]) or r["pid"] in ancestors(mg["pid"])), None)
         info.append(mg)
     return info
 
