@@ -161,6 +161,9 @@ val sharedSources by tasks.registering(Sync::class) {
         include("org/apache/calcite/adapter/file/etl/VariableResolver.java")
         // VariableResolver renders period formats through it; JDK-only.
         include("org/apache/calcite/adapter/file/etl/PeriodFormat.java")
+        // R2CredentialProvider waits out network outages through it; JDK and SLF4J only.
+        include("org/apache/calcite/adapter/file/etl/NetworkOutageWait.java")
+        include("org/apache/calcite/adapter/file/etl/SecretRedaction.java")
     }
     into(layout.buildDirectory.dir("shared-sources"))
 }
