@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -150,6 +151,7 @@ public class CesRevisionVintagesTransformer implements ResponseTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", USER_AGENT);
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);

@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.housing;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 
 import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
 import org.apache.poi.openxml4j.opc.OPCPackage;
@@ -201,6 +202,7 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
       conn.setRequestProperty("Referer", REFERER);
       conn.setRequestProperty("Accept", "*/*");
       try {
+        NetworkOutageWait.connect(conn);
         int status = conn.getResponseCode();
         if (status == HttpURLConnection.HTTP_OK) {
           try (InputStream in = conn.getInputStream()) {

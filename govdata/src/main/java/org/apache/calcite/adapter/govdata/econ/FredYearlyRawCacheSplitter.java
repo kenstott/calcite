@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.DimensionConfig;
 import org.apache.calcite.adapter.file.etl.HttpSource;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.TableContext;
 import org.apache.calcite.adapter.file.etl.TableLifecycleListener;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
@@ -204,6 +205,7 @@ public class FredYearlyRawCacheSplitter implements TableLifecycleListener {
     conn.setRequestMethod("GET");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("HTTP " + responseCode + " for " + url);

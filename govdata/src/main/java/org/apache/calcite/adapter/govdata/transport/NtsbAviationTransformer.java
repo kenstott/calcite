@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.transport;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -329,6 +330,7 @@ public class NtsbAviationTransformer implements StreamingResponseTransformer {
     conn.setReadTimeout(600000);
     conn.setInstanceFollowRedirects(true);
     conn.setRequestProperty("User-Agent", USER_AGENT);
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("ntsb_aviation_accidents: HTTP " + status + " from " + url);

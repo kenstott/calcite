@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.fiscal;
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -152,6 +153,7 @@ public class Irs990Provider implements CachingDataProvider {
           conn.setRequestProperty("User-Agent", FiscalHttp.USER_AGENT);
           conn.setConnectTimeout(30000);
           conn.setReadTimeout(30000);
+          NetworkOutageWait.connect(conn);
           int code = conn.getResponseCode();
           if (code == 200) {
             return true;

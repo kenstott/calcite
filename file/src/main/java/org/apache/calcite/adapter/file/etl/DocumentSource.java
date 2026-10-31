@@ -246,6 +246,7 @@ public class DocumentSource {
           conn.setRequestProperty(header.getKey(), header.getValue());
         }
 
+        NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
 
         if (isRetryableHttpStatus(responseCode)) {
@@ -322,6 +323,7 @@ public class DocumentSource {
           conn.setRequestProperty(header.getKey(), header.getValue());
         }
 
+        NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
 
         if (responseCode == 404) {

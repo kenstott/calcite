@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +52,7 @@ final class FiscalHttp {
     conn.setInstanceFollowRedirects(true);
     conn.setRequestProperty("User-Agent", USER_AGENT);
     conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/json,text/csv,*/*");
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("HTTP " + code + " for GET " + url);
@@ -103,6 +106,7 @@ final class FiscalHttp {
     conn.setRequestProperty("Accept", "application/json");
     byte[] bytes = jsonBody.getBytes(StandardCharsets.UTF_8);
     conn.setRequestProperty("Content-Length", String.valueOf(bytes.length));
+    NetworkOutageWait.connect(conn);
     OutputStream out = conn.getOutputStream();
     try {
       out.write(bytes);

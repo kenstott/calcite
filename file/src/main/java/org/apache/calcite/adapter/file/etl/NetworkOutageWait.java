@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.ConnectException;
+import java.net.HttpURLConnection;
 import java.net.NoRouteToHostException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -147,6 +148,19 @@ public final class NetworkOutageWait {
         backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
       }
     }
+  }
+
+  /**
+   * Connects {@code conn}, waiting out a network outage per {@link #call}. Call it after the
+   * request properties are set and before the first {@code getResponseCode}, {@code
+   * getInputStream} or {@code getOutputStream}: only the connect step can fail because the
+   * network is down, and a failed connect can be retried on the same connection object.
+   */
+  public static HttpURLConnection connect(HttpURLConnection conn) throws IOException {
+    return call("GET " + SecretRedaction.redact(conn.getURL().toString()), () -> {
+      conn.connect();
+      return conn;
+    });
   }
 
   private static long elapsedSec(long startNs) {

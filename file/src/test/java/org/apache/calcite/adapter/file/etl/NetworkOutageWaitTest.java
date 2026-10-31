@@ -27,6 +27,7 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.UnknownHostException;
@@ -121,6 +122,40 @@ class NetworkOutageWaitTest {
     assertEquals(404, r.getResponseCode());
     r.disconnect();
     assertEquals(1, hits.get());
+  }
+
+  @Test void connectWaitsOutOutageOnSameConnection() throws Exception {
+    NetworkOutageWait.configureMillis(10_000L, 200L, 400L);
+    final int port = freePort();
+    Thread starter = new Thread(() -> {
+      try {
+        Thread.sleep(1_500L);
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+        server.createContext("/", ex -> {
+          ex.sendResponseHeaders(200, -1);
+          ex.close();
+        });
+        server.start();
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
+    });
+    starter.start();
+    HttpURLConnection conn = (HttpURLConnection) new java.net.URL(
+        "http://127.0.0.1:" + port + "/").openConnection();
+    conn.setConnectTimeout(2_000);
+    assertEquals(200, NetworkOutageWait.connect(conn).getResponseCode());
+    conn.disconnect();
+    starter.join();
+  }
+
+  @Test void connectPastLimitFails() throws Exception {
+    NetworkOutageWait.configureMillis(1_000L, 200L, 400L);
+    int port = freePort();
+    HttpURLConnection conn = (HttpURLConnection) new java.net.URL(
+        "http://127.0.0.1:" + port + "/").openConnection();
+    IOException e = assertThrows(IOException.class, () -> NetworkOutageWait.connect(conn));
+    assertTrue(e.getMessage().contains("Network unavailable for"), e.toString());
   }
 
   @Test void classifiesNameResolutionFailureAsOutage() {

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.health;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -152,6 +153,7 @@ public class WhoGhoTransformer implements StreamingResponseTransformer {
       conn.setRequestProperty("Accept", "application/json");
       int status;
       try {
+        NetworkOutageWait.connect(conn);
         status = conn.getResponseCode();
       } catch (IOException e) {
         conn.disconnect();
