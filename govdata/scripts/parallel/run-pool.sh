@@ -59,6 +59,7 @@ SWAP_HARD_PCT="${SWAP_HARD_PCT:-90}"
 SWAP_ACTIVE_PAGES_SEC="${SWAP_ACTIVE_PAGES_SEC:-200}"
 _swap_prev_pages=""
 _swap_prev_ts=0
+_swap_rate=0
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
 
@@ -820,25 +821,29 @@ get_swap_used_pct() {
   awk '/^SwapTotal:/ {t=$2} /^SwapFree:/ {f=$2} END {if (t>0) print int((t-f)*100/t); else print 0}' /proc/meminfo
 }
 
-# Swap in+out page rate (pages/sec) since the previous call; 0 on the first call, when no time has
-# elapsed, or off Linux. Usage: get_swap_rate_pages_sec [now_epoch]
+# Swap in+out page rate (pages/sec) since the previous call, left in the global _swap_rate (0 on the
+# first call or off Linux; unchanged when no time has elapsed). Sets a global rather than echoing so
+# the previous sample survives between calls -- a command substitution would run in a subshell.
+# Usage: get_swap_rate_pages_sec [now_epoch]
 get_swap_rate_pages_sec() {
   local now="${1:-$(date +%s)}" pages
   if [ "$(uname)" != "Linux" ]; then
-    echo 0
+    _swap_rate=0
     return
   fi
   pages=$(awk '/^pswpin / {i=$2} /^pswpout / {o=$2} END {print i+o}' "${VMSTAT_FILE:-/proc/vmstat}")
-  if [ -z "$_swap_prev_pages" ] || [ "$now" -le "$_swap_prev_ts" ]; then
+  if [ -z "$_swap_prev_pages" ]; then
     _swap_prev_pages=$pages
     _swap_prev_ts=$now
-    echo 0
+    _swap_rate=0
     return
   fi
-  local rate=$(( (pages - _swap_prev_pages) / (now - _swap_prev_ts) ))
+  if [ "$now" -le "$_swap_prev_ts" ]; then
+    return
+  fi
+  _swap_rate=$(( (pages - _swap_prev_pages) / (now - _swap_prev_ts) ))
   _swap_prev_pages=$pages
   _swap_prev_ts=$now
-  echo "$rate"
 }
 
 # Pure admission decision. Usage: swap_gate_reason <swap_pct> <rate_pages_sec> <avail_mb> <need_mb>
@@ -1008,7 +1013,8 @@ fill_pool() {
     # mostly full and free RAM could not absorb this job.
     local swap_pct swap_rate swap_reason
     swap_pct=$(get_swap_used_pct)
-    swap_rate=$(get_swap_rate_pages_sec)
+    get_swap_rate_pages_sec
+    swap_rate=$_swap_rate
     swap_reason=$(swap_gate_reason "$swap_pct" "$swap_rate" "$avail_mb" "$next_foot_mb")
     if [ -n "$swap_reason" ]; then
       log_info "Swap pressure: ${swap_reason}, ${next_id} needs ${next_foot_mb}MB — holding"
