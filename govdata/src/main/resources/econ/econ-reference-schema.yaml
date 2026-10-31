@@ -14,6 +14,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:econ_reference}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >

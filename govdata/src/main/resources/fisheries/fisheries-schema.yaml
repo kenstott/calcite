@@ -38,6 +38,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fisheries}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/fisheries"
 
 comment: >

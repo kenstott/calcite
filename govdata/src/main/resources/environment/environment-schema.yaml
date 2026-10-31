@@ -27,6 +27,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:environment}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 

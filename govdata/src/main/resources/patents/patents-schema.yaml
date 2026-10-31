@@ -37,6 +37,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:patents}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 # Ingest config operand — declared in the model, read in code via ModelOperand (never getenv).
 includeDesignPatents: "${PATENTS_INCLUDE_DESIGN:false}"
 # Full-dump TSVs are re-read once per year; a DQ rebuild spans several years back-to-back.

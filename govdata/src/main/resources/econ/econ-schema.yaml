@@ -15,6 +15,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:econ}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 2
 
 # regional_income fans out over geo_fips_set (STATE/COUNTY/MSA/MIC/PORT/DIV/CSA — COUNTY

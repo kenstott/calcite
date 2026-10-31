@@ -35,6 +35,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:banking}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 

@@ -25,6 +25,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:energy}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}/energy"
 
 comment: >

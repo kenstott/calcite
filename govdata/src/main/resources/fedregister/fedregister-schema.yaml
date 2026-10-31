@@ -14,6 +14,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fedregister}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 

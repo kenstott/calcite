@@ -12,6 +12,7 @@
 # ============================================================================
 
 schemaName: "${CYBER_THREAT_SCHEMA_NAME:cyber_threat}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 # OTX incremental fetch is driven by the threat_pulses freshness watermark, not a fixed day

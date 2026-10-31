@@ -20,6 +20,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:ag}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 

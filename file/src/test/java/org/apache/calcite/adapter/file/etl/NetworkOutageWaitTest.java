@@ -95,6 +95,17 @@ class NetworkOutageWaitTest {
     assertTrue(e.getMessage().contains("limit 1 s"), e.getMessage());
   }
 
+  @Test void defaultConfigurationFailsFastOnRefusedPort() throws Exception {
+    NetworkOutageWait.reset();
+    assertEquals(0L, NetworkOutageWait.maxWaitMs());
+    int port = freePort();
+    long start = System.nanoTime();
+    IOException e = assertThrows(IOException.class, () -> SharedHttpClient.execute(
+        new SharedHttpClient.Request("GET", "http://127.0.0.1:" + port + "/")));
+    assertTrue(NetworkOutageWait.isOutage(e));
+    assertTrue((System.nanoTime() - start) / 1_000_000L < 5_000L);
+  }
+
   @Test void zeroLimitFailsImmediately() throws Exception {
     NetworkOutageWait.configureMillis(0L, 200L, 400L);
     int port = freePort();

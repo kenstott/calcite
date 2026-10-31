@@ -37,13 +37,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * time. The start and the end of a wait are each logged once.
  *
  * <p>The limit is one JVM-wide setting, taken from the model's {@code networkOutageWaitMinutes}
- * operand ({@link #configureMinutes}); 0 disables waiting.
+ * operand ({@link #configureMinutes}); 0 disables waiting. Waiting is off until a model sets it:
+ * the govdata schema YAMLs set 25 minutes for production runs, so a process that never loads one
+ * (a unit test against an unreachable host) fails at once instead of waiting out an outage.
  */
 public final class NetworkOutageWait {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(NetworkOutageWait.class);
 
-  static final long DEFAULT_MAX_WAIT_MS = 25L * 60_000L;
+  static final long DEFAULT_MAX_WAIT_MS = 0L;
   static final long FIRST_BACKOFF_MS = 5_000L;
   static final long MAX_BACKOFF_MS = 60_000L;
 

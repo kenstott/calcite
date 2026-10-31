@@ -5,6 +5,7 @@
 # ============================================================================
 
 schemaName: "${HEALTH_SCHEMA_NAME:health}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >

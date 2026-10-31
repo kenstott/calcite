@@ -17,6 +17,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:cftc}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 
 # EQUITIES daily files uncompress to ~500 MB each; a full 2024+ ingest (one fetch per
 # asset_class/day) far exceeds the 60-min default worker cap. Read by the pool's

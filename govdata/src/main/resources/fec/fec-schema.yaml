@@ -28,6 +28,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fec}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 workerTimeoutMinutes: 480
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
