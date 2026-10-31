@@ -577,7 +577,7 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
-  # CDO MONTHLY SUMMARIES (GSOM) - Monthly climate data (requires NOAA_CDO_TOKEN)
+  # CDO MONTHLY SUMMARIES (GSOM) - Monthly climate data from the NCEI bulk archive (no auth)
   # ---------------------------------------------------------------------------
   - name: cdo_monthly_summaries
     pattern: "type=cdo_monthly/year=*/*.parquet"
@@ -595,20 +595,15 @@ partitionedTables:
       monthly climate metrics per station. One row per station+month+datatype.
       Monthly companion to cdo_annual_summaries (GSOY, same station network
       at annual grain). Cross-references geo.state_ref via state_fips and
-      cdo_stations via station_id. Requires NOAA_CDO_TOKEN environment
-      variable.
-
-    # DQ sample cap (GOVDATA_DQ mode): CDO GSOM returns one row per station×month×datatype, paged
-    # 1000/request per year×state. Each combo is its own fetch-unit, so the cap samples every combo
-    # and stops pagination early. Cache-safe — paginated pages are cached on full drain, so a capped
-    # run leaves the prod cache untouched.
-    dqRowLimit: 5000
+      cdo_stations via station_id. No auth needed. Loaded from NCEI's GSOM
+      bulk archive (gsom-latest.tar.gz); state_fips is the station's own state
+      from ghcnd-stations.txt, and stations outside the 50 states and DC are
+      not included.
 
     dimensions:
       type:
         - cdo_monthly
       year: *weather_year_range
-      state_fips: *all_state_fips
 
     columns:
       - <<: *state_fips_column
@@ -640,28 +635,17 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOM&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31"
+      url: "https://www.ncei.noaa.gov/data/gsom/archive/gsom-latest.tar.gz"
       method: GET
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          limitParam: limit
-          offsetParam: offset
-          startOffset: 1
-          pageSize: 1000
-          countPath: metadata.resultset.count
-      headers:
-        token: "{env:NOAA_CDO_TOKEN}"
+        format: text
       rateLimit:
-        requestsPerSecond: 4.0
+        requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
-      rawCache:
-        enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.weather.CdoDataTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.weather.NceiSummaryBulkDataProvider"
 
     materialize:
       format: iceberg
@@ -686,7 +670,7 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
-  # CDO ANNUAL SUMMARIES (GSOY) - Annual climate data (requires NOAA_CDO_TOKEN)
+  # CDO ANNUAL SUMMARIES (GSOY) - Annual climate data from the NCEI bulk archive (no auth)
   # ---------------------------------------------------------------------------
   - name: cdo_annual_summaries
     pattern: "type=cdo_annual/year=*/*.parquet"
@@ -705,14 +689,12 @@ partitionedTables:
       station+datatype+year. Annual companion to cdo_monthly_summaries
       (GSOM, same station network at monthly grain — use that table for
       TAVG/TMAX/TMIN/PRCP/SNOW by month). Cross-references geo.state_ref via
-      state_fips and cdo_stations via station_id. Requires NOAA_CDO_TOKEN
-      environment variable.
+      state_fips and cdo_stations via station_id. No auth needed.
 
     dimensions:
       type:
         - cdo_annual
       year: *weather_year_range
-      state_fips: *all_state_fips
 
     columns:
       - <<: *state_fips_column
@@ -740,28 +722,17 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.ncdc.noaa.gov/cdo-web/api/v2/data?datasetid=GSOY&locationid=FIPS:{state_fips}&startdate={effective_year}-01-01&enddate={effective_year}-12-31"
+      url: "https://www.ncei.noaa.gov/data/gsoy/archive/gsoy-latest.tar.gz"
       method: GET
       response:
-        format: json
-        pagination:
-          type: OFFSET
-          limitParam: limit
-          offsetParam: offset
-          startOffset: 1
-          pageSize: 1000
-          countPath: metadata.resultset.count
-      headers:
-        token: "{env:NOAA_CDO_TOKEN}"
+        format: text
       rateLimit:
-        requestsPerSecond: 4.0
+        requestsPerSecond: 1.0
         retryOn: [429, 503]
         maxRetries: 3
-      rawCache:
-        enabled: true
 
     hooks:
-      responseTransformer: "org.apache.calcite.adapter.govdata.weather.CdoDataTransformer"
+      dataProvider: "org.apache.calcite.adapter.govdata.weather.NceiSummaryBulkDataProvider"
 
     materialize:
       format: iceberg
