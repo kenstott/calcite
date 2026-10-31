@@ -110,7 +110,8 @@ final class PartialPartitionGuard {
   /**
    * The batch errors that leave a unit's rows missing from a replaced partition. A batch that
    * failed with HTTP 404 is recorded as unavailable — the source has no data for it, so there is
-   * nothing to lose — and does not count.
+   * nothing to lose — and does not count. A unit skipped by an open circuit breaker is recorded
+   * through {@link #circuitOpenError} and does count.
    *
    * @param errors the batch error messages collected during the run
    * @return the errors that make a replace-partitions commit unsafe
@@ -123,6 +124,18 @@ final class PartialPartitionGuard {
       }
     }
     return blocking;
+  }
+
+  /**
+   * The batch error recorded for a unit skipped by an open circuit breaker.
+   *
+   * @param batch   the batch label
+   * @param e       the skip signal
+   * @param variables the unit's fetch variables
+   * @return the error message
+   */
+  static String circuitOpenError(String batch, CircuitOpenSkipException e, Object variables) {
+    return String.format("Batch %s skipped: %s (fetch=%s)", batch, e.getMessage(), variables);
   }
 
   /**

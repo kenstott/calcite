@@ -1163,6 +1163,10 @@ public class EtlPipeline {
                     }
                   } catch (SkippedBatchException e) {
                     partSkipped.incrementAndGet();
+                    if (e instanceof CircuitOpenSkipException) {
+                      partErrors.add(PartialPartitionGuard.circuitOpenError(
+                          String.valueOf(currentBatch), (CircuitOpenSkipException) e, variables));
+                    }
                     LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
                         e.getMessage());
                   } catch (Exception e) {
@@ -1283,6 +1287,10 @@ public class EtlPipeline {
               } catch (SkippedBatchException e) {
                 skippedBatches++;
                 consecutiveFailures = 0;
+                if (e instanceof CircuitOpenSkipException) {
+                  errors.add(PartialPartitionGuard.circuitOpenError(
+                      String.valueOf(processedCount), (CircuitOpenSkipException) e, variables));
+                }
                 LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
               } catch (Exception e) {
                 consecutiveFailures++;
@@ -1438,6 +1446,11 @@ public class EtlPipeline {
                   }
                 } catch (SkippedBatchException e) {
                   parallelSkipped.incrementAndGet();
+                  if (e instanceof CircuitOpenSkipException) {
+                    parallelErrors.add(PartialPartitionGuard.circuitOpenError(
+                        String.valueOf(currentBatch), (CircuitOpenSkipException) e,
+                        unit.getFetchVariables()));
+                  }
                   LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
                       e.getMessage());
                 } catch (Exception e) {
@@ -1584,6 +1597,11 @@ public class EtlPipeline {
             } catch (SkippedBatchException e) {
               skippedBatches++;
               consecutiveFailures = 0;
+              if (e instanceof CircuitOpenSkipException) {
+                errors.add(PartialPartitionGuard.circuitOpenError(
+                    String.valueOf(processedCount), (CircuitOpenSkipException) e,
+                    unit.getFetchVariables()));
+              }
               LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
             } catch (Exception e) {
               consecutiveFailures++;
