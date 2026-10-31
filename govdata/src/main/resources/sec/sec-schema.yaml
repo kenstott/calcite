@@ -25,6 +25,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:sec}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 # Ingest config operands — declared here so the dependency lives in the model
 # (an orchestration model/script can override any of them). Read in code via the
 # operand / ModelOperand, never System.getenv.

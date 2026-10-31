@@ -15,6 +15,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:crime}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 # 0: CDE/BJS are queried by the literal data year and CDE publishes current-year monthly data,
 # so the end year is the current year (no publish lag). Year ranges file under the data year.
 dataLagYears: 0

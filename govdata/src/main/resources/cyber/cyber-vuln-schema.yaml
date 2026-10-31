@@ -13,6 +13,7 @@
 # ============================================================================
 
 schemaName: "${CYBER_VULN_SCHEMA_NAME:cyber_vuln}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
