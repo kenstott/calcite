@@ -12,6 +12,14 @@
 #               regenerate the seed with it, commit the seed files and push, so the release and
 #               the jar below carry the new seed. A failed seed rebuild is reported and the
 #               release continues on the committed seed.
+#   2c. CI gate the release and the staged jar ship only code whose CI is green. The code commit is
+#               the newest commit on main that is not an auto-generated seed or coverage-metadata
+#               commit (those have no CI of their own yet). Its newest "CI" workflow run (main.yml)
+#               on kenstott/calcite must be completed with conclusion success. A queued,
+#               in-progress, cancelled, failed or missing run, or a run that cannot be read, is not
+#               green: nothing is released or staged, the reason (sha, run state, URL) is logged and
+#               the script exits 1, so the window continues on the jar already staged. The seed
+#               rebuild and its push above are not gated. --dry-run prints the decision.
 #   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag
 #               AND we're about to build a fresh jar for this head_sha (step 4's own gate) —
 #               a release always accompanies the build it corresponds to, not a wall-clock timer.
@@ -175,6 +183,57 @@ else
   fi
 fi
 
+# ── 2c. CI gate ──────────────────────────────────────────────────────────────
+CI_WORKFLOW="main.yml"
+# Subjects of commits that carry no code and get no CI run of their own.
+GENERATED_SUBJECTS='^(chore\(govdata\): rebuild the DuckDB seed for changed schema models|chore\(govdata\): refresh observed-coverage metadata)'
+
+# ci_gate: 0 when the CI run for the code commit is completed/success; otherwise 1. Sets ci_reason.
+ci_gate() {
+  local code_sha subject runs state
+  code_sha=""
+  while IFS=$'\t' read -r sha subject; do
+    if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
+  done < <(git log -n 50 --format='%H%x09%s' main)
+  if [ -z "$code_sha" ]; then
+    ci_reason="no code commit among the last 50 commits on main"; return 1
+  fi
+  if ! runs="$(gh run list --repo "$FORK" --workflow "$CI_WORKFLOW" --commit "$code_sha" \
+                 --limit 20 --json status,conclusion,url,createdAt 2>&1)"; then
+    ci_reason="CI for $code_sha could not be read: $runs"; return 1
+  fi
+  if ! state="$(python3 -I -c '
+import json, sys
+runs = json.loads(sys.stdin.read())
+if not runs:
+    print("none\t\t")
+else:
+    r = max(runs, key=lambda x: x["createdAt"])
+    print("%s\t%s\t%s" % (r["status"], r["conclusion"], r["url"]))
+' <<<"$runs" 2>&1)"; then
+    ci_reason="CI for $code_sha could not be parsed: $state"; return 1
+  fi
+  IFS=$'\t' read -r run_status run_conclusion run_url <<<"$state"
+  if [ "$run_status" = none ]; then
+    ci_reason="no $CI_WORKFLOW run for code commit $code_sha"; return 1
+  fi
+  if [ "$run_status" = completed ] && [ "$run_conclusion" = success ]; then
+    ci_reason="CI green for code commit $code_sha ($run_url)"; return 0
+  fi
+  ci_reason="CI not green for code commit $code_sha: status=$run_status conclusion=${run_conclusion:-none} $run_url"
+  return 1
+}
+
+ci_ok=true
+ci_reason=""
+if ci_gate; then
+  log "CI gate: $ci_reason"
+else
+  ci_ok=false
+  release_ok=false
+  log "ERROR: CI gate: $ci_reason; not releasing and not staging a new jar"
+fi
+
 # ── 3. release ───────────────────────────────────────────────────────────────
 # Gated on the same signal step 4 uses to decide whether to build: a real release only
 # happens on a window where we're actually building a new jar for this head_sha, so it
@@ -244,6 +303,13 @@ fi
 # stamp/dest/will_build are computed above, ahead of step 3, so the release step can gate on
 # the same "are we building fresh for this head_sha" signal.
 
+if ! $ci_ok; then
+  if $DRY_RUN; then
+    log "would not release or stage a new jar (CI gate)"
+    exit 0
+  fi
+  exit 1
+fi
 if ! $will_build; then
   log "the staged jar is already built from $head_sha"
   exit 0
