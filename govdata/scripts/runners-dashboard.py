@@ -112,7 +112,7 @@ def issues(ttl):
     if _gh_cache["data"] is None or time.time() - _gh_cache["at"] > ttl:
         # Open issues are fetched on their own: one "--state all --limit 400" list is newest-first, so
         # once the repo outgrows it the oldest open issues drop out and their counts and labels vanish.
-        fields = "number,title,state,labels,updatedAt,closedAt"
+        fields = "number,title,state,labels,updatedAt,closedAt,body"
         open_out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "open", "--limit", "1000",
                         "--json", fields], timeout=60)
         closed_out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "closed", "--limit", "100",
@@ -175,6 +175,127 @@ def branches():
     return rows
 
 
+CODE_REPO = "kenstott/calcite"
+_BRANCH_ISSUE = re.compile(r"(?:defect|sourcing|remediation)-(\d+)$")
+_DQ_PATH = re.compile(r"calcite-fixes/(?:defect|sourcing)-(\d+)")
+_DQ_JAR = re.compile(r"sih-govdata-(?:defect|sourcing)-(\d+)\.jar")
+
+
+def pull_requests():
+    """PRs of the code repo by head branch, with the CI tally of each open PR's tip commit."""
+    out = run(["gh", "pr", "list", "-R", CODE_REPO, "--state", "all", "--limit", "100", "--json",
+               "number,headRefName,headRefOid,state,title,body"], timeout=60)
+    prs = {}
+    for pr in json.loads(out):
+        if pr["headRefName"] not in prs:          # newest first: keep the latest PR per branch
+            prs[pr["headRefName"]] = pr
+    for pr in prs.values():
+        if pr["state"] == "OPEN":
+            lines = run(["gh", "api", "repos/%s/commits/%s/check-runs" % (CODE_REPO, pr["headRefOid"]),
+                         "--paginate", "--jq", '.check_runs[] | .status + " " + (.conclusion // "")'],
+                        timeout=60).splitlines()
+            ok = failed = pending = 0
+            for l in lines:
+                status, _, concl = l.partition(" ")
+                if status != "completed":
+                    pending += 1
+                elif concl in ("failure", "cancelled", "timed_out", "action_required"):
+                    failed += 1
+                else:
+                    ok += 1
+            pr["ci"] = (ok, pending, failed)
+            pr["has_main"] = subprocess.run(["git", "merge-base", "--is-ancestor", "origin/main",
+                                             pr["headRefOid"]], cwd=REPO).returncode == 0
+    return prs
+
+
+def rehearsals():
+    """DQ rehearsals: processes running against the -dq bucket, mapped to the issue whose worktree
+    (calcite-fixes/defect-<n>) or jar (sih-govdata-defect-<n>.jar) they run.  One entry per issue."""
+    found = {}
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open("/proc/%s/environ" % pid, "rb") as f:
+                env = f.read().decode(errors="replace")
+            if not re.search(r"(?:^|\0)GOVDATA_PARQUET_DIR=[^\0]*-dq(?:[/\0]|$)", env):
+                continue
+            with open("/proc/%s/cmdline" % pid, "rb") as f:
+                cmd = f.read().decode(errors="replace").replace("\0", " ")
+            m = _DQ_JAR.search(cmd) or _DQ_PATH.search(cmd) or _DQ_PATH.search(os.readlink("/proc/%s/cwd" % pid))
+            if not m:
+                continue
+            etimes = int(run(["ps", "-o", "etimes=", "-p", pid]).strip())
+        except (OSError, RuntimeError):
+            continue                      # the process exited while we scanned
+        n = int(m.group(1))
+        if n not in found or etimes > found[n]["age"]:
+            found[n] = {"pid": pid, "age": etimes, "issue": n, "cmd": cmd}
+    return found
+
+
+def ancestors(pid):
+    """The pid and its parent chain, as strings."""
+    chain = []
+    while pid not in ("0", "1") and pid not in chain:
+        chain.append(pid)
+        try:
+            with open("/proc/%s/stat" % pid) as f:
+                pid = f.read().rsplit(")", 1)[1].split()[1]
+        except OSError:
+            break
+    return chain
+
+
+def blocker(issue):
+    m = re.search(r"#(\d+)", issue.get("body") or "")
+    return int(m.group(1)) if m and int(m.group(1)) != issue["number"] else None
+
+
+def in_flight(ag, iss, prs, dq_runs, dq_marks):
+    """{issue number: [stage text, ...]} for every open issue with work under way."""
+    stages = {}
+
+    def add(n, text):
+        stages.setdefault(n, []).append(text)
+
+    for a in ag or []:
+        add(a["issue"], "agent %s running %s" % (a["skill"].replace("-runner", "").replace("-register", ""), age(a["age"])))
+    for n, r in (dq_runs or {}).items():
+        add(n, "DQ rehearsal running %s (pid %s)" % (age(r["age"]), r["pid"]))
+    for br, pr in (prs or {}).items():
+        if pr["state"] != "OPEN":
+            continue
+        m = _BRANCH_ISSUE.search(br) or re.search(r"govdata-ops#(\d+)", pr["title"] + (pr["body"] or ""))
+        n = int(m.group(1)) if m else None
+        if n is None:
+            continue
+        ok, pending, failed = pr["ci"]
+        tally = "%d ok/%d pending/%d failed" % (ok, pending, failed)
+        labels = by_label(iss, n)
+        if not pr["has_main"] or "needs:rebase" in labels:
+            add(n, "PR #%d needs rebase onto main" % pr["number"])
+        elif failed:
+            add(n, "PR #%d CI failed (%s)" % (pr["number"], tally))
+        elif pending:
+            add(n, "PR #%d CI pending (%s)" % (pr["number"], tally))
+        elif br[len("fix/"):] in dq_marks or "dq-passed" in labels:
+            add(n, "PR #%d CI green, DQ passed: waits for the lead's merge" % pr["number"])
+        else:
+            add(n, "PR #%d CI green: waits for DQ" % pr["number"])
+    for i in iss or []:
+        if i["state"] == "OPEN" and "status:blocked" in i["labelset"]:
+            b = blocker(i)
+            add(i["number"], "blocked on #%d" % b if b else "blocked (blocker not named in the issue body)")
+    return stages
+
+
+def by_label(iss, n):
+    for i in iss or []:
+        if i["number"] == n:
+            return i["labelset"]
+    return set()
+
+
 def merged_commits(hours=24):
     out = run(["git", "log", "--since=%d hours ago" % hours, "main",
                "--format=%h%x1f%ct%x1f%s%x1f%b%x1e"], cwd=REPO)
@@ -207,6 +328,7 @@ def pool():
         m = re.match(r"\s*(\d+)\s+(\d+)\s+bash \S*run-pool\.sh\s+(.*)$", line)
         if m:
             managers.append({"pid": m.group(1), "age": int(m.group(2)), "args": m.group(3)})
+    dq_runs = rehearsals()
     info = []
     for mg in managers:
         log, last = None, None
@@ -223,6 +345,7 @@ def pool():
                 lines = [l for l in f.read().splitlines()[-400:] if "Running:" in l]
             last = lines[-1] if lines else None
         mg["log"], mg["last"] = log, last
+        mg["dq_issue"] = next((n for n, r in dq_runs.items() if mg["pid"] in ancestors(r["pid"])), None)
         info.append(mg)
     return info
 
@@ -358,7 +481,8 @@ def render(ttl):
         out.append(yellow("  no pool running"))
     else:
         for mg in pl:
-            out.append("  %-8s %-6s %s" % ("pid " + mg["pid"], age(mg["age"]), clip(mg["args"], 40)))
+            serves = "  (DQ rehearsal for #%d)" % mg["dq_issue"] if mg.get("dq_issue") else ""
+            out.append("  %-8s %-6s %s%s" % ("pid " + mg["pid"], age(mg["age"]), clip(mg["args"], 60), serves))
             if mg["last"]:
                 out.append(dim("    " + clip(re.sub(r"^\[[^]]*\]\s*", "", mg["last"]), width - 4)))
     wn, wn_err = guarded(window)
@@ -370,6 +494,23 @@ def render(ttl):
             out.append(dim("  " + clip(l, width - 2)))
     elif wn_err:
         out.append(red("  window log: " + wn_err))
+
+    # in flight
+    out.append(section("IN FLIGHT", width))
+    pr_map, pr_err = guarded(pull_requests)
+    dq_runs, dq_err = guarded(rehearsals)
+    br, br_err = guarded(branches)
+    for err in (pr_err, dq_err):
+        if err:
+            out.append(red("  " + err))
+    if not iss_err and not ag_err:
+        flight = in_flight(ag, iss, pr_map, dq_runs, {b["slug"] for b in br or [] if b["dq"]})
+        for n in sorted(flight):
+            title = by_num.get(n, {}).get("title", "?")
+            out.append("  #%-4d %s" % (n, clip(title, 44)))
+            out.append("        " + "; ".join(flight[n]))
+        if not flight:
+            out.append(yellow("  nothing in flight"))
 
     # agents
     out.append(section("AGENTS (current work)", width))
@@ -383,14 +524,15 @@ def render(ttl):
             skill = a["skill"].replace("-runner", "").replace("-register", "").replace("remediation-ledger", "remediation")
             out.append("  %-12s #%-4d %-6s %s" % (skill, a["issue"], age(a["age"]),
                                                    clip(title, width - 32)))
-    br, br_err = guarded(branches)
     if br_err:
         out.append(red("  branches: " + br_err))
     for b in br or []:
-        if not (b["ahead"] or b["dq"] or re.match(r"(defect|sourcing)-", b["slug"])):
-            continue
-        state = green("DQ passed") if b["dq"] else ("commits, no DQ yet" if b["ahead"] else "no commits yet")
-        out.append(dim("  branch fix/%-22s %d commit(s) ahead  %s" % (b["slug"], b["ahead"], state)))
+        pr = (pr_map or {}).get("fix/" + b["slug"])
+        if not b["ahead"] or (pr and pr["state"] == "MERGED"):
+            continue                      # merged or empty: nothing to show
+        state = green("DQ passed") if b["dq"] else "commits, no DQ yet"
+        out.append(dim("  branch fix/%-22s %-8s %d commit(s) ahead  %s" %
+                       (b["slug"], "PR #%d" % pr["number"] if pr else "no PR", b["ahead"], state)))
 
     # queue
     out.append(section("QUEUE (open issues)", width))
