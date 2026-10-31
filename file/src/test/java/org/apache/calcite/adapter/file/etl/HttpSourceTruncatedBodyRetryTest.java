@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.SocketException;
 
+import javax.net.ssl.SSLHandshakeException;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,6 +54,29 @@ class HttpSourceTruncatedBodyRetryTest {
 
   @Test void tlsStreamTruncatedMidRecordIsRetried() throws Exception {
     assertTrue(shouldRetry(new IOException("BUFFER_UNDERFLOW with EOF, 7481 bytes non decrypted.")));
+  }
+
+  @Test void handshakeTerminatedByRemoteHostWithResetCauseIsRetried() throws Exception {
+    SSLHandshakeException e =
+        new SSLHandshakeException("Remote host terminated the handshake");
+    e.initCause(new SocketException("Connection reset"));
+    assertTrue(shouldRetry(e));
+  }
+
+  @Test void handshakeTerminatedByRemoteHostIsRetried() throws Exception {
+    assertTrue(shouldRetry(new SSLHandshakeException("Remote host terminated the handshake")));
+  }
+
+  @Test void resetNestedInCauseChainIsRetried() throws Exception {
+    IOException outer = new IOException("request failed", new IOException("wrapped",
+        new SocketException("Connection reset")));
+    assertTrue(shouldRetry(outer));
+  }
+
+  @Test void otherHandshakeFailureIsNotRetried() throws Exception {
+    SSLHandshakeException e = new SSLHandshakeException("PKIX path building failed");
+    e.initCause(new java.security.cert.CertificateException("untrusted"));
+    assertFalse(shouldRetry(e));
   }
 
   @Test void configuredStatusIsStillRetried() throws Exception {

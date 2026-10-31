@@ -3471,6 +3471,36 @@ public class HttpSource implements DataSource {
     return false;
   }
 
+  private static final int MAX_CAUSE_DEPTH = 5;
+
+  /**
+   * True when the exception, or a cause within {@link #MAX_CAUSE_DEPTH} links, is a truncated or
+   * reset transport. A TLS handshake the remote host terminated surfaces as an
+   * SSLHandshakeException whose own message carries none of the truncation signals; the reset is
+   * in its cause.
+   */
+  private static boolean isTruncatedOrReset(Throwable e) {
+    Throwable t = e;
+    for (int depth = 0; t != null && depth < MAX_CAUSE_DEPTH; depth++) {
+      String msg = t.getMessage();
+      if (t instanceof java.io.EOFException
+          || (t instanceof javax.net.ssl.SSLHandshakeException
+              && msg != null && msg.contains("Remote host terminated the handshake"))
+          || (msg != null
+              && (msg.contains("Premature EOF")
+                  || msg.contains("Connection reset")
+                  // java.net.http: "fixed content-length: N, bytes received: M" and
+                  // "chunked transfer encoding, state: READING_DATA"
+                  || msg.contains("bytes received")
+                  || msg.contains("chunked transfer encoding, state")
+                  || msg.contains("BUFFER_UNDERFLOW with EOF")))) {
+        return true;
+      }
+      t = t.getCause() == t ? null : t.getCause();
+    }
+    return false;
+  }
+
   /**
    * Checks if we should retry based on the error.
    */
@@ -3491,17 +3521,7 @@ public class HttpSource implements DataSource {
     // request is retried, within maxRetries, and the exception still propagates when the retries
     // are exhausted. Seen on OpenFEMA, which closes deep $skip pages early at random, and on the
     // Census flows API, which resets the connection on its multi-megabyte state responses.
-    if (e instanceof java.io.EOFException
-        || (e.getMessage() != null
-            && (e.getMessage().contains("Premature EOF")
-                || e.getMessage().contains("Connection reset")
-                // java.net.http: "fixed content-length: N, bytes received: M" and
-                // "chunked transfer encoding, state: READING_DATA"
-                || e.getMessage().contains("bytes received")
-                || e.getMessage().contains("chunked transfer encoding, state")
-                // java.net.http: TLS connection closed mid-record, "BUFFER_UNDERFLOW with EOF,
-                // N bytes non decrypted."
-                || e.getMessage().contains("BUFFER_UNDERFLOW with EOF")))) {
+    if (isTruncatedOrReset(e)) {
       return true;
     }
 
