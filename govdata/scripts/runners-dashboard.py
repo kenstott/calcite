@@ -110,9 +110,16 @@ def issues(ttl):
             _gh_cache["data"] = json.load(f)
         _gh_cache["at"] = os.path.getmtime(_GH_CACHE_FILE)
     if _gh_cache["data"] is None or time.time() - _gh_cache["at"] > ttl:
-        out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "all", "--limit", "400",
-                   "--json", "number,title,state,labels,updatedAt,closedAt"], timeout=60)
-        _gh_cache["data"] = json.loads(out)
+        # Open issues are fetched on their own: one "--state all --limit 400" list is newest-first, so
+        # once the repo outgrows it the oldest open issues drop out and their counts and labels vanish.
+        fields = "number,title,state,labels,updatedAt,closedAt"
+        open_out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "open", "--limit", "1000",
+                        "--json", fields], timeout=60)
+        closed_out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "closed", "--limit", "100",
+                          "--json", fields], timeout=60)
+        merged = json.loads(open_out) + json.loads(closed_out)
+        out = json.dumps(merged)
+        _gh_cache["data"] = merged
         _gh_cache["at"] = time.time()
         tmp = _GH_CACHE_FILE + ".tmp"
         with open(tmp, "w") as f:
@@ -295,6 +302,13 @@ def type_of(issue):
     return "other"
 
 
+def is_stale_running(issue, live_issues):
+    """A status:running label with no agent process behind it, for any issue type.  Unknowable when
+    the agent scan failed (live_issues is None)."""
+    return live_issues is not None and issue["state"] == "OPEN" and "status:running" in issue["labelset"] \
+        and issue["number"] not in live_issues
+
+
 def render(ttl):
     width = min(shutil.get_terminal_size((120, 40)).columns, 140)
     out = []
@@ -304,6 +318,7 @@ def render(ttl):
     ag, ag_err = guarded(agents)
     iss, iss_err = guarded(issues, ttl)
     by_num = {i["number"]: i for i in iss} if iss else {}
+    live_issues = {a["issue"] for a in ag} if ag is not None else None  # None: scan failed, shown in header
 
     # header
     if dm:
@@ -386,7 +401,8 @@ def render(ttl):
             counts = {}
             for i in iss:
                 if i["state"] == "OPEN" and type_of(i) == t:
-                    counts[status_of(i)] = counts.get(status_of(i), 0) + 1
+                    k = "stale-running" if is_stale_running(i, live_issues) else status_of(i)
+                    counts[k] = counts.get(k, 0) + 1
             cells = ["%s %d" % (k, counts[k]) for k in sorted(counts, key=lambda k: -counts[k])]
             out.append("  %-12s %s" % (t, " · ".join(cells) if cells else dim("none")))
 
@@ -416,7 +432,6 @@ def render(ttl):
 
     # attention: blockers, stale running, failures, repeated retries
     out.append(section("BLOCKERS & ATTENTION (age = time since last update)", width))
-    live_issues = {a["issue"] for a in ag or []}
     if iss:
         blocked = [i for i in iss if i["state"] == "OPEN" and
                    ({"status:blocked", "status:waiting-resources"} & i["labelset"])]
@@ -424,8 +439,7 @@ def render(ttl):
         for i in blocked[:8]:
             out.append("  %-21s #%-4d %-6s %s" % (status_of(i), i["number"],
                                                   age(iso_age(i["updatedAt"])), clip(i["title"], width - 42)))
-        stale = [i for i in iss if i["state"] == "OPEN" and "status:running" in i["labelset"]
-                 and type_of(i) == "remediation" and i["number"] not in live_issues]
+        stale = [i for i in iss if is_stale_running(i, live_issues)]
         for i in sorted(stale, key=lambda i: i["number"]):
             out.append("  %s #%-4d %-6s %s" % (red("STALE running   "), i["number"],
                                                age(iso_age(i["updatedAt"])),
