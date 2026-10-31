@@ -1610,6 +1610,8 @@ public class IcebergTableWriter {
     // set, so it can never pull a file out from under the CURRENT snapshot regardless of window.
     try {
       underCommitLock(() -> {
+        table.refresh();
+        supersedeAgedRemovingSnapshot(expireSnapshotsMillis);
         table.expireSnapshots()
             .expireOlderThan(expireSnapshotsMillis)
             .deleteWith(this::deleteExpiredFile)
@@ -1619,6 +1621,33 @@ public class IcebergTableWriter {
     } catch (Exception e) {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Commits an empty snapshot when the current snapshot is older than the retention cutoff and
+   * removed data files (a compaction or an overwrite).
+   *
+   * <p>Iceberg's incremental cleanup deletes the files a snapshot removed only when that snapshot
+   * is itself expired, and the current snapshot is never expired. A table that compacts on its
+   * last write and then idles would therefore keep every replaced file indefinitely. The empty
+   * snapshot makes the aged one non-current so the expiry that follows can reclaim its files; it
+   * carries no removals itself, so the next pass finds nothing further to supersede.
+   */
+  private void supersedeAgedRemovingSnapshot(long cutoffMillis) {
+    org.apache.iceberg.Snapshot current = table.currentSnapshot();
+    if (current == null || current.timestampMillis() >= cutoffMillis) {
+      return;
+    }
+    Map<String, String> summary = current.summary();
+    String removed = summary == null ? null : summary.get(
+        org.apache.iceberg.SnapshotSummary.DELETED_FILES_PROP);
+    if (removed == null || Long.parseLong(removed) <= 0) {
+      return;
+    }
+    table.newAppend().commit();
+    table.refresh();
+    LOGGER.info("Committed an empty snapshot over {}'s aged snapshot {} that removed {} files so "
+        + "its files can be reclaimed", table.name(), current.snapshotId(), removed);
   }
 
   /**
