@@ -162,6 +162,23 @@ def agents():
     return found
 
 
+def unmerged_commits(ref):
+    """Commits of `ref` with no patch-equivalent on main.  The lead's merge rebases, so a merged branch
+    is not an ancestor of main (and its PR stays OPEN on GitHub) but has none of these."""
+    out = run(["git", "cherry", "main", ref], cwd=REPO)
+    return sum(1 for l in out.splitlines() if l.startswith("+"))
+
+
+def rebase_conflict(oid):
+    """The files the merge gate (lead-merge.sh) refuses on: changed by main since the branch point and also
+    changed by the branch.  Schema YAMLs under govdata/src/main/resources are ignored, as the gate does."""
+    base = run(["git", "merge-base", "main", oid], cwd=REPO).strip()
+    mine = set(run(["git", "diff", "--name-only", base, oid], cwd=REPO).split())
+    other = {f for f in run(["git", "diff", "--name-only", base, "main"], cwd=REPO).split()
+             if not re.match(r"govdata/src/main/resources/.*\.ya?ml$", f)}
+    return sorted(mine & other)
+
+
 def branches():
     rows = []
     git_dir = run(["git", "rev-parse", "--git-common-dir"], cwd=REPO).strip()
@@ -169,7 +186,7 @@ def branches():
         git_dir = os.path.join(REPO, git_dir)
     for br in run(["git", "branch", "--list", "fix/*", "--format=%(refname:short)"], cwd=REPO).split():
         slug = br[len("fix/"):]
-        ahead = int(run(["git", "rev-list", "--count", "main.." + br], cwd=REPO).strip())
+        ahead = unmerged_commits(br)
         rows.append({"slug": slug, "ahead": ahead,
                      "dq": os.path.exists(os.path.join(git_dir, "fix-branch-dq", slug))})
     return rows
@@ -190,6 +207,8 @@ def pull_requests():
         if pr["headRefName"] not in prs:          # newest first: keep the latest PR per branch
             prs[pr["headRefName"]] = pr
     for pr in prs.values():
+        if pr["state"] == "OPEN" and unmerged_commits(pr["headRefOid"]) == 0:
+            pr["state"] = "MERGED"                # already on main by rebase: GitHub still says OPEN
         if pr["state"] == "OPEN":
             lines = run(["gh", "api", "repos/%s/commits/%s/check-runs" % (CODE_REPO, pr["headRefOid"]),
                          "--paginate", "--jq", '.check_runs[] | .status + " " + (.conclusion // "")'],
@@ -204,8 +223,7 @@ def pull_requests():
                 else:
                     ok += 1
             pr["ci"] = (ok, pending, failed)
-            pr["has_main"] = subprocess.run(["git", "merge-base", "--is-ancestor", "origin/main",
-                                             pr["headRefOid"]], cwd=REPO).returncode == 0
+            pr["conflicts"] = rebase_conflict(pr["headRefOid"])
     return prs
 
 
@@ -238,6 +256,14 @@ _JOB_KINDS = (
     (re.compile(r"idle-snapshot-expiry\.sh|IcebergMaintenanceRunner"), "production"),
     (re.compile(r"run-scheduled\.sh"), "production"),
 )
+
+
+def job_label(args):
+    """The scheduled window's script is named by what it is, not by its path."""
+    first, _, rest = args.partition(" ")
+    if os.path.basename(first) == "run-scheduled.sh":
+        return "scheduled daily/historical window" + (" " + rest if rest else "")
+    return args
 
 
 def other_jobs(dq_runs):
@@ -276,9 +302,58 @@ def ancestors(pid):
     return chain
 
 
+_COMMENT_CACHE_FILE = os.path.join(tempfile.gettempdir(), "runners-dashboard-comments-%d.json" % os.getuid())
+
+
+def comments_of(issue):
+    """[{author, createdAt, body}] of an issue, fetched once per updatedAt (a new comment bumps it) and
+    kept on disk so a fresh process per redraw does not call gh for every blocked issue again."""
+    cache = {}
+    if os.path.exists(_COMMENT_CACHE_FILE):
+        with open(_COMMENT_CACHE_FILE) as f:
+            cache = json.load(f)
+    key = str(issue["number"])
+    if key not in cache or cache[key]["at"] != issue["updatedAt"]:
+        out = run(["gh", "issue", "view", key, "-R", OPS_REPO, "--json", "comments"], timeout=60)
+        cache[key] = {"at": issue["updatedAt"],
+                      "comments": [{"author": c["author"]["login"], "createdAt": c["createdAt"], "body": c["body"]}
+                                   for c in json.loads(out)["comments"]]}
+        tmp = _COMMENT_CACHE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(cache, f)
+        os.replace(tmp, _COMMENT_CACHE_FILE)
+    return cache[key]["comments"]
+
+
 def blocker(issue):
-    m = re.search(r"#(\d+)", issue.get("body") or "")
-    return int(m.group(1)) if m and int(m.group(1)) != issue["number"] else None
+    """The issue a blocked issue names: the first other #N in its body, else in its last lead comment."""
+    texts = [issue.get("body") or ""]
+    lead = [c for c in comments_of(issue) if c["body"].lstrip("*_ ").startswith("Lead")]
+    if lead:
+        texts.append(lead[-1]["body"])
+    for t in texts:
+        for m in re.finditer(r"#(\d+)", t):
+            if int(m.group(1)) != issue["number"]:
+                return int(m.group(1))
+    return None
+
+
+_WAITS = (
+    (re.compile(r"quota|10,000/day|rate.?limit|daily cap", re.I), "quota"),
+    (re.compile(r"maintainer|needs:approval|approval|decision", re.I), "maintainer"),
+    (re.compile(r"another issue|depends on|after the .* (?:issue|job|run)", re.I), "another issue"),
+)
+
+
+def waits_on(issue):
+    """Blocked issue with no #N named: the last comment's date and author, and what it waits on, read from
+    that comment's wording ('unstated' when it does not say)."""
+    cs = comments_of(issue)
+    if not cs:
+        return "no comments, waits on: %s" % ("maintainer" if "needs:approval" in issue["labelset"] else "unstated")
+    last = cs[-1]
+    who = next((w for rx, w in _WAITS if rx.search(last["body"])), "unstated")
+    return "last comment %s ago by %s, waits on: %s" % (age(iso_age(last["createdAt"])), last["author"], who)
 
 
 def in_flight(ag, iss, prs, dq_runs, dq_marks):
@@ -301,9 +376,13 @@ def in_flight(ag, iss, prs, dq_runs, dq_marks):
             continue
         ok, pending, failed = pr["ci"]
         tally = "%d ok/%d pending/%d failed" % (ok, pending, failed)
+        issue = next((i for i in iss or [] if i["number"] == n), None)
+        if issue and issue["state"] != "OPEN":
+            continue
         labels = by_label(iss, n)
-        if not pr["has_main"] or "needs:rebase" in labels:
-            add(n, "PR #%d needs rebase onto main" % pr["number"])
+        if pr["conflicts"]:
+            add(n, "PR #%d needs rebase onto main (main changed %s)" % (pr["number"], ", ".join(
+                os.path.basename(f) for f in pr["conflicts"][:2])))
         elif failed:
             add(n, "PR #%d CI failed (%s)" % (pr["number"], tally))
         elif pending:
@@ -315,7 +394,7 @@ def in_flight(ag, iss, prs, dq_runs, dq_marks):
     for i in iss or []:
         if i["state"] == "OPEN" and "status:blocked" in i["labelset"]:
             b = blocker(i)
-            add(i["number"], "blocked on #%d" % b if b else "blocked (blocker not named in the issue body)")
+            add(i["number"], "blocked on #%d" % b if b else "blocked: " + waits_on(i))
     return stages
 
 
@@ -528,7 +607,7 @@ def render(ttl):
     jobs, jobs_err = guarded(lambda: other_jobs(rehearsals()))
     for jb in jobs or []:
         out.append("  %-8s %-6s %-11s %s%s" % ("pid " + jb["pid"], age(jb["age"]), jb["kind"],
-                                             clip(jb["args"], 50),
+                                             clip(job_label(jb["args"]), 50),
                                              "  (#%d)" % jb["issue"] if jb["issue"] else ""))
     if jobs_err:
         out.append(red("  " + jobs_err))
