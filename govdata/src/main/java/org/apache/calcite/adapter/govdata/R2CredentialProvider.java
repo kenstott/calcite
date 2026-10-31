@@ -9,8 +9,6 @@
  * permission from the copyright holder.
  */
 package org.apache.calcite.adapter.govdata;
-
-import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -175,7 +173,6 @@ public final class R2CredentialProvider {
       conn.setConnectTimeout(TIMEOUT_MS);
       conn.setReadTimeout(TIMEOUT_MS);
 
-      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (status != 200) {
         String errorBody;
