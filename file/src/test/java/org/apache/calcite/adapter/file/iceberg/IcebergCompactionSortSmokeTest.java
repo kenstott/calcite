@@ -165,6 +165,46 @@ public class IcebergCompactionSortSmokeTest {
         "after sorted compaction the rows on disk must be in sortOrder");
   }
 
+  @Test void compactionReplansWhenAnotherWriterReplacedPlannedFiles() throws Exception {
+    IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
+    writeFile(writer, Arrays.asList(row("zebra", 1), row("alpha", 2)));
+    writeFile(writer, Arrays.asList(row("mango", 3), row("beta", 4)));
+    writeFile(writer, Arrays.asList(row("yak", 5), row("cherry", 6)));
+
+    List<FileScanTask> planned = new ArrayList<>();
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        planned.add(task);
+      }
+    }
+    assertEquals(3, planned.size(), "precondition: three planned files");
+    String partitionKey = planned.get(0).file().partition().toString();
+
+    // A concurrent writer compacts the same partition, replacing every planned file.
+    assertEquals(1, writer.compactSmallFiles(
+        128L * 1024 * 1024, 2, 100L * 1024 * 1024, 7, Collections.<String>emptyList()));
+    writeFile(writer, Arrays.asList(row("delta", 7), row("walrus", 8)));
+    writeFile(writer, Arrays.asList(row("echo", 9), row("violet", 10)));
+
+    writer.compactPartitionAgainstCurrentState(partitionKey, planned, planned, 2,
+        128L * 1024 * 1024, 100L * 1024 * 1024, Collections.<String>emptyList());
+
+    List<String> actual = new ArrayList<>(readNamesInFileOrder());
+    Collections.sort(actual);
+    List<String> expected = new ArrayList<>(Arrays.asList("zebra", "alpha", "mango", "beta",
+        "yak", "cherry", "delta", "walrus", "echo", "violet"));
+    Collections.sort(expected);
+    assertEquals(expected, actual, "re-planned compaction must keep every row exactly once");
+    table.refresh();
+    int liveFiles = 0;
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        liveFiles++;
+      }
+    }
+    assertEquals(1, liveFiles, "the stale plan must not block merging the live files");
+  }
+
   @Test void compactionWithoutSortOrderLeavesOrderAlone() throws Exception {
     IcebergTableWriter writer = new IcebergTableWriter(table, storageProvider);
     writeFile(writer, Arrays.asList(row("zebra", 1), row("alpha", 2)));

@@ -28,6 +28,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
+import org.apache.iceberg.exceptions.CommitStateUnknownException;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
@@ -75,6 +76,11 @@ public class IcebergTableWriter {
 
   /** Read-then-commit passes {@code deleteRows} makes before surfacing a concurrent-rewrite conflict. */
   private static final int DELETE_ROWS_MAX_ATTEMPTS = 3;
+
+  /** Plan-rewrite-commit passes one partition's compaction makes before surfacing a conflict. */
+  private static final int COMPACT_PARTITION_MAX_ATTEMPTS = 3;
+
+  private static final String MISSING_FILES_TO_DELETE = "Missing required files to delete";
 
   /**
    * Floor on the per-record byte estimate used to size compaction output files. The estimate is
@@ -760,7 +766,7 @@ public class IcebergTableWriter {
         return;
       } catch (ValidationException e) {
         String message = e.getMessage();
-        if (message == null || !message.startsWith("Missing required files to delete")
+        if (message == null || !message.startsWith(MISSING_FILES_TO_DELETE)
             || attempt >= DELETE_ROWS_MAX_ATTEMPTS) {
           throw e;
         }
@@ -1964,11 +1970,14 @@ public class IcebergTableWriter {
       if (smallFiles.size() >= minFilesToCompact) {
         LOGGER.info("Compacting partition {} with {} small files", partitionKey, smallFiles.size());
         try {
-          boolean sorted = compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
+          boolean allRewrittenSorted = compactPartitionAgainstCurrentState(partitionKey, tasks,
+              smallFiles, minFilesToCompact, smallFileSizeBytes, targetFileSizeBytes, sortOrder);
           compactedPartitions++;
-          if (!sorted || smallFiles.size() != tasks.size()) {
+          if (!allRewrittenSorted) {
             fullySorted = false;
           }
+        } catch (ValidationException e) {
+          throw e;
         } catch (Throwable e) {
           LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
           fullySorted = false;
@@ -2377,19 +2386,7 @@ public class IcebergTableWriter {
       }
       LOGGER.info("External sort wrote {} records to {} files", written, newFiles.size());
 
-      RewriteFiles rewrite = table.newRewrite();
-      if (table.currentSnapshot() != null) {
-        rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-      }
-      for (DataFile oldFile : filesToDelete) {
-        rewrite.deleteFile(oldFile);
-      }
-      for (DataFile newFile : newFiles) {
-        rewrite.addFile(newFile);
-      }
-      underCommitLock(() -> {
-        rewrite.commit();
-      });
+      commitCompactionRewrite(filesToDelete, newFiles);
     } finally {
       for (java.io.File run : runs) {
         if (run.exists() && !run.delete()) {
@@ -2513,6 +2510,90 @@ public class IcebergTableWriter {
     return out;
   }
 
+  /**
+   * Commits a compaction rewrite swapping {@code filesToDelete} for {@code newFiles}. When the
+   * commit fails, the replacement files it wrote are unreferenced by any snapshot and are
+   * deleted, so a re-planned attempt does not leave them behind. A commit whose outcome is
+   * unknown keeps them, since the snapshot may already reference them.
+   */
+  private void commitCompactionRewrite(Set<DataFile> filesToDelete, List<DataFile> newFiles) {
+    try {
+      underCommitLock(() -> {
+        RewriteFiles rewrite = table.newRewrite();
+        if (table.currentSnapshot() != null) {
+          rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+        }
+        for (DataFile oldFile : filesToDelete) {
+          rewrite.deleteFile(oldFile);
+        }
+        for (DataFile newFile : newFiles) {
+          rewrite.addFile(newFile);
+        }
+        rewrite.commit();
+      });
+    } catch (CommitStateUnknownException e) {
+      throw e;
+    } catch (RuntimeException e) {
+      for (DataFile newFile : newFiles) {
+        table.io().deleteFile(newFile.path().toString());
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Compacts one partition, re-planning its files from the current table state when another
+   * writer replaced one of them between planning and the rewrite commit. Planning happens once
+   * for the whole table before any partition is rewritten, and a sorted rewrite of a large
+   * partition runs long enough for a concurrent writer to commit over the planned files, so the
+   * rewrite's whole-file delete then names a file that is no longer live. A conflict that
+   * persists past {@link #COMPACT_PARTITION_MAX_ATTEMPTS} attempts propagates.
+   *
+   * @return true when the partition was rewritten entirely, in sorted order
+   */
+  boolean compactPartitionAgainstCurrentState(String partitionKey,
+      List<FileScanTask> plannedTasks, List<FileScanTask> plannedSmallFiles, int minFilesToCompact,
+      long smallFileSizeBytes, long targetFileSizeBytes, java.util.List<String> sortOrder)
+      throws IOException {
+    List<FileScanTask> tasks = plannedTasks;
+    List<FileScanTask> smallFiles = plannedSmallFiles;
+    for (int attempt = 1;; attempt++) {
+      try {
+        boolean sorted = compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
+        return sorted && smallFiles.size() == tasks.size();
+      } catch (ValidationException e) {
+        String message = e.getMessage();
+        if (message == null || !message.startsWith(MISSING_FILES_TO_DELETE)
+            || attempt >= COMPACT_PARTITION_MAX_ATTEMPTS) {
+          throw e;
+        }
+        LOGGER.warn("compactSmallFiles: files planned for partition {} were replaced by another "
+            + "writer before the commit (attempt {}/{}); re-planning against the current table "
+            + "state", partitionKey, attempt, COMPACT_PARTITION_MAX_ATTEMPTS);
+        table.refresh();
+        tasks = new ArrayList<>();
+        try (CloseableIterable<FileScanTask> planned = table.newScan().planFiles()) {
+          for (FileScanTask task : planned) {
+            if (task.file().partition().toString().equals(partitionKey)) {
+              tasks.add(task);
+            }
+          }
+        }
+        smallFiles = new ArrayList<>();
+        for (FileScanTask task : tasks) {
+          if (task.file().fileSizeInBytes() < smallFileSizeBytes) {
+            smallFiles.add(task);
+          }
+        }
+        if (smallFiles.size() < minFilesToCompact) {
+          LOGGER.info("Partition {} no longer has {} small files after the concurrent rewrite; "
+              + "nothing left to compact", partitionKey, minFilesToCompact);
+          return false;
+        }
+      }
+    }
+  }
+
   private boolean compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
       java.util.List<String> sortOrder) throws IOException {
     if (smallFiles.isEmpty()) {
@@ -2634,22 +2715,7 @@ public class IcebergTableWriter {
 
     LOGGER.info("Java compaction wrote {} records to {} files", totalWritten, newFiles.size());
 
-    // Commit the rewrite: delete old files, add new files
-    RewriteFiles rewrite = table.newRewrite();
-    // Set validation snapshot to current to avoid lineage errors
-    // when old snapshots have been expired
-    if (table.currentSnapshot() != null) {
-      rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-    }
-    for (DataFile oldFile : filesToDelete) {
-      rewrite.deleteFile(oldFile);
-    }
-    for (DataFile newFile : newFiles) {
-      rewrite.addFile(newFile);
-    }
-    underCommitLock(() -> {
-      rewrite.commit();
-    });
+    commitCompactionRewrite(filesToDelete, newFiles);
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
     return false;
