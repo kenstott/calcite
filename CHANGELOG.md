@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.125.0](https://github.com/kenstott/calcite/compare/engine-v0.124.0...engine-v0.125.0) (2026-10-31)
+
+
+### Features
+
+* **file:** a schema's own HTML files read their lists as tables; landmark lists never are (REQ-2186) ([9e58fb7](https://github.com/kenstott/calcite/commit/9e58fb7b76f27a67ae93d251206d1f9444d38f75))
+* **file:** pin Iceberg reads to the metadata.json named by the pointer for a short TTL ([7d63848](https://github.com/kenstott/calcite/commit/7d6384867e189d74278067c391e998ab13e44213))
+* **file:** read the lists of a crawled page's content as tables (REQ-2186) ([93c1aec](https://github.com/kenstott/calcite/commit/93c1aec345714bf20dc1e1823148e29b54c2e195))
+* **file:** wait out short network and DNS outages instead of failing the batch ([191de8b](https://github.com/kenstott/calcite/commit/191de8bbc12d99f10396933c0264cb84880aaecb))
+* **file:** wait up to 25 minutes for the network by default ([e9e0dbe](https://github.com/kenstott/calcite/commit/e9e0dbeb57f910bc4dc89ba2945c72628b9f5834))
+* **govdata/scripts:** runners-dashboard IN FLIGHT section with stage and wait per issue ([04f5fbe](https://github.com/kenstott/calcite/commit/04f5fbe6baa6623587d959b732d8892e444da747))
+* **govdata/scripts:** runners-dashboard shows job kind on every pool row and flags STALE investigating ([4540bc2](https://github.com/kenstott/calcite/commit/4540bc299447a882838305288cf2520f5e036c6d))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** serialise the tests that share the pgwire start-state statics (govdata-ops[#1039](https://github.com/kenstott/calcite/issues/1039)) ([9bce7c5](https://github.com/kenstott/calcite/commit/9bce7c55fd0d260e5160d194cdcbda4cc7ef5f46))
+* **file:** a re-conversion writes what the first conversion wrote (REQ-2186) ([3dda726](https://github.com/kenstott/calcite/commit/3dda726d0a5052469549439ba06de2cffa5f8a0d))
+* **file:** attach Javadoc to the right methods in EtlPipeline (ErrorProne InvalidParam) ([bf22198](https://github.com/kenstott/calcite/commit/bf221984c67eb361f14b047cb621201fd1dadff2))
+* **file:** compare PipelineClock tests against the UTC date ([dd3c8c3](https://github.com/kenstott/calcite/commit/dd3c8c33cfb0600d8f61cb523ffafdc8ba5bbe2e))
+* **file:** Fail the batch on a BEAAPI.Error body and drop impossible dimension combinations ([ced8bfe](https://github.com/kenstott/calcite/commit/ced8bfef70226bda3e61f065f2fa3cc099847290))
+* **file:** inline the pinned-scan format string ([5cfbc0f](https://github.com/kenstott/calcite/commit/5cfbc0f67e200c6a0fd07fc1f24709291e8e6fa7))
+* **file:** pin by the extension's version argument, not the metadata.json path ([8c0b80a](https://github.com/kenstott/calcite/commit/8c0b80a930a5e2dde459edada5573d72211b96da))
+* **file:** RefreshCoverageTest immediate needsRefresh checks use an interval a loaded runner cannot outrun ([5b61ee0](https://github.com/kenstott/calcite/commit/5b61ee0bb0bdf109dfc2d42300cd134a2352d13b))
+* **govdata/census:** lodes_workplace skips a state-year LEHD has not published ([e197b8e](https://github.com/kenstott/calcite/commit/e197b8eb67a818f9ca2613835e884b7704dbeaaa))
+* **govdata/econ:** national_accounts loads T20305 (PCE by major type) instead of the unserved T20200; T71600 excluded while BEA returns 201 ([ff74e63](https://github.com/kenstott/calcite/commit/ff74e630311dfe769b8ce276a9c5f43159011917))
+* **govdata/law:** use the newest USC release point that has published zips ([7fd1d36](https://github.com/kenstott/calcite/commit/7fd1d362ef8e474ea11a3e0c0c4ee507daf78158))
+* **govdata/scripts:** runners-dashboard finds the daemon in the process table and reads its own log ([f6dd2a4](https://github.com/kenstott/calcite/commit/f6dd2a4657ba962ebc63bb8c6c4fb812dfc6c2b8))
+* **govdata/scripts:** runners-dashboard matches a pool to its DQ rehearsal when the pool is the child ([1d5656e](https://github.com/kenstott/calcite/commit/1d5656e67d76c8425bb7b76c3307a00d397a2698))
+* **govdata/scripts:** runners-dashboard shows stale running for every type and no longer truncates open issues ([37afa6d](https://github.com/kenstott/calcite/commit/37afa6da4ad3cc77a5771b0ff48930f2294fded5))
+* **govdata:** pin Comtrade request to HS-6 totals so partner 0 stays under the record cap ([2dd8565](https://github.com/kenstott/calcite/commit/2dd8565a867722aa32839e6f522885c0c36358b5))
+
 ## [0.124.0](https://github.com/kenstott/calcite/compare/engine-v0.123.2...engine-v0.124.0) (2026-10-29)
 
 
