@@ -15,6 +15,7 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.IncompleteFetchException;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -4459,6 +4460,7 @@ public class XbrlToParquetConverter implements FileConverter {
           LOGGER.debug("Attempting XSD download with User-Agent: {}", userAgent);
         }
 
+        NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
 
         // Retryable HTTP status codes

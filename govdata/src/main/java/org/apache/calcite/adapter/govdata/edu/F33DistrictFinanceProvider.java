@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -239,6 +240,7 @@ public class F33DistrictFinanceProvider implements DataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
       throw new IOException("HTTP " + status + " from " + url);

@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.law;
 
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
@@ -217,6 +218,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
     try {
+      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (status != HttpURLConnection.HTTP_OK) {
         throw new IOException(tableName() + ": HTTP " + status + " from " + RELEASE_PAGE_URL);
@@ -273,6 +275,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
     try {
+      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (status == HttpURLConnection.HTTP_OK) {
         return true;

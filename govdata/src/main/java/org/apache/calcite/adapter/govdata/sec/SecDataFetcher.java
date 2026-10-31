@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -433,6 +434,7 @@ public class SecDataFetcher {
       Thread.currentThread().interrupt();
     }
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("SEC API returned status " + responseCode);
@@ -623,6 +625,7 @@ public class SecDataFetcher {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(30000);
 
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != 200) {
         LOGGER.warn("Wikipedia returned status " + conn.getResponseCode());
         return ciks;
@@ -737,6 +740,7 @@ public class SecDataFetcher {
       Thread.currentThread().interrupt();
     }
 
+    NetworkOutageWait.connect(conn);
     if (conn.getResponseCode() != 200) {
       throw new IOException("SEC API returned status " + conn.getResponseCode());
     }
@@ -1087,6 +1091,7 @@ public class SecDataFetcher {
           + "\"messages\": [{\"role\": \"user\", \"content\": \"" + prompt.replace("\"", "\\\"") + "\"}]"
           + "}";
 
+      NetworkOutageWait.connect(conn);
       try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(conn.getOutputStream())) {
         writer.write(requestBody);
         writer.flush();
@@ -1825,6 +1830,7 @@ public class SecDataFetcher {
           + "}";
 
       // Send request
+      NetworkOutageWait.connect(conn);
       try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(conn.getOutputStream())) {
         writer.write(requestBody);
         writer.flush();
@@ -3112,6 +3118,7 @@ public class SecDataFetcher {
         headConn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
         headConn.setConnectTimeout(8000);
         headConn.setReadTimeout(10000);
+        NetworkOutageWait.connect(headConn);
         int headStatus = headConn.getResponseCode();
         if (headStatus == 200) {
           long remoteSize = headConn.getContentLengthLong();
@@ -3135,6 +3142,7 @@ public class SecDataFetcher {
     conn.setRequestProperty("Connection", "close");
     conn.setConnectTimeout(8000);
     conn.setReadTimeout(10000);
+    NetworkOutageWait.connect(conn);
     if (conn.getResponseCode() == 200) {
       JsonNode node = MAPPER.readTree(conn.getInputStream());
       try {
@@ -3309,6 +3317,7 @@ public class SecDataFetcher {
       conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
       conn.setConnectTimeout(8000);
       conn.setReadTimeout(10000);
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != 200) {
         return null;
       }

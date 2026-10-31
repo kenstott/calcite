@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.housing;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -57,6 +58,7 @@ public class FhfaHpiStreamingTransformer implements StreamingResponseTransformer
     conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
     conn.setReadTimeout(READ_TIMEOUT_MS);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
       conn.disconnect();

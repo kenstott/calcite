@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.govdata.ref;
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.ModelOperand;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -255,6 +256,7 @@ public class FigiDataProvider implements DataProvider {
 
     byte[] requestBytes = requestJson.getBytes(StandardCharsets.UTF_8);
     conn.setRequestProperty("Content-Length", String.valueOf(requestBytes.length));
+    NetworkOutageWait.connect(conn);
     OutputStream out = conn.getOutputStream();
     out.write(requestBytes);
     out.flush();

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -485,6 +486,7 @@ public class UsitcTariffsTransformer implements StreamingResponseTransformer {
       }
       try {
         conn.setRequestMethod("POST");
+        NetworkOutageWait.connect(conn);
         try (OutputStream os = conn.getOutputStream()) {
           os.write(payload);
         }

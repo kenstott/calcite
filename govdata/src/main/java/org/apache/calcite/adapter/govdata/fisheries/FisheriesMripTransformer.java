@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.fisheries;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -317,6 +318,7 @@ public class FisheriesMripTransformer implements StreamingResponseTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setRequestProperty("User-Agent", "Mozilla/5.0 (govdata-etl)");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       conn.disconnect();

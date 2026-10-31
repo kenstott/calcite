@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.energy;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -346,6 +347,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);
@@ -373,6 +375,7 @@ public class MshaCoalMinesTransformer implements ResponseTransformer {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(30000);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
         return conn.getHeaderField("Last-Modified");
       }

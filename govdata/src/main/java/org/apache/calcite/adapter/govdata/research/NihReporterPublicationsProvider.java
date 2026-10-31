@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.research;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -527,6 +528,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(60000);
     conn.setDoOutput(true);
+    NetworkOutageWait.connect(conn);
     try (OutputStream os = conn.getOutputStream()) {
       os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
     }
@@ -589,6 +591,7 @@ public class NihReporterPublicationsProvider implements CachingDataProvider {
     conn.setRequestProperty("User-Agent", "GovData/1.0");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(60000);
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status < 200 || status >= 300) {
       throw new IciteHttpException(status, url);

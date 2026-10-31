@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.lands;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -121,6 +122,7 @@ public class PadusFederalFeeLandsStreamingTransformer implements StreamingRespon
         return t;
       });
       try {
+        NetworkOutageWait.connect(conn);
         if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
           throw new IOException("HTTP " + conn.getResponseCode() + " from PAD-US query");
         }

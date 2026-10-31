@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.ag;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -239,6 +240,7 @@ public class ErsFarmIncomeProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("ERS: HTTP " + code + " for " + url);

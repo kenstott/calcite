@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 
 
 import org.slf4j.Logger;
@@ -213,6 +214,7 @@ public class RSSRefreshMonitor {
     conn.setRequestProperty("User-Agent", "Calcite-SEC-Adapter/1.0");
     conn.setConnectTimeout(10000);
     conn.setReadTimeout(30000);
+    NetworkOutageWait.connect(conn);
 
     try (BufferedReader reader = new BufferedReader(
         new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {

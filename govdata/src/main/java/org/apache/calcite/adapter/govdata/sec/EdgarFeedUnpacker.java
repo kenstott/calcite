@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
+
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
@@ -210,6 +212,7 @@ public final class EdgarFeedUnpacker {
           conn.setRequestProperty("User-Agent", USER_AGENT);
           conn.setConnectTimeout(30000);
           conn.setReadTimeout(120000);
+          NetworkOutageWait.connect(conn);
           status = conn.getResponseCode();
           if (status != 429 || attempt >= MAX_429_ATTEMPTS) {
             break;

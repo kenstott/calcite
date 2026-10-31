@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.crime;
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 
@@ -226,6 +227,7 @@ public class CdeAgencyPoliceEmploymentProvider implements CachingDataProvider {
       conn.setReadTimeout(60000);
       int status;
       try {
+        NetworkOutageWait.connect(conn);
         status = conn.getResponseCode();
       } catch (IOException e) {
         lastError = e;       // connection-level failure (reset/timeout) — retryable

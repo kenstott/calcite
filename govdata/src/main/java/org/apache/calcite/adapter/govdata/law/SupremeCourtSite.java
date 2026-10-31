@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.law;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -165,6 +167,7 @@ final class SupremeCourtSite {
         conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
         conn.setReadTimeout(READ_TIMEOUT_MS);
         conn.setRequestProperty("User-Agent", USER_AGENT);
+        NetworkOutageWait.connect(conn);
         int status = conn.getResponseCode();
         if (status == HttpURLConnection.HTTP_OK) {
           String type = conn.getContentType();

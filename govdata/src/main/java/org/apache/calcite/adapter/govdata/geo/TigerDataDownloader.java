@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.geo;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider.FileEntry;
 import org.apache.calcite.adapter.govdata.CacheKey;
@@ -137,6 +138,7 @@ public class TigerDataDownloader extends AbstractGeoDataDownloader {
       conn.setConnectTimeout(15000);
       conn.setReadTimeout(15000);
       conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (status != HttpURLConnection.HTTP_OK) {
         conn.disconnect();
