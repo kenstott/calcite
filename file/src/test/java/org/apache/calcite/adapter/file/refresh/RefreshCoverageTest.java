@@ -542,17 +542,20 @@ class RefreshCoverageTest {
     assertEquals("RefreshableCsvTable(my_csv)", table.toString());
   }
 
+  /** Long enough that an immediate check cannot expire on a loaded runner. */
+  private static final Duration REFRESH_INTERVAL = Duration.ofMillis(500);
+
   @Test void testRefreshableCsvTableAfterIntervalElapsed(@TempDir Path tempDir) throws Exception {
     File csvFile = createCsvFile(tempDir, "data.csv", "id,name\n1,Alice\n");
     Source source = createFileSource(csvFile);
 
     RefreshableCsvTable table = new RefreshableCsvTable(
-        source, "csv_table", null, Duration.ofMillis(1));
+        source, "csv_table", null, REFRESH_INTERVAL);
 
     table.refresh();
     assertFalse(table.needsRefresh());
 
-    Thread.sleep(10);
+    Thread.sleep(REFRESH_INTERVAL.toMillis() + 100);
 
     assertTrue(table.needsRefresh());
   }
@@ -722,7 +725,7 @@ class RefreshCoverageTest {
   // ===================================================================
 
   @Test void testRefreshLifecycleWithFileChange(@TempDir Path tempDir) throws Exception {
-    TestRefreshableTable table = new TestRefreshableTable("lifecycle", Duration.ofMillis(1));
+    TestRefreshableTable table = new TestRefreshableTable("lifecycle", REFRESH_INTERVAL);
 
     // Phase 1: First refresh
     assertTrue(table.needsRefresh());
@@ -732,7 +735,7 @@ class RefreshCoverageTest {
     assertFalse(table.needsRefresh());
 
     // Phase 2: Wait for interval to elapse
-    Thread.sleep(10);
+    Thread.sleep(REFRESH_INTERVAL.toMillis() + 100);
     assertTrue(table.needsRefresh());
 
     // Phase 3: Second refresh
@@ -749,7 +752,7 @@ class RefreshCoverageTest {
     Source source = createFileSource(csvFile);
 
     RefreshableCsvTable table = new RefreshableCsvTable(
-        source, "lifecycle", null, Duration.ofMillis(1));
+        source, "lifecycle", null, REFRESH_INTERVAL);
 
     // Initial state
     assertTrue(table.needsRefresh());
@@ -761,7 +764,7 @@ class RefreshCoverageTest {
     assertFalse(table.needsRefresh());
 
     // Wait and check again
-    Thread.sleep(10);
+    Thread.sleep(REFRESH_INTERVAL.toMillis() + 100);
     assertTrue(table.needsRefresh());
 
     // Second refresh
