@@ -13,8 +13,9 @@ package org.apache.calcite.adapter.file.etl;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -211,7 +212,7 @@ public class DimensionIteratorTest {
   }
 
   @Test void testDimensionIteratorExpandYearRange() {
-    int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+    int currentYear = LocalDate.now(ZoneOffset.UTC).getYear();
 
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<String, DimensionConfig>();
     dimensions.put("year", DimensionConfig.builder()
@@ -232,9 +233,9 @@ public class DimensionIteratorTest {
   }
 
   @Test void testDimensionIteratorMonthlyYtd() {
-    int currentYear = Calendar.getInstance().get(Calendar.YEAR);
-    // Calendar.MONTH is 0-based, so it equals the number of the last fully completed month.
-    int lastCompletedMonth = Calendar.getInstance().get(Calendar.MONTH);
+    int currentYear = LocalDate.now(ZoneOffset.UTC).getYear();
+    // The previous month's number is the last fully completed month (PipelineClock is UTC).
+    int lastCompletedMonth = LocalDate.now(ZoneOffset.UTC).getMonthValue() - 1;
 
     Map<String, DimensionConfig> dimensions = new LinkedHashMap<String, DimensionConfig>();
     dimensions.put("year", DimensionConfig.builder()
