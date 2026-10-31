@@ -233,6 +233,36 @@ def rehearsals():
     return found
 
 
+_JOB_KINDS = (
+    (re.compile(r"heavy\.sh|force-reprocess\.sh|fix-sec\.sh"), "remediation"),
+    (re.compile(r"idle-snapshot-expiry\.sh|IcebergMaintenanceRunner"), "production"),
+    (re.compile(r"run-scheduled\.sh"), "production"),
+)
+
+
+def other_jobs(dq_runs):
+    """Jobs outside run-pool.sh: remediation (heavy/force-reprocess/fix-sec), snapshot-expiry passes and
+    the daily window (run-scheduled).  Kind is dq when the process runs a DQ rehearsal, else the script's
+    kind; the issue comes from the worktree path or jar name when one maps."""
+    found = []
+    dq_pids = {r["pid"] for r in (dq_runs or {}).values()}
+    for line in run(["ps", "-eo", "pid,etimes,args"]).splitlines():
+        m = re.match(r"\s*(\d+)\s+(\d+)\s+(?:bash |/bin/bash |sh |java )?(.*)$", line)
+        if not m or "runners-dashboard" in line:
+            continue
+        kind = next((k for rx, k in _JOB_KINDS if rx.search(m.group(3).split(" -", 1)[0]) or
+                     (rx.pattern.startswith("idle") and rx.search(m.group(3)))), None)
+        if kind is None:
+            continue
+        pid = m.group(1)
+        im = _DQ_JAR.search(m.group(3)) or _DQ_PATH.search(m.group(3))
+        found.append({"pid": pid, "age": int(m.group(2)), "args": m.group(3),
+                      "kind": "dq" if pid in dq_pids else kind,
+                      "issue": int(im.group(1)) if im else None})
+    pids = {j["pid"] for j in found}
+    return [j for j in found if not (set(ancestors(j["pid"])[1:]) & pids)]   # topmost process of each job
+
+
 def ancestors(pid):
     """The pid and its parent chain, as strings."""
     chain = []
@@ -432,6 +462,14 @@ def is_stale_running(issue, live_issues):
         and issue["number"] not in live_issues
 
 
+def is_stale_investigating(issue, active_issues):
+    """status:investigating or status:running for over 2 hours with no agent, pool/worker process or PR
+    in CI behind it.  A label is a status, never activity."""
+    return issue["state"] == "OPEN" and \
+        bool({"status:investigating", "status:running"} & issue["labelset"]) and \
+        issue["number"] not in active_issues and iso_age(issue["updatedAt"]) > 2 * 3600
+
+
 def render(ttl):
     width = min(shutil.get_terminal_size((120, 40)).columns, 140)
     out = []
@@ -481,10 +519,19 @@ def render(ttl):
         out.append(yellow("  no pool running"))
     else:
         for mg in pl:
-            serves = "  (DQ rehearsal for #%d)" % mg["dq_issue"] if mg.get("dq_issue") else ""
-            out.append("  %-8s %-6s %s%s" % ("pid " + mg["pid"], age(mg["age"]), clip(mg["args"], 60), serves))
+            serves = "  (#%d)" % mg["dq_issue"] if mg.get("dq_issue") else ""
+            out.append("  %-8s %-6s %-11s %s%s" % ("pid " + mg["pid"], age(mg["age"]),
+                                                 "dq" if mg.get("dq_issue") else "production",
+                                                 clip(mg["args"], 50), serves))
             if mg["last"]:
                 out.append(dim("    " + clip(re.sub(r"^\[[^]]*\]\s*", "", mg["last"]), width - 4)))
+    jobs, jobs_err = guarded(lambda: other_jobs(rehearsals()))
+    for jb in jobs or []:
+        out.append("  %-8s %-6s %-11s %s%s" % ("pid " + jb["pid"], age(jb["age"]), jb["kind"],
+                                             clip(jb["args"], 50),
+                                             "  (#%d)" % jb["issue"] if jb["issue"] else ""))
+    if jobs_err:
+        out.append(red("  " + jobs_err))
     wn, wn_err = guarded(window)
     if wn:
         head, pre, errs = wn
@@ -503,6 +550,7 @@ def render(ttl):
     for err in (pr_err, dq_err):
         if err:
             out.append(red("  " + err))
+    flight = {}
     if not iss_err and not ag_err:
         flight = in_flight(ag, iss, pr_map, dq_runs, {b["slug"] for b in br or [] if b["dq"]})
         for n in sorted(flight):
@@ -582,11 +630,21 @@ def render(ttl):
             out.append("  %-21s #%-4d %-6s %s" % (status_of(i), i["number"],
                                                   age(iso_age(i["updatedAt"])), clip(i["title"], width - 42)))
         stale = [i for i in iss if is_stale_running(i, live_issues)]
+        stale_inv = []
         for i in sorted(stale, key=lambda i: i["number"]):
             out.append("  %s #%-4d %-6s %s" % (red("STALE running   "), i["number"],
                                                age(iso_age(i["updatedAt"])),
                                                clip(i["title"] + "  (no live agent)", width - 34)))
-        if not blocked and not stale:
+        if not ag_err and not pr_err and not dq_err:
+            active = {a["issue"] for a in ag} | set(dq_runs or {}) | set(flight)
+            for i in sorted(iss, key=lambda i: i["number"]):
+                if is_stale_investigating(i, active) and i not in stale:
+                    stale_inv.append(i)
+        for i in stale_inv:
+            out.append("  %s #%-4d %-6s %s" % (red("STALE investigating"), i["number"],
+                                               age(iso_age(i["updatedAt"])),
+                                               clip(i["title"] + "  (no agent, process or CI)", width - 36)))
+        if not blocked and not stale and not stale_inv:
             out.append(green("  none"))
     if pl:
         for mg in pl:
