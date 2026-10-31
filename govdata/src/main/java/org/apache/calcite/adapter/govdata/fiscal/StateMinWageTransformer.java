@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.fiscal;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -115,6 +116,7 @@ public class StateMinWageTransformer implements DataProvider {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(120000);
       conn.setInstanceFollowRedirects(true);
+      NetworkOutageWait.connect(conn);
       int code = conn.getResponseCode();
       if (code < 200 || code >= 300) {
         throw new IOException("state_minimum_wage_history: HTTP " + code + " for " + DOL_URL);

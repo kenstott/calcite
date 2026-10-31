@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.fiscal;
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import org.slf4j.Logger;
@@ -132,6 +133,7 @@ abstract class AbstractBulkCsvProvider implements CachingDataProvider {
       if (from > 0) {
         conn.setRequestProperty("Range", "bytes=" + from + "-");
       }
+      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (from == 0) {
         if (status != 200) {

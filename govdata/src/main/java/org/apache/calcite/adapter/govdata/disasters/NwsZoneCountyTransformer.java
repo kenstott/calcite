@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.disasters;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -167,6 +168,7 @@ public class NwsZoneCountyTransformer implements StreamingResponseTransformer {
     c.setConnectTimeout(CONNECT_TIMEOUT_MS);
     c.setReadTimeout(READ_TIMEOUT_MS);
     c.setRequestProperty("User-Agent", "calcite-govdata (+mailto:kennethstott@gmail.com)");
+    NetworkOutageWait.connect(c);
     int code = c.getResponseCode();
     if (code != 200) {
       throw new IOException("NWS zone-county: HTTP " + code + " from " + url);

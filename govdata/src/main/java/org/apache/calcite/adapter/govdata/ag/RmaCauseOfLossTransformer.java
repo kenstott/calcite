@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.ag;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -209,6 +210,7 @@ public class RmaCauseOfLossTransformer implements StreamingResponseTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("RMA Cause of Loss download HTTP " + code + ": " + url);

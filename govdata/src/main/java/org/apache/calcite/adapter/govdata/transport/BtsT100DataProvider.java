@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.transport;
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -211,6 +212,7 @@ public class BtsT100DataProvider implements CachingDataProvider {
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", USER_AGENT);
     conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("t100_segments: HTTP " + status + " on GET " + url);
@@ -248,6 +250,7 @@ public class BtsT100DataProvider implements CachingDataProvider {
     }
     byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
     conn.setRequestProperty("Content-Length", String.valueOf(bytes.length));
+    NetworkOutageWait.connect(conn);
     try (OutputStream out = conn.getOutputStream()) {
       out.write(bytes);
       out.flush();

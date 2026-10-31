@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.patents;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -245,6 +246,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
       conn.setReadTimeout(30_000);
       conn.setRequestProperty("User-Agent", "GovData/1.0");
       conn.setRequestProperty("X-Api-Key", usptoApiKey());
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != 200) {
         LOGGER.debug("Patents freshness: metadata HTTP {} for product {}",
             conn.getResponseCode(), productId);
@@ -617,6 +619,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
           conn.setRequestProperty(h.getKey(), h.getValue());
         }
       }
+      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
         String location = conn.getHeaderField("Location");
@@ -631,6 +634,7 @@ public abstract class AbstractPatentsTransformer implements StreamingResponseTra
         // Deliberately NO headers here -- a presigned URL's signature covers the exact request
         // it was issued for; any extra header (even a generic User-Agent) risks the same
         // signature-mismatch failure this fix exists to avoid.
+        NetworkOutageWait.connect(conn);
         status = conn.getResponseCode();
       }
       if (status != 200) {

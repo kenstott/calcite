@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.housing;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import org.slf4j.Logger;
@@ -249,6 +250,7 @@ public class HmdaLoanLevelAggregateProvider implements CachingDataProvider {
       if (from > 0) {
         conn.setRequestProperty("Range", "bytes=" + from + "-");
       }
+      NetworkOutageWait.connect(conn);
       return conn;
     }
 

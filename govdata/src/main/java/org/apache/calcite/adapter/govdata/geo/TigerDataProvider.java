@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
@@ -334,6 +335,7 @@ public class TigerDataProvider implements StorageAwareDataProvider {
     conn.setConnectTimeout(15000);
     conn.setReadTimeout(15000);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
       conn.disconnect();

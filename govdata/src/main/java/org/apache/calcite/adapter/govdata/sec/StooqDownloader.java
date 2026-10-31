@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.avro.Schema;
@@ -725,6 +726,7 @@ public class StooqDownloader {
       conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
     }
 
+    NetworkOutageWait.connect(conn);
     return conn;
   }
 

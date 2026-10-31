@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.cyber.threat;
 
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.ModelOperand;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -577,6 +578,7 @@ public class OtxResponseTransformer implements ResponseTransformer {
         conn.setRequestProperty("Accept-Encoding", "gzip");
         conn.setRequestProperty("User-Agent", USER_AGENT);
 
+        NetworkOutageWait.connect(conn);
         int status = conn.getResponseCode();
         if (status == 200) {
           String body = readBody(conn);

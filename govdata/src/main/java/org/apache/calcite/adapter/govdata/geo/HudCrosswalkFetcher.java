@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.geo;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -440,6 +441,7 @@ public class HudCrosswalkFetcher extends AbstractGeoDataDownloader {
     conn.setConnectTimeout(10000);
     conn.setReadTimeout(30000);
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode == HttpURLConnection.HTTP_OK) {
       try (InputStream is = CompleteBody.of(conn)) {

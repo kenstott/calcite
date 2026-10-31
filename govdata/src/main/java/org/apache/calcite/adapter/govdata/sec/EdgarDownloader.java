@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -184,6 +185,7 @@ public class EdgarDownloader {
     // Host-wide shared budget so parallel worker processes don't collectively exceed it.
     EdgarRateLimiter.acquire();
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
 
     if (responseCode == 304) {
@@ -417,6 +419,7 @@ public class EdgarDownloader {
         // Rate limiting — host-wide shared per-IP budget
         EdgarRateLimiter.acquire();
 
+        NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
         if (responseCode == 200) {
           // Download the file
@@ -508,6 +511,7 @@ public class EdgarDownloader {
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != 200) {
         return null;
       }

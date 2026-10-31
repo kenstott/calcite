@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -223,6 +224,7 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
       conn.setRequestProperty("User-Agent", "GovData/1.0");
       int status;
       try {
+        NetworkOutageWait.connect(conn);
         status = conn.getResponseCode();
       } catch (IOException e) {
         conn.disconnect();

@@ -893,6 +893,7 @@ public class SchemaLifecycleProcessor {
     conn.setRequestProperty("User-Agent",
         "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("HTTP " + responseCode + " for " + url);
