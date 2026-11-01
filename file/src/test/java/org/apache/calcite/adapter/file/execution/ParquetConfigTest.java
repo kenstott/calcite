@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.execution.parquet.ParquetConfig;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests for {@link ParquetConfig}.
  */
 @Tag("unit")
+@ResourceLock("parquet.vectorized.property")
 public class ParquetConfigTest {
 
   private static final Logger LOGGER =
