@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -27,7 +28,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Test to verify vectorized reading and cache priming configuration works correctly.
  */
-@Tag("performance")public class VectorizedAndCachePrimingTest {
+@Tag("performance")
+@ResourceLock("parquet.vectorized.property")
+public class VectorizedAndCachePrimingTest {
 
   @TempDir
   File tempDir;
