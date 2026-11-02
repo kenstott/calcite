@@ -212,6 +212,19 @@ public class IcebergOrphanCleanupTest {
         IcebergOrphanCleanup.normalize("s3a://b/k"));
   }
 
+  @Test void directoryPlaceholderKeysAreNotDataFiles() {
+    assertTrue(IcebergOrphanCleanup.isDataFileEntry(new StorageProvider.FileEntry(
+        "s3://b/t/data/f.parquet", "f.parquet", false, 10L, 0L)));
+    assertFalse(IcebergOrphanCleanup.isDataFileEntry(new StorageProvider.FileEntry(
+        "s3://b/t/data/", "data", false, 0L, 0L)), "zero-byte data/ marker");
+    assertFalse(IcebergOrphanCleanup.isDataFileEntry(new StorageProvider.FileEntry(
+        "s3://b/t/data", "data", true, 0L, 0L)));
+    assertFalse(IcebergOrphanCleanup.isDataFileEntry(new StorageProvider.FileEntry(
+        "s3://b/t/metadata/v1.metadata.json", "v1.metadata.json", false, 10L, 0L)));
+    assertFalse(IcebergOrphanCleanup.isDataFileEntry(new StorageProvider.FileEntry(
+        "s3://b/t/data/.f.parquet.crc", ".f.parquet.crc", false, 10L, 0L)));
+  }
+
   @Test void safetyWindowBelowOneDayIsRejected() {
     assertThrows(IllegalArgumentException.class, () -> IcebergOrphanCleanup.cleanTable("trade",
         table, storage, 0, true, System.currentTimeMillis()));

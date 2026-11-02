@@ -156,10 +156,10 @@ public final class IcebergOrphanCleanup {
     int young = 0;
     List<String> deletable = new ArrayList<>();
     for (StorageProvider.FileEntry entry : storage.listFiles(directory, true)) {
-      String key = normalize(entry.getPath());
-      if (entry.isDirectory() || key.contains("/metadata/") || entry.getName().endsWith(".crc")) {
+      if (!isDataFileEntry(entry)) {
         continue;
       }
+      String key = normalize(entry.getPath());
       onDisk++;
       if (currentRefs.contains(key)) {
         continue;
@@ -181,6 +181,17 @@ public final class IcebergOrphanCleanup {
     }
     return new Outcome(name, false, false, delete, onDisk, held, orphans, young,
         deletable.size(), removed);
+  }
+
+  /**
+   * True when a listed entry is a table data file: not a directory (an object store lists a
+   * zero-byte {@code data/} placeholder key as a file), not under {@code metadata/}, not a
+   * {@code .crc} checksum.
+   */
+  static boolean isDataFileEntry(StorageProvider.FileEntry entry) {
+    String path = normalize(entry.getPath());
+    return !entry.isDirectory() && !path.endsWith("/") && !path.contains("/metadata/")
+        && !entry.getName().endsWith(".crc");
   }
 
   /** Every data and delete file the snapshot's manifests list as added or existing. */
