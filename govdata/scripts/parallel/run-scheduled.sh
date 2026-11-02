@@ -212,18 +212,34 @@ run_x_schema_if_needed() {
 
 # SEC's nightly submissions.zip answers the per-filer submissions JSON fetches (the ones that draw
 # the HTTP 429s). Historical windows only: it lags live by up to a day, and a daily run needs
-# yesterday's and today's filings. One conditional GET per call (304 when unchanged). If the fetch
-# fails the window runs without it, as before the zip existed, and says so.
+# yesterday's and today's filings. One conditional GET per attempt (304 when unchanged). A failed
+# fetch (DNS not up after a boot, connect/reset, HTTP error) is not a result: it is retried with
+# backoff until it succeeds or the window ends, and the pool is not started without the zip, because
+# live per-filer fetches exhaust the SEC request budget. Returns 1 when the window ended first.
 SUBMISSIONS_BULK_DIR="${SEC_SUBMISSIONS_BULK_DIR:-/var/tmp/govdata/bulk-submissions}"
+SUBMISSIONS_RETRY_MIN_SECS="${SEC_SUBMISSIONS_RETRY_MIN_SECS:-30}"
+SUBMISSIONS_RETRY_MAX_SECS="${SEC_SUBMISSIONS_RETRY_MAX_SECS:-900}"
 prepare_sec_submissions_bulk() {
-  local window_log="$1"
-  if "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" >> "$window_log" 2>&1 \
-      && [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
-    export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
-  else
+  local window_log="$1" window_end="$2"
+  local delay="$SUBMISSIONS_RETRY_MIN_SECS" tries=0
+  while true; do
+    tries=$(( tries + 1 ))
+    if "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" >> "$window_log" 2>&1 \
+        && [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
+      export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
+      return 0
+    fi
     unset SEC_BULK_SUBMISSIONS_ZIP 2>/dev/null || true
-    log_error "WARNING: could not fetch SEC's submissions.zip - this historical window fetches submissions live (see $window_log)"
-  fi
+    if [ $(( $(date +%s) + delay )) -ge "$window_end" ]; then
+      log_error "ERROR: could not fetch SEC's submissions.zip in $tries attempts before the window ended - the historical pool was not started (see $window_log)"
+      echo "[$(ts)] submissions.zip fetch failed ($tries attempts); window ends before the next retry - pool not started" >> "$window_log"
+      return 1
+    fi
+    echo "[$(ts)] submissions.zip fetch failed (attempt $tries); retrying in ${delay}s - the pool waits for the zip" >> "$window_log"
+    sleep "$delay"
+    delay=$(( delay * 2 ))
+    [ "$delay" -gt "$SUBMISSIONS_RETRY_MAX_SECS" ] && delay="$SUBMISSIONS_RETRY_MAX_SECS"
+  done
 }
 
 # ── Window runner ─────────────────────────────────────────────────────────────
@@ -273,7 +289,7 @@ run_window() {
     # Re-evaluated each iteration because $current can switch to the fill mode mid-window.
     if [ "$current" = "historical" ]; then
       export GOVDATA_START_YEAR=2010
-      prepare_sec_submissions_bulk "$window_log"
+      prepare_sec_submissions_bulk "$window_log" "$window_end" || break
     else
       unset GOVDATA_START_YEAR 2>/dev/null || true
       # Daily runs fetch submissions live: a filing made since the nightly zip was built is not in it.
