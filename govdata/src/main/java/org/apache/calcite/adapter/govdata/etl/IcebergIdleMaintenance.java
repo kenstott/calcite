@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.io.CloseableIterable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -111,8 +113,12 @@ public final class IcebergIdleMaintenance {
     new IcebergTableWriter(table, storage).runMaintenance(retentionDays);
     table.refresh();
     int liveFiles = 0;
-    for (FileScanTask task : table.newScan().planFiles()) {
-      liveFiles++;
+    try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
+      Iterator<FileScanTask> it = tasks.iterator();
+      while (it.hasNext()) {
+        it.next();
+        liveFiles++;
+      }
     }
     return new Outcome(name, false, snapshotsBefore, countSnapshots(table), liveFiles,
         onDiskBefore, countDataFilesOnDisk(table, storage));
