@@ -184,6 +184,23 @@ public final class IcebergOrphanCleanup {
   }
 
   /**
+   * Refuses a table whose metadata records a location outside the warehouse being cleaned. Iceberg
+   * resolves manifests and data files from the absolute paths in its metadata, so a table whose
+   * metadata was copied from another bucket would be listed, and deleted from, in that other bucket.
+   */
+  static void requireUnderWarehouse(String name, String tableLocation, String warehouse) {
+    String root = normalize(warehouse);
+    if (!root.endsWith("/")) {
+      root = root + "/";
+    }
+    String location = normalize(tableLocation);
+    if (!(location + "/").startsWith(root)) {
+      throw new IllegalStateException(name + ": table location " + tableLocation
+          + " is outside the warehouse " + warehouse + "; its metadata points at another store");
+    }
+  }
+
+  /**
    * True when a listed entry is a table data file: not a directory (an object store lists a
    * zero-byte {@code data/} placeholder key as a file), not under {@code metadata/}, not a
    * {@code .crc} checksum.
@@ -322,6 +339,7 @@ public final class IcebergOrphanCleanup {
             continue;
           }
           Table table = IcebergCatalogManager.loadTable(catalogConfig, target.name);
+          requireUnderWarehouse(target.name, table.location(), target.warehouse);
           LOGGER.info("{}", cleanTable(target.name, table, storage, minAgeDays, delete,
               System.currentTimeMillis()));
         } catch (Exception e) {

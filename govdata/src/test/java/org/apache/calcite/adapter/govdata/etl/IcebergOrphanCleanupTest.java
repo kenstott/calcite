@@ -225,6 +225,15 @@ public class IcebergOrphanCleanupTest {
         "s3://b/t/data/.f.parquet.crc", ".f.parquet.crc", false, 10L, 0L)));
   }
 
+  @Test void tableOutsideTheWarehouseIsRefused() {
+    IcebergOrphanCleanup.requireUnderWarehouse("t", "s3a://dq/patents/t", "s3://dq/patents");
+    IcebergOrphanCleanup.requireUnderWarehouse("t", "s3a://dq/patents/t", "s3://dq/patents/");
+    assertThrows(IllegalStateException.class, () -> IcebergOrphanCleanup.requireUnderWarehouse(
+        "t", "s3a://prod/patents/t", "s3://dq/patents"));
+    assertThrows(IllegalStateException.class, () -> IcebergOrphanCleanup.requireUnderWarehouse(
+        "t", "s3a://dq/patents2/t", "s3://dq/patents"));
+  }
+
   @Test void safetyWindowBelowOneDayIsRejected() {
     assertThrows(IllegalArgumentException.class, () -> IcebergOrphanCleanup.cleanTable("trade",
         table, storage, 0, true, System.currentTimeMillis()));
