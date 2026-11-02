@@ -41,6 +41,25 @@ prepare_sec_submissions_bulk "$tmp/w.log" $(( $(date +%s) + 60 )); rc=$?
 [ "$rc" -eq 0 ] && [ "$SEC_BULK_SUBMISSIONS_ZIP" = "$tmp/bulk/submissions.zip" ] \
   && ok "retry succeeds and exports the zip" || bad "rc=$rc zip=${SEC_BULK_SUBMISSIONS_ZIP:-}"
 
+# 4. historical with an existing zip: reused, the fetch script is not called
+echo 0 > "$tmp/succeed_after"; rm -f "$tmp/n"; : > "$tmp/bulk/submissions.zip"; unset SEC_BULK_SUBMISSIONS_ZIP
+: > "$tmp/w.log"
+prepare_sec_submissions_bulk "$tmp/w.log" $(( $(date +%s) + 60 )); rc=$?
+[ "$rc" -eq 0 ] && [ "$SEC_BULK_SUBMISSIONS_ZIP" = "$tmp/bulk/submissions.zip" ] && [ ! -e "$tmp/n" ] \
+  && ok "existing zip reused with no fetch call" || bad "reuse: rc=$rc fetch calls=$(cat "$tmp/n" 2>/dev/null)"
+grep -q "reused existing" "$tmp/w.log" && ok "reuse path logged" || bad "reuse not logged"
+
+# 5. historical with no zip: fetches
+rm -f "$tmp/n" "$tmp/bulk/submissions.zip"; unset SEC_BULK_SUBMISSIONS_ZIP; : > "$tmp/w.log"
+prepare_sec_submissions_bulk "$tmp/w.log" $(( $(date +%s) + 60 )); rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$tmp/n")" -eq 1 ] && grep -q "fetched" "$tmp/w.log" \
+  && ok "no zip on disk: fetched and logged" || bad "fetch path: rc=$rc"
+
+# 6. daily mode still fetches (conditional GET) and never reuses blindly
+grep -n 'Daily runs fetch submissions live' "$HERE/run-scheduled.sh" >/dev/null \
+  && ! sed -n '/^    else$/,/^    fi$/p' "$HERE/run-scheduled.sh" | grep -q prepare_sec_submissions_bulk \
+  && ok "daily window does not use the reuse path (fetches live per filer)" || bad "daily branch changed"
+
 # 3. the run_window call site must stop (not launch the pool) when preparation fails
 grep -q 'prepare_sec_submissions_bulk "\$window_log" "\$window_end" || break' "$HERE/run-scheduled.sh" \
   && ok "run_window breaks out before run-pool.sh on failure" || bad "call site does not gate the pool"
