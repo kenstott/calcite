@@ -359,25 +359,28 @@ fi
 # accession once, and converge whether or not rows appeared.
 # -------------------------------------------------------------------------------------
 
-psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
-             accession   VARCHAR PRIMARY KEY,
-             attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
-
-# retired_by names the code that decided an accession's one pass was done — the jar's own content
-# hash, not a version string, so it survives an unbumped rebuild. A retired_by cksum turns "which of
-# these predate the fix" into a WHERE clause.
-psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted
-             ADD COLUMN IF NOT EXISTS retired_by VARCHAR" >/dev/null
-
+# The attempted-list schema is created and migrated only under --confirm: a dry run reads the
+# list when it exists and writes nothing. retired_by names the code that decided a pair's one pass
+# was done — the jar's own content hash, not a version string, so it survives an unbumped rebuild.
 # tbl scopes a retirement to the table whose gap the pass was run for. An accession-only key hid a
 # filing from every table's gap once any pass had touched it, so a filing_metadata gap could never
 # be re-offered after a pass that was enumerated for another table. Rows written before the column
 # existed have tbl NULL: their scope is unknown, so they retire nothing and the still-open gaps
 # behind them are offered once more, then recorded with their table.
-psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted ADD COLUMN IF NOT EXISTS tbl VARCHAR" >/dev/null
-psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted DROP CONSTRAINT IF EXISTS fix_sec_attempted_pkey" >/dev/null
-psql_q -c "CREATE UNIQUE INDEX IF NOT EXISTS fix_sec_attempted_acc_tbl
-             ON ${PG_SCHEMA}.fix_sec_attempted (accession, tbl)" >/dev/null
+if $CONFIRM; then
+  psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
+               accession   VARCHAR NOT NULL,
+               attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
+  psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted
+               ADD COLUMN IF NOT EXISTS retired_by VARCHAR" >/dev/null
+  psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted ADD COLUMN IF NOT EXISTS tbl VARCHAR" >/dev/null
+  psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted DROP CONSTRAINT IF EXISTS fix_sec_attempted_pkey" >/dev/null
+  psql_q -c "CREATE UNIQUE INDEX IF NOT EXISTS fix_sec_attempted_acc_tbl
+               ON ${PG_SCHEMA}.fix_sec_attempted (accession, tbl)" >/dev/null
+fi
+HAVE_ATTEMPTED_TBL=$(psql_q -tA -c "SELECT count(*) FROM information_schema.columns
+                                     WHERE table_schema = '${PG_SCHEMA}'
+                                       AND table_name = 'fix_sec_attempted' AND column_name = 'tbl'")
 
 JAR_CKSUM=""
 for _jar in "$SCRIPT_DIR"/../../build/libs/sih-govdata.jar \
@@ -394,7 +397,11 @@ done
 if $REOFFER_ATTEMPTED; then
   log_info "fix-sec: --reoffer-attempted — not subtracting the attempted-list"
 else
-  psql_q -c "\\copy (SELECT accession || '|' || tbl FROM ${PG_SCHEMA}.fix_sec_attempted WHERE tbl IS NOT NULL ORDER BY 1) TO '$ACC_FILE.attempted'" >/dev/null
+  if [ "$HAVE_ATTEMPTED_TBL" = "1" ]; then
+    psql_q -c "\\copy (SELECT accession || '|' || tbl FROM ${PG_SCHEMA}.fix_sec_attempted WHERE tbl IS NOT NULL ORDER BY 1) TO '$ACC_FILE.attempted'" >/dev/null
+  else
+    : > "$ACC_FILE.attempted"
+  fi
   sort -u "$ACC_FILE.pairs" > "$ACC_FILE.pairs.all"
   sort -u "$ACC_FILE.attempted" > "$ACC_FILE.attempted.sorted"
   comm -23 "$ACC_FILE.pairs.all" "$ACC_FILE.attempted.sorted" > "$ACC_FILE.pairs"
