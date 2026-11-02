@@ -114,7 +114,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 482396
-      checkedAt: "2026-11-01T19:25:55Z"
+      checkedAt: "2026-11-02T19:40:52Z"
     partitions: *year_month_partitions
     comment: >
       All Federal Register documents partitioned by publication year and month.
@@ -224,7 +224,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 487403
-      checkedAt: "2026-11-01T19:25:59Z"
+      checkedAt: "2026-11-02T19:41:05Z"
     partitions: *year_month_partitions
     comment: >
       Text of each Federal Register document, one row per document_number (joins to
@@ -314,7 +314,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 489533
-      checkedAt: "2026-11-01T19:26:00Z"
+      checkedAt: "2026-11-02T19:41:07Z"
     partitions:
       style: hive
       columnDefinitions:
