@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.RequestContext;
+import org.apache.calcite.adapter.file.etl.SourceExhaustedException;
 
 import com.sun.net.httpserver.HttpServer;
 
@@ -148,17 +149,23 @@ class ComtradeTransformerRetryTest {
     assertEquals(before, tmp.listFiles((d, n) -> n.startsWith("comtrade-")).length);
   }
 
-  /** A 403 is Comtrade refusing the call (quota spent): one request, no retries. */
+  /**
+   * A 403 is Comtrade refusing every call (quota spent): one request, no retries, and a
+   * run-stopping exception naming the reset time.
+   */
   @Test void refusedCallIsNotRetried() throws Exception {
     server.createContext("/data", exchange -> {
       requests.incrementAndGet();
+      exchange.getResponseHeaders().add("Retry-After", "28536");
       exchange.sendResponseHeaders(403, -1);
       exchange.close();
     });
     String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/data?reporterCode=842&maxRecords=1000";
-    IOException e = assertThrows(IOException.class,
+    IOException e = assertThrows(SourceExhaustedException.class,
         () -> new ComtradeTransformer().fetchAndTransform(context(url, 3)));
     assertTrue(e.getMessage().contains("refused"), e.getMessage());
+    assertTrue(e.getMessage().contains("quota resets in 28536s"), e.getMessage());
+    assertTrue(e.getMessage().contains("calls were made"), e.getMessage());
     assertEquals(1, requests.get());
   }
 }

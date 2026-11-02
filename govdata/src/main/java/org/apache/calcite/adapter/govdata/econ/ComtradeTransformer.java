@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
 import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.SecretRedaction;
+import org.apache.calcite.adapter.file.etl.SourceExhaustedException;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import com.fasterxml.jackson.core.JsonFactory;
@@ -278,6 +279,9 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
    * a big-reporter response runs to hundreds of thousands of records.
    */
   private static final class Fetch {
+    /** Requests issued by this process, reported when the quota refusal stops the run. */
+    private static final java.util.concurrent.atomic.AtomicLong CALLS =
+        new java.util.concurrent.atomic.AtomicLong();
     private final RequestContext context;
     private final String url;
     private final String safeUrl;
@@ -309,12 +313,19 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
           return openOnce();
         } catch (IOException e) {
           if (isRefusal(e)) {
-            // A 4xx other than 429 is Comtrade refusing the call (403 once the day's 500-call
-            // quota is spent, or a rejected key): the same call cannot succeed on a retry, and
-            // retrying a whole day's batches only spends minutes on it.
+            // A 4xx other than 429/408 is Comtrade refusing every call (403 once the day's call
+            // quota is spent, or a rejected key): no later call can succeed, so the whole run
+            // stops rather than failing each remaining batch.
             closeQuietly();
-            throw new IOException("Comtrade: refused " + safeUrl + " (" + e.getMessage()
-                + "): the daily call quota is spent or the key is rejected; not retrying", e);
+            long retryAfterMs = ((RetryableHttp.HttpStatusException) e).getRetryAfterMs();
+            String resets = retryAfterMs >= 0
+                ? "quota resets in " + (retryAfterMs / 1000) + "s (at "
+                    + java.time.Instant.now().plusMillis(retryAfterMs) + ")"
+                : "no Retry-After given";
+            throw new SourceExhaustedException("Comtrade: refused " + safeUrl + " ("
+                + e.getMessage() + "): the daily call quota is spent or the key is rejected; "
+                + resets + "; " + CALLS.get() + " calls were made by this process before the "
+                + "refusal; stopping the run", e);
           }
           retryOrThrow(e);
         }
@@ -362,6 +373,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     }
 
     private boolean openOnce() throws IOException {
+      CALLS.incrementAndGet();
       SharedHttpClient.Response conn =
           RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
       try {

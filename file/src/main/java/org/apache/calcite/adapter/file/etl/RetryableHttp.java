@@ -57,10 +57,21 @@ public final class RetryableHttp {
   /** Signals a non-retryable, non-200 HTTP status so callers can apply their own handling. */
   public static final class HttpStatusException extends IOException {
     private final int status;
+    private final long retryAfterMs;
 
     public HttpStatusException(int status, String message) {
+      this(status, message, -1L);
+    }
+
+    public HttpStatusException(int status, String message, long retryAfterMs) {
       super(message);
       this.status = status;
+      this.retryAfterMs = retryAfterMs;
+    }
+
+    /** The response's Retry-After in milliseconds, or -1 when the server sent none. */
+    public long getRetryAfterMs() {
+      return retryAfterMs;
     }
 
     public int getStatus() {
@@ -165,7 +176,7 @@ public final class RetryableHttp {
         continue;
       }
       throw new HttpStatusException(status,
-          "HTTP " + status + " from " + SecretRedaction.redact(url));
+          "HTTP " + status + " from " + SecretRedaction.redact(url), retryAfterMs);
     }
     throw last != null ? last
         : new IOException("retries exhausted for " + SecretRedaction.redact(url));
