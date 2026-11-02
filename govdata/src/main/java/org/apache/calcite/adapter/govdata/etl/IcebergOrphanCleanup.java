@@ -156,12 +156,11 @@ public final class IcebergOrphanCleanup {
     int young = 0;
     List<String> deletable = new ArrayList<>();
     for (StorageProvider.FileEntry entry : storage.listFiles(directory, true)) {
-      if (entry.isDirectory() || entry.getPath().contains("/metadata/")
-          || entry.getName().endsWith(".crc")) {
+      String key = normalize(entry.getPath());
+      if (entry.isDirectory() || key.contains("/metadata/") || entry.getName().endsWith(".crc")) {
         continue;
       }
       onDisk++;
-      String key = normalize(entry.getPath());
       if (currentRefs.contains(key)) {
         continue;
       }
@@ -209,10 +208,25 @@ public final class IcebergOrphanCleanup {
     }
   }
 
-  /** Drops the URI scheme so {@code s3a://b/k} and {@code s3://b/k} compare equal. */
+  /**
+   * Canonical form for comparing a listed path with a path Iceberg records: forward slashes, no URI
+   * scheme ({@code s3a://b/k} equals {@code s3://b/k}), and {@code file:/C:/x} equals
+   * {@code C:/x} on Windows.
+   */
   static String normalize(String path) {
-    int scheme = path.indexOf("://");
-    return scheme < 0 ? path : path.substring(scheme + 3);
+    String p = path.replace('\\', '/');
+    if (p.startsWith("file:")) {
+      p = p.substring("file:".length());
+      int start = 0;
+      while (start < p.length() && p.charAt(start) == '/') {
+        start++;
+      }
+      boolean drive = p.length() >= start + 2 && p.charAt(start + 1) == ':'
+          && Character.isLetter(p.charAt(start));
+      return drive ? p.substring(start) : "/" + p.substring(start);
+    }
+    int scheme = p.indexOf("://");
+    return scheme < 0 ? p : p.substring(scheme + 3);
   }
 
   public static void main(String[] args) throws Exception {
