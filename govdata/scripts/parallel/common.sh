@@ -204,11 +204,21 @@ load_env() {
   # Source DQ overrides only in an explicit DQ run (GOVDATA_DQ=true). Gating on file
   # existence alone armed the -dq bucket reroute on every prod/preprod run.
   local env_dq="$GOVDATA_ROOT/.env.dq"
-  if [ "${GOVDATA_DQ:-}" = "true" ] && [ -f "$env_dq" ]; then
+  if [ "${GOVDATA_DQ:-}" = "true" ]; then
+    if [ ! -f "$env_dq" ]; then
+      echo "FATAL: GOVDATA_DQ=true but $env_dq does not exist, so the DQ bucket (GOVDATA_DQ_BUCKET) is unknown;" \
+           "refusing to run, since the target would resolve to the production bucket." >&2
+      return 1 2>/dev/null || exit 1
+    fi
     set -a
     # shellcheck disable=SC1090
     source <(tr -d '\r' < "$env_dq")   # CRLF-tolerant (see note above)
     set +a
+    if [ -z "${GOVDATA_DQ_BUCKET:-}" ]; then
+      echo "FATAL: GOVDATA_DQ=true but GOVDATA_DQ_BUCKET is empty after sourcing $env_dq;" \
+           "refusing to run, since the target would resolve to the production bucket." >&2
+      return 1 2>/dev/null || exit 1
+    fi
   fi
 
   local env_override="$SCRIPT_DIR/.env.sh"
@@ -379,6 +389,19 @@ target_is_dq_bucket() {
   case "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" in
     *-dq|*-dq/*) return 0 ;;
   esac
+  return 1
+}
+
+# assert_dq_target
+# A GOVDATA_DQ=true run must write to a -dq bucket. Fails (non-zero, message on stderr) when the
+# resolved GOVDATA_PARQUET_DIR does not end in -dq, including when it is unset. No-op otherwise.
+assert_dq_target() {
+  [ "${GOVDATA_DQ:-}" = "true" ] || return 0
+  case "${GOVDATA_PARQUET_DIR:-}" in
+    s3://*-dq|s3://*-dq/) return 0 ;;
+  esac
+  echo "FATAL: GOVDATA_DQ=true but GOVDATA_PARQUET_DIR='${GOVDATA_PARQUET_DIR:-<unset>}' is not a -dq bucket" \
+       "(GOVDATA_DQ_BUCKET='${GOVDATA_DQ_BUCKET:-<unset>}'); refusing to start the ETL against a non-DQ target." >&2
   return 1
 }
 
@@ -1600,6 +1623,8 @@ run_etl() {
   fi
   echo "[$worker_id] Log: $log_file"
 
+  assert_dq_target || return 1
+
   # Ensure Ctrl-C kills the java process, not just tee
   trap 'kill 0' INT TERM
 
@@ -1648,6 +1673,8 @@ run_etl_inline() {
     echo "[$worker_id] Parallel entity threads: $ETL_PARALLEL_THREADS"
   fi
   echo "[$worker_id] Log: $log_file"
+
+  assert_dq_target || return 1
 
   trap 'kill 0' INT TERM
 
