@@ -212,7 +212,9 @@ run_x_schema_if_needed() {
 
 # SEC's nightly submissions.zip answers the per-filer submissions JSON fetches (the ones that draw
 # the HTTP 429s). Historical windows only: it lags live by up to a day, and a daily run needs
-# yesterday's and today's filings. One conditional GET per attempt (304 when unchanged). A failed
+# yesterday's and today's filings. A backfill does not need the latest filings, so a zip already
+# on disk is reused with no network call (SEC rebuilds the file nightly, so a fetch would pull the
+# full ~1.5 GB every day); only when none is present is it fetched, one conditional GET per attempt. A failed
 # fetch (DNS not up after a boot, connect/reset, HTTP error) is not a result: it is retried with
 # backoff until it succeeds or the window ends, and the pool is not started without the zip, because
 # live per-filer fetches exhaust the SEC request budget. Returns 1 when the window ended first.
@@ -222,11 +224,17 @@ SUBMISSIONS_RETRY_MAX_SECS="${SEC_SUBMISSIONS_RETRY_MAX_SECS:-900}"
 prepare_sec_submissions_bulk() {
   local window_log="$1" window_end="$2"
   local delay="$SUBMISSIONS_RETRY_MIN_SECS" tries=0
+  if [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
+    export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
+    echo "[$(ts)] submissions.zip: reused existing $SEC_BULK_SUBMISSIONS_ZIP (no fetch)" >> "$window_log"
+    return 0
+  fi
   while true; do
     tries=$(( tries + 1 ))
     if "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" >> "$window_log" 2>&1 \
         && [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
       export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
+      echo "[$(ts)] submissions.zip: fetched (attempt $tries)" >> "$window_log"
       return 0
     fi
     unset SEC_BULK_SUBMISSIONS_ZIP 2>/dev/null || true
