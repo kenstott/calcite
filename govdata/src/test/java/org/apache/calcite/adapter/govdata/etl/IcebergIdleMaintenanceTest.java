@@ -167,6 +167,19 @@ public class IcebergIdleMaintenanceTest {
     assertEquals(rowsBefore, liveRowCount(), "the live rows are unchanged");
   }
 
+  @Test void doesNotCountFilesOfASiblingTableWhoseNameSharesThePrefix() throws Exception {
+    Path sibling = java.nio.file.Paths.get(table.location().replace("file:", "") + "_critical");
+    Files.createDirectories(sibling.resolve("data"));
+    Files.write(sibling.resolve("data").resolve("stray.parquet"), new byte[] {1});
+    backdateSnapshots(26);
+
+    IcebergIdleMaintenance.Outcome outcome =
+        IcebergIdleMaintenance.expireIdleTable("idle_test", table, storage, 7);
+
+    assertEquals(outcome.liveFiles, outcome.filesOnDiskAfter,
+        "the sibling table's file must not be counted: " + outcome);
+  }
+
   @Test void keepsFilesWhileASnapshotIsInsideRetention() throws Exception {
     backdateSnapshots(2);
     int onDiskBefore = IcebergIdleMaintenance.expireIdleTable("idle_test", table, storage, 7)
