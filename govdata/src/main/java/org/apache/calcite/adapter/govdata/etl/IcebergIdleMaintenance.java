@@ -140,7 +140,7 @@ public final class IcebergIdleMaintenance {
     String location = table.location();
     String directory = location.endsWith("/") ? location : location + "/";
     for (StorageProvider.FileEntry entry : storage.listFiles(directory, true)) {
-      if (!entry.isDirectory() && !entry.getPath().contains("/metadata/")
+      if (!entry.isDirectory() && !IcebergOrphanCleanup.normalize(entry.getPath()).contains("/metadata/")
           && !entry.getName().endsWith(".crc")) {
         count++;
       }

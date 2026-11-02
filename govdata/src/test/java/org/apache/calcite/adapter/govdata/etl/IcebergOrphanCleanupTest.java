@@ -21,6 +21,7 @@ import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Types;
 
 import org.junit.jupiter.api.AfterEach;
@@ -99,8 +100,12 @@ public class IcebergOrphanCleanupTest {
   }
 
   private Path liveFile(Table t) {
-    for (FileScanTask task : t.newScan().planFiles()) {
-      return Path.of(task.file().path().toString().replaceFirst("^file:", ""));
+    try (CloseableIterable<FileScanTask> tasks = t.newScan().planFiles()) {
+      for (FileScanTask task : tasks) {
+        return Path.of(task.file().path().toString().replaceFirst("^file:", ""));
+      }
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
     }
     throw new IllegalStateException("table has no live file");
   }
@@ -195,6 +200,16 @@ public class IcebergOrphanCleanupTest {
       assertTrue(outcome[0].skippedBusy);
     }
     assertTrue(Files.exists(old));
+  }
+
+  @Test void windowsAndUriPathsNormalizeToTheSameKey() {
+    assertEquals("C:/w/trade/data/f.parquet",
+        IcebergOrphanCleanup.normalize("C:\\w\\trade\\data\\f.parquet"));
+    assertEquals("C:/w/trade/data/f.parquet",
+        IcebergOrphanCleanup.normalize("file:/C:/w/trade/data/f.parquet"));
+    assertEquals("/w/trade/f.parquet", IcebergOrphanCleanup.normalize("file:///w/trade/f.parquet"));
+    assertEquals(IcebergOrphanCleanup.normalize("s3://b/k"),
+        IcebergOrphanCleanup.normalize("s3a://b/k"));
   }
 
   @Test void safetyWindowBelowOneDayIsRejected() {
