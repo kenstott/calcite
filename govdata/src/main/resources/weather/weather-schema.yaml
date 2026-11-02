@@ -588,7 +588,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 10033213
-      checkedAt: "2026-11-01T19:30:25Z"
+      checkedAt: "2026-11-02T19:47:37Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Month (GSOM) data. Includes temperature
@@ -697,7 +697,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 981241
-      checkedAt: "2026-11-01T19:30:26Z"
+      checkedAt: "2026-11-02T19:47:39Z"
     partitions: *standard_partitions
     comment: >
       NOAA CDO Global Summary of the Year (GSOY) data — annual temperature,
@@ -895,7 +895,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 130416289
-      checkedAt: "2026-11-01T19:30:29Z"
+      checkedAt: "2026-11-02T19:47:43Z"
     partitions: *standard_partitions
     comment: >
       NOAA GHCN-Daily station observations from NCEI annual bulk files
@@ -1018,7 +1018,7 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 2807592
-      checkedAt: "2026-11-01T19:30:30Z"
+      checkedAt: "2026-11-02T19:47:44Z"
     partitions: *drought_partitions
     comment: >
       National Drought Monitor weekly county-level drought severity from the USDM API
@@ -1141,7 +1141,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 3792836
-      checkedAt: "2026-11-01T19:30:33Z"
+      checkedAt: "2026-11-02T19:47:50Z"
     partitions: *hms_partitions
     comment: >
       NOAA Hazard Mapping System (HMS) satellite smoke detection aggregated to county
@@ -1246,7 +1246,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 466773
-      checkedAt: "2026-11-01T19:30:37Z"
+      checkedAt: "2026-11-02T19:47:56Z"
     comment: >
       Raw NOAA HMS smoke plume polygon geometries retained for spatial re-analysis.
       One row per smoke polygon per day. Geometry stored as WKT for direct use with
@@ -1436,7 +1436,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026]
       rowCount: 14951151
-      checkedAt: "2026-11-01T19:30:38Z"
+      checkedAt: "2026-11-02T19:47:57Z"
     partitions: *standard_partitions
     comment: >
       Sub-daily surface observations (one row per METAR report) for the 15 US airport
@@ -1775,7 +1775,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 211427
-      checkedAt: "2026-11-01T19:30:39Z"
+      checkedAt: "2026-11-02T19:47:58Z"
     partitions: *standard_partitions
     comment: >
       Observed high and low water events (tide extremes) from NOAA CO-OPS NWLON tide gauges,
@@ -1869,7 +1869,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 297141
-      checkedAt: "2026-11-01T19:30:40Z"
+      checkedAt: "2026-11-02T19:47:58Z"
     partitions: *standard_partitions
     comment: >
       Predicted high and low tide times and heights from NOAA CO-OPS harmonic prediction
