@@ -3076,7 +3076,8 @@ public class SecDataFetcher {
 
   /**
    * Returns company_name, ticker, sic_code, and fiscal_year_end (MMDD) for a CIK from EDGAR
-   * submissions.json. Results are cached in-process for the lifetime of the JVM.
+   * submissions.json. Successful results are cached in-process for the lifetime of the JVM; a failed
+   * fetch throws {@link IllegalStateException} and is not cached.
    */
   public static Map<String, String> getCompanyInfoForCik(String cik) {
     String normalized = cik.replaceAll("[^0-9]", "");
@@ -3086,15 +3087,14 @@ public class SecDataFetcher {
     if (COMPANY_INFO_CACHE.containsKey(normalized)) {
       return COMPANY_INFO_CACHE.get(normalized);
     }
-    Map<String, String> info = new HashMap<>();
+    JsonNode node;
     try {
-      JsonNode node = readSubmissionsJsonWithCache(normalized);
-      if (node != null) {
-        info = parseSubmissionsJson(node);
-      }
+      node = readSubmissionsJsonWithCache(normalized);
     } catch (Exception e) {
-      LOGGER.warn("Failed to fetch submissions.json for CIK {}: {}", normalized, e.getMessage());
+      throw new IllegalStateException(
+          "Failed to fetch submissions.json for CIK " + normalized + ": " + e.getMessage(), e);
     }
+    Map<String, String> info = parseSubmissionsJson(node);
     COMPANY_INFO_CACHE.put(normalized, info);
     return info;
   }
@@ -3152,7 +3152,7 @@ public class SecDataFetcher {
       }
       return node;
     }
-    return null;
+    throw new java.io.IOException("HTTP " + conn.getResponseCode() + " from " + url);
   }
 
   private static Map<String, String> parseSubmissionsJson(JsonNode node) {
