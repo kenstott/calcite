@@ -129,7 +129,11 @@ public final class IcebergIdleMaintenance {
   private static int countDataFilesOnDisk(Table table, StorageProvider storage)
       throws IOException {
     int count = 0;
-    for (StorageProvider.FileEntry entry : storage.listFiles(table.location(), true)) {
+    // The trailing slash bounds an object-store prefix listing to this table's directory, so a
+    // sibling table whose name starts with this one's (trade_exports / trade_exports_*) is not counted.
+    String location = table.location();
+    String directory = location.endsWith("/") ? location : location + "/";
+    for (StorageProvider.FileEntry entry : storage.listFiles(directory, true)) {
       if (!entry.isDirectory() && !entry.getPath().contains("/metadata/")
           && !entry.getName().endsWith(".crc")) {
         count++;
