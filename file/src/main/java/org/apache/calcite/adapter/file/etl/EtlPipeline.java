@@ -41,6 +41,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
@@ -1127,6 +1128,9 @@ public class EtlPipeline {
             final int partCountFinal = partCount;
             final long startTimeFinal = startTime;
 
+            final AtomicReference<SourceExhaustedException> partExhausted =
+                new AtomicReference<SourceExhaustedException>();
+            final AtomicInteger partNotAttempted = new AtomicInteger();
             ExecutorService partExecutor = Executors.newFixedThreadPool(partThreadCount);
             List<Future<Void>> partFutures = new ArrayList<Future<Void>>();
 
@@ -1136,6 +1140,10 @@ public class EtlPipeline {
               partFutures.add(
                   partExecutor.submit(new Callable<Void>() {
                 @Override public Void call() {
+                  if (partExhausted.get() != null) {
+                    partNotAttempted.incrementAndGet();
+                    return null;
+                  }
                   int currentBatch = partProcessed.incrementAndGet();
                   if (progressListener != null) {
                     synchronized (writeLock) {
@@ -1170,6 +1178,16 @@ public class EtlPipeline {
                     LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
                         e.getMessage());
                   } catch (Exception e) {
+                    SourceExhaustedException exhausted = findExhausted(e);
+                    if (exhausted != null) {
+                      partExhausted.compareAndSet(null, exhausted);
+                      LOGGER.error("Batch {} failed: {}", currentBatch, exhausted.getMessage());
+                      partFailed.incrementAndGet();
+                      synchronized (writeLock) {
+                        incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                      }
+                      return null;
+                    }
                     String errorMsg =
                         String.format("Batch %d (partition %d/%d) failed: %s (fetch=%s)", currentBatch, piFinal + 1, partCountFinal, e.getMessage(), variables);
                     LOGGER.error(errorMsg, e);
@@ -1240,6 +1258,9 @@ public class EtlPipeline {
               }
             }
             partExecutor.shutdown();
+            if (partExhausted.get() != null) {
+              throw exhaustedFailure(pipelineName, partExhausted.get(), partNotAttempted.get());
+            }
 
             totalRows += partRows.get();
             successfulBatches += partSucceeded.get();
@@ -1293,6 +1314,12 @@ public class EtlPipeline {
                 }
                 LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
               } catch (Exception e) {
+                SourceExhaustedException exhausted = findExhausted(e);
+                if (exhausted != null) {
+                  LOGGER.error("Batch {} failed: {}", processedCount, exhausted.getMessage());
+                  incrementalTracker.invalidateTableCompletion(pipelineName);
+                  throw exhaustedFailure(pipelineName, exhausted, neededCount - processedCount);
+                }
                 consecutiveFailures++;
                 String errorMsg =
                     String.format("Batch %d (partition %d/%d) failed: %s (fetch=%s)",
@@ -1410,6 +1437,10 @@ public class EtlPipeline {
           final String pipelineNameFinal = pipelineName;
           final int unitCountFinal = unitCount;
 
+          final AtomicReference<SourceExhaustedException> unitExhausted =
+              new AtomicReference<SourceExhaustedException>();
+          final AtomicInteger unitNotAttempted = new AtomicInteger();
+
           ExecutorService executor = Executors.newFixedThreadPool(threadCount);
           List<Future<Void>> futures = new ArrayList<Future<Void>>();
 
@@ -1419,6 +1450,10 @@ public class EtlPipeline {
             futures.add(
                 executor.submit(new Callable<Void>() {
               @Override public Void call() {
+                if (unitExhausted.get() != null) {
+                  unitNotAttempted.incrementAndGet();
+                  return null;
+                }
                 int currentBatch = parallelProcessed.incrementAndGet();
                 if (progressListener != null) {
                   synchronized (writeLock) {
@@ -1454,6 +1489,17 @@ public class EtlPipeline {
                   LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
                       e.getMessage());
                 } catch (Exception e) {
+                  SourceExhaustedException exhausted = findExhausted(e);
+                  if (exhausted != null) {
+                    unitExhausted.compareAndSet(null, exhausted);
+                    LOGGER.error("Batch {}/{} failed: {}", currentBatch, unitCountFinal,
+                        exhausted.getMessage());
+                    parallelFailed.incrementAndGet();
+                    synchronized (writeLock) {
+                      incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                    }
+                    return null;
+                  }
                   String errorMsg =
                       String.format("Batch %d/%d failed: %s (fetch=%s)", currentBatch, unitCountFinal, e.getMessage(), unit.getFetchVariables());
                   LOGGER.error(errorMsg, e);
@@ -1550,6 +1596,9 @@ public class EtlPipeline {
             }
           }
           executor.shutdown();
+          if (unitExhausted.get() != null) {
+            throw exhaustedFailure(pipelineName, unitExhausted.get(), unitNotAttempted.get());
+          }
 
           totalRows += parallelTotalRows.get();
           successfulBatches += parallelSucceeded.get();
@@ -1604,6 +1653,13 @@ public class EtlPipeline {
               }
               LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
             } catch (Exception e) {
+              SourceExhaustedException exhausted = findExhausted(e);
+              if (exhausted != null) {
+                LOGGER.error("Batch {}/{} failed: {}", processedCount, unitCount,
+                    exhausted.getMessage());
+                incrementalTracker.invalidateTableCompletion(pipelineName);
+                throw exhaustedFailure(pipelineName, exhausted, unitCount - processedCount);
+              }
               consecutiveFailures++;
               String errorMsg =
                   String.format("Batch %d/%d failed: %s (fetch=%s)", processedCount, unitCount, e.getMessage(), unit.getFetchVariables());
@@ -2901,6 +2957,22 @@ public class EtlPipeline {
       incrementalTracker.markProcessedSuspectEmpty(pipelineName, pipelineName, markKey,
           scanned, 0L, reason);
     }
+  }
+
+  /** The {@link SourceExhaustedException} in {@code e}'s cause chain, or null. */
+  private static SourceExhaustedException findExhausted(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+      if (t instanceof SourceExhaustedException) {
+        return (SourceExhaustedException) t;
+      }
+    }
+    return null;
+  }
+
+  private static IOException exhaustedFailure(String table, SourceExhaustedException cause,
+      int notAttempted) {
+    return new IOException("Table '" + table + "' stopped on its first source refusal: "
+        + cause.getMessage() + "; " + notAttempted + " batches not attempted", cause);
   }
 
   /**
