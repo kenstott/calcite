@@ -67,6 +67,7 @@
 #   fix-sec.sh --form 10-K,10-K/A               # report and repair only these form types
 #   fix-sec.sh --batch-size 1000 --confirm      # smaller worker invocations
 #   fix-sec.sh --max-accessions 500 --confirm   # cap the run (rehearsal)
+#   fix-sec.sh --reoffer-attempted --confirm    # retry gaps an earlier pass retired without closing
 #   fix-sec.sh --threads 12 --heap 16 --confirm # push harder on an otherwise idle box
 #   fix-sec.sh --threads 2 --heap 3 --confirm   # back off to pool-sized resources
 #
@@ -131,6 +132,7 @@ VECTORIZATION_ENABLED="${GOVDATA_VECTORIZATION_ENABLED:-true}"
 
 CONFIRM=false
 ONLY_TABLE=""
+REOFFER_ATTEMPTED=false
 ONLY_YEAR=""
 ONLY_FORMS=""
 BATCH_SIZE=2000
@@ -149,6 +151,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --confirm)        CONFIRM=true ;;
     --table)          shift; ONLY_TABLE="${1:-}" ;;
+    --reoffer-attempted) REOFFER_ATTEMPTED=true ;;
     --year)           shift; ONLY_YEAR="${1:-}" ;;
     --form)           shift; ONLY_FORMS="${1:-}" ;;
     --batch-size)     shift; BATCH_SIZE="${1:-}" ;;
@@ -325,6 +328,7 @@ log_info "fix-sec: scanning Iceberg for filings missing a table their form shoul
   echo "CREATE TEMP TABLE acc_form AS SELECT acc, any_value(form) AS form FROM"
   echo "  (SELECT acc, form FROM meta UNION ALL SELECT acc, form FROM idx) GROUP BY acc;"
   echo "COPY (SELECT DISTINCT g.acc FROM gaps g ORDER BY 1) TO '${ACC_FILE}' (HEADER false);"
+  echo "COPY (SELECT DISTINCT g.acc || '|' || g.tbl FROM gaps g ORDER BY 1) TO '${ACC_FILE}.pairs' (HEADER false);"
   echo "COPY (SELECT g.acc, CASE"
   echo "    WHEN f.form IN ('10-K','10-K/A','10-Q','10-Q/A') THEN 'sec_primary'"
   echo "    WHEN f.form IN ('13F-HR','13F-HR/A') THEN 'sec_13f'"
@@ -360,15 +364,20 @@ psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
              attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
 
 # retired_by names the code that decided an accession's one pass was done — the jar's own content
-# hash, not a version string, so it survives an unbumped rebuild. Without it a retirement outlives
-# the bug that caused it: 194 13F-HR filings were marked attempted by a converter that guessed at
-# four fixed information-table filenames and 404'd on every non-standard one, the guess was
-# replaced by reading index.json (f1a5dc431) thirteen hours later, and the 165 markers written
-# before that fix stayed retired regardless — because nothing recorded which converter had looked.
-# They surfaced only by cross-referencing attempted_at against `git log`, which does not scale past
-# one investigation. A retired_by cksum turns "which of these predate the fix" into a WHERE clause.
+# hash, not a version string, so it survives an unbumped rebuild. A retired_by cksum turns "which of
+# these predate the fix" into a WHERE clause.
 psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted
              ADD COLUMN IF NOT EXISTS retired_by VARCHAR" >/dev/null
+
+# tbl scopes a retirement to the table whose gap the pass was run for. An accession-only key hid a
+# filing from every table's gap once any pass had touched it, so a filing_metadata gap could never
+# be re-offered after a pass that was enumerated for another table. Rows written before the column
+# existed have tbl NULL: their scope is unknown, so they retire nothing and the still-open gaps
+# behind them are offered once more, then recorded with their table.
+psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted ADD COLUMN IF NOT EXISTS tbl VARCHAR" >/dev/null
+psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted DROP CONSTRAINT IF EXISTS fix_sec_attempted_pkey" >/dev/null
+psql_q -c "CREATE UNIQUE INDEX IF NOT EXISTS fix_sec_attempted_acc_tbl
+             ON ${PG_SCHEMA}.fix_sec_attempted (accession, tbl)" >/dev/null
 
 JAR_CKSUM=""
 for _jar in "$SCRIPT_DIR"/../../build/libs/sih-govdata.jar \
@@ -380,13 +389,19 @@ done
 [ -n "$JAR_CKSUM" ] || log_info "fix-sec: WARNING could not identify the worker jar —" \
   "retired_by will be recorded empty for this run"
 
-ATTEMPTED=$(psql_q -c "SELECT count(*) FROM ${PG_SCHEMA}.fix_sec_attempted")
-if [ "${ATTEMPTED:-0}" -gt 0 ]; then
-  psql_q -c "\\copy (SELECT accession FROM ${PG_SCHEMA}.fix_sec_attempted ORDER BY accession) TO '$ACC_FILE.attempted'" >/dev/null
-  sort -u "$ACC_FILE" > "$ACC_FILE.all"
-  comm -23 "$ACC_FILE.all" "$ACC_FILE.attempted" > "$ACC_FILE"
-  log_info "fix-sec: $(wc -l < "$ACC_FILE.all") in gap, $ATTEMPTED already attempted, $(wc -l < "$ACC_FILE") remaining"
-  rm -f "$ACC_FILE.all" "$ACC_FILE.attempted"
+# A gap pair (accession, table) is retired only by an attempt recorded for that same table.
+# --reoffer-attempted skips the subtraction so a pass can retry pairs retired by earlier code.
+if $REOFFER_ATTEMPTED; then
+  log_info "fix-sec: --reoffer-attempted — not subtracting the attempted-list"
+else
+  psql_q -c "\\copy (SELECT accession || '|' || tbl FROM ${PG_SCHEMA}.fix_sec_attempted WHERE tbl IS NOT NULL ORDER BY 1) TO '$ACC_FILE.attempted'" >/dev/null
+  sort -u "$ACC_FILE.pairs" > "$ACC_FILE.pairs.all"
+  sort -u "$ACC_FILE.attempted" > "$ACC_FILE.attempted.sorted"
+  comm -23 "$ACC_FILE.pairs.all" "$ACC_FILE.attempted.sorted" > "$ACC_FILE.pairs"
+  cut -d'|' -f1 "$ACC_FILE.pairs" | sort -u > "$ACC_FILE.all"
+  log_info "fix-sec: $(wc -l < "$ACC_FILE.pairs.all") gap pair(s), $(wc -l < "$ACC_FILE.attempted.sorted") attempted pair(s) on record, $(wc -l < "$ACC_FILE.pairs") open"
+  cp "$ACC_FILE.all" "$ACC_FILE"
+  rm -f "$ACC_FILE.all" "$ACC_FILE.attempted" "$ACC_FILE.attempted.sorted" "$ACC_FILE.pairs.all"
 fi
 
 TOTAL=$(wc -l < "$ACC_FILE" | tr -d ' ')
@@ -465,21 +480,25 @@ record_attempted() {
   # psql_q opens a fresh connection per call — a TEMP TABLE would not survive between the
   # statements below, so this stages through a real (unlogged, so no WAL cost) table instead,
   # scoped per invocation of this script so two concurrent fix-sec runs cannot collide on it.
+  # Each listed accession is recorded against the tables it was a gap in.
   _rf="$1"
+  _pf="$_rf.pairs"
+  awk -F'|' 'NR==FNR{a[$1]; next} $1 in a' "$_rf" "$ACC_FILE.pairs" > "$_pf"
   _stage="_fix_sec_batch_$$"
-  psql_q -c "CREATE UNLOGGED TABLE ${_stage} (accession VARCHAR)" >/dev/null 2>&1 || return 1
-  ( psql_q -c "\\copy ${_stage} (accession) FROM '$_rf'" >/dev/null 2>&1 \
-      || psql_q -c "INSERT INTO ${_stage} (accession)
-                    SELECT unnest(string_to_array(pg_read_file('$_rf'), E'\\n'))" >/dev/null 2>&1 )
+  psql_q -c "CREATE UNLOGGED TABLE ${_stage} (pair VARCHAR)" >/dev/null 2>&1 || return 1
+  ( psql_q -c "\\copy ${_stage} (pair) FROM '$_pf'" >/dev/null 2>&1 \
+      || psql_q -c "INSERT INTO ${_stage} (pair)
+                    SELECT unnest(string_to_array(pg_read_file('$_pf'), E'\\n'))" >/dev/null 2>&1 )
   _copy_rc=$?
   if [ "$_copy_rc" -eq 0 ]; then
-    psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession, retired_by)
-               SELECT accession, NULLIF('$JAR_CKSUM', '') FROM ${_stage}
-               WHERE accession <> ''
-               ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1
+    psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession, tbl, retired_by)
+               SELECT split_part(pair, '|', 1), split_part(pair, '|', 2), NULLIF('$JAR_CKSUM', '')
+                 FROM ${_stage} WHERE pair <> ''
+               ON CONFLICT (accession, tbl) DO NOTHING" >/dev/null 2>&1
     _copy_rc=$?
   fi
   psql_q -c "DROP TABLE IF EXISTS ${_stage}" >/dev/null 2>&1
+  rm -f "$_pf"
   return $_copy_rc
 }
 
