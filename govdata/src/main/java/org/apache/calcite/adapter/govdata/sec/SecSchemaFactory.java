@@ -4566,7 +4566,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       return;
     }
     Object v = operand != null ? operand.get("feedDir") : null;
-    String dir = v == null ? null : String.valueOf(v);
+    // The schema YAML's own feedDir is merged into the operand only after the hooks run, so a model
+    // that does not name one gets the YAML's value here.
+    String dir = v == null
+        ? GovDataUtils.loadSchemaSetting(getClass(), getSchemaResourceName(), "feedDir")
+        : String.valueOf(v);
     if (dir != null && dir.contains("${")) {
       dir = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(dir);
     }
