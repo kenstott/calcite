@@ -7771,7 +7771,8 @@ public class XbrlToParquetConverter implements FileConverter {
             xmlDoc = builder.parse(is);
           }
         } catch (Exception e) {
-          LOGGER.debug("XML parse failed for 13D/G, using HTML path: {}", e.getMessage());
+          throw new IOException("13D/G primary document " + fileName
+              + " is not parseable XML: " + e.getMessage(), e);
         }
       }
 
@@ -7945,6 +7946,12 @@ public class XbrlToParquetConverter implements FileConverter {
       String cik, String filingType, String filingDate, String accession, int year) {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
+    if (xmlDoc != null) {
+      dataList.add(extract13DGOwnershipFromXml(xmlDoc, cik, filingType, filingDate, accession,
+          year));
+      return dataList;
+    }
+
     // Parse HTML for text extraction
     org.jsoup.nodes.Document htmlDoc = Jsoup.parse(fileContent);
     htmlDoc.select("script, style").remove();
@@ -8041,6 +8048,120 @@ public class XbrlToParquetConverter implements FileConverter {
 
     dataList.add(data);
     return dataList;
+  }
+
+  /**
+   * Reads a structured Schedule 13D or 13G {@code primary_doc.xml} (EDGAR schema
+   * {@code edgarSubmission}, namespaces {@code schedule13D} / {@code schedule13g}, in use since
+   * December 2024).
+   *
+   * <p>The two schedules name the same facts differently, so each is looked up by its own
+   * element names: 13D carries {@code reportingPersons/reportingPersonInfo} with flat power and
+   * {@code aggregateAmountOwned}/{@code percentOfClass} children; 13G carries repeated
+   * {@code coverPageHeaderReportingPersonDetails} with the four powers nested under
+   * {@code reportingPersonBeneficiallyOwnedNumberOfShares}, and {@code classPercent}.
+   *
+   * <p>The table has one row per filing, so the figures are those of the first reporting person,
+   * who is the lead filer. {@code subject_cik} and {@code filer_cik} come from the document
+   * itself: the issuer CIK, and the first reporting person's CIK (13D) or the submitting
+   * filer's CIK (13G, whose reporting persons carry none).
+   */
+  static Map<String, Object> extract13DGOwnershipFromXml(Document doc, String cik,
+      String filingType, String filingDate, String accession, int year) {
+    Element person = firstElementByLocalName(doc, "reportingPersonInfo");
+    if (person == null) {
+      person = firstElementByLocalName(doc, "coverPageHeaderReportingPersonDetails");
+    }
+    if (person == null) {
+      throw new IllegalStateException("13D/G XML for accession=" + accession
+          + " has no reporting person element");
+    }
+
+    String filerCik = textOf(person, "reportingPersonCIK");
+    if (filerCik == null) {
+      Element headerFiler = firstElementByLocalName(doc, "filerCredentials");
+      filerCik = headerFiler == null ? null : textOf(headerFiler, "cik");
+    }
+
+    String percent = textOf(person, "percentOfClass");
+    if (percent == null) {
+      percent = textOf(person, "classPercent");
+    }
+    String aggregate = textOf(person, "aggregateAmountOwned");
+    if (aggregate == null) {
+      aggregate = textOf(person, "reportingPersonBeneficiallyOwnedAggregateNumberOfShares");
+    }
+    String dateOfEvent = textOf(doc.getDocumentElement(), "dateOfEvent");
+    if (dateOfEvent == null) {
+      dateOfEvent = textOf(doc.getDocumentElement(), "eventDateRequiresFilingThisStatement");
+    }
+    String purpose = textOf(doc.getDocumentElement(), "transactionPurpose");
+    if (purpose != null && purpose.length() > 5000) {
+      purpose = purpose.substring(0, 5000) + "...";
+    }
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_date", filingDate);
+    data.put("year", year);
+    data.put("filing_type", filingType);
+    data.put("subject_company", textOf(doc.getDocumentElement(), "issuerName"));
+    data.put("subject_cik", paddedCik(textOf(doc.getDocumentElement(), "issuerCik")));
+    data.put("filer_name", textOf(person, "reportingPersonName"));
+    data.put("filer_cik", paddedCik(filerCik));
+    data.put("date_of_event", dateOfEvent);
+    data.put("title_of_class", textOf(doc.getDocumentElement(), "securitiesClassTitle"));
+    data.put("cusip", textOf(doc.getDocumentElement(), "issuerCusipNumber"));
+    data.put("percent_of_class", xmlNumber(percent));
+    data.put("shares_beneficially_owned", xmlNumber(aggregate));
+    data.put("sole_voting_power", xmlNumber(textOf(person, "soleVotingPower")));
+    data.put("shared_voting_power", xmlNumber(textOf(person, "sharedVotingPower")));
+    data.put("sole_dispositive_power", xmlNumber(textOf(person, "soleDispositivePower")));
+    data.put("shared_dispositive_power", xmlNumber(textOf(person, "sharedDispositivePower")));
+    data.put("type_of_reporting_person", textOf(person, "typeOfReportingPerson"));
+    data.put("source_of_funds", textOf(person, "fundType"));
+    data.put("purpose_of_transaction", purpose);
+    return data;
+  }
+
+  /** First descendant (or self) element whose local name matches case-insensitively. */
+  private static Element firstElementByLocalName(Node scope, String localName) {
+    NodeList nodes = scope instanceof Document
+        ? ((Document) scope).getElementsByTagNameNS("*", "*")
+        : ((Element) scope).getElementsByTagNameNS("*", "*");
+    for (int i = 0; i < nodes.getLength(); i++) {
+      Element e = (Element) nodes.item(i);
+      if (localName.equalsIgnoreCase(e.getLocalName())) {
+        return e;
+      }
+    }
+    return null;
+  }
+
+  /** Trimmed text of the first descendant with the given local name; null when absent or blank. */
+  private static String textOf(Element scope, String localName) {
+    Element e = firstElementByLocalName(scope, localName);
+    if (e == null) {
+      return null;
+    }
+    String t = e.getTextContent().trim();
+    return t.isEmpty() ? null : t;
+  }
+
+  private static String paddedCik(String digits) {
+    if (digits == null) {
+      return null;
+    }
+    return digits.length() >= 10 ? digits : String.format("%010d", Long.parseLong(digits));
+  }
+
+  /** Parses an XML numeric value such as {@code 990000.00}, {@code 9.90%} or {@code 990,000}. */
+  private static Double xmlNumber(String value) {
+    if (value == null) {
+      return null;
+    }
+    return Double.valueOf(value.replace(",", "").replace("%", "").trim());
   }
 
   /**
