@@ -348,7 +348,14 @@ if ! $DRY_RUN && ! { $SKIP_HISTORICAL && $SKIP_DAILY; }; then
         "$SCHEMA" "$_claim_start" "$_claim_end" "$TABLES"; then
     exit 3
   fi
-  trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT
+  if ! target_is_dq_bucket; then
+    # Whole-run write lock: run-pool.sh and worker.sh refuse to start this schema's workers meanwhile (#1064).
+    acquire_schema_lock "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$$" force-reprocess.sh "$SCHEMA" || exit 3
+    trap 'release_schema_years_claim "$CLAIM_DIR" "$$"; release_schema_lock "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$$" "$SCHEMA"' EXIT
+    export GOVDATA_SCHEMA_LOCK_OWNER=$$
+  else
+    trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT
+  fi
 fi
 
 if ! $SKIP_HISTORICAL; then
