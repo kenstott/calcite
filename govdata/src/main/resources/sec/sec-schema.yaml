@@ -1407,6 +1407,8 @@ partitionedTables:
       Schedule 13G (passive >5% holders). Discloses who owns large stakes, how many
       shares, percent of class, source of funds, and critically — the purpose of the
       transaction (Item 4). 13D filers may push for M&A, board changes, or restructuring.
+      One row per filing: when a filing names several reporting persons (a group), the
+      row carries the lead (first) reporting person's figures, matching the primary key.
       Distinct from insider_transactions (Section 16, Forms 3/4/5): this is Section
       13(d)/(g), filed by ANY person/group crossing 5% ownership of a class, not just
       officers/directors/10%-owners — an activist fund or index manager with no insider
