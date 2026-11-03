@@ -67,7 +67,7 @@
 #   fix-sec.sh --form 10-K,10-K/A               # report and repair only these form types
 #   fix-sec.sh --batch-size 1000 --confirm      # smaller worker invocations
 #   fix-sec.sh --max-accessions 500 --confirm   # cap the run (rehearsal)
-#   fix-sec.sh --reoffer-attempted --confirm    # retry gaps an earlier pass retired without closing
+#   fix-sec.sh --reoffer-attempted --confirm    # accepted for compatibility; attempted pairs that are absent are always offered
 #   fix-sec.sh --threads 12 --heap 16 --confirm # push harder on an otherwise idle box
 #   fix-sec.sh --threads 2 --heap 3 --confirm   # back off to pool-sized resources
 #
@@ -75,6 +75,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/fix-sec-lib.sh"
 load_env
 
 # Which Iceberg tables each SEC form type is defined to produce.
@@ -392,24 +393,19 @@ done
 [ -n "$JAR_CKSUM" ] || log_info "fix-sec: WARNING could not identify the worker jar —" \
   "retired_by will be recorded empty for this run"
 
-# A gap pair (accession, table) is retired only by an attempt recorded for that same table.
-# --reoffer-attempted skips the subtraction so a pass can retry pairs retired by earlier code.
-if $REOFFER_ATTEMPTED; then
-  log_info "fix-sec: --reoffer-attempted — not subtracting the attempted-list"
-else
-  if [ "$HAVE_ATTEMPTED_TBL" = "1" ]; then
-    psql_q -c "\\copy (SELECT accession || '|' || tbl FROM ${PG_SCHEMA}.fix_sec_attempted WHERE tbl IS NOT NULL ORDER BY 1) TO '$ACC_FILE.attempted'" >/dev/null
-  else
-    : > "$ACC_FILE.attempted"
-  fi
-  sort -u "$ACC_FILE.pairs" > "$ACC_FILE.pairs.all"
-  sort -u "$ACC_FILE.attempted" > "$ACC_FILE.attempted.sorted"
-  comm -23 "$ACC_FILE.pairs.all" "$ACC_FILE.attempted.sorted" > "$ACC_FILE.pairs"
-  cut -d'|' -f1 "$ACC_FILE.pairs" | sort -u > "$ACC_FILE.all"
-  log_info "fix-sec: $(wc -l < "$ACC_FILE.pairs.all") gap pair(s), $(wc -l < "$ACC_FILE.attempted.sorted") attempted pair(s) on record, $(wc -l < "$ACC_FILE.pairs") open"
-  cp "$ACC_FILE.all" "$ACC_FILE"
-  rm -f "$ACC_FILE.all" "$ACC_FILE.attempted" "$ACC_FILE.attempted.sorted" "$ACC_FILE.pairs.all"
+# The gap list is built from the tables, so a pair in it is absent whether or not an earlier pass
+# attempted it. The attempted-list never removes a pair: only a row in the table closes a gap.
+# Attempted pairs that are still absent are reported and offered again.
+sort -u "$ACC_FILE.pairs" > "$ACC_FILE.pairs.all"
+: > "$ACC_FILE.attempted"
+if [ "$HAVE_ATTEMPTED_TBL" = "1" ]; then
+  psql_q -c "\\copy (SELECT accession || '|' || tbl FROM ${PG_SCHEMA}.fix_sec_attempted WHERE tbl IS NOT NULL ORDER BY 1) TO '$ACC_FILE.attempted'" >/dev/null
 fi
+ATTEMPTED_ABSENT=$(fix_sec_attempted_absent "$ACC_FILE.pairs.all" "$ACC_FILE.attempted")
+log_info "fix-sec: $(wc -l < "$ACC_FILE.pairs.all") gap pair(s) before this pass, attempted, not materialized: ${ATTEMPTED_ABSENT}"
+cut -d'|' -f1 "$ACC_FILE.pairs.all" | sort -u > "$ACC_FILE"
+cp "$ACC_FILE.pairs.all" "$ACC_FILE.pairs"
+rm -f "$ACC_FILE.attempted"
 
 TOTAL=$(wc -l < "$ACC_FILE" | tr -d ' ')
 TOTAL="${TOTAL:-0}"
@@ -468,6 +464,8 @@ if [ "$MAX_ACCESSIONS" -gt 0 ] && [ "$TOTAL" -gt "$MAX_ACCESSIONS" ]; then
   head -n "$MAX_ACCESSIONS" "$ACC_FILE" > "$ACC_FILE.capped"
   mv "$ACC_FILE.capped" "$ACC_FILE"
 fi
+# The pairs this pass offers: every gap pair of the accessions being reprocessed.
+awk -F'|' 'NR==FNR{a[$1]; next} $1 in a' "$ACC_FILE" "$ACC_FILE.pairs.all" > "$ACC_FILE.pairs"
 
 # Bucket by the filing year the accession encodes. One year per worker invocation keeps
 # the EDGAR full-index load to a single year: worker-sec-reprocess.sh derives its model's
@@ -616,6 +614,21 @@ done
 
 echo
 log_info "fix-sec: $batches batch(es) attempted, $failed failed"
+
+# Re-read the tables: a pair is closed only if its table now holds the row.
+POST="$ACC_FILE.post"
+sed -e "s#${ACC_FILE}#${POST}#g" "$WORK_DIR/enumerate-$STAMP.sql" > "$WORK_DIR/enumerate-post-$STAMP.sql"
+if ! duckdb -noheader -list < "$WORK_DIR/enumerate-post-$STAMP.sql" > "$REPORT_FILE.post" 2>&1; then
+  echo "fix-sec: post-pass Iceberg enumeration failed — see $REPORT_FILE.post" >&2
+  exit 1
+fi
+_before=$(wc -l < "$ACC_FILE.pairs.all" | tr -d ' ')
+read -r _materialized _absent <<< "$(fix_sec_outcome "$ACC_FILE.pairs" "$POST.pairs")"
+log_info "fix-sec: gap pairs before: ${_before}; materialized by this pass: ${_materialized}; attempted but still absent: ${_absent}"
+if [ "$_absent" -gt 0 ]; then
+  echo "fix-sec: ${_absent} pair(s) attempted but not materialized; the next run offers them again" >&2
+  exit 1
+fi
 if [ "$failed" -gt 0 ]; then
   echo "fix-sec: re-run to retry — the report is rebuilt from the tracker each time," >&2
   echo "  so anything genuinely repaired drops out and only real gaps remain." >&2
