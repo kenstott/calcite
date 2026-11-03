@@ -71,6 +71,62 @@ public class EdgarRateLimiterTest {
     }
   }
 
+  @Test void tooManyRequestsWaitsThenRetriesAndSucceeds() throws Exception {
+    declareUserAgent();
+    final AtomicInteger hits = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", ex -> {
+      if (hits.incrementAndGet() == 1) {
+        ex.getResponseHeaders().add("Retry-After", "1");
+        ex.sendResponseHeaders(429, -1);
+      } else {
+        ex.sendResponseHeaders(200, -1);
+      }
+      ex.close();
+    });
+    server.start();
+    try {
+      String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/s.json";
+      long start = System.currentTimeMillis();
+      HttpURLConnection conn = EdgarRateLimiter.connect(url, "HEAD", 2000, 2000, 10L, 3);
+      long elapsed = System.currentTimeMillis() - start;
+      assertEquals(200, conn.getResponseCode());
+      assertEquals(2, hits.get());
+      assertTrue(elapsed >= 1000L, "Retry-After of 1s not honoured: " + elapsed + "ms");
+      assertEquals(0L, EdgarRateLimiter.blockedUntil());
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test void tooManyRequestsFailsByNameAfterBoundedRetries() throws Exception {
+    declareUserAgent();
+    final AtomicInteger hits = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", ex -> {
+      hits.incrementAndGet();
+      ex.getResponseHeaders().add("Retry-After", "0");
+      ex.sendResponseHeaders(429, -1);
+      ex.close();
+    });
+    server.start();
+    try {
+      String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/CIK1.json";
+      java.io.IOException e = assertThrows(java.io.IOException.class,
+          () -> EdgarRateLimiter.connect(url, "GET", 2000, 2000, 10L, 2));
+      assertTrue(e.getMessage().contains(url), e.getMessage());
+      assertEquals(3, hits.get());
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  private static void declareUserAgent() {
+    java.util.Map<String, Object> operand = new java.util.HashMap<String, Object>();
+    operand.put("edgarUserAgent", "govdata-etl test@example.org");
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture("sec", operand);
+  }
+
   @Test void successStatusDoesNotBlock() {
     EdgarRateLimiter.recordStatus(200, "http://x/");
     EdgarRateLimiter.recordStatus(404, "http://x/");
