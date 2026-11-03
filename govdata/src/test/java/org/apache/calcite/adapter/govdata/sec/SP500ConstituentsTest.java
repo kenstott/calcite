@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +30,18 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("unit")
 public class SP500ConstituentsTest {
+
+  @BeforeAll static void declareSecUserAgent() {
+    java.util.Map<String, Object> operand = new java.util.HashMap<String, Object>();
+    operand.put("edgarUserAgent", "govdata-etl kennethstott@gmail.com");
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture("sec", operand);
+  }
+
+  @AfterAll static void clearSecOperand() {
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture("sec",
+        new java.util.HashMap<String, Object>());
+  }
+
 
   @Test void testSP500ConstituentsLoading() {
     // Test resolving the SP500_COMPLETE group which uses _SP500_CONSTITUENTS marker

@@ -19,6 +19,8 @@ package org.apache.calcite.adapter.govdata.sec;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.LocalFileStorageProvider;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,6 +46,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 class PlainTextFilingTest {
+
+  @BeforeAll static void declareSecUserAgent() {
+    java.util.Map<String, Object> operand = new java.util.HashMap<String, Object>();
+    operand.put("edgarUserAgent", "govdata-etl kennethstott@gmail.com");
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture("sec", operand);
+  }
+
+  @AfterAll static void clearSecOperand() {
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture("sec",
+        new java.util.HashMap<String, Object>());
+  }
+
 
   @TempDir
   Path tempDir;
