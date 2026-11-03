@@ -1307,17 +1307,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           LOGGER.info("Table '{}': {} staged source files claimed for absorption ({} uploaded by this pass)",
               icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
           Set<String> forced = parseForceAccessions(operand);
-          if (isForceReprocessed(operand, tableName) && !pendingSourceFiles.isEmpty()) {
-            // A table-level force re-stages accessions the table already holds. Delete exactly
-            // those accessions' rows, in every year partition, before the replacements are
-            // appended: an accession is one filing, and a forced reprocess replaces it, it does
-            // not add a second copy.
+          boolean tableForced = isForceReprocessed(operand, tableName);
+          if ((tableForced || !forced.isEmpty()) && !pendingSourceFiles.isEmpty()) {
+            // A forced accession's rows are deleted before its replacement is appended: an
+            // accession is one filing, and a forced reprocess replaces it, it does not add a
+            // second copy. Only accessions whose replacement is in the files this process
+            // claimed may be deleted. A concurrent worker can claim and absorb a staged file
+            // the pass uploaded first; deleting that accession here would remove the rows the
+            // other worker just wrote, with no replacement left to append.
             Set<String> restaged = materializer.distinctValuesInFiles(pendingSourceFiles,
                 config.getAccessionColumn());
-            LOGGER.info("Table '{}' is force-reprocessed: replacing {} accession(s) from {} staged "
-                + "file(s)", icebergTableName, restaged.size(), pendingSourceFiles.size());
-            forced = new HashSet<String>(forced);
-            forced.addAll(restaged);
+            if (tableForced) {
+              LOGGER.info("Table '{}' is force-reprocessed: replacing {} accession(s) from {} "
+                  + "staged file(s)", icebergTableName, restaged.size(),
+                  pendingSourceFiles.size());
+            }
+            forced = forcedWithClaimedReplacement(forced, restaged, tableForced);
+          } else {
+            forced = Collections.<String>emptySet();
           }
           config = buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
               tableConfig, operand, warehousePath, pendingSourceFiles, null, forced);
@@ -1749,6 +1756,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
     return forceAccessions;
+  }
+
+  /**
+   * The accessions whose existing rows may be deleted before this process appends its claimed
+   * files: those named by the operand that have a replacement in the claimed files, plus every
+   * accession in the claimed files when the whole table is force-reprocessed. An operand accession
+   * with no replacement in the claim keeps its rows.
+   */
+  static Set<String> forcedWithClaimedReplacement(Set<String> operandForced,
+      Set<String> inClaimedFiles, boolean tableForced) {
+    Set<String> result = new HashSet<String>(inClaimedFiles);
+    if (!tableForced) {
+      result.retainAll(operandForced);
+    }
+    return result;
   }
 
   /**
