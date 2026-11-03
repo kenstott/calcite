@@ -63,6 +63,11 @@ public final class EdgarRateLimiter {
     CrossProcessRateLimiter.acquire(SEC_KEY, interval > 0 ? interval : DEFAULT_INTERVAL_MS);
   }
 
+  /** The User-Agent (with a real contact) declared on direct sec.gov requests, from the model. */
+  public static String userAgent() {
+    return ModelOperand.getString("sec.edgarUserAgent");
+  }
+
   /** Requests paced so far in this JVM. */
   public static long acquired() {
     return ACQUIRED.get();
