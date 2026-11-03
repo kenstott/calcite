@@ -38,6 +38,9 @@ public final class EdgarRateLimiter {
   // edgarRateLimitMs default and the file-layer DocumentSource default so all SEC paths agree.
   private static final long DEFAULT_INTERVAL_MS = 125L;
 
+  // Akamai blocks on this host have lasted tens of minutes; probing sooner extends them.
+  private static final long DEFAULT_COOLDOWN_MS = 30L * 60L * 1000L;
+
   private EdgarRateLimiter() {
   }
 
@@ -58,9 +61,58 @@ public final class EdgarRateLimiter {
         }
       }, "edgar-request-count"));
     }
+    long blockedUntil = blockedUntil();
+    if (blockedUntil > System.currentTimeMillis()) {
+      throw new IllegalStateException("sec.gov refused this host with HTTP 403/429; no requests "
+          + "until " + java.time.Instant.ofEpochMilli(blockedUntil));
+    }
     ACQUIRED.incrementAndGet();
     long interval = ModelOperand.getLong("sec.edgarRateLimitMs", DEFAULT_INTERVAL_MS);
     CrossProcessRateLimiter.acquire(SEC_KEY, interval > 0 ? interval : DEFAULT_INTERVAL_MS);
+  }
+
+  private static java.nio.file.Path blockFile() {
+    return java.nio.file.Paths.get(System.getProperty("java.io.tmpdir"),
+        "calcite-ratelimit-" + SEC_KEY + ".blocked");
+  }
+
+  /** Epoch millis until which every process on this host must not call sec.gov, or 0. */
+  static long blockedUntil() {
+    java.nio.file.Path file = blockFile();
+    if (!java.nio.file.Files.exists(file)) {
+      return 0L;
+    }
+    try {
+      return Long.parseLong(new String(java.nio.file.Files.readAllBytes(file),
+          java.nio.charset.StandardCharsets.UTF_8).trim());
+    } catch (java.io.IOException | NumberFormatException e) {
+      throw new IllegalStateException("Cannot read sec.gov block marker " + file, e);
+    }
+  }
+
+  /**
+   * Records a sec.gov refusal. A 403 or 429 starts a host-wide cool-down
+   * ({@code sec.edgarBlockCooldownMs}) during which {@link #acquire()} throws, so no process
+   * keeps sending requests to a host that has blocked it. Other statuses are ignored.
+   *
+   * @param status HTTP status of the response
+   * @param url requested URL, named in the log
+   */
+  public static void recordStatus(int status, String url) {
+    if (status != 403 && status != 429) {
+      return;
+    }
+    long cooldown = ModelOperand.getLong("sec.edgarBlockCooldownMs", DEFAULT_COOLDOWN_MS);
+    long until = System.currentTimeMillis() + cooldown;
+    try {
+      java.nio.file.Files.write(blockFile(),
+          Long.toString(until).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    } catch (java.io.IOException e) {
+      throw new IllegalStateException("Cannot write sec.gov block marker " + blockFile(), e);
+    }
+    org.slf4j.LoggerFactory.getLogger(EdgarRateLimiter.class).error(
+        "HTTP {} from {}: no sec.gov requests from this host until {}", status, url,
+        java.time.Instant.ofEpochMilli(until));
   }
 
   /** The User-Agent (with a real contact) declared on direct sec.gov requests, from the model. */
