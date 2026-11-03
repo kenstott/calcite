@@ -117,7 +117,12 @@ public final class EdgarRateLimiter {
 
   /** The User-Agent (with a real contact) declared on direct sec.gov requests, from the model. */
   public static String userAgent() {
-    return ModelOperand.getString("sec.edgarUserAgent");
+    String ua = ModelOperand.getString("sec.edgarUserAgent");
+    if (ua == null || ua.isEmpty()) {
+      throw new IllegalStateException(
+          "sec.edgarUserAgent is not set in the sec schema operand; SEC requires a contact");
+    }
+    return ua;
   }
 
   /** Requests paced so far in this JVM. */
