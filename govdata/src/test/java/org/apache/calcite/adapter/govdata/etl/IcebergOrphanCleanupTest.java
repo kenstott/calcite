@@ -238,4 +238,19 @@ public class IcebergOrphanCleanupTest {
     assertThrows(IllegalArgumentException.class, () -> IcebergOrphanCleanup.cleanTable("trade",
         table, storage, 0, true, System.currentTimeMillis()));
   }
+
+  @Test void summaryNamesFailedAndUnreachedTables() {
+    IcebergOrphanCleanup.RunSummary summary = new IcebergOrphanCleanup.RunSummary();
+    summary.pending.add("a");
+    summary.pending.add("b");
+    summary.pending.add("c");
+    summary.completed("a");
+    summary.failed("b", new IOException("S3 LIST failed"));
+
+    assertEquals(1, summary.failedCount());
+    String report = summary.render();
+    assertTrue(report.contains("completed 1, failed 1, not reached 1"), report);
+    assertTrue(report.contains("FAILED b: IOException: S3 LIST failed"), report);
+    assertTrue(report.contains("NOT REACHED c"), report);
+  }
 }

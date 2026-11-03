@@ -59,7 +59,8 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Usage: {@code IcebergOrphanCleanup --schema-resource econ/econ-schema.yaml [...]
  * [--s3-access-key K --s3-secret-key S --s3-endpoint URL] [--min-age-days N] [--delete]}. Exit code
- * 0 when every visited table was handled, 1 when any table failed.
+ * 0 when every table was handled, 1 when any table failed. A final summary names the failed
+ * tables and, when the run is stopped early, the tables not reached.
  */
 public final class IcebergOrphanCleanup {
 
@@ -257,6 +258,41 @@ public final class IcebergOrphanCleanup {
     return scheme < 0 ? p : p.substring(scheme + 3);
   }
 
+  /** Per-table tally of a run: completed, failed with reason, and not yet reached. */
+  static final class RunSummary {
+    final List<String> pending = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final List<String> done = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final Map<String, String> failures =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    void completed(String table) {
+      pending.remove(table);
+      done.add(table);
+    }
+
+    void failed(String table, Exception cause) {
+      pending.remove(table);
+      failures.put(table, cause.getClass().getSimpleName() + ": " + cause.getMessage());
+    }
+
+    int failedCount() {
+      return failures.size();
+    }
+
+    String render() {
+      StringBuilder out = new StringBuilder();
+      out.append("completed ").append(done.size()).append(", failed ").append(failures.size())
+          .append(", not reached ").append(pending.size());
+      for (Map.Entry<String, String> failure : failures.entrySet()) {
+        out.append("\n  FAILED ").append(failure.getKey()).append(": ").append(failure.getValue());
+      }
+      for (String table : pending) {
+        out.append("\n  NOT REACHED ").append(table);
+      }
+      return out.toString();
+    }
+  }
+
   public static void main(String[] args) throws Exception {
     List<String> resources = new ArrayList<>();
     String accessKey = null;
@@ -319,7 +355,7 @@ public final class IcebergOrphanCleanup {
 
     LOGGER.info("orphan cleanup mode: {}, safety window {} days",
         delete ? "DELETE" : "dry run (no files deleted)", minAgeDays);
-    int failed = 0;
+    List<IcebergIdleMaintenance.Target> targets = new ArrayList<>();
     for (String resource : resources) {
       JsonNode root;
       try (InputStream in = IcebergOrphanCleanup.class.getResourceAsStream("/" + resource)) {
@@ -328,26 +364,41 @@ public final class IcebergOrphanCleanup {
         }
         root = YamlUtils.parseYamlOrJson(in, resource);
       }
-      for (IcebergIdleMaintenance.Target target : IcebergIdleMaintenance.targetsOf(root, resource)) {
-        Map<String, Object> catalogConfig = new HashMap<>();
-        catalogConfig.put("catalog", "hadoop");
-        catalogConfig.put("warehouse", target.warehouse);
-        catalogConfig.put("hadoopConfig", hadoopConfig);
-        try {
-          if (!IcebergCatalogManager.tableExists(catalogConfig, target.name)) {
-            LOGGER.info("{}: not materialized, nothing to clean", target.name);
-            continue;
-          }
-          Table table = IcebergCatalogManager.loadTable(catalogConfig, target.name);
-          requireUnderWarehouse(target.name, table.location(), target.warehouse);
-          LOGGER.info("{}", cleanTable(target.name, table, storage, minAgeDays, delete,
-              System.currentTimeMillis()));
-        } catch (Exception e) {
-          failed++;
-          LOGGER.error("{}: orphan cleanup failed", target.name, e);
+      targets.addAll(IcebergIdleMaintenance.targetsOf(root, resource));
+    }
+    final RunSummary summary = new RunSummary();
+    for (IcebergIdleMaintenance.Target target : targets) {
+      summary.pending.add(target.name);
+    }
+    // A wall-clock cap (timeout, SIGTERM) must not hide the tables it cut off.
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      if (!summary.pending.isEmpty()) {
+        System.err.println("orphan cleanup interrupted\n" + summary.render());
+      }
+    }));
+    for (IcebergIdleMaintenance.Target target : targets) {
+      Map<String, Object> catalogConfig = new HashMap<>();
+      catalogConfig.put("catalog", "hadoop");
+      catalogConfig.put("warehouse", target.warehouse);
+      catalogConfig.put("hadoopConfig", hadoopConfig);
+      try {
+        if (!IcebergCatalogManager.tableExists(catalogConfig, target.name)) {
+          LOGGER.info("{}: not materialized, nothing to clean", target.name);
+          summary.completed(target.name);
+          continue;
         }
+        Table table = IcebergCatalogManager.loadTable(catalogConfig, target.name);
+        requireUnderWarehouse(target.name, table.location(), target.warehouse);
+        LOGGER.info("{}", cleanTable(target.name, table, storage, minAgeDays, delete,
+            System.currentTimeMillis()));
+        summary.completed(target.name);
+      } catch (Exception e) {
+        summary.failed(target.name, e);
+        LOGGER.error("{}: orphan cleanup failed", target.name, e);
       }
     }
+    LOGGER.info("orphan cleanup finished\n{}", summary.render());
+    int failed = summary.failedCount();
     System.exit(failed == 0 ? 0 : 1);
   }
 }

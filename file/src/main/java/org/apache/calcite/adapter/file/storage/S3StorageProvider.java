@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.exception.ApiCallAttemptTimeoutException;
+import software.amazon.awssdk.core.exception.ApiCallTimeoutException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
@@ -92,7 +94,13 @@ public class S3StorageProvider implements StorageProvider {
           .apiCallTimeout(Duration.ofSeconds(90))
           .build();
 
+  /** Attempts per LIST page; a timed-out page is requested again from the same continuation token. */
+  private static final int LIST_PAGE_ATTEMPTS = 5;
+
   private final S3Client s3Client;
+
+  /** Base of the exponential wait between attempts at a timed-out LIST page. */
+  long listRetryBackoffMillis = 2000L;
 
   // Persistent cache for restart-survivable caching
   private final PersistentStorageCache persistentCache;
@@ -357,7 +365,7 @@ public class S3StorageProvider implements StorageProvider {
         if (continuationToken != null) {
           requestBuilder.continuationToken(continuationToken);
         }
-        result = s3Client.listObjectsV2(requestBuilder.build());
+        result = listPageWithRetry(requestBuilder.build(), fullPath, page + 1);
         page++;
 
         for (S3Object summary : result.contents()) {
@@ -401,6 +409,33 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     return entries;
+  }
+
+  /**
+   * Requests one LIST page, requesting it again after a call or attempt timeout. A timeout says the
+   * store was slow, not that the page is empty, so it is retried with exponential backoff and, once
+   * the attempts are spent, thrown to the caller; any other failure is thrown at once.
+   */
+  private ListObjectsV2Response listPageWithRetry(ListObjectsV2Request request, String fullPath,
+      int page) {
+    for (int attempt = 1;; attempt++) {
+      try {
+        return s3Client.listObjectsV2(request);
+      } catch (ApiCallTimeoutException | ApiCallAttemptTimeoutException e) {
+        if (attempt >= LIST_PAGE_ATTEMPTS) {
+          throw e;
+        }
+        long wait = listRetryBackoffMillis << (attempt - 1);
+        LOGGER.warn("S3 LIST {} page {} timed out (attempt {}/{}); retrying in {} ms",
+            fullPath, page, attempt, LIST_PAGE_ATTEMPTS, wait);
+        try {
+          Thread.sleep(wait);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw e;
+        }
+      }
+    }
   }
 
   @Override public FileMetadata getMetadata(String path) throws IOException {
