@@ -255,6 +255,27 @@ public final class GovDataUtils {
   }
 
   /**
+   * A top-level string setting of a schema resource (such as {@code feedDir}), unresolved, or null
+   * when the resource does not declare it. For hooks that run before the resource's top-level
+   * settings are merged into the operand.
+   */
+  public static String loadSchemaSetting(Class<?> clazz, String schemaResourceName, String key) {
+    ObjectMapper mapper = getMapperForSchema(schemaResourceName);
+    try (InputStream is = clazz.getResourceAsStream(schemaResourceName)) {
+      if (is == null) {
+        throw new IllegalStateException("schema resource not found: " + schemaResourceName);
+      }
+      @SuppressWarnings("unchecked")
+      Map<String, Object> schema = mapper.readValue(is, Map.class);
+      Object v = schema.get(key);
+      return v == null ? null : String.valueOf(v);
+    } catch (IOException e) {
+      throw new IllegalStateException(
+          "could not read " + key + " from schema resource " + schemaResourceName, e);
+    }
+  }
+
+  /**
    * Load table comments from schema resource file.
    *
    * @param clazz Class to use for resource loading

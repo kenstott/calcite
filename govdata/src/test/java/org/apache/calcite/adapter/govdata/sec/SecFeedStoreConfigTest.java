@@ -57,4 +57,10 @@ class SecFeedStoreConfigTest {
     SecFeedStore.install("");
     assertNull(SecFeedStore.bytes(URL));
   }
+
+  @Test void theSchemaYamlNamesTheOnDiskFeedAsTheDefault() {
+    assertEquals("${SEC_FEED_DIR:/mnt/wsltmp/govdata/edgar-feed}",
+        org.apache.calcite.adapter.govdata.GovDataUtils.loadSchemaSetting(
+            SecSchemaFactory.class, "/sec/sec-schema.yaml", "feedDir"));
+  }
 }
