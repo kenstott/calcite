@@ -422,7 +422,7 @@ public class SecDataFetcher {
     URI uri = URI.create(SEC_TICKERS_URL);
     HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
     conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-XBRL/1.0 (admin@example.com)");
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
@@ -728,7 +728,7 @@ public class SecDataFetcher {
     URI uri = URI.create(SEC_TICKERS_URL);
     HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
     conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-XBRL/1.0 (admin@example.com)");
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
@@ -3113,9 +3113,10 @@ public class SecDataFetcher {
     // Check cache validity by comparing content size (submissions.json is append-only)
     if (cacheFile.exists()) {
       try {
+        EdgarRateLimiter.acquire();
         HttpURLConnection headConn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
         headConn.setRequestMethod("HEAD");
-        headConn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+        headConn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
         headConn.setConnectTimeout(8000);
         headConn.setReadTimeout(10000);
         NetworkOutageWait.connect(headConn);
@@ -3137,8 +3138,9 @@ public class SecDataFetcher {
       }
     }
 
+    EdgarRateLimiter.acquire();
     HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
-    conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Connection", "close");
     conn.setConnectTimeout(8000);
     conn.setReadTimeout(10000);
@@ -3313,8 +3315,9 @@ public class SecDataFetcher {
   /** Fetches and parses a submissions JSON document, or null when EDGAR does not return one. */
   private static JsonNode readSubmissionsJson(String url) {
     try {
+      EdgarRateLimiter.acquire();
       HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
-      conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
+      conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
       conn.setConnectTimeout(8000);
       conn.setReadTimeout(10000);
       NetworkOutageWait.connect(conn);

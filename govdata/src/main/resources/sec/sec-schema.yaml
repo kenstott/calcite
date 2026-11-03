@@ -40,6 +40,9 @@ alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
 # no margin for slot-claim-to-send jitter across concurrent worker JVMs, which tripped SEC's
 # escalating IP block (a burst → minutes of blanket 429s). Matches the file DocumentSource default.
 edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:125}"
+# SEC's fair-access policy requires every request to declare a real contact in the User-Agent;
+# a placeholder identity is what its CDN is entitled to refuse. Used by the direct sec.gov fetchers.
+edgarUserAgent: "${EDGAR_USER_AGENT:govdata-etl kennethstott@gmail.com}"
 cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 # Local directory of SEC Form 13F data set files (infotable_*.parquet, made by
 # govdata/scripts/fetch-13f-bulk.sh). A 13F filing found there needs only its cover document
