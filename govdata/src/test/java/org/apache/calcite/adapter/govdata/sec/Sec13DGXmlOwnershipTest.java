@@ -74,4 +74,13 @@ public class Sec13DGXmlOwnershipTest {
     assertEquals("IA", row.get("type_of_reporting_person"));
     assertNull(row.get("source_of_funds"));
   }
+
+  @Test void cusipIsReadWhenTheElementIsNamedIssuerCusip() throws Exception {
+    Map<String, Object> row = XbrlToParquetConverter.extract13DGOwnershipFromXml(
+        load("sc13g-issuercusip-primary_doc.xml"), "0001551950", "SCHEDULE 13G", "2025-07-07",
+        "0000092230-25-000082", 2025);
+    assertEquals("19761L805", row.get("cusip"));
+    assertEquals("Columbia ETF Trust I", row.get("subject_company"));
+    assertEquals(0.1, (Double) row.get("percent_of_class"), 0.0);
+  }
 }

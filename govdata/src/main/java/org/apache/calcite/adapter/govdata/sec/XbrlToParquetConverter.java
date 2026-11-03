@@ -8112,7 +8112,13 @@ public class XbrlToParquetConverter implements FileConverter {
     data.put("filer_cik", paddedCik(filerCik));
     data.put("date_of_event", dateOfEvent);
     data.put("title_of_class", textOf(doc.getDocumentElement(), "securitiesClassTitle"));
-    data.put("cusip", textOf(doc.getDocumentElement(), "issuerCusipNumber"));
+    // The element is issuerCusipNumber in some filings and issuerCusip in others (the lookup
+    // ignores case, so issuerCUSIP is covered).
+    String cusip = textOf(doc.getDocumentElement(), "issuerCusipNumber");
+    if (cusip == null) {
+      cusip = textOf(doc.getDocumentElement(), "issuerCusip");
+    }
+    data.put("cusip", cusip);
     data.put("percent_of_class", xmlNumber(percent));
     data.put("shares_beneficially_owned", xmlNumber(aggregate));
     data.put("sole_voting_power", xmlNumber(textOf(person, "soleVotingPower")));
