@@ -234,16 +234,16 @@ public enum FormType {
     if (normalized.equals("13F-HR/A")) {
       return FORM_13F_HR_A;
     }
-    if (normalized.equals("SC 13D")) {
+    if (normalized.equals("SC 13D") || normalized.equals("SCHEDULE 13D")) {
       return FORM_SC_13D;
     }
-    if (normalized.equals("SC 13D/A")) {
+    if (normalized.equals("SC 13D/A") || normalized.equals("SCHEDULE 13D/A")) {
       return FORM_SC_13D_A;
     }
-    if (normalized.equals("SC 13G")) {
+    if (normalized.equals("SC 13G") || normalized.equals("SCHEDULE 13G")) {
       return FORM_SC_13G;
     }
-    if (normalized.equals("SC 13G/A")) {
+    if (normalized.equals("SC 13G/A") || normalized.equals("SCHEDULE 13G/A")) {
       return FORM_SC_13G_A;
     }
     return FORM_OTHER;
