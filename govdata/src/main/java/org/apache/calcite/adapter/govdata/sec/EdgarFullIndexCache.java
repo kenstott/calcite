@@ -545,13 +545,16 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
       }
 
       String companyName = line.substring(0, formTypeStart).trim();
-      String formType = normalizeFormType(line.substring(formTypeStart, cikStart).trim());
       // The form-type column is only 12 chars wide; EDGAR's own file truncates anything longer
       // (e.g. "SCHEDULE 13D/A" at 14 chars) and lets the overflow spill into the CIK column that
-      // follows it, corrupting it to something like "/A   2024448" instead of "2024448". Strip
-      // everything but digits rather than trusting a plain trim() — a no-op for well-formed
-      // fields, and it recovers the real CIK from an overflowed one.
-      String cikField = line.substring(cikStart, dateFiledStart).trim().replaceAll("[^0-9]", "");
+      // follows it ("/A   2024448" instead of "2024448"). The leading non-digit run of the CIK
+      // field is the tail of the form type and is restored to it, so an amendment keeps its "/A";
+      // the CIK is then the digits that remain.
+      String rawCikField = line.substring(cikStart, dateFiledStart).trim();
+      String formOverflow = rawCikField.replaceFirst("[0-9].*$", "").trim();
+      String formType = normalizeFormType(
+          line.substring(formTypeStart, cikStart).trim() + formOverflow);
+      String cikField = rawCikField.replaceAll("[^0-9]", "");
       String filingDate = line.substring(dateFiledStart, fileNameStart).trim();
       String filename = line.substring(fileNameStart).trim();
 
