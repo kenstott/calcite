@@ -7875,21 +7875,11 @@ public class XbrlToParquetConverter implements FileConverter {
    *
    * @return two-element array, {@code [subjectCik, filerCik]}, either element possibly null
    */
-  private String[] extract13DGPartyCiks(String cik, String accession) {
+  private String[] extract13DGPartyCiks(String header, String accession) {
     String[] parties = new String[] {null, null};
-    if (cik == null || accession == null || accession.isEmpty()) {
-      LOGGER.warn("13D/G header lookup skipped: cik={} accession={}", cik, accession);
+    if (header == null) {
       return parties;
     }
-    String url = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s.hdr.sgml",
-        cik.replaceFirst("^0+", ""), accession.replace("-", ""), accession);
-    String header = downloadFile(url);
-    if (header == null || header.isEmpty()) {
-      LOGGER.warn("13D/G submission header unavailable for accession={} ({}); subject_cik and "
-          + "filer_cik will be null for this filing", accession, url);
-      return parties;
-    }
-
     parties = parseHeaderPartyCiks(header);
 
     if (parties[0] == null || parties[1] == null) {
@@ -7899,6 +7889,46 @@ public class XbrlToParquetConverter implements FileConverter {
           accession, parties[0], parties[1]);
     }
     return parties;
+  }
+
+  /**
+   * Fetches the {@code .hdr.sgml} submission header of a 13D/G filing.
+   *
+   * @return the header text, or null (after a WARN) when it cannot be read
+   */
+  private String fetch13DGHeader(String cik, String accession) {
+    if (cik == null || accession == null || accession.isEmpty()) {
+      LOGGER.warn("13D/G header lookup skipped: cik={} accession={}", cik, accession);
+      return null;
+    }
+    String url = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s.hdr.sgml",
+        cik.replaceFirst("^0+", ""), accession.replace("-", ""), accession);
+    String header = downloadFile(url);
+    if (header == null || header.isEmpty()) {
+      LOGGER.warn("13D/G submission header unavailable for accession={} ({}); subject_cik and "
+          + "filer_cik will be null for this filing", accession, url);
+      return null;
+    }
+    return header;
+  }
+
+  private static final Pattern HEADER_SUBMISSION_TYPE =
+      Pattern.compile("(?m)^<TYPE>\\s*(\\S[^\\r\\n]*)");
+
+  /**
+   * True when the submission is a Schedule TO tender-offer filing that EDGAR also indexes as a
+   * Schedule 13D/G (a combined TO/13D). Its submission {@code <TYPE>} is {@code SC TO-T},
+   * {@code SC TO-I}, {@code SC TO-C} or an amendment of one, while its party blocks carry the
+   * {@code SC 13D} form types. The document is a tender-offer narrative with no 13D cover page.
+   *
+   * <p>Package-private so it can be tested against real header text without a network call.
+   */
+  static boolean isCombinedTenderOffer(String header) {
+    if (header == null) {
+      return false;
+    }
+    Matcher m = HEADER_SUBMISSION_TYPE.matcher(header);
+    return m.find() && m.group(1).trim().toUpperCase().startsWith("SC TO");
   }
 
   /**
@@ -7965,7 +7995,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // CIK. The cover-page regex above is kept for subject_company because the header's
     // COMPANY CONFORMED NAME and the cover page's "Name of Issuer" are not always the same
     // string, and downstream text matching already depends on the cover-page form.
-    String[] partyCiks = extract13DGPartyCiks(cik, accession);
+    String header = fetch13DGHeader(cik, accession);
+    String[] partyCiks = extract13DGPartyCiks(header, accession);
+    boolean combinedTenderOffer = isCombinedTenderOffer(header);
+    if (combinedTenderOffer) {
+      LOGGER.warn("Accession {} is a combined Schedule TO/13D; the cover-page figures are not "
+          + "in the document, so filer_name, percent, share counts and voting power are null",
+          accession);
+    }
     String subjectCik = partyCiks[0];
     String filerCik = partyCiks[1];
 
@@ -8019,6 +8056,25 @@ public class XbrlToParquetConverter implements FileConverter {
 
     // Extract purpose of transaction (Item 4)
     String purpose = extract13DGPurposeText(bodyText);
+
+    if (combinedTenderOffer) {
+      // The cover-page patterns above match item numbers and tender-offer narrative in a
+      // Schedule TO document, so none of what they read is a 13D figure.
+      subjectCompany = null;
+      titleOfClass = null;
+      cusip = null;
+      dateOfEvent = null;
+      typeOfReportingPerson = null;
+      sourceOfFunds = null;
+      percentOfClass = null;
+      sharesBeneficiallyOwned = null;
+      soleVoting = null;
+      sharedVoting = null;
+      soleDispositive = null;
+      sharedDispositive = null;
+      filerName = null;
+      purpose = null;
+    }
 
     Map<String, Object> data = new HashMap<>();
     data.put("cik", cik);
