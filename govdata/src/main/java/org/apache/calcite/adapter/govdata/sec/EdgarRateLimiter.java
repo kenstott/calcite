@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
 import org.apache.calcite.adapter.file.etl.ModelOperand;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 
 /**
  * EDGAR-specific paging over the generic {@link CrossProcessRateLimiter}.
@@ -182,6 +184,15 @@ public final class EdgarRateLimiter {
   /** The User-Agent (with a real contact) declared on direct sec.gov requests, from the model. */
   public static String userAgent() {
     String ua = ModelOperand.getString("sec.edgarUserAgent");
+    if (ua == null) {
+      // A model that does not name one (the hand-built accession reprocess model) gets the schema
+      // YAML's own value, the single place it is declared.
+      ua = GovDataUtils.loadSchemaSetting(SecSchemaFactory.class, "/sec/sec-schema.yaml",
+          "edgarUserAgent");
+      if (ua != null && ua.contains("${")) {
+        ua = VariableResolver.resolveEnvVars(ua);
+      }
+    }
     if (ua == null || ua.isEmpty()) {
       throw new IllegalStateException(
           "sec.edgarUserAgent is not set in the sec schema operand; SEC requires a contact");
