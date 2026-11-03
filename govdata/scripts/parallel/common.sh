@@ -477,6 +477,28 @@ live_sec_workers() {
   printf '%s' "$_live"
 }
 
+# wait_for_sec_workers <pid_dir> <timeout_seconds> <poll_seconds>
+# Waits for every live worker-sec* to exit, logging who is still alive each poll. Never signals a worker.
+# Returns 0 when none is live; on timeout prints the workers still alive (ids and pids) to stderr, returns 1.
+wait_for_sec_workers() {
+  local _pid_dir="$1" _timeout="$2" _poll="$3" _deadline _live _id _detail
+  _deadline=$(( $(date +%s) + _timeout ))
+  while :; do
+    _live=$(live_sec_workers "$_pid_dir")
+    [ -z "$_live" ] && return 0
+    _detail=""
+    for _id in $_live; do
+      _detail="$_detail $_id(pid $(head -1 "$_pid_dir/${_id}.pid" 2>/dev/null | tr -d '[:space:]'))"
+    done
+    if [ "$(date +%s)" -ge "$_deadline" ]; then
+      echo "wait_for_sec_workers: timed out after ${_timeout}s; still alive:${_detail}" >&2
+      return 1
+    fi
+    log_info "waiting for live SEC worker(s):${_detail}"
+    sleep "$_poll"
+  done
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
 # Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
 # single read of version-hint.text, then metadata.json + manifest-list + every manifest +
