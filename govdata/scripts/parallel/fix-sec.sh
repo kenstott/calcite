@@ -70,6 +70,12 @@
 #   fix-sec.sh --reoffer-attempted --confirm    # accepted for compatibility; attempted pairs that are absent are always offered
 #   fix-sec.sh --threads 12 --heap 16 --confirm # push harder on an otherwise idle box
 #   fix-sec.sh --threads 2 --heap 3 --confirm   # back off to pool-sized resources
+#   fix-sec.sh --wait-for-workers[=MINUTES] --confirm  # hand over from a running pool (default 120 min)
+#
+#   --wait-for-workers takes the schema write lock FIRST (the pool then starts no new sec workers), then
+#   waits for the live sec workers to exit, logging each minute who is left. It never signals a worker.
+#   On timeout it releases the lock and exits 1 naming the workers still alive. Without the flag a live
+#   worker is refused at once.
 #
 set -uo pipefail
 
@@ -147,6 +153,8 @@ MAX_ACCESSIONS=0
 # the run above sat at 2.48G RSS against -Xmx3g with only two of them.
 THREADS=8
 HEAP_GB=12
+WAIT_MINUTES=0
+WAIT_POLL_SECONDS=60
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -159,6 +167,8 @@ while [ $# -gt 0 ]; do
     --max-accessions) shift; MAX_ACCESSIONS="${1:-}" ;;
     --threads)        shift; THREADS="${1:-}" ;;
     --heap)           shift; HEAP_GB="${1:-}" ;;
+    --wait-for-workers) WAIT_MINUTES=120 ;;
+    --wait-for-workers=*) WAIT_MINUTES="${1#*=}" ;;
     -h|--help)        sed -n '18,63p' "$0" >&2; exit 0 ;;
     *) echo "fix-sec: unknown argument '$1'" >&2; exit 2 ;;
   esac
@@ -169,6 +179,8 @@ done
   || { echo "fix-sec: --batch-size must be a positive integer" >&2; exit 2; }
 [[ "$MAX_ACCESSIONS" =~ ^[0-9]+$ ]] \
   || { echo "fix-sec: --max-accessions must be an integer" >&2; exit 2; }
+[[ "$WAIT_MINUTES" =~ ^[0-9]+$ ]] \
+  || { echo "fix-sec: --wait-for-workers=MINUTES must be a non-negative integer" >&2; exit 2; }
 [ -z "$ONLY_YEAR" ] || [[ "$ONLY_YEAR" =~ ^[0-9]{4}$ ]] \
   || { echo "fix-sec: --year must be a 4-digit year" >&2; exit 2; }
 
@@ -446,12 +458,14 @@ fi
 if target_is_dq_bucket; then
   log_info "fix-sec: target ${GOVDATA_PARQUET_DIR} is a DQ bucket; skipping the live-writer guard (production writers do not touch it)"
 else
-  _live=$(live_sec_workers "$SCRIPT_DIR/runs/pids")
-  if [ -n "$_live" ]; then
-    echo "fix-sec: REFUSING to reprocess — live SEC worker(s):${_live}" >&2
-    echo "  These write the same sec/year=*/ partitions. Stop the pool" >&2
-    echo "  (stop-pool.sh) and re-run, or wait for them to finish." >&2
-    exit 1
+  if [ "$WAIT_MINUTES" -eq 0 ]; then
+    _live=$(live_sec_workers "$SCRIPT_DIR/runs/pids")
+    if [ -n "$_live" ]; then
+      echo "fix-sec: REFUSING to reprocess — live SEC worker(s):${_live}" >&2
+      echo "  These write the same sec/year=*/ partitions. Stop the pool" >&2
+      echo "  (stop-pool.sh) and re-run, wait for them to finish, or pass --wait-for-workers." >&2
+      exit 1
+    fi
   fi
   # Hold the write lock for the whole pass: the check above sees only workers live NOW, and the
   # scheduler's pool may start sec workers at any point in a multi-hour pass (2026-11-03, #1064).
@@ -461,6 +475,15 @@ else
   # shellcheck disable=SC2064
   trap "release_schema_lock '$(schema_lock_dir "$SCRIPT_DIR/runs/pids")' $$ $_SEC_LOCKS" EXIT
   export GOVDATA_SCHEMA_LOCK_OWNER=$$
+  if [ "$WAIT_MINUTES" -gt 0 ]; then
+    # Lock first: the pool starts no new sec workers, so the set of live ones can only shrink.
+    log_info "fix-sec: holding the SEC write lock; waiting up to ${WAIT_MINUTES} min for live SEC workers to exit"
+    if ! wait_for_sec_workers "$SCRIPT_DIR/runs/pids" $(( WAIT_MINUTES * 60 )) "$WAIT_POLL_SECONDS"; then
+      echo "fix-sec: REFUSING to reprocess — live SEC worker(s) did not exit within ${WAIT_MINUTES} min; lock released" >&2
+      exit 1
+    fi
+    log_info "fix-sec: no live SEC worker remains; proceeding"
+  fi
 fi
 
 # -------------------------------------------------------------------------------------
