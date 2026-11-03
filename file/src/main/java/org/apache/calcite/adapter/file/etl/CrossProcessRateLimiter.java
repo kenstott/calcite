@@ -62,6 +62,65 @@ public final class CrossProcessRateLimiter {
   private CrossProcessRateLimiter() {
   }
 
+  /** Default host-wide cool-down after a 403: Akamai blocks have lasted tens of minutes. */
+  public static final long DEFAULT_COOLDOWN_MS = 30L * 60L * 1000L;
+
+  private static Path blockFile(String key) {
+    String safe = key == null ? "default" : key.replaceAll("[^a-zA-Z0-9._-]", "_");
+    return Paths.get(System.getProperty("java.io.tmpdir"), "calcite-ratelimit-" + safe + ".blocked");
+  }
+
+  /**
+   * Epoch millis until which every process on this host must not call {@code key}'s host, or 0
+   * when no cool-down is recorded.
+   *
+   * @param key budget identity, as for {@link #acquire}
+   */
+  public static long blockedUntil(String key) {
+    Path file = blockFile(key);
+    if (!Files.exists(file)) {
+      return 0L;
+    }
+    try {
+      return Long.parseLong(new String(Files.readAllBytes(file),
+          java.nio.charset.StandardCharsets.UTF_8).trim());
+    } catch (IOException | NumberFormatException e) {
+      throw new IllegalStateException("Cannot read block marker " + file, e);
+    }
+  }
+
+  /**
+   * Throws when a host-wide cool-down is in force for {@code key}.
+   *
+   * @param key budget identity, as for {@link #acquire}
+   */
+  public static void checkNotBlocked(String key) {
+    long until = blockedUntil(key);
+    if (until > System.currentTimeMillis()) {
+      throw new IllegalStateException(key + " refused this host with HTTP 403/429; no requests "
+          + "until " + java.time.Instant.ofEpochMilli(until));
+    }
+  }
+
+  /**
+   * Starts a host-wide cool-down for {@code key}: every process on the host that checks
+   * {@link #checkNotBlocked} fails until it ends.
+   *
+   * @param key budget identity, as for {@link #acquire}
+   * @param cooldownMs cool-down length from now
+   * @return epoch millis at which the cool-down ends
+   */
+  public static long block(String key, long cooldownMs) {
+    long until = System.currentTimeMillis() + cooldownMs;
+    try {
+      Files.write(blockFile(key),
+          Long.toString(until).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      throw new IllegalStateException("Cannot write block marker " + blockFile(key), e);
+    }
+    return until;
+  }
+
   private static Path stateFile(String key) {
     String safe = key == null ? "default" : key.replaceAll("[^a-zA-Z0-9._-]", "_");
     // Machine-wide coordination state by ruling (REQ-1992 amendment): every process on the host
