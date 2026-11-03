@@ -79,6 +79,25 @@ class EdgarFeedUnpackerTest {
     assertTrue(index.contains("\"name\":\"acme-8k.htm\"") && index.contains("logo.jpg"), index);
   }
 
+  @Test void aStructuredXmlScheduleThirteenDgPrimaryDocumentIsUnpacked(@TempDir File dir)
+      throws Exception {
+    ByteArrayOutputStream raw = new ByteArrayOutputStream();
+    try (TarArchiveOutputStream tar = new TarArchiveOutputStream(new GZIPOutputStream(raw))) {
+      String sub = NcSubmissionTest.EIGHT_K
+          .replace("<TYPE>8-K\n<FILING-DATE>", "<TYPE>SCHEDULE 13G\n<FILING-DATE>")
+          .replace("</SUBMISSION>",
+              "<DOCUMENT>\n<TYPE>SCHEDULE 13G\n<SEQUENCE>1\n<FILENAME>primary_doc.xml\n"
+                  + "<DESCRIPTION>p\n<TEXT>\n<XML>\n<edgarSubmission/>\n</XML>\n</TEXT>\n"
+                  + "</DOCUMENT>\n</SUBMISSION>");
+      add(tar, "./0001234567-23-000009.nc", sub);
+    }
+    EdgarFeedUnpacker.Stats stats =
+        EdgarFeedUnpacker.unpack(new ByteArrayInputStream(raw.toByteArray()), dir);
+
+    assertEquals(1, stats.processed);
+    assertTrue(new File(dir, "000123456723000009/primary_doc.xml").isFile());
+  }
+
   @Test void renderingFilesNothingReadsAreListedButNotWritten(@TempDir File dir) throws Exception {
     ByteArrayOutputStream raw = new ByteArrayOutputStream();
     try (TarArchiveOutputStream tar = new TarArchiveOutputStream(new GZIPOutputStream(raw))) {
