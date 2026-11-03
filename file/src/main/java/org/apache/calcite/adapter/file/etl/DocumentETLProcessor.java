@@ -517,11 +517,12 @@ public class DocumentETLProcessor {
       // run, for every form type, with no special-cased retry list to maintain. The error is
       // still captured into the returned DocumentETLResult's errors list and failedCount, a
       // proper error-as-value result the caller can inspect.
-      LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession, e.getMessage());
+      LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession,
+          describeCauseChain(e));
       return new DocumentETLResult(0, 0, 1,
           Collections.<String>emptyList(),
           Collections.singletonList(
-              "submissions.json fetch failed for " + accession + ": " + e.getMessage()),
+              "submissions.json fetch failed for " + accession + ": " + describeCauseChain(e)),
           System.currentTimeMillis() - startTime);
     }
 
@@ -561,8 +562,9 @@ public class DocumentETLProcessor {
     } catch (IOException e) {
       converted = Collections.<String>emptyList();
       failed = 1;
-      errors.add("Failed to process " + accession + ": " + e.getMessage());
-      LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, e.getMessage());
+      String cause = describeCauseChain(e);
+      errors.add("Failed to process " + accession + ": " + cause);
+      LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, cause);
     }
 
     // Zero-output is a valid terminal state (mark processed), but a failure is not — retries
@@ -858,6 +860,22 @@ public class DocumentETLProcessor {
       }
     }
     throw lastException;
+  }
+
+  /**
+   * Renders a throwable and its causes as {@code Class: message <- Class: message ...}, so a
+   * failure log names the root cause without a stack trace per accession.
+   */
+  static String describeCauseChain(Throwable error) {
+    StringBuilder sb = new StringBuilder();
+    Set<Throwable> seen = new HashSet<Throwable>();
+    for (Throwable t = error; t != null && seen.add(t); t = t.getCause()) {
+      if (sb.length() > 0) {
+        sb.append(" <- ");
+      }
+      sb.append(t.getClass().getName()).append(": ").append(t.getMessage());
+    }
+    return sb.toString();
   }
 
   /**
