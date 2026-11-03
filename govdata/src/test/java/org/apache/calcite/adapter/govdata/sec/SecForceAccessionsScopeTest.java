@@ -59,4 +59,19 @@ class SecForceAccessionsScopeTest {
     assertTrue(SecSchemaFactory.forceAccessionsFor(
         Collections.<ColumnDef>emptyList(), FORCED).isEmpty());
   }
+
+  @Test void operandAccessionWithoutClaimedReplacementIsNotDeleted() {
+    Set<String> claimed = new HashSet<String>(Arrays.asList("0000320193-23-000106"));
+    assertEquals(claimed, SecSchemaFactory.forcedWithClaimedReplacement(FORCED, claimed, false));
+  }
+
+  @Test void claimedAccessionNotNamedByOperandIsNotDeletedWithoutTableForce() {
+    Set<String> claimed = new HashSet<String>(Arrays.asList("0000111111-23-000001"));
+    assertTrue(SecSchemaFactory.forcedWithClaimedReplacement(FORCED, claimed, false).isEmpty());
+  }
+
+  @Test void tableForceDeletesEveryClaimedAccessionOnly() {
+    Set<String> claimed = new HashSet<String>(Arrays.asList("0000111111-23-000001"));
+    assertEquals(claimed, SecSchemaFactory.forcedWithClaimedReplacement(FORCED, claimed, true));
+  }
 }
