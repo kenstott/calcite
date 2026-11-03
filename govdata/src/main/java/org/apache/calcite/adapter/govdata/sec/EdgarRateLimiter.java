@@ -40,8 +40,7 @@ public final class EdgarRateLimiter {
   // edgarRateLimitMs default and the file-layer DocumentSource default so all SEC paths agree.
   private static final long DEFAULT_INTERVAL_MS = 125L;
 
-  // Akamai blocks on this host have lasted tens of minutes; probing sooner extends them.
-  private static final long DEFAULT_COOLDOWN_MS = 30L * 60L * 1000L;
+  private static final long DEFAULT_COOLDOWN_MS = CrossProcessRateLimiter.DEFAULT_COOLDOWN_MS;
 
   private static final long DEFAULT_RETRY_FLOOR_MS = 10_000L;
   private static final long DEFAULT_MAX_RETRIES = 5L;
@@ -62,37 +61,21 @@ public final class EdgarRateLimiter {
       Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
         @Override public void run() {
           org.slf4j.LoggerFactory.getLogger(EdgarRateLimiter.class).info(
-              "sec.gov requests paced by EdgarRateLimiter in this JVM: {}", ACQUIRED.get());
+              "sec.gov requests paced by EdgarRateLimiter in this JVM: {}; live document fetches "
+                  + "through DocumentSource: {}", ACQUIRED.get(),
+              org.apache.calcite.adapter.file.etl.DocumentSource.liveCalls());
         }
       }, "edgar-request-count"));
     }
-    long blockedUntil = blockedUntil();
-    if (blockedUntil > System.currentTimeMillis()) {
-      throw new IllegalStateException("sec.gov refused this host with HTTP 403/429; no requests "
-          + "until " + java.time.Instant.ofEpochMilli(blockedUntil));
-    }
+    CrossProcessRateLimiter.checkNotBlocked(SEC_KEY);
     ACQUIRED.incrementAndGet();
     long interval = ModelOperand.getLong("sec.edgarRateLimitMs", DEFAULT_INTERVAL_MS);
     CrossProcessRateLimiter.acquire(SEC_KEY, interval > 0 ? interval : DEFAULT_INTERVAL_MS);
   }
 
-  private static java.nio.file.Path blockFile() {
-    return java.nio.file.Paths.get(System.getProperty("java.io.tmpdir"),
-        "calcite-ratelimit-" + SEC_KEY + ".blocked");
-  }
-
   /** Epoch millis until which every process on this host must not call sec.gov, or 0. */
   static long blockedUntil() {
-    java.nio.file.Path file = blockFile();
-    if (!java.nio.file.Files.exists(file)) {
-      return 0L;
-    }
-    try {
-      return Long.parseLong(new String(java.nio.file.Files.readAllBytes(file),
-          java.nio.charset.StandardCharsets.UTF_8).trim());
-    } catch (java.io.IOException | NumberFormatException e) {
-      throw new IllegalStateException("Cannot read sec.gov block marker " + file, e);
-    }
+    return CrossProcessRateLimiter.blockedUntil(SEC_KEY);
   }
 
   /**
@@ -109,13 +92,7 @@ public final class EdgarRateLimiter {
       return;
     }
     long cooldown = ModelOperand.getLong("sec.edgarBlockCooldownMs", DEFAULT_COOLDOWN_MS);
-    long until = System.currentTimeMillis() + cooldown;
-    try {
-      java.nio.file.Files.write(blockFile(),
-          Long.toString(until).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-    } catch (java.io.IOException e) {
-      throw new IllegalStateException("Cannot write sec.gov block marker " + blockFile(), e);
-    }
+    long until = CrossProcessRateLimiter.block(SEC_KEY, cooldown);
     org.slf4j.LoggerFactory.getLogger(EdgarRateLimiter.class).error(
         "HTTP {} from {}: no sec.gov requests from this host until {}", status, url,
         java.time.Instant.ofEpochMilli(until));

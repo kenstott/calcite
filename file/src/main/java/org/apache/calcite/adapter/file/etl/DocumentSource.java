@@ -75,6 +75,9 @@ public class DocumentSource {
 
   // Retry configuration
   private static final int MAX_RETRIES = 3;
+  private static final long RATE_LIMIT_RETRY_FLOOR_MS = 10_000L;
+  private static final java.util.concurrent.atomic.AtomicLong LIVE_CALLS =
+      new java.util.concurrent.atomic.AtomicLong();
   private static final long INITIAL_RETRY_DELAY_MS = 1000;
 
   /**
@@ -249,9 +252,14 @@ public class DocumentSource {
         NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
 
+        if (responseCode == 403) {
+          refusalDelay(responseCode, conn, urlStr);
+          throw new IOException("HTTP 403 from " + urlStr + "; host-wide cool-down started");
+        }
         if (isRetryableHttpStatus(responseCode)) {
           if (attempt < MAX_RETRIES - 1) {
-            long delay = retryDelay(attempt);
+            long delay = responseCode == 429
+                ? refusalDelay(responseCode, conn, urlStr) : retryDelay(attempt);
             LOGGER.warn("HTTP {} from {} - retrying in {}ms (attempt {}/{})",
                 responseCode, urlStr, delay, attempt + 1, MAX_RETRIES);
             sleepQuietly(delay);
@@ -330,9 +338,14 @@ public class DocumentSource {
           throw new IOException("File not found: " + urlStr);
         }
 
+        if (responseCode == 403) {
+          refusalDelay(responseCode, conn, urlStr);
+          throw new IOException("HTTP 403 from " + urlStr + "; host-wide cool-down started");
+        }
         if (isRetryableHttpStatus(responseCode)) {
           if (attempt < MAX_RETRIES - 1) {
-            long delay = retryDelay(attempt);
+            long delay = responseCode == 429
+                ? refusalDelay(responseCode, conn, urlStr) : retryDelay(attempt);
             LOGGER.warn("HTTP {} downloading {} - retrying in {}ms (attempt {}/{})",
                 responseCode, urlStr, delay, attempt + 1, MAX_RETRIES);
             sleepQuietly(delay);
@@ -393,6 +406,10 @@ public class DocumentSource {
    * preventing multiple threads from exceeding EDGAR's 10 req/sec limit.
    */
   private void enforceRateLimit(String urlStr) {
+    // A host-wide 403/429 cool-down (marker shared with the SEC adapter's limiter) stops this
+    // fetch before any request: the caller fails this document by URL instead of extending a block.
+    CrossProcessRateLimiter.checkNotBlocked(rateLimitKey(urlStr));
+    LIVE_CALLS.incrementAndGet();
     // Host-wide, cross-process pacing keyed by the request's registrable domain, so
     // sibling hosts (e.g. data.sec.gov + www.sec.gov) and parallel worker JVMs on one
     // host share a single per-domain budget. A per-JVM lock cannot bound multiple
@@ -420,6 +437,36 @@ public class DocumentSource {
     } catch (RuntimeException e) {
       return "default";
     }
+  }
+
+  /** Live HTTP requests this JVM has sent through document fetches (for the run summary). */
+  public static long liveCalls() {
+    return LIVE_CALLS.get();
+  }
+
+  /**
+   * Records a 403 as a host-wide cool-down and returns the wait before retrying a 429: the
+   * server's {@code Retry-After} (seconds), never less than the floor.
+   */
+  private static long refusalDelay(int status, HttpURLConnection conn, String urlStr) {
+    if (status == 403) {
+      long until = CrossProcessRateLimiter.block(rateLimitKey(urlStr),
+          CrossProcessRateLimiter.DEFAULT_COOLDOWN_MS);
+      LOGGER.error("HTTP 403 from {}: no requests to {} from this host until {}", urlStr,
+          rateLimitKey(urlStr), java.time.Instant.ofEpochMilli(until));
+      return -1L;
+    }
+    long retryAfter = 0L;
+    String v = conn.getHeaderField("Retry-After");
+    if (v != null) {
+      try {
+        retryAfter = Long.parseLong(v.trim()) * 1000L;
+      } catch (NumberFormatException e) {
+        throw new IllegalStateException("Unsupported Retry-After '" + v + "' from " + urlStr, e);
+      }
+    }
+    return Math.max(ModelOperand.getLong("http.rateLimitRetryFloorMs", RATE_LIMIT_RETRY_FLOOR_MS),
+        retryAfter);
   }
 
   /**
