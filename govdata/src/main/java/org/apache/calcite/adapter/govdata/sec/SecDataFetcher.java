@@ -3121,6 +3121,7 @@ public class SecDataFetcher {
         headConn.setReadTimeout(10000);
         NetworkOutageWait.connect(headConn);
         int headStatus = headConn.getResponseCode();
+        EdgarRateLimiter.recordStatus(headStatus, url);
         if (headStatus == 200) {
           long remoteSize = headConn.getContentLengthLong();
           long cachedSize = cacheFile.length();
@@ -3145,7 +3146,9 @@ public class SecDataFetcher {
     conn.setConnectTimeout(8000);
     conn.setReadTimeout(10000);
     NetworkOutageWait.connect(conn);
-    if (conn.getResponseCode() == 200) {
+    int status = conn.getResponseCode();
+    EdgarRateLimiter.recordStatus(status, url);
+    if (status == 200) {
       JsonNode node = MAPPER.readTree(conn.getInputStream());
       try {
         MAPPER.writeValue(cacheFile, node);
@@ -3154,7 +3157,7 @@ public class SecDataFetcher {
       }
       return node;
     }
-    throw new java.io.IOException("HTTP " + conn.getResponseCode() + " from " + url);
+    throw new java.io.IOException("HTTP " + status + " from " + url);
   }
 
   private static Map<String, String> parseSubmissionsJson(JsonNode node) {
@@ -3321,7 +3324,9 @@ public class SecDataFetcher {
       conn.setConnectTimeout(8000);
       conn.setReadTimeout(10000);
       NetworkOutageWait.connect(conn);
-      if (conn.getResponseCode() != 200) {
+      int status = conn.getResponseCode();
+      EdgarRateLimiter.recordStatus(status, url);
+      if (status != 200) {
         return null;
       }
       return MAPPER.readTree(conn.getInputStream());
