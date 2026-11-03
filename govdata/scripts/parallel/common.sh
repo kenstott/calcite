@@ -405,6 +405,61 @@ assert_dq_target() {
   return 1
 }
 
+# ── Schema write lock ─────────────────────────────────────────────────────────
+# One owner per schema for writes, enforced where writers START. A remediation pass (fix-sec.sh,
+# force-reprocess.sh) holds <lock_dir>/<schema>.lock for its whole run; run-pool.sh (through
+# check_schema_year_conflict) and worker.sh refuse to start a worker for that schema while the holder is
+# alive. The lock names the holder's pid and a command-line pattern, so a dead holder or a recycled pid is
+# stale and is removed when found. Workers the holder itself launches inherit
+# GOVDATA_SCHEMA_LOCK_OWNER=<holder pid> and pass. Production bucket only: a -dq run shares no tables.
+schema_lock_dir() { echo "${GOVDATA_LOCK_DIR:-$1/../locks}"; }
+
+# schema_lock_holder <lock_dir> <schema> -> prints "<pid> <pattern> <since>" and returns 0 when a live holder
+# other than $GOVDATA_SCHEMA_LOCK_OWNER has the lock; returns 1 otherwise (a stale lock is removed).
+schema_lock_holder() {
+  local dir=$1 schema=$2 f="$1/$2.lock" l_pid="" l_pattern="" l_since=0
+  [ -f "$f" ] || return 1
+  # shellcheck disable=SC1090
+  source "$f" 2>/dev/null
+  if [ -z "$l_pid" ] || ! kill -0 "$l_pid" 2>/dev/null \
+     || ! tr '\0' ' ' < "/proc/$l_pid/cmdline" 2>/dev/null | grep -qF "$l_pattern"; then
+    rm -f "$f"; return 1
+  fi
+  [ "$l_pid" = "${GOVDATA_SCHEMA_LOCK_OWNER:-}" ] && return 1
+  echo "$l_pid $l_pattern $l_since"
+}
+
+# acquire_schema_lock <lock_dir> <owner_pid> <owner_cmd_pattern> <schema>...
+# All-or-nothing across the schemas. Returns 1 naming the holder on stderr.
+acquire_schema_lock() {
+  local dir=$1 owner=$2 pattern=$3 s h rc=0; shift 3
+  mkdir -p "$dir"
+  (
+    flock 9
+    for s in "$@"; do
+      if h=$(schema_lock_holder "$dir" "$s"); then
+        echo "REFUSING: schema '$s' is write-locked by a live remediation pass: pid ${h%% *}" \
+             "($(echo "$h" | cut -d' ' -f2)), held for $(( $(date +%s) - ${h##* } ))s." >&2
+        exit 1
+      fi
+    done
+    for s in "$@"; do
+      printf "l_pid=%s\nl_pattern='%s'\nl_since=%s\n" "$owner" "$pattern" "$(date +%s)" > "$dir/$s.lock"
+    done
+  ) 9>"$dir/.lock" || rc=1
+  return $rc
+}
+
+# release_schema_lock <lock_dir> <owner_pid> <schema>...   (removes only locks this pid owns)
+release_schema_lock() {
+  local dir=$1 owner=$2 s l_pid; shift 2
+  for s in "$@"; do
+    l_pid=$(sed -n 's/^l_pid=//p' "$dir/$s.lock" 2>/dev/null)
+    if [ "$l_pid" = "$owner" ]; then rm -f "$dir/$s.lock"; fi
+  done
+  return 0
+}
+
 # live_sec_workers <pid_dir>
 # Prints the ids of worker-sec* pid files whose process is alive and has not recorded an exit.
 live_sec_workers() {
@@ -1802,7 +1857,12 @@ _schemas_write_same_tables() {
 check_schema_year_conflict() {
   local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4 _new_mode=${5:-}
   [ -d "$_pid_dir" ] || return 0
-  local _pf _id _id_base _wpid _rest _other_schema _other_mode _o_start _o_end
+  local _pf _id _id_base _wpid _rest _other_schema _other_mode _o_start _o_end _lock_h
+  if ! target_is_dq_bucket && _lock_h=$(schema_lock_holder "$(schema_lock_dir "$_pid_dir")" "$_schema"); then
+    echo "REFUSING: schema '${_schema}' is write-locked by a live remediation pass (pid ${_lock_h%% *}," \
+         "$(echo "$_lock_h" | cut -d' ' -f2)) -- held for the whole pass; retry after it ends." >&2
+    return 1
+  fi
   for _pf in "$_pid_dir"/worker-*.pid; do
     [ -e "$_pf" ] || continue
     # Pure parameter expansion, no fork: this loop visits every pid file ever written (hundreds),

@@ -453,6 +453,14 @@ else
     echo "  (stop-pool.sh) and re-run, or wait for them to finish." >&2
     exit 1
   fi
+  # Hold the write lock for the whole pass: the check above sees only workers live NOW, and the
+  # scheduler's pool may start sec workers at any point in a multi-hour pass (2026-11-03, #1064).
+  _SEC_LOCKS="sec_primary sec_secondary sec_13f"
+  # shellcheck disable=SC2086
+  acquire_schema_lock "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$$" fix-sec.sh $_SEC_LOCKS || exit 1
+  # shellcheck disable=SC2064
+  trap "release_schema_lock '$(schema_lock_dir "$SCRIPT_DIR/runs/pids")' $$ $_SEC_LOCKS" EXIT
+  export GOVDATA_SCHEMA_LOCK_OWNER=$$
 fi
 
 # -------------------------------------------------------------------------------------

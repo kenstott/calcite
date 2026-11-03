@@ -87,6 +87,13 @@ case "$MODE" in
 esac
 
 WORKER_ID="worker-${SCHEMA}-${MODE}"
+
+# A remediation pass holds the schema's write lock for its whole run (schema_lock_holder, common.sh).
+# Not a failure: exit 0 so the queue entry is left for a later attempt.
+if ! target_is_dq_bucket && _lock_h=$(schema_lock_holder "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$SCHEMA"); then
+  log_info "${WORKER_ID}: NOT STARTING -- schema '${SCHEMA}' is write-locked by remediation pass pid ${_lock_h%% *} ($(echo "$_lock_h" | cut -d' ' -f2)); leaving for a later attempt"
+  exit 0
+fi
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
 # Self-contained schema+year conflict guard. check_schema_year_conflict() previously only
