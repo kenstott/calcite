@@ -61,9 +61,30 @@ command -v ionice >/dev/null && runner+=(ionice -c3)
 # PARALLEL=N runs N days at once (default 1). Days are independent (an accession belongs to one
 # day) and each has its own done marker. A failed day (e.g. HTTP 429/403) is reported and left
 # unmarked so a rerun retries it; the other days continue.
+MAX_RETRIES="${MAX_RETRIES:-20}"
+RETRY_DELAY="${RETRY_DELAY:-30}"
+# Host-wide sec.gov cool-down shared with EdgarRateLimiter: epoch millis until which no process on
+# this host may call sec.gov, in <java.io.tmpdir>/calcite-ratelimit-sec.gov.blocked.
+BLOCK_FILE="${BLOCK_DIR:-${TMPDIR:-/tmp}}/calcite-ratelimit-sec.gov.blocked"
+COOLDOWN_SECS=1800
+block_host() {
+  # Cool down for the longer of the default and a numeric Retry-After (seconds).
+  local secs="$COOLDOWN_SECS"
+  case "${3:-}" in ''|*[!0-9]*) ;; *) [ "$3" -gt "$secs" ] && secs="$3" ;; esac
+  local until=$(( ($(date +%s) + secs) * 1000 ))
+  printf '%s' "$until" > "$BLOCK_FILE"
+}
+if [ -f "$BLOCK_FILE" ]; then
+  until_ms=$(tr -d '[:space:]' < "$BLOCK_FILE")
+  if [ "$until_ms" -gt "$(( $(date +%s) * 1000 ))" ]; then
+    echo "sec.gov cool-down in effect until $(date -d "@$((until_ms / 1000))" -u +%FT%TZ) ($BLOCK_FILE); not starting" >&2
+    exit 1
+  fi
+fi
+FEED_BASE_URL="${FEED_BASE_URL:-https://www.sec.gov}"  # override only for tests against a local server
 PARALLEL="${PARALLEL:-1}"
 FEED_UA="Apache Calcite SEC Adapter apache-calcite@apache.org"
-export FEED_DIR JAR FEED_UA
+export FEED_BASE_URL FEED_DIR JAR FEED_UA MAX_RETRIES RETRY_DELAY BLOCK_FILE COOLDOWN_SECS
 export RUNNER="${runner[*]:-}"
 fetch_day() {
   local day="$1"
@@ -71,23 +92,50 @@ fetch_day() {
     echo "[edgar-feed] $day: already unpacked, skipped"
     return 0
   fi
+  if [ -f "$BLOCK_FILE" ] && [ "$(tr -d '[:space:]' < "$BLOCK_FILE")" -gt "$(( $(date +%s) * 1000 ))" ]; then
+    echo "[edgar-feed] $day: sec.gov cool-down in effect, skipped" >&2
+    return 2
+  fi
   local y="${day:0:4}" m="${day:4:2}" q
   q=$(( (10#$m - 1) / 3 + 1 ))
-  local url="https://www.sec.gov/Archives/edgar/Feed/$y/QTR$q/$day.nc.tar.gz"
+  local url="$FEED_BASE_URL/Archives/edgar/Feed/$y/QTR$q/$day.nc.tar.gz"
   # A busy day is several GB and SEC drops long connections ("Premature EOF", "Connection reset"),
   # which lost the whole day when the unpacker streamed it. Download to disk with resume instead, then
   # unpack the local file. An HTTP error (curl 22: a holiday, weekend or unpublished day) is left to
   # the unpacker, which reports "no file" and skips it.
-  local dl="$FEED_DIR/.dl" src="$url" rc=0
+  local dl="$FEED_DIR/.dl" src="$url" code=0 attempt=0
   mkdir -p "$dl"
-  $RUNNER curl -sS -f -C - --retry 20 --retry-delay 30 --retry-all-errors -A "$FEED_UA" \
-      -o "$dl/$day.nc.tar.gz" "$url" || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    src="$dl/$day.nc.tar.gz"
-  elif [ "$rc" -ne 22 ]; then
-    echo "[edgar-feed] $day: download failed (curl $rc), partial file kept for resume" >&2
-    return 1
-  fi
+  # Own retry loop (curl's --retry/--retry-all-errors would retry 403/429, which extends sec.gov's
+  # fair-access block). Transport failures and 5xx are retried; 403/429 stop at once and record the
+  # host-wide cool-down the adapter honours; 404 is an unpublished day and is skipped.
+  while :; do
+    local rc=0 hdr="$dl/$day.hdr"
+    code=$($RUNNER curl -sS -C - -A "$FEED_UA" -D "$hdr" -o "$dl/$day.nc.tar.gz" \
+        -w '%{http_code}' "$url") || rc=$?
+    if [ "$rc" -eq 0 ] && { [ "$code" = 200 ] || [ "$code" = 206 ] || [ "$code" = 416 ]; }; then
+      src="$dl/$day.nc.tar.gz"; break
+    fi
+    if [ "$rc" -eq 0 ] && [ "$code" = 404 ]; then
+      rm -f "$dl/$day.nc.tar.gz"; break
+    fi
+    if [ "$rc" -eq 0 ] && { [ "$code" = 403 ] || [ "$code" = 429 ]; }; then
+      local ra
+      ra=$(tr -d '\r' < "$hdr" | awk 'tolower($1)=="retry-after:"{print $2}' | tail -1)
+      block_host "$code" "$url" "$ra"
+      echo "[edgar-feed] $day: HTTP $code from sec.gov, stopping (no retry); cool-down recorded${ra:+, Retry-After $ra}" >&2
+      return 2
+    fi
+    if [ "$rc" -eq 0 ] && [ "${code:0:1}" != 5 ]; then
+      echo "[edgar-feed] $day: unexpected HTTP $code, not retrying" >&2
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    if [ "$attempt" -gt "$MAX_RETRIES" ]; then
+      echo "[edgar-feed] $day: download failed (curl $rc, HTTP $code), partial file kept for resume" >&2
+      return 1
+    fi
+    sleep "$RETRY_DELAY"
+  done
   if $RUNNER java -Xmx3g -cp "$JAR" org.apache.calcite.adapter.govdata.sec.EdgarFeedUnpacker \
       "$FEED_DIR" "$src"; then
     rm -f "$dl/$day.nc.tar.gz"
@@ -97,5 +145,5 @@ fetch_day() {
     return 1
   fi
 }
-export -f fetch_day
+export -f fetch_day block_host
 printf '%s\n' "${days[@]}" | xargs -P "$PARALLEL" -I{} bash -c 'fetch_day {}'
