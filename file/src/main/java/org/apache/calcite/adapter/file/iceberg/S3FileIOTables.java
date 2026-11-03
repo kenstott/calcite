@@ -186,8 +186,33 @@ public final class S3FileIOTables {
       String root = stripTrailingSlash(tablePath);
       S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
       ops.refresh();
+      requireLocationUnder(root, ops.current());
       return new BaseTable(ops, tableName(root));
     });
+  }
+
+  /**
+   * Refuses a table whose metadata records a location other than the path it was loaded from.
+   * Iceberg resolves manifests and data files from the absolute paths in its metadata, so metadata
+   * copied from another bucket would make every commit, expiry and compaction act on that other
+   * bucket's files.
+   */
+  static void requireLocationUnder(String tablePath, TableMetadata metadata) {
+    if (metadata == null) {
+      return;
+    }
+    String expected = sameStoreForm(tablePath);
+    String actual = sameStoreForm(metadata.location());
+    if (!expected.equals(actual)) {
+      throw new IllegalStateException("Iceberg table loaded from " + tablePath
+          + " records location " + metadata.location()
+          + " in its metadata; refusing to use a table whose metadata points at another store");
+    }
+  }
+
+  private static String sameStoreForm(String path) {
+    String p = stripTrailingSlash(path);
+    return p.startsWith("s3a://") ? "s3://" + p.substring(6) : p;
   }
 
   /** Bounded retries for {@link #drop}'s post-delete verification — mirrors
