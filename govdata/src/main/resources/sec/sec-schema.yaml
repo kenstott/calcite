@@ -59,9 +59,10 @@ bulk13fDir: "${SEC_BULK_13F_DIR:}"
 bulkSubmissionsZip: "${SEC_BULK_SUBMISSIONS_ZIP:}"
 # A tree of filing documents unpacked from EDGAR's daily feed (govdata/scripts/fetch-edgar-feed.sh).
 # A document request it can answer is read locally instead of fetched from sec.gov; anything it
-# lacks is fetched as before. Transient: delete it after the run. Empty = off. Passed through the
-# inline model like bulk13fDir.
-feedDir: "${SEC_FEED_DIR:}"
+# lacks is fetched as before. The tree is durable and takes days to rebuild: never delete it. A
+# configured directory that is missing fails the worker by name; set SEC_FEED_DIR to empty to run
+# without it. Passed through the inline model like bulk13fDir.
+feedDir: "${SEC_FEED_DIR:/mnt/wsltmp/govdata/edgar-feed}"
 # Periodic table commit: flush + materialize to Iceberg every N accessions so a worker
 # killed mid-run (large years have ~293k accessions) still leaves queryable tables.
 # <= 0 disables periodic commit (single final commit at end of run).

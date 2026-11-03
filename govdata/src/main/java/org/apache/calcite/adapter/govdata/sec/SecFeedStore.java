@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
  * that tree whichever CIK it names, which also settles ownership filings that EDGAR lists once per
  * CIK involved. A request the tree cannot answer returns null and is fetched as before.
  *
- * <p>The tree is transient: unpacked for the run, deleted after it.
+ * <p>The tree is durable and expensive to rebuild (days of download); nothing here deletes it.
  */
 final class SecFeedStore {
 
@@ -93,8 +93,8 @@ final class SecFeedStore {
     DocumentSource.registerLocalContentResolver(ARCHIVE_PREFIX, resolver);
     Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
       @Override public void run() {
-        LOGGER.info("EDGAR feed store: run finished, {} documents answered locally, {} not held "
-            + "(fetched live)", store.hits.get(), store.misses.get());
+        LOGGER.info("EDGAR feed: {} answered locally, {} not in the feed (fetched live)",
+            store.hits.get(), store.misses.get());
       }
     }, "feed-store-summary"));
     LOGGER.info("EDGAR feed store: using {}", root);
