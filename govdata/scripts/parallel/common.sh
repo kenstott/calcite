@@ -809,6 +809,7 @@ generate_sec_reprocess_model() {
       "ciks": "_ALL_EDGAR_FILERS",
       "filingTypes": ${filing_types_json},
       "fetchStockPrices": false,
+      "edgarUserAgent": "\${EDGAR_USER_AGENT:govdata-etl kennethstott@gmail.com}",
       "forceAccessions": ${acc_json},
       "startYear": ${start_year},
       "endYear": ${end_year},
