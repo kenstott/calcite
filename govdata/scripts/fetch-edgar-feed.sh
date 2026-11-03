@@ -9,8 +9,9 @@
 # instead of fetched from sec.gov.
 #
 # One request per day; the day file is read as a stream and never stored, so only the unpacked
-# documents use disk (text documents only; images, spreadsheets and zips are skipped). The tree is
-# transient: delete feed_dir when the run that used it is over. The feed publishes a day's file after
+# documents use disk (text documents only; images, spreadsheets and zips are skipped). The unpacked
+# tree is DURABLE and expensive to rebuild (days of download): never delete, move or clean up feed_dir,
+# and do not walk or du it (it shares a disk with MinIO). The feed publishes a day's file after
 # that day closes, so today's filings are not in it and are fetched from sec.gov as usual.
 #
 # Disk: the unpacked tree is about 15-20% of the bytes downloaded (a 450 GB year is about 65-85 GB).
