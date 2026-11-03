@@ -29,7 +29,9 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * True end-to-end streaming transformer for the large Census International Trade timeseries
@@ -76,13 +79,61 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
       new HashSet<String>(java.util.Arrays.asList(
           "-666666666", "-333333333", "-222222222", "-999999999")));
 
+  private static final int GATEWAY_TIMEOUT = 524;
+  private static final int NO_CONTENT = 204;
+  private static final int FULL_CODE_LENGTH = 6;
+  private static final Pattern UNFILTERED_HS6 =
+      Pattern.compile("[?&]COMM_LVL=HS6(&|$)");
+
+  /** A non-200 Census response, carrying the status so callers can react to it. */
+  static final class CensusHttpException extends IOException {
+    private final int status;
+
+    CensusHttpException(int status, String url) {
+      super("HTTP " + status + " from " + url);
+      this.status = status;
+    }
+
+    int status() {
+      return status;
+    }
+  }
+
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context)
       throws IOException {
     String url = context.getUrl();
     if (url == null || url.isEmpty()) {
       throw new IllegalStateException("CensusTradeStreamingTransformer: no URL in context");
     }
-    Path spool = spoolResponse(url);
+    String commodityParam = commodityParam(url);
+    if (commodityParam != null) {
+      return new PrefixSplitIterator(url, commodityParam, context);
+    }
+    return fetchOne(url, context, false, false);
+  }
+
+  /**
+   * Returns the commodity filter parameter ({@code I_COMMODITY} or {@code E_COMMODITY}) when the
+   * URL is a national HS6 request with no commodity filter of its own, else null. Such a month is
+   * one very large origin query that Census answers with a gateway timeout (HTTP 524) when its
+   * backend is slow, so it is fetched as commodity-prefix sub-requests instead.
+   */
+  private static String commodityParam(String url) {
+    if (!UNFILTERED_HS6.matcher(url).find() || url.contains("_COMMODITY=")) {
+      return null;
+    }
+    if (url.contains("/intltrade/imports/hs?")) {
+      return "I_COMMODITY";
+    }
+    if (url.contains("/intltrade/exports/hs?")) {
+      return "E_COMMODITY";
+    }
+    return null;
+  }
+
+  private Iterator<Map<String, Object>> fetchOne(String url, RequestContext context,
+      boolean prefixed, boolean failFastOnGatewayTimeout) throws IOException {
+    Path spool = spoolResponse(url, prefixed, failFastOnGatewayTimeout);
     JsonParser parser;
     try {
       parser = JSON_FACTORY.createParser(Files.newInputStream(spool));
@@ -172,7 +223,9 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
    * fetch, not a half-consumed row stream, so the whole request is repeated, up to
    * {@link #MAX_RETRIES} attempts. The body is on disk, not in memory: a statehs month is ~170 MB.
    */
-  private static Path spoolResponse(String url) throws IOException {
+  private static Path spoolResponse(String url, boolean prefixed,
+      boolean failFastOnGatewayTimeout)
+      throws IOException {
     IOException last = null;
     for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       Path spool = Files.createTempFile("census-trade-", ".json");
@@ -193,6 +246,10 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
         return spool;
       } catch (IOException e) {
         deleteQuietly(spool);
+        if (prefixed && (isStatus(e, NO_CONTENT)
+            || failFastOnGatewayTimeout && isStatus(e, GATEWAY_TIMEOUT))) {
+          throw e;
+        }
         last = e;
         LOGGER.warn("Census trade: body fetch failed (attempt {}/{}) for {}: {}", attempt,
             MAX_RETRIES, url, e.toString());
@@ -205,6 +262,10 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
     }
     throw new IOException("Census trade: read failed after " + MAX_RETRIES + " attempts for " + url,
         last);
+  }
+
+  private static boolean isStatus(IOException e, int status) {
+    return e instanceof CensusHttpException && ((CensusHttpException) e).status() == status;
   }
 
   private static void deleteQuietly(Path path) {
@@ -241,7 +302,7 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
         sleep(attempt);
         continue;
       }
-      throw new IOException("HTTP " + status + " from " + url);
+      throw new CensusHttpException(status, url);
     }
     throw last != null ? last : new IOException("Census trade: retries exhausted for " + url);
   }
@@ -261,6 +322,70 @@ public class CensusTradeStreamingTransformer implements StreamingResponseTransfo
       // best-effort
     }
     deleteQuietly(spool);
+  }
+
+  /**
+   * Fetches an unfiltered HS6 month as commodity-prefix sub-requests, starting at the 2-digit HS
+   * chapters. A prefix Census answers with a gateway timeout is replaced by its ten child
+   * prefixes (down to the full 6-digit code length, where the timeout is raised as a failure);
+   * a prefix with no commodities (HTTP 204) contributes no rows. Prefixes are disjoint, so the
+   * union of the sub-responses is exactly the unfiltered month. One sub-response is resident at
+   * a time and rows stream through unchanged.
+   */
+  private final class PrefixSplitIterator implements Iterator<Map<String, Object>> {
+    private final String baseUrl;
+    private final String commodityParam;
+    private final RequestContext context;
+    private final Deque<String> prefixes = new ArrayDeque<String>();
+    private Iterator<Map<String, Object>> current = Collections.emptyIterator();
+
+    PrefixSplitIterator(String baseUrl, String commodityParam, RequestContext context) {
+      this.baseUrl = baseUrl;
+      this.commodityParam = commodityParam;
+      this.context = context;
+      for (int chapter = 1; chapter <= 99; chapter++) {
+        prefixes.add(String.format("%02d", chapter));
+      }
+    }
+
+    @Override public boolean hasNext() {
+      while (!current.hasNext()) {
+        if (prefixes.isEmpty()) {
+          return false;
+        }
+        current = fetchPrefix(prefixes.pollFirst());
+      }
+      return true;
+    }
+
+    @Override public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      return current.next();
+    }
+
+    private Iterator<Map<String, Object>> fetchPrefix(String prefix) {
+      String url = baseUrl + "&" + commodityParam + "=" + prefix + "*";
+      try {
+        return fetchOne(url, context, true, prefix.length() < FULL_CODE_LENGTH);
+      } catch (CensusHttpException e) {
+        if (e.status() == NO_CONTENT) {
+          return Collections.<Map<String, Object>>emptyList().iterator();
+        }
+        if (e.status() == GATEWAY_TIMEOUT && prefix.length() < FULL_CODE_LENGTH) {
+          LOGGER.warn("Census trade: HTTP 524 for commodity prefix {}, splitting into {}0-{}9",
+              prefix, prefix, prefix);
+          for (int digit = 9; digit >= 0; digit--) {
+            prefixes.addFirst(prefix + digit);
+          }
+          return Collections.<Map<String, Object>>emptyList().iterator();
+        }
+        throw new RuntimeException("Census trade: prefix " + prefix + " failed", e);
+      } catch (IOException e) {
+        throw new RuntimeException("Census trade: prefix " + prefix + " failed", e);
+      }
+    }
   }
 
   /** Lazy iterator: parses one data row (inner array) per {@code next()}; closes on exhaustion. */
