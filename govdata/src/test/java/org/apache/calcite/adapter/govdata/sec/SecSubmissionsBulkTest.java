@@ -54,6 +54,21 @@ class SecSubmissionsBulkTest {
     }
   }
 
+  @Test void companyInfoForAFilerInTheFileMakesNoHttpCall(@TempDir File dir) throws Exception {
+    try (SecSubmissionsBulk bulk = SecSubmissionsBulk.open(zip(dir))) {
+      org.apache.calcite.adapter.file.etl.DocumentSource.registerLocalContentResolver(
+          SecSubmissionsBulk.URL_PREFIX, bulk);
+      // No sec operand is captured, so any live request would throw for want of a User-Agent.
+      long before = EdgarRateLimiter.acquired();
+      java.util.Map<String, String> info = SecDataFetcher.getCompanyInfoForCik("19617");
+      assertEquals("JPMORGAN CHASE & CO", info.get("company_name"));
+      assertEquals(before, EdgarRateLimiter.acquired());
+      assertEquals(1, bulk.hits());
+    } finally {
+      org.apache.calcite.adapter.file.etl.DocumentSource.clearLocalContentResolvers();
+    }
+  }
+
   @Test void aFilerNotInTheFileIsNullSoTheCallerFetchesIt(@TempDir File dir) throws Exception {
     try (SecSubmissionsBulk bulk = SecSubmissionsBulk.open(zip(dir))) {
       assertNull(bulk.resolve("https://data.sec.gov/submissions/CIK0000000002.json"));

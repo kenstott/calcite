@@ -41,6 +41,8 @@ alphaVantageRateLimitMs: "${ALPHA_VANTAGE_RATE_LIMIT_MS:1500}"
 # escalating IP block (a burst → minutes of blanket 429s). Matches the file DocumentSource default.
 edgarRateLimitMs: "${EDGAR_RATE_LIMIT_MS:125}"
 edgarBlockCooldownMs: "${EDGAR_BLOCK_COOLDOWN_MS:1800000}"
+edgarRetryFloorMs: "${EDGAR_RETRY_FLOOR_MS:10000}"
+edgarMaxRetries: "${EDGAR_MAX_RETRIES:5}"
 # SEC's fair-access policy requires every request to declare a real contact in the User-Agent;
 # a placeholder identity is what its CDN is entitled to refuse. Used by the direct sec.gov fetchers.
 edgarUserAgent: "${EDGAR_USER_AGENT:govdata-etl kennethstott@gmail.com}"

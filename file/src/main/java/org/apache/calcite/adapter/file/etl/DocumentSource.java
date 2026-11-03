@@ -491,6 +491,16 @@ public class DocumentSource {
     return fetchUrl(url);
   }
 
+  /**
+   * Returns the content a registered {@link LocalContentResolver} holds for {@code url}, or null
+   * when none covers it or the local copy does not hold it. For callers that fetch directly
+   * rather than through a {@code DocumentSource} instance.
+   */
+  public static String resolveLocalContent(String url) throws IOException {
+    LocalContentResolver resolver = localResolverFor(url);
+    return resolver == null ? null : resolver.resolve(url);
+  }
+
   /** True when a registered {@link LocalContentResolver} covers {@code url}. */
   public boolean hasLocalContent(String url) {
     return localResolverFor(url) != null;
