@@ -10,7 +10,7 @@
 # The downloaded zip and the extracted TSV are deleted as soon as the parquet is written, and the
 # parquet files are transient too: delete out_dir when the run that used them is over.
 #
-# One request per release. SEC asks for a descriptive User-Agent; override with SEC_USER_AGENT.
+# One request per release. SEC asks for a descriptive User-Agent; the declared contact comes from sec-schema.yaml (edgarUserAgent) via the govdata jar (GOVDATA_JAR).
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
@@ -22,7 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/sec-cooldown.sh"
 sec_cooldown_init
 sec_cooldown_refuse fetch-13f-bulk || exit "$SEC_COOLDOWN_EXIT"
-UA="${SEC_USER_AGENT:-Apache Calcite SEC Adapter apache-calcite@apache.org}"
+sec_user_agent_init || exit 1
+UA="$SEC_UA"
 BASE="${F13_BASE_URL:-https://www.sec.gov/files/structureddata/data/form-13f-data-sets}"  # override only for tests against a local server
 mkdir -p "$OUT_DIR"
 

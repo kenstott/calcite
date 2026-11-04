@@ -68,7 +68,9 @@ sec_cooldown_init
 sec_cooldown_refuse edgar-feed || exit 1
 FEED_BASE_URL="${FEED_BASE_URL:-https://www.sec.gov}"  # override only for tests against a local server
 PARALLEL="${PARALLEL:-1}"
-FEED_UA="Apache Calcite SEC Adapter apache-calcite@apache.org"
+GOVDATA_JAR="$JAR"
+sec_user_agent_init || exit 1
+FEED_UA="$SEC_UA"
 export FEED_BASE_URL FEED_DIR JAR FEED_UA MAX_RETRIES RETRY_DELAY SEC_BLOCK_FILE SEC_COOLDOWN_SECS SCRIPT_DIR
 export RUNNER="${runner[*]:-}"
 fetch_day() {

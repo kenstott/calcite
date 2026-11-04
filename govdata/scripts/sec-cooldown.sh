@@ -58,3 +58,13 @@ sec_cooldown_on_status() {
   echo "[$who] HTTP $code from sec.gov, stopping (no retry); cool-down recorded${ra:+, Retry-After $ra}" >&2
   return 1
 }
+
+# sec_user_agent_init: sets SEC_UA to the declared sec.gov User-Agent. The only source is
+# edgarUserAgent in sec-schema.yaml, resolved by the govdata jar (GOVDATA_JAR); there is no default
+# here. Fails, naming what is missing, before any request if it cannot be obtained.
+sec_user_agent_init() {
+  : "${GOVDATA_JAR:?GOVDATA_JAR is not set: the SEC User-Agent is resolved from sec-schema.yaml by the govdata jar (set it to the shadow jar)}"
+  [ -f "$GOVDATA_JAR" ] || { echo "GOVDATA_JAR not found: $GOVDATA_JAR (needed to resolve the SEC User-Agent)" >&2; return 1; }
+  SEC_UA=$(java -cp "$GOVDATA_JAR" org.apache.calcite.adapter.govdata.sec.SecUserAgentMain) \
+    && [ -n "$SEC_UA" ] || { echo "could not resolve the SEC User-Agent from $GOVDATA_JAR (edgarUserAgent in sec-schema.yaml)" >&2; return 1; }
+}
