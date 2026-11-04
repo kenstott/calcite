@@ -645,10 +645,12 @@ committed_mb=0          # Sum of max heaps of all active workers
 queue_idx=0
 done_count=0
 failed_count=0
+deferred_count=0
 requeue_count=0
 declare -A _conflict_logged=()   # slot -> last schema+year conflict message logged
 _sec_hold_logged=""        # SEC-family running count a hold was last logged for
 failed_list=()
+deferred_list=()
 restart_count=0
 
 # Convert a heap size string (e.g., "3g", "2048m") to MB
@@ -1170,6 +1172,10 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
             hcy_mark_complete "$_hcy_schema" "$_hcy_token"
           fi
         fi
+      elif [ "$exit_code" -eq "$SEC_COOLDOWN_EXIT" ]; then
+        ((deferred_count++)) || true
+        deferred_list+=("$id")
+        log_info "$id DEFERRED by sec.gov cool-down (${mins}m): retries in the next window after the marker expires"
       else
         ((failed_count++)) || true
         failed_list+=("$id")
@@ -1242,7 +1248,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
 
   # Status line
   # Queued = total jobs - done - failed - requeued (tracked separately to avoid inflation) - currently running
-  remaining=$((total - done_count - failed_count - requeue_count - ${#active_pids[@]}))
+  remaining=$((total - done_count - failed_count - deferred_count - requeue_count - ${#active_pids[@]}))
   active_str=""
   if [ "${#active_labels[@]}" -gt 0 ]; then
     active_str="| ${active_labels[*]}"
@@ -1282,7 +1288,8 @@ done
 echo ""
 echo ""
 echo "=== Pool Complete ==="
-echo "Total: $total  Done: $done_count  Failed: $failed_count  Restarts: $restart_count"
+echo "Total: $total  Done: $done_count  Failed: $failed_count  Deferred: $deferred_count  Restarts: $restart_count"
+[ "$deferred_count" -eq 0 ] || echo "Deferred by sec.gov cool-down: ${deferred_list[*]}"
 if [ "$failed_count" -gt 0 ]; then
   echo "Failed workers: ${failed_list[*]}"
   # Exit 2 == "queue fully drained, but N workers failed after their in-pool

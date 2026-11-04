@@ -96,6 +96,19 @@ if ! target_is_dq_bucket && _lock_h=$(schema_lock_holder "$(schema_lock_dir "$SC
 fi
 INCREMENTAL_YEAR=${GOVDATA_INCREMENTAL_START_YEAR:-$(date +%Y)}
 
+# sec.gov refused this host and the cool-down marker is active: sec work is deferred, not failed.
+# No request is made; the pool reports exit $SEC_COOLDOWN_EXIT as deferred and the tracker resumes
+# the slot in the next window.
+case "$SCHEMA" in
+  sec|sec_primary|sec_secondary|sec_13f)
+    if [ "$(sec_cooldown_remaining)" -gt 0 ]; then
+      sec_cooldown_refuse "$WORKER_ID" || true
+      log_info "${WORKER_ID}: DEFERRED by sec.gov cool-down; not starting"
+      exit "$SEC_COOLDOWN_EXIT"
+    fi
+    ;;
+esac
+
 # Self-contained schema+year conflict guard. check_schema_year_conflict() previously only
 # ran inside run-pool.sh's own admission logic (fill_pool()) -- fine for jobs launched
 # through the pool, but a caller invoking this script directly gets zero protection.
