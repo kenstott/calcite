@@ -533,9 +533,13 @@ partitionedTables:
       enabled: false
 
     comment: >
-      Raw XBRL facts extracted from 10-K/10-Q/20-F filings, one row per (cik, accession_number,
-      concept, context_ref) using native US-GAAP concept names (e.g. us-gaap:Assets,
-      us-gaap:Revenues) — variant concepts for the same metric are NOT consolidated here.
+      Raw XBRL facts extracted from 10-K/10-Q/20-F filings, one row per fact element in the
+      filing, using native US-GAAP concept names (e.g. us-gaap:Assets, us-gaap:Revenues) —
+      variant concepts for the same metric are NOT consolidated here. (cik, accession_number,
+      concept, context_ref, unit_ref) is NOT a unique key: a filing can contain the same fact
+      more than once (XBRL permits consistent duplicates), and each occurrence is its own row
+      with its own element_id. Use DISTINCT over the fact tuple, or MAX/MIN, rather than
+      SUM/COUNT when a metric must be counted once per filing.
       Carries both the original text value and a derived value_numeric (value_numeric_method
       records direct vs. heuristic conversion), plus unit_ref_normalized for the canonical unit.
       For canonical metric names, dollar-scaled values, and consolidated-vs-segment filtering
