@@ -63,31 +63,13 @@ command -v ionice >/dev/null && runner+=(ionice -c3)
 # unmarked so a rerun retries it; the other days continue.
 MAX_RETRIES="${MAX_RETRIES:-20}"
 RETRY_DELAY="${RETRY_DELAY:-30}"
-# Host-wide sec.gov cool-down shared with EdgarRateLimiter: epoch millis until which no process on
-# this host may call sec.gov, in <java.io.tmpdir>/calcite-ratelimit-sec.gov.blocked. The pool starts
-# the workers with -Djava.io.tmpdir=$GOVDATA_TMPDIR (parallel/common.sh), so this script uses the same
-# variable; there is no default, because a guessed directory is a second marker the workers never read.
-: "${GOVDATA_TMPDIR:?GOVDATA_TMPDIR is not set: it is the directory the ETL workers use as java.io.tmpdir, which holds the sec.gov cool-down marker (export the value parallel/common.sh uses, /var/tmp/govdata by default)}"
-BLOCK_FILE="$GOVDATA_TMPDIR/calcite-ratelimit-sec.gov.blocked"
-COOLDOWN_SECS=1800
-block_host() {
-  # Cool down for the longer of the default and a numeric Retry-After (seconds).
-  local secs="$COOLDOWN_SECS"
-  case "${3:-}" in ''|*[!0-9]*) ;; *) [ "$3" -gt "$secs" ] && secs="$3" ;; esac
-  local until=$(( ($(date +%s) + secs) * 1000 ))
-  printf '%s' "$until" > "$BLOCK_FILE"
-}
-if [ -f "$BLOCK_FILE" ]; then
-  until_ms=$(tr -d '[:space:]' < "$BLOCK_FILE")
-  if [ "$until_ms" -gt "$(( $(date +%s) * 1000 ))" ]; then
-    echo "sec.gov cool-down in effect until $(date -d "@$((until_ms / 1000))" -u +%FT%TZ) ($BLOCK_FILE); not starting" >&2
-    exit 1
-  fi
-fi
+. "$SCRIPT_DIR/sec-cooldown.sh"
+sec_cooldown_init
+sec_cooldown_refuse edgar-feed || exit 1
 FEED_BASE_URL="${FEED_BASE_URL:-https://www.sec.gov}"  # override only for tests against a local server
 PARALLEL="${PARALLEL:-1}"
 FEED_UA="Apache Calcite SEC Adapter apache-calcite@apache.org"
-export FEED_BASE_URL FEED_DIR JAR FEED_UA MAX_RETRIES RETRY_DELAY BLOCK_FILE COOLDOWN_SECS
+export FEED_BASE_URL FEED_DIR JAR FEED_UA MAX_RETRIES RETRY_DELAY SEC_BLOCK_FILE SEC_COOLDOWN_SECS SCRIPT_DIR
 export RUNNER="${runner[*]:-}"
 fetch_day() {
   local day="$1"
@@ -95,10 +77,7 @@ fetch_day() {
     echo "[edgar-feed] $day: already unpacked, skipped"
     return 0
   fi
-  if [ -f "$BLOCK_FILE" ] && [ "$(tr -d '[:space:]' < "$BLOCK_FILE")" -gt "$(( $(date +%s) * 1000 ))" ]; then
-    echo "[edgar-feed] $day: sec.gov cool-down in effect, skipped" >&2
-    return 2
-  fi
+  sec_cooldown_refuse "edgar-feed $day" || return 2
   local y="${day:0:4}" m="${day:4:2}" q
   q=$(( (10#$m - 1) / 3 + 1 ))
   local url="$FEED_BASE_URL/Archives/edgar/Feed/$y/QTR$q/$day.nc.tar.gz"
@@ -122,10 +101,7 @@ fetch_day() {
       rm -f "$dl/$day.nc.tar.gz"; break
     fi
     if [ "$rc" -eq 0 ] && { [ "$code" = 403 ] || [ "$code" = 429 ]; }; then
-      local ra
-      ra=$(tr -d '\r' < "$hdr" | awk 'tolower($1)=="retry-after:"{print $2}' | tail -1)
-      block_host "$code" "$url" "$ra"
-      echo "[edgar-feed] $day: HTTP $code from sec.gov, stopping (no retry); cool-down recorded${ra:+, Retry-After $ra}" >&2
+      sec_cooldown_on_status "edgar-feed $day" "$code" "$hdr"
       return 2
     fi
     if [ "$rc" -eq 0 ] && [ "${code:0:1}" != 5 ]; then
@@ -148,5 +124,5 @@ fetch_day() {
     return 1
   fi
 }
-export -f fetch_day block_host
+export -f fetch_day sec_cooldown_remaining sec_cooldown_refuse sec_cooldown_block sec_retry_after sec_cooldown_on_status
 printf '%s\n' "${days[@]}" | xargs -P "$PARALLEL" -I{} bash -c 'fetch_day {}'

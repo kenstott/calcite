@@ -19,16 +19,25 @@ if [ $# -ne 1 ]; then
   exit 1
 fi
 OUT_DIR="$1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/sec-cooldown.sh"
+sec_cooldown_init
+sec_cooldown_refuse fetch-submissions-bulk || exit "$SEC_COOLDOWN_EXIT"
 UA="${SEC_USER_AGENT:-Apache Calcite SEC Adapter apache-calcite@apache.org}"
-URL="https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip"
+URL="${SUBMISSIONS_URL:-https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip}"  # override only for tests against a local server
 mkdir -p "$OUT_DIR"
 ZIP="$OUT_DIR/submissions.zip"
 ETAG="$OUT_DIR/submissions.etag"
 TMP="$ZIP.part"
+HDR="$ZIP.hdr"
+trap 'rm -f "$HDR"' EXIT
 
 echo "[fetch-submissions-bulk] $URL"
-code=$(curl -sS -L -A "$UA" -o "$TMP" -w '%{http_code}' \
+code=$(curl -sS -L -A "$UA" -D "$HDR" -o "$TMP" -w '%{http_code}' \
   --etag-save "$ETAG.new" ${ETAG:+$( [ -f "$ZIP" ] && [ -f "$ETAG" ] && echo "--etag-compare $ETAG" )} "$URL")
+if ! sec_cooldown_on_status fetch-submissions-bulk "$code" "$HDR"; then
+  rm -f "$TMP" "$ETAG.new"; exit "$SEC_COOLDOWN_EXIT"
+fi
 case "$code" in
   200) mv -f "$TMP" "$ZIP"; mv -f "$ETAG.new" "$ETAG"
        echo "[fetch-submissions-bulk] wrote $ZIP ($(du -h "$ZIP" | cut -f1))" ;;

@@ -22,6 +22,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Load credentials/config from .env.prod (storage points at MinIO directly there now;
 # the old .env.preprod redirect is retired). Needed for the PROD_* publish gate below.
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/../sec-cooldown.sh"
+export GOVDATA_TMPDIR
+sec_cooldown_init
 load_env
 
 LOG_DIR="$SCRIPT_DIR/runs"
@@ -223,7 +226,7 @@ SUBMISSIONS_RETRY_MIN_SECS="${SEC_SUBMISSIONS_RETRY_MIN_SECS:-30}"
 SUBMISSIONS_RETRY_MAX_SECS="${SEC_SUBMISSIONS_RETRY_MAX_SECS:-900}"
 prepare_sec_submissions_bulk() {
   local window_log="$1" window_end="$2"
-  local delay="$SUBMISSIONS_RETRY_MIN_SECS" tries=0
+  local delay="$SUBMISSIONS_RETRY_MIN_SECS" tries=0 wait_s
   if [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
     export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
     echo "[$(ts)] submissions.zip: reused existing $SEC_BULK_SUBMISSIONS_ZIP (no fetch)" >> "$window_log"
@@ -231,22 +234,32 @@ prepare_sec_submissions_bulk() {
   fi
   while true; do
     tries=$(( tries + 1 ))
-    if "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" >> "$window_log" 2>&1 \
-        && [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
+    local rc=0
+    "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" >> "$window_log" 2>&1 || rc=$?
+    if [ "$rc" -eq 0 ] && [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
       export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
       echo "[$(ts)] submissions.zip: fetched (attempt $tries)" >> "$window_log"
       return 0
     fi
     unset SEC_BULK_SUBMISSIONS_ZIP 2>/dev/null || true
-    if [ $(( $(date +%s) + delay )) -ge "$window_end" ]; then
+    wait_s="$delay"
+    if [ "$rc" -eq "$SEC_COOLDOWN_EXIT" ]; then
+      # sec.gov refused this host: no call until the marker's end, not the backoff delay.
+      wait_s=$(sec_cooldown_remaining)
+      [ "$wait_s" -gt 0 ] || wait_s="$delay"
+      echo "[$(ts)] submissions.zip: sec.gov cool-down (attempt $tries); next fetch in ${wait_s}s, when it ends" >> "$window_log"
+    fi
+    if [ $(( $(date +%s) + wait_s )) -ge "$window_end" ]; then
       log_error "ERROR: could not fetch SEC's submissions.zip in $tries attempts before the window ended - the historical pool was not started (see $window_log)"
       echo "[$(ts)] submissions.zip fetch failed ($tries attempts); window ends before the next retry - pool not started" >> "$window_log"
       return 1
     fi
-    echo "[$(ts)] submissions.zip fetch failed (attempt $tries); retrying in ${delay}s - the pool waits for the zip" >> "$window_log"
-    sleep "$delay"
-    delay=$(( delay * 2 ))
-    [ "$delay" -gt "$SUBMISSIONS_RETRY_MAX_SECS" ] && delay="$SUBMISSIONS_RETRY_MAX_SECS"
+    echo "[$(ts)] submissions.zip fetch failed (attempt $tries); retrying in ${wait_s}s - the pool waits for the zip" >> "$window_log"
+    sleep "$wait_s"
+    if [ "$rc" -ne "$SEC_COOLDOWN_EXIT" ]; then
+      delay=$(( delay * 2 ))
+      [ "$delay" -gt "$SUBMISSIONS_RETRY_MAX_SECS" ] && delay="$SUBMISSIONS_RETRY_MAX_SECS"
+    fi
   done
 }
 

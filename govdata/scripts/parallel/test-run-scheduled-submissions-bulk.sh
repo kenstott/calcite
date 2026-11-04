@@ -15,6 +15,8 @@ log_error() { echo "ERROR: $*" >> "$tmp/errors"; }
 SUBMISSIONS_BULK_DIR="$tmp/bulk"
 SUBMISSIONS_RETRY_MIN_SECS=1
 SUBMISSIONS_RETRY_MAX_SECS=1
+. "$HERE/../sec-cooldown.sh"
+GOVDATA_TMPDIR="$tmp"; sec_cooldown_init
 eval "$(sed -n '/^prepare_sec_submissions_bulk() {/,/^}/p' "$HERE/run-scheduled.sh")"
 
 # fetch script: fails until the counter file reaches $tmp/succeed_after calls, then writes the zip

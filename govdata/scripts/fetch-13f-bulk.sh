@@ -18,8 +18,12 @@ if [ $# -lt 2 ]; then
   exit 1
 fi
 OUT_DIR="$1"; shift
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/sec-cooldown.sh"
+sec_cooldown_init
+sec_cooldown_refuse fetch-13f-bulk || exit "$SEC_COOLDOWN_EXIT"
 UA="${SEC_USER_AGENT:-Apache Calcite SEC Adapter apache-calcite@apache.org}"
-BASE="https://www.sec.gov/files/structureddata/data/form-13f-data-sets"
+BASE="${F13_BASE_URL:-https://www.sec.gov/files/structureddata/data/form-13f-data-sets}"  # override only for tests against a local server
 mkdir -p "$OUT_DIR"
 
 for release in "$@"; do
@@ -32,7 +36,12 @@ for release in "$@"; do
   trap 'rm -rf "$work"' EXIT
 
   echo "[fetch-13f-bulk] $name <- $url"
-  curl -sS -L -A "$UA" -f -o "$work/z.zip" "$url"
+  sec_cooldown_refuse fetch-13f-bulk || exit "$SEC_COOLDOWN_EXIT"
+  code=$(curl -sS -L -A "$UA" -D "$work/hdr" -o "$work/z.zip" -w '%{http_code}' "$url")
+  sec_cooldown_on_status fetch-13f-bulk "$code" "$work/hdr" || exit "$SEC_COOLDOWN_EXIT"
+  if [ "$code" != 200 ]; then
+    echo "[fetch-13f-bulk] unexpected HTTP $code for $url" >&2; exit 1
+  fi
   unzip -q -o "$work/z.zip" INFOTABLE.tsv -d "$work"
   rm -f "$work/z.zip"
   duckdb -c "
