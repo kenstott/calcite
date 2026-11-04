@@ -6,7 +6,10 @@
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
-mkdir "$work/tmp" "$work/out"
+mkdir "$work/tmp" "$work/out" "$work/bin"; : > "$work/jar"
+# stub java: the User-Agent is resolved by the jar (see test-fetch-sec-user-agent.sh)
+printf '#!/usr/bin/env bash\necho "test-agent test@example.org"\n' > "$work/bin/java"; chmod +x "$work/bin/java"
+export PATH="$work/bin:$PATH" GOVDATA_JAR="$work/jar"
 cat > "$work/server.py" <<'PY'
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer

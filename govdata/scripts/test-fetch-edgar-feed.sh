@@ -4,7 +4,9 @@
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
-mkdir "$work/tmp" "$work/feed"; : > "$work/jar"
+mkdir "$work/tmp" "$work/feed" "$work/bin"; : > "$work/jar"
+printf '#!/usr/bin/env bash\necho "test-agent test@example.org"\n' > "$work/bin/java"; chmod +x "$work/bin/java"
+export PATH="$work/bin:$PATH"
 cat > "$work/server.py" <<'PY'
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer

@@ -23,7 +23,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/sec-cooldown.sh"
 sec_cooldown_init
 sec_cooldown_refuse fetch-submissions-bulk || exit "$SEC_COOLDOWN_EXIT"
-UA="${SEC_USER_AGENT:-Apache Calcite SEC Adapter apache-calcite@apache.org}"
+sec_user_agent_init || exit 1
+UA="$SEC_UA"
 URL="${SUBMISSIONS_URL:-https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip}"  # override only for tests against a local server
 mkdir -p "$OUT_DIR"
 ZIP="$OUT_DIR/submissions.zip"
