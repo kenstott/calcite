@@ -1244,10 +1244,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Get the job's filing types from the operand for table filtering
     List<String> jobFilingTypes = getScopedFilingTypes(operand);
+    // A run scoped by enabledTables owns only those tables. Without this, a table with no
+    // filing_type dimension (stock_prices) passed the filing-type filter for every scoped run and
+    // its whole staged backlog was absorbed as a side effect (kenstott/govdata-ops#1081).
+    Set<String> enabledTables = readEnabledTables(operand);
 
     // Process each table configured for Iceberg materialization
     for (Map<String, Object> tableConfig : partitionedTables) {
       String tableName = (String) tableConfig.get("name");
+
+      if (enabledTables != null && !enabledTables.contains(tableName)) {
+        LOGGER.info("Skipping table '{}' - not in enabledTables {}", tableName, enabledTables);
+        continue;
+      }
 
       // Check table-level enabled flag (supports env var interpolation)
       if (!isTableEnabled(tableConfig)) {
