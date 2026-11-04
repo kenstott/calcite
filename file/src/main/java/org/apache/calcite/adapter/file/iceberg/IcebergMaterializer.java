@@ -2455,6 +2455,19 @@ public class IcebergMaterializer {
   }
 
   /**
+   * The name of the directory that holds the first {@code year=} partition in a slash-separated
+   * path or pattern, or null when the text has no {@code year=} partition below a directory.
+   */
+  private static String directoryBeforeYear(String slashedPath) {
+    int yearIdx = slashedPath.indexOf("/year=");
+    if (yearIdx <= 0) {
+      return null;
+    }
+    int parentStart = slashedPath.lastIndexOf('/', yearIdx - 1);
+    return slashedPath.substring(parentStart + 1, yearIdx);
+  }
+
+  /**
    * Returns whether a filename satisfies a suffix from {@link #deriveFileSuffix}.
    *
    * <p>A suffix containing {@code *} matches when its literal parts occur in order — the same
@@ -2529,6 +2542,7 @@ public class IcebergMaterializer {
     }
     String fileSuffix = deriveFileSuffix(sourcePattern);
     String yearMarker = "year=" + year + "/";
+    String partitionParent = directoryBeforeYear(LocalPaths.toSlashes(sourcePattern));
     List<String> matched = new ArrayList<String>();
     for (String path : staged) {
       // Read by "/": a staged local file on Windows is separated by "\\"
@@ -2539,6 +2553,13 @@ public class IcebergMaterializer {
       }
       String remainder = slashed.substring(markerIdx + yearMarker.length());
       if (remainder.indexOf('/') >= 0) {
+        continue;
+      }
+      // A suffix such as ".parquet" also fits every other table's files sitting in a sibling
+      // year= partition, so the directory holding the partitions must be the pattern's own.
+      if (partitionParent != null
+          && !partitionParent.equals(directoryBeforeYear(slashed.substring(0, markerIdx
+              + yearMarker.length())))) {
         continue;
       }
       if (matchesFileSuffix(remainder, fileSuffix)) {

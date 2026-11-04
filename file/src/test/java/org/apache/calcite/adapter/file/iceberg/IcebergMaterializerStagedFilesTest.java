@@ -70,6 +70,21 @@ class IcebergMaterializerStagedFilesTest {
         "chunks file belongs to neither the metadata nor the facts batch");
   }
 
+  @Test void testTableInOwnDirectoryDoesNotClaimSiblingPartitionFiles() {
+    String pricesPattern = BASE + "/stock_prices/year=*/*.parquet";
+    List<String> mixed = Arrays.asList(
+        BASE + "/year=2026/insider_batch_0000.parquet",
+        BASE + "/year=2026/metadata_batch_0001.parquet",
+        BASE + "/stock_prices/year=2026/prices_0002.parquet");
+
+    assertEquals(Arrays.asList(BASE + "/stock_prices/year=2026/prices_0002.parquet"),
+        IcebergMaterializer.filterStagedFilesForBatch(mixed, pricesPattern, "2026"),
+        "stock_prices must claim only files under its own directory");
+    assertEquals(Arrays.asList(BASE + "/year=2026/metadata_batch_0001.parquet"),
+        IcebergMaterializer.filterStagedFilesForBatch(mixed, METADATA_PATTERN, "2026"),
+        "a filing table must not claim files under stock_prices/");
+  }
+
   @Test void testNullStagedListMeansListThePartition() {
     assertNull(IcebergMaterializer.filterStagedFilesForBatch(null, METADATA_PATTERN, "2026"),
         "a null staged list must stay null so the caller falls back to listing");
