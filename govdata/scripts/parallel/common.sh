@@ -124,6 +124,9 @@ GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
 mkdir -p "$GOVDATA_TMPDIR"
 export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
 GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djava.io.tmpdir=$GOVDATA_TMPDIR"
+# Host-wide sec.gov cool-down (marker lives in $GOVDATA_TMPDIR, the java.io.tmpdir above).
+source "$(dirname "${BASH_SOURCE[0]}")/../sec-cooldown.sh"
+sec_cooldown_init
 # The file adapter and the ETL never read java.io.tmpdir for their own temporary files; they
 # stage in the directory this property names, which they require (REQ-1992).
 GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Dcalcite.file.staging.directory=$GOVDATA_TMPDIR"
@@ -1730,6 +1733,13 @@ run_etl() {
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
+  # A run stopped by the sec.gov cool-down is deferred, not failed: the refusal is the expected
+  # state while the marker is active, and the tracker resumes the work in the next window.
+  if [ "$exit_code" -ne 0 ] && [ "$(sec_cooldown_remaining)" -gt 0 ] \
+      && grep -q "refused this host with HTTP 403/429" "$log_file"; then
+    echo "[$worker_id] DEFERRED by sec.gov cool-down (exit $SEC_COOLDOWN_EXIT); resumes after the marker expires"
+    return "$SEC_COOLDOWN_EXIT"
+  fi
   return $exit_code
 }
 
