@@ -37,6 +37,7 @@ class DocumentSourceCooldownTest {
   private HttpServer server;
   private final AtomicInteger hits = new AtomicInteger();
   private volatile int firstStatuses;
+  private volatile boolean forbidden;
 
   @BeforeEach void setUp() throws IOException {
     Files.deleteIfExists(Paths.get(System.getProperty("java.io.tmpdir"),
@@ -47,7 +48,9 @@ class DocumentSourceCooldownTest {
     server.createContext("/", ex -> {
       int n = hits.incrementAndGet();
       byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
-      if (n <= firstStatuses) {
+      if (forbidden) {
+        ex.sendResponseHeaders(403, -1);
+      } else if (n <= firstStatuses) {
         ex.getResponseHeaders().add("Retry-After", "0");
         ex.sendResponseHeaders(429, -1);
       } else {
@@ -79,6 +82,18 @@ class DocumentSourceCooldownTest {
     firstStatuses = 1;
     assertEquals("ok\n", source().fetchUrlContentLive(url()));
     assertEquals(2, hits.get());
+  }
+
+  @Test void a403StartsTheCooldownAndTheNextFetchIsRefused() {
+    forbidden = true;
+    assertThrows(IOException.class, () -> source().fetchUrlContentLive(url()));
+    assertEquals(1, hits.get());
+    assertTrue(Files.exists(Paths.get(System.getProperty("java.io.tmpdir"),
+        "calcite-ratelimit-localhost.blocked")));
+    IllegalStateException e = assertThrows(IllegalStateException.class,
+        () -> source().fetchUrlContentLive(url()));
+    assertTrue(e.getMessage().contains("localhost"));
+    assertEquals(1, hits.get());
   }
 
   @Test void cooldownMarkerStopsFetchBeforeAnyRequest() {
