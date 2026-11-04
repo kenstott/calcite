@@ -64,8 +64,11 @@ command -v ionice >/dev/null && runner+=(ionice -c3)
 MAX_RETRIES="${MAX_RETRIES:-20}"
 RETRY_DELAY="${RETRY_DELAY:-30}"
 # Host-wide sec.gov cool-down shared with EdgarRateLimiter: epoch millis until which no process on
-# this host may call sec.gov, in <java.io.tmpdir>/calcite-ratelimit-sec.gov.blocked.
-BLOCK_FILE="${BLOCK_DIR:-${TMPDIR:-/tmp}}/calcite-ratelimit-sec.gov.blocked"
+# this host may call sec.gov, in <java.io.tmpdir>/calcite-ratelimit-sec.gov.blocked. The pool starts
+# the workers with -Djava.io.tmpdir=$GOVDATA_TMPDIR (parallel/common.sh), so this script uses the same
+# variable; there is no default, because a guessed directory is a second marker the workers never read.
+: "${GOVDATA_TMPDIR:?GOVDATA_TMPDIR is not set: it is the directory the ETL workers use as java.io.tmpdir, which holds the sec.gov cool-down marker (export the value parallel/common.sh uses, /var/tmp/govdata by default)}"
+BLOCK_FILE="$GOVDATA_TMPDIR/calcite-ratelimit-sec.gov.blocked"
 COOLDOWN_SECS=1800
 block_host() {
   # Cool down for the longer of the default and a numeric Retry-After (seconds).

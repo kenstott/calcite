@@ -23,7 +23,7 @@ run() { # status port expected_requests expect_marker
   : > "$work/req"; rm -f "$work/tmp/"*.blocked
   # the server ends itself after 20 s (timeout), so nothing needs stopping
   timeout 20 python3 -I "$work/server.py" "$2" "$1" "$work/req" & sleep 1
-  BLOCK_DIR="$work/tmp" GOVDATA_JAR="$work/jar" FEED_BASE_URL="http://127.0.0.1:$2" \
+  GOVDATA_TMPDIR="$work/tmp" GOVDATA_JAR="$work/jar" FEED_BASE_URL="http://127.0.0.1:$2" \
     MAX_RETRIES=2 RETRY_DELAY=1 bash "$here/fetch-edgar-feed.sh" "$work/feed" 20240102 >/dev/null 2>"$work/err"
   rc=$?
   n=$(wc -l < "$work/req"); m=no; [ -f "$work/tmp/calcite-ratelimit-sec.gov.blocked" ] && m=yes
@@ -35,6 +35,12 @@ run 429 18429 1 yes
 run 503 18503 3 no
 # cool-down marker present -> refuse to start, zero requests
 printf '%s' $(( ($(date +%s) + 600) * 1000 )) > "$work/tmp/calcite-ratelimit-sec.gov.blocked"
-BLOCK_DIR="$work/tmp" GOVDATA_JAR="$work/jar" FEED_BASE_URL="http://127.0.0.1:1" bash "$here/fetch-edgar-feed.sh" "$work/feed" 20240102 >/dev/null 2>"$work/err"
+GOVDATA_TMPDIR="$work/tmp" GOVDATA_JAR="$work/jar" FEED_BASE_URL="http://127.0.0.1:1" bash "$here/fetch-edgar-feed.sh" "$work/feed" 20240102 >/dev/null 2>"$work/err"
 if [ $? -ne 0 ] && grep -q "cool-down in effect" "$work/err"; then echo "PASS marker refuses start"; else echo "FAIL marker"; fail=1; fi
+# no GOVDATA_TMPDIR -> fail loudly naming it, no request, no marker written anywhere
+env -u GOVDATA_TMPDIR -u BLOCK_DIR GOVDATA_JAR="$work/jar" FEED_BASE_URL="http://127.0.0.1:1" \
+  bash "$here/fetch-edgar-feed.sh" "$work/feed" 20240102 >/dev/null 2>"$work/err"
+if [ $? -ne 0 ] && grep -q "GOVDATA_TMPDIR" "$work/err"; then echo "PASS unset GOVDATA_TMPDIR fails naming it"; else echo "FAIL unset"; cat "$work/err"; fail=1; fi
+# the pool gives the workers java.io.tmpdir=$GOVDATA_TMPDIR, the directory the script writes to
+if grep -q 'Djava.io.tmpdir=\$GOVDATA_TMPDIR' "$here/parallel/common.sh"; then echo "PASS common.sh sets java.io.tmpdir to GOVDATA_TMPDIR"; else echo "FAIL common.sh tmpdir"; fail=1; fi
 exit $fail

@@ -65,7 +65,8 @@ public final class CrossProcessRateLimiter {
   /** Default host-wide cool-down after a 403: Akamai blocks have lasted tens of minutes. */
   public static final long DEFAULT_COOLDOWN_MS = 30L * 60L * 1000L;
 
-  private static Path blockFile(String key) {
+  /** Path of the host-wide cool-down marker for a host key; shell scripts write the same file. */
+  static Path blockFile(String key) {
     String safe = key == null ? "default" : key.replaceAll("[^a-zA-Z0-9._-]", "_");
     return Paths.get(System.getProperty("java.io.tmpdir"), "calcite-ratelimit-" + safe + ".blocked");
   }
