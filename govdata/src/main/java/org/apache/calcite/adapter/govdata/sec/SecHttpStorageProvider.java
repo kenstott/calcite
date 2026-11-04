@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit;
  */
 public class SecHttpStorageProvider extends HttpStorageProvider {
   private static final Logger LOGGER = LoggerFactory.getLogger(SecHttpStorageProvider.class);
-  private static final String USER_AGENT = "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
   private static final long RATE_LIMIT_MS = 100; // 10 requests per second max
 
   private long lastRequestTime = 0;
@@ -59,7 +58,7 @@ public class SecHttpStorageProvider extends HttpStorageProvider {
    */
   private static Map<String, String> createSecHeaders() {
     Map<String, String> headers = new HashMap<>();
-    headers.put("User-Agent", USER_AGENT);
+    headers.put("User-Agent", EdgarRateLimiter.userAgent());
     headers.put("Accept", "application/json, application/xml, text/html");
     return headers;
   }
@@ -73,7 +72,7 @@ public class SecHttpStorageProvider extends HttpStorageProvider {
       headers.putAll(userHeaders);
     }
     // Ensure User-Agent is always the SEC-compliant one
-    headers.put("User-Agent", USER_AGENT);
+    headers.put("User-Agent", EdgarRateLimiter.userAgent());
     return headers;
   }
 

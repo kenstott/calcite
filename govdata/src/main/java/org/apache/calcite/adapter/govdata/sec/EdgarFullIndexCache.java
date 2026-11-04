@@ -54,8 +54,6 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
 
   private static final String FULL_INDEX_URL =
       "https://www.sec.gov/Archives/edgar/full-index/%d/QTR%d/company.idx";
-  private static final String USER_AGENT =
-      "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
 
   /** Map from normalized CIK to list of index entries across all loaded quarters. */
   private final Map<String, List<IndexEntry>> entriesByCik =
@@ -456,7 +454,7 @@ public class EdgarFullIndexCache implements FilingIndexProvider {
 
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setRequestMethod("GET");
-      conn.setRequestProperty("User-Agent", USER_AGENT);
+      conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
       conn.setRequestProperty("Accept", "text/plain");
       conn.setConnectTimeout(60000);
       conn.setReadTimeout(120000);

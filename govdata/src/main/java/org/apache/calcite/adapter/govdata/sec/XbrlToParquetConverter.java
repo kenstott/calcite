@@ -4447,7 +4447,7 @@ public class XbrlToParquetConverter implements FileConverter {
         conn.setReadTimeout(30000);
         // SEC.gov requires proper User-Agent identifying automated tools with contact info
         // Format: "Company Name admin@email.com" - see: https://www.sec.gov/os/accessing-edgar-data
-        String userAgent = "Apache Calcite SEC Adapter apache-calcite@apache.org";
+        String userAgent = EdgarRateLimiter.userAgent();
         conn.setRequestProperty("User-Agent", userAgent);
         conn.setRequestProperty("Accept",
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");

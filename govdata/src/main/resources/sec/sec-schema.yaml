@@ -45,7 +45,7 @@ edgarRetryFloorMs: "${EDGAR_RETRY_FLOOR_MS:10000}"
 edgarMaxRetries: "${EDGAR_MAX_RETRIES:5}"
 # SEC's fair-access policy requires every request to declare a real contact in the User-Agent;
 # a placeholder identity is what its CDN is entitled to refuse. Used by the direct sec.gov fetchers.
-edgarUserAgent: "${EDGAR_USER_AGENT:govdata-etl kennethstott@gmail.com}"
+edgarUserAgent: &edgar_user_agent "${EDGAR_USER_AGENT:govdata-etl kennethstott@gmail.com}"
 cikRegistryPath: "${XBRL_CIK_REGISTRY:}"
 # Local directory of SEC Form 13F data set files (infotable_*.parquet, made by
 # govdata/scripts/fetch-13f-bulk.sh). A 13F filing found there needs only its cover document
@@ -325,7 +325,7 @@ document_source_defaults: &document_source_defaults
 
   # Required SEC headers
   headers:
-    User-Agent: "Apache Calcite SEC Adapter (apache-calcite@apache.org)"
+    User-Agent: *edgar_user_agent
     Accept-Encoding: "gzip, deflate"
 
   # Response transformer for metadata

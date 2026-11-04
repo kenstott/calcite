@@ -2181,7 +2181,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Create headers
     Map<String, String> headers = new HashMap<String, String>();
-    headers.put("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
+    headers.put("User-Agent", EdgarRateLimiter.userAgent());
     headers.put("Accept-Encoding", "gzip, deflate");
 
     // Build HttpSourceConfig
@@ -2581,7 +2581,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           conn.setConnectTimeout(30000);
           conn.setReadTimeout(60000);
           conn.setRequestMethod("GET");
-          conn.setRequestProperty("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
+          conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
           conn.setRequestProperty("Accept", "application/json");
 
           // Add conditional GET header if we have cached metadata

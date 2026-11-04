@@ -45,7 +45,6 @@ import java.util.zip.GZIPInputStream;
 public final class EdgarFeedUnpacker {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(EdgarFeedUnpacker.class);
-  private static final String USER_AGENT = "Apache Calcite SEC Adapter apache-calcite@apache.org";
   private static final int MAX_429_ATTEMPTS = 8;
   private static final long MAX_ENTRY_BYTES = 200L * 1024 * 1024;
 
@@ -209,7 +208,7 @@ public final class EdgarFeedUnpacker {
         // two. Wait and ask again (each wait is printed), then fail so a rerun retries the day.
         for (int attempt = 1; ; attempt++) {
           conn = (HttpURLConnection) new URL(src).openConnection();
-          conn.setRequestProperty("User-Agent", USER_AGENT);
+          conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
           conn.setConnectTimeout(30000);
           conn.setReadTimeout(120000);
           NetworkOutageWait.connect(conn);

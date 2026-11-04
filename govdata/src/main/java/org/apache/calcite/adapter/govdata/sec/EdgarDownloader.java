@@ -44,7 +44,6 @@ import java.util.Map;
 public class EdgarDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(EdgarDownloader.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String USER_AGENT = "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
 
   // SEC API endpoints
   @SuppressWarnings("InlineFormatString")
@@ -162,7 +161,7 @@ public class EdgarDownloader {
 
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", USER_AGENT);
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
@@ -412,7 +411,7 @@ public class EdgarDownloader {
       try {
         HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
         conn.setRequestMethod("GET");
-        conn.setRequestProperty("User-Agent", USER_AGENT);
+        conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
         conn.setConnectTimeout(30000);
         conn.setReadTimeout(30000);
 
@@ -503,7 +502,7 @@ public class EdgarDownloader {
     try {
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setRequestMethod("GET");
-      conn.setRequestProperty("User-Agent", USER_AGENT);
+      conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(30000);
       try {
