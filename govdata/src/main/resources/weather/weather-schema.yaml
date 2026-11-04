@@ -1484,6 +1484,10 @@ partitionedTables:
       type: http
       url: "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?station={station}&data=tmpf&data=tmpc&data=metar&sts={year}-01-01T00:00Z&ets={year}-12-31T23:59:59Z&format=onlycomma&latlon=no&missing=empty&trace=T&direct=no&report_type={report_type}"
       method: GET
+      # mesonet.agron.iastate.edu answers a second in-flight request from the same IP with
+      # 429 "Too many requests from your IP address"; one request at a time never trips it,
+      # and requestsPerSecond only spaces request starts, not overlapping downloads.
+      parallel: 1
       response:
         format: text
       rateLimit:
