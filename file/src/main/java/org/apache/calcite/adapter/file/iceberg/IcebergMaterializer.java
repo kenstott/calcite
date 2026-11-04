@@ -3948,6 +3948,8 @@ public class IcebergMaterializer {
           values.add(rs.getString(1));
         }
       }
+      LOGGER.info("Read '{}' from {}/{} staged files ({} distinct values so far)", column,
+          Math.min(offset + chunk, files.size()), files.size(), values.size());
     }
     return values;
   }
