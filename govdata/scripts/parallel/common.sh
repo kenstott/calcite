@@ -394,9 +394,19 @@ target_is_dq_bucket() {
 
 # assert_dq_target
 # A GOVDATA_DQ=true run must write to a -dq bucket. Fails (non-zero, message on stderr) when the
-# resolved GOVDATA_PARQUET_DIR does not end in -dq, including when it is unset. No-op otherwise.
+# resolved GOVDATA_PARQUET_DIR does not end in -dq, including when it is unset. Without GOVDATA_DQ=true it
+# fails when the target IS a -dq bucket.
 assert_dq_target() {
-  [ "${GOVDATA_DQ:-}" = "true" ] || return 0
+  if [ "${GOVDATA_DQ:-}" != "true" ]; then
+    # Mirror: a run without GOVDATA_DQ must not write to a -dq bucket either.
+    case "${GOVDATA_PARQUET_DIR:-}" in
+      *-dq|*-dq/*)
+        echo "FATAL: GOVDATA_DQ is not true but GOVDATA_PARQUET_DIR='${GOVDATA_PARQUET_DIR}' is a -dq bucket;" \
+             "refusing to start; set GOVDATA_DQ=true for a DQ run or point at the production bucket." >&2
+        return 1 ;;
+    esac
+    return 0
+  fi
   case "${GOVDATA_PARQUET_DIR:-}" in
     s3://*-dq|s3://*-dq/) return 0 ;;
   esac

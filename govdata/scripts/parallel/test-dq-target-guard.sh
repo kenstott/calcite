@@ -48,6 +48,9 @@ run "GOVDATA_DQ_BUCKET=govdata-parquet-v1-dq" "s3://govdata-parquet-v1-dq"
 ( source "$HERE/common.sh" >/dev/null 2>&1; unset GOVDATA_DQ; GOVDATA_PARQUET_DIR=s3://govdata-parquet-v1; assert_dq_target ) \
   && ok "non-DQ runs are unaffected" || bad "non-DQ run refused"
 
+( source "$HERE/common.sh" >/dev/null 2>&1; unset GOVDATA_DQ; GOVDATA_PARQUET_DIR=s3://govdata-parquet-v1-dq; assert_dq_target ) >/dev/null 2>&1 \
+  && bad "non-DQ run with a -dq target was allowed" || ok "non-DQ run refuses a -dq target"
+
 for fn in run_etl run_etl_inline; do
   awk -v f="$fn" '$0 ~ "^"f"\\(\\)" {on=1} on && /assert_dq_target/ {found=1} on && /GOVDATA_JAVA_BIN" \\/ {exit} END {exit !found}' "$HERE/common.sh" \
     && ok "$fn checks the DQ target before the JVM starts" || bad "$fn does not check the DQ target before the JVM"
