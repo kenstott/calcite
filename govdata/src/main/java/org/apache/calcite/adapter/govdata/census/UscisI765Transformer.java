@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.govdata.census;
 
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -46,7 +45,7 @@ import java.util.Map;
  * <p>USCIS publishes one workbook per fiscal quarter with an irregular file suffix
  * ({@code ...fy2025_q1.xlsx}, {@code ...fy2025_q4_v1.xlsx}), and only the current quarter is
  * linked from its index page, so each quarter's file is located by probing the known folders
- * ({@code data/}, {@code reports/}) and suffixes. A local directory ({@code census.uscisLocalDir})
+ * ({@code data/}, {@code reports/}) and suffixes. A local directory ({@code uscisLocalDir} source parameter)
  * is checked first; otherwise the file is fetched through a headed browser session, because
  * uscis.gov refuses every non-browser client.
  * A quarter for which no file exists is not yet published and contributes no rows; a fiscal year
@@ -81,7 +80,8 @@ public class UscisI765Transformer implements StreamingResponseTransformer {
     }
     int fiscalYear = Integer.parseInt(yearStr);
 
-    String localDir = ModelOperand.getString("census.uscisLocalDir");
+    Map<String, String> settings = context.getParameters();
+    String localDir = settings.get("uscisLocalDir");
     ArrayNode result = MAPPER.createArrayNode();
     for (int quarter = 1; quarter <= 4; quarter++) {
       InputStream xlsx = openLocal(localDir, fiscalYear, quarter);
@@ -91,7 +91,7 @@ public class UscisI765Transformer implements StreamingResponseTransformer {
         }
         for (String suffix : SUFFIXES) {
           String url = workbookUrl(folder, fiscalYear, quarter, suffix);
-          xlsx = openBrowser(url);
+          xlsx = openBrowser(settings, url);
           if (xlsx != null) {
             LOGGER.info("uscis_i765: FY{} Q{} workbook served from {}", fiscalYear, quarter, url);
             break;
@@ -250,18 +250,29 @@ public class UscisI765Transformer implements StreamingResponseTransformer {
   }
 
   /** Fetches the URL through the headed browser; null when uscis.gov answers 404. */
-  private static InputStream openBrowser(String url) {
+  private static InputStream openBrowser(Map<String, String> settings, String url) {
     UscisBrowserSession.Config config = new UscisBrowserSession.Config(
-        ModelOperand.getString("census.uscisNodeCommand"),
-        ModelOperand.getString("census.uscisBrowserScript"),
-        ModelOperand.getString("census.uscisDataPageUrl"),
-        ModelOperand.getLong("census.uscisRequestDelayMs", -1L),
-        ModelOperand.getString("census.uscisBrowserCacheDir"),
-        ModelOperand.getString("census.uscisChromeExecutable"));
+        settings.get("uscisNodeCommand"),
+        settings.get("uscisBrowserScript"),
+        settings.get("uscisDataPageUrl"),
+        parseDelay(settings.get("uscisRequestDelayMs")),
+        settings.get("uscisBrowserCacheDir"),
+        settings.get("uscisChromeExecutable"));
     try {
       return UscisBrowserSession.get(config).fetch(url);
     } catch (IOException e) {
       throw new RuntimeException("uscis_i765: browser fetch failed for " + url, e);
+    }
+  }
+
+  private static long parseDelay(String value) {
+    if (value == null || value.trim().isEmpty()) {
+      return -1L;
+    }
+    try {
+      return Long.parseLong(value.trim());
+    } catch (NumberFormatException e) {
+      throw new IllegalStateException("uscis_i765: uscisRequestDelayMs is not a number: " + value, e);
     }
   }
 }

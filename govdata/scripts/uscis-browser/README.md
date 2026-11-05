@@ -24,7 +24,7 @@ as `USCIS_BROWSER_SCRIPT`. Needs `node` >= 18 and `npm`.
   `libnss3` and `libnspr4` (`apt install libnss3 libnspr4`; a host-package step for the
   maintainer). `ldd <chrome> | grep "not found"` lists what is absent.
 
-## Settings (census schema operands; all via `${VAR:default}` in `census-schema.yaml`)
+## Settings (source parameters of the table, each `${VAR:default}` in `census-schema.yaml`)
 
 | Operand | Env var | Default | Meaning |
 |---|---|---|---|

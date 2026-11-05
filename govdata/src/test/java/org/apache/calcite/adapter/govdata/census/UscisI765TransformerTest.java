@@ -13,7 +13,6 @@ package org.apache.calcite.adapter.govdata.census;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
-import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -76,7 +75,8 @@ class UscisI765TransformerTest {
   private static RequestContext year(int fy) {
     Map<String, String> dims = new HashMap<>();
     dims.put("year", Integer.toString(fy));
-    return RequestContext.builder().url("unused").dimensionValues(dims).build();
+    return RequestContext.builder().url("unused").parameters(settings).dimensionValues(dims)
+        .build();
   }
 
   private static int count(Iterator<Map<String, Object>> it) {
@@ -88,14 +88,20 @@ class UscisI765TransformerTest {
     return n;
   }
 
+  private static Map<String, String> settings = new HashMap<>();
+
+  @org.junit.jupiter.api.BeforeEach void resetSettings() {
+    settings = new HashMap<>();
+  }
+
   private static void operand(String localDir, String script, String node) {
-    Map<String, Object> m = new HashMap<>();
+    Map<String, String> m = new HashMap<>();
     m.put("uscisLocalDir", localDir);
     m.put("uscisBrowserScript", script);
     m.put("uscisNodeCommand", node);
     m.put("uscisDataPageUrl", "https://www.uscis.gov/data");
     m.put("uscisRequestDelayMs", "0");
-    ModelOperand.capture("census", m);
+    settings = m;
   }
 
   /** A stand-in for the browser helper: serves one workbook, answers 404 for the rest. */
@@ -116,9 +122,9 @@ class UscisI765TransformerTest {
     // No browser helper exists: a quarter found locally must not need one.
     Path sub = Files.createDirectory(dir.resolve("local"));
     stageFixture(sub);
-    Map<String, Object> m = new HashMap<>();
+    Map<String, String> m = new HashMap<>();
     m.put("uscisLocalDir", sub.toString());
-    ModelOperand.capture("census", m);
+    settings = m;
     // FY2026 Q2-Q4 are not local, so the browser is required for them and its absence is named.
     IllegalStateException e = assertThrows(IllegalStateException.class,
         () -> new UscisI765Transformer().fetchAndTransform(year(2026)));

@@ -96,12 +96,12 @@ final class UscisBrowserSession {
     if (config.nodeCommand == null || config.nodeCommand.trim().isEmpty()
         || config.dataPageUrl == null || config.dataPageUrl.trim().isEmpty()
         || config.delayMs < 0) {
-      throw new IllegalStateException("uscis_i765: browser settings missing from the census "
-          + "model: uscisNodeCommand, uscisDataPageUrl and uscisRequestDelayMs must be set");
+      throw new IllegalStateException("uscis_i765: browser settings missing from the table source "
+          + "parameters: uscisNodeCommand, uscisDataPageUrl and uscisRequestDelayMs must be set");
     }
     if (config.script == null || config.script.trim().isEmpty()) {
       throw new IllegalStateException("uscis_i765: headed browser not configured: set "
-          + "census.uscisBrowserScript (USCIS_BROWSER_SCRIPT) to the installed fetch-uscis.js");
+          + "the uscisBrowserScript source parameter (USCIS_BROWSER_SCRIPT) to the installed fetch-uscis.js");
     }
     File script = new File(config.script.trim());
     if (!script.isFile()) {
