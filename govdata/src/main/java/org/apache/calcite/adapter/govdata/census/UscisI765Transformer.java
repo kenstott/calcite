@@ -40,7 +40,7 @@ import java.util.Map;
  *
  * <p>USCIS publishes one workbook per fiscal quarter with an irregular file suffix
  * ({@code ...fy2025_q1.xlsx}, {@code ...fy2025_q4_v1.xlsx}), and only the current quarter is
- * linked from its index page, so each quarter's file is located by probing the known suffixes.
+ * linked from its index page, so each quarter's file is located by probing the known folders ({@code data/}, {@code reports/}) and suffixes.
  * A quarter for which no file exists is not yet published and contributes no rows; a fiscal year
  * with no published quarter at all yields an empty result. The layout (header row starting
  * "EAD Eligibility Category", four filing-type groups of Receipt/Approval/Denial/Pending, then a
@@ -51,6 +51,8 @@ public class UscisI765Transformer implements ResponseTransformer {
   private static final Logger LOGGER = LoggerFactory.getLogger(UscisI765Transformer.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
+  private static final String BASE_URL = "https://www.uscis.gov/sites/default/files/document/";
+  private static final String[] FOLDERS = {"data", "reports"};
   private static final String[] SUFFIXES = {"_v1", "", "_v2", "_v3"};
   private static final String USER_AGENT =
       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -72,11 +74,15 @@ public class UscisI765Transformer implements ResponseTransformer {
     ArrayNode result = MAPPER.createArrayNode();
     for (int quarter = 1; quarter <= 4; quarter++) {
       InputStream xlsx = null;
-      for (String suffix : SUFFIXES) {
-        xlsx = open(String.format(
-            "https://www.uscis.gov/sites/default/files/document/data/"
-                + "i765_application_for_employment_fy%d_q%d%s.xlsx",
-            fiscalYear, quarter, suffix));
+      for (String folder : FOLDERS) {
+        for (String suffix : SUFFIXES) {
+          String url = workbookUrl(folder, fiscalYear, quarter, suffix);
+          xlsx = open(url);
+          if (xlsx != null) {
+            LOGGER.info("uscis_i765: FY{} Q{} workbook served from {}", fiscalYear, quarter, url);
+            break;
+          }
+        }
         if (xlsx != null) {
           break;
         }
@@ -95,7 +101,12 @@ public class UscisI765Transformer implements ResponseTransformer {
     return result.toString();
   }
 
-  private void parseSheet(Sheet sheet, int fiscalYear, int quarter, ArrayNode out) {
+  static String workbookUrl(String folder, int fiscalYear, int quarter, String suffix) {
+    return String.format(BASE_URL + "%s/i765_application_for_employment_fy%d_q%d%s.xlsx",
+        folder, fiscalYear, quarter, suffix);
+  }
+
+  static void parseSheet(Sheet sheet, int fiscalYear, int quarter, ArrayNode out) {
     DataFormatter fmt = new DataFormatter();
     String where = "FY" + fiscalYear + " Q" + quarter;
     int headerRow = -1;
