@@ -17,19 +17,6 @@ networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
-# USCIS I-765 workbooks (uscis_i765_employment_authorization). uscis.gov (Akamai) answers HTTP 403
-# to every non-browser client, so workbooks come from a local directory first, then from a headed
-# Chrome session driven by the helper installed by govdata/scripts/uscis-browser/install.sh.
-# Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY) and the shared libraries Chrome links
-# (on Debian/Ubuntu: libnss3, libnspr4). When the browser cannot start the table fails, naming the cause.
-uscisLocalDir: "${USCIS_I765_LOCAL_DIR:}"
-uscisBrowserScript: "${USCIS_BROWSER_SCRIPT:}"
-uscisNodeCommand: "${USCIS_NODE_COMMAND:node}"
-uscisChromeExecutable: "${USCIS_CHROME_EXECUTABLE:}"
-uscisBrowserCacheDir: "${USCIS_BROWSER_CACHE_DIR:}"
-uscisRequestDelayMs: "${USCIS_REQUEST_DELAY_MS:4000}"
-uscisDataPageUrl: "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data"
-
 comment: >
   U.S. Census Bureau demographic and population data including American Community Survey (ACS)
   estimates, decennial census results, and population estimates. Provides comprehensive demographic
@@ -7358,6 +7345,20 @@ partitionedTables:
       # is linked here) from a local directory or through a headed browser (see uscis* operands).
       url: "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data?fy={year}"
       method: GET
+      # Read by UscisI765Transformer from this block (ModelOperand is not captured until after the
+      # ETL phase). uscis.gov (Akamai) answers HTTP 403 to every non-browser client, so a workbook
+      # comes from the local directory first, then from a headed Chrome session driven by the helper
+      # installed by govdata/scripts/uscis-browser/install.sh. Headed Chrome needs a display
+      # (DISPLAY or WAYLAND_DISPLAY) and the shared libraries Chrome links (Debian/Ubuntu: libnss3,
+      # libnspr4); when the browser cannot start the table fails, naming the cause.
+      parameters:
+        uscisLocalDir: "${USCIS_I765_LOCAL_DIR:}"
+        uscisBrowserScript: "${USCIS_BROWSER_SCRIPT:}"
+        uscisNodeCommand: "${USCIS_NODE_COMMAND:node}"
+        uscisChromeExecutable: "${USCIS_CHROME_EXECUTABLE:}"
+        uscisBrowserCacheDir: "${USCIS_BROWSER_CACHE_DIR:}"
+        uscisRequestDelayMs: "${USCIS_REQUEST_DELAY_MS:4000}"
+        uscisDataPageUrl: "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data"
       response:
         format: TEXT
 
