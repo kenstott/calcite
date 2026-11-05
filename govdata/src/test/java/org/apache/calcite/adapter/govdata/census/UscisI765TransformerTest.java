@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.etl.RequestContext;
 
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -132,6 +133,10 @@ class UscisI765TransformerTest {
   }
 
   @Test void quartersComeFromLocalDirectoryThenBrowser(@TempDir Path dir) throws Exception {
+    // The stub helper is a bash script, so this exercises the launch path only where bash exists.
+    Assumptions.assumeFalse(
+        System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).startsWith("windows"),
+        "stub browser helper needs /bin/bash");
     Path q1 = stageFixture(dir);
     Path q2 = dir.resolve("served-by-browser.xlsx");
     Files.copy(q1, q2);
