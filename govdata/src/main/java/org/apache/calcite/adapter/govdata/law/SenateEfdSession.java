@@ -13,8 +13,10 @@ package org.apache.calcite.adapter.govdata.law;
 // object-store URI.
 
 import org.apache.calcite.adapter.file.etl.ModelOperand;
+import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.govdata.BrowserHelperProcess;
 import org.apache.calcite.adapter.govdata.GovDataException;
+import org.apache.calcite.adapter.govdata.GovDataUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -162,20 +164,31 @@ final class SenateEfdSession {
     Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
   }
 
+  /**
+   * A law schema setting: the model operand, or, when the operand is not yet published (an ETL-time
+   * reader runs before the top-level settings are merged into it), the schema YAML's own value.
+   */
+  private static String setting(String key) {
+    String value = ModelOperand.getString("law." + key);
+    if (value == null) {
+      value = GovDataUtils.loadSchemaSetting(LawSchemaFactory.class, "/law/law-schema.yaml", key);
+      if (value != null && value.contains("${")) {
+        value = VariableResolver.resolveEnvVars(value);
+      }
+    }
+    if (value == null || value.trim().isEmpty()) {
+      throw new IllegalStateException("fd_*: law." + key + " is not set in the law schema model");
+    }
+    return value.trim();
+  }
+
   private BrowserHelperProcess helper() {
     if (helper == null || !helper.isAlive()) {
-      String script = ModelOperand.getString("law.efdBrowserScript", "");
-      String edge = ModelOperand.getString("law.efdEdgeExecutable", "");
-      String profile = ModelOperand.getString("law.efdProfileDir", "");
-      int port = ModelOperand.getInt("law.efdDebugPort", 0);
-      if (edge.isEmpty() || profile.isEmpty() || port <= 0) {
-        throw new IllegalStateException("fd_*: Edge settings missing from the law model: "
-            + "efdEdgeExecutable, efdProfileDir and efdDebugPort must be set");
-      }
-      helper = BrowserHelperProcess.start("fd_*",
-          ModelOperand.getString("law.efdNodeCommand", ""), script,
+      helper = BrowserHelperProcess.start("fd_*", setting("efdNodeCommand"),
+          setting("efdBrowserScript"),
           "run govdata/scripts/edge-browser/install.sh and set EFD_BROWSER_SCRIPT",
-          Arrays.asList(edge, Integer.toString(port), profile));
+          Arrays.asList(setting("efdEdgeExecutable"), setting("efdDebugPort"),
+              setting("efdProfileDir")));
     }
     return helper;
   }
