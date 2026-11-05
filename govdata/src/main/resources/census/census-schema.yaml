@@ -17,6 +17,19 @@ networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
+# USCIS I-765 workbooks (uscis_i765_employment_authorization). uscis.gov (Akamai) answers HTTP 403
+# to every non-browser client, so workbooks come from a local directory first, then from a headed
+# Chrome session driven by the helper installed by govdata/scripts/uscis-browser/install.sh.
+# Headed Chrome needs a display (DISPLAY or WAYLAND_DISPLAY) and the shared libraries Chrome links
+# (on Debian/Ubuntu: libnss3, libnspr4). When the browser cannot start the table fails, naming the cause.
+uscisLocalDir: "${USCIS_I765_LOCAL_DIR:}"
+uscisBrowserScript: "${USCIS_BROWSER_SCRIPT:}"
+uscisNodeCommand: "${USCIS_NODE_COMMAND:node}"
+uscisChromeExecutable: "${USCIS_CHROME_EXECUTABLE:}"
+uscisBrowserCacheDir: "${USCIS_BROWSER_CACHE_DIR:}"
+uscisRequestDelayMs: "${USCIS_REQUEST_DELAY_MS:4000}"
+uscisDataPageUrl: "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data"
+
 comment: >
   U.S. Census Bureau demographic and population data including American Community Survey (ACS)
   estimates, decennial census results, and population estimates. Provides comprehensive demographic
@@ -7291,7 +7304,7 @@ partitionedTables:
       or occupation breakdown in any USCIS release; do not use this table for employment by
       industry. Counts are restated by USCIS in later releases. Pending cannot be reconstructed
       by summing quarters. Coverage starts at FY2025 (the earliest quarterly workbooks USCIS
-      still publishes as xlsx); FY2026 Q1 is not published by USCIS and is absent.
+      still publishes as xlsx); FY2026 Q1 is published under the reports/ folder.
       Source: https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data
 
     dimensions:
@@ -7340,17 +7353,13 @@ partitionedTables:
 
     source:
       type: http
-      # The URL only anchors freshness and the raw cache: the transformer locates and downloads
+      # The URL is never fetched: the streaming transformer locates and downloads
       # each quarter's workbook itself (file suffixes are irregular and only the current quarter
-      # is linked here). uscis.gov requires a browser User-Agent.
+      # is linked here) from a local directory or through a headed browser (see uscis* operands).
       url: "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data?fy={year}"
       method: GET
-      headers:
-        User-Agent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
       response:
         format: TEXT
-      rawCache:
-        enabled: true
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.census.UscisI765Transformer"
