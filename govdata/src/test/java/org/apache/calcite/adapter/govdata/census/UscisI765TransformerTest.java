@@ -49,4 +49,19 @@ class UscisI765TransformerTest {
     assertEquals("Initial", out.get(0).get("filing_type").asText());
     assertEquals("Renewal", out.get(1).get("filing_type").asText());
   }
+
+  @Test void openLocalReadsStagedWorkbook() throws Exception {
+    java.io.File dir = java.nio.file.Files.createTempDirectory("i765").toFile();
+    try (InputStream src = getClass().getResourceAsStream("/census/"
+        + "i765_application_for_employment_fy2026_q1_v1.xlsx")) {
+      java.nio.file.Files.copy(src, new java.io.File(dir,
+          "i765_application_for_employment_fy2026_q1_v1.xlsx").toPath());
+    }
+    try (InputStream in = UscisI765Transformer.openLocal(dir.getPath(), 2026, 1)) {
+      assertTrue(in != null);
+    }
+    assertEquals(null, UscisI765Transformer.openLocal(dir.getPath(), 2026, 2));
+    assertEquals(null, UscisI765Transformer.openLocal(null, 2026, 1));
+    assertEquals(null, UscisI765Transformer.openLocal("", 2026, 1));
+  }
 }

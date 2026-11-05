@@ -1548,6 +1548,16 @@ build_inline_model() {
     fi
   fi
 
+  # Local directory of manually downloaded USCIS I-765 workbooks (USCIS_I765_LOCAL_DIR), census only.
+  # The census ETL runs before the schema YAML's own operands are merged in, so it arrives through
+  # the inline model like the SEC bulk sources above.
+  if [ "$schema_name" = "census" ] && [ -n "${USCIS_I765_LOCAL_DIR:-}" ]; then
+    case "$USCIS_I765_LOCAL_DIR" in
+      *\"*|*\\*) echo "USCIS_I765_LOCAL_DIR must not contain quotes or backslashes: $USCIS_I765_LOCAL_DIR" >&2; return 1 ;;
+    esac
+    user_tables_json="${user_tables_json},\"uscisI765LocalDir\":\"${USCIS_I765_LOCAL_DIR}\""
+  fi
+
   printf '{"version":"1.0","defaultSchema":"%s","schemas":[{"name":"%s","type":"custom","factory":"org.apache.calcite.adapter.govdata.GovDataSchemaFactory","operand":{"dataSource":"%s",%s"autoDownload":true,"directory":"${GOVDATA_PARQUET_DIR}","cacheDirectory":"${GOVDATA_CACHE_DIR}/%s",%s,"s3Config":{"accessKeyId":"${AWS_ACCESS_KEY_ID}","secretAccessKey":"${AWS_SECRET_ACCESS_KEY}","endpoint":"${AWS_ENDPOINT_OVERRIDE}"}%s%s}}]}' \
     "$schema_name" "$schema_name" "$schema_name" "$year_json" "$schema_name" "$(tracker_operand_json)" "$extra_json" "$user_tables_json"
 }

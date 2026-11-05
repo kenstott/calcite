@@ -16,6 +16,12 @@ schemaName: "${SCHEMA_NAME:census}"
 networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 1
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
+# Directory holding manually downloaded USCIS I-765 workbooks
+# (i765_application_for_employment_fy<YYYY>_q<N><suffix>.xlsx). uscis_i765_employment_authorization
+# reads a quarter from here before trying uscis.gov. Empty = off. The ETL runs before this file's
+# operands are merged in, so the launch scripts also pass USCIS_I765_LOCAL_DIR through the inline
+# model (build_inline_model in common.sh).
+uscisI765LocalDir: "${USCIS_I765_LOCAL_DIR:}"
 
 comment: >
   U.S. Census Bureau demographic and population data including American Community Survey (ACS)
@@ -7291,7 +7297,7 @@ partitionedTables:
       or occupation breakdown in any USCIS release; do not use this table for employment by
       industry. Counts are restated by USCIS in later releases. Pending cannot be reconstructed
       by summing quarters. Coverage starts at FY2025 (the earliest quarterly workbooks USCIS
-      still publishes as xlsx); FY2026 Q1 is not published by USCIS and is absent.
+      still publishes as xlsx).
       Source: https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data
 
     dimensions:

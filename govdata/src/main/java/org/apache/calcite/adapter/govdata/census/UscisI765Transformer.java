@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.census;
 
+import org.apache.calcite.adapter.file.etl.ModelOperand;
 import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
@@ -28,6 +29,8 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -40,7 +43,8 @@ import java.util.Map;
  *
  * <p>USCIS publishes one workbook per fiscal quarter with an irregular file suffix
  * ({@code ...fy2025_q1.xlsx}, {@code ...fy2025_q4_v1.xlsx}), and only the current quarter is
- * linked from its index page, so each quarter's file is located by probing the known folders ({@code data/}, {@code reports/}) and suffixes.
+ * linked from its index page, so each quarter's file is located by probing a local directory (when the schema declares one), then the known folders
+ * ({@code data/}, {@code reports/}) and suffixes.
  * A quarter for which no file exists is not yet published and contributes no rows; a fiscal year
  * with no published quarter at all yields an empty result. The layout (header row starting
  * "EAD Eligibility Category", four filing-type groups of Receipt/Approval/Denial/Pending, then a
@@ -71,20 +75,18 @@ public class UscisI765Transformer implements ResponseTransformer {
     }
     int fiscalYear = Integer.parseInt(yearStr);
 
+    String localDir = ModelOperand.getString("census.uscisI765LocalDir");
     ArrayNode result = MAPPER.createArrayNode();
     for (int quarter = 1; quarter <= 4; quarter++) {
-      InputStream xlsx = null;
-      for (String folder : FOLDERS) {
+      InputStream xlsx = openLocal(localDir, fiscalYear, quarter);
+      for (int f = 0; xlsx == null && f < FOLDERS.length; f++) {
         for (String suffix : SUFFIXES) {
-          String url = workbookUrl(folder, fiscalYear, quarter, suffix);
+          String url = workbookUrl(FOLDERS[f], fiscalYear, quarter, suffix);
           xlsx = open(url);
           if (xlsx != null) {
             LOGGER.info("uscis_i765: FY{} Q{} workbook served from {}", fiscalYear, quarter, url);
             break;
           }
-        }
-        if (xlsx != null) {
-          break;
         }
       }
       if (xlsx == null) {
@@ -101,9 +103,37 @@ public class UscisI765Transformer implements ResponseTransformer {
     return result.toString();
   }
 
+  static String workbookName(int fiscalYear, int quarter, String suffix) {
+    return String.format("i765_application_for_employment_fy%d_q%d%s.xlsx", fiscalYear, quarter,
+        suffix);
+  }
+
+  /**
+   * Opens a quarter's workbook from the local directory declared in the schema YAML, or returns
+   * null when no directory is configured or it holds no file for the quarter.
+   */
+  static InputStream openLocal(String localDir, int fiscalYear, int quarter) {
+    if (localDir == null || localDir.isEmpty()) {
+      return null;
+    }
+    for (String suffix : SUFFIXES) {
+      File file = new File(localDir, workbookName(fiscalYear, quarter, suffix));
+      if (file.isFile()) {
+        try {
+          InputStream in = new FileInputStream(file);
+          LOGGER.info("uscis_i765: FY{} Q{} workbook served from local file {}", fiscalYear,
+              quarter, file);
+          return in;
+        } catch (IOException e) {
+          throw new RuntimeException("uscis_i765: cannot read local workbook " + file, e);
+        }
+      }
+    }
+    return null;
+  }
+
   static String workbookUrl(String folder, int fiscalYear, int quarter, String suffix) {
-    return String.format(BASE_URL + "%s/i765_application_for_employment_fy%d_q%d%s.xlsx",
-        folder, fiscalYear, quarter, suffix);
+    return BASE_URL + folder + "/" + workbookName(fiscalYear, quarter, suffix);
   }
 
   static void parseSheet(Sheet sheet, int fiscalYear, int quarter, ArrayNode out) {
