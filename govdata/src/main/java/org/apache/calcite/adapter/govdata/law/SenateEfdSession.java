@@ -93,6 +93,11 @@ final class SenateEfdSession {
     agreed = true;
   }
 
+  private static String abbreviate(String body) {
+    String flat = body.replaceAll("\\s+", " ");
+    return flat.length() > 300 ? flat.substring(0, 300) : flat;
+  }
+
   /** POSTs the DataTables listing query and returns the JSON body. */
   synchronized String listing(Map<String, String> params, boolean cacheable) throws IOException {
     File cached = new File(cacheDir(), "list-" + sha256(params.toString()) + ".json");
@@ -111,8 +116,7 @@ final class SenateEfdSession {
     if (status != 200) {
       throw new GovDataException(SITE + "/search/report/data/: HTTP " + status
           + " for " + params + " (a redirect means the session's agreement lapsed): "
-          + response.path("body").asText().replaceAll("\\s+", " ").substring(0,
-              Math.min(300, response.path("body").asText().length())));
+          + abbreviate(response.path("body").asText()));
     }
     String body = response.path("body").asText();
     if (cacheable) {
