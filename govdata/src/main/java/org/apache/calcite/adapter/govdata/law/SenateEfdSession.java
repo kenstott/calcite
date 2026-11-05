@@ -12,38 +12,38 @@ package org.apache.calcite.adapter.govdata.law;
 // storage-provider-guard:ignore-file - audited: the cache is a local temp directory, never an
 // object-store URI.
 
+import org.apache.calcite.adapter.file.etl.ModelOperand;
+import org.apache.calcite.adapter.govdata.BrowserHelperProcess;
 import org.apache.calcite.adapter.govdata.GovDataException;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.CookieManager;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.time.Duration;
-import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.Map;
 
 /**
- * One scripted session against the Senate's eFD system (efdsearch.senate.gov). Every search and
- * view is gated behind a click-through agreement (a CSRF form posting {@code
- * prohibition_agreement=1}); {@link #acceptAgreement()} submits it once and the cookie jar carries
- * the session after that. Requests are serialized and spaced by {@link #REQUEST_SPACING_MS}, and a
- * 5xx or I/O failure is retried with a growing delay (10s, 20s, ... about 2.5 minutes in all, since
- * eFD answers runs of 503s for minutes at a time) before it is thrown.
+ * One scripted session against the Senate's eFD system (efdsearch.senate.gov), run inside a
+ * Windows-side Edge driven over the DevTools protocol (Akamai answers HTTP 403 to every client on
+ * the Linux side). Every search and view is gated behind a click-through agreement;
+ * {@link #acceptAgreement()} clicks through it once and the browser's cookies carry the session
+ * after that. Requests are serialized and spaced by {@link #REQUEST_SPACING_MS}, and a 5xx or I/O
+ * failure is retried with a growing delay (10s, 20s, ... about 2.5 minutes in all, since eFD
+ * answers runs of 503s for minutes at a time) before it is thrown. A browser that cannot start
+ * fails the run with the cause; there is no fallback client.
  *
- * <p>Redirects are never followed: a view URL that answers 302 to the site root is a report the
- * Senate no longer serves (candidate reports expire a year after the candidacy ends), which
- * {@link #getView(String)} reports as {@link View#unavailable} rather than hiding behind the home
- * page's HTML.
+ * <p>A view URL that redirects to the site root is a report the Senate no longer serves
+ * (candidate reports expire a year after the candidacy ends), which {@link #getView(String)}
+ * reports as {@link View#unavailable} rather than hiding behind the home page's HTML.
  */
 final class SenateEfdSession {
 
@@ -53,7 +53,7 @@ final class SenateEfdSession {
 
   private static final long REQUEST_SPACING_MS = 350L;
   private static final int MAX_ATTEMPTS = 6;
-  private static final String USER_AGENT = "Mozilla/5.0 (compatible; govdata-etl)";
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   /** Result of {@link #getView(String)}. */
   static final class View {
@@ -78,35 +78,16 @@ final class SenateEfdSession {
   }
   private static final String UNAVAILABLE_MARKER = "UNAVAILABLE";
 
-  private final HttpClient client;
-  private final CookieManager cookies = new CookieManager();
+  private BrowserHelperProcess helper;
   private boolean agreed;
   private long lastRequestAt;
 
-  SenateEfdSession() {
-    this.client = HttpClient.newBuilder().cookieHandler(cookies)
-        .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(30)).build();
-  }
-
-  /** Loads the agreement form and submits it; idempotent. */
+  /** Accepts the agreement in the browser session; idempotent. */
   synchronized void acceptAgreement() throws IOException {
     if (agreed) {
       return;
     }
-    String form = send(get("/search/home/")).body();
-    String token = attribute(form, "csrfmiddlewaretoken");
-    if (token == null) {
-      throw new GovDataException(SITE + "/search/home/: no csrfmiddlewaretoken in the agreement form");
-    }
-    Map<String, String> fields = new LinkedHashMap<String, String>();
-    fields.put("csrfmiddlewaretoken", token);
-    fields.put("prohibition_agreement", "1");
-    HttpResponse<String> response = send(post("/search/home/", fields, "/search/home/", null));
-    if (response.statusCode() != 302 || !response.headers().firstValue("Location").orElse("")
-        .endsWith("/search/")) {
-      throw new GovDataException(SITE + "/search/home/: agreement POST answered "
-          + response.statusCode() + " instead of a redirect to /search/");
-    }
+    call(MAPPER.createObjectNode().put("op", "agree"));
     agreed = true;
   }
 
@@ -117,16 +98,23 @@ final class SenateEfdSession {
       return new String(Files.readAllBytes(cached.toPath()), StandardCharsets.UTF_8);
     }
     acceptAgreement();
-    HttpResponse<String> response =
-        send(post("/search/report/data/", params, "/search/", csrfCookie()));
-    if (response.statusCode() != 200) {
-      throw new GovDataException(SITE + "/search/report/data/: HTTP " + response.statusCode()
-          + " (a 302 means the session's agreement lapsed)");
+    ObjectNode request = MAPPER.createObjectNode().put("op", "post").put("path",
+        "/search/report/data/");
+    ObjectNode fields = request.putObject("fields");
+    for (Map.Entry<String, String> field : params.entrySet()) {
+      fields.put(field.getKey(), field.getValue());
     }
+    JsonNode response = call(request);
+    int status = response.path("status").asInt();
+    if (status != 200) {
+      throw new GovDataException(SITE + "/search/report/data/: HTTP " + status
+          + " (a redirect means the session's agreement lapsed)");
+    }
+    String body = response.path("body").asText();
     if (cacheable) {
-      store(cached, response.body());
+      store(cached, body);
     }
-    return response.body();
+    return body;
   }
 
   /** GETs a report view path such as {@code /search/view/annual/{uuid}/}. */
@@ -137,18 +125,20 @@ final class SenateEfdSession {
       return body.equals(UNAVAILABLE_MARKER) ? new View(null, true) : new View(body, false);
     }
     acceptAgreement();
-    HttpResponse<String> response = send(get(path));
-    if (response.statusCode() == 200) {
-      store(cached, response.body());
-      return new View(response.body(), false);
+    JsonNode response = call(MAPPER.createObjectNode().put("op", "get").put("path", path));
+    int status = response.path("status").asInt();
+    String finalPath = response.path("finalPath").asText();
+    if (status == 200 && !response.path("redirected").asBoolean()) {
+      String body = response.path("body").asText();
+      store(cached, body);
+      return new View(body, false);
     }
-    String location = response.headers().firstValue("Location").orElse("");
-    if (response.statusCode() == 302 && (location.equals(SITE + "/") || location.equals("/"))) {
+    if (status == 200 && (finalPath.equals("/") || finalPath.equals("/search/home/"))) {
       store(cached, UNAVAILABLE_MARKER);
       return new View(null, true);
     }
-    throw new GovDataException(SITE + path + ": HTTP " + response.statusCode() + " Location="
-        + location);
+    throw new GovDataException(SITE + path + ": HTTP " + status + " finalPath=" + finalPath
+        + " redirected=" + response.path("redirected").asBoolean());
   }
 
   private static String sha256(String text) {
@@ -172,41 +162,26 @@ final class SenateEfdSession {
     Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
   }
 
-  private String csrfCookie() {
-    for (java.net.HttpCookie cookie : cookies.getCookieStore().getCookies()) {
-      if ("csrftoken".equals(cookie.getName())) {
-        return cookie.getValue();
+  private BrowserHelperProcess helper() {
+    if (helper == null || !helper.isAlive()) {
+      String script = ModelOperand.getString("law.efdBrowserScript", "");
+      String edge = ModelOperand.getString("law.efdEdgeExecutable", "");
+      String profile = ModelOperand.getString("law.efdProfileDir", "");
+      int port = ModelOperand.getInt("law.efdDebugPort", 0);
+      if (edge.isEmpty() || profile.isEmpty() || port <= 0) {
+        throw new IllegalStateException("fd_*: Edge settings missing from the law model: "
+            + "efdEdgeExecutable, efdProfileDir and efdDebugPort must be set");
       }
+      helper = BrowserHelperProcess.start("fd_*",
+          ModelOperand.getString("law.efdNodeCommand", ""), script,
+          "run govdata/scripts/edge-browser/install.sh and set EFD_BROWSER_SCRIPT",
+          Arrays.asList(edge, Integer.toString(port), profile));
     }
-    throw new GovDataException(SITE + ": the session has no csrftoken cookie");
+    return helper;
   }
 
-  private static HttpRequest get(String path) {
-    return HttpRequest.newBuilder(URI.create(SITE + path)).header("User-Agent", USER_AGENT)
-        .timeout(Duration.ofMinutes(2)).GET().build();
-  }
-
-  private static HttpRequest post(String path, Map<String, String> fields, String referer,
-      String csrfHeader) {
-    StringBuilder body = new StringBuilder();
-    for (Map.Entry<String, String> field : fields.entrySet()) {
-      if (body.length() > 0) {
-        body.append('&');
-      }
-      body.append(URLEncoder.encode(field.getKey(), StandardCharsets.UTF_8)).append('=')
-          .append(URLEncoder.encode(field.getValue(), StandardCharsets.UTF_8));
-    }
-    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(SITE + path))
-        .header("User-Agent", USER_AGENT).header("Referer", SITE + referer)
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .timeout(Duration.ofMinutes(2)).POST(HttpRequest.BodyPublishers.ofString(body.toString()));
-    if (csrfHeader != null) {
-      builder.header("X-CSRFToken", csrfHeader);
-    }
-    return builder.build();
-  }
-
-  private HttpResponse<String> send(HttpRequest request) throws IOException {
+  /** One request to the browser, spaced by {@link #REQUEST_SPACING_MS}; 5xx and I/O failures retried. */
+  private JsonNode call(ObjectNode request) throws IOException {
     IOException last = null;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       long wait = lastRequestAt + REQUEST_SPACING_MS - System.currentTimeMillis();
@@ -214,34 +189,27 @@ final class SenateEfdSession {
         if (wait > 0) {
           Thread.sleep(wait);
         }
-        HttpResponse<String> response =
-            client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        JsonNode response = helper().call(request);
         lastRequestAt = System.currentTimeMillis();
-        if (response.statusCode() < 500) {
+        if (response.path("status").asInt(0) < 500) {
           return response;
         }
-        last = new IOException(request.uri() + ": HTTP " + response.statusCode());
+        last = new IOException(request.path("path").asText() + ": HTTP "
+            + response.path("status").asInt());
       } catch (IOException e) {
         last = e;
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        throw new IOException(request.uri() + ": interrupted", e);
+        throw new IOException(request.path("path").asText() + ": interrupted", e);
       }
       LOGGER.warn("{} (attempt {}/{})", last.getMessage(), attempt, MAX_ATTEMPTS);
       try {
         Thread.sleep(10000L * attempt);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        throw new IOException(request.uri() + ": interrupted", e);
+        throw new IOException(request.path("path").asText() + ": interrupted", e);
       }
     }
     throw last;
-  }
-
-  /** Value of the first {@code <input name="...">} in the page, or null. */
-  private static String attribute(String html, String name) {
-    java.util.regex.Matcher m = java.util.regex.Pattern
-        .compile("name=\"" + name + "\"\\s+value=\"([^\"]*)\"").matcher(html);
-    return m.find() ? m.group(1) : null;
   }
 }
