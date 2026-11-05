@@ -52,6 +52,17 @@ networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
+# Senate eFD (fd_* tables). efdsearch.senate.gov (Akamai) answers HTTP 403 to every client on the
+# Linux/WSL side, including headed Chrome; a Windows-side Edge is accepted. The worker starts Edge
+# with a fresh profile under efdProfileDir and a DevTools port bound to localhost, drives it with the
+# helper installed by govdata/scripts/edge-browser/install.sh, and closes it after the run. When
+# Edge or the helper is missing, or the port is unreachable, the fd_* tables fail naming the cause.
+efdEdgeExecutable: "${EFD_EDGE_EXECUTABLE:/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe}"
+efdDebugPort: "${EFD_DEBUG_PORT:9222}"
+efdProfileDir: "${EFD_PROFILE_DIR:C:\\Users\\Admin\\AppData\\Local\\Temp}"
+efdBrowserScript: "${EFD_BROWSER_SCRIPT:}"
+efdNodeCommand: "${EFD_NODE_COMMAND:node}"
+
 comment: >
   The legal corpus, one source per group of tables. It currently holds the United States Code
   (codified general and permanent federal statutes) from the Office
