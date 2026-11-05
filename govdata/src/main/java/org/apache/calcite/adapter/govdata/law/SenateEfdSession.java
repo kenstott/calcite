@@ -110,7 +110,9 @@ final class SenateEfdSession {
     int status = response.path("status").asInt();
     if (status != 200) {
       throw new GovDataException(SITE + "/search/report/data/: HTTP " + status
-          + " (a redirect means the session's agreement lapsed)");
+          + " for " + params + " (a redirect means the session's agreement lapsed): "
+          + response.path("body").asText().replaceAll("\\s+", " ").substring(0,
+              Math.min(300, response.path("body").asText().length())));
     }
     String body = response.path("body").asText();
     if (cacheable) {
