@@ -4710,6 +4710,7 @@ public class McpServer {
                             renderedClaims = claimsSec;
                         }
                     } else {
+                        addIfPresent(gateProblems, enforceValidationHasClaims(args));
                         addIfPresent(gateProblems, enforceClaimsArrayPresence(secs));
                     }
                     addIfPresent(gateProblems, enforceExclusionDisclosure(secs));
@@ -7255,6 +7256,23 @@ public class McpServer {
         if (problem != null && !problem.isEmpty()) {
             problems.add(problem);
         }
+    }
+
+    /** A publish that names the article under review ({@code source_url}) is an article
+     *  validation, and a validation without a non-empty {@code claims} array has no claims
+     *  table and no engine-computed honesty or bias scores. Refuse it with the required shape. */
+    private static String enforceValidationHasClaims(JsonNode args) {
+        String srcUrl = args.path("source_url").asText(null);
+        if (srcUrl == null || srcUrl.trim().isEmpty()) {
+            return null;
+        }
+        return "validation refused: `source_url` names an article under review but `claims` is "
+            + "missing or empty. Put every graded assertion in the structured `claims` array "
+            + "(not only in report sections): each claim needs `group` (`fidelity`, "
+            + "`author_claims` or `subject_claims`), `speaker` on every `subject_claims` entry, "
+            + "and `rests_on` (1-based claim numbers offered as evidence, [] when none). The "
+            + "engine computes the honesty and bias scores from these fields. Call again with "
+            + "the `claims` array.";
     }
 
     /** A validation with no {@code source_url} publishes a report the browser extension can
