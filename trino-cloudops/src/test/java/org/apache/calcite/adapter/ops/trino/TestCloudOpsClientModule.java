@@ -148,7 +148,8 @@ class TestCloudOpsClientModule
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> CloudOpsClientModule.validate(config));
         assertTrue(e.getMessage().contains("aws.account-ids"), e.getMessage());
-        assertTrue(e.getMessage().contains("aws.region"), e.getMessage());
+        // The region is optional: without it every enabled region is queried
+        assertFalse(e.getMessage().contains("aws.region"), e.getMessage());
         assertTrue(e.getMessage().contains("aws.secret-access-key"), e.getMessage());
     }
 

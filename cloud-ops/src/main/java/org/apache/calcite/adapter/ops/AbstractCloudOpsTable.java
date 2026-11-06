@@ -17,16 +17,24 @@ import org.apache.calcite.adapter.ops.util.CloudOpsProjectionHandler;
 import org.apache.calcite.adapter.ops.util.CloudOpsSortHandler;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
+import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelCollation;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelReferentialConstraint;
+import org.apache.calcite.rel.logical.LogicalTableScan;
+import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.ProjectableFilterableTable;
 import org.apache.calcite.schema.Statistic;
 import org.apache.calcite.schema.Statistics;
+import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -40,15 +48,32 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
  * Base class for Cloud Ops tables.
  * Handles common functionality like provider filtering and parallel execution.
- * Supports query optimization through projection, filtering, sorting, and pagination pushdown.
+ * Filters choose the clouds and accounts to call; ORDER BY, LIMIT and OFFSET are handed to
+ * {@link #scan(DataContext, List, int[], RelCollation, RexNode, RexNode)} by
+ * {@link CloudOpsSortScanRule} and applied once over the rows of all clouds.
  */
-public abstract class AbstractCloudOpsTable extends AbstractTable implements ProjectableFilterableTable {
+public abstract class AbstractCloudOpsTable extends AbstractTable
+    implements ProjectableFilterableTable, TranslatableTable {
   private static final Logger logger = LoggerFactory.getLogger(AbstractCloudOpsTable.class);
+
+  /**
+   * Threads the cloud providers are queried on. Not the common pool: the Azure and Google
+   * credential libraries fetch tokens on the common pool, so provider calls that occupy all
+   * of its threads would wait for tokens that have no thread left to be fetched on.
+   */
+  private static final ExecutorService PROVIDER_POOL =
+      Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "cloudops-provider");
+        thread.setDaemon(true);
+        return thread;
+      });
 
   /** Schema name used when the model does not choose one. */
   public static final String DEFAULT_SCHEMA_NAME = "cloud";
@@ -120,8 +145,27 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
   }
 
   /**
-   * Enhanced scan method that accepts sort and pagination information.
-   * This method can be called by custom table scan implementations.
+   * Registers the rule that hands ORDER BY / OFFSET / FETCH to this table. The scan itself
+   * is the planner's standard one, so filter and projection handling are unchanged.
+   */
+  @Override public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
+    context.getCluster().getPlanner().addRule(CloudOpsSortScanRule.INSTANCE);
+    return LogicalTableScan.create(context.getCluster(), relOptTable, context.getTableHints());
+  }
+
+  /**
+   * Scan with a sort order and a row window, as planned by {@link CloudOpsSortScanRule}.
+   *
+   * <p>The rows of all providers are combined, sorted by {@code collation} (table ordinals),
+   * cut to {@code offset}/{@code fetch} and only then projected. Providers are never given
+   * the sort or the offset: a provider's own ordering of strings and nulls is not SQL's, so
+   * a provider that sorted and truncated could keep the wrong rows. A provider is told to
+   * return at most offset + fetch rows only when any rows will do, that is, when there is
+   * neither a sort nor a filter.
+   *
+   * @param collation sort order in table ordinals, or null
+   * @param offset literal number of leading rows to skip, or null
+   * @param fetch literal maximum number of rows to return, or null
    */
   public Enumerable<Object[]> scan(DataContext root,
                                    List<RexNode> filters,
@@ -132,21 +176,27 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
     // Log all received optimization hints
     logOptimizationHints(filters, projects, collation, offset, fetch);
 
+    final RelDataType rowType = getRowType(root.getTypeFactory());
+
     // Create projection handler for optimization
     CloudOpsProjectionHandler projectionHandler =
-        new CloudOpsProjectionHandler(getRowType(root.getTypeFactory()), projects);
+        new CloudOpsProjectionHandler(rowType, projects);
 
-    // Create sort handler for optimization
-    CloudOpsSortHandler sortHandler =
-        new CloudOpsSortHandler(getRowType(root.getTypeFactory()), collation);
+    final CloudOpsSortHandler sortHandler = new CloudOpsSortHandler(rowType, collation);
+    final long offsetRows = offset == null ? 0L : rowCount(offset, "OFFSET");
+    final long fetchRows = fetch == null ? -1L : rowCount(fetch, "FETCH");
 
-    // Create pagination handler for optimization
-    CloudOpsPaginationHandler paginationHandler =
-        new CloudOpsPaginationHandler(offset, fetch);
+    // What the providers see: no sort, and a row cap only when any rows satisfy the query
+    final boolean anyRowsWillDo =
+        fetch != null && !sortHandler.hasSort() && (filters == null || filters.isEmpty());
+    final CloudOpsSortHandler providerSort = new CloudOpsSortHandler(rowType, null);
+    final CloudOpsPaginationHandler providerPagination = anyRowsWillDo
+        ? CloudOpsPaginationHandler.firstRows(offsetRows + fetchRows)
+        : CloudOpsPaginationHandler.none();
 
     // Create filter handler for optimization
     CloudOpsFilterHandler filterHandler =
-        new CloudOpsFilterHandler(getRowType(root.getTypeFactory()), filters);
+        new CloudOpsFilterHandler(rowType, filters);
 
     // Extract filters
     Set<String> providers = extractProviders(filterHandler);
@@ -157,34 +207,42 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
       providers = new HashSet<>(config.providers);
     }
 
-    // Query providers in parallel with projection support
+    // Providers hand back whatever their API returned (Azure Resource Graph, for one, sends
+    // booleans as 0/1); every row is brought to the declared column types before it leaves
+    final List<RelDataTypeField> fields = rowType.getFieldList();
+    final SqlTypeName[] columnTypes = new SqlTypeName[fields.size()];
+    for (int i = 0; i < columnTypes.length; i++) {
+      columnTypes[i] = fields.get(i).getType().getSqlTypeName();
+    }
+
+    // Query providers in parallel; rows stay full-width until sorted
     List<CompletableFuture<List<Object[]>>> futures = new ArrayList<>();
 
     if (providers.contains("azure") && config.azure != null) {
       futures.add(
-          CompletableFuture.supplyAsync(() -> {
-            List<Object[]> results =
-                queryAzure(accounts.isEmpty() ? config.azure.subscriptionIds : accounts, projectionHandler, sortHandler, paginationHandler, filterHandler);
-            return projectionHandler.projectRows(results);
-          }));
+          CompletableFuture.supplyAsync(() ->
+              toColumnTypes(
+                  queryAzure(accounts.isEmpty() ? config.azure.subscriptionIds : accounts,
+                      projectionHandler, providerSort, providerPagination, filterHandler),
+                  columnTypes), PROVIDER_POOL));
     }
 
     if (providers.contains("gcp") && config.gcp != null) {
       futures.add(
-          CompletableFuture.supplyAsync(() -> {
-            List<Object[]> results =
-                queryGCP(accounts.isEmpty() ? config.gcp.projectIds : accounts, projectionHandler, sortHandler, paginationHandler, filterHandler);
-            return projectionHandler.projectRows(results);
-          }));
+          CompletableFuture.supplyAsync(() ->
+              toColumnTypes(
+                  queryGCP(accounts.isEmpty() ? config.gcp.projectIds : accounts,
+                      projectionHandler, providerSort, providerPagination, filterHandler),
+                  columnTypes), PROVIDER_POOL));
     }
 
     if (providers.contains("aws") && config.aws != null) {
       futures.add(
-          CompletableFuture.supplyAsync(() -> {
-            List<Object[]> results =
-                queryAWS(accounts.isEmpty() ? config.aws.accountIds : accounts, projectionHandler, sortHandler, paginationHandler, filterHandler);
-            return projectionHandler.projectRows(results);
-          }));
+          CompletableFuture.supplyAsync(() ->
+              toColumnTypes(
+                  queryAWS(accounts.isEmpty() ? config.aws.accountIds : accounts,
+                      projectionHandler, providerSort, providerPagination, filterHandler),
+                  columnTypes), PROVIDER_POOL));
     }
 
     // Combine results
@@ -194,32 +252,47 @@ public abstract class AbstractCloudOpsTable extends AbstractTable implements Pro
         .collect(Collectors.toList());
 
     if (logger.isDebugEnabled()) {
-      if (projectionHandler != null && !projectionHandler.isSelectAll()) {
-        CloudOpsProjectionHandler.ProjectionMetrics metrics = projectionHandler.calculateMetrics();
-        logger.debug("Combined projection results: {} rows with {}",
-                     allResults.size(), metrics);
-      }
-
-      if (paginationHandler != null && paginationHandler.hasPagination()) {
-        CloudOpsPaginationHandler.PaginationMetrics metrics =
-            paginationHandler.calculateMetrics(true, allResults.size());
-        logger.debug("Combined pagination results: {}", metrics);
-      }
-
-      if (filterHandler != null && filterHandler.hasPushableFilters()) {
-        CloudOpsFilterHandler.FilterMetrics metrics =
-            filterHandler.calculateMetrics(true, allResults.size());
-        logger.debug("Combined filter results: {}", metrics);
-      }
+      logger.debug("Combined {} rows; sort {}, offset {}, fetch {}, provider row cap {}",
+          allResults.size(), sortHandler.getSortFieldNames(), offsetRows,
+          fetch == null ? "none" : String.valueOf(fetchRows),
+          anyRowsWillDo ? String.valueOf(offsetRows + fetchRows) : "none");
     }
 
-    // Apply cross-provider client-side pagination if needed
-    if (paginationHandler != null) {
-      allResults = paginationHandler.applyClientSidePagination(allResults);
+    // One sort and one window over the rows of all providers
+    allResults = sortHandler.sortRows(allResults);
+    if (offset != null || fetch != null) {
+      final int from = (int) Math.min(offsetRows, allResults.size());
+      final int to = fetch == null
+          ? allResults.size()
+          : (int) Math.min(offsetRows + fetchRows, allResults.size());
+      allResults = allResults.subList(from, to);
     }
 
     // Apply remaining filters in memory
-    return applyFilters(Linq4j.asEnumerable(allResults), filters);
+    return applyFilters(Linq4j.asEnumerable(projectionHandler.projectRows(allResults)), filters);
+  }
+
+  private static long rowCount(RexNode node, String clause) {
+    if (!(node instanceof RexLiteral)) {
+      throw new IllegalArgumentException(clause + " must be a literal, but is " + node);
+    }
+    final long rows = RexLiteral.intValue(node);
+    if (rows < 0) {
+      throw new IllegalArgumentException(clause + " must not be negative, but is " + rows);
+    }
+    return rows;
+  }
+
+  private static List<Object[]> toColumnTypes(List<Object[]> rows, SqlTypeName[] columnTypes) {
+    final List<Object[]> converted = new ArrayList<>(rows.size());
+    for (Object[] row : rows) {
+      if (row.length != columnTypes.length) {
+        throw new IllegalStateException("Row has " + row.length + " values for "
+            + columnTypes.length + " columns");
+      }
+      converted.add(CloudOpsDataConverter.convertRow(row, columnTypes));
+    }
+    return converted;
   }
 
   /**

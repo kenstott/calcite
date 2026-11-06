@@ -24,9 +24,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -43,8 +40,6 @@ import java.util.Map;
  * Azure and GCP scans return empty until those providers extract the associations.
  */
 public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ComputeSecurityGroupsTable.class);
-
   public ComputeSecurityGroupsTable(CloudOpsConfig config) {
     super(config);
   }
@@ -56,10 +51,10 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
   @Override public RelDataType getRowType(RelDataTypeFactory typeFactory) {
     return typeFactory.builder()
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("instance_id", SqlTypeName.VARCHAR)
-        .add("compute_resource_id", SqlTypeName.VARCHAR)
-        .add("security_group_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("compute_resource_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("security_group_id", SqlTypeName.VARCHAR).nullable(true)
         .build();
   }
 
@@ -120,7 +115,7 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                                 CloudOpsFilterHandler filterHandler) {
     List<Object[]> results = new ArrayList<>();
     try {
-      AzureProvider azureProvider = new AzureProvider(config.azure);
+      AzureProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       for (Map<String, Object> row : azureProvider.queryComputeSecurityGroups(subscriptionIds)) {
         results.add(new Object[]{
             "azure",
@@ -130,8 +125,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
             row.get("SecurityGroupId")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure compute security-group associations: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure compute security-group associations failed: " + e.getMessage(), e);
     }
     return results;
   }
@@ -152,7 +147,7 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
                                               CloudOpsFilterHandler filterHandler) {
     List<Object[]> results = new ArrayList<>();
     try {
-      AWSProvider awsProvider = new AWSProvider(config.aws);
+      AWSProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       for (Map<String, Object> row : awsProvider.queryComputeSecurityGroups(accountIds)) {
         results.add(new Object[]{
             "aws",
@@ -162,8 +157,8 @@ public class ComputeSecurityGroupsTable extends AbstractCloudOpsTable {
             row.get("SecurityGroupId")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS compute security-group associations: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS compute security-group associations failed: " + e.getMessage(), e);
     }
     return results;
   }

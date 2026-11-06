@@ -727,8 +727,11 @@ public class CloudOpsSQL2003ComplianceTest {
 
       while (rs.next()) {
         int nodeCount = rs.getInt("node_count");
-        Integer prevCount = rs.getObject("prev_count", Integer.class);
-        Integer nextCount = rs.getObject("next_count", Integer.class);
+        // Avatica's integer accessor has no typed getObject: read the int and ask for null
+        int prev = rs.getInt("prev_count");
+        Integer prevCount = rs.wasNull() ? null : Integer.valueOf(prev);
+        int next = rs.getInt("next_count");
+        Integer nextCount = rs.wasNull() ? null : Integer.valueOf(next);
 
         nodeCounts.add(nodeCount);
 

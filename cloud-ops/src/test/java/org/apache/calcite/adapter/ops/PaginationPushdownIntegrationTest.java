@@ -118,7 +118,7 @@ public class PaginationPushdownIntegrationTest {
 
     // Test KQL generation
     String kqlClause = paginationHandler.buildAzureKqlPaginationClause();
-    assertEquals("| top 10", kqlClause, "Should generate correct KQL TOP clause");
+    assertEquals("| take 10", kqlClause, "Should generate correct KQL TOP clause");
 
     logger.debug("✅ Basic LIMIT pagination test passed");
   }
@@ -151,7 +151,7 @@ public class PaginationPushdownIntegrationTest {
     assertFalse(azureStrategy.needsMultipleFetches, "Azure handles offset server-side");
 
     String kqlClause = paginationHandler.buildAzureKqlPaginationClause();
-    assertEquals("| skip 20 | top 5", kqlClause, "Should generate correct KQL SKIP/TOP clause");
+    assertEquals("| take 25", kqlClause, "Should generate correct KQL SKIP/TOP clause");
 
     // Test AWS strategy (needs client-side offset handling)
     CloudOpsPaginationHandler.PaginationStrategy awsStrategy = paginationHandler.getAWSStrategy();
@@ -305,7 +305,7 @@ public class PaginationPushdownIntegrationTest {
 
     // Test Azure KQL generation with combined optimizations
     String azureKqlPagination = paginationHandler.buildAzureKqlPaginationClause();
-    assertEquals("| skip 5 | top 3", azureKqlPagination);
+    assertEquals("| take 8", azureKqlPagination);
 
     logger.debug("✅ Pagination + Projection + Sort integration test passed");
   }

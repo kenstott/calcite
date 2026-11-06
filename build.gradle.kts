@@ -1119,6 +1119,10 @@ allprojects {
                     // [CALCITE-6587], [CALCITE-6590] (Avatica), [HADOOP-19212],
                     // https://openjdk.org/jeps/411.
                     jvmArgs("-Djava.security.manager=allow")
+                    // Byte Buddy 1.14 (under Mockito) refuses class files newer than the
+                    // Java it knows, so Mockito cannot mock anything on JDK 23. This lets
+                    // it read them as it reads the newest version it does know.
+                    jvmArgs("-Dnet.bytebuddy.experimental=true")
                 }
                 jvmArgs("-Xmx1536m")
                 jvmArgs("-Djdk.net.URLClassPath.disableClassPathURLCheck=true")

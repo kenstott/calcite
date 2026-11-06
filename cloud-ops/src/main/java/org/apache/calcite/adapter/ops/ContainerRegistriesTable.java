@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +30,6 @@ import java.util.Map;
  * Table containing container registry information across cloud providers.
  */
 public class ContainerRegistriesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ContainerRegistriesTable.class);
   public ContainerRegistriesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -42,30 +38,30 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("registry_name", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
-        .add("registry_uri", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("registry_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("registry_uri", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("sku", SqlTypeName.VARCHAR)
-        .add("admin_user_enabled", SqlTypeName.BOOLEAN)
-        .add("public_access", SqlTypeName.VARCHAR)
-        .add("image_scanning_enabled", SqlTypeName.BOOLEAN)
-        .add("immutable_tags", SqlTypeName.BOOLEAN)
+        .add("sku", SqlTypeName.VARCHAR).nullable(true)
+        .add("admin_user_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("public_access", SqlTypeName.VARCHAR).nullable(true)
+        .add("image_scanning_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("immutable_tags", SqlTypeName.BOOLEAN).nullable(true)
 
         // Security facts
-        .add("encryption_type", SqlTypeName.VARCHAR)
-        .add("encryption_key", SqlTypeName.VARCHAR)
-        .add("quarantine_policy", SqlTypeName.VARCHAR)
-        .add("trust_policy", SqlTypeName.VARCHAR)
-        .add("retention_policy", SqlTypeName.VARCHAR)
+        .add("encryption_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("encryption_key", SqlTypeName.VARCHAR).nullable(true)
+        .add("quarantine_policy", SqlTypeName.VARCHAR).nullable(true)
+        .add("trust_policy", SqlTypeName.VARCHAR).nullable(true)
+        .add("retention_policy", SqlTypeName.VARCHAR).nullable(true)
 
         // Timestamps
-        .add("created_at", SqlTypeName.TIMESTAMP)
+        .add("created_at", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }
@@ -78,7 +74,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> registryResults = azureProvider.queryContainerRegistries(subscriptionIds);
 
       for (Map<String, Object> registry : registryResults) {
@@ -90,22 +86,22 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("Location"),
             registry.get("ResourceGroup"),
             registry.get("ResourceId"),
-            null, // registry URI would need construction
+            registry.get("LoginServer"),
             registry.get("RegistrySKU"),
             registry.get("AdminUserEnabled"),
             registry.get("PublicNetworkAccess"),
-            false, // image scanning configured differently in Azure
-            false, // immutable tags configured differently in Azure
+            null, // image scanning: a Defender for Cloud setting, not a registry property
+            null, // immutable tags: set per repository in ACR, not per registry
             registry.get("Encryption"),
-            null, // encryption key not in query
+            registry.get("EncryptionKey"),
             registry.get("QuarantinePolicy"),
             registry.get("TrustPolicy"),
             registry.get("RetentionPolicy"),
-            null  // created time not in query
+            CloudOpsDataConverter.convertValue(registry.get("CreatedAt"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure container registries: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure container registries failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -119,7 +115,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> registryResults = gcpProvider.queryContainerRegistries(projectIds);
 
       for (Map<String, Object> registry : registryResults) {
@@ -131,24 +127,23 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("Location"),
             null, // resource group not applicable
             registry.get("ResourceId"),
-            null, // registry URI would need construction
+            registry.get("RegistryUri"),
             registry.get("Format"), // GCP uses format instead of SKU
-            false, // admin user not a GCP concept
+            null, // admin user not a GCP concept
             null, // public access controlled by IAM
-            false, // image scanning configured separately
-            "STANDARD_REPOSITORY".equals(registry.get("Mode")),
+            registry.get("ScanningEnabled"),
+            registry.get("ImmutableTags"),
             registry.get("Encryption"),
             registry.get("KmsKey"),
             null, // quarantine policy not in GCP
             null, // trust policy not in GCP
-            registry.get("CleanupPoliciesCount") != null &&
-                ((Number) registry.get("CleanupPoliciesCount")).intValue() > 0 ?
-                "Enabled" : "Disabled",
+            ((Number) registry.get("CleanupPoliciesCount")).intValue() > 0
+                ? "Enabled" : "Disabled",
             CloudOpsDataConverter.convertValue(registry.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP container registries: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP container registries failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -162,7 +157,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> registryResults = awsProvider.queryContainerRegistries(accountIds);
 
       for (Map<String, Object> registry : registryResults) {
@@ -176,7 +171,7 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("ResourceId"),
             registry.get("RepositoryUri"),
             null, // SKU not applicable to ECR
-            false, // admin user not applicable to ECR
+            null, // admin user not applicable to ECR
             "Private", // ECR is always private
             registry.get("ImageScanningEnabled"),
             "IMMUTABLE".equals(registry.get("ImageTagMutability")),
@@ -184,12 +179,12 @@ public class ContainerRegistriesTable extends AbstractCloudOpsTable {
             registry.get("KmsKey"),
             null, // quarantine policy not in ECR
             null, // trust policy not in ECR
-            null, // retention policy configured per lifecycle rules
+            registry.get("RetentionPolicy"), // whether a lifecycle policy expires images
             CloudOpsDataConverter.convertValue(registry.get("CreatedAt"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS container registries: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS container registries failed: " + e.getMessage(), e);
     }
 
     return results;

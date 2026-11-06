@@ -278,7 +278,7 @@ public class CloudOpsIntegrationTest {
     if (hasAWSCredentials()) {
       aws =
           new CloudOpsConfig.AWSConfig(Arrays.asList(testProperties.getProperty("aws.accountIds").split(",")),
-          testProperties.getProperty("aws.region", "us-east-1"),
+          testProperties.getProperty("aws.region", "all"),
           testProperties.getProperty("aws.accessKeyId"),
           testProperties.getProperty("aws.secretAccessKey"),
           testProperties.getProperty("aws.roleArn"));

@@ -74,13 +74,12 @@ public class StorageOptimizationVerificationTest {
         .add("soft_delete_retention_days", SqlTypeName.INTEGER) // 20
         .add("backup_enabled", SqlTypeName.BOOLEAN)        // 21
         .add("lifecycle_rules_count", SqlTypeName.INTEGER) // 22
-        // Access control facts (23-26)
+        // Access control facts (23-25)
         .add("access_tier", SqlTypeName.VARCHAR)           // 23
-        .add("last_access_time", SqlTypeName.TIMESTAMP)    // 24
-        .add("created_date", SqlTypeName.TIMESTAMP)        // 25
-        .add("modified_date", SqlTypeName.TIMESTAMP)       // 26
-        // Metadata (27)
-        .add("tags", SqlTypeName.VARCHAR)                  // 27
+        .add("created_date", SqlTypeName.TIMESTAMP)        // 24
+        .add("modified_date", SqlTypeName.TIMESTAMP)       // 25
+        // Metadata (26)
+        .add("tags", SqlTypeName.VARCHAR)                  // 26
         .build();
   }
 

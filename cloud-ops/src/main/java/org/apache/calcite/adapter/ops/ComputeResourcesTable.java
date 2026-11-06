@@ -25,9 +25,6 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.mapping.IntPair;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,8 +35,6 @@ import java.util.Map;
  * Table containing compute resource (VM) information across cloud providers.
  */
 public class ComputeResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ComputeResourcesTable.class);
-
   public ComputeResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -105,36 +100,36 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("instance_id", SqlTypeName.VARCHAR)
-        .add("instance_name", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("availability_zone", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_name", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("availability_zone", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("instance_type", SqlTypeName.VARCHAR)
-        .add("state", SqlTypeName.VARCHAR)
-        .add("platform", SqlTypeName.VARCHAR)
-        .add("architecture", SqlTypeName.VARCHAR)
-        .add("virtualization_type", SqlTypeName.VARCHAR)
+        .add("instance_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("state", SqlTypeName.VARCHAR).nullable(true)
+        .add("platform", SqlTypeName.VARCHAR).nullable(true)
+        .add("architecture", SqlTypeName.VARCHAR).nullable(true)
+        .add("virtualization_type", SqlTypeName.VARCHAR).nullable(true)
 
         // Network facts
-        .add("public_ip", SqlTypeName.VARCHAR)
-        .add("private_ip", SqlTypeName.VARCHAR)
-        .add("vpc_id", SqlTypeName.VARCHAR)
-        .add("subnet_id", SqlTypeName.VARCHAR)
+        .add("public_ip", SqlTypeName.VARCHAR).nullable(true)
+        .add("private_ip", SqlTypeName.VARCHAR).nullable(true)
+        .add("vpc_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("subnet_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Security facts
-        .add("iam_role", SqlTypeName.VARCHAR)
-        .add("security_groups", SqlTypeName.VARCHAR) // JSON array
-        .add("disk_encryption_enabled", SqlTypeName.BOOLEAN)
-        .add("monitoring_enabled", SqlTypeName.BOOLEAN)
+        .add("iam_role", SqlTypeName.VARCHAR).nullable(true)
+        .add("security_groups", SqlTypeName.VARCHAR).nullable(true) // JSON array
+        .add("disk_encryption_enabled", SqlTypeName.BOOLEAN).nullable(true)
+        .add("monitoring_enabled", SqlTypeName.BOOLEAN).nullable(true)
 
         // Timestamps
-        .add("launch_time", SqlTypeName.TIMESTAMP)
+        .add("launch_time", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }
@@ -147,7 +142,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> vmResults = azureProvider.queryComputeInstances(subscriptionIds);
 
       for (Map<String, Object> vm : vmResults) {
@@ -164,21 +159,21 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             vm.get("VMSize"),
             vm.get("PowerState"),
             vm.get("OSType"),
-            null, // architecture not in query
-            null, // virtualization type not in query
-            null, // public IP would need additional query
-            null, // private IP would need additional query
+            null, // architecture: implied by the VM size, not reported on the VM
+            null, // virtualization type: no Azure counterpart
+            vm.get("PublicIp"),
+            vm.get("PrivateIp"),
             vm.get("VNetId"),   // vpc_id: VNet ARM id (matches network_resources.native_id)
             vm.get("SubnetId"), // subnet_id: subnet ARM id
             vm.get("AttachedIdentity"), // iam_role: attached managed-identity ARM id
-            null, // security groups would need additional query
+            vm.get("SecurityGroups"), // NSG of the primary network interface
             "Enabled".equals(vm.get("DiskEncryption")),
             vm.get("BootDiagnostics"),
-            null  // launch time not in query
+            CloudOpsDataConverter.convertValue(vm.get("LaunchTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure compute instances: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure compute instances failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -192,7 +187,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> vmResults = gcpProvider.queryComputeInstances(projectIds);
 
       for (Map<String, Object> vm : vmResults) {
@@ -208,22 +203,22 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             vm.get("ResourceId"),
             vm.get("MachineType"),
             vm.get("Status"),
-            null, // platform not directly available
+            null, // platform: the instance does not name its operating system
             vm.get("CpuPlatform"),
             null, // virtualization type not exposed
-            vm.get("HasExternalIP") != null && (Boolean) vm.get("HasExternalIP") ? "assigned" : null,
-            null, // private IP would need additional query
+            vm.get("PublicIp"),
+            vm.get("PrivateIp"),
             vm.get("NetworkId"), // vpc_id: VPC network self-link (matches network_resources.native_id)
             vm.get("SubnetId"),  // subnet_id: subnetwork self-link
-            null, // iam_role: GCP service-account row emission is a follow-up (left null, FK-safe)
-            null, // security groups as JSON
+            vm.get("ServiceAccount"), // iam_role: resource name of the attached service account
+            vm.get("NetworkTags"), // security_groups: the tags firewall rules target
             "Enabled".equals(vm.get("DiskEncryption")),
-            false, // monitoring not in basic query
+            null, // monitoring: no per-instance switch in GCP
             CloudOpsDataConverter.convertValue(vm.get("CreationTimestamp"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP compute instances: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP compute instances failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -237,7 +232,7 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> vmResults = awsProvider.queryComputeInstances(accountIds);
 
       for (Map<String, Object> vm : vmResults) {
@@ -267,8 +262,8 @@ public class ComputeResourcesTable extends AbstractCloudOpsTable {
             CloudOpsDataConverter.convertValue(vm.get("LaunchTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS compute instances: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS compute instances failed: " + e.getMessage(), e);
     }
 
     return results;

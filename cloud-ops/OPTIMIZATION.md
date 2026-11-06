@@ -1,486 +1,158 @@
-# Cloud Ops Optimization Design
+# What the Cloud Ops adapter pushes down
 
-## Overview
+Most of a query runs in Calcite, not in the cloud. The adapter lists resources through each
+provider's inventory API, builds full-width rows, and lets Calcite filter, join and aggregate them.
+A few parts of a query do change which API calls are made. This page says which.
 
-The Cloud Ops adapter is designed with performance optimization as a core principle, implementing intelligent query pushdown capabilities to minimize data transfer and maximize query performance when working with cloud provider APIs.
+| Part of the query | Effect on cloud API calls |
+|-------------------|---------------------------|
+| `cloud_provider = '...'` | Only the named providers are called |
+| `account_id = '...'` | Only the named accounts, subscriptions or projects are queried |
+| `region = '...'` on `kubernetes_clusters` | AWS: EKS is asked in that region only. Azure: added to the Resource Graph query |
+| `cluster_name`, `application` filters on `kubernetes_clusters` | Azure: added to the Resource Graph query. AWS: applied to the rows after they are fetched |
+| Any other filter | None |
+| Column list on `storage_resources` | AWS: per-bucket calls for unselected columns are skipped |
+| Column list on any other table | None |
+| `ORDER BY` | None. The adapter sorts the combined rows itself |
+| `LIMIT` / `OFFSET` | None, except a row cap on `kubernetes_clusters` when the query has no `ORDER BY` and no `WHERE` |
 
-## Current Implementation Status (as of 2024)
+The rest of the page gives the detail and the source file for each row.
 
-The foundational infrastructure for query optimization has been **completed**:
-- ✅ Tables now receive all optimization hints (filters, projections, sorts, pagination)
-- ✅ CloudOpsQueryOptimizer analyzes and extracts optimization information
-- ✅ Comprehensive logging shows what optimizations are available for each query
-- ✅ Unit tests verify optimization hint reception
+## Filters
 
-**Next Steps**: Implement actual pushdown to cloud provider APIs using the received hints.
+Every table is a Calcite `ProjectableFilterableTable`. Calcite hands `scan` the `WHERE` conjuncts,
+and the adapter leaves all of them in the list, so Calcite evaluates every filter again on the rows
+that come back. `AbstractCloudOpsTable.applyFilters` returns its input unchanged.
 
-## Key Optimization Features
+`util/CloudOpsFilterHandler` reads the filters only to decide what to fetch. It recognises a
+column compared with a literal (`=`, `<>`, `<`, `<=`, `>`, `>=`, `LIKE`), `IS NULL`,
+`IS NOT NULL`, `IN`, and an `OR` of two such terms.
 
-### 1. Sort Pushdown
+**Provider and account selection** (`AbstractCloudOpsTable.scan`, all tables):
 
-#### Design Goals
-- Push ORDER BY operations to cloud provider APIs where supported
-- Minimize memory usage by receiving pre-sorted results
-- Leverage cloud-native sorting capabilities for better performance
+- `cloud_provider = 'aws'` limits the scan to AWS. Without such a filter every configured
+  provider is called.
+- `account_id = '...'` replaces the configured account list. The same list goes to every provider
+  being called. AWS skips an id it has no credentials for; Azure and GCP pass the ids to their
+  APIs as given. Combine an `account_id` filter with a `cloud_provider` filter.
 
-#### Implementation Strategy
-
-##### Azure Resource Graph
-Azure Resource Graph supports KQL `order by` clause natively:
-```java
-public class AzureProvider implements CloudProvider {
-    public List<Map<String, Object>> queryWithSort(String resourceType,
-                                                   List<SortField> sortFields,
-                                                   int limit) {
-        StringBuilder kql = new StringBuilder();
-        kql.append("Resources | where type == '").append(resourceType).append("'");
-
-        // Push sort to Azure Resource Graph
-        if (!sortFields.isEmpty()) {
-            kql.append(" | order by ");
-            for (SortField field : sortFields) {
-                kql.append(field.name).append(" ")
-                   .append(field.isAscending ? "asc" : "desc")
-                   .append(", ");
-            }
-        }
-
-        if (limit > 0) {
-            kql.append(" | limit ").append(limit);
-        }
-
-        return executeKqlQuery(kql.toString());
-    }
-}
+```sql
+-- Calls AWS only, and only account 111111111111
+SELECT instance_id, state
+FROM cloud.compute_resources
+WHERE cloud_provider = 'aws' AND account_id = '111111111111';
 ```
 
-##### AWS SDK
-AWS SDK supports sorting through request parameters:
-```java
-public class AWSProvider implements CloudProvider {
-    public List<EC2Instance> getInstancesSorted(SortOrder sortOrder) {
-        DescribeInstancesRequest request = DescribeInstancesRequest.builder()
-            .maxResults(1000)  // Pagination support
-            .filters(Filter.builder()
-                .name("instance-state-name")
-                .values("running")
-                .build())
-            .build();
+**`kubernetes_clusters` only.** This is the one table whose providers receive the filter handler.
 
-        // AWS doesn't support server-side sorting for EC2
-        // But we can optimize by fetching only required fields
-        List<Instance> instances = ec2Client.describeInstances(request)
-            .reservations().stream()
-            .flatMap(r -> r.instances().stream())
-            .collect(Collectors.toList());
+- AWS (`AWSProvider.executeKubernetesClusterQuery`): `region = '...'` skips every other region.
+  Filters on `application` and `cluster_name` are applied to the fetched clusters.
+- Azure (`AzureProvider.buildKubernetesClusterKql`): filters on `account_id`, `region`,
+  `cluster_name` and `application` are appended to the KQL as a `| where` clause.
+- GCP: the filters are logged and not used. `listClusters` is called for all locations.
 
-        // Client-side sort only when necessary
-        return sortLocally(instances, sortOrder);
-    }
+The other seven tables call the provider with the account list and nothing else.
 
-    // For services that support sorting (like S3)
-    public List<S3Bucket> getBucketsSorted() {
-        ListBucketsV2Request request = ListBucketsV2Request.builder()
-            .sortBy(BucketSortBy.CREATION_DATE)  // Native sort support
-            .build();
+### Known limitation: OR
 
-        return s3Client.listBucketsV2(request).buckets();
-    }
-}
+`CloudOpsFilterHandler.extractFieldFilters` records the two sides of an `OR` as separate
+constraints, and the code that uses them treats constraints as cumulative. `WHERE cloud_provider =
+'aws' OR region = 'eastus'` therefore selects AWS only, and the Azure rows in `eastus` are never
+fetched. Calcite cannot restore rows the adapter did not fetch. Until this is fixed, do not put
+`cloud_provider`, `account_id`, or (on `kubernetes_clusters`) `region`, `cluster_name` or
+`application` inside an `OR` with a different column.
+
+## Projection
+
+`scan` receives the selected column ordinals. Providers still return whole rows; the adapter
+converts them to the declared column types, sorts if asked, and trims to the selected columns last
+(`CloudOpsProjectionHandler.projectRows`).
+
+One provider path uses the column list to make fewer calls. `AWSProvider.executeStorageResourceQuery`
+lists buckets once, then makes a per-bucket call only for columns the query selects:
+
+| Selected column | S3 / CloudWatch call per bucket |
+|-----------------|---------------------------------|
+| `region`, `size_bytes` | `GetBucketLocation` |
+| `application`, `tags` | `GetBucketTagging` |
+| `encryption_enabled`, `encryption_type`, `encryption_key_type` | `GetBucketEncryption` |
+| `public_access_enabled`, `public_access_level` | `GetPublicAccessBlock` |
+| `versioning_enabled` | `GetBucketVersioning` |
+| `replication_type` | `GetBucketReplication` |
+| `lifecycle_rules_count` | `GetBucketLifecycleConfiguration` |
+| `size_bytes` | CloudWatch `GetMetricStatistics` |
+
+`SELECT *` makes all of them. A column used only in `WHERE` counts as selected, because Calcite
+adds filter columns to the list it passes to `scan`.
+
+```sql
+-- One ListBuckets call per account, no per-bucket calls
+SELECT resource_name, created_date
+FROM cloud.storage_resources
+WHERE cloud_provider = 'aws';
 ```
 
-##### GCP Cloud Asset API
-GCP supports ordering through API parameters:
-```java
-public class GCPProvider implements CloudProvider {
-    public List<Asset> getAssetsSorted(String orderBy) {
-        SearchAllResourcesRequest request = SearchAllResourcesRequest.newBuilder()
-            .setScope("projects/" + projectId)
-            .setOrderBy(orderBy)  // e.g., "name desc", "createTime"
-            .setPageSize(500)
-            .build();
+There is no projection in Azure KQL: `CloudOpsProjectionHandler.buildAzureKqlProjectClause` returns
+null and every Resource Graph query projects its full column set. The GCP `fields` parameter the
+handler can build is logged and not sent.
 
-        return assetClient.searchAllResources(request)
-            .iterateAll()
-            .stream()
-            .collect(Collectors.toList());
-    }
-}
+## ORDER BY, LIMIT and OFFSET
+
+`AbstractCloudOpsTable.toRel` registers the planner rule `CloudOpsSortScanRule`. The rule replaces a
+`Sort` that sits directly on a cloud-ops table scan with a `CloudOpsSortedScan`, which calls the
+table's six-argument `scan` with the sort order, offset and fetch.
+
+The rule does not fire when:
+
+- a `WHERE` lies between the sort and the scan, or the scan already carries filters;
+- `OFFSET` or `FETCH` is a parameter (`LIMIT ?`) and not a literal.
+
+In those cases Calcite sorts and limits above an ordinary scan.
+
+When the rule fires, the table collects the rows of all providers, sorts them once
+(`CloudOpsSortHandler.sortRows`), applies offset and fetch once, then projects. No sort is ever
+sent to a cloud API. A provider's ordering of strings and nulls is not SQL's, so a provider that
+sorted and truncated could keep the wrong rows.
+
+```sql
+EXPLAIN PLAN FOR
+SELECT cluster_name, node_count
+FROM cloud.kubernetes_clusters
+ORDER BY node_count DESC
+LIMIT 5;
+-- The plan contains CloudOpsSortedScan(..., sort=[...], fetch=[5]) when the rule fired.
 ```
 
-#### Sort Pushdown Rules
+**Row cap.** Providers are told to return at most `offset + fetch` rows only when any rows will do:
+there is a fetch, no sort, and no filter. Only the `kubernetes_clusters` providers use the cap:
 
-```java
-public class CloudOpsSortRule extends RelOptRule {
-    public static final CloudOpsSortRule INSTANCE = new CloudOpsSortRule();
+- Azure adds `| take N` to the KQL when N is below 1000.
+- AWS stops listing EKS clusters in a region once it has N names, then trims.
+- GCP lists every cluster and trims.
 
-    @Override
-    public void onMatch(RelOptRuleCall call) {
-        final Sort sort = call.rel(0);
-        final CloudOpsTableScan scan = call.rel(1);
+The other tables ignore the cap and fetch everything. The table still applies offset and fetch to
+the combined rows in every case.
 
-        // Check if provider supports sort pushdown
-        if (scan.getTable().supportsSort()) {
-            CloudOpsTableScan newScan = scan.withSort(
-                sort.getCollation(),
-                sort.fetch
-            );
-            call.transformTo(newScan);
-        }
-    }
-}
-```
+## Caching
 
-### 2. Pagination Pushdown
+`util/CloudOpsCacheManager` is a Caffeine cache with a time-to-live and a 1000-entry limit. The
+providers consult it for every Azure Resource Graph query, for the Kubernetes queries of all three
+providers, and for the AWS S3 listing.
 
-#### Design Goals
-- Implement efficient pagination for large result sets
-- Push LIMIT and OFFSET to cloud APIs
-- Support cursor-based pagination where available
-- Minimize memory footprint for large queries
+It does not carry results from one query to the next. Each table scan constructs a new provider
+(`new AWSProvider(config.aws)` and its Azure and GCP counterparts), and that constructor creates
+its own cache with a fixed five-minute lifetime. The cache is discarded with the provider when the
+scan ends.
 
-#### Implementation Strategy
+The settings `cache.enabled`, `cache.ttlMinutes` and `cache.debugMode` are read by
+`CloudOpsSchemaFactory` and stored on `CloudOpsConfig`. No table or provider reads them, so they
+change nothing today. `util/CloudOpsCacheValidator`, which would build a cache from them, is called
+only from tests.
 
-##### Limit Pushdown
-```java
-public abstract class AbstractCloudOpsTable extends AbstractTable
-    implements ProjectableFilterableTable {
+Expect every query to call the cloud APIs.
 
-    protected Integer limit;
-    protected Integer offset;
+## Seeing what happened
 
-    public Enumerable<Object[]> scan(DataContext root,
-                                     List<RexNode> filters,
-                                     int[] projects,
-                                     Integer fetchLimit,
-                                     Integer fetchOffset) {
-        // Push limit to cloud provider
-        this.limit = fetchLimit;
-        this.offset = fetchOffset;
-
-        List<Map<String, Object>> results = queryCloudProvider(
-            filters,
-            projects,
-            limit,
-            offset
-        );
-
-        return Linq4j.asEnumerable(results)
-            .select(row -> projectRow(row, projects));
-    }
-}
-```
-
-##### Provider-Specific Pagination
-
-**Azure Resource Graph** (supports top/skip):
-```java
-public List<Map<String, Object>> queryWithPagination(String kql,
-                                                     int limit,
-                                                     int offset) {
-    String paginatedKql = kql;
-    if (offset > 0) {
-        paginatedKql += " | skip " + offset;
-    }
-    if (limit > 0) {
-        paginatedKql += " | top " + limit;
-    }
-
-    QueryRequest request = new QueryRequest()
-        .withQuery(paginatedKql)
-        .withOptions(new QueryRequestOptions()
-            .withTop(limit)
-            .withSkip(offset));
-
-    return resourceGraphClient.resources(request);
-}
-```
-
-**AWS SDK** (cursor-based pagination):
-```java
-public class AWSPaginationHandler {
-    public List<Instance> getAllInstances(int maxResults) {
-        List<Instance> allInstances = new ArrayList<>();
-        String nextToken = null;
-        int fetched = 0;
-
-        do {
-            DescribeInstancesRequest request = DescribeInstancesRequest.builder()
-                .nextToken(nextToken)
-                .maxResults(Math.min(100, maxResults - fetched))
-                .build();
-
-            DescribeInstancesResponse response = ec2Client.describeInstances(request);
-
-            response.reservations().forEach(reservation ->
-                allInstances.addAll(reservation.instances())
-            );
-
-            nextToken = response.nextToken();
-            fetched = allInstances.size();
-
-        } while (nextToken != null && fetched < maxResults);
-
-        return allInstances;
-    }
-}
-```
-
-**GCP** (page token pagination):
-```java
-public class GCPPaginationHandler {
-    public List<Asset> getAssetsWithPagination(int pageSize, int maxPages) {
-        List<Asset> allAssets = new ArrayList<>();
-        String pageToken = null;
-        int pagesRetrieved = 0;
-
-        while (pagesRetrieved < maxPages) {
-            SearchAllResourcesRequest.Builder requestBuilder =
-                SearchAllResourcesRequest.newBuilder()
-                    .setScope("projects/" + projectId)
-                    .setPageSize(pageSize);
-
-            if (pageToken != null) {
-                requestBuilder.setPageToken(pageToken);
-            }
-
-            SearchAllResourcesPagedResponse response =
-                assetClient.searchAllResources(requestBuilder.build());
-
-            for (ResourceSearchResult result : response.getPage().getValues()) {
-                allAssets.add(convertToAsset(result));
-            }
-
-            pageToken = response.getNextPageToken();
-            pagesRetrieved++;
-
-            if (pageToken == null) break;
-        }
-
-        return allAssets;
-    }
-}
-```
-
-### 3. Filter Pushdown Optimization
-
-#### Enhanced Filter Translation
-```java
-public class CloudOpsFilterTranslator {
-    public CloudProviderFilter translate(List<RexNode> filters) {
-        CloudProviderFilter result = new CloudProviderFilter();
-
-        for (RexNode filter : filters) {
-            if (filter instanceof RexCall) {
-                RexCall call = (RexCall) filter;
-                SqlOperator op = call.getOperator();
-
-                // Translate to provider-specific filter
-                if (op == SqlStdOperatorTable.EQUALS) {
-                    result.addEqualsFilter(
-                        getFieldName(call.operands.get(0)),
-                        getValue(call.operands.get(1))
-                    );
-                } else if (op == SqlStdOperatorTable.GREATER_THAN) {
-                    result.addRangeFilter(
-                        getFieldName(call.operands.get(0)),
-                        getValue(call.operands.get(1)),
-                        null
-                    );
-                } else if (op == SqlStdOperatorTable.LIKE) {
-                    result.addPatternFilter(
-                        getFieldName(call.operands.get(0)),
-                        getValue(call.operands.get(1))
-                    );
-                }
-            }
-        }
-
-        return result;
-    }
-}
-```
-
-### 4. Projection Pushdown
-
-#### Minimize Data Transfer
-```java
-public class ProjectionOptimizer {
-    public List<String> optimizeProjection(int[] projects,
-                                          RelDataType rowType) {
-        List<String> requestedFields = new ArrayList<>();
-
-        // Only request fields that are actually needed
-        for (int project : projects) {
-            String fieldName = rowType.getFieldList()
-                .get(project).getName();
-            requestedFields.add(fieldName);
-        }
-
-        // Add fields required for filters/sorts even if not projected
-        requestedFields.addAll(getRequiredFields());
-
-        return requestedFields;
-    }
-}
-```
-
-### 5. Parallel Query Execution
-
-#### Multi-Account/Project Parallelization
-```java
-public class ParallelCloudQueryExecutor {
-    private final ExecutorService executor =
-        Executors.newFixedThreadPool(10);
-
-    public List<Map<String, Object>> queryAllAccounts(
-            List<String> accounts,
-            QuerySpec querySpec) {
-
-        List<CompletableFuture<List<Map<String, Object>>>> futures =
-            accounts.stream()
-                .map(account -> CompletableFuture.supplyAsync(() ->
-                    queryAccount(account, querySpec), executor))
-                .collect(Collectors.toList());
-
-        // Combine results from all accounts
-        return futures.stream()
-            .map(CompletableFuture::join)
-            .flatMap(List::stream)
-            .collect(Collectors.toList());
-    }
-}
-```
-
-### 6. Caching Strategy
-
-#### Result Caching
-```java
-public class CloudOpsCacheManager {
-    private final Cache<QueryKey, List<Map<String, Object>>> cache;
-
-    public CloudOpsCacheManager() {
-        this.cache = Caffeine.newBuilder()
-            .maximumSize(1000)
-            .expireAfterWrite(5, TimeUnit.MINUTES)
-            .build();
-    }
-
-    public List<Map<String, Object>> getCachedOrQuery(
-            QueryKey key,
-            Supplier<List<Map<String, Object>>> querySupplier) {
-
-        return cache.get(key, k -> querySupplier.get());
-    }
-}
-```
-
-## Performance Metrics
-
-### Query Optimization Goals
-
-| Optimization | Target Improvement | Measurement |
-|-------------|-------------------|-------------|
-| Sort Pushdown | 50-80% reduction in client-side processing | Memory usage, CPU time |
-| Pagination | 90% reduction in memory for large queries | Peak heap usage |
-| Filter Pushdown | 60-95% reduction in data transfer | Network bytes, row count |
-| Projection Pushdown | 30-70% reduction in data transfer | Response size |
-| Parallel Execution | 3-5x faster for multi-account queries | End-to-end query time |
-| Caching | 95% faster for repeated queries | Query response time |
-
-## Implementation Roadmap
-
-### Phase 1: Core Optimizations
-- [x] Basic filter pushdown - **COMPLETED**: Tables receive filter RexNodes
-- [x] Query optimization hint reception - **COMPLETED**: Tables receive sort, pagination, and projection hints
-- [x] ProjectableFilterableTable implementation - **COMPLETED**: AbstractCloudOpsTable now implements projection support
-- [x] Enhanced scan method with optimization parameters - **COMPLETED**: scan() accepts RelCollation, offset, fetch
-- [x] CloudOpsQueryOptimizer utility - **COMPLETED**: Analyzes and extracts optimization hints
-- [ ] Sort pushdown to Azure Resource Graph KQL
-- [ ] Limit pushdown to cloud provider APIs
-- [ ] Projection pushdown to minimize data transfer
-
-### Phase 2: Advanced Optimizations
-- [ ] Cursor-based pagination for AWS
-- [ ] Page token pagination for GCP
-- [ ] Parallel query execution
-- [ ] Smart caching with TTL
-
-### Phase 3: Intelligent Optimization
-- [ ] Cost-based optimization
-- [ ] Adaptive query execution
-- [ ] Statistics collection
-- [ ] Query plan caching
-
-## Testing Strategy
-
-### Performance Tests
-```java
-@Test
-@Category(PerformanceTest.class)
-public void testSortPushdownPerformance() {
-    long withoutPushdown = measureQuery(
-        "SELECT * FROM kubernetes_clusters ORDER BY cluster_name",
-        false
-    );
-
-    long withPushdown = measureQuery(
-        "SELECT * FROM kubernetes_clusters ORDER BY cluster_name",
-        true
-    );
-
-    double improvement = (1.0 - (withPushdown / (double) withoutPushdown)) * 100;
-    assertTrue("Sort pushdown should improve performance by >50%",
-               improvement > 50);
-}
-
-@Test
-@Category(PerformanceTest.class)
-public void testPaginationMemoryUsage() {
-    long memoryBefore = Runtime.getRuntime().totalMemory() -
-                       Runtime.getRuntime().freeMemory();
-
-    // Query with pagination
-    executeQuery("SELECT * FROM storage_resources LIMIT 100 OFFSET 1000");
-
-    long memoryAfter = Runtime.getRuntime().totalMemory() -
-                       Runtime.getRuntime().freeMemory();
-
-    long memoryUsed = memoryAfter - memoryBefore;
-    assertTrue("Memory usage should be under 10MB for paginated query",
-               memoryUsed < 10 * 1024 * 1024);
-}
-```
-
-## Monitoring and Metrics
-
-### Query Performance Metrics
-```java
-public class CloudOpsMetrics {
-    private final MeterRegistry registry;
-
-    public void recordQueryMetrics(QueryExecution execution) {
-        registry.timer("cloud.ops.query.time")
-            .record(execution.getDuration());
-
-        registry.counter("cloud.ops.rows.fetched")
-            .increment(execution.getRowCount());
-
-        registry.gauge("cloud.ops.memory.used",
-            execution.getPeakMemoryUsage());
-
-        registry.counter("cloud.ops.optimization.pushdown",
-            "type", execution.getPushdownType())
-            .increment();
-    }
-}
-```
-
-## Best Practices
-
-1. **Always push filters first** - Reduce data at the source
-2. **Combine sorts with limits** - Most effective together
-3. **Use provider-native features** - Leverage cloud-specific optimizations
-4. **Monitor API quotas** - Respect rate limits with intelligent batching
-5. **Cache strategically** - Cache metadata, not volatile data
-6. **Parallelize carefully** - Balance throughput with API limits
+Set the logger `org.apache.calcite.adapter.ops` to `DEBUG`. Each scan logs the filters, column
+ordinals, sort, offset and fetch it received, then the row count, sort fields and provider row cap
+it used. The AWS S3 path logs which per-bucket calls it made.

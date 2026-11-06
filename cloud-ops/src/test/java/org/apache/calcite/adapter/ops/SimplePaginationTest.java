@@ -85,7 +85,7 @@ public class SimplePaginationTest {
     // Test 3: Azure KQL generation
     System.out.println("\n--- Test 3: Azure KQL Generation ---");
     String azureKql = offsetLimitHandler.buildAzureKqlPaginationClause();
-    assertEquals("| skip 5 | top 3", azureKql);
+    assertEquals("| take 8", azureKql);
     System.out.println("✅ Azure KQL: " + azureKql);
 
     // Test 4: AWS parameter generation

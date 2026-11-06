@@ -23,9 +23,6 @@ import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,7 +32,6 @@ import java.util.Map;
  * Table containing network resource information across cloud providers.
  */
 public class NetworkResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(NetworkResourcesTable.class);
   public NetworkResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -58,30 +54,30 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("network_resource", SqlTypeName.VARCHAR)
-        .add("network_resource_type", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("network_resource", SqlTypeName.VARCHAR).nullable(true)
+        .add("network_resource_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
         // Provider-native stable identifier (AWS bare id, Azure ARM id, GCP self-link/id). The
         // consistent cross-cloud join key referenced by compute_resources / compute_security_groups.
-        .add("native_id", SqlTypeName.VARCHAR)
+        .add("native_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("configuration", SqlTypeName.VARCHAR)
-        .add("cidr_block", SqlTypeName.VARCHAR)
-        .add("state", SqlTypeName.VARCHAR)
-        .add("is_default", SqlTypeName.BOOLEAN)
+        .add("configuration", SqlTypeName.VARCHAR).nullable(true)
+        .add("cidr_block", SqlTypeName.VARCHAR).nullable(true)
+        .add("state", SqlTypeName.VARCHAR).nullable(true)
+        .add("is_default", SqlTypeName.BOOLEAN).nullable(true)
 
         // Security facts
-        .add("security_findings", SqlTypeName.VARCHAR)
-        .add("has_open_ingress", SqlTypeName.BOOLEAN)
-        .add("rule_count", SqlTypeName.INTEGER)
+        .add("security_findings", SqlTypeName.VARCHAR).nullable(true)
+        .add("has_open_ingress", SqlTypeName.BOOLEAN).nullable(true)
+        .add("rule_count", SqlTypeName.INTEGER).nullable(true)
 
         // Metadata
-        .add("tags", SqlTypeName.VARCHAR) // JSON
+        .add("tags", SqlTypeName.VARCHAR).nullable(true) // JSON
 
         .build();
   }
@@ -94,7 +90,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> networkResults = azureProvider.queryNetworkResources(subscriptionIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -109,17 +105,17 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("ResourceId"),
             network.get("NativeId"),
             network.get("Configuration"),
-            null, // CIDR block would need parsing from configuration
-            null, // state not in query
-            null, // is_default not in query
+            network.get("CidrBlock"), // address prefix; the address itself for a public IP
+            network.get("State"),
+            null, // is_default: Azure has no default network
             network.get("SecurityFindings"),
-            null, // has_open_ingress would need rule analysis
-            null, // rule_count would need parsing
-            null  // tags not in query
+            network.get("HasOpenIngress"), // network security groups only
+            network.get("RuleCount"), // network security groups only
+            network.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure network resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure network resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -133,7 +129,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> networkResults = gcpProvider.queryNetworkResources(projectIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -148,17 +144,17 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("ResourceId"),
             network.get("NativeId"),
             network.get("Configuration"),
-            network.get("SourceRanges"), // for firewall rules
-            null, // state not applicable
-            null, // is_default would need additional info
+            network.get("SourceRanges"), // subnet range, or a firewall rule's ranges
+            network.get("State"), // firewall rules only: enabled / disabled
+            network.get("IsDefault"), // networks only
             null, // security findings not computed
-            null, // has_open_ingress would need rule analysis
-            null, // rule_count not computed
-            null  // tags would need conversion
+            network.get("HasOpenIngress"), // firewall rules only
+            network.get("RuleCount"), // firewall rules only
+            null  // networks, subnets and firewall rules carry no labels
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP network resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP network resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -172,7 +168,7 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> networkResults = awsProvider.queryNetworkResources(accountIds);
 
       for (Map<String, Object> network : networkResults) {
@@ -196,11 +192,11 @@ public class NetworkResourcesTable extends AbstractCloudOpsTable {
             network.get("HasOpenIngressRule"),
             network.get("IngressRulesCount") != null ? network.get("IngressRulesCount") :
                 network.get("EgressRulesCount"),
-            null  // tags would need conversion
+            network.get("Tags")
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS network resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS network resources failed: " + e.getMessage(), e);
     }
 
     return results;

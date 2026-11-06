@@ -1,6 +1,19 @@
 # Cloud Ops SQL Query Examples
 
-This document provides practical SQL query examples for common cloud ops, security, and compliance use cases.
+Queries for inventory, security review and cost questions across Azure, AWS and GCP.
+
+The queries name tables without a schema, which works when `cloud` is the connection's default
+schema (it is with `jdbc:cloudops:`, and with a model file that sets `defaultSchema`). Names are
+lower-case: quote them, or connect with `unquotedCasing=TO_LOWER` as these examples assume. See
+the [README](README.md#identifier-case).
+
+Table and column names here were checked against the table classes. The functions used are from
+Calcite's standard operator table (`TIMESTAMPDIFF`, `LISTAGG`). The queries have not been executed
+as a suite against live clouds.
+
+A column that one cloud does not fill is null for that cloud's rows. Before reading a percentage as
+a compliance figure, check the per-cloud notes in [docs/SCHEMA.md](docs/SCHEMA.md); a few columns
+are constants for some services.
 
 ## Basic Resource Discovery
 
@@ -151,7 +164,8 @@ ORDER BY
 ### Orphaned Resources Detection
 
 ```sql
--- Find untagged/orphaned resources that may be unused
+-- Resources with no application tag or label.
+-- The adapter reports those as 'Untagged/Orphaned'.
 SELECT
   cloud_provider,
   'storage' as resource_type,
@@ -159,9 +173,9 @@ SELECT
   region,
   storage_type,
   created_date,
-  DATEDIFF('day', created_date, CURRENT_DATE) as days_old
+  TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) as days_old
 FROM storage_resources
-WHERE application IN ('Untagged/Orphaned', '', NULL)
+WHERE application = 'Untagged/Orphaned'
 
 UNION ALL
 
@@ -172,9 +186,9 @@ SELECT
   region,
   instance_type as storage_type,
   launch_time as created_date,
-  DATEDIFF('day', launch_time, CURRENT_DATE) as days_old
+  TIMESTAMPDIFF(DAY, launch_time, CURRENT_TIMESTAMP) as days_old
 FROM compute_resources
-WHERE application IN ('Untagged/Orphaned', '', NULL)
+WHERE application = 'Untagged/Orphaned'
 
 ORDER BY days_old DESC, cloud_provider;
 ```
@@ -182,25 +196,30 @@ ORDER BY days_old DESC, cloud_provider;
 ### Resource Distribution by Region
 
 ```sql
--- Regional resource distribution for optimization
+-- Resource counts per provider and region
 SELECT
   cloud_provider,
   region,
-  COUNT(DISTINCT k.cluster_name) as kubernetes_clusters,
-  COUNT(DISTINCT s.resource_name) as storage_resources,
-  COUNT(DISTINCT c.instance_id) as compute_instances,
-  COUNT(DISTINCT n.network_resource) as network_resources
-
-FROM kubernetes_clusters k
-FULL OUTER JOIN storage_resources s ON k.cloud_provider = s.cloud_provider AND k.region = s.region
-FULL OUTER JOIN compute_resources c ON k.cloud_provider = c.cloud_provider AND k.region = c.region
-FULL OUTER JOIN network_resources n ON k.cloud_provider = n.cloud_provider AND n.region = n.region
-
+  SUM(CASE WHEN resource_type = 'kubernetes' THEN 1 ELSE 0 END) as kubernetes_clusters,
+  SUM(CASE WHEN resource_type = 'storage' THEN 1 ELSE 0 END) as storage_resources,
+  SUM(CASE WHEN resource_type = 'compute' THEN 1 ELSE 0 END) as compute_instances,
+  SUM(CASE WHEN resource_type = 'network' THEN 1 ELSE 0 END) as network_resources,
+  COUNT(*) as total_resources
+FROM (
+  SELECT cloud_provider, region, 'kubernetes' as resource_type FROM kubernetes_clusters
+  UNION ALL
+  SELECT cloud_provider, region, 'storage' as resource_type FROM storage_resources
+  UNION ALL
+  SELECT cloud_provider, region, 'compute' as resource_type FROM compute_resources
+  UNION ALL
+  SELECT cloud_provider, region, 'network' as resource_type FROM network_resources
+) all_resources
 GROUP BY cloud_provider, region
-ORDER BY cloud_provider,
-  (COUNT(DISTINCT k.cluster_name) + COUNT(DISTINCT s.resource_name) +
-   COUNT(DISTINCT c.instance_id) + COUNT(DISTINCT n.network_resource)) DESC;
+ORDER BY cloud_provider, total_resources DESC;
 ```
+
+For GCP, `compute_resources.region` holds the zone, and `network_resources.region` is filled for
+subnets only.
 
 ## Cross-Cloud Application Analysis
 
@@ -224,7 +243,7 @@ app_summary AS (
     application,
     COUNT(DISTINCT cloud_provider) as cloud_count,
     SUM(resource_count) as total_resources,
-    STRING_AGG(cloud_provider, ', ') as cloud_providers
+    LISTAGG(cloud_provider, ', ') as cloud_providers
   FROM app_clouds
   GROUP BY application
 )
@@ -305,7 +324,7 @@ SELECT
   SUM(CASE WHEN publicly_accessible = true THEN 1 ELSE 0 END) as public_accessible_count,
   ROUND(100.0 * SUM(CASE WHEN publicly_accessible = true THEN 1 ELSE 0 END) / COUNT(*), 1) as public_access_pct,
 
-  -- Backup Analysis
+  -- Backup Analysis (for GCP Cloud SQL the column is a count of retained backups, not days)
   SUM(CASE WHEN backup_retention_days > 0 THEN 1 ELSE 0 END) as backup_enabled_count,
   AVG(backup_retention_days) as avg_backup_retention_days
 
@@ -389,7 +408,7 @@ SELECT
   -- Age Analysis
   create_date,
   password_last_used,
-  DATEDIFF('day', password_last_used, CURRENT_DATE) as days_since_last_use,
+  TIMESTAMPDIFF(DAY, password_last_used, CURRENT_TIMESTAMP) as days_since_last_use,
 
   -- Risk Score
   CASE
@@ -400,7 +419,7 @@ SELECT
   END as risk_level
 
 FROM iam_resources
-WHERE iam_resource_type IN ('IAM User', 'Service Account', 'Managed Identity')
+WHERE iam_resource_type IN ('IAM User', 'ServiceAccount', 'Managed Identity')
 ORDER BY
   CASE
     WHEN is_active = true AND mfa_enabled = false AND access_key_count > 1 THEN 1
@@ -447,12 +466,12 @@ SELECT
   cluster_name as resource_name,
   application,
   created_date,
-  DATEDIFF('day', created_date, CURRENT_DATE) as age_days,
+  TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) as age_days,
   CASE
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 365 THEN 'Very Old (>1 year)'
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 180 THEN 'Old (6-12 months)'
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 90 THEN 'Mature (3-6 months)'
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 30 THEN 'Recent (1-3 months)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 365 THEN 'Very Old (>1 year)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 180 THEN 'Old (6-12 months)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 90 THEN 'Mature (3-6 months)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 30 THEN 'Recent (1-3 months)'
     ELSE 'New (<1 month)'
   END as age_category
 FROM kubernetes_clusters
@@ -466,12 +485,12 @@ SELECT
   resource_name,
   application,
   created_date,
-  DATEDIFF('day', created_date, CURRENT_DATE) as age_days,
+  TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) as age_days,
   CASE
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 365 THEN 'Very Old (>1 year)'
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 180 THEN 'Old (6-12 months)'
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 90 THEN 'Mature (3-6 months)'
-    WHEN DATEDIFF('day', created_date, CURRENT_DATE) > 30 THEN 'Recent (1-3 months)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 365 THEN 'Very Old (>1 year)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 180 THEN 'Old (6-12 months)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 90 THEN 'Mature (3-6 months)'
+    WHEN TIMESTAMPDIFF(DAY, created_date, CURRENT_TIMESTAMP) > 30 THEN 'Recent (1-3 months)'
     ELSE 'New (<1 month)'
   END as age_category
 FROM storage_resources
@@ -485,42 +504,18 @@ ORDER BY age_days DESC;
 ### Executive Dashboard Query
 
 ```sql
--- High-level executive summary
-WITH resource_summary AS (
-  SELECT
-    COUNT(DISTINCT CASE WHEN k.cluster_name IS NOT NULL THEN k.cloud_provider END) as k8s_providers,
-    COUNT(k.cluster_name) as total_k8s_clusters,
-    COUNT(DISTINCT s.cloud_provider) as storage_providers,
-    COUNT(s.resource_name) as total_storage_resources,
-    COUNT(DISTINCT c.cloud_provider) as compute_providers,
-    COUNT(c.instance_id) as total_compute_instances
-  FROM kubernetes_clusters k
-  FULL OUTER JOIN storage_resources s ON 1=1
-  FULL OUTER JOIN compute_resources c ON 1=1
-),
-security_summary AS (
-  SELECT
-    SUM(CASE WHEN rbac_enabled = true THEN 1 ELSE 0 END) as k8s_rbac_compliant,
-    COUNT(*) as total_k8s,
-    (SELECT SUM(CASE WHEN encryption_enabled = true THEN 1 ELSE 0 END) FROM storage_resources) as storage_encrypted,
-    (SELECT COUNT(*) FROM storage_resources) as total_storage
-  FROM kubernetes_clusters
-)
-
+-- One-row summary across all clouds
 SELECT
-  'Multi-Cloud Infrastructure Summary' as report_section,
-  r.k8s_providers as kubernetes_providers,
-  r.total_k8s_clusters,
-  r.storage_providers,
-  r.total_storage_resources,
-  r.compute_providers,
-  r.total_compute_instances,
-
-  -- Security Compliance
-  ROUND(100.0 * s.k8s_rbac_compliant / NULLIF(s.total_k8s, 0), 1) as k8s_rbac_compliance_pct,
-  ROUND(100.0 * s.storage_encrypted / NULLIF(s.total_storage, 0), 1) as storage_encryption_pct
-
-FROM resource_summary r, security_summary s;
+  (SELECT COUNT(*) FROM kubernetes_clusters) as total_k8s_clusters,
+  (SELECT COUNT(DISTINCT cloud_provider) FROM kubernetes_clusters) as kubernetes_providers,
+  (SELECT COUNT(*) FROM storage_resources) as total_storage_resources,
+  (SELECT COUNT(DISTINCT cloud_provider) FROM storage_resources) as storage_providers,
+  (SELECT COUNT(*) FROM compute_resources) as total_compute_instances,
+  (SELECT COUNT(DISTINCT cloud_provider) FROM compute_resources) as compute_providers,
+  (SELECT SUM(CASE WHEN rbac_enabled = true THEN 1 ELSE 0 END) FROM kubernetes_clusters) as k8s_rbac_enabled,
+  (SELECT SUM(CASE WHEN encryption_enabled = true THEN 1 ELSE 0 END) FROM storage_resources) as storage_encrypted
+FROM (VALUES (1)) as t(x);
 ```
 
-These examples demonstrate the power of SQL for cloud ops analysis. You can modify and combine these queries based on your specific compliance requirements and organizational needs.
+Each scan of a table calls the cloud APIs, and nothing is cached between scans. A query with
+several subqueries on the same table can list its resources several times.
