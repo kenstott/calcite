@@ -204,6 +204,81 @@ FROM (
 ) t;
 
 -- ============================================================
+-- eia_electricity_prices_monthly
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_prices_monthly', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true);
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_prices_monthly', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 300 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 300, 'expected >= 300 rows (state x sector x month)'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_prices_monthly', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year', 'month')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_prices_monthly', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year', 'price_year', 'month', 'price_month')
+) t;
+
+-- T6: pk_nulls (price_year and price_month NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_prices_monthly', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'price_year IS NULL OR price_month IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true)
+WHERE price_year IS NULL OR price_month IS NULL;
+
+-- T7: expected_values — price_month in 1..12, avg_price_cents_kwh >= 0 where not null
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_electricity_prices_monthly', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0,
+  'price_month outside 1..12 or avg_price_cents_kwh < 0'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true)
+  WHERE price_month NOT BETWEEN 1 AND 12
+     OR (avg_price_cents_kwh IS NOT NULL AND avg_price_cents_kwh < 0)
+) t;
+
+-- ============================================================
 -- eia_utility_annual
 -- ============================================================
 
