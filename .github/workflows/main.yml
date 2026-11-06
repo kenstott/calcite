@@ -57,8 +57,74 @@ env:
   TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'ghcr.io/kenstott/calcite/ci-hub/'
 
 jobs:
+  changes:
+    # Decides what the other jobs run, from the files the change touches.
+    #  - push to main or release: full_matrix=true, every job runs, tasks=build (nothing is scoped).
+    #  - pull request or branch push: the PR matrix runs (Linux JDK 21, Windows JDK 21, ErrorProne,
+    #    plus CheckerFramework/Druid/Splunk when scope is full). The matrix-only jobs (other JDKs,
+    #    Guava, timezones, macOS) are skipped.
+    # scope: none     only *.md / docs/ / LICENSE / NOTICE: no build job runs
+    #        askamerica only askamerica-engine/ (and docs): :askamerica-engine:build
+    #        govdata    only govdata/ and askamerica-engine/ (askamerica-engine tests use govdata):
+    #                   :govdata:build :askamerica-engine:build
+    #        full       anything else (core/, file/, linq4j/, build scripts, .github/ ...): build
+    # A job skipped here reports as skipped, which the merge gate counts as passing.
+    name: 'Change scope'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
+      tasks: ${{ steps.scope.outputs.tasks }}
+      full_matrix: ${{ steps.scope.outputs.full_matrix }}
+    steps:
+    - name: 'Compute scope'
+      id: scope
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        EVENT: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        if [ "$REF" = refs/heads/main ] || [ "$REF" = refs/heads/release ]; then
+          { echo scope=full; echo tasks=build; echo full_matrix=true; } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ "$EVENT" = pull_request ]; then
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename' > files.txt
+          limit=3000
+        else
+          gh api "repos/$REPO/compare/main...$SHA" --jq '.files[].filename' > files.txt
+          limit=300
+        fi
+        count=$(wc -l < files.txt)
+        echo "$count changed files"; cat files.txt
+        has_gov=0; has_ask=0; full=0
+        # the API lists at most $limit files; a change that large runs everything
+        [ "$count" -lt "$limit" ] || full=1
+        while IFS= read -r f; do
+          case "$f" in
+            *.md|docs/*|LICENSE|NOTICE) ;;
+            askamerica-engine/*) has_ask=1 ;;
+            govdata/*) has_gov=1 ;;
+            *) full=1 ;;
+          esac
+        done < files.txt
+        if [ "$full" = 1 ]; then scope=full; tasks=build
+        elif [ "$has_gov" = 1 ]; then scope=govdata; tasks=':govdata:build :askamerica-engine:build'
+        elif [ "$has_ask" = 1 ]; then scope=askamerica; tasks=':askamerica-engine:build'
+        else scope=none; tasks=; fi
+        echo "scope=$scope tasks=$tasks"
+        { echo "scope=$scope"; echo "tasks=$tasks"; echo full_matrix=false; } >> "$GITHUB_OUTPUT"
+
   windows-jdk11:
-    if: github.event.action != 'labeled'
+    # Main-push matrix only: not run on pull requests (see the changes job).
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Windows (JDK 11)'
     runs-on: windows-latest
     steps:
@@ -104,7 +170,8 @@ jobs:
         call sqlsh.bat -o headers "select count(*) commits, author from (select substring(author, 1, position(' <' in author)-1) author from git_commits) group by author order by count(*) desc, author limit 20"
 
   windows-jdk17:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Windows (JDK 17)'
     runs-on: windows-latest
     steps:
@@ -150,7 +217,8 @@ jobs:
           call sqlsh.bat -o headers "select count(*) commits, author from (select substring(author, 1, position(' <' in author)-1) author from git_commits) group by author order by count(*) desc, author limit 20"
 
   windows-jdk21:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.scope != 'none'
     name: 'Windows (JDK 21)'
     runs-on: windows-latest
     steps:
@@ -183,7 +251,7 @@ jobs:
         with:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
-          arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build
+          arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 ${{ needs.changes.outputs.tasks }}
       - name: 'sqlline and sqllsh'
         shell: cmd
         run: |
@@ -196,7 +264,8 @@ jobs:
           call sqlsh.bat -o headers "select count(*) commits, author from (select substring(author, 1, position(' <' in author)-1) author from git_commits) group by author order by count(*) desc, author limit 20"
 
   linux-jdk11-oldest-guava-tz:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Linux (JDK 11, oldest Guava, America/New_York Timezone)'
     runs-on: ubuntu-latest
     env:
@@ -218,7 +287,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA_MIN }} build
 
   linux-jdk11-latest-guava-tz:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Linux (JDK 11, latest Guava, America/New_York Timezone)'
     runs-on: ubuntu-latest
     env:
@@ -240,7 +310,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA_MAX }} tasks build
 
   linux-jdk11-tz:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Linux (JDK 11, Pacific/Chatham Timezone)'
     runs-on: ubuntu-latest
     env:
@@ -262,7 +333,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon build
 
   linux-jdk17:  # LTS JDK version, don't remove until EOL
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Linux (JDK 17)'
     runs-on: ubuntu-latest
     steps:
@@ -282,7 +354,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA }} build
 
   linux-jdk121:  # LTS JDK version, don't remove until EOL
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.scope != 'none'
     name: 'Linux (JDK 21)'
     runs-on: ubuntu-latest
     steps:
@@ -299,10 +372,11 @@ jobs:
         with:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
-          arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA }} build
+          arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA }} ${{ needs.changes.outputs.tasks }}
 
   mac:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'macOS (JDK 21)'
     runs-on: macos-15
     steps:
@@ -331,7 +405,8 @@ jobs:
           ./sqlsh -o headers "select count(*) commits, author from (select substring(author, 1, position(' <' in author)-1) author from git_commits) group by author order by count(*) desc, author limit 20"
 
   errorprone-guava-latest:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && needs.changes.outputs.scope != 'none'
     name: 'ErrorProne (JDK 11, latest Guava)'
     runs-on: ubuntu-latest
     steps:
@@ -352,6 +427,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon -Pguava.version=${{ env.GUAVA_MAX }} -PenableErrorprone classes
 
   linux-checkerframework:
+    needs: changes
+    if: (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.scope == 'full')
     name: 'CheckerFramework (JDK 11)'
     runs-on: ubuntu-latest
     steps:
@@ -371,6 +448,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon -PenableCheckerframework :linq4j:classes :core:classes :server:classes
 
   linux-checkerframework-oldest-guava:
+    needs: changes
+    if: (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.scope == 'full')
     name: 'CheckerFramework (JDK 11, oldest Guava)'
     runs-on: ubuntu-latest
     steps:
@@ -412,7 +491,8 @@ jobs:
           arguments: --scan --no-parallel --no-daemon testSlow
 
   linux-druid:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.scope == 'full')
     name: 'Druid Tests'
     runs-on: ubuntu-latest
     steps:
@@ -476,7 +556,8 @@ jobs:
         arguments: --scan --no-parallel --no-daemon :druid:test -Dcalcite.test.druid=true
 
   linux-splunk:
-    if: github.event.action != 'labeled'
+    needs: changes
+    if: github.event.action != 'labeled' && (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.scope == 'full')
     name: 'Splunk Tests'
     runs-on: ubuntu-latest
     steps:
