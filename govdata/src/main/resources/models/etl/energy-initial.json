@@ -13,6 +13,7 @@
       "enabledTables": [
         "eia_electricity_generation",
         "eia_electricity_prices",
+        "eia_electricity_prices_monthly",
         "eia_utility_annual",
         "eia_power_plants",
         "eia_capacity_changes",

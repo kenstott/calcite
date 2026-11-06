@@ -473,8 +473,8 @@ partitionedTables:
       checkedAt: "2026-11-06T20:37:01Z"
     partitions: *standard_partitions
     comment: >
-      EIA API v2 retail electricity sales data, fetched at annual frequency (the source URL
-      hardcodes frequency=annual, so price_month exists in the schema but is always null here).
+      EIA API v2 retail electricity sales data, fetched at annual frequency (price_month is
+      always null here; monthly values are in eia_electricity_prices_monthly).
       Average price (cents/kWh), revenue (million dollars), sales (million kWh), and customer
       counts by state and sector. One row per state + sector + year. Cross-references geo.state_ref
       via state_abbr.
@@ -557,6 +557,113 @@ partitionedTables:
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]
         incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # EIA ELECTRICITY PRICES MONTHLY - Monthly retail electricity sales and prices by state
+  # ---------------------------------------------------------------------------
+  - name: eia_electricity_prices_monthly
+    # EIA Electric Power Monthly (Table 5.6.A) values are preliminary for about two months
+    # after the reference month and are revised as the survey is finalized; 24 periods spans
+    # the revision window, matching eia_electricity_generation.
+    # https://www.eia.gov/electricity/monthly/
+    lookbackPeriods: 24
+    freshness:
+      type: hash
+    pattern: "type=eia_elec_price_monthly/year=*/month=*/*.parquet"
+    partitions: *standard_partitions_monthly
+    comment: >
+      EIA API v2 retail electricity sales and prices, monthly (electricity/retail-sales,
+      frequency=monthly). Average price (cents/kWh), revenue (million dollars), sales
+      (million kWh), and customer counts by state and sector, one row per state + sector +
+      year-month. Preliminary values run about two months behind the reference month.
+      Year-over-year monthly change in avg_price_cents_kwh, the measure behind "electricity
+      bills up X%" claims, compares the same price_month across two price_year values for
+      one state and sector_code. For annual figures see eia_electricity_prices.
+      Cross-references geo.state_ref via state_abbr.
+
+    dimensions:
+      type:
+        - eia_elec_price_monthly
+      year: *eia_elec_gen_years
+      month: *eia_months
+
+    columns:
+      - name: price_year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - name: price_month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12)
+      - <<: *state_abbr_column
+      - <<: *state_description_column
+      - name: sector_code
+        type: string
+        nullable: true
+        comment: EIA customer sector code (e.g., 'RES', 'COM', 'IND', 'TRA', 'ALL')
+      - name: sector
+        type: string
+        nullable: true
+        comment: Sector description (e.g., 'Residential', 'Commercial', 'Industrial')
+      - name: avg_price_cents_kwh
+        type: double
+        nullable: true
+        comment: Average retail electricity price in cents per kWh
+      - name: revenue_million_dollars
+        type: double
+        nullable: true
+        comment: Total revenue in million dollars
+      - name: sales_million_kwh
+        type: double
+        nullable: true
+        comment: Total electricity sales in million kWh
+      - name: customers
+        type: integer
+        nullable: true
+        comment: Number of customer accounts
+
+    backfill_period: annual
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=monthly&start={period_start}&end={period_end}&data[]=price&data[]=revenue&data[]=sales&data[]=customers"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaRetailSalesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_elec_price_monthly/year=*/month=*/"
+      partition:
+        columns: [type, year, month]
+        valueSource:
+          year: effective_year
+          month: price_month
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_electricity_prices_monthly
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year, month]
+        incrementalKeys: [year, month]
 
   # ---------------------------------------------------------------------------
   # EIA UTILITY ANNUAL - EIA-861 Annual Electric Power Industry Report
@@ -3370,6 +3477,14 @@ constraints:
         targetColumns: [state_abbr]
 
   eia_electricity_prices:
+    primaryKey: [state_abbr, sector_code, price_year, price_month]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
+  eia_electricity_prices_monthly:
     primaryKey: [state_abbr, sector_code, price_year, price_month]
     foreignKeys:
       - columns: [state_abbr]
