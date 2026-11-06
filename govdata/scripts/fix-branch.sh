@@ -12,7 +12,7 @@
 # resume point.
 set -euo pipefail
 
-usage() { echo "Usage: $0 start|dq-passed|merge <slug>" >&2; exit 2; }
+usage() { echo "Usage: $0 start|dq-passed|merge|prune-remote <slug>" >&2; exit 2; }
 [ $# -eq 2 ] || usage
 cmd="$1"; slug="$2"
 case "$slug" in
@@ -36,6 +36,20 @@ require_worktree() {
   if [ -n "$(git -C "$WT" status --porcelain --untracked-files=no)" ]; then
     echo "worktree $WT has uncommitted changes; commit them on $BRANCH first" >&2
     exit 1
+  fi
+}
+
+# Delete origin/<branch> once its commits are in origin/main (main is pushed once a day, so this may
+# only succeed on a later call: `fix-branch.sh prune-remote <slug>`).
+prune_remote() {
+  git -C "$MAIN_TREE" rev-parse --verify -q "refs/remotes/origin/$BRANCH" >/dev/null \
+    || { echo "no remote branch origin/$BRANCH"; return 0; }
+  # The remote tip is the pre-rebase commit, so compare by patch (git cherry), not by ancestry.
+  if ! git -C "$MAIN_TREE" cherry refs/remotes/origin/main "refs/remotes/origin/$BRANCH" | grep -q '^+'; then
+    git -C "$MAIN_TREE" push origin --delete "$BRANCH" >&2
+    echo "deleted origin/$BRANCH"
+  else
+    echo "origin/$BRANCH has commits not yet in origin/main; run: $0 prune-remote $slug after main is pushed"
   fi
 }
 
@@ -75,10 +89,18 @@ case "$cmd" in
       || { echo "$MAIN_TREE is not on main" >&2; exit 1; }
     git -C "$MAIN_TREE" merge --ff-only "$BRANCH" >&2
     sha="$(git -C "$MAIN_TREE" rev-parse --short HEAD)"
+    # The branch is merged into main, not into its upstream, so `branch -d` would refuse after a rebase.
+    # Verify the tip really is in main, then delete it with -D.
+    git -C "$MAIN_TREE" merge-base --is-ancestor "$BRANCH" main \
+      || { echo "$BRANCH tip is not in main; leaving the branch and worktree" >&2; exit 1; }
     git -C "$MAIN_TREE" worktree remove "$WT" >&2
-    git -C "$MAIN_TREE" branch -d "$BRANCH" >&2
+    git -C "$MAIN_TREE" branch -D "$BRANCH" >&2
     rm -f "$MARK_DIR/$slug"
     echo "merged $BRANCH into main at $sha"
+    prune_remote
+    ;;
+  prune-remote)
+    prune_remote
     ;;
   *) usage ;;
 esac
