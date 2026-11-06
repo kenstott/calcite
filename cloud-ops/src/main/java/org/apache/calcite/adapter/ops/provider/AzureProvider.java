@@ -656,8 +656,8 @@ public class AzureProvider implements CloudProvider {
   /**
    * Emits one row per (VM, Network Security Group) association, resolved through the VM's network
    * interface. Feeds the compute_security_groups junction. {@code ComputeResourceId} is the VM ARM id
-   * (-> compute_resources.resource_id); {@code SecurityGroupId} is the NSG ARM id
-   * (-> network_resources.native_id).
+   * (joins {@code compute_resources.resource_id}); {@code SecurityGroupId} is the NSG ARM id
+   * (joins {@code network_resources.native_id}).
    */
   public List<Map<String, Object>> queryComputeSecurityGroups(List<String> subscriptionIds) {
     String kql = "Resources\n"
