@@ -37,7 +37,8 @@ class AsosObservationsFetchPaceTest {
       for (JsonNode t : root.get("partitionedTables")) {
         if ("asos_observations".equals(t.get("name").asText())) {
           assertEquals(1, t.get("source").get("parallel").asInt());
-          assertEquals(0.2, t.get("source").get("rateLimit").get("requestsPerSecond").asDouble());
+          assertEquals(1, t.get("source").get("rateLimit").get("requestsPerSecond").asInt());
+          assertEquals(5000, t.get("source").get("rateLimit").get("retryBackoffMs").asInt());
           return;
         }
       }
