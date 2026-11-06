@@ -1486,15 +1486,17 @@ partitionedTables:
       method: GET
       # mesonet.agron.iastate.edu answers a second in-flight request from the same IP with
       # 429 "Too many requests from your IP address"; one request at a time never trips it,
-      # and requestsPerSecond only spaces request starts, not overlapping downloads. Even serial,
-      # starts one second apart after a short response drew a 429, so starts are spaced 5 s.
+      # and requestsPerSecond (an integer; 0 disables pacing) only spaces request starts, not
+      # overlapping downloads. Even serial, a start right after a short response can draw a 429,
+      # so a retry waits 5/10/20 s rather than the 1/2/4 s default.
       parallel: 1
       response:
         format: text
       rateLimit:
-        requestsPerSecond: 0.2
+        requestsPerSecond: 1
         retryOn: [429, 503]
         maxRetries: 3
+        retryBackoffMs: 5000
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.weather.AsosObservationTransformer"
