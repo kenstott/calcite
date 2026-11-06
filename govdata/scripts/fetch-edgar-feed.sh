@@ -102,6 +102,14 @@ fetch_day() {
     if [ "$rc" -eq 0 ] && [ "$code" = 404 ]; then
       rm -f "$dl/$day.nc.tar.gz"; break
     fi
+    # EDGAR's bucket answers a key that does not exist (a holiday, weekend or unpublished day) with
+    # 403 and an S3 <Code>AccessDenied</Code> error body. That is not a rate-limit block, so it is a
+    # skip like 404 and writes no cool-down; any other 403 body (SEC's block page) or 429 does.
+    if [ "$rc" -eq 0 ] && [ "$code" = 403 ] && tail -c 2048 "$dl/$day.nc.tar.gz" | grep -aq '<Code>AccessDenied</Code>'; then
+      [ "$(wc -c < "$dl/$day.nc.tar.gz")" -lt 4096 ] && rm -f "$dl/$day.nc.tar.gz"
+      echo "[edgar-feed] $day: no file (HTTP 403 AccessDenied for a missing key), skipped; no cool-down" >&2
+      return 0
+    fi
     if [ "$rc" -eq 0 ] && { [ "$code" = 403 ] || [ "$code" = 429 ]; }; then
       sec_cooldown_on_status "edgar-feed $day" "$code" "$hdr"
       return 2
