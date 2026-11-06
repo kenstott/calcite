@@ -1684,6 +1684,19 @@ filter_enabled_tables() {
   echo "${out%,}"
 }
 
+# A run stopped by the sec.gov cool-down is deferred, not failed: the refusal is the expected
+# state while the marker is active, and the tracker resumes the work in the next window.
+# Usage: etl_exit_status <exit_code> <worker_id> <log_file>; returns the code the worker exits with.
+etl_exit_status() {
+  local exit_code=$1 worker_id=$2 log_file=$3
+  if [ "$exit_code" -ne 0 ] && [ "$(sec_cooldown_remaining)" -gt 0 ] \
+      && grep -q "refused this host with HTTP 403/429" "$log_file"; then
+    echo "[$worker_id] DEFERRED by sec.gov cool-down (exit $SEC_COOLDOWN_EXIT); resumes after the marker expires"
+    return "$SEC_COOLDOWN_EXIT"
+  fi
+  return "$exit_code"
+}
+
 # Run the ETL with a given model file
 # Usage: run_etl <model_file> <worker_id> [extra_args...]
 run_etl() {
@@ -1733,14 +1746,7 @@ run_etl() {
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
-  # A run stopped by the sec.gov cool-down is deferred, not failed: the refusal is the expected
-  # state while the marker is active, and the tracker resumes the work in the next window.
-  if [ "$exit_code" -ne 0 ] && [ "$(sec_cooldown_remaining)" -gt 0 ] \
-      && grep -q "refused this host with HTTP 403/429" "$log_file"; then
-    echo "[$worker_id] DEFERRED by sec.gov cool-down (exit $SEC_COOLDOWN_EXIT); resumes after the marker expires"
-    return "$SEC_COOLDOWN_EXIT"
-  fi
-  return $exit_code
+  etl_exit_status "$exit_code" "$worker_id" "$log_file"
 }
 
 # Usage: run_etl_inline <inline_json> <worker_id> [extra etl args...]
@@ -1796,7 +1802,7 @@ run_etl_inline() {
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
-  return $exit_code
+  etl_exit_status "$exit_code" "$worker_id" "$log_file"
 }
 
 # Detect schemas with a live ETL writer, from run-pool's pid/exit markers under
