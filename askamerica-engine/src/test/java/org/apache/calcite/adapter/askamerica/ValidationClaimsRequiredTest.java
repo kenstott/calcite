@@ -40,6 +40,15 @@ class ValidationClaimsRequiredTest {
             && msg.contains("rests_on"));
     }
 
+    @Test void questionNamingUrlWithoutSourceUrlIsRefused() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.putObject("question_coverage")
+            .put("question", "Fact-check https://example.com/story for me");
+        String msg = enforce(args);
+        assertNotNull(msg);
+        assertTrue(msg.contains("source_url") && msg.contains("rests_on"));
+    }
+
     @Test void generalReportWithoutSourceUrlPasses() throws Exception {
         assertNull(enforce(MAPPER.createObjectNode()));
     }
