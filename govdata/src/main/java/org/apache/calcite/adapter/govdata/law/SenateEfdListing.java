@@ -42,6 +42,8 @@ final class SenateEfdListing {
   /** 7 Annual, 11 Periodic Transaction Report, 10 Due Date Extension, 14 Blind Trusts, 15 Other. */
   private static final String REPORT_TYPES = "[7,11,10,14,15]";
 
+  private static final String FILER_TYPES_PARAM = "[1,4,5]";
+
   private static final Pattern LINK =
       Pattern.compile("href=\"/search/view/([a-z\\-/]+?)/([0-9A-Fa-f\\-]{36})/\"[^>]*>([^<]*)<");
   private static final java.util.Set<String> FILER_TYPES =
@@ -60,7 +62,6 @@ final class SenateEfdListing {
     final String title;
     /** MM/DD/YYYY as the listing prints it. */
     final String filedDate;
-    String state;
 
     Filing(String firstName, String lastName, String filerType, String kind, String uuid,
         String title, String filedDate) {
@@ -82,37 +83,19 @@ final class SenateEfdListing {
   }
 
   /**
-   * Every filing submitted in {@code year}, with {@link Filing#state} set where the state-filtered
-   * listing places it. The unfiltered listing is the authority on which filings exist; the per-state
-   * passes only attach a state, so a filing no state pass returns keeps a null state.
+   * Every filing submitted in {@code year}: one unfiltered listing, which is the authority on
+   * which filings exist. The listing is not queried per state, to keep the request count low.
    */
-  static List<Filing> forYear(SenateEfdSession session, int year, List<String> states)
-      throws IOException {
-    List<Filing> all = page(session, year, "[1,4,5]", null, null);
-    Map<String, Filing> byUuid = new LinkedHashMap<String, Filing>();
+  static List<Filing> forYear(SenateEfdSession session, int year) throws IOException {
+    List<Filing> all = page(session, year);
+    java.util.Set<String> seen = new java.util.HashSet<String>();
     for (Filing f : all) {
-      if (byUuid.put(f.uuid, f) != null) {
+      if (!seen.add(f.uuid)) {
         throw new GovDataException("eFD listing for " + year + " returned filing " + f.uuid
             + " twice");
       }
     }
-    for (String state : states) {
-      attachState(byUuid, page(session, year, "[1,5]", "senator_state", state), state);
-      attachState(byUuid, page(session, year, "[4]", "candidate_state", state), state);
-    }
     return all;
-  }
-
-  private static void attachState(Map<String, Filing> byUuid, List<Filing> inState,
-      String state) {
-    for (Filing f : inState) {
-      Filing known = byUuid.get(f.uuid);
-      if (known == null) {
-        throw new GovDataException("eFD state listing (" + state + ") returned filing " + f.uuid
-            + " absent from the unfiltered listing");
-      }
-      known.state = state;
-    }
   }
 
   /**
@@ -121,27 +104,22 @@ final class SenateEfdListing {
    * order for rows that tie, so a row can arrive on two pages (and another on none). A window
    * that reports at most one page of rows needs no paging at all; a larger one is halved.
    */
-  private static List<Filing> page(SenateEfdSession session, int year, String filerTypes,
-      String stateParam, String state) throws IOException {
+  private static List<Filing> page(SenateEfdSession session, int year) throws IOException {
     List<Filing> out = new ArrayList<Filing>();
-    window(session, year, LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31), filerTypes,
-        stateParam, state, out);
+    window(session, year, LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31), out);
     return out;
   }
 
   private static void window(SenateEfdSession session, int year, LocalDate from, LocalDate to,
-      String filerTypes, String stateParam, String state, List<Filing> out) throws IOException {
+      List<Filing> out) throws IOException {
     Map<String, String> params = new LinkedHashMap<String, String>();
     params.put("start", "0");
     params.put("length", Integer.toString(PAGE_SIZE));
     params.put("report_types", REPORT_TYPES);
-    params.put("filer_types", filerTypes);
+    params.put("filer_types", FILER_TYPES_PARAM);
     params.put("submitted_start_date", DATE.format(from) + " 00:00:00");
     params.put("submitted_end_date", DATE.format(to) + " 23:59:59");
     params.put("draw", "1");
-    if (stateParam != null) {
-      params.put(stateParam, state);
-    }
     boolean pastYear = year < LocalDate.now(ZoneOffset.UTC).getYear();
     JsonNode root = MAPPER.readTree(session.listing(params, pastYear));
     long total = root.path("recordsTotal").asLong(-1);
@@ -165,8 +143,8 @@ final class SenateEfdListing {
           + " exceed one page and cannot be split further");
     }
     LocalDate mid = from.plusDays(java.time.temporal.ChronoUnit.DAYS.between(from, to) / 2);
-    window(session, year, from, mid, filerTypes, stateParam, state, out);
-    window(session, year, mid.plusDays(1), to, filerTypes, stateParam, state, out);
+    window(session, year, from, mid, out);
+    window(session, year, mid.plusDays(1), to, out);
   }
 
   static Filing parseRow(JsonNode row) {

@@ -5247,8 +5247,8 @@ partitionedTables:
       year after the candidacy ends) — such filings are listed here but have no detail rows.
       Scanned paper filings (eFD's /search/view/paper/ pages, all of 2012-2013 and a few percent
       of later years) have no machine-readable text and are excluded; each year's count is logged
-      by the ETL. `state` is the state eFD's per-state listing places the filer in; it is null for
-      candidates and for the few senators that listing omits. Senate filings only: House annual
+      by the ETL. `state` is always null: the crawl reads one unfiltered listing per year and does
+      not query eFD per state. Senate filings only: House annual
       reports are not sourced, and PTRs of the House are in member_stock_transactions. Use of
       these reports is restricted by 5 U.S.C. § 13107(c): not for credit rating, not for
       soliciting money, and commercial use only by news and communications media.
@@ -5299,7 +5299,7 @@ partitionedTables:
       - name: state
         type: string
         nullable: true
-        comment: "Two-letter state code from eFD's per-state listing; null for candidates and for senators that listing omits"
+        comment: "Always null; the crawl uses one unfiltered listing per year, which carries no state"
       - name: report_kind
         type: string
         nullable: false
