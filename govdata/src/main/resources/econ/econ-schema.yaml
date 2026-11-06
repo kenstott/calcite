@@ -5207,6 +5207,14 @@ partitionedTables:
       that transformer's target-code set / window size, not re-deriving the source.
       series_id is reconstructed from the ZIP's filename industry_code (see column
       comment) since the file itself never spells out the full BLS series ID.
+      SOURCE CURRENCY: this table is only as current as BLS's archive. BLS republishes
+      cesvinall.zip irregularly, not with each monthly Employment Situation release, and its
+      product page (cesvininfo.htm) links no other file; the archive was last modified
+      2026-03-06 and carries releases only through January 2026 (see observedCoverage and
+      max(release_period)). Releases after the archive's last one are not available from this
+      product, so for the first print of a recent month use employment_statistics, which
+      carries only the current value. The ETag freshness gate picks up a refreshed archive on
+      the next daily run.
 
     dimensions:
       type:
