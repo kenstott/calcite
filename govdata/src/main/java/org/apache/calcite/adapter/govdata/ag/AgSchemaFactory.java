@@ -42,6 +42,7 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
 
   private static final Set<String> NASS_TABLES = new HashSet<>(Arrays.asList(
       "nass_crop_production",
+      "nass_crop_estimates_current",
       "nass_livestock_inventory"
   ));
 

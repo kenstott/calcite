@@ -384,7 +384,8 @@ partitionedTables:
       derived county_fips column and to geo.state_ref via state_fips_code; also joinable to
       disasters drought/storm tables by county+year for yield-impact analysis. For the
       current season's weekly condition and progress with week-ending dates and national
-      rows, use nass_crop_progress.
+      rows, use nass_crop_progress. A crop year is held here only once NASS publishes its
+      January final; the in-progress year's latest estimate is in nass_crop_estimates_current.
 
     dimensions:
       type:
@@ -465,6 +466,105 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # NASS_CROP_ESTIMATES_CURRENT — latest in-season annual estimate for the current crop year
+  # ---------------------------------------------------------------------------
+  # nass_crop_production requests data year = publish year - 1 (dataLag 1), so the crop year
+  # still in progress is not requested until NASS's January final. This table requests the
+  # current calendar year with no lag. QuickStats carries the in-season estimate as the
+  # reference_period_desc 'YEAR' row, overwritten as each report lands (verified live
+  # 2026-11-06, AR rice 2026 AREA PLANTED: 'YEAR' 901,000 loaded 2026-09-11, identical to the
+  # 'YEAR - SEP FORECAST' row; 'YEAR - JUN ACREAGE' 851,000 and 'YEAR - MAR ACREAGE' 1,001,000
+  # are older vintages). NassQuickStatsTransformer already keeps 'YEAR' and drops the dated
+  # vintages, so the latest vintage is what lands, with load_time dating it. STATE and
+  # NATIONAL only: NASS publishes county estimates once, with the final. freq_desc=ANNUAL
+  # keeps weekly progress/condition rows out (those are nass_crop_progress).
+  - name: nass_crop_estimates_current
+    freshness:
+      type: hash
+    pattern: "type=nass_crop_estimates_current/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      Latest in-season USDA NASS estimate of annual field-crop area planted, area harvested,
+      production and yield for the CURRENT crop year, by state and nation (agg_level_desc
+      STATE or NATIONAL; NATIONAL rows carry state_alpha 'US'). Fills the gap in
+      nass_crop_production, which holds a crop year only once NASS publishes its January
+      final: for example Arkansas rice planted acres for 2026 are 901,000 here (NASS August
+      Crop Production, unchanged in September) months before nass_crop_production has year
+      2026. One row per (commodity, class, practice, data item, geography) for the latest
+      vintage only: reference_period_desc is 'YEAR' and load_time is the date NASS loaded
+      that vintage, which dates the report it came from (June Acreage, August/September/
+      October/November Crop Production, and so on). Earlier vintages, such as the June
+      Acreage figure that was later revised, are not kept. Estimates are provisional and are
+      revised until the January final: when a year exists in nass_crop_production prefer
+      that table, and do not union the two for the same year. Same tall layout and column set
+      as nass_crop_production: filter statisticcat_desc (AREA PLANTED, AREA HARVESTED,
+      PRODUCTION, YIELD) and unit_desc, and pin domain_desc/class_desc/prodn_practice_desc
+      to 'TOTAL'/'ALL CLASSES'/'ALL PRODUCTION PRACTICES' for a single figure. PRODUCTION
+      also carries a '$' unit series alongside the physical one.
+
+    dimensions:
+      type:
+        - nass_crop_estimates_current
+      agg_level_desc:
+        type: list
+        values: ["STATE", "NATIONAL"]
+      state_alpha: *nass_crop_states
+      year:
+        type: yearRange
+        start: "${GOVDATA_CURRENT_YEAR}"
+        end: "${GOVDATA_CURRENT_YEAR}"
+        dataLag: 0
+
+    columns: *nass_columns
+
+    source:
+      type: http
+      url: "https://quickstats.nass.usda.gov/api/api_GET/"
+      method: GET
+      parameters:
+        key: "${AGR_NASS_API_KEY}"
+        format: "JSON"
+        sector_desc: "CROPS"
+        group_desc: "FIELD CROPS"
+        freq_desc: "ANNUAL"
+        agg_level_desc: "{agg_level_desc}"
+        state_alpha: "{state_alpha}"
+        year: "{year}"
+      response:
+        format: json
+      rateLimit:
+        # Same Azure gateway throttling as nass_crop_production; see its rateLimit comment.
+        requestsPerSecond: 1
+        retryOn: [429, 403, 500, 503]
+        maxRetries: 6
+        retryBackoffMs: 5000
+        # HTTP 400 for a (agg_level, state) pairing NASS has no records for (STATE x US,
+        # NATIONAL x a real state), as in nass_crop_production.
+        skipOn: [400]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.ag.NassQuickStatsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=nass_crop_estimates_current/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *nass_iceberg
+        # The same year is re-requested as each NASS report revises it; replace the year's
+        # partition rather than stacking vintages.
+        overwritePartitions: true
 
   # ---------------------------------------------------------------------------
   # NASS_CROP_PROGRESS — weekly in-season crop condition and progress (NASS QuickStats)
@@ -2558,6 +2658,24 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Derived 5-digit county FIPS to geo.counties (county-level rows only)
+
+  nass_crop_estimates_current:
+    # Latest vintage only, so uniqueness matches nass_crop_production's key.
+    primaryKey:
+      - type
+      - year
+      - source_desc
+      - agg_level_desc
+      - state_fips_code
+      - short_desc
+      - domaincat_desc
+      - reference_period_desc
+    foreignKeys:
+      - columns: [state_fips_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
+        comment: NASS state FIPS to geo.state_ref
 
   rma_crop_insurance:
     # One row per state x county x crop x plan x coverage category x delivery type
