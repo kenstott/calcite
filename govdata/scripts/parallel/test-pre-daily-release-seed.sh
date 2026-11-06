@@ -53,7 +53,7 @@ S
   (cd "$tmp/w" && git add -A govdata/scripts && git commit -qm "stub seed" && git push -q origin main)
   : > "$tmp/seed-builds.log"
 }
-run() { (cd "$tmp/w" && PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh) > "$tmp/out.log" 2>&1; echo $? > "$tmp/rc"; }
+run() { (cd "$tmp/w" && CI_WAIT_SECS="${CI_WAIT_SECS:-0}" CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-0}" CI_POLL_SECS=1 PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh) > "$tmp/out.log" 2>&1; echo $? > "$tmp/rc"; }
 
 # 1. model unchanged: no seed build, no seed commit
 setup; stub_seed 10 0; head0=$(git -C "$tmp/w" rev-parse HEAD); run
@@ -111,12 +111,43 @@ code=$(git -C "$tmp/w" rev-parse HEAD); : > "$tmp/gh.log"; run
 [ "$(cat "$tmp/rc")" -eq 0 ] && grep -q "release create engine-v0.1.1" "$tmp/gh.log" \
   && [ "$(cat "$tmp/w/govdata/build/libs/sih-govdata.jar.commit" 2>/dev/null)" = "$code" ] \
   && ok "CI success: released and staged" || bad "CI success: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
-grep -q -- "--commit $code" "$tmp/gh.log" && ok "CI success: gate looked up the code commit" || bad "CI success: wrong commit looked up"
+grep -q -- "--commit $code" "$tmp/gh.log" && ok "CI success: gate looked up the head commit" || bad "CI success: wrong commit looked up"
 
-# a generated seed commit on top is skipped: CI is looked up for the code commit below it
+# a generated seed commit on top: the gate judges the head, since the code commit's own run was
+# cancelled by the seed push or never started
 setup; stub_seed 0 0; : > "$tmp/gh.log"; run
-code=$(git -C "$tmp/w" rev-parse HEAD~1)
-grep -q -- "--commit $code" "$tmp/gh.log" && ok "seed commit skipped: CI looked up for the code commit" || bad "seed commit skipped: $(grep 'run list' "$tmp/gh.log")"
+head1=$(git -C "$tmp/w" rev-parse HEAD)
+grep -q -- "--commit $head1" "$tmp/gh.log" && ! grep -q -- "--commit $(git -C "$tmp/w" rev-parse HEAD~1)" "$tmp/gh.log" \
+  && ok "seed commit on top: CI judged on the head" || bad "seed commit on top: $(grep 'run list' "$tmp/gh.log")"
+[ "$(cat "$tmp/rc")" -eq 0 ] && [ "$(cat "$tmp/w/govdata/build/libs/sih-govdata.jar.commit" 2>/dev/null)" = "$head1" ] \
+  && ok "seed commit on top: green head releases and stages" || bad "seed commit on top: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# the code commit's own run is cancelled, the head's is green: passes (stub answers per sha)
+setup; stub_seed 0 0
+cat > "$tmp/bin/gh" <<G
+#!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "run list" ]; then
+  sha=""; while [ \$# -gt 0 ]; do [ "\$1" = --commit ] && sha="\$2"; shift; done
+  if [ "\$sha" = "\$(git -C "$tmp/w" rev-parse HEAD)" ]; then cat "$tmp/gh-runs.json"
+  else echo '[{"status":"completed","conclusion":"cancelled","url":"http://ci/c","createdAt":"2026-10-31T00:00:00Z"}]'; fi
+fi
+G
+run
+[ "$(cat "$tmp/rc")" -eq 0 ] && ok "code commit cancelled by the seed push, head green: gate passes" || bad "cancelled code commit: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# head in progress, then green: the gate waits
+setup; stub_seed 10 0
+echo '[{"status":"in_progress","conclusion":"","url":"http://ci/w","createdAt":"2026-10-31T00:00:00Z"}]' > "$tmp/gh-runs.json"
+( sleep 3; echo '[{"status":"completed","conclusion":"success","url":"http://ci/w","createdAt":"2026-10-31T00:00:00Z"}]' > "$tmp/gh-runs.json" ) &
+CI_WAIT_SECS=30 run; wait
+[ "$(cat "$tmp/rc")" -eq 0 ] && grep -q "waiting" "$tmp/out.log" && ok "head in progress then green: waited and passed" || bad "wait: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# head stays in progress past the bound: fails naming the wait
+setup; stub_seed 10 0
+echo '[{"status":"in_progress","conclusion":"","url":"http://ci/w","createdAt":"2026-10-31T00:00:00Z"}]' > "$tmp/gh-runs.json"
+CI_WAIT_SECS=2 run
+[ "$(cat "$tmp/rc")" -ne 0 ] && grep -q "after waiting" "$tmp/out.log" && [ ! -e "$tmp/w/govdata/build/libs/sih-govdata.jar" ] \
+  && ok "head in progress past the bound: fails, nothing staged" || bad "wait bound: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
 
 # --dry-run prints the decision and changes nothing
 setup; stub_seed 10 0; echo '[]' > "$tmp/gh-runs.json"

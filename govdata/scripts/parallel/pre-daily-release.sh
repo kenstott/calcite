@@ -12,14 +12,16 @@
 #               regenerate the seed with it, commit the seed files and push, so the release and
 #               the jar below carry the new seed. A failed seed rebuild is reported and the
 #               release continues on the committed seed.
-#   2c. CI gate the release and the staged jar ship only code whose CI is green. The code commit is
-#               the newest commit on main that is not an auto-generated seed or coverage-metadata
-#               commit (those have no CI of their own yet). Its newest "CI" workflow run (main.yml)
-#               on kenstott/calcite must be completed with conclusion success. A queued,
-#               in-progress, cancelled, failed or missing run, or a run that cannot be read, is not
-#               green: nothing is released or staged, the reason (sha, run state, URL) is logged and
-#               the script exits 1, so the window continues on the jar already staged. The seed
-#               rebuild and its push above are not gated. --dry-run prints the decision.
+#   2c. CI gate the release and the staged jar ship only code whose CI is green. Commits above the
+#               newest non-generated (code) commit are auto-generated seed or coverage-metadata
+#               commits that change no code, so the gate judges HEAD: its newest "CI" workflow run
+#               (main.yml) on kenstott/calcite must be completed with conclusion success. A run
+#               still queued or in progress is waited for (CI_WAIT_SECS, default 90 min; a head with
+#               no run yet gets CI_NONE_GRACE_SECS, default 5 min). A cancelled, failed or missing
+#               run, a timeout, or a run that cannot be read, is not green: nothing is released or
+#               staged, the reason (sha, run state, URL) is logged and the script exits 1, so the
+#               window continues on the jar already staged. The seed rebuild and its push above
+#               are not gated. --dry-run prints the decision and never waits.
 #   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag
 #               AND we're about to build a fresh jar for this head_sha (step 4's own gate) —
 #               a release always accompanies the build it corresponds to, not a wall-clock timer.
@@ -186,23 +188,20 @@ fi
 # ── 2c. CI gate ──────────────────────────────────────────────────────────────
 CI_WORKFLOW="main.yml"
 # Subjects of commits that carry no code and get no CI run of their own.
+CI_WAIT_SECS="${CI_WAIT_SECS:-5400}"
+CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-300}"
+CI_POLL_SECS="${CI_POLL_SECS:-60}"
 GENERATED_SUBJECTS='^(chore\(govdata\): rebuild the DuckDB seed for changed schema models|chore\(govdata\): refresh observed-coverage metadata)'
 
-# ci_gate: 0 when the CI run for the code commit is completed/success; otherwise 1. Sets ci_reason.
-ci_gate() {
-  local code_sha subject runs state
-  code_sha=""
-  while IFS=$'\t' read -r sha subject; do
-    if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
-  done < <(git log -n 50 --format='%H%x09%s' main)
-  if [ -z "$code_sha" ]; then
-    ci_reason="no code commit among the last 50 commits on main"; return 1
-  fi
-  if ! runs="$(gh run list --repo "$FORK" --workflow "$CI_WORKFLOW" --commit "$code_sha" \
+# ci_query <sha>: prints "<status>\t<conclusion>\t<url>" for the newest CI run of <sha>
+# ("none" when it has no run); non-zero with the reason on stdout when it cannot be read.
+ci_query() {
+  local runs
+  if ! runs="$(gh run list --repo "$FORK" --workflow "$CI_WORKFLOW" --commit "$1" \
                  --limit 20 --json status,conclusion,url,createdAt 2>&1)"; then
-    ci_reason="CI for $code_sha could not be read: $runs"; return 1
+    echo "CI for $1 could not be read: $runs"; return 1
   fi
-  if ! state="$(python3 -I -c '
+  python3 -I -c '
 import json, sys
 runs = json.loads(sys.stdin.read())
 if not runs:
@@ -210,18 +209,49 @@ if not runs:
 else:
     r = max(runs, key=lambda x: x["createdAt"])
     print("%s\t%s\t%s" % (r["status"], r["conclusion"], r["url"]))
-' <<<"$runs" 2>&1)"; then
-    ci_reason="CI for $code_sha could not be parsed: $state"; return 1
+' <<<"$runs" 2>&1 || { echo "CI for $1 could not be parsed"; return 1; }
+}
+
+# ci_gate: 0 when CI is completed/success for HEAD; otherwise 1. Sets ci_reason.
+# Every commit above the code commit is a generated seed/coverage commit that changes no code, so
+# the head's run covers the code commit too (a seed push cancels the code commit's own run through
+# the workflow's concurrency group, or leaves it with no run at all). A run that is still queued or
+# in progress is waited for, up to CI_WAIT_SECS; a head with no run yet gets CI_NONE_GRACE_SECS
+# for GitHub to start one. --dry-run never waits.
+ci_gate() {
+  local code_sha subject head state waited=0 limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
+  code_sha=""
+  while IFS=$'\t' read -r sha subject; do
+    if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
+  done < <(git log -n 50 --format='%H%x09%s' main)
+  if [ -z "$code_sha" ]; then
+    ci_reason="no code commit among the last 50 commits on main"; return 1
   fi
-  IFS=$'\t' read -r run_status run_conclusion run_url <<<"$state"
-  if [ "$run_status" = none ]; then
-    ci_reason="no $CI_WORKFLOW run for code commit $code_sha"; return 1
-  fi
-  if [ "$run_status" = completed ] && [ "$run_conclusion" = success ]; then
-    ci_reason="CI green for code commit $code_sha ($run_url)"; return 0
-  fi
-  ci_reason="CI not green for code commit $code_sha: status=$run_status conclusion=${run_conclusion:-none} $run_url"
-  return 1
+  head="$(git rev-parse main)"
+  if $DRY_RUN; then limit=0; grace=0; fi
+  while :; do
+    if ! state="$(ci_query "$head")"; then ci_reason="$state"; return 1; fi
+    IFS=$'\t' read -r run_status run_conclusion run_url <<<"$state"
+    case "$run_status" in
+      completed)
+        if [ "$run_conclusion" = success ]; then
+          ci_reason="CI green for $head, covering code commit $code_sha ($run_url)"; return 0
+        fi
+        ci_reason="CI not green for $head (code commit $code_sha): status=completed conclusion=${run_conclusion:-none} $run_url"
+        return 1 ;;
+      none)
+        if [ "$waited" -ge "$grace" ]; then
+          ci_reason="no $CI_WORKFLOW run for $head (code commit $code_sha)"; return 1
+        fi ;;
+      *)
+        if [ "$waited" -ge "$limit" ]; then
+          ci_reason="CI not green for $head (code commit $code_sha): status=$run_status conclusion=${run_conclusion:-none} after waiting ${waited}s $run_url"
+          return 1
+        fi ;;
+    esac
+    log "CI gate: $head status=$run_status; waiting ${CI_POLL_SECS}s (${waited}s waited)"
+    sleep "$CI_POLL_SECS"; waited=$((waited + CI_POLL_SECS))
+  done
 }
 
 ci_ok=true
