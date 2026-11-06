@@ -1971,6 +1971,196 @@ partitionedTables:
         compactionMinFiles: 5
 
   # ---------------------------------------------------------------------------
+  # DHS REMOVALS AND RETURNS - OHSS Yearbook of Immigration Statistics, Table 39
+  # ---------------------------------------------------------------------------
+  - name: dhs_repatriations_by_year
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
+    # Snapshot table: the OHSS enforcement workbook holds the complete 1892-onward history, so
+    # every fetch returns every year. The hash freshness gate skips the Iceberg write when the
+    # workbook is unchanged; overwritePartitions replaces the single partition when a new
+    # fiscal year is published. The workbook URL carries its publication date, so the source
+    # URL is the Yearbook index page and the transformer resolves the newest workbook from it.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=dhs_repatriations/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      DHS removals and returns (deportations) by fiscal year, FY1892 onward, from the DHS Office
+      of Homeland Security Statistics (OHSS) Yearbook of Immigration Statistics, Table 39
+      (enforcement workbook). Removals are movements out of the US under an order of removal;
+      returns are movements out without one, split into enforcement returns and administrative
+      returns (administrative returns exist from FY2009; enforcement returns from FY1927 and,
+      before FY2009, include all returns); Title 42 expulsions are the COVID-19 public-health
+      expulsions (FY2020 onward). total_removals_and_returns is administrative returns +
+      enforcement returns + removals and EXCLUDES Title 42 expulsions. Cells are rounded to the
+      nearest ten by OHSS. The Yearbook is annual and lags: the newest workbook published covers
+      FY2023, and the monthly "Immigration Enforcement and Legal Processes" tables stopped in
+      January 2025, so figures after the newest fiscal year (including the 2025-26 enforcement
+      surge) are not in this table. The series does not split by agency (ICE/CBP) or criminal
+      status; for removals by criminal status see dhs_removals_by_criminal_status, and for
+      detention snapshots by agency and criminality see ice_detention_population_by_criminality.
+      A source value of NA (not available) or X (not applicable) is stored as NULL.
+      One row per fiscal year (October-September).
+
+    dimensions:
+      type:
+        - dhs_repatriations
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September). FY1976 covers 15 months because the fiscal year changed from a June 30 to a September 30 end.
+      - name: administrative_returns
+        type: long
+        nullable: true
+        comment: Administrative returns (incl. crew detained aboard vessels from FY2009 and administrative withdrawals FY2018 onward). NULL before FY2009.
+      - name: enforcement_returns
+        type: long
+        nullable: true
+        comment: Enforcement returns - returns other than crew members and administrative withdrawals; all returns before FY2009. NULL before FY1927.
+      - name: removals
+        type: long
+        nullable: true
+        comment: Removals - compulsory, confirmed departures under an order of removal; carries consequences for reentry
+      - name: title_42_expulsions
+        type: long
+        nullable: true
+        comment: Expulsions under Title 42 on COVID-19 public-health grounds. NULL (not applicable) before FY2020.
+      - name: total_removals_and_returns
+        type: long
+        nullable: true
+        comment: Sum of administrative returns, enforcement returns and removals; excludes Title 42 expulsions
+
+    source:
+      type: http
+      url: "https://ohss.dhs.gov/topics/immigration/yearbook"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.DhsRepatriationsByYearTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=dhs_repatriations/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: dhs_repatriations_by_year
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # DHS REMOVALS BY CRIMINAL STATUS - OHSS Yearbook of Immigration Statistics, Table 42
+  # ---------------------------------------------------------------------------
+  - name: dhs_removals_by_criminal_status
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
+    # Snapshot table, same shape and refresh behaviour as dhs_repatriations_by_year.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=dhs_removals_criminal/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      DHS removals (deportations) by known criminal status and region or country of nationality,
+      from the DHS Office of Homeland Security Statistics (OHSS) Yearbook of Immigration
+      Statistics, Table 42 (enforcement workbook), FY2014 onward (the newest workbook published
+      covers FY2023). "Criminal" is the known-criminal-conviction flag recorded at removal;
+      "non-criminal" are removals with no known conviction. Removals only - returns and Title 42
+      expulsions are not in this table (see dhs_repatriations_by_year for the all-years totals).
+      geo_level is 'total' (all nationalities, one row per year), 'region' (Africa, Asia, Europe,
+      North America, Oceania, South America, Unknown) or 'country'; sum a single level, never
+      across levels. Cells are rounded to the nearest ten by OHSS, so criminal + non-criminal
+      can differ from the total by a few. Not split by agency (ICE/CBP). One row per fiscal year
+      + geography. Not current past the newest published fiscal year; the monthly series
+      stopped in January 2025.
+
+    dimensions:
+      type:
+        - dhs_removals_criminal
+
+    columns:
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October-September)
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: "'total', 'region' or 'country'"
+      - name: geography
+        type: string
+        nullable: false
+        comment: "'Total', a world region, or a country of nationality as named by OHSS"
+      - name: removals_total
+        type: long
+        nullable: true
+        comment: Removals of all known criminal statuses
+      - name: removals_criminal
+        type: long
+        nullable: true
+        comment: Removals of people with a known criminal conviction
+      - name: removals_non_criminal
+        type: long
+        nullable: true
+        comment: Removals of people with no known criminal conviction
+
+    source:
+      type: http
+      url: "https://ohss.dhs.gov/topics/immigration/yearbook"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.crime.DhsRemovalsByCriminalStatusTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=dhs_removals_criminal/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/crime"
+        tableName: dhs_removals_by_criminal_status
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
   # CDE SUPPLEMENTAL - Stolen and recovered property values
   # ---------------------------------------------------------------------------
   - name: cde_supplemental

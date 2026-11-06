@@ -1272,3 +1272,163 @@ SELECT
   SUM(CASE WHEN status = 'pass' THEN 1 ELSE 0 END) AS passes
 FROM dq_results
 GROUP BY schema;
+
+-- ============================================================================
+-- dhs_repatriations_by_year (OHSS Yearbook enforcement workbook; partitioned by type only, no year dimension)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 130 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 130, 'FY1892-FY2023 is 132 fiscal years; at least 130'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is a single-value partition column by design
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'fiscal_year IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true)
+WHERE fiscal_year IS NULL;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (fiscal_year) rows'
+FROM (
+  SELECT fiscal_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true)
+  GROUP BY fiscal_year HAVING COUNT(*) > 1
+);
+
+-- T7: spot-check against the published OHSS Table 39 (FY2000: 188,470 removals, 1,675,880
+-- enforcement returns, 1,864,340 total; FY2024 or later rows only add to the series)
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'FY2000 removals=188470 enforcement_returns=1675880 total=1864340'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true)
+WHERE fiscal_year = 2000 AND removals = 188470 AND enforcement_returns = 1675880
+  AND total_removals_and_returns = 1864340;
+
+-- T7: the total is the sum of its three parts wherever the parts exist (rounded to tens)
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_repatriations_by_year', 'T7_total_is_sum',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, 'total_removals_and_returns differs from the sum of its parts by more than 30'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_repatriations_by_year', allow_moved_paths := true)
+WHERE removals IS NOT NULL
+  AND ABS(total_removals_and_returns
+          - (COALESCE(administrative_returns, 0) + COALESCE(enforcement_returns, 0) + removals)) > 30;
+
+-- ============================================================================
+-- dhs_removals_by_criminal_status (OHSS Yearbook enforcement workbook; partitioned by type only, no year dimension)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true);
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 1000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1000, '10 fiscal years x ~200 geographies is well over 1000 rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true);
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    -- type is a single-value partition column by design
+    -- geo_level is a 3-value category set (total/region/country), not a constant
+    AND column_name NOT IN ('type', 'geo_level')
+) t;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'fiscal_year IS NULL OR geo_level IS NULL OR geography IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true)
+WHERE fiscal_year IS NULL OR geo_level IS NULL OR geography IS NULL;
+
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T6_pk_dupes',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (fiscal_year, geo_level, geography) rows'
+FROM (
+  SELECT fiscal_year, geo_level, geography
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true)
+  GROUP BY fiscal_year, geo_level, geography HAVING COUNT(*) > 1
+);
+
+-- T7: spot-check against the published OHSS Table 42 (FY2014 Total: 404,700 removals,
+-- 172,100 criminal, 232,600 non-criminal)
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T7_expected_values',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'FY2014 total removals=404700 criminal=172100 non_criminal=232600'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true)
+WHERE fiscal_year = 2014 AND geo_level = 'total' AND removals_total = 404700
+  AND removals_criminal = 172100 AND removals_non_criminal = 232600;
+
+-- T7: the regions sum to the total (rounded to tens, so allow a small gap)
+INSERT INTO dq_results
+SELECT 'crime', 'dhs_removals_by_criminal_status', 'T7_regions_sum_to_total',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0, 'fiscal years where the region rows differ from the total row by more than 100'
+FROM (
+  SELECT fiscal_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/crime/dhs_removals_by_criminal_status', allow_moved_paths := true)
+  GROUP BY fiscal_year
+  HAVING ABS(SUM(CASE WHEN geo_level = 'region' THEN removals_total END)
+             - SUM(CASE WHEN geo_level = 'total' THEN removals_total END)) > 100
+);
