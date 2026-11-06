@@ -653,6 +653,21 @@ failed_list=()
 deferred_list=()
 restart_count=0
 
+# A non-zero worker exit: the sec.gov cool-down code is deferred (retried in the next window, not
+# a failure); anything else is failed.
+count_unsuccessful_exit() {
+  local id=$1 exit_code=$2 mins=$3
+  if [ "$exit_code" -eq "$SEC_COOLDOWN_EXIT" ]; then
+    ((deferred_count++)) || true
+    deferred_list+=("$id")
+    log_info "$id DEFERRED by sec.gov cool-down (${mins}m): retries in the next window after the marker expires"
+  else
+    ((failed_count++)) || true
+    failed_list+=("$id")
+    log_info "$id FAILED (${mins}m): check launch.log for details"
+  fi
+}
+
 # Convert a heap size string (e.g., "3g", "2048m") to MB
 heap_to_mb() {
   local val=$1
@@ -1172,14 +1187,8 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
             hcy_mark_complete "$_hcy_schema" "$_hcy_token"
           fi
         fi
-      elif [ "$exit_code" -eq "$SEC_COOLDOWN_EXIT" ]; then
-        ((deferred_count++)) || true
-        deferred_list+=("$id")
-        log_info "$id DEFERRED by sec.gov cool-down (${mins}m): retries in the next window after the marker expires"
       else
-        ((failed_count++)) || true
-        failed_list+=("$id")
-        log_info "$id FAILED (${mins}m): check launch.log for details"
+        count_unsuccessful_exit "$id" "$exit_code" "$mins"
       fi
 
       remove_active "$i"
