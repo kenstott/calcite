@@ -7258,21 +7258,34 @@ public class McpServer {
         }
     }
 
-    /** A publish that names the article under review ({@code source_url}) is an article
-     *  validation, and a validation without a non-empty {@code claims} array has no claims
-     *  table and no engine-computed honesty or bias scores. Refuse it with the required shape. */
+    private static final java.util.regex.Pattern QUESTION_URL =
+        java.util.regex.Pattern.compile("https?://\\S+");
+
+    /** A publish that names the article under review is an article validation, and a validation
+     *  without a non-empty {@code claims} array has no claims table and no engine-computed
+     *  honesty or bias scores. The article is named by {@code source_url} or, when the caller
+     *  left that out, by a URL in the restated question ({@code question_coverage.question}),
+     *  so omitting {@code source_url} cannot sidestep the requirement. Refuse with the
+     *  required shape. */
     private static String enforceValidationHasClaims(JsonNode args) {
         String srcUrl = args.path("source_url").asText(null);
-        if (srcUrl == null || srcUrl.trim().isEmpty()) {
+        boolean hasSourceUrl = srcUrl != null && !srcUrl.trim().isEmpty();
+        String question = args.path("question_coverage").path("question").asText("");
+        boolean questionNamesUrl = QUESTION_URL.matcher(question).find();
+        if (!hasSourceUrl && !questionNamesUrl) {
             return null;
         }
-        return "validation refused: `source_url` names an article under review but `claims` is "
+        String named = hasSourceUrl
+            ? "`source_url` names an article under review"
+            : "the question names a URL, so this is an article validation, and `source_url` "
+                + "(the article's exact URL) is also missing";
+        return "validation refused: " + named + " but `claims` is "
             + "missing or empty. Put every graded assertion in the structured `claims` array "
             + "(not only in report sections): each claim needs `group` (`fidelity`, "
             + "`author_claims` or `subject_claims`), `speaker` on every `subject_claims` entry, "
             + "and `rests_on` (1-based claim numbers offered as evidence, [] when none). The "
             + "engine computes the honesty and bias scores from these fields. Call again with "
-            + "the `claims` array.";
+            + "the `claims` array" + (hasSourceUrl ? "." : " and `source_url`.");
     }
 
     /** A validation with no {@code source_url} publishes a report the browser extension can
