@@ -25,9 +25,9 @@ Pins `puppeteer-core` 23.11.1 (no browser download) and prints the path to set a
 | Operand | Env var | Default |
 |---|---|---|
 | `efdBrowserScript` | `EFD_BROWSER_SCRIPT` | unset (required) |
-| `efdEdgeExecutable` | `EFD_EDGE_EXECUTABLE` | `/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe` |
+| `efdEdgeExecutable` | `EFD_EDGE_EXECUTABLE` | none; required (path to `msedge.exe` as WSL sees it) |
 | `efdDebugPort` | `EFD_DEBUG_PORT` | 9222 |
-| `efdProfileDir` | `EFD_PROFILE_DIR` | `C:\Users\Admin\AppData\Local\Temp` (a per-run `efd-<pid>-<time>` folder is created under it) |
+| `efdProfileDir` | `EFD_PROFILE_DIR` | none; required (a Windows folder; a per-run `efd-<pid>-<time>` folder is created under it) |
 | `efdNodeCommand` | `EFD_NODE_COMMAND` | `node` |
 
 If the debug port already answers, the helper refuses to start rather than drive a browser it did

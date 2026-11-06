@@ -57,9 +57,9 @@ materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 # with a fresh profile under efdProfileDir and a DevTools port bound to localhost, drives it with the
 # helper installed by govdata/scripts/edge-browser/install.sh, and closes it after the run. When
 # Edge or the helper is missing, or the port is unreachable, the fd_* tables fail naming the cause.
-efdEdgeExecutable: "${EFD_EDGE_EXECUTABLE:/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe}"
+efdEdgeExecutable: "${EFD_EDGE_EXECUTABLE:}"
 efdDebugPort: "${EFD_DEBUG_PORT:9222}"
-efdProfileDir: "${EFD_PROFILE_DIR:C:\\Users\\Admin\\AppData\\Local\\Temp}"
+efdProfileDir: "${EFD_PROFILE_DIR:}"
 efdBrowserScript: "${EFD_BROWSER_SCRIPT:}"
 efdNodeCommand: "${EFD_NODE_COMMAND:node}"
 

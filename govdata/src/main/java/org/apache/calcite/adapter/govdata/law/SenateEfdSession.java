@@ -183,7 +183,9 @@ final class SenateEfdSession {
       }
     }
     if (value == null || value.trim().isEmpty()) {
-      throw new IllegalStateException("fd_*: law." + key + " is not set in the law schema model");
+      throw new IllegalStateException("fd_*: law." + key + " is not set in the law schema model;"
+          + " set " + key.replaceAll("([A-Z])", "_$1").toUpperCase(java.util.Locale.ROOT)
+          + " in the environment file");
     }
     return value.trim();
   }
