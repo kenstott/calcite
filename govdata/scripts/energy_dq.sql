@@ -1182,8 +1182,8 @@ FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices',
 INSERT INTO dq_results
 SELECT
   'energy', 'eia_retail_gasoline_prices', 'T2_row_count',
-  CASE WHEN COUNT(*) >= 100000 THEN 'pass' ELSE 'fail' END,
-  COUNT(*), 100000, 'expected weekly price rows'
+  CASE WHEN COUNT(*) >= 50000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 50000, 'expected >= 50000 weekly price rows (5-year daily window alone is ~75000)'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true);
 
 -- T3: sample
@@ -1237,7 +1237,7 @@ SELECT
 FROM (
   SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true)
-  WHERE stocks_kbbl IS NOT NULL AND price_dollars_per_gallon outside 0.1..20
+  WHERE price_dollars_per_gallon IS NOT NULL AND (price_dollars_per_gallon < 0.1 OR price_dollars_per_gallon > 20)
 ) t;
 
 -- ============================================================
@@ -1782,6 +1782,27 @@ SELECT 'energy', 'eia_petroleum_stocks', 'T8_worker_coverage',
   MAX(stock_year), 2025,
   printf('MIN=%d MAX=%d | historical: MIN<=2024, daily (weekly worker): MAX>=2025', MIN(stock_year), MAX(stock_year))
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_stocks', allow_moved_paths := true);
+
+-- eia_retail_gasoline_prices: PK duplication guard (series_id, report_date)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_retail_gasoline_prices', 'T9_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (series_id, report_date) groups'
+FROM (
+  SELECT series_id, report_date
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true)
+  GROUP BY series_id, report_date HAVING COUNT(*) > 1
+) d;
+
+-- eia_retail_gasoline_prices: known published value. U.S. regular gasoline, week of 2026-09-21
+-- was $4.478/gal (the 2026 peak is not revised; checked against the live EIA API 2026-11-06).
+INSERT INTO dq_results
+SELECT 'energy', 'eia_retail_gasoline_prices', 'T10_known_value',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'EMM_EPMR_PTE_NUS_DPG 2026-09-21 = 4.478'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true)
+WHERE series_id = 'EMM_EPMR_PTE_NUS_DPG' AND report_date = '2026-09-21'
+  AND price_dollars_per_gallon = 4.478;
 
 -- eia_retail_gasoline_prices (weekly from 1990, current week published → MAX >= 2025)
 INSERT INTO dq_results

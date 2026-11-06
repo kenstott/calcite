@@ -105,7 +105,7 @@ public class EiaRetailGasolinePricesTransformer extends EiaV2Transformer
     if (code.matches("S[A-Z]{2}")) {
       return "state";
     }
-    if (code.matches("Y[0-9A-Z]{4}")) {
+    if (code.matches("Y[0-9A-Z]{3,4}")) {
       return "city";
     }
     throw new IllegalStateException("Unrecognised EIA retail price area code '" + code + "'");
