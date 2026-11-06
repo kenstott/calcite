@@ -118,6 +118,68 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_
     AND unit_desc IN ('PCT GOOD', 'PCT EXCELLENT'));
 
 -- ------------------------------------------------------------
+-- TABLE: nass_crop_estimates_current (partition cols: type, year; PK id col: short_desc)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+-- sector_desc/group_desc/source_desc/freq_desc/reference_period_desc are constant by design: the
+-- request is scoped to CROPS / FIELD CROPS / ANNUAL and only the latest ('YEAR') vintage lands.
+-- year is a single value (the current crop year) by design.
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc', 'source_desc', 'freq_desc', 'reference_period_desc')));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true) WHERE short_desc IS NULL);
+
+-- T7: only the latest vintage lands -- the dated in-season vintages ('YEAR - ... FORECAST' /
+-- 'YEAR - ... ACREAGE') must be dropped by NassQuickStatsTransformer, else vintages stack under
+-- one key.
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T7_latest_vintage_only',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with reference_period_desc <> ''YEAR'''
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true) WHERE reference_period_desc <> 'YEAR');
+
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate natural-key groups'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true)
+  GROUP BY year, source_desc, short_desc, agg_level_desc, state_alpha, state_fips_code, location_desc,
+           reference_period_desc, domain_desc, domaincat_desc, class_desc, commodity_desc, statisticcat_desc, unit_desc,
+           prodn_practice_desc, util_practice_desc
+  HAVING COUNT(*) > 1));
+
+-- T9: the table's purpose -- national and state in-season corn area planted for the current crop year.
+INSERT INTO dq_results
+SELECT 'ag', 'nass_crop_estimates_current', 'T9_current_year_corn_planted',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  'Rows with commodity_desc=CORN, statisticcat_desc=AREA PLANTED, agg_level_desc=NATIONAL'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true)
+  WHERE commodity_desc = 'CORN' AND statisticcat_desc = 'AREA PLANTED' AND agg_level_desc = 'NATIONAL');
+
+-- ------------------------------------------------------------
 -- TABLE: nass_livestock_inventory (partition cols: type, year; PK id col: short_desc)
 -- ------------------------------------------------------------
 INSERT INTO dq_results
