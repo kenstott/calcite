@@ -441,3 +441,4 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
         return result;
     }
 }
+// ci-scope verification (throwaway)
