@@ -16,6 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -30,8 +31,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A URL a local copy can answer must not be fetched; one the copy lacks, or one asked for live,
  * must be. The host below does not resolve, so any request that reaches the network fails.
+ *
+ * <p>The resolver registry is static and the test JVM runs methods concurrently, so the class
+ * holds a resource lock to keep each method's registrations to itself.
  */
 @Tag("unit")
+@ResourceLock("DocumentSource.localContentResolvers")
 class DocumentSourceLocalContentTest {
 
   private static final String PREFIX = "https://bulk-test.invalid/submissions/";
