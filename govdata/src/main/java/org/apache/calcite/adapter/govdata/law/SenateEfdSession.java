@@ -83,6 +83,7 @@ final class SenateEfdSession {
   private BrowserHelperProcess helper;
   private boolean agreed;
   private long lastRequestAt;
+  private int liveRequests;
 
   /** Accepts the agreement in the browser session; idempotent. */
   synchronized void acceptAgreement() throws IOException {
@@ -115,7 +116,7 @@ final class SenateEfdSession {
     int status = response.path("status").asInt();
     if (status != 200) {
       throw new GovDataException(SITE + "/search/report/data/: HTTP " + status
-          + " for " + params + " (a redirect means the session's agreement lapsed): "
+          + " after " + liveRequests + " live requests for " + params + " (a redirect means the session's agreement lapsed): "
           + abbreviate(response.path("body").asText()));
     }
     String body = response.path("body").asText();
@@ -145,7 +146,8 @@ final class SenateEfdSession {
       store(cached, UNAVAILABLE_MARKER);
       return new View(null, true);
     }
-    throw new GovDataException(SITE + path + ": HTTP " + status + " finalPath=" + finalPath
+    throw new GovDataException(SITE + path + ": HTTP " + status + " after " + liveRequests
+        + " live requests, finalPath=" + finalPath
         + " redirected=" + response.path("redirected").asBoolean());
   }
 
@@ -212,6 +214,10 @@ final class SenateEfdSession {
         }
         JsonNode response = helper().call(request);
         lastRequestAt = System.currentTimeMillis();
+        liveRequests++;
+        if (liveRequests % 25 == 0) {
+          LOGGER.info("fd_*: {} live requests to efdsearch.senate.gov so far", liveRequests);
+        }
         if (response.path("status").asInt(0) < 500) {
           return response;
         }
@@ -219,6 +225,7 @@ final class SenateEfdSession {
             + response.path("status").asInt());
       } catch (IOException e) {
         last = e;
+        LOGGER.warn("fd_*: request failed after {} live requests", liveRequests);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IOException(request.path("path").asText() + ": interrupted", e);
