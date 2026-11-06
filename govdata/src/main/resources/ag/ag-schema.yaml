@@ -2938,3 +2938,4 @@ views:
       FROM faostat_production f
       LEFT JOIN "ref"."countries" c ON f.country_code = c.iso_numeric
       WHERE f.is_aggregate = FALSE
+# ci-scope verification (throwaway)
