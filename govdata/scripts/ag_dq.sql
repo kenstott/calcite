@@ -136,10 +136,12 @@ SELECT 'ag', 'nass_crop_estimates_current', 'T4_all_null_cols',
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, null_percentage
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true))
-    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'asd_code', 'asd_desc', 'county_ansi', 'county_code', 'county_fips', 'county_name', 'cv_pct', 'value_flag')));
 -- sector_desc/group_desc/source_desc/freq_desc/reference_period_desc are constant by design: the
 -- request is scoped to CROPS / FIELD CROPS / ANNUAL and only the latest ('YEAR') vintage lands.
--- year is a single value (the current crop year) by design.
+-- year is a single value (the current crop year) by design. County columns (asd_*, county_*) are
+-- null by design (STATE/NATIONAL only); domain_desc/domaincat_desc are TOTAL/NOT SPECIFIED for the
+-- annual series requested; value_flag/cv_pct are null for the in-season estimates.
 INSERT INTO dq_results
 SELECT 'ag', 'nass_crop_estimates_current', 'T5_all_same_value',
   CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
@@ -147,7 +149,7 @@ SELECT 'ag', 'nass_crop_estimates_current', 'T5_all_same_value',
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc', 'source_desc', 'freq_desc', 'reference_period_desc')));
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'sector_desc', 'group_desc', 'source_desc', 'freq_desc', 'reference_period_desc', 'domain_desc', 'domaincat_desc', 'asd_code', 'asd_desc', 'county_ansi', 'county_code', 'county_fips', 'county_name', 'cv_pct', 'value_flag')));
 INSERT INTO dq_results
 SELECT 'ag', 'nass_crop_estimates_current', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
@@ -166,7 +168,7 @@ SELECT 'ag', 'nass_crop_estimates_current', 'T8_pk_duplication',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate natural-key groups'
 FROM (SELECT COUNT(*) AS n FROM (
   SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_crop_estimates_current', allow_moved_paths := true)
-  GROUP BY year, source_desc, short_desc, agg_level_desc, state_alpha, state_fips_code, location_desc,
+  GROUP BY year, source_desc, short_desc, agg_level_desc, state_alpha, state_fips_code,
            reference_period_desc, domain_desc, domaincat_desc, class_desc, commodity_desc, statisticcat_desc, unit_desc,
            prodn_practice_desc, util_practice_desc
   HAVING COUNT(*) > 1));
