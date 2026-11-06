@@ -1486,12 +1486,13 @@ partitionedTables:
       method: GET
       # mesonet.agron.iastate.edu answers a second in-flight request from the same IP with
       # 429 "Too many requests from your IP address"; one request at a time never trips it,
-      # and requestsPerSecond only spaces request starts, not overlapping downloads.
+      # and requestsPerSecond only spaces request starts, not overlapping downloads. Even serial,
+      # starts one second apart after a short response drew a 429, so starts are spaced 5 s.
       parallel: 1
       response:
         format: text
       rateLimit:
-        requestsPerSecond: 1.0
+        requestsPerSecond: 0.2
         retryOn: [429, 503]
         maxRetries: 3
 
