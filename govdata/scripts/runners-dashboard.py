@@ -169,6 +169,12 @@ def unmerged_commits(ref):
     return sum(1 for l in out.splitlines() if l.startswith("+"))
 
 
+def commit_known(oid):
+    """True when the commit object exists in the local repo (a PR head updated since the last fetch does not)."""
+    return subprocess.run(["git", "cat-file", "-e", oid + "^{commit}"], cwd=REPO,
+                          capture_output=True).returncode == 0
+
+
 def rebase_conflict(oid):
     """The files the merge gate (lead-merge.sh) refuses on: changed by main since the branch point and also
     changed by the branch.  Schema YAMLs under govdata/src/main/resources are ignored, as the gate does."""
@@ -207,7 +213,8 @@ def pull_requests():
         if pr["headRefName"] not in prs:          # newest first: keep the latest PR per branch
             prs[pr["headRefName"]] = pr
     for pr in prs.values():
-        if pr["state"] == "OPEN" and unmerged_commits(pr["headRefOid"]) == 0:
+        pr["head_missing"] = pr["state"] == "OPEN" and not commit_known(pr["headRefOid"])
+        if pr["state"] == "OPEN" and not pr["head_missing"] and unmerged_commits(pr["headRefOid"]) == 0:
             pr["state"] = "MERGED"                # already on main by rebase: GitHub still says OPEN
         if pr["state"] == "OPEN":
             lines = run(["gh", "api", "repos/%s/commits/%s/check-runs" % (CODE_REPO, pr["headRefOid"]),
@@ -223,7 +230,8 @@ def pull_requests():
                 else:
                     ok += 1
             pr["ci"] = (ok, pending, failed)
-            pr["conflicts"] = rebase_conflict(pr["headRefOid"])
+            # without the head object neither the rebase test nor the conflict test can run: leave it OPEN
+            pr["conflicts"] = [] if pr["head_missing"] else rebase_conflict(pr["headRefOid"])
     return prs
 
 
@@ -376,6 +384,8 @@ def in_flight(ag, iss, prs, dq_runs, dq_marks):
             continue
         ok, pending, failed = pr["ci"]
         tally = "%d ok/%d pending/%d failed" % (ok, pending, failed)
+        if pr.get("head_missing"):
+            tally += ", head not fetched"
         issue = next((i for i in iss or [] if i["number"] == n), None)
         if issue and issue["state"] != "OPEN":
             continue
