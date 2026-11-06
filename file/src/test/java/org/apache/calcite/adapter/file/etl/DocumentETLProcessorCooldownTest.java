@@ -16,11 +16,11 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.Property;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** A host cool-down mid-run stops the accession run once instead of failing every accession. */
 @Tag("unit")
+@ResourceLock("DocumentETLProcessor.loggerConfig")
 class DocumentETLProcessorCooldownTest {
   private static final int ACCESSIONS = 2000;
   private static final int REFUSED_AFTER = 10;
@@ -65,37 +66,52 @@ class DocumentETLProcessorCooldownTest {
     return refs;
   }
 
-  /** Counts ERROR events logged by DocumentETLProcessor. */
+  /**
+   * Counts the host cool-down ERROR events logged by DocumentETLProcessor. The logger is shared
+   * by every test in the JVM and tests run concurrently, so other classes' errors must not count.
+   */
   private static final class ErrorCounter extends AbstractAppender {
     final AtomicInteger errors = new AtomicInteger();
 
     ErrorCounter() {
-      super("cooldown-test", null, null, true, Property.EMPTY_ARRAY);
+      super("cooldown-test-" + System.nanoTime(), null, null, true, Property.EMPTY_ARRAY);
     }
 
     @Override public void append(LogEvent event) {
-      if (event.getLevel() == Level.ERROR) {
+      if (event.getLevel() == Level.ERROR
+          && event.getMessage().getFormattedMessage().startsWith("Host cool-down:")) {
         errors.incrementAndGet();
       }
     }
   }
 
+  private static org.apache.logging.log4j.core.Logger processorLogger() {
+    // The first SLF4J lookup in the JVM starts the log4j context on whichever thread gets there
+    // first, and starting it replaces the configuration, which stops any appender attached
+    // before that. Wait until the context is fully started before attaching the appender.
+    org.slf4j.LoggerFactory.getLogger(DocumentETLProcessor.class);
+    org.apache.logging.log4j.core.Logger logger = (org.apache.logging.log4j.core.Logger)
+        org.apache.logging.log4j.LogManager.getLogger(DocumentETLProcessor.class);
+    LoggerContext ctx = logger.getContext();
+    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+    while (!ctx.isStarted()) {
+      if (System.nanoTime() > deadline) {
+        throw new IllegalStateException("log4j context did not start: " + ctx.getState());
+      }
+      Thread.yield();
+    }
+    return logger;
+  }
+
   private static ErrorCounter capture() {
-    LoggerContext ctx = (LoggerContext) org.apache.logging.log4j.LogManager.getContext(false);
-    Configuration cfg = ctx.getConfiguration();
     ErrorCounter appender = new ErrorCounter();
     appender.start();
-    cfg.addAppender(appender);
-    cfg.getLoggerConfig(DocumentETLProcessor.class.getName()).addAppender(appender, null, null);
-    ctx.updateLoggers();
+    processorLogger().addAppender(appender);
     return appender;
   }
 
   private static void release(ErrorCounter appender) {
-    LoggerContext ctx = (LoggerContext) org.apache.logging.log4j.LogManager.getContext(false);
-    ctx.getConfiguration().getLoggerConfig(DocumentETLProcessor.class.getName())
-        .removeAppender(appender.getName());
-    ctx.updateLoggers();
+    processorLogger().removeAppender(appender);
     appender.stop();
   }
 
