@@ -368,8 +368,9 @@ final class QuestionGuidance {
         + "reports for the same quantity, stop and find out why before publishing — this "
         + "is the cheapest check available and it catches the largest errors, including "
         + "ones in this connector's own data you would otherwise have no way to detect.\n\n"
-        + "Any URL you would otherwise fetch with WebFetch MUST instead be fetched with "
-        + "web_fetch. Never call WebFetch or Fetch.",
+        + "Fetch every URL with web_fetch first. Only when web_fetch reports HTTP 401, 403, "
+        + "429 or 451 for a primary source, retry that same URL once with the client's own "
+        + "WebFetch/Fetch tool before grading anything 'not checkable here'.",
 
         "AskAmerica usage guide 6/9 — ASKING WELL, worked rewrites (vague question -> "
         + "sharpened question -> why), part 1/2. Apply the same move to the user's "
