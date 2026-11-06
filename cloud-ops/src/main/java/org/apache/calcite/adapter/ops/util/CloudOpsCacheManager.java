@@ -39,18 +39,27 @@ public class CloudOpsCacheManager {
   private static final int MAX_CACHE_SIZE = 1000;
 
   public CloudOpsCacheManager(int ttlMinutes, boolean debugMode) {
+    this(ttlMinutes, debugMode, MAX_CACHE_SIZE);
+  }
+
+  /** A cache manager that keeps nothing: every call reaches the cloud. */
+  public static CloudOpsCacheManager disabled(boolean debugMode) {
+    return new CloudOpsCacheManager(DEFAULT_TTL_MINUTES, debugMode, 0);
+  }
+
+  private CloudOpsCacheManager(int ttlMinutes, boolean debugMode, int maximumSize) {
     this.cacheTtl = Duration.ofMinutes(ttlMinutes > 0 ? ttlMinutes : DEFAULT_TTL_MINUTES);
     this.debugMode = debugMode;
 
     this.cache = Caffeine.newBuilder()
-        .maximumSize(MAX_CACHE_SIZE)
+        .maximumSize(maximumSize)
         .expireAfterWrite(this.cacheTtl)
         .recordStats()
         .build();
 
     if (logger.isInfoEnabled()) {
       logger.info("CloudOpsCacheManager initialized: TTL={}min, MaxSize={}, Debug={}",
-                 this.cacheTtl.toMinutes(), MAX_CACHE_SIZE, debugMode);
+                 this.cacheTtl.toMinutes(), maximumSize, debugMode);
     }
   }
 
@@ -61,17 +70,26 @@ public class CloudOpsCacheManager {
                                                Supplier<List<Map<String, Object>>> apiCall) {
     long startTime = System.currentTimeMillis();
 
-    List<Map<String, Object>> result = cache.get(cacheKey, key -> {
+    // The API call runs outside the cache's own compute lock. A cached call that makes
+    // another cached call (an Azure table query wrapping its Resource Graph query) would
+    // otherwise update the map from inside its own update, which the map rejects with
+    // "Recursive update" whenever the two keys land in the same bin. The price is that two
+    // threads missing the same key at once both call the API.
+    List<Map<String, Object>> result = cache.getIfPresent(cacheKey);
+    final boolean wasFromCache = result != null;
+    if (result == null) {
       if (debugMode && logger.isDebugEnabled()) {
         logger.debug("Cache MISS for key: {} - executing API call", cacheKey);
       }
-      return apiCall.get();
-    });
+      result = apiCall.get();
+      if (result != null) {
+        cache.put(cacheKey, result);
+      }
+    }
 
     long duration = System.currentTimeMillis() - startTime;
 
     if (debugMode && logger.isDebugEnabled()) {
-      boolean wasFromCache = cache.getIfPresent(cacheKey) != null;
       logger.debug("Cache {} for key: {} - {} results retrieved in {}ms",
                  wasFromCache ? "HIT" : "MISS", cacheKey,
                  result != null ? result.size() : 0, duration);

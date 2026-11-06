@@ -435,10 +435,31 @@ public class CloudOpsFilterHandler {
     RexCall call = (RexCall) filter;
     SqlKind kind = call.getKind();
 
-    // Handle OR operations by recursively processing both operands
+    // An OR restricts a column only when every branch is an equality on that one column
+    // (an IN list). Any other OR restricts none of its columns on their own: treating a
+    // branch as a restriction would leave out rows the other branch asks for.
     if (kind == SqlKind.OR) {
+      Integer onlyField = null;
+      List<Object> values = new ArrayList<>();
       for (RexNode operand : call.getOperands()) {
-        extractFieldFilters(operand);
+        if (operand.getKind() != SqlKind.EQUALS) {
+          return;
+        }
+        List<RexNode> sides = ((RexCall) operand).getOperands();
+        if (!(sides.get(0) instanceof RexInputRef) || !(sides.get(1) instanceof RexLiteral)) {
+          return;
+        }
+        int index = ((RexInputRef) sides.get(0)).getIndex();
+        if (onlyField != null && onlyField != index) {
+          return;
+        }
+        onlyField = index;
+        values.add(((RexLiteral) sides.get(1)).getValue());
+      }
+      if (onlyField != null && onlyField < rowType.getFieldCount()) {
+        String name = rowType.getFieldNames().get(onlyField);
+        fieldFilters.computeIfAbsent(name, k -> new ArrayList<>())
+            .add(new FilterInfo(name, onlyField, SqlKind.IN, null, values));
       }
       return;
     }
@@ -468,10 +489,10 @@ public class CloudOpsFilterHandler {
       List<Object> values = new ArrayList<>();
       for (int i = 1; i < call.getOperands().size(); i++) {
         RexNode operand = call.getOperands().get(i);
-        if (operand instanceof RexLiteral) {
-          Object value = ((RexLiteral) operand).getValue();
-          values.add(value);
+        if (!(operand instanceof RexLiteral)) {
+          return; // a value known only at run time restricts nothing here
         }
+        values.add(((RexLiteral) operand).getValue());
       }
       filterInfo = new FilterInfo(fieldName, fieldIndex, kind, null, values);
     } else if (kind == SqlKind.IS_NULL || kind == SqlKind.IS_NOT_NULL) {
@@ -481,11 +502,11 @@ public class CloudOpsFilterHandler {
       // Handle binary operations
       if (call.getOperands().size() >= 2) {
         RexNode secondOperand = call.getOperands().get(1);
-        Object value = null;
-        if (secondOperand instanceof RexLiteral) {
-          value = ((RexLiteral) secondOperand).getValue();
+        if (!(secondOperand instanceof RexLiteral)) {
+          return; // a value known only at run time restricts nothing here
         }
-        filterInfo = new FilterInfo(fieldName, fieldIndex, kind, value, null);
+        filterInfo = new FilterInfo(fieldName, fieldIndex, kind,
+            ((RexLiteral) secondOperand).getValue(), null);
       } else {
         return;
       }

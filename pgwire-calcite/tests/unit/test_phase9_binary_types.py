@@ -164,3 +164,30 @@ def _decode_pgcopy(data: bytes) -> list[tuple]:
             pos += size
             row.append(body)
         out.append((struct.unpack("!i", row[0])[0], row[1]))
+
+
+def test_every_column_is_read_with_the_nullable_consumer(calcite_backend, monkeypatch):
+    """A column an adapter declares NOT NULL can still hold a NULL (cloud-ops declared all
+    of its columns that way). arrow-jdbc's non-null consumers do not check for it and
+    throw, which closed the client's connection; the factory asks for the nullable one."""
+    del calcite_backend  # only for the JVM it starts
+    from pgwire_calcite import arrow_bridge
+
+    seen = []
+
+    class _Utils:
+        @staticmethod
+        def getConsumer(arrow_type, column_index, nullable, vector, config):
+            seen.append(nullable)
+            return None
+
+    class _Type:
+        @staticmethod
+        def getTypeID():
+            return "Utf8"
+
+    monkeypatch.setattr(arrow_bridge, "_FACTORY_CACHE", None)
+    factory = arrow_bridge._consumer_factory({"JdbcToArrowUtils": _Utils})
+    factory.apply(_Type(), 1, False, None, None)
+    assert seen == [True]
+    monkeypatch.setattr(arrow_bridge, "_FACTORY_CACHE", None)

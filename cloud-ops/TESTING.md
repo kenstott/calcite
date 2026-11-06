@@ -1,507 +1,204 @@
-# Testing Guide for Cloud Ops Adapter
+# Testing the Cloud Ops adapter
 
-This guide explains how to run tests for the Cloud Ops adapter, including all test categories, configurations, and command-line options.
+The module has unit tests that need no cloud, and live tests that read real Azure, AWS and GCP
+accounts. One command runs both; which live tests run depends on whether credentials are on disk.
 
-## Table of Contents
-
-- [Test Categories](#test-categories)
-- [Quick Start](#quick-start)
-- [Test Commands Reference](#test-commands-reference)
-- [Credential Configuration](#credential-configuration)
-- [Command Line Options](#command-line-options)
-- [Test Reports](#test-reports)
-- [Troubleshooting](#troubleshooting)
-- [CI/CD Integration](#cicd-integration)
-
-## Test Categories
-
-The Cloud Ops adapter uses JUnit categories to organize tests into three distinct types:
-
-### Unit Tests (`@Category(UnitTest.class)`)
-- **Purpose**: Fast, isolated tests without external dependencies
-- **Characteristics**:
-  - No network calls to cloud providers
-  - Uses mock/fake credentials
-  - Tests internal logic and data structures
-  - Execution time: < 10 seconds total
-- **Examples**: Configuration parsing, schema creation, table metadata
-
-### Integration Tests (`@Category(IntegrationTest.class)`)
-- **Purpose**: Tests requiring real cloud credentials and API calls
-- **Characteristics**:
-  - Makes actual API calls to Azure, AWS, and GCP
-  - Requires valid credentials in `local-test.properties`
-  - Tests end-to-end functionality
-  - Execution time: 30 seconds to several minutes
-- **Examples**: Querying real Kubernetes clusters, storage resources
-
-### Performance Tests (`@Category(PerformanceTest.class)`)
-- **Purpose**: Tests measuring execution time, memory usage, and throughput
-- **Characteristics**:
-  - Benchmarks component performance
-  - Memory allocation testing
-  - Large-scale object creation tests
-  - Reports performance metrics
-- **Examples**: Schema creation speed, memory usage patterns
-
-## Quick Start
-
-### 1. Run Unit Tests Only (Default)
 ```bash
 ./gradlew :cloud-ops:test
 ```
-- Fastest option for development
-- No credentials required
-- Always runs regardless of environment
 
-### 2. Run All Available Tests
-```bash
-# With credentials configured
-./gradlew :cloud-ops:test
+## What `:cloud-ops:test` runs
 
-# Without credentials configured
-./gradlew :cloud-ops:allTests
-```
+Tests are JUnit 5 classes selected by `@Tag`. `cloud-ops/build.gradle.kts` configures the default task
+as follows:
 
-### 3. Run Integration Tests
-```bash
-# First, configure credentials (see Credential Configuration section)
-cp src/test/resources/local-test.properties.sample src/test/resources/local-test.properties
-# Edit the file with your credentials
+| Tag | Runs in `:cloud-ops:test` |
+|-----|---------------------------|
+| `unit` | always |
+| `integration` | only when `src/test/resources/local-test.properties` exists and holds a complete set of credentials for at least one cloud |
+| `performance` | never |
+| no tag | always |
 
-# Then run integration tests
-./gradlew :cloud-ops:integrationTest
-```
+A complete set means: all four `azure.*` properties; or `gcp.credentialsPath` and
+`gcp.projectIds`; or `aws.accessKeyId`, `aws.secretAccessKey` and `aws.accountIds`.
 
-## Test Commands Reference
+So on a machine with the properties file, a plain `:cloud-ops:test` calls the clouds. Remove or
+rename the file to keep a run offline.
 
-### Basic Test Tasks
+Eight test classes carry no tag. Three are offline. `CloudOpsDataDiscoveryTest`,
+`CloudOpsComprehensiveCountTest`, `TestAWSIAM`, `SimpleCountTest` and
+`SortPushdownIntegrationTest` read `local-test.properties`; the last two skip themselves when no
+configuration loads.
 
-| Command | Description | Duration | Prerequisites |
-|---------|-------------|----------|---------------|
-| `./gradlew :cloud-ops:test` | Smart default - unit tests + integration tests if credentials available | 10s - 2min | None |
-| `./gradlew :cloud-ops:unitTest` | Unit tests only | ~10s | None |
-| `./gradlew :cloud-ops:integrationTest` | Integration tests only | 1-5min | Credentials required |
-| `./gradlew :cloud-ops:performanceTest` | Performance tests only | 10-30s | None |
-| `./gradlew :cloud-ops:allTests` | All test categories | 1-5min | None (credentials optional) |
+### Other tasks
 
-### Build Integration
+| Command | Selects |
+|---------|---------|
+| `./gradlew :cloud-ops:unitTest` | tag `unit` only |
+| `./gradlew :cloud-ops:integrationTest` | tag `integration` only, whether or not credentials exist |
+| `./gradlew :cloud-ops:performanceTest` | tag `performance` only |
+| `./gradlew :cloud-ops:allTests` | everything |
 
-| Command | Description | When to Use |
-|---------|-------------|-------------|
-| `./gradlew :cloud-ops:build` | Build + run default tests | Before committing |
-| `./gradlew :cloud-ops:check` | Build + all checks including tests | Release preparation |
-| `./gradlew :cloud-ops:clean test` | Clean build + tests | After major changes |
-
-## Credential Configuration
-
-### Setup Steps
-
-1. **Copy the sample file**:
-   ```bash
-   cp src/test/resources/local-test.properties.sample src/test/resources/local-test.properties
-   ```
-
-2. **Configure at least one cloud provider** (you don't need all three):
-
-### Azure Configuration
-```properties
-# Azure AD App Registration required
-azure.tenantId=your-azure-tenant-id
-azure.clientId=your-azure-client-id
-azure.clientSecret=your-azure-client-secret
-azure.subscriptionIds=sub1,sub2,sub3
-```
-
-**Required Azure Permissions:**
-- `Microsoft.ResourceGraph/resources/read`
-- `Reader` role on target subscriptions
-
-### AWS Configuration
-```properties
-# IAM User or Role credentials
-aws.accessKeyId=AKIA...
-aws.secretAccessKey=your-secret-key
-aws.region=us-east-1
-aws.accountIds=111111111111,222222222222
-aws.roleArn=arn:aws:iam::{account-id}:role/CrossAccountRole  # Optional
-```
-
-**Required AWS Permissions:**
-- `ec2:Describe*`, `eks:Describe*`, `eks:List*`
-- `s3:ListAllMyBuckets`, `s3:GetBucket*`
-- `iam:List*`, `iam:Get*`
-- `rds:Describe*`, `dynamodb:List*`, `dynamodb:Describe*`
-- `ecr:Describe*`
-
-### GCP Configuration
-```properties
-# Service Account Key File
-gcp.credentialsPath=/path/to/service-account.json
-gcp.projectIds=project1,project2
-```
-
-**Required GCP Roles:**
-- `roles/cloudasset.viewer`
-- `roles/storage.objectViewer`
-- `roles/container.viewer`
-
-### Credential Detection Logic
-
-The build system automatically detects credentials:
-
-```
-IF local-test.properties exists AND
-   (Azure credentials complete OR AWS credentials complete OR GCP credentials complete)
-THEN include integration tests in default 'test' task
-ELSE exclude integration tests from default 'test' task
-```
-
-## Command Line Options
-
-### Gradle Test Options
+Run one class with `--tests`:
 
 ```bash
-# Verbose output
-./gradlew :cloud-ops:test --info
-
-# Debug output
-./gradlew :cloud-ops:test --debug
-
-# Continue on failure
-./gradlew :cloud-ops:test --continue
-
-# Run specific test class
-./gradlew :cloud-ops:test --tests "CloudOpsConfigTest"
-
-# Run specific test method
-./gradlew :cloud-ops:test --tests "CloudOpsConfigTest.testAzureConfig"
-
-# Run tests matching pattern
-./gradlew :cloud-ops:test --tests "*Config*"
-
-# Parallel execution
-./gradlew :cloud-ops:test --parallel
-
-# Dry run (show what would execute)
-./gradlew :cloud-ops:test --dry-run
-
-# Force re-run even if up-to-date
-./gradlew :cloud-ops:test --rerun-tasks
+./gradlew :cloud-ops:test --tests "*SortLimitPushdownTest*" --console=plain
 ```
 
-### Memory and Performance Options
+HTML reports land in `cloud-ops/build/reports/tests/<task>/`: `unit`, `integration`,
+`performance` and `all` for the tasks above, and Gradle's default `test` directory for
+`:cloud-ops:test`.
+
+## Credentials for live tests
+
+Live tests read `cloud-ops/src/test/resources/local-test.properties`. The file is git-ignored.
+Create it one of two ways.
+
+**From the env file.** `scripts/write-local-test-properties.py` reads the `CLOUDOPS_*` variables
+in `govdata/.env.prod` and writes the properties file with mode 600.
 
 ```bash
-# Increase heap size for performance tests
-./gradlew :cloud-ops:performanceTest -Dorg.gradle.jvmargs="-Xmx4g"
-
-# Enable detailed GC logging
-./gradlew :cloud-ops:test -Dorg.gradle.jvmargs="-Xmx2g -verbose:gc"
-
-# Set test timeout
-./gradlew :cloud-ops:test -Dtest.timeout=600
+python3 cloud-ops/scripts/write-local-test-properties.py
+# wrote cloud-ops/src/test/resources/local-test.properties for: azure, aws, gcp
 ```
 
-### System Properties
+| Cloud | Variables read |
+|-------|----------------|
+| Azure | `CLOUDOPS_AZURE_TENANT_ID`, `CLOUDOPS_AZURE_CLIENT_ID`, `CLOUDOPS_AZURE_CLIENT_SECRET`, `CLOUDOPS_AZURE_SUBSCRIPTION_IDS` |
+| AWS | `CLOUDOPS_AWS_ACCESS_KEY_ID`, `CLOUDOPS_AWS_SECRET_ACCESS_KEY`, `CLOUDOPS_AWS_ACCOUNT_IDS`, optional `CLOUDOPS_AWS_ROLE_ARN` |
+| GCP | `CLOUDOPS_GCP_CREDENTIALS_PATH`, `CLOUDOPS_GCP_PROJECT_IDS` |
+
+A cloud with a blank required variable is left out and reported as skipped. The script exits with
+an error if no cloud is complete. It does not write `aws.region`, so live tests query every region
+enabled for the AWS account.
+
+**By hand.** Copy the sample and fill in the clouds you want.
 
 ```bash
-# Force headless mode
-./gradlew :cloud-ops:test -Djava.awt.headless=true
-
-# Set specific region for AWS tests
-./gradlew :cloud-ops:integrationTest -Daws.region=eu-west-1
-
-# Enable debug logging
-./gradlew :cloud-ops:test -Dorg.slf4j.simpleLogger.defaultLogLevel=debug
+cp cloud-ops/src/test/resources/local-test.properties.sample \
+   cloud-ops/src/test/resources/local-test.properties
 ```
 
-## Test Reports
+The sample sets `aws.region=us-east-1`. Delete that line to cover all regions.
 
-### Report Locations
+The permissions the credentials need are in
+[aws-permissions-needed.md](aws-permissions-needed.md).
 
-Each test category generates separate HTML reports:
+## Live column audit
 
-| Test Type | Report Location |
-|-----------|-----------------|
-| Default/Unit | `build/reports/tests/test/index.html` |
-| Unit Tests | `build/reports/tests/unit/index.html` |
-| Integration Tests | `build/reports/tests/integration/index.html` |
-| Performance Tests | `build/reports/tests/performance/index.html` |
-| All Tests | `build/reports/tests/all/index.html` |
-
-### JUnit XML Reports
-
-JUnit XML reports for CI/CD integration:
-
-| Test Type | XML Location |
-|-----------|--------------|
-| Default/Unit | `build/test-results/test/` |
-| Unit Tests | `build/test-results/unit/` |
-| Integration Tests | `build/test-results/integration/` |
-| Performance Tests | `build/test-results/performance/` |
-| All Tests | `build/test-results/all/` |
-
-### Opening Reports
+`CloudOpsLiveColumnAuditTest` is the quickest check that a set of credentials can read everything
+and that the columns are being filled. It connects through `CloudOpsDriver` with the properties
+file, runs `SELECT *` on each of the eight tables, and writes
+`cloud-ops/build/reports/cloudops-column-audit.txt`.
 
 ```bash
-# Open unit test report
-open build/reports/tests/unit/index.html
-
-# Open integration test report
-open build/reports/tests/integration/index.html
-
-# Open performance test report
-open build/reports/tests/performance/index.html
+./gradlew :cloud-ops:integrationTest --tests '*CloudOpsLiveColumnAuditTest*' --console=plain
 ```
+
+For each table and provider the report gives the row count, the columns that were null in every
+row, and up to two sample rows. The figures below are illustrative:
+
+```
+== database_resources
+   aws: 4 rows; always null: [resource_group, tls_version]
+      e.g. cloud_provider=aws; account_id=111111111111; database_resource=...
+```
+
+The test fails only when a table cannot be read. A column that is always null does not fail it;
+read the report and compare with the per-cloud notes in [docs/SCHEMA.md](docs/SCHEMA.md). A column
+can also be always null because the account has no resource of the kind that fills it, which is
+what the next script addresses.
+
+## Audit against short-lived resources
+
+An account with no databases or clusters cannot show whether those columns work.
+`scripts/ephemeral-live-test.sh` creates the smallest resource of each kind, runs the column audit
+against them, and deletes them again.
+
+```bash
+cloud-ops/scripts/ephemeral-live-test.sh            # create, audit, delete
+cloud-ops/scripts/ephemeral-live-test.sh teardown   # only delete, after a crashed run
+```
+
+**It creates real, billable resources.** The script's own estimate is about an hour per run, most
+of it waiting for clusters and databases, and well under a dollar in total.
+
+What it creates, all tagged or labelled `application=calcite-cloudops-test`:
+
+| Cloud | Resources |
+|-------|-----------|
+| Azure | Resource group `calcite-cloudops-test-rg` holding: a B1s VM with its VNet, NSG, NIC, public IP and disk; a storage account with versioning, soft delete and a lifecycle rule switched on; a Basic container registry; a user-assigned managed identity; an AKS cluster with one node; a SQL server with a Basic database; PostgreSQL and MySQL flexible servers; a serverless Cosmos DB account; an Azure Managed Redis cache (Azure refuses new Azure Cache for Redis instances) |
+| GCP | An e2-micro VM that GCP deletes by itself after 15 minutes; a zonal GKE cluster with one node; a db-f1-micro Cloud SQL instance |
+| AWS | A t3.micro instance; a security group; an empty ECR repository; an empty DynamoDB table; a db.t3.micro RDS instance; an Aurora cluster without instances; a cache.t4g.micro ElastiCache cluster; an EKS cluster with one t3.small node and its two IAM roles |
+
+What it needs:
+
+- `govdata/.env.prod` with `CLOUDOPS_AZURE_SUBSCRIPTION_IDS`, `CLOUDOPS_GCP_PROJECT_IDS` and
+  `CLOUDOPS_AWS_REGION`. A cloud whose variable is blank is skipped.
+- The `az` and `gcloud` CLIs, signed in as someone who may create these resources. Azure and GCP
+  resources are created with the CLIs, not with the adapter's read-only credentials.
+- For AWS, `CLOUDOPS_AWS_ADMIN_ACCESS_KEY_ID` and `CLOUDOPS_AWS_ADMIN_SECRET_ACCESS_KEY` in the
+  env file, and Python with `boto3`. Without the admin key the AWS part is skipped, because the
+  adapter's own key is read-only. `scripts/ephemeral_aws.py` does the AWS work.
+
+What it does, in order:
+
+1. Creates the resources of the three clouds in parallel. If any creation fails, nothing is
+   audited and the script exits 1.
+2. Waits up to five minutes for Azure Resource Graph to list the eight new Azure compute,
+   cluster and database resources.
+3. Runs `write-local-test-properties.py`, then the column audit through Gradle.
+4. On success, copies the report to
+   `cloud-ops/build/reports/cloudops-column-audit-ephemeral.txt`.
+5. Deletes everything. The exit status is the audit's.
+
+Deletion runs from a shell trap, so it also happens when the audit fails or the script is
+interrupted. It removes the Azure resource group and everything in it, the GCP instance, GKE
+cluster and every Cloud SQL instance whose name starts with `calcite-cloudops-test-`, and every
+AWS resource carrying the test name. If the log shows `a deletion FAILED`, run the `teardown`
+form again and check the consoles.
+
+One thing is not deleted: the GCP Artifact Registry repository `calcite-cloudops-test`. The
+script neither creates nor removes it; its header describes it as permanent and free.
+
+### Role assumption
+
+`AWSRoleAssumptionLiveTest` reads AWS through an assumed role with a key that may do nothing
+but assume it, and checks that the same key without the role is refused.
+
+```bash
+export AWS_ADMIN_KEY=... AWS_ADMIN_SECRET=...
+python3 cloud-ops/scripts/ephemeral_aws_role.py create
+./gradlew :cloud-ops:test -PincludeTags=integration --tests "*AWSRoleAssumptionLiveTest"
+python3 cloud-ops/scripts/ephemeral_aws_role.py delete
+```
+
+`create` makes the IAM user and role `calcite-cloudops-test-assume` and appends three
+`aws.assumeRole.*` lines to `local-test.properties`; `delete` removes all of it. Without those
+lines the test is skipped. The user and the role are in one account: the adapter makes the same
+`sts:AssumeRole` call for a role in another account, but that has not been run.
+
+Step 3 overwrites `local-test.properties`. Because the script starts Gradle, do not run it while
+another Gradle build is using the same checkout.
+
+## Tests worth knowing
+
+| Class | Tag | What it covers |
+|-------|-----|----------------|
+| `SortLimitPushdownTest` | unit | The `CloudOpsSortScanRule` planner rule: when ORDER BY / LIMIT reach the table and when they do not |
+| `CloudOpsSchemaFactoryTest` | unit | Schema creation from operand settings, including missing configuration |
+| `AWSRegionSettingTest` | unit | Parsing of `aws.region` |
+| `CloudOpsConstraintMetadataTest` | unit | Declared keys and foreign keys |
+| `CloudOpsLiveColumnAuditTest` | integration | Every table against the live clouds |
 
 ## Troubleshooting
 
-### Common Issues
+**Integration tests did not run.** `local-test.properties` is missing or no cloud in it is
+complete. Run `write-local-test-properties.py` and read which clouds it reports as skipped.
 
-#### 1. Integration Tests Skipped
-```
-Symptom: Integration tests show "0 completed" or WARNING status
-Cause: Missing or incomplete credentials
-Solution: Verify local-test.properties file exists and has valid credentials
-```
+**A live test fails with a cloud error.** The adapter fails a query when a cloud call fails, and
+the message names the cloud, account and region. An `AccessDenied` or `AuthorizationFailed` means
+a missing permission; see [aws-permissions-needed.md](aws-permissions-needed.md).
 
-#### 2. Authentication Failures
-```
-Symptom: AADSTS70011, "Invalid client credentials", "Security token invalid"
-Azure: Check tenantId, clientId, clientSecret, and app permissions
-AWS: Verify accessKeyId, secretAccessKey, and IAM permissions
-GCP: Confirm service account key file path and roles
-```
-
-#### 3. Permission Denied Errors
-```
-Symptom: 403 Forbidden, "Access denied"
-Solution: Review required permissions in Credential Configuration section
-Ensure service accounts/users have appropriate roles assigned
-```
-
-#### 4. Network/Timeout Issues
-```
-Symptom: Connection timeouts, network errors
-Solution: Check network connectivity to cloud providers
-Consider running tests behind corporate proxy or firewall
-```
-
-#### 5. Memory Issues in Performance Tests
-```
-Symptom: OutOfMemoryError during performance tests
-Solution: Increase heap size: -Dorg.gradle.jvmargs="-Xmx4g"
-```
-
-### Debug Commands
-
-```bash
-# Check credential detection logic
-./gradlew :cloud-ops:test --dry-run --info | grep -i credential
-
-# Verbose test output
-./gradlew :cloud-ops:test --info --debug
-
-# Test specific authentication
-./gradlew :cloud-ops:test --tests "*Azure*" --info
-
-# Check classpath issues
-./gradlew :cloud-ops:dependencies --configuration testRuntimeClasspath
-```
-
-### Log Analysis
-
-Enable detailed logging:
-```bash
-# Create log4j2-test.xml in src/test/resources
-echo '<?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="WARN">
-  <Appenders>
-    <Console name="Console" target="SYSTEM_OUT">
-      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
-    </Console>
-  </Appenders>
-  <Loggers>
-    <Logger name="org.apache.calcite.adapter.ops" level="DEBUG"/>
-    <Root level="INFO">
-      <AppenderRef ref="Console"/>
-    </Root>
-  </Loggers>
-</Configuration>' > src/test/resources/log4j2-test.xml
-```
-
-## CI/CD Integration
-
-### GitHub Actions Example
-
-```yaml
-name: Test Cloud Ops Adapter
-
-on: [push, pull_request]
-
-jobs:
-  unit-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      # Unit tests only (no credentials)
-      - name: Run Unit Tests
-        run: ./gradlew :cloud-ops:unitTest
-
-      - name: Upload Unit Test Reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: unit-test-reports
-          path: cloud-ops/build/reports/tests/unit/
-
-  integration-tests:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      # Integration tests with secrets
-      - name: Create Test Credentials
-        run: |
-          cat > cloud-ops/src/test/resources/local-test.properties << EOF
-          azure.tenantId=${{ secrets.AZURE_TENANT_ID }}
-          azure.clientId=${{ secrets.AZURE_CLIENT_ID }}
-          azure.clientSecret=${{ secrets.AZURE_CLIENT_SECRET }}
-          azure.subscriptionIds=${{ secrets.AZURE_SUBSCRIPTION_IDS }}
-          EOF
-
-      - name: Run Integration Tests
-        run: ./gradlew :cloud-ops:integrationTest
-
-      - name: Upload Integration Test Reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: integration-test-reports
-          path: cloud-ops/build/reports/tests/integration/
-```
-
-### Jenkins Pipeline Example
-
-```groovy
-pipeline {
-    agent any
-
-    stages {
-        stage('Unit Tests') {
-            steps {
-                sh './gradlew :cloud-ops:unitTest'
-            }
-            post {
-                always {
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'cloud-ops/build/reports/tests/unit',
-                        reportFiles: 'index.html',
-                        reportName: 'Unit Test Report'
-                    ])
-                }
-            }
-        }
-
-        stage('Integration Tests') {
-            when {
-                branch 'main'
-            }
-            steps {
-                withCredentials([
-                    string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID'),
-                    string(credentialsId: 'azure-client-id', variable: 'AZURE_CLIENT_ID'),
-                    string(credentialsId: 'azure-client-secret', variable: 'AZURE_CLIENT_SECRET')
-                ]) {
-                    sh '''
-                        cat > cloud-ops/src/test/resources/local-test.properties << EOF
-                        azure.tenantId=${AZURE_TENANT_ID}
-                        azure.clientId=${AZURE_CLIENT_ID}
-                        azure.clientSecret=${AZURE_CLIENT_SECRET}
-                        azure.subscriptionIds=${AZURE_SUBSCRIPTION_IDS}
-                        EOF
-
-                        ./gradlew :cloud-ops:integrationTest
-                    '''
-                }
-            }
-        }
-    }
-}
-```
-
-### Docker Testing
-
-```dockerfile
-# Dockerfile.test
-FROM eclipse-temurin:17-jdk
-
-WORKDIR /app
-COPY . .
-
-# Unit tests only by default
-RUN ./gradlew :cloud-ops:unitTest
-
-# Optional: Run with mounted credentials
-# docker run -v $(pwd)/credentials:/app/credentials test-image ./gradlew :cloud-ops:integrationTest
-```
-
-## Performance Benchmarking
-
-### Running Performance Tests
-
-```bash
-# Basic performance tests
-./gradlew :cloud-ops:performanceTest
-
-# Performance tests with detailed output
-./gradlew :cloud-ops:performanceTest --info
-
-# Performance tests with memory profiling
-./gradlew :cloud-ops:performanceTest -Dorg.gradle.jvmargs="-Xmx4g -XX:+PrintGCDetails"
-```
-
-### Expected Performance Metrics
-
-| Test | Expected Time | Memory Usage |
-|------|---------------|--------------|
-| Schema Creation (1000x) | < 1 second | < 100 MB |
-| Row Type Creation (10000x) | < 2 seconds | < 200 MB |
-| Configuration Creation (100000x) | < 3 seconds | < 50 MB |
-
-### Performance Regression Detection
-
-Add performance assertions to catch regressions:
-
-```java
-@Test
-public void testPerformanceRegression() {
-    long startTime = System.currentTimeMillis();
-
-    // Test operation
-    for (int i = 0; i < 1000; i++) {
-        createSchema();
-    }
-
-    long duration = System.currentTimeMillis() - startTime;
-
-    // Fail if performance degrades significantly
-    assertThat("Performance regression detected", duration < 1000, is(true));
-}
-```
-
-This comprehensive testing guide should help developers and CI/CD systems run tests effectively across all scenarios and environments.
+**More detail.** `src/test/resources/log4j2-test.xml` controls test logging. Set the logger
+`org.apache.calcite.adapter.ops` to `DEBUG` to see what each scan received and fetched.

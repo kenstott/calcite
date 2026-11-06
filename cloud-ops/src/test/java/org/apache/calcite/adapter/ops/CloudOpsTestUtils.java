@@ -57,7 +57,7 @@ public class CloudOpsTestUtils {
       if (props.containsKey("aws.accessKeyId") && props.containsKey("aws.secretAccessKey")) {
         awsConfig =
             new CloudOpsConfig.AWSConfig(parseList(props.getProperty("aws.accountIds")),
-            props.getProperty("aws.region", "us-east-1"),
+            props.getProperty("aws.region", "all"),
             props.getProperty("aws.accessKeyId"),
             props.getProperty("aws.secretAccessKey"),
             props.getProperty("aws.roleArn"));

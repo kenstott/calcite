@@ -16,16 +16,32 @@ read **from the environment** (the factory falls back to these when the operand 
 secrets live in the model:
 
 - **Azure:** `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_IDS`
-- **AWS:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_IDS`, `AWS_REGION` (optional `AWS_ROLE_ARN`)
+- **AWS:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCOUNT_IDS` (optional `AWS_REGION`, `AWS_ROLE_ARN`)
 - **GCP:** `GCP_CREDENTIALS_PATH`, `GCP_PROJECT_IDS`
 
 Configure only the providers you use, then narrow `providers` accordingly. (You can also set the
 `azure.tenantId` / `aws.accessKeyId` / `gcp.credentialsPath` operands directly in the model instead.)
 
+`AWS_REGION` takes one region, a comma-separated list, or `all`. Unset or `all`, the adapter
+queries every region enabled for each account, which it finds with EC2 DescribeRegions. It no
+longer defaults to `us-east-1`. S3 and IAM are global and do not depend on it.
+
+A provider is switched on by `AZURE_TENANT_ID`, `AWS_ACCESS_KEY_ID` or `GCP_CREDENTIALS_PATH`. If
+one of those is set and another variable of the same provider is missing, the schema fails to load
+with a message such as `AWS is configured without aws.accountIds`. The provider is not left out.
+Watch for an `AWS_ACCESS_KEY_ID` exported for some other tool.
+
+A cloud call that fails at query time fails the query with that cloud's error. It does not return
+zero rows.
+
+Tables and columns are described in [cloud-ops/docs/SCHEMA.md](../cloud-ops/docs/SCHEMA.md), and
+the permissions each cloud needs in
+[cloud-ops/aws-permissions-needed.md](../cloud-ops/aws-permissions-needed.md).
+
 ## Run
 
 ```bash
-export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_ACCOUNT_IDS=... AWS_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_ACCOUNT_IDS=...   # all enabled regions
 tar -xzf pgwire-cloudops-<version>-<os>.tar.gz
 cd pgwire-cloudops-<version>-<os>
 ./bin/pgwire-cloudops             # serves on 127.0.0.1:5433

@@ -50,7 +50,7 @@ public class KubernetesClustersTableTest {
     RelDataType rowType = table.getRowType(typeFactory);
 
     assertThat(rowType, is(notNullValue()));
-    assertThat(rowType.getFieldCount(), is(23)); // Expected number of columns
+    assertThat(rowType.getFieldCount(), is(22)); // Expected number of columns
 
     // Verify key columns exist
     assertThat(rowType.getField("cloud_provider", false, false), is(notNullValue()));

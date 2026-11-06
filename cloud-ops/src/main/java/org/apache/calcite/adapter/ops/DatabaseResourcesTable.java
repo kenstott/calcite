@@ -22,9 +22,6 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +30,6 @@ import java.util.Map;
  * Table containing database resource information across cloud providers.
  */
 public class DatabaseResourcesTable extends AbstractCloudOpsTable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseResourcesTable.class);
   public DatabaseResourcesTable(CloudOpsConfig config) {
     super(config);
   }
@@ -42,34 +38,34 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     return typeFactory.builder()
         // Identity fields
         .add("cloud_provider", SqlTypeName.VARCHAR)
-        .add("account_id", SqlTypeName.VARCHAR)
-        .add("database_resource", SqlTypeName.VARCHAR)
-        .add("database_type", SqlTypeName.VARCHAR)
-        .add("application", SqlTypeName.VARCHAR)
-        .add("region", SqlTypeName.VARCHAR)
-        .add("resource_group", SqlTypeName.VARCHAR)
-        .add("resource_id", SqlTypeName.VARCHAR)
+        .add("account_id", SqlTypeName.VARCHAR).nullable(true)
+        .add("database_resource", SqlTypeName.VARCHAR).nullable(true)
+        .add("database_type", SqlTypeName.VARCHAR).nullable(true)
+        .add("application", SqlTypeName.VARCHAR).nullable(true)
+        .add("region", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_group", SqlTypeName.VARCHAR).nullable(true)
+        .add("resource_id", SqlTypeName.VARCHAR).nullable(true)
 
         // Configuration facts
-        .add("engine", SqlTypeName.VARCHAR)
-        .add("engine_version", SqlTypeName.VARCHAR)
-        .add("instance_class", SqlTypeName.VARCHAR)
-        .add("allocated_storage", SqlTypeName.INTEGER)
-        .add("multi_az", SqlTypeName.BOOLEAN)
-        .add("status", SqlTypeName.VARCHAR)
+        .add("engine", SqlTypeName.VARCHAR).nullable(true)
+        .add("engine_version", SqlTypeName.VARCHAR).nullable(true)
+        .add("instance_class", SqlTypeName.VARCHAR).nullable(true)
+        .add("allocated_storage", SqlTypeName.INTEGER).nullable(true)
+        .add("multi_az", SqlTypeName.BOOLEAN).nullable(true)
+        .add("status", SqlTypeName.VARCHAR).nullable(true)
 
         // Security facts
-        .add("publicly_accessible", SqlTypeName.BOOLEAN)
-        .add("encrypted", SqlTypeName.BOOLEAN)
-        .add("encryption_key", SqlTypeName.VARCHAR)
-        .add("tls_version", SqlTypeName.VARCHAR)
+        .add("publicly_accessible", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encrypted", SqlTypeName.BOOLEAN).nullable(true)
+        .add("encryption_key", SqlTypeName.VARCHAR).nullable(true)
+        .add("tls_version", SqlTypeName.VARCHAR).nullable(true)
 
         // Backup facts
-        .add("backup_retention_days", SqlTypeName.INTEGER)
-        .add("backup_window", SqlTypeName.VARCHAR)
+        .add("backup_retention_days", SqlTypeName.INTEGER).nullable(true)
+        .add("backup_window", SqlTypeName.VARCHAR).nullable(true)
 
         // Timestamps
-        .add("create_time", SqlTypeName.TIMESTAMP)
+        .add("create_time", SqlTypeName.TIMESTAMP).nullable(true)
 
         .build();
   }
@@ -82,7 +78,7 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider azureProvider = new AzureProvider(config.azure);
+      CloudProvider azureProvider = new AzureProvider(config.azure, config.cacheManager());
       List<Map<String, Object>> dbResults = azureProvider.queryDatabaseResources(subscriptionIds);
 
       for (Map<String, Object> db : dbResults) {
@@ -95,23 +91,23 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("Location"),
             db.get("ResourceGroup"),
             db.get("ResourceId"),
-            null, // engine parsed from database type
-            null, // engine version not in query
-            db.get("SKU"),
-            null, // allocated storage not in query
-            null, // multi-AZ concept different in Azure
-            null, // status not in query
-            null, // publicly accessible would need additional query
-            null, // encrypted status would need parsing
-            null, // encryption key not in query
-            parseMinTlsVersion(db.get("SecurityConfiguration")),
-            null, // backup retention would need parsing
-            db.get("BackupConfiguration"),
-            null  // create time not in query
+            db.get("Engine"),
+            db.get("EngineVersion"),
+            db.get("InstanceClass"),
+            db.get("AllocatedStorageGb"), // GB, as for AWS
+            db.get("MultiAz"), // zone redundancy
+            db.get("Status"),
+            db.get("PubliclyAccessible"),
+            db.get("Encrypted"),
+            db.get("EncryptionKey"), // a customer-managed key; null under a service-managed one
+            db.get("TlsVersion"),
+            db.get("BackupRetentionDays"),
+            null, // backup_window - Azure schedules backups itself
+            CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying Azure database resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying Azure database resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -125,7 +121,7 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider gcpProvider = new GCPProvider(config.gcp);
+      CloudProvider gcpProvider = new GCPProvider(config.gcp, config.cacheManager());
       List<Map<String, Object>> dbResults = gcpProvider.queryDatabaseResources(projectIds);
 
       for (Map<String, Object> db : dbResults) {
@@ -138,24 +134,23 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("Location"),
             null, // resource group not applicable
             db.get("ResourceId"),
-            db.get("DatabaseVersion"),
-            db.get("DatabaseVersion"),
+            db.get("Engine"),
+            db.get("EngineVersion"),
             db.get("Tier"),
-            db.get("MemorySizeGb") != null ?
-                ((Number) db.get("MemorySizeGb")).intValue() * 1024 : null, // Convert GB to MB
-            false, // GCP uses regional replication differently
+            db.get("AllocatedStorageGb"), // GB, as for AWS
+            db.get("MultiZone"),
             db.get("State"),
-            db.get("PublicNetworkAccess") != null,
-            db.get("RequireSSL") != null && (Boolean) db.get("RequireSSL"),
-            null, // encryption key not exposed
-            db.get("RequireSSL") != null && (Boolean) db.get("RequireSSL") ? "1.2" : null,
-            db.get("BackupEnabled") != null && (Boolean) db.get("BackupEnabled") ? 7 : 0,
-            null, // backup window not exposed
+            db.get("PubliclyAccessible"),
+            db.get("Encrypted"),
+            db.get("KmsKeyName"),
+            Boolean.TRUE.equals(db.get("RequireSsl")) ? "required" : null,
+            db.get("RetainedBackups"), // a count of backups, the unit Cloud SQL retains by
+            db.get("BackupStartTime"),
             CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying GCP database resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying GCP database resources failed: " + e.getMessage(), e);
     }
 
     return results;
@@ -169,7 +164,7 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
     List<Object[]> results = new ArrayList<>();
 
     try {
-      CloudProvider awsProvider = new AWSProvider(config.aws);
+      CloudProvider awsProvider = new AWSProvider(config.aws, config.cacheManager());
       List<Map<String, Object>> dbResults = awsProvider.queryDatabaseResources(accountIds);
 
       for (Map<String, Object> db : dbResults) {
@@ -184,47 +179,23 @@ public class DatabaseResourcesTable extends AbstractCloudOpsTable {
             db.get("ResourceId"),
             db.get("Engine"),
             db.get("EngineVersion"),
-            db.get("DBInstanceClass") != null ? db.get("DBInstanceClass") :
-                db.get("CacheNodeType"),
+            db.get("InstanceClass"),
             db.get("AllocatedStorage"),
             db.get("MultiAZ"),
-            db.get("DBInstanceStatus") != null ? db.get("DBInstanceStatus") :
-                db.get("Status"),
+            db.get("Status"),
             db.get("PubliclyAccessible"),
-            db.get("StorageEncrypted") != null ? db.get("StorageEncrypted") :
-                db.get("AtRestEncryptionEnabled"),
-            db.get("KmsKeyId") != null ? db.get("KmsKeyId") :
-                db.get("KMSMasterKeyArn"),
-            null, // TLS version not directly exposed
-            db.get("BackupRetentionPeriod") != null ?
-                Integer.valueOf(((Number) db.get("BackupRetentionPeriod")).intValue()) :
-                db.get("SnapshotRetentionLimit") != null ?
-                    Integer.valueOf(((Number) db.get("SnapshotRetentionLimit")).intValue()) : null,
-            db.get("PreferredBackupWindow") != null ? db.get("PreferredBackupWindow") :
-                db.get("SnapshotWindow"),
-            CloudOpsDataConverter.convertValue(
-                db.get("InstanceCreateTime") != null ? db.get("InstanceCreateTime") :
-                db.get("ClusterCreateTime") != null ? db.get("ClusterCreateTime") :
-                db.get("CreationDateTime"), SqlTypeName.TIMESTAMP)
+            db.get("Encrypted"),
+            db.get("EncryptionKey"), // a KMS key; null under an AWS-owned one
+            null, // tls_version - a connection negotiates it; no service reports a minimum
+            db.get("BackupRetentionDays"),
+            db.get("BackupWindow"),
+            CloudOpsDataConverter.convertValue(db.get("CreateTime"), SqlTypeName.TIMESTAMP)
         });
       }
-    } catch (Exception e) {
-      LOGGER.debug("Error querying AWS database resources: {}", e.getMessage());
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Querying AWS database resources failed: " + e.getMessage(), e);
     }
 
     return results;
-  }
-
-  private String parseMinTlsVersion(Object securityConfig) {
-    if (securityConfig instanceof String) {
-      String config = (String) securityConfig;
-      if (config.contains("Min TLS: ")) {
-        int start = config.indexOf("Min TLS: ") + 9;
-        int end = config.indexOf(",", start);
-        if (end == -1) end = config.length();
-        return config.substring(start, end).trim();
-      }
-    }
-    return null;
   }
 }

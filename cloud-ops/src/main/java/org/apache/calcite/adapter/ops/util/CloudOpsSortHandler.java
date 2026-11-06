@@ -191,35 +191,35 @@ public class CloudOpsSortHandler {
   }
 
   /**
-   * Create a comparator for a specific field.
+   * Create a comparator for a specific field. Nulls go where the collation says, whatever
+   * the direction; a column's values are all of its declared type, so they compare directly.
    */
   @SuppressWarnings("unchecked")
   private Comparator<Object[]> createFieldComparator(int fieldIndex, RelFieldCollation fc) {
+    final boolean nullsFirst =
+        (fc.nullDirection == RelFieldCollation.NullDirection.UNSPECIFIED
+            ? fc.getDirection().defaultNullDirection()
+            : fc.nullDirection) == RelFieldCollation.NullDirection.FIRST;
+    final boolean descending = fc.getDirection().isDescending();
+    final String fieldName = rowType.getFieldList().get(fieldIndex).getName();
     return (row1, row2) -> {
-      Object val1 = (fieldIndex < row1.length) ? row1[fieldIndex] : null;
-      Object val2 = (fieldIndex < row2.length) ? row2[fieldIndex] : null;
-
-      // Handle nulls according to null direction
-      if (val1 == null && val2 == null) return 0;
-      if (val1 == null) return fc.nullDirection == RelFieldCollation.NullDirection.FIRST ? -1 : 1;
-      if (val2 == null) return fc.nullDirection == RelFieldCollation.NullDirection.FIRST ? 1 : -1;
-
-      // Compare values
-      int comparison = 0;
-      if (val1 instanceof Comparable && val2 instanceof Comparable) {
-        try {
-          comparison = ((Comparable<Object>) val1).compareTo(val2);
-        } catch (ClassCastException e) {
-          // Fallback to string comparison
-          comparison = val1.toString().compareTo(val2.toString());
-        }
-      } else {
-        // String comparison fallback
-        comparison = val1.toString().compareTo(val2.toString());
+      Object val1 = row1[fieldIndex];
+      Object val2 = row2[fieldIndex];
+      if (val1 == null && val2 == null) {
+        return 0;
       }
-
-      // Apply direction
-      return fc.getDirection() == RelFieldCollation.Direction.DESCENDING ? -comparison : comparison;
+      if (val1 == null) {
+        return nullsFirst ? -1 : 1;
+      }
+      if (val2 == null) {
+        return nullsFirst ? 1 : -1;
+      }
+      if (!(val1 instanceof Comparable)) {
+        throw new IllegalStateException("Cannot sort by " + fieldName + ": its values ("
+            + val1.getClass().getName() + ") have no order");
+      }
+      int comparison = ((Comparable<Object>) val1).compareTo(val2);
+      return descending ? -comparison : comparison;
     };
   }
 

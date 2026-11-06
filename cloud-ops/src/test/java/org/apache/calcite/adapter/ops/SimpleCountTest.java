@@ -42,7 +42,7 @@ public class SimpleCountTest {
       String[] tables = {
         "kubernetes_clusters",
         "storage_resources",
-        "compute_instances",
+        "compute_resources",
         "network_resources",
         "iam_resources",
         "database_resources",

@@ -119,7 +119,6 @@ public class CloudOpsClientModule
         }
         if (aws) {
             requireField(missing, "aws.account-ids", config.getAwsAccountIds());
-            requireField(missing, "aws.region", config.getAwsRegion());
             requireField(missing, "aws.secret-access-key", config.getAwsSecretAccessKey());
         }
         if (!missing.isEmpty()) {

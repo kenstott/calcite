@@ -506,3 +506,60 @@ def test_json_build_object_rewrite_recurses_into_arguments():
     )
     assert "json_build_object" not in out.lower()
     assert out.lower().count("json_object(") == 2
+
+
+# --------------------------------------------------------------------------
+# Parameter types are the ones the engine infers, not a guess
+# --------------------------------------------------------------------------
+
+
+def test_question_marks_keeps_literals_and_orders_parameters():
+    from pgwire_calcite.calcite_backend import _question_marks
+
+    sql, numbers = _question_marks("""SELECT '$1', "a$2" FROM t WHERE a = $2 AND b = $1 AND c = $2""")
+    assert sql == """SELECT '$1', "a$2" FROM t WHERE a = ? AND b = ? AND c = ?"""
+    assert numbers == [2, 1, 2]
+
+
+def test_parameter_types_come_from_the_columns_they_are_compared_with(calcite_backend):
+    types = calcite_backend.parameter_types(
+        "SELECT ENAME FROM EMPS WHERE ENAME = $1 AND DEPTNO = $2 AND SAL > $3"
+    )
+    assert len(types) == 3
+    assert types[0].startswith("VARCHAR") or types[0].startswith("CHAR")
+    assert types[1] == "INTEGER"
+    assert types[2] in ("DOUBLE", "FLOAT")
+
+
+def test_asyncpg_untyped_text_parameter(calcite_backend):
+    """asyncpg asks the server for parameter types. An untyped parameter compared with a
+    text column was described as int8, so 'SMITH' was rejected and the statement was
+    planned as ENAME = 42."""
+    asyncpg = pytest.importorskip("asyncpg")
+    from pgwire_calcite import launcher
+    from test_phase0_wire import _free_port
+
+    port = _free_port()
+    srv = launcher.serve(host="127.0.0.1", port=port, auth="none", backend=calcite_backend)
+    time.sleep(0.1)
+
+    async def _run():
+        conn = await asyncpg.connect(
+            host="127.0.0.1", port=port, user="tester", database="postgres",
+            statement_cache_size=0,
+        )
+        try:
+            by_name = await conn.fetch("SELECT EMPNO FROM EMPS WHERE ENAME = $1", "SMITH")
+            by_number = await conn.fetch(
+                "SELECT ENAME FROM EMPS WHERE DEPTNO = $1 AND ENAME = $2", 20, "SMITH"
+            )
+            return [r[0] for r in by_name], [r[0] for r in by_number]
+        finally:
+            await conn.close()
+
+    try:
+        by_name, by_number = asyncio.run(_run())
+    finally:
+        srv.shutdown()
+    assert by_name == [7369]
+    assert by_number == ["SMITH"]
