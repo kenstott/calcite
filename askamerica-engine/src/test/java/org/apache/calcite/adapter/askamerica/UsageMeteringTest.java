@@ -116,7 +116,7 @@ class UsageMeteringTest {
       String body = bodies.poll(10, TimeUnit.SECONDS);
       assertNotNull(body, "expected a metering POST after the query");
       assertTrue(body.contains("\"row_count\":3"), body);
-      assertTrue(body.contains("sec_filings"), body);
+      assertTrue(body.contains("\"query_count\":1"), body);
       assertTrue(body.matches("(?s).*\"actual_bytes\":[1-9][0-9]*.*"),
           "actual_bytes should be a positive egress estimate: " + body);
     } finally {
@@ -239,6 +239,36 @@ class UsageMeteringTest {
           "with the flag, a self-test session must not report usage");
     } finally {
       System.clearProperty("askamerica.selftest.enabled");
+      stopStub(server);
+    }
+  }
+
+  @Test void sendsOneRunningTotalPerKeyAtFlush() throws Exception {
+    HttpServer server = startStub();
+    System.clearProperty("askamerica.metering.sync");
+    try {
+      UsageMetering.flushAll(); // drop totals queued by an earlier test from this one's count
+      bodies.clear();
+      Connection conn = UsageMetering.wrap(freshDuck(), "aa_live_test_totalled");
+      for (int q = 0; q < 2; q++) {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT cik, name FROM sec_filings")) {
+          while (rs.next()) {
+            // consume
+          }
+        }
+      }
+      conn.close();
+
+      assertNull(bodies.poll(1, TimeUnit.SECONDS), "queries must not be sent one by one");
+      UsageMetering.flushAll();
+      String body = bodies.poll(10, TimeUnit.SECONDS);
+      assertNotNull(body, "expected one POST of the running total after flushAll");
+      assertTrue(body.contains("\"query_count\":2"), body);
+      assertTrue(body.contains("\"row_count\":6"), body);
+      assertTrue(body.matches("(?s).*\"actual_bytes\":[1-9][0-9]*.*"), body);
+      assertNull(bodies.poll(1, TimeUnit.SECONDS), "one key's total is one POST");
+    } finally {
       stopStub(server);
     }
   }

@@ -27,15 +27,16 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,9 +47,11 @@ import java.util.regex.Pattern;
  * every access path funnels through: raw JDBC (Node/Go/Java/DBeaver), the Python
  * client, and MCP all execute queries through this driver. Wrapping the
  * {@link Connection} here therefore meters them all uniformly. After each result
- * set is consumed, an estimate of the R2 egress it produced is reported to the
- * AskAmerica metering endpoint, fire-and-forget — metering never blocks a query
- * and never surfaces an error to the caller.
+ * set is consumed, an estimate of the R2 egress it produced is added to a running
+ * total for its API key. Each key's total (bytes, queries, rows, duration) goes to the
+ * AskAmerica metering endpoint as one request every {@link #FLUSH_SECONDS} seconds and
+ * once more when the JVM shuts down, so the endpoint's load does not grow with query
+ * volume. Metering never blocks a query and never surfaces an error to the caller.
  *
  * <p>Egress is approximated (byte-exact egress lives inside DuckDB's httpfs layer
  * and is zero on a cache hit): the UTF-8 size of the first {@link #SAMPLE_ROWS}
@@ -70,14 +73,33 @@ final class UsageMetering {
     return firstNonEmpty(System.getenv("ASKAMERICA_API_URL"), "https://api.askamerica.ai");
   }
 
-  private static final ExecutorService REPORTER =
-      Executors.newSingleThreadExecutor(new ThreadFactory() {
+  /** Seconds between sends of each key's running total. */
+  static final long FLUSH_SECONDS = 3600L;
+
+  /** Running totals per API key: bytes, queries, rows, duration ms. Guarded by itself. */
+  private static final Map<String, long[]> PENDING = new HashMap<String, long[]>();
+
+  private static final ScheduledExecutorService REPORTER =
+      Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override public Thread newThread(Runnable r) {
           Thread t = new Thread(r, "askamerica-metering");
           t.setDaemon(true);
           return t;
         }
       });
+
+  static {
+    REPORTER.scheduleWithFixedDelay(new Runnable() {
+      @Override public void run() {
+        flushAll();
+      }
+    }, FLUSH_SECONDS, FLUSH_SECONDS, TimeUnit.SECONDS);
+    Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+      @Override public void run() {
+        flushAll();
+      }
+    }, "askamerica-metering-shutdown"));
+  }
 
   private UsageMetering() { }
 
@@ -249,12 +271,10 @@ final class UsageMetering {
           && (name.equals("createStatement")
               || name.equals("prepareStatement")
               || name.equals("prepareCall"))) {
-        String sql = (args != null && args.length > 0 && args[0] instanceof String)
-            ? (String) args[0] : null;
         return Proxy.newProxyInstance(
             UsageMetering.class.getClassLoader(),
             allInterfaces(result.getClass()),
-            new StatementHandler((Statement) result, apiKey, sql));
+            new StatementHandler((Statement) result, apiKey));
       }
       return result;
     }
@@ -263,11 +283,9 @@ final class UsageMetering {
   private static final class StatementHandler implements InvocationHandler {
     private final Statement target;
     private final String apiKey;
-    private final String preparedSql;
-    StatementHandler(Statement target, String apiKey, String preparedSql) {
+    StatementHandler(Statement target, String apiKey) {
       this.target = target;
       this.apiKey = apiKey;
-      this.preparedSql = preparedSql;
     }
     @Override public Object invoke(Object proxy, Method method, Object[] args)
         throws Throwable {
@@ -280,12 +298,10 @@ final class UsageMetering {
       Object result = invokeTarget(method, target, args);
       if (result instanceof ResultSet
           && (name.equals("executeQuery") || name.equals("getResultSet"))) {
-        String sql = (args != null && args.length > 0 && args[0] instanceof String)
-            ? (String) args[0] : preparedSql;
         return Proxy.newProxyInstance(
             UsageMetering.class.getClassLoader(),
             allInterfaces(result.getClass()),
-            new ResultSetHandler((ResultSet) result, apiKey, sql));
+            new ResultSetHandler((ResultSet) result, apiKey));
       }
       return result;
     }
@@ -294,17 +310,15 @@ final class UsageMetering {
   private static final class ResultSetHandler implements InvocationHandler {
     private final ResultSet target;
     private final String apiKey;
-    private final String sql;
     private final long startMs = System.currentTimeMillis();
     private long rowCount = 0;
     private long sampleBytes = 0;
     private int columnCount = -1;
     private boolean reported = false;
 
-    ResultSetHandler(ResultSet target, String apiKey, String sql) {
+    ResultSetHandler(ResultSet target, String apiKey) {
       this.target = target;
       this.apiKey = apiKey;
-      this.sql = sql;
     }
 
     @Override public Object invoke(Object proxy, Method method, Object[] args)
@@ -357,7 +371,7 @@ final class UsageMetering {
       // non-empty result from metering entirely.
       long cols = columnCount > 0 ? columnCount : 1;
       long egress = Math.max(est, rowCount * cols);
-      reportUsageAsync(apiKey, sql, rowCount, egress,
+      reportUsageAsync(apiKey, rowCount, egress,
           System.currentTimeMillis() - startMs);
     }
   }
@@ -367,23 +381,42 @@ final class UsageMetering {
   private static final java.util.logging.Logger USAGE_LOG =
       java.util.logging.Logger.getLogger(UsageMetering.class.getName());
 
-  private static void reportUsageAsync(final String apiKey, final String sql,
-      final long rowCount, final long egressBytes, final long durationMs) {
-    Runnable task = new Runnable() {
-      @Override public void run() {
-        postUsage(apiKey, sql, rowCount, egressBytes, durationMs);
-      }
-    };
-    // Tests can force a synchronous send for a deterministic assertion.
+  private static void reportUsageAsync(String apiKey, long rowCount, long egressBytes,
+      long durationMs) {
+    // Tests can force an immediate send for a deterministic assertion.
     if ("true".equals(System.getProperty("askamerica.metering.sync"))) {
-      task.run();
-    } else {
-      REPORTER.submit(task);
+      postTotal(apiKey, new long[] { egressBytes, 1, rowCount, durationMs });
+      return;
+    }
+    synchronized (PENDING) {
+      long[] total = PENDING.get(apiKey);
+      if (total == null) {
+        total = new long[4];
+        PENDING.put(apiKey, total);
+      }
+      total[0] += egressBytes;
+      total[1] += 1;
+      total[2] += rowCount;
+      total[3] += durationMs;
     }
   }
 
-  private static void postUsage(String apiKey, String sql, long rowCount,
-      long egressBytes, long durationMs) {
+  /** Send every key's running total and start the next interval from zero. */
+  static void flushAll() {
+    Map<String, long[]> drained;
+    synchronized (PENDING) {
+      if (PENDING.isEmpty()) {
+        return;
+      }
+      drained = new HashMap<String, long[]>(PENDING);
+      PENDING.clear();
+    }
+    for (Map.Entry<String, long[]> e : drained.entrySet()) {
+      postTotal(e.getKey(), e.getValue());
+    }
+  }
+
+  private static void postTotal(String apiKey, long[] total) {
     HttpURLConnection c = null;
     try {
       URL url = java.net.URI.create(apiBase() + "/v1/metering/usage").toURL();
@@ -395,13 +428,10 @@ final class UsageMetering {
       c.setRequestProperty("Content-Type", "application/json");
       c.setRequestProperty("X-API-Key", apiKey);
       String body = "{"
-          + "\"query_id\":\"" + UUID.randomUUID() + "\","
-          + "\"table\":" + jsonString(extractTable(sql)) + ","
-          + "\"planned_bytes\":" + egressBytes + ","
-          + "\"actual_bytes\":" + egressBytes + ","
-          + "\"row_count\":" + rowCount + ","
-          + "\"duration_ms\":" + durationMs + ","
-          + "\"query_text\":" + jsonString(truncate(sql, 1024))
+          + "\"actual_bytes\":" + total[0] + ","
+          + "\"query_count\":" + total[1] + ","
+          + "\"row_count\":" + total[2] + ","
+          + "\"duration_ms\":" + total[3]
           + "}";
       OutputStream os = c.getOutputStream();
       try {
@@ -411,12 +441,13 @@ final class UsageMetering {
       }
       int status = c.getResponseCode(); // drive the request; response body is ignored
       if (status / 100 != 2) {
-        USAGE_LOG.warning("usage report was not accepted: HTTP " + status);
+        USAGE_LOG.warning("usage total for " + total[1]
+            + " queries was not accepted: HTTP " + status);
       }
     } catch (Throwable t) {
-      // best-effort — never surface to the caller, but leave a trace: a report that does
-      // not arrive otherwise shows up only as usage reading zero
-      USAGE_LOG.warning("usage report failed: " + t);
+      // best-effort — never surface to the caller, but leave a trace: a total that does
+      // not arrive otherwise shows up only as usage reading low
+      USAGE_LOG.warning("usage total for " + total[1] + " queries failed: " + t);
     } finally {
       if (c != null) {
         c.disconnect();
@@ -443,46 +474,6 @@ final class UsageMetering {
       }
     }
     return set.toArray(new Class<?>[0]);
-  }
-
-  private static String extractTable(String sql) {
-    if (sql == null) {
-      return "unknown";
-    }
-    Matcher m = Pattern.compile("\\bFROM\\s+([\\w.]+)", Pattern.CASE_INSENSITIVE)
-        .matcher(sql);
-    return m.find() ? m.group(1) : "unknown";
-  }
-
-  private static String truncate(String s, int max) {
-    if (s == null) {
-      return "";
-    }
-    return s.length() <= max ? s : s.substring(0, max);
-  }
-
-  private static String jsonString(String s) {
-    if (s == null) {
-      return "\"\"";
-    }
-    StringBuilder b = new StringBuilder("\"");
-    for (int i = 0; i < s.length(); i++) {
-      char ch = s.charAt(i);
-      switch (ch) {
-        case '"':  b.append("\\\""); break;
-        case '\\': b.append("\\\\"); break;
-        case '\n': b.append("\\n"); break;
-        case '\r': b.append("\\r"); break;
-        case '\t': b.append("\\t"); break;
-        default:
-          if (ch < 0x20) {
-            b.append(String.format("\\u%04x", (int) ch));
-          } else {
-            b.append(ch);
-          }
-      }
-    }
-    return b.append("\"").toString();
   }
 
   private static String firstNonEmpty(String a, String b) {
