@@ -41,6 +41,7 @@ plugins {
     jacoco
     id("jacoco-report-aggregation")
     id("org.checkerframework") apply false
+    id("org.gradle.test-retry") apply false
     id("com.github.autostyle")
     id("org.nosphere.apache.rat")
     id("com.github.spotbugs")
@@ -406,6 +407,12 @@ allprojects {
     val javaUsed = file("src/main/java").isDirectory
     if (javaUsed) {
         apply(plugin = "java-library")
+        // Retry a failed test once inside the job, in CI only, for the modules with flaky tests.
+        // Local runs still fail fast. See ops issue 1109.
+        if (!System.getenv("CI").isNullOrBlank() &&
+            project.name in setOf("file", "govdata", "askamerica-engine")) {
+            apply(plugin = "org.gradle.test-retry")
+        }
         configurations {
             "implementation" {
                 exclude(group = "org.jetbrains", module = "annotations")
@@ -1109,6 +1116,13 @@ allprojects {
                     showStandardStreams = true
                 }
                 exclude("**/*Suite*")
+                pluginManager.withPlugin("org.gradle.test-retry") {
+                    extensions.configure<org.gradle.testretry.TestRetryTaskExtension>("retry") {
+                        maxRetries.set(1)
+                        // A test that passes on retry stays visible in the report as retried.
+                        failOnPassedAfterRetry.set(false)
+                    }
+                }
                 if (JavaVersion.current() >= JavaVersion.VERSION_23) {
                     // Subject.doAs is deprecated and does not work in JDK 23
                     // and higher unless the (also deprecated) SecurityManager

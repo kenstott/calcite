@@ -39,6 +39,7 @@ pluginManagement {
         idv("net.ltgt.errorprone")
         idv("org.jetbrains.gradle.plugin.idea-ext")
         idv("org.nosphere.apache.rat")
+        idv("org.gradle.test-retry")
         idv("org.owasp.dependencycheck")
         idv("org.sonarqube")
         kotlin("jvm") version "kotlin".v()
