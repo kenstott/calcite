@@ -238,6 +238,14 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
+  # EIA weekly retail gasoline/diesel prices (Gasoline and Diesel Fuel Update): weekly series
+  # from 1990. dataLag: 0 -- the current week is published each Monday/Tuesday.
+  eia_retail_gasoline_years: &eia_retail_gasoline_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1990}"
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
   # EIA crude oil imports year range (EIA-814 monthly XLSX)
   eia_crude_imp_years: &eia_crude_imp_years
     type: yearRange
@@ -2405,6 +2413,121 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # EIA RETAIL GASOLINE PRICES - Weekly retail gasoline and diesel prices (EIA API v2)
+  # ---------------------------------------------------------------------------
+  - name: eia_retail_gasoline_prices
+    # Weekly price survey rows are final once published; lookback is for accrual (the current
+    # year gains a row per series per week, and the first week of January can be published
+    # after the calendar rolls over).
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    pattern: "type=eia_retail_gasoline/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      EIA weekly retail gasoline and diesel prices (Gasoline and Diesel Fuel Update, EIA API v2
+      petroleum/pri/gnd), weekly from 1990, dollars per gallon including taxes. One row per
+      series + report date (Monday). Geographies: U.S. national (geo_level 'national', code NUS),
+      PADD 1-5 ('padd'), sub-PADD 1A/1B/1C and 5-except-California ('sub_padd'), nine states
+      CA CO FL MA MN NY OH TX WA ('state', with state_abbr), and ten cities ('city'). Products:
+      regular, midgrade, premium and total gasoline (with reformulated/conventional splits) and
+      No 2 diesel. The headline U.S. regular price is series_id EMM_EPMR_PTE_NUS_DPG (the FRED
+      GASREGW series). Use for gas-price trend, peak and year-over-year questions; BLS monthly
+      average gasoline price is in econ.average_prices.
+
+    dimensions:
+      type:
+        - eia_retail_gasoline
+      year: *eia_retail_gasoline_years
+
+    columns:
+      - name: report_date
+        type: string
+        nullable: false
+        comment: Week date in ISO format (YYYY-MM-DD), a Monday
+      - name: price_year
+        type: integer
+        nullable: false
+        comment: Calendar year of the report date
+      - name: eia_area_code
+        type: string
+        nullable: false
+        comment: EIA area code (NUS, R10-R50, R1X/R1Y/R1Z/R5XCA, S<ST> for states, Y... for cities)
+      - name: area_name
+        type: string
+        nullable: true
+        comment: Area name, e.g. 'U.S.', 'PADD 1', 'CALIFORNIA', 'LOS ANGELES'
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: Geography level derived from the area code - national, padd, sub_padd, state, city
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: Two-letter state code for geo_level 'state' rows; null for other levels
+      - name: product_code
+        type: string
+        nullable: false
+        comment: EIA product code (EPMR regular, EPMM midgrade, EPMP premium, EPM0 total gasoline, EPD2D diesel, ...)
+      - name: product
+        type: string
+        nullable: true
+        comment: Product description (e.g. 'Regular Gasoline', 'No 2 Diesel')
+      - name: price_dollars_per_gallon
+        type: double
+        nullable: true
+        comment: Retail price in dollars per gallon, including taxes
+      - name: series_id
+        type: string
+        nullable: false
+        comment: >
+          EIA API v2 series identifier encoding product, area and process (e.g.
+          EMM_EPMR_PTE_NUS_DPG, U.S. regular gasoline). Long-format table: one row per
+          (series_id, report_date), so ALWAYS filter on series_id or on product_code plus
+          eia_area_code; averaging across areas or products mixes different series. Enumerate
+          with SELECT DISTINCT series_id, series_description.
+      - name: series_description
+        type: string
+        nullable: true
+        comment: Full series description
+
+    source:
+      type: http
+      url: "https://api.eia.gov/v2/petroleum/pri/gnd/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      method: GET
+      parameters:
+        api_key: "${ENERGY_EIA_API_KEY:}"
+        length: "5000"
+      response:
+        format: json
+        dataPath: "$.response.data"
+        pagination:
+          type: OFFSET
+          totalPath: "$.response.total"
+          pageSize: 5000
+          limitParam: "length"
+          offsetParam: "offset"
+      rateLimit: *eia_rate_limit
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.EiaRetailGasolinePricesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=eia_retail_gasoline/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *iceberg_common
+        tableName: eia_retail_gasoline_prices
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
   # EIA NATURAL GAS PRICE - Henry Hub daily spot price (EIA API v2)
   # ---------------------------------------------------------------------------
   - name: eia_natural_gas_price
@@ -3331,6 +3454,9 @@ constraints:
 
   eia_petroleum_stocks:
     primaryKey: [eia_area_code, product_code, process_code, report_date]
+
+  eia_retail_gasoline_prices:
+    primaryKey: [series_id, report_date]
 
   eia_natural_gas_price:
     primaryKey: [series_id, report_date]

@@ -12,7 +12,8 @@
       "autoDownload": true,
       "enabledTables": [
         "eia_natural_gas_storage",
-        "eia_petroleum_stocks"
+        "eia_petroleum_stocks",
+        "eia_retail_gasoline_prices"
       ]
     }
   }]

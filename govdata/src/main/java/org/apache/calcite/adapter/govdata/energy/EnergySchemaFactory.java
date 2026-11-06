@@ -36,6 +36,7 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       "eia_state_energy_consumption",
       "eia_natural_gas_storage",
       "eia_petroleum_stocks",
+      "eia_retail_gasoline_prices",
       "eia_refinery_operations",
       "eia_drilling_activity"
   ));

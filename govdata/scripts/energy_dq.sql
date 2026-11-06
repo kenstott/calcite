@@ -7,7 +7,7 @@
 --         eia_utility_annual, eia_utility_reliability, eia_service_territory, eia_power_plants, gas_pipelines,
 --         interconnection_queue, eia_capacity_changes, eia_fossil_fuel_production,
 --         eia_state_energy_consumption, eia_natural_gas_storage,
---         eia_petroleum_stocks, eia_crude_oil_imports, eia_refinery_operations,
+--         eia_petroleum_stocks, eia_retail_gasoline_prices, eia_crude_oil_imports, eia_refinery_operations,
 --         eia_coal_mines, ev_charging_stations, eia_drilling_activity,
 --         pjm_capacity_auction_prices
 -- Storage: Iceberg (iceberg_scan)
@@ -1167,6 +1167,80 @@ FROM (
 ) t;
 
 -- ============================================================
+-- eia_retail_gasoline_prices
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_retail_gasoline_prices', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true);
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_retail_gasoline_prices', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 100000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 100000, 'expected weekly price rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_retail_gasoline_prices', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_retail_gasoline_prices', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T6: pk_nulls (report_date, price_year, series_id, eia_area_code NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_retail_gasoline_prices', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'report_date IS NULL OR price_year IS NULL OR series_id IS NULL OR eia_area_code IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true)
+WHERE report_date IS NULL OR price_year IS NULL OR series_id IS NULL OR eia_area_code IS NULL;
+
+-- T7: expected_values — price_dollars_per_gallon between 0.1 and 20 where not null
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_retail_gasoline_prices', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'price_dollars_per_gallon outside 0.1..20'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true)
+  WHERE stocks_kbbl IS NOT NULL AND price_dollars_per_gallon outside 0.1..20
+) t;
+
+-- ============================================================
 -- eia_natural_gas_price
 -- ============================================================
 
@@ -1708,6 +1782,14 @@ SELECT 'energy', 'eia_petroleum_stocks', 'T8_worker_coverage',
   MAX(stock_year), 2025,
   printf('MIN=%d MAX=%d | historical: MIN<=2024, daily (weekly worker): MAX>=2025', MIN(stock_year), MAX(stock_year))
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_stocks', allow_moved_paths := true);
+
+-- eia_retail_gasoline_prices (weekly from 1990, current week published → MAX >= 2025)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_retail_gasoline_prices', 'T8_worker_coverage',
+  CASE WHEN MIN(price_year) <= 2024 AND MAX(price_year) >= 2025 THEN 'pass' ELSE 'fail' END,
+  MAX(price_year), 2025,
+  printf('MIN=%d MAX=%d | historical: MIN<=2024, daily (weekly worker): MAX>=2025', MIN(price_year), MAX(price_year))
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true);
 
 -- eia_crude_oil_imports (monthly, lag=2 → MAX >= 2024)
 INSERT INTO dq_results
