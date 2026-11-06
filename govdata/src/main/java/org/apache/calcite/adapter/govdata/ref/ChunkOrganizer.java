@@ -454,6 +454,13 @@ public class ChunkOrganizer {
         skipped++;
         continue;
       }
+      if (!sourceHasCommitsSinceLastSweep(duckdb, pg,
+          base + "/" + src.sourceSchema + "/" + src.sourceTable, src.sourceTable)) {
+        LOGGER.info("ChunkOrganizer: {}.{} re-ran its ETL but committed no snapshot since the "
+            + "last sweep -- skipped", src.sourceSchema, src.sourceTable);
+        skipped++;
+        continue;
+      }
       // Captured BEFORE any scan starts and reused as the watermark markSwept persists: reading
       // completed_at again after the scan would record a value the scan never saw whenever the
       // source's own ETL finishes mid-sweep, and the next sweep would skip those changes.
@@ -476,11 +483,15 @@ public class ChunkOrganizer {
               Collections.singleton(year), skipHashCompare, yearCompletedAt.get(year));
           markYearSwept(pg, src.sourceSchema, src.sourceTable, year, yearCompletedAt.get(year));
         }
+        markSwept(pg, src.sourceSchema, src.sourceTable, sourceAsOf);
       } else {
+        // Captured BEFORE the scan, with the watermark: it names the snapshot the scan reads.
+        ScanPlan plan = planScan(duckdb, pg,
+            base + "/" + src.sourceSchema + "/" + src.sourceTable, src, skipHashCompare);
         chunkRowConcatSource(duckdb, pg, base, src, maxRowsPerSource, null, skipHashCompare,
-            sourceAsOf);
+            sourceAsOf, plan);
+        markSwept(pg, src.sourceSchema, src.sourceTable, sourceAsOf, plan.snapshotId);
       }
-      markSwept(pg, src.sourceSchema, src.sourceTable, sourceAsOf);
       swept++;
     }
     for (DocumentBlobSource src : DOCUMENT_BLOB_SOURCES) {
@@ -489,6 +500,13 @@ public class ChunkOrganizer {
         continue;
       }
       if (!sourceNeedsSweep(pg, src.sourceTable)) {
+        skipped++;
+        continue;
+      }
+      if (!sourceHasCommitsSinceLastSweep(duckdb, pg,
+          base + "/" + src.sourceSchema + "/" + src.sourceTable, src.sourceTable)) {
+        LOGGER.info("ChunkOrganizer: {}.{} re-ran its ETL but committed no snapshot since the "
+            + "last sweep -- skipped", src.sourceSchema, src.sourceTable);
         skipped++;
         continue;
       }
@@ -530,6 +548,39 @@ public class ChunkOrganizer {
     return lastSwept == null || completedAt > lastSwept;
   }
 
+  /** True if {@code loc}'s Iceberg table has committed a snapshot since the last completed sweep
+   *  of {@code sourceTable} (or it was never swept). {@link #sourceNeedsSweep} reads
+   *  table_completion.completed_at, which the source's ETL advances on every run -- including
+   *  runs that commit nothing -- so it alone re-queued a source whose data had not changed
+   *  (confirmed live 2026-10-09: patents.patent_grants, last snapshot 2026-08-31, re-hashed all
+   *  4.87M rows for 25 minutes with 0 replaced, every night, out of a 2h sweep budget). A
+   *  snapshot committed after the last sweep's watermark was necessarily written after that
+   *  watermark was read, so this never skips a change. */
+  static boolean sourceHasCommitsSinceLastSweep(Connection duckdb, Connection pg, String loc,
+      String sourceTable) throws SQLException {
+    Long lastSwept = selectLastSweptCompletedAt(pg, sourceTable);
+    if (lastSwept == null) {
+      return true;
+    }
+    return selectLatestSnapshotMillis(duckdb, loc) > lastSwept;
+  }
+
+  /** Commit time (epoch millis) of the newest snapshot of the Iceberg table at {@code loc}. */
+  static long selectLatestSnapshotMillis(Connection duckdb, String loc) throws SQLException {
+    try (Statement st = duckdb.createStatement();
+        ResultSet rs = st.executeQuery(
+            "SELECT epoch_ms(max(timestamp_ms)) FROM iceberg_snapshots('" + loc + "')")) {
+      if (!rs.next()) {
+        throw new IllegalStateException("iceberg_snapshots returned no row for " + loc);
+      }
+      long millis = rs.getLong(1);
+      if (rs.wasNull()) {
+        throw new IllegalStateException("no snapshots found for " + loc);
+      }
+      return millis;
+    }
+  }
+
   static Long selectTableCompletedAt(Connection pg, String sourceTable)
       throws SQLException {
     try (PreparedStatement ps = pg.prepareStatement(
@@ -569,17 +620,132 @@ public class ChunkOrganizer {
    *  pass the value it read BEFORE scanning (see {@link #sweep}), never one re-read afterwards. */
   static void markSwept(Connection pg, String sourceSchema, String sourceTable, long watermark)
       throws SQLException {
+    markSwept(pg, sourceSchema, sourceTable, watermark, null);
+  }
+
+  /** As above, additionally recording the Iceberg snapshot the sweep scanned (and the current
+   *  {@link #CHUNKER_VERSION}) as the baseline for the next sweep's row-level diff. A null {@code
+   *  snapshotId} clears any stored baseline, so a sweep that did not scan a single known snapshot
+   *  (per-year scoped, document-blob) can never leave a stale one behind. */
+  static void markSwept(Connection pg, String sourceSchema, String sourceTable, long watermark,
+      Long snapshotId) throws SQLException {
     try (PreparedStatement ps = pg.prepareStatement(
-        "INSERT INTO vc_sync_state (source_schema, source_table, last_swept_completed_at) "
-        + "VALUES (?, ?, ?) "
+        "INSERT INTO vc_sync_state (source_schema, source_table, last_swept_completed_at, "
+        + "last_swept_snapshot_id, last_swept_chunker_version) "
+        + "VALUES (?, ?, ?, ?, ?) "
         + "ON CONFLICT (source_schema, source_table) "
-        + "DO UPDATE SET last_swept_completed_at = EXCLUDED.last_swept_completed_at")) {
+        + "DO UPDATE SET last_swept_completed_at = EXCLUDED.last_swept_completed_at, "
+        + "last_swept_snapshot_id = EXCLUDED.last_swept_snapshot_id, "
+        + "last_swept_chunker_version = EXCLUDED.last_swept_chunker_version")) {
       ps.setString(1, sourceSchema);
       ps.setString(2, sourceTable);
       ps.setLong(3, watermark);
+      if (snapshotId == null) {
+        ps.setNull(4, java.sql.Types.BIGINT);
+        ps.setNull(5, java.sql.Types.INTEGER);
+      } else {
+        ps.setLong(4, snapshotId);
+        ps.setInt(5, CHUNKER_VERSION);
+      }
       ps.executeUpdate();
     }
     pg.commit();
+  }
+
+  /** The snapshot id and chunker version recorded by the last {@link #markSwept} of {@code
+   *  sourceTable}; null when the source was never swept or the sweep recorded no baseline. */
+  static SweptBaseline selectLastSweptBaseline(Connection pg, String sourceTable)
+      throws SQLException {
+    try (PreparedStatement ps = pg.prepareStatement(
+        "SELECT last_swept_snapshot_id, last_swept_chunker_version FROM vc_sync_state "
+        + "WHERE source_table = ? LIMIT 1")) {
+      ps.setString(1, sourceTable);
+      try (ResultSet rs = ps.executeQuery()) {
+        if (!rs.next()) {
+          return null;
+        }
+        long id = rs.getLong(1);
+        if (rs.wasNull()) {
+          return null;
+        }
+        int version = rs.getInt(2);
+        return new SweptBaseline(id, rs.wasNull() ? null : Integer.valueOf(version));
+      }
+    }
+  }
+
+  /** The snapshot a source was last fully swept at. */
+  static final class SweptBaseline {
+    final long snapshotId;
+    final Integer chunkerVersion;
+
+    SweptBaseline(long snapshotId, Integer chunkerVersion) {
+      this.snapshotId = snapshotId;
+      this.chunkerVersion = chunkerVersion;
+    }
+  }
+
+  /** Why the next sweep of a source must read every row instead of only the rows that differ from
+   *  its last-swept snapshot; null when the diff is safe. A changed chunker version rules the
+   *  diff out because the version bump exists to reprocess parents whose source rows did not
+   *  change. A forced hash-compare skip rules it out because that mode rewrites every parent. */
+  static String fullScanReason(SweptBaseline baseline, int currentChunkerVersion,
+      boolean skipHashCompare) {
+    if (skipHashCompare) {
+      return "hash comparison is being skipped, so every parent is rewritten";
+    }
+    if (baseline == null) {
+      return "no snapshot baseline from a previous sweep";
+    }
+    if (baseline.chunkerVersion == null || baseline.chunkerVersion != currentChunkerVersion) {
+      return "chunker version changed (" + baseline.chunkerVersion + " -> "
+          + currentChunkerVersion + ")";
+    }
+    return null;
+  }
+
+  /** Id of the newest snapshot of the Iceberg table at {@code loc}. */
+  static long selectLatestSnapshotId(Connection duckdb, String loc) throws SQLException {
+    try (Statement st = duckdb.createStatement();
+        ResultSet rs = st.executeQuery(
+            "SELECT snapshot_id FROM iceberg_snapshots('" + loc + "') "
+            + "ORDER BY timestamp_ms DESC LIMIT 1")) {
+      if (!rs.next()) {
+        throw new IllegalStateException("no snapshots found for " + loc);
+      }
+      return rs.getLong(1);
+    }
+  }
+
+  /** True while snapshot {@code snapshotId} is still in the Iceberg table's metadata. Snapshot
+   *  expiry removes old ones, after which the diff has nothing to compare against. */
+  static boolean snapshotExists(Connection duckdb, String loc, long snapshotId)
+      throws SQLException {
+    try (Statement st = duckdb.createStatement();
+        ResultSet rs = st.executeQuery(
+            "SELECT count(*) FROM iceberg_snapshots('" + loc + "') WHERE snapshot_id = "
+            + snapshotId)) {
+      rs.next();
+      return rs.getLong(1) > 0;
+    }
+  }
+
+  /** The Iceberg table at {@code loc} as of {@code snapshotId}. */
+  static String snapshotScan(String loc, long snapshotId) {
+    return "iceberg_scan('" + loc + "', allow_moved_paths=true, snapshot_from_id="
+        + snapshotId + ")";
+  }
+
+  /** The rows of {@code newScan} that are absent from {@code baseScan}, compared on exactly {@code
+   *  cols}: new rows, and rows whose value in any of those columns changed. Those columns are the
+   *  ones that feed the chunk text and the staged FK columns, so a row outside this set would
+   *  produce the same parent_hash it already has staged. EXCEPT treats NULLs as equal, so a
+   *  column that stays NULL is not a difference. Rows deleted from the source are not returned
+   *  (a sweep has never tombstoned them). */
+  static String diffRelation(String newScan, String baseScan, List<String> cols) {
+    String list = String.join(", ", cols);
+    return "(SELECT " + list + " FROM " + newScan + " EXCEPT SELECT " + list + " FROM "
+        + baseScan + ") diff";
   }
 
   /** Per-year counterpart to {@link #selectLastSweptCompletedAt}: every tracked year's own
@@ -752,10 +918,22 @@ public class ChunkOrganizer {
       return null;
     }
     Map<Integer, Long> perYearWatermarks = selectLastSweptCompletedAtByYear(pg, sourceTable);
+    // A year with no per-year row of its own was covered by the source-level sweep that
+    // vc_sync_state records: markSwept only runs once a whole sweep of the source finished, and
+    // that sweep scanned every year (or skipped it as already swept). So the source-level
+    // watermark is that year's watermark until the year gets a row of its own. Starting such a
+    // year at 0 instead re-hashed the entire year, years that had already been swept before
+    // per-year tracking existed (patents.patent_claims, 2026-10: 16 years, ~80M rows, none of
+    // them changed since the 2026-09-27 sweep). A source never swept at all has no watermark
+    // anywhere and is scanned in full.
+    Long sourceLevelWatermark = selectLastSweptCompletedAt(pg, sourceTable);
     Set<Integer> changedYears = new HashSet<Integer>();
     for (Map.Entry<Integer, Long> entry : yearCompletedAt.entrySet()) {
       Long lastSweptForYear = perYearWatermarks.get(entry.getKey());
-      if (entry.getValue() > (lastSweptForYear != null ? lastSweptForYear : 0L)) {
+      if (lastSweptForYear == null) {
+        lastSweptForYear = sourceLevelWatermark;
+      }
+      if (lastSweptForYear == null || entry.getValue() > lastSweptForYear) {
         changedYears.add(entry.getKey());
       }
     }
@@ -840,8 +1018,9 @@ public class ChunkOrganizer {
     try (Statement stmt = conn.createStatement()) {
       stmt.execute("SET threads=2");
       stmt.execute("SET memory_limit='2GB'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/chunk-organizer-duckdb";
-      stmt.execute("SET temp_directory='" + tempDir + "'");
+      // DuckDB spill in the run's staging directory (REQ-1992), never the JVM temp directory
+      String tempDir = new java.io.File(org.apache.calcite.adapter.file.StagingDirectory.get(), "chunk-organizer-duckdb").getPath();
+      stmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
       try {
         stmt.execute("INSTALL parquet");
         stmt.execute("LOAD parquet");
@@ -919,6 +1098,15 @@ public class ChunkOrganizer {
   private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
       RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears,
       boolean skipHashCompare, long cursorAsOf) throws SQLException {
+    chunkRowConcatSource(conn, pg, base, src, maxRowsPerSource, changedYears, skipHashCompare,
+        cursorAsOf, null);
+  }
+
+  /** As above. {@code scan}, when non-null, replaces the full-table scan with a pinned snapshot
+   *  and optionally the diff against an earlier one -- see {@link ScanPlan}. */
+  private static void chunkRowConcatSource(Connection conn, Connection pg, String base,
+      RowConcatSource src, int maxRowsPerSource, Set<Integer> changedYears,
+      boolean skipHashCompare, long cursorAsOf, ScanPlan scan) throws SQLException {
     String loc = base + "/" + src.sourceSchema + "/" + src.sourceTable;
     // SELECT DISTINCT pk cols + string cols together: a column can be both (e.g. naics_code
     // is the PK and also carries real text), so query each column once, not once per role.
@@ -939,11 +1127,17 @@ public class ChunkOrganizer {
     // pair across page boundaries.
     Set<String> seenPk = new HashSet<String>();
     boolean singleYear = changedYears != null && changedYears.size() == 1;
-    boolean trackCursor = singleYear || changedYears == null;
+    // A diff scan reads a small set whose membership depends on its baseline snapshot, which a
+    // saved cursor does not record: resuming a full-scan cursor over it (or a diff cursor over a
+    // later full scan) would skip rows. The diff is cheap to redo, so it never saves or resumes.
+    boolean diffScan = scan != null && scan.baseSnapshotId != null;
+    boolean trackCursor = !diffScan && (singleYear || changedYears == null);
     int cursorYear = singleYear ? changedYears.iterator().next() : NO_YEAR_SENTINEL;
     String seedCursor = trackCursor
         ? selectValidCursor(pg, src.sourceTable, cursorYear, cursorAsOf) : null;
-    queryRowsBatched(conn, loc, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE, maxRowsPerSource,
+    String scanRelation = scan == null ? defaultScan(loc) : scan.relation(loc, selectCols);
+    queryRowsBatched(conn, scanRelation, selectCols, src.pkColumns, ROW_CONCAT_BATCH_SIZE,
+        maxRowsPerSource,
         changedYears, seedCursor,
         trackCursor ? cursorLiteral -> saveCursor(pg, src.sourceSchema, src.sourceTable,
             cursorYear, cursorLiteral, cursorAsOf) : null,
@@ -983,7 +1177,7 @@ public class ChunkOrganizer {
       totals[0] += chunkRows.size();
       totals[1] += batch.size();
     });
-    if (trackCursor) {
+    if (trackCursor || diffScan) {
       clearCursor(pg, src.sourceSchema, src.sourceTable, cursorYear);
     }
     LOGGER.info("ChunkOrganizer: row-concat {}.{} -> {} chunks from {} rows",
@@ -1106,7 +1300,7 @@ public class ChunkOrganizer {
     int cursorYear = singleYear ? changedYears.iterator().next() : NO_YEAR_SENTINEL;
     String seedCursor = trackCursor
         ? selectValidCursor(pg, src.sourceTable, cursorYear, cursorAsOf) : null;
-    queryRowsBatched(conn, loc, selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE,
+    queryRowsBatched(conn, defaultScan(loc), selectCols, src.pkColumns, DOCUMENT_BLOB_BATCH_SIZE,
         maxRowsPerSource, changedYears, seedCursor,
         trackCursor ? cursorLiteral -> saveCursor(pg, src.sourceSchema, src.sourceTable,
             cursorYear, cursorLiteral, cursorAsOf) : null,
@@ -1500,6 +1694,14 @@ public class ChunkOrganizer {
       // pipeline_tracker.source_as_of.
       stmt.execute("ALTER TABLE vc_sync_state ADD COLUMN IF NOT EXISTS "
           + "last_swept_completed_at BIGINT NOT NULL DEFAULT 0");
+      // The Iceberg snapshot a source was last fully swept at, and the CHUNKER_VERSION in force
+      // then. Together they let the next sweep scan only the rows that differ from that snapshot
+      // (see diffRelation) instead of re-reading and re-hashing the whole table. NULL means "no
+      // usable baseline" and forces a full scan.
+      stmt.execute("ALTER TABLE vc_sync_state ADD COLUMN IF NOT EXISTS "
+          + "last_swept_snapshot_id BIGINT");
+      stmt.execute("ALTER TABLE vc_sync_state ADD COLUMN IF NOT EXISTS "
+          + "last_swept_chunker_version INT");
       // Per-year counterpart to vc_sync_state, for sources whose ETL tracks completion per year
       // (see selectChangedYears). vc_sync_state's one watermark per source only lets a sweep skip
       // a source entirely; this lets it skip individual already-complete years within a source
@@ -1642,7 +1844,8 @@ public class ChunkOrganizer {
    *  pre-rendered SQL literal tuple, via {@link #sqlLiteral}) after every batch that writes
    *  successfully -- a caller persists this via {@link #saveCursor} so a kill partway through
    *  loses at most one batch of this scope's progress, not the whole scope. */
-  private static void queryRowsBatched(Connection conn, String loc, List<String> selectCols,
+  private static void queryRowsBatched(Connection conn, String scanRelation,
+      List<String> selectCols,
       List<String> pkColumns, int batchSize, int maxTotalRows, Set<Integer> yearFilter,
       String initialCursorLiteral, CursorConsumer cursorConsumer, BatchConsumer batchConsumer)
       throws SQLException {
@@ -1676,7 +1879,7 @@ public class ChunkOrganizer {
         }
       }
       StringBuilder sql = new StringBuilder("SELECT ").append(String.join(", ", selectCols))
-          .append(" FROM iceberg_scan('").append(loc).append("', allow_moved_paths=true)");
+          .append(" FROM ").append(scanRelation);
       List<String> whereClauses = new ArrayList<String>(2);
       if (yearClause != null) {
         whereClauses.add(yearClause);
@@ -1724,6 +1927,53 @@ public class ChunkOrganizer {
         break;
       }
     }
+  }
+
+  /** How one sweep reads a row-concat source: pinned to {@code snapshotId}, and when {@code
+   *  baseSnapshotId} is non-null, restricted to the rows that differ from that earlier snapshot
+   *  (see {@link #diffRelation}). Pinning the scanned snapshot is what makes the id {@link
+   *  #markSwept} stores a faithful baseline: the sweep read exactly that snapshot, not a later
+   *  one it could not account for. */
+  private static final class ScanPlan {
+    final long snapshotId;
+    final Long baseSnapshotId;
+
+    ScanPlan(long snapshotId, Long baseSnapshotId) {
+      this.snapshotId = snapshotId;
+      this.baseSnapshotId = baseSnapshotId;
+    }
+
+    String relation(String loc, List<String> cols) {
+      String current = snapshotScan(loc, snapshotId);
+      return baseSnapshotId == null ? current
+          : diffRelation(current, snapshotScan(loc, baseSnapshotId), cols);
+    }
+  }
+
+  /** Decides how to scan an unscoped row-concat source: the diff against its last-swept snapshot
+   *  when that baseline is still valid, otherwise every row, logging which and why. */
+  private static ScanPlan planScan(Connection duckdb, Connection pg, String loc,
+      RowConcatSource src, boolean skipHashCompare) throws SQLException {
+    long snapshotId = selectLatestSnapshotId(duckdb, loc);
+    SweptBaseline baseline = selectLastSweptBaseline(pg, src.sourceTable);
+    String reason = fullScanReason(baseline, CHUNKER_VERSION, skipHashCompare);
+    if (reason == null && !snapshotExists(duckdb, loc, baseline.snapshotId)) {
+      reason = "last-swept snapshot " + baseline.snapshotId + " has been expired";
+    }
+    if (reason != null) {
+      LOGGER.info("ChunkOrganizer: {}.{} full scan at snapshot {}: {}", src.sourceSchema,
+          src.sourceTable, snapshotId, reason);
+      return new ScanPlan(snapshotId, null);
+    }
+    LOGGER.info("ChunkOrganizer: {}.{} scanning only rows that differ between snapshot {} "
+        + "(last swept) and {}", src.sourceSchema, src.sourceTable, baseline.snapshotId,
+        snapshotId);
+    return new ScanPlan(snapshotId, baseline.snapshotId);
+  }
+
+  /** The unpinned full-table scan every sweep used before the row-level diff existed. */
+  private static String defaultScan(String loc) {
+    return "iceberg_scan('" + loc + "', allow_moved_paths=true)";
   }
 
   private static String sqlLiteral(Object value) {

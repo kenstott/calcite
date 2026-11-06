@@ -251,6 +251,8 @@ final class DashboardLayout {
         List<String> categories;
         List<ChartRenderer.SeriesSpec> series;
         List<ChartRenderer.PointSeriesSpec> points;
+        /** Group name to the category labels it singles out; empty when the caller named none. */
+        java.util.Map<String, List<String>> highlightGroups = new java.util.LinkedHashMap<>();
         /** A candlestick panel's prices; null on every other chart. */
         ChartRenderer.Candles candles;
         List<ChartRenderer.Band> bands = new ArrayList<>();

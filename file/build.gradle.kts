@@ -105,20 +105,20 @@ dependencies {
 
     // Apache Iceberg support
     // iceberg-api is exposed as api() so dependent modules can use Iceberg Table type
-    api("org.apache.iceberg:iceberg-api:1.4.0")
-    implementation("org.apache.iceberg:iceberg-core:1.4.0")
-    implementation("org.apache.iceberg:iceberg-common:1.4.0")
+    api("org.apache.iceberg:iceberg-api:1.5.2")
+    implementation("org.apache.iceberg:iceberg-core:1.5.2")
+    implementation("org.apache.iceberg:iceberg-common:1.5.2")
     // Theta sketches for Iceberg Puffin column statistics. Declared explicitly rather than
     // relying on the com.yahoo.datasketches:sketches-core that arrives transitively via Calcite
     // core: Iceberg's StandardBlobTypes.APACHE_DATASKETCHES_THETA_V1 names the Apache
     // serialization, and a blob written under that type must actually carry it or it fails at
     // read time in Spark/Trino — long after the snapshot committed — rather than at write time.
     implementation("org.apache.datasketches:datasketches-java:6.1.1")
-    implementation("org.apache.iceberg:iceberg-parquet:1.4.0")
-    implementation("org.apache.iceberg:iceberg-data:1.4.0")
+    implementation("org.apache.iceberg:iceberg-parquet:1.5.2")
+    implementation("org.apache.iceberg:iceberg-data:1.5.2")
     // iceberg-aws provides S3FileIO (AWS SDK v2) so the read path can load Iceberg
     // tables from S3/MinIO without hadoop-aws + the AWS SDK v1 bundle (S3AFileSystem).
-    implementation("org.apache.iceberg:iceberg-aws:1.4.0")
+    implementation("org.apache.iceberg:iceberg-aws:1.5.2")
     // AWS SDK v2 — the one JVM S3 stack, shared by S3StorageProvider, Iceberg's S3FileIO and
     // (since 3.4.x) Hadoop's S3AFileSystem. BOM-pinned so every awssdk module resolves to one
     // version; 2.35.4 is what hadoop-project 3.4.3 pins, so S3A gets the version it expects.
@@ -137,8 +137,8 @@ dependencies {
 
     testImplementation(project(":testkit"))
     // DuckDB for performance comparison tests and optional execution engine
-    compileOnly("org.duckdb:duckdb_jdbc:1.4.4.0")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")
+    compileOnly("org.duckdb:duckdb_jdbc:1.5.6.0")
+    testImplementation("org.duckdb:duckdb_jdbc:1.5.6.0")
     // ClickHouse for optional execution engine
     compileOnly("com.clickhouse:clickhouse-jdbc:0.7.1:all")
     testImplementation("com.clickhouse:clickhouse-jdbc:0.7.1:all")
@@ -178,7 +178,7 @@ dependencies {
     compileOnly("org.immutables:value-annotations")
     compileOnly("com.google.code.findbugs:jsr305")
     testRuntimeOnly("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
-    testRuntimeOnly("org.apache.logging.log4j:log4j-core:2.23.1")
+    testImplementation("org.apache.logging.log4j:log4j-core:2.23.1")
 }
 
 fun JavaCompile.configureAnnotationSet(sourceSet: SourceSet) {
@@ -251,6 +251,12 @@ ide {
 }
 
 tasks.test {
+    // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+    systemProperty("iceberg.metadata.cache.directory",
+        layout.buildDirectory.dir("iceberg-schema-cache").get().asFile.absolutePath)
+    // Nor do temporary files no schema owns (REQ-1992)
+    systemProperty("calcite.file.staging.directory",
+        layout.buildDirectory.dir("test-staging").get().asFile.absolutePath)
     // Set working directory to build directory for all tests
     workingDir = layout.buildDirectory.get().asFile
 

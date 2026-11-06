@@ -19,6 +19,8 @@ import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SchemaParser;
+import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.Table;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -29,8 +31,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -106,6 +111,8 @@ public final class IcebergSchemaCache {
   private static volatile boolean loaded;
   private static volatile boolean trusted;
   private static volatile boolean syncAttempted;
+  /** True once the sync has finished (trusted or not); callers arriving earlier wait for it. */
+  private static volatile boolean syncDone;
 
   /**
    * Warehouse coordinates observed on the live read path, so publishing needs no plumbing.
@@ -160,16 +167,19 @@ public final class IcebergSchemaCache {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Resolves the cache directory: the system property {@code iceberg.metadata.cache.directory} when
-   * set, else {@code {user.home}/.aperio/.iceberg_metadata_cache}. The directory name still says
-   * "metadata" for backward compatibility with existing on-disk artifacts.
+   * Resolves the cache directory: the system property {@code iceberg.metadata.cache.directory},
+   * which is required. There is no default (REQ-1992): the process that hosts the adapter names a
+   * directory it owns, since the cache holds the schemas of the tables it reads. The directory
+   * name still says "metadata" for backward compatibility with existing on-disk artifacts.
    */
   static File cacheDir() {
     String configured = System.getProperty("iceberg.metadata.cache.directory");
-    File dir = (configured != null && !configured.isEmpty())
-        ? new File(configured)
-        : new File(System.getProperty("user.home")
-            + File.separator + ".aperio" + File.separator + ".iceberg_metadata_cache");
+    if (configured == null || configured.isEmpty()) {
+      throw new IllegalStateException("The system property iceberg.metadata.cache.directory is "
+          + "not set: the Iceberg schema cache has no default directory. Set it to a directory "
+          + "this process owns.");
+    }
+    File dir = new File(configured);
     if (!dir.exists()) {
       dir.mkdirs();
     }
@@ -401,6 +411,91 @@ public final class IcebergSchemaCache {
     entry.statsSnapshotId = snapshotId;
   }
 
+  /** Snapshot summary key holding the table's total row count; maintained by every commit. */
+  static final String TOTAL_RECORDS = "total-records";
+
+  /**
+   * Row count of the table's current snapshot, read from the snapshot summary's
+   * {@value #TOTAL_RECORDS}. No manifest or data file is opened: the summary is part of the table
+   * metadata the caller already holds.
+   *
+   * @param tablePath table root, for the error message
+   * @param table loaded Iceberg table
+   * @return the row count, or 0 for a table with no snapshot
+   * @throws IllegalStateException when the snapshot's summary carries no usable total-records
+   */
+  static double snapshotRowCount(String tablePath, Table table) {
+    Snapshot snapshot = table.currentSnapshot();
+    if (snapshot == null) {
+      return 0.0;
+    }
+    Map<String, String> summary = snapshot.summary();
+    String total = summary == null ? null : summary.get(TOTAL_RECORDS);
+    if (total == null) {
+      throw new IllegalStateException("Iceberg snapshot " + snapshot.snapshotId() + " of "
+          + tablePath + " has no '" + TOTAL_RECORDS + "' in its summary; the row count cannot be "
+          + "read without walking data files, which is never done");
+    }
+    try {
+      return Double.parseDouble(total);
+    } catch (NumberFormatException e) {
+      throw new IllegalStateException("Iceberg snapshot " + snapshot.snapshotId() + " of "
+          + tablePath + " has a non-numeric '" + TOTAL_RECORDS + "': " + total, e);
+    }
+  }
+
+  /**
+   * Records, from table metadata alone, the statistics the planner needs for this table: the row
+   * count from the snapshot summary and the per-column NDV the table's Puffin statistics file
+   * publishes for the current snapshot (blob properties in the table metadata, no payload read).
+   *
+   * <p>NDV is recorded as an empty map when the table publishes none, so a lookup can tell
+   * "described, nothing published" from "never described" and does not go back to the object store.
+   * NDV is never computed from data.
+   *
+   * @param tablePath table root
+   * @param table loaded Iceberg table
+   * @return the recorded row count
+   */
+  public static double recordSnapshotStatistics(String tablePath, Table table) {
+    double rowCount = snapshotRowCount(tablePath, table);
+    Snapshot snapshot = table.currentSnapshot();
+    recordStatistics(tablePath, snapshot == null ? -1L : snapshot.snapshotId(), rowCount);
+    recordNdv(tablePath,
+        org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(table));
+    return rowCount;
+  }
+
+  /**
+   * Lists what is wrong with the cache relative to the tables a model declares: for each
+   * {@code schema/table} either no entry, or an entry without a row count or the snapshot it was
+   * read at. Empty means complete. Used by seed generation, which must fail rather than ship a
+   * cache a runtime would have to fill from the object store.
+   *
+   * @param declared declared tables as {@code schema/table}
+   * @return one problem description per incomplete table
+   */
+  public static List<String> incompleteTables(Collection<String> declared) {
+    ensureLoaded();
+    List<String> problems = new ArrayList<String>();
+    for (String d : declared) {
+      TableSchema found = null;
+      for (Map.Entry<String, TableSchema> e : ENTRIES.entrySet()) {
+        // A local warehouse's table location on Windows is separated by backslashes.
+        if (e.getKey().replace('\\', '/').endsWith("/" + d)) {
+          found = e.getValue();
+          break;
+        }
+      }
+      if (found == null) {
+        problems.add(d + ": no entry in the schema cache");
+      } else if (found.rowCount == null || found.statsSnapshotId == null) {
+        problems.add(d + ": entry has no row count / statsSnapshotId");
+      }
+    }
+    return problems;
+  }
+
   /**
    * Drops a single table's cached schema, forcing the next {@link #lookup} to miss and the
    * caller to fall back to a live read. Used when a caller has independent proof the cached
@@ -414,6 +509,9 @@ public final class IcebergSchemaCache {
       ENTRIES.remove(tablePath);
     }
   }
+
+  /** System property that makes seed generation ignore any published cache. */
+  public static final String IGNORE_PUBLISHED_PROPERTY = "iceberg.schema.cache.ignorePublished";
 
   /** Number of entries currently held — used by seed generation to report what it materialized. */
   public static int size() {
@@ -461,45 +559,64 @@ public final class IcebergSchemaCache {
   // ---------------------------------------------------------------------------------------------
 
   private static void syncIfNeeded(String tablePath, Map<String, String> s3Config) {
-    if (syncAttempted) {
+    if (syncDone) {
       return;
     }
+    // A caller that arrives while another thread is syncing waits here for the verdict. Returning
+    // at once would answer "untrusted", and every schema loader that started alongside the first
+    // would read its tables live from the object store: minutes of start-up the cache exists to
+    // avoid. syncAttempted stops the syncing thread re-entering itself.
     synchronized (IcebergSchemaCache.class) {
-      if (syncAttempted) {
+      if (syncDone || syncAttempted) {
         return;
       }
       syncAttempted = true;
-      String root = bucketRoot(tablePath);
-      if (root == null || s3Config == null || s3Config.isEmpty()) {
-        LOGGER.debug("Iceberg schema cache not synced (no object-store root for {}) — "
-            + "every lookup will read live", tablePath);
+      try {
+        sync(tablePath, s3Config);
+      } finally {
+        syncDone = true;
+      }
+    }
+  }
+
+  private static void sync(String tablePath, Map<String, String> s3Config) {
+    if (Boolean.getBoolean(IGNORE_PUBLISHED_PROPERTY)) {
+      // A rebuild creates the cache again from the live tables: nothing from an earlier cache,
+      // which may hold tables that have since gone or schemas that have since changed.
+      LOGGER.info("Iceberg schema cache: {} is set, ignoring any published cache — reading "
+          + "schemas live", IGNORE_PUBLISHED_PROPERTY);
+      return;
+    }
+    String root = bucketRoot(tablePath);
+    if (root == null || s3Config == null || s3Config.isEmpty()) {
+      LOGGER.debug("Iceberg schema cache not synced (no object-store root for {}) — "
+          + "every lookup will read live", tablePath);
+      return;
+    }
+    try {
+      StorageProvider provider = providerFor(s3Config);
+      String publishedPath = root + PUBLISHED_KEY;
+      String publishedDigest = etagDigest(provider, publishedPath);
+      if (publishedDigest == null) {
+        LOGGER.info("No published Iceberg schema cache at {} — reading schemas live",
+            publishedPath);
         return;
       }
-      try {
-        StorageProvider provider = providerFor(s3Config);
-        String publishedPath = root + PUBLISHED_KEY;
-        String publishedDigest = etagDigest(provider, publishedPath);
-        if (publishedDigest == null) {
-          LOGGER.info("No published Iceberg schema cache at {} — reading schemas live",
-              publishedPath);
-          return;
-        }
-        if (!publishedDigest.equals(localFileDigest())) {
-          download(provider, publishedPath);
-        }
-        // Re-digest after the download: trust requires the local bytes to BE the published bytes.
-        if (publishedDigest.equals(localFileDigest())) {
-          trusted = true;
-          ensureLoaded();
-          LOGGER.info("Iceberg schema cache trusted ({} tables, digest {})",
-              ENTRIES.size(), publishedDigest);
-        } else {
-          LOGGER.warn("Iceberg schema cache digest still differs from published {} — reading live",
-              publishedPath);
-        }
-      } catch (IOException | RuntimeException e) {
-        LOGGER.info("Iceberg schema cache sync failed ({}) — reading schemas live", e.toString());
+      if (!publishedDigest.equals(localFileDigest())) {
+        download(provider, publishedPath);
       }
+      // Re-digest after the download: trust requires the local bytes to BE the published bytes.
+      if (publishedDigest.equals(localFileDigest())) {
+        trusted = true;
+        ensureLoaded();
+        LOGGER.info("Iceberg schema cache trusted ({} tables, digest {})",
+            ENTRIES.size(), publishedDigest);
+      } else {
+        LOGGER.warn("Iceberg schema cache digest still differs from published {} — reading live",
+            publishedPath);
+      }
+    } catch (IOException | RuntimeException e) {
+      LOGGER.info("Iceberg schema cache sync failed ({}) — reading schemas live", e.toString());
     }
   }
 
@@ -737,6 +854,7 @@ public final class IcebergSchemaCache {
     loaded = false;
     trusted = false;
     syncAttempted = false;
+    syncDone = false;
     warehouseTablePath = null;
     warehouseS3Config = null;
     File f = cacheFile();
@@ -788,6 +906,14 @@ public final class IcebergSchemaCache {
    * the hadoop {@code fs.s3a.*} keys or the plain {@code accessKeyId}/{@code secretAccessKey} ones.
    */
   private static StorageProvider providerFor(Map<String, String> s3Config) {
+    return providerFactory.apply(s3Config);
+  }
+
+  /** Builds the object-store provider; replaceable so a test can observe the sync. */
+  static volatile java.util.function.Function<Map<String, String>, StorageProvider> providerFactory =
+      IcebergSchemaCache::buildProvider;
+
+  private static StorageProvider buildProvider(Map<String, String> s3Config) {
     Map<String, Object> config = new HashMap<>();
     copyFirst(config, "accessKeyId", s3Config, "fs.s3a.access.key", "accessKeyId");
     copyFirst(config, "secretAccessKey", s3Config, "fs.s3a.secret.key", "secretAccessKey");

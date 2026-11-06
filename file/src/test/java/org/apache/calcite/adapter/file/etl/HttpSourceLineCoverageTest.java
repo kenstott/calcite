@@ -96,7 +96,7 @@ class HttpSourceLineCoverageTest {
         .url("http://localhost/test")
         .build();
     return new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
-        null, null);
+        null, tempDir.toString());
   }
 
 
@@ -979,7 +979,7 @@ class HttpSourceLineCoverageTest {
         .response(HttpSourceConfig.ResponseConfig.fromMap(createMap("format", "csv")))
         .build();
     HttpSource source = new HttpSource(config, (HooksConfig) null, new LocalFileStorageProvider(),
-        null, null);
+        null, tempDir.toString());
 
     String result =
         (String) invokePrivate(source, "extractFromZip", new Class[]{InputStream.class, String.class, String.class},

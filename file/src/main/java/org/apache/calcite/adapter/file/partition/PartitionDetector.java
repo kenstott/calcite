@@ -11,11 +11,11 @@
 package org.apache.calcite.adapter.file.partition;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -173,14 +173,16 @@ public class PartitionDetector {
     }
 
     Map<String, String> partitionValues = new LinkedHashMap<>();
-    Path path = Paths.get(filePath);
-    Path parent = path.getParent();
-
+    // By string, not java.nio.file.Path: the path may be a URI, which is not a path
+    // Windows accepts
     List<String> dirValues = new ArrayList<>();
-    while (parent != null && parent.getFileName() != null
-        && dirValues.size() < columnNames.size()) {
-      dirValues.add(0, parent.getFileName().toString());
-      parent = parent.getParent();
+    String parent = LocalPaths.parent(filePath);
+    while (parent != null && dirValues.size() < columnNames.size()) {
+      String name = LocalPaths.fileName(parent);
+      if (!name.isEmpty()) {
+        dirValues.add(0, name);
+      }
+      parent = LocalPaths.parent(parent);
     }
 
     // Match directory values with column names from the end

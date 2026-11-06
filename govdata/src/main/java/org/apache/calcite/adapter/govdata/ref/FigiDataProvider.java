@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.govdata.ref;
 import org.apache.calcite.adapter.file.etl.DataProvider;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.ModelOperand;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -119,7 +120,7 @@ public class FigiDataProvider implements DataProvider {
 
   @SuppressWarnings("MixedMutabilityReturnType")
   private List<String> loadTickers(String tickersPath) {
-    try (Connection conn = createDuckDBWithS3();
+    try (Connection conn = createDuckDBWithS3(tickersPath);
          Statement stmt = conn.createStatement()) {
 
       String sql = "SELECT DISTINCT ticker "
@@ -153,7 +154,7 @@ public class FigiDataProvider implements DataProvider {
     }
   }
 
-  private Connection createDuckDBWithS3() throws java.sql.SQLException {
+  private Connection createDuckDBWithS3(String tickersPath) throws java.sql.SQLException {
     Connection conn = AbstractGovDataDownloader.getDuckDBConnection(null);
 
     // S3 credentials come from the model (the s3Config operand the factory builds), not env.
@@ -163,7 +164,13 @@ public class FigiDataProvider implements DataProvider {
     String region = ModelOperand.getString("ref.s3Config.region");
 
     if (keyId == null || keyId.isEmpty() || secret == null || secret.isEmpty()) {
-      LOGGER.debug("FigiDataProvider: no AWS credentials in env, DuckDB will use default chain");
+      // A local tickers path needs no credentials. An s3:// one does: the model carries them, and
+      // DuckDB's default chain would instead pick up whatever secret the host happens to hold (a
+      // persistent secret left by another process pointed this at R2 with expired credentials).
+      if (tickersPath.startsWith("s3://")) {
+        throw new java.sql.SQLException("no S3 credentials in the model at ref.s3Config for "
+            + tickersPath);
+      }
       return conn;
     }
 
@@ -249,6 +256,7 @@ public class FigiDataProvider implements DataProvider {
 
     byte[] requestBytes = requestJson.getBytes(StandardCharsets.UTF_8);
     conn.setRequestProperty("Content-Length", String.valueOf(requestBytes.length));
+    NetworkOutageWait.connect(conn);
     OutputStream out = conn.getOutputStream();
     out.write(requestBytes);
     out.flush();

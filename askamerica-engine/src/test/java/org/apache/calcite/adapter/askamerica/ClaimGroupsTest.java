@@ -474,11 +474,22 @@ class ClaimGroupsTest {
     assertEquals(3, audit.path("claims").get(1).path("n").asInt());
   }
 
-  @Test void theLocalReportLinkIsAFileLink() {
-    String link = McpServer.reportFileLink("Rents [rose]",
-        "file:/Users/x/.askamerica/reports/20261001-074149-rents.html");
-    assertEquals("[Rents [rose)](file:/Users/x/.askamerica/reports/20261001-074149-rents.html)",
-        link);
+  @Test void theLocalReportLinkIsTheHttpLinkWithTheFilePathAsPlainText() {
+    String page = McpServer.localReportPage("Rents [rose]",
+        "http://127.0.0.1:56654/a/abc.html",
+        "/Users/x/.askamerica/reports/20261001-074149-rents.html", "20261001-074149-rents");
+    assertTrue(page.contains("[Rents [rose)](http://127.0.0.1:56654/a/abc.html)"), page);
+    assertTrue(page.contains("restore_report with report_id `20261001-074149-rents`"), page);
+    assertTrue(page.contains("/Users/x/.askamerica/reports/20261001-074149-rents.html"), page);
+    assertFalse(page.contains("file:"), page);
+  }
+
+  @Test void withoutAnHttpServerOnlyThePlainPathAndRestoreReportAreGiven() {
+    String page = McpServer.localReportPage("Rents", null,
+        "/Users/x/.askamerica/reports/r.html", "r");
+    assertFalse(page.contains("]("), page);
+    assertTrue(page.contains("/Users/x/.askamerica/reports/r.html"), page);
+    assertTrue(page.contains("restore_report"), page);
   }
 
   @Test void theArticleUnderReviewIsLinkedAboveTheFirstSection() {

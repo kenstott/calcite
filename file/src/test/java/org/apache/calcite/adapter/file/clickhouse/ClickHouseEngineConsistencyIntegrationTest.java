@@ -482,6 +482,8 @@ public class ClickHouseEngineConsistencyIntegrationTest {
       sb.append("    \"operand\": {\n");
       sb.append("      \"directory\": \"")
           .append(dataDir.getAbsolutePath().replace("\\", "\\\\")).append("\",\n");
+      sb.append("      \"baseDirectory\": \"")
+          .append(dataDir.getAbsolutePath().replace("\\", "\\\\")).append("\",\n");
       sb.append("      \"executionEngine\": \"").append(engine).append("\",\n");
       sb.append("      \"ephemeralCache\": true");
       if ("clickhouse".equals(engine)) {

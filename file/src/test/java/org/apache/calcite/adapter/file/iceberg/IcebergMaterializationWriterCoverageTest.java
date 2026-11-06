@@ -84,7 +84,7 @@ public class IcebergMaterializationWriterCoverageTest {
       }
     };
     writer =
-        new IcebergMaterializationWriter(mockStorageProvider, tempDir.toString(), IncrementalTracker.NOOP);
+        new IcebergMaterializationWriter(mockStorageProvider, tempDir.toString(), IncrementalTracker.NOOP, tempDir.toFile());
   }
 
   // ========== Constructor Tests ==========
@@ -105,7 +105,7 @@ public class IcebergMaterializationWriterCoverageTest {
 
   @Test void testConstructorWithNullIncrementalTracker() throws Exception {
     IcebergMaterializationWriter w =
-        new IcebergMaterializationWriter(mockStorageProvider, tempDir.toString(), null);
+        new IcebergMaterializationWriter(mockStorageProvider, tempDir.toString(), null, tempDir.toFile());
     Field field = IcebergMaterializationWriter.class.getDeclaredField("incrementalTracker");
     field.setAccessible(true);
     assertNotNull(field.get(w));

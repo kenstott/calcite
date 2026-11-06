@@ -72,8 +72,9 @@ public class ClickHouseHLLCountDistinctRule extends RelOptRule {
 
     // Check if this has COUNT(DISTINCT)
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
-      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
-        LOGGER.debug("[CH-HLL] Found COUNT(DISTINCT) in ClickHouse query");
+      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()
+          && aggCall.isApproximate()) {
+        LOGGER.debug("[CH-HLL] Found APPROX_COUNT_DISTINCT in ClickHouse query");
         return true;
       }
     }
@@ -102,7 +103,8 @@ public class ClickHouseHLLCountDistinctRule extends RelOptRule {
     boolean hasOptimizableCountDistinct = false;
 
     for (AggregateCall aggCall : aggregate.getAggCallList()) {
-      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()) {
+      if (aggCall.getAggregation().getKind() == SqlKind.COUNT && aggCall.isDistinct()
+          && aggCall.isApproximate()) {
         Long estimate = getHLLEstimate(tableInfo, input, aggCall);
         if (estimate != null) {
           hasOptimizableCountDistinct = true;

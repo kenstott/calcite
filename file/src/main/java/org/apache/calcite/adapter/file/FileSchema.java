@@ -10,7 +10,9 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.json.JsonConversionUtil;
@@ -19,6 +21,7 @@ import org.apache.calcite.adapter.file.format.json.JsonSearchConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergMetadataTables;
+import org.apache.calcite.adapter.file.iceberg.IcebergSchemaCache;
 import org.apache.calcite.adapter.file.iceberg.IcebergTable;
 import org.apache.calcite.adapter.file.materialized.MaterializedViewTable;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
@@ -45,6 +48,8 @@ import org.apache.calcite.adapter.file.table.GlobParquetTable;
 import org.apache.calcite.adapter.file.table.JsonScannableTable;
 import org.apache.calcite.adapter.file.table.ParquetTranslatableTable;
 import org.apache.calcite.adapter.file.table.PartitionedParquetTable;
+import org.apache.calcite.adapter.file.util.GlobMatcher;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.schema.CommentableSchema;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.SchemaPlus;
@@ -70,11 +75,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -220,6 +221,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   private final CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig;
   private final @Nullable String comment;
   private final @Nullable String canonicalSchemaName;  // Canonical name for .aperio directory (e.g., "econ" vs user-assigned "ECON")
+  /** How the schema's HTML files are read: their lists as tables, and their content (REQ-2186). */
+  private final CrawlerConfiguration pages;
   // Schema-level materialize default (FILE-186), set post-construction by FileSchemaFactory. When
   // present, getTableMap materializes every discovered table to Iceberg under warehousePath. Not a
   // constructor param — FileSchema has many delegating overloads and getTableMap runs lazily after
@@ -250,49 +253,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   // Registry for alternate partition tables (source table -> alternate mappings)
   private final org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry alternatePartitionRegistry =
       new org.apache.calcite.adapter.file.partition.AlternatePartitionRegistry();
-
-  /**
-   * Creates a file schema with all features including storage provider support.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param directoryPattern Directory pattern for file discovery, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param storageType     Storage type (e.g., "local", "s3", "sharepoint"), or null
-   * @param storageConfig   Storage-specific configuration, or null
-   * @param flatten         Whether to flatten JSON/YAML structures, or null
-   * @param csvTypeInference CSV type inference configuration, or null
-   * @param primeCache      Whether to prime statistics cache on initialization (default true)
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval,
-      String tableNameCasing,
-      String columnNameCasing,
-      @Nullable String storageType,
-      @Nullable Map<String, Object> storageConfig,
-      @Nullable Boolean flatten,
-      @Nullable Map<String, Object> csvTypeInference,
-      boolean primeCache) {
-    this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
-        recursive, materializations, views, partitionedTables, refreshInterval,
-        tableNameCasing, columnNameCasing, storageType, storageConfig, flatten,
-        csvTypeInference, primeCache, null);
-  }
 
   /**
    * Creates a file schema with all features including storage provider support.
@@ -484,6 +444,40 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       boolean primeCache,
       @Nullable String comment,
       @Nullable String canonicalSchemaName) {
+    // A schema that states no page options reads HTML tables only: lists are off by default
+    // (REQ-2186).
+    this(parentSchema, name, sourceDirectory, userConfiguredBaseDirectory, directoryPath,
+        directoryPattern, tables, engineConfig, recursive, materializations, views,
+        partitionedTables, refreshInterval, tableNameCasing, columnNameCasing, storageType,
+        storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName,
+        new CrawlerConfiguration());
+  }
+
+  /**
+   * The full constructor, with how the schema reads its HTML files: whether their content's
+   * lists are tables, and which part of a page is content (REQ-2186).
+   */
+  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
+      @Nullable File userConfiguredBaseDirectory,
+      @Nullable String directoryPath,
+      @Nullable String directoryPattern,
+      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
+      boolean recursive,
+      @Nullable List<Map<String, Object>> materializations,
+      @Nullable List<Map<String, Object>> views,
+      @Nullable List<Map<String, Object>> partitionedTables,
+      @Nullable String refreshInterval,
+      String tableNameCasing,
+      String columnNameCasing,
+      @Nullable String storageType,
+      @Nullable Map<String, Object> storageConfig,
+      @Nullable Boolean flatten,
+      @Nullable Map<String, Object> csvTypeInference,
+      boolean primeCache,
+      @Nullable String comment,
+      @Nullable String canonicalSchemaName,
+      CrawlerConfiguration pages) {
+    this.pages = pages;
     this.tables =
         tables == null ? ImmutableList.of()
             : ImmutableList.copyOf(tables);
@@ -505,24 +499,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Determine operating cache directory - ALWAYS local filesystem for .conversions.json and file locks
     // This is separate from the parquet output directory which may be remote (S3, etc.)
-    File operatingCacheRoot;
-    if (userConfiguredBaseDirectory != null) {
-      // Caller explicitly provided a base directory — use it for the .aperio root.
-      // This covers both temp dirs (ephemeral tests) and stable product dirs (e.g. ~/.askamerica/data/ref).
-      operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
-      LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
-    } else {
-      // No explicit base directory — fall back to working directory.
-      String userDir = System.getProperty("user.dir");
-
-      // Safety check: if user.dir is root, use temp directory instead
-      if ("/".equals(userDir) || userDir == null || userDir.isEmpty()) {
-        LOGGER.warn("Working directory is root or invalid ('{}'), falling back to temp directory", userDir);
-        userDir = System.getProperty("java.io.tmpdir");
-      }
-      operatingCacheRoot = new File(userDir).getAbsoluteFile();
-      LOGGER.debug("Using working directory for operating cache: {}", operatingCacheRoot);
+    // Every file the schema writes goes under its base directory (REQ-1992); there is no default
+    // location, so a schema without one refuses to start rather than write beside the process.
+    if (userConfiguredBaseDirectory == null) {
+      throw new IllegalArgumentException("File schema '" + name + "' has no baseDirectory "
+          + "(or operatingDirectory) operand. Every file the adapter writes for the schema goes "
+          + "under that directory; set it to the directory the schema may write to.");
     }
+    File operatingCacheRoot = userConfiguredBaseDirectory.getAbsoluteFile();
+    LOGGER.debug("Using configured base directory for operating cache: {}", operatingCacheRoot);
 
     // Operating cache is ALWAYS .aperio/<schema> on local filesystem for metadata and locks
     // Use canonicalSchemaName if provided (for consistent paths like .aperio/econ regardless of user name ECON)
@@ -783,137 +768,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     primingThread.start();
   }
 
-  /**
-   * Creates a file schema with all features including partitioned tables, refresh support,
-   * and configurable identifier casing.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param directoryPattern Directory pattern for file discovery, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   * @param tableNameCasing Table name casing: "UPPER", "LOWER", or "UNCHANGED"
-   * @param columnNameCasing Column name casing: "UPPER", "LOWER", or "UNCHANGED"
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval,
-      String tableNameCasing,
-      String columnNameCasing) {
-    this(parentSchema, name, sourceDirectory, null, directoryPattern, tables, engineConfig,
-        recursive, materializations, views, partitionedTables, refreshInterval,
-        tableNameCasing, columnNameCasing, null, null, null, null, true);
-  }
-
-
-  /**
-   * Creates a file schema with all features including partitioned tables and refresh support.
-   * Uses default casing (SMART_CASING for both tables and columns).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for relative files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   * @param partitionedTables List of partitioned table definitions, or null
-   * @param refreshInterval Default refresh interval for tables (e.g., "5 minutes"), or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable String directoryPattern,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views,
-      @Nullable List<Map<String, Object>> partitionedTables,
-      @Nullable String refreshInterval) {
-    this(parentSchema, name, sourceDirectory, directoryPattern, tables, engineConfig, recursive,
-        materializations, views, partitionedTables, refreshInterval, "SMART_CASING", "SMART_CASING");
-  }
-
-  /**
-   * Creates a file schema with execution engine support, recursive directory scanning,
-   * multi-table Excel support, multi-table HTML support, and materialized views.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for relative files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   * @param materializations List of materialized view definitions, or null
-   * @param views           List of view definitions, or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive,
-      @Nullable List<Map<String, Object>> materializations,
-      @Nullable List<Map<String, Object>> views) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, recursive,
-        materializations, views, null, null);
-  }
 
   private final SchemaPlus parentSchema;
   private final String name;
-
-  /**
-   * Creates a file schema with execution engine support and recursive directory scanning.
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   * @param recursive       Whether to recursively scan subdirectories
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig,
-      boolean recursive) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, recursive, null,
-        null, null, null);
-  }
-
-  /**
-   * Creates a file schema with execution engine support (non-recursive).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   * @param engineConfig    Execution engine configuration
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables, ExecutionEngineConfig engineConfig) {
-    this(parentSchema, name, sourceDirectory, null, tables, engineConfig, false, null, null,
-        null, null);
-  }
-
-  /**
-   * Creates a file schema with default execution engine (for backward compatibility).
-   *
-   * @param parentSchema    Parent schema
-   * @param name            Schema name
-   * @param sourceDirectory Source directory to look for files, or null
-   * @param tables          List containing table identifiers, or null
-   */
-  public FileSchema(SchemaPlus parentSchema, String name, @Nullable File sourceDirectory,
-      @Nullable List<Map<String, Object>> tables) {
-    this(parentSchema, name, sourceDirectory, null, tables, new ExecutionEngineConfig(), false,
-        null, null, null, null);
-  }
 
   /**
    * Applies the configured casing transformation and sanitization to an identifier.
@@ -1269,25 +1126,20 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       matchingFiles = findMatchingFiles(pattern);
     }
 
-    // Determine output directory for converted files
-    File conversionDir = null;
+    // Converted files go to baseDirectory/conversions/ (see sourceFileConversion())
     if (baseDirectory != null) {
-      // Use baseDirectory/conversions/ for converted files
-      conversionDir = new File(operatingCacheDirectory, "conversions");
+      File conversionDir = new File(operatingCacheDirectory, "conversions");
       if (!conversionDir.exists()) {
         conversionDir.mkdirs();
         LOGGER.debug("Created conversions directory: {}", conversionDir.getAbsolutePath());
       }
     }
 
-    // When a refresh interval is configured, register this schema's conversion output directory
-    // with the ConversionFileWatcher so changed multi-table source files (Excel, HTML, XML,
-    // Markdown, DOCX, PPTX) are re-converted in the background at that interval.
+    // When a refresh interval is configured, the ConversionFileWatcher re-converts changed
+    // multi-table source files (Excel, HTML, XML, Markdown, DOCX, PPTX) in the background at
+    // that interval, with this schema's conversion.
     final java.time.Duration conversionWatchInterval =
         refreshInterval != null ? RefreshInterval.parse(refreshInterval) : null;
-    if (conversionWatchInterval != null) {
-      ConversionFileWatcher.getInstance().registerSchemaBaseDirectory(name, operatingCacheDirectory);
-    }
 
     // Get list of source files that have already been processed via tableDef
     Set<String> alreadyProcessedFiles = new HashSet<>();
@@ -1328,37 +1180,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
 
       try {
-        // Calculate relative path from the data directory (baseDirectory) to preserve
-        // directory structure for files in subdirectories.
-        // Only use relativePath when the file is actually inside the base directory,
-        // otherwise the path becomes meaningless (e.g., ../../../../var/folders/...)
-        String relativePath = null;
-        if (baseDirectory != null) {
-          try {
-            java.nio.file.Path baseDirPath = new File(baseDirectory).toPath().toAbsolutePath().normalize();
-            java.nio.file.Path sourceFilePath = file.toPath().toAbsolutePath().normalize();
-            if (sourceFilePath.startsWith(baseDirPath)) {
-              relativePath = baseDirPath.relativize(sourceFilePath).toString();
-            }
-          } catch (Exception e) {
-            LOGGER.debug("Could not compute relative path for {}: {}", file.getName(), e.getMessage());
-          }
-        }
-
-        // Use FileConversionManager for centralized conversion logic
-        // Output to conversions directory if available, otherwise fallback to source directory
-        File outputDir = conversionDir != null ? conversionDir : file.getParentFile();
-        // Pass baseDirectory for metadata storage and relativePath for directory preservation
-        boolean converted =
-            FileConversionManager.convertIfNeeded(file, outputDir, columnNameCasing, tableNameCasing,
-                operatingCacheDirectory, relativePath);
+        // The schema's one conversion: its watcher and refreshable tables re-run it, so a
+        // re-conversion writes what this one writes.
+        SourceFileConversion conversion = sourceFileConversion();
+        boolean converted = conversion.convertIfNeeded(file);
         if (converted) {
-          LOGGER.debug("Converted file: {} to directory: {}", file.getName(), outputDir.getAbsolutePath());
+          LOGGER.debug("Converted file: {} to directory: {}", file.getName(),
+              conversion.outputDirectoryOf(file).getAbsolutePath());
         }
         // Watch multi-table source files so changes are re-converted at the refresh interval.
         // watchFile() ignores file types it does not handle, so it is safe to call for every file.
         if (conversionWatchInterval != null) {
-          ConversionFileWatcher.getInstance().watchFile(name, file, conversionWatchInterval);
+          ConversionFileWatcher.getInstance().watchFile(name, file, conversionWatchInterval,
+              conversion);
         }
       } catch (Exception e) {
         LOGGER.warn("Failed to convert file {}: {}", file.getName(), e.getMessage());
@@ -1396,6 +1230,23 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   }
 
   /**
+   * The path the storage provider is listed from: the base directory, or the root when
+   * there is none. A relative local base directory is taken from the root; a URI and an
+   * absolute local path, which on Windows starts with a drive letter, are used as given.
+   */
+  private String storageBasePath() {
+    if (baseDirectory == null) {
+      return "/";
+    }
+    if (baseDirectory.startsWith("s3://") || baseDirectory.startsWith("gs://")
+        || baseDirectory.startsWith("azure://") || baseDirectory.startsWith("http")
+        || LocalPaths.isAbsolute(baseDirectory)) {
+      return baseDirectory;
+    }
+    return "/" + baseDirectory;
+  }
+
+  /**
    * Converts complex file types from storage provider to JSON.
    * Downloads convertible files (Excel, HTML, DOCX, etc.) to cache and converts them.
    */
@@ -1406,18 +1257,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Determine the base path for storage provider using baseDirectory (data directory)
     // not sourceDirectory (which may be the working directory)
-    String basePath = "/";
-    if (baseDirectory != null) {
-      basePath = baseDirectory;
-      // Handle cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
-    }
+    String basePath = storageBasePath();
 
     try {
       LOGGER.debug("Checking storage provider for convertible files at: {}", basePath);
@@ -1443,10 +1283,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
             // Calculate relative path to preserve directory structure
             String relativePath = entry.getName();
-            if (basePath != null && !basePath.equals("/") && relativePath.startsWith(basePath)) {
-              relativePath = relativePath.substring(basePath.length());
-              if (relativePath.startsWith("/")) {
-                relativePath = relativePath.substring(1);
+            if (!basePath.equals("/")) {
+              String underBase = LocalPaths.relativize(basePath, relativePath);
+              if (underBase != null) {
+                relativePath = underBase;
               }
             }
 
@@ -1458,7 +1298,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 columnNameCasing,
                 tableNameCasing,
                 operatingCacheDirectory,
-                relativePath);
+                relativePath,
+                pages);
 
             if (converted) {
               LOGGER.debug("Converted storage provider file: {}", entry.getName());
@@ -1487,9 +1328,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     // Create cached file path preserving directory structure
     String relativePath = entry.getName();
-    if (relativePath.contains("/")) {
+    String subPath = LocalPaths.parent(relativePath);
+    if (subPath != null) {
       // Create subdirectories if needed
-      String subPath = relativePath.substring(0, relativePath.lastIndexOf("/"));
       File subDir = new File(cacheDir, subPath);
       if (!subDir.exists()) {
         subDir.mkdirs();
@@ -1883,12 +1724,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           source = Sources.of(file);
         }
         Source sourceSansGz = source.trim(".gz");
-        Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+        Source sourceSansJson = trimExtension(sourceSansGz, ".json");
         if (sourceSansJson == null) {
-          sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+          sourceSansJson = trimExtension(sourceSansGz, ".yaml");
         }
         if (sourceSansJson == null) {
-          sourceSansJson = sourceSansGz.trimOrNull(".yml");
+          sourceSansJson = trimExtension(sourceSansGz, ".yml");
         }
         if (sourceSansJson != null) {
           LOGGER.debug("=== PROCESSING JSON FILE IN BULK CONVERSION ===");
@@ -2118,7 +1959,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             }
           }
         }
-        final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+        final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
         if (sourceSansCsv != null) {
           LOGGER.debug("Processing CSV file: {}", source.path());
           String baseName =
@@ -2139,7 +1980,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             registeredTableNames.add(tableName);
           }
         }
-        final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+        final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
         if (sourceSansTsv != null) {
           String baseName =
               applyCasing(
@@ -2159,7 +2000,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
         }
         final Source sourceSansParquet =
-            sourceSansGz.trimOrNull(".parquet");
+            trimExtension(sourceSansGz, ".parquet");
         if (sourceSansParquet != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansParquet.relative(baseSource).path()
@@ -2172,7 +2013,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           builder.put(tableName, table);
           recordTableMetadata(tableName, table, source, null);
         }
-        final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+        final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
         if (sourceSansArrow != null) {
           String tableName = applyCasing(WHITESPACE_PATTERN
               .matcher(sourceSansArrow.relative(baseSource).path()
@@ -2507,13 +2348,67 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         return null;
       }
       String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
-      warehousePath = baseDirectory + "/" + schemaSegment;
+      warehousePath = LocalPaths.normalize(baseDirectory + "/" + schemaSegment);
     }
     String icebergTableName = icebergConf != null ? (String) icebergConf.get("tableName") : null;
     if (icebergTableName == null) {
       icebergTableName = tableName;
     }
-    return warehousePath.endsWith("/") ? warehousePath + icebergTableName : warehousePath + "/" + icebergTableName;
+    return LocalPaths.join(warehousePath, icebergTableName);
+  }
+
+  /**
+   * True when {@code tableName} is declared as a SQL view ({@code type: view}) rather than a
+   * table. A view has no table behind it for {@link #getDeclaredTable} to resolve ({@code
+   * addTable} skips it); the execution engine registers it from its SQL.
+   */
+  public boolean isDeclaredSqlView(String tableName) {
+    Map<String, Object> tableDef = findDeclaredTableDef(tableName);
+    return tableDef != null && "view".equals(tableDef.get("type"));
+  }
+
+  /**
+   * The {@code fs.s3a.*} credential map every Iceberg table of this schema is loaded with, or null
+   * when the storage provider has no object-store credentials.
+   */
+  private @Nullable Map<String, String> icebergHadoopConfig() {
+    if (storageProvider == null) {
+      return null;
+    }
+    Map<String, String> s3Creds = storageProvider.getS3Config();
+    if (s3Creds == null || s3Creds.isEmpty()) {
+      return null;
+    }
+    Map<String, String> hadoopConfig = new HashMap<>();
+    if (s3Creds.containsKey("accessKeyId")) {
+      hadoopConfig.put("fs.s3a.access.key", s3Creds.get("accessKeyId"));
+    }
+    if (s3Creds.containsKey("secretAccessKey")) {
+      hadoopConfig.put("fs.s3a.secret.key", s3Creds.get("secretAccessKey"));
+    }
+    // Short-lived credentials must carry their session token into the Iceberg
+    // config, or every metadata read signs wrong and 403s.
+    if (s3Creds.containsKey("sessionToken")) {
+      hadoopConfig.put("fs.s3a.session.token", s3Creds.get("sessionToken"));
+    }
+    if (s3Creds.containsKey("endpoint")) {
+      hadoopConfig.put("fs.s3a.endpoint", s3Creds.get("endpoint"));
+      hadoopConfig.put("fs.s3a.path.style.access", "true");
+    }
+    return hadoopConfig;
+  }
+
+  /**
+   * One declared Iceberg table's entry in the published {@link IcebergSchemaCache}, found without
+   * resolving the table, or null when the table is not a declared Iceberg table or the cache has
+   * no trusted entry for it (the caller must then resolve the table).
+   */
+  public IcebergSchemaCache.@Nullable TableSchema declaredIcebergCacheEntry(String tableName) {
+    String path = declaredIcebergTablePath(tableName);
+    if (path == null) {
+      return null;
+    }
+    return IcebergSchemaCache.lookup(path, icebergHadoopConfig());
   }
 
   private @Nullable Map<String, Object> findDeclaredTableDef(String tableName) {
@@ -2678,7 +2573,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             .build();
     org.apache.calcite.adapter.file.etl.MaterializationWriter writer =
         org.apache.calcite.adapter.file.etl.MaterializationWriterFactory.create(
-            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath);
+            org.apache.calcite.adapter.file.etl.MaterializeConfig.Format.ICEBERG, sp, warehousePath,
+            operatingCacheDirectory);
     try {
       writer.initialize(cfg);
       writer.writeBatch(scanTableAsMaps(sourceTable), java.util.Collections.<String, String>emptyMap());
@@ -2770,13 +2666,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       Duration refreshDuration = RefreshInterval.parse(refreshInterval);
 
       // Get cache directory for glob results
-      File cacheDir = baseDirectory != null
-          ? new File(operatingCacheDirectory, ".glob_cache")
-          : new File(System.getProperty("java.io.tmpdir"), "calcite_glob_cache");
+      File cacheDir = new File(operatingCacheDirectory, ".glob_cache");
 
       // REQ-788: an opt-in column carrying each row's source file path.
       String sourceFileColumn = (String) tableDef.get("sourceFileColumn");
-      Table globTable = new GlobParquetTable(url, tableName, cacheDir, refreshDuration, csvTypeInferenceConfig, columnNameCasing, sourceFileColumn);
+      Table globTable = new GlobParquetTable(url, tableName, cacheDir, refreshDuration, csvTypeInferenceConfig, columnNameCasing, tableNameCasing, pages, sourceFileColumn);
       // Use explicit table name as-is, without casing transformation
       builder.put(tableName, globTable);
       return true;
@@ -3010,7 +2904,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
         RefreshableParquetCacheTable refreshableTable =
             new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir, refreshInterval, typeInferenceEnabled,
-            columnNameCasing, tableNameCasing, null, engineConfig.getEngineType(), parentSchema, name);
+            sourceFileConversion(), null, engineConfig.getEngineType(), parentSchema, name);
 
         String finalName = applyCasing(tableName, tableNameCasing);
 
@@ -3122,7 +3016,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
               parquetTable =
                   new RefreshableParquetCacheTable(source, parquetFile, cacheDir, effectiveInterval, typeInferenceEnabled,
-                  columnNameCasing, tableNameCasing, null, engineConfig.getEngineType(), parentSchema, name);
+                  sourceFileConversion(), null, engineConfig.getEngineType(), parentSchema, name);
             } else {
               // Use standard Parquet table for non-refresh cases
               parquetTable = new ParquetTranslatableTable(parquetFile, name);
@@ -3368,12 +3262,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 int effectiveIndex = (index != null) ? index : 0;
                 LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, effectiveIndex, tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs, pages);
               } else {
                 // Use regular conversion that processes all tables
                 LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
                 convertedFiles =
-                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, operatingCacheDirectory, null, tableName);
+                    org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, tableName, operatingCacheDirectory, null, pages);
               }
 
               if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3490,12 +3384,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Default extension-based detection
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+    Source sourceSansJson = trimExtension(sourceSansGz, ".json");
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yaml");
     }
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yml");
     }
     if (sourceSansJson != null) {
       String jsonAutoRefreshInterval = tableDef != null ? (String) tableDef.get("refreshInterval") : null;
@@ -3519,7 +3413,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           tableNameCasing), table);
       return true;
     }
-    final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+    final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
     if (sourceSansCsv != null) {
       // For PARQUET engine, CSV files should have been converted above - don't create fallback CSV tables
       if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
@@ -3531,14 +3425,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       builder.put(tableNameKey, table);
       return true;
     }
-    final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+    final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
     if (sourceSansTsv != null) {
       String tsvAutoRefreshInterval = tableDef != null ? (String) tableDef.get("refreshInterval") : null;
       final Table table = createEnhancedCsvTable(source, null, tableName, tsvAutoRefreshInterval);
       builder.put(getTableName(tableName, sourceSansTsv.path(), tableNameCasing), table);
       return true;
     }
-    final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+    final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
     if (sourceSansArrow != null) {
       try {
         final Table table = createArrowTable(new java.io.File(source.path()));
@@ -3551,7 +3445,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.warn("Warning: Failed to create Arrow table for {}: {}", source.path(), e.getMessage());
       }
     }
-    final Source sourceSansParquet = sourceSansGz.trimOrNull(".parquet");
+    final Source sourceSansParquet = trimExtension(sourceSansGz, ".parquet");
     if (sourceSansParquet != null) {
       try {
         // DuckDB engine will be handled same as PARQUET for initial setup
@@ -3567,9 +3461,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         LOGGER.warn("Warning: Failed to create Parquet table for {}: {}", source.path(), e.getMessage());
       }
     }
-    Source sourceSansXlsx = sourceSansGz.trimOrNull(".xlsx");
+    Source sourceSansXlsx = trimExtension(sourceSansGz, ".xlsx");
     if (sourceSansXlsx == null) {
-      sourceSansXlsx = sourceSansGz.trimOrNull(".xls");
+      sourceSansXlsx = trimExtension(sourceSansGz, ".xls");
     }
     if (sourceSansXlsx != null) {
       // Only throw error if this is from an explicit table definition
@@ -3583,9 +3477,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Check for HTML files
-    Source sourceSansHtml = sourceSansGz.trimOrNull(".html");
+    Source sourceSansHtml = trimExtension(sourceSansGz, ".html");
     if (sourceSansHtml == null) {
-      sourceSansHtml = sourceSansGz.trimOrNull(".htm");
+      sourceSansHtml = trimExtension(sourceSansGz, ".htm");
     }
     if (sourceSansHtml != null) {
       // For directory discovery mode, skip individual processing
@@ -3627,12 +3521,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               int effectiveIndex = (index != null) ? index : 0;
               LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, effectiveIndex, tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs, pages);
             } else {
               // Use regular conversion that processes all tables
               LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
               convertedFiles =
-                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, operatingCacheDirectory, null, tableName);
+                  org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, tableName, operatingCacheDirectory, null, pages);
             }
 
             if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3768,12 +3662,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             int effectiveIndex = (index != null) ? index : 0;
             LOGGER.info("Converting HTML with selector='{}' and index={} to create single table '{}'", selector, effectiveIndex, tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convertWithSelector(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, selector, effectiveIndex, tableName, operatingCacheDirectory, fieldConfigs, pages);
           } else {
             // Use regular conversion that processes all tables
             LOGGER.info("Converting HTML without selector/index - will process all tables and use first one for '{}'", tableName);
             convertedFiles =
-                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, operatingCacheDirectory, null, tableName);
+                org.apache.calcite.adapter.file.converters.HtmlToJsonConverter.convert(htmlFile, conversionsDir, columnNameCasing, tableNameCasing, tableName, operatingCacheDirectory, null, pages);
           }
 
           if (convertedFiles != null && !convertedFiles.isEmpty()) {
@@ -3907,12 +3801,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Default extension-based detection
-    Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+    Source sourceSansJson = trimExtension(sourceSansGz, ".json");
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yaml");
     }
     if (sourceSansJson == null) {
-      sourceSansJson = sourceSansGz.trimOrNull(".yml");
+      sourceSansJson = trimExtension(sourceSansGz, ".yml");
     }
     if (sourceSansJson != null) {
       // Use simple table for conversion to avoid Arrow issues
@@ -3925,13 +3819,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       return new JsonScannableTable(source, options, columnNameCasing);
     }
 
-    final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+    final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
     if (sourceSansCsv != null) {
       // Use simple table for conversion to avoid Arrow issues
       return new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
     }
 
-    final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+    final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
     if (sourceSansTsv != null) {
       // Use simple table for conversion to avoid Arrow issues
       return new CsvTranslatableTable(source, null, columnNameCasing, csvTypeInferenceConfig);
@@ -3971,7 +3865,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           boolean typeInferenceEnabled = csvTypeInferenceConfig != null && csvTypeInferenceConfig.isEnabled();
           // Use standard RefreshableParquetCacheTable for PARQUET engine
           return new RefreshableParquetCacheTable(source, parquetFile, cacheDir,
-              effectiveInterval, typeInferenceEnabled, columnNameCasing, tableNameCasing, protoRowType,
+              effectiveInterval, typeInferenceEnabled, sourceFileConversion(), protoRowType,
               engineConfig.getEngineType(), parentSchema, name);
         } catch (Exception e) {
           throw new RuntimeException("Failed to create refreshable Parquet table for " + source.path(), e);
@@ -4036,7 +3930,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
         // JSONPath extractions should use regular JSON tables that can be refreshed via re-extraction
         if (isJsonPathExtraction) {
-          return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory);
+          return new RefreshableJsonTable(source, tableName, effectiveInterval, sourceFileConversion());
         }
 
         try {
@@ -4074,7 +3968,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
           // Use RefreshableParquetCacheTable with original source if found
           return new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir,
-              effectiveInterval, false, columnNameCasing, tableNameCasing, null,
+              effectiveInterval, false, sourceFileConversion(), null,
               engineConfig.getEngineType(), parentSchema, name);
         } catch (Exception e) {
           throw new RuntimeException("Failed to create refreshable Parquet table for " + source.path(), e);
@@ -4115,7 +4009,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     case LINQ4J:
     default:
       if (effectiveInterval != null && tableName != null) {
-        return new RefreshableJsonTable(source, tableName, effectiveInterval, columnNameCasing, operatingCacheDirectory);
+        return new RefreshableJsonTable(source, tableName, effectiveInterval, sourceFileConversion());
       }
       return new JsonScannableTable(source, options, columnNameCasing);
     }
@@ -4484,7 +4378,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           String warehousePath = icebergConf != null ? (String) icebergConf.get("warehousePath") : null;
           if (warehousePath == null && baseDirectory != null) {
             String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
-            warehousePath = baseDirectory + "/" + schemaSegment;
+            warehousePath = LocalPaths.normalize(baseDirectory + "/" + schemaSegment);
           }
           if (warehousePath == null) {
             throw new RuntimeException("Cannot create IcebergTable for '" + config.getName()
@@ -4496,9 +4390,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             icebergTableName = config.getName();
           }
 
-          String tablePath = warehousePath.endsWith("/")
-              ? warehousePath + icebergTableName
-              : warehousePath + "/" + icebergTableName;
+          String tablePath = LocalPaths.join(warehousePath, icebergTableName);
 
           // A declared Iceberg table with no backing data yet (ETL hasn't materialized it) must
           // not be registered: IcebergTable loads lazily, so a phantom entry here would sail
@@ -4515,29 +4407,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           Map<String, Object> tableConfig = new HashMap<>();
-          if (storageProvider != null) {
-            Map<String, String> s3Creds = storageProvider.getS3Config();
-            if (s3Creds != null && !s3Creds.isEmpty()) {
-              Map<String, String> hadoopConfig = new HashMap<>();
-              if (s3Creds.containsKey("accessKeyId")) {
-                hadoopConfig.put("fs.s3a.access.key", s3Creds.get("accessKeyId"));
-              }
-              if (s3Creds.containsKey("secretAccessKey")) {
-                hadoopConfig.put("fs.s3a.secret.key", s3Creds.get("secretAccessKey"));
-              }
-              // Short-lived credentials must carry their session token into the Iceberg
-              // config, or every metadata read signs wrong and 403s.
-              if (s3Creds.containsKey("sessionToken")) {
-                hadoopConfig.put("fs.s3a.session.token", s3Creds.get("sessionToken"));
-              }
-              if (s3Creds.containsKey("endpoint")) {
-                hadoopConfig.put("fs.s3a.endpoint", s3Creds.get("endpoint"));
-                hadoopConfig.put("fs.s3a.path.style.access", "true");
-              }
-              tableConfig.put("hadoopConfig", hadoopConfig);
-            }
+          Map<String, String> hadoopConfig = icebergHadoopConfig();
+          if (hadoopConfig != null) {
+            tableConfig.put("hadoopConfig", hadoopConfig);
           }
 
+          if (config.getPartitions() != null
+              && config.getPartitions().getColumnDefinitions() != null) {
+            tableConfig.put(IcebergTable.DECLARED_PARTITION_COLUMNS,
+                config.getPartitions().getColumnDefinitions());
+          }
           Source icebergSource = Sources.of(tablePath);
           IcebergTable icebergTableObj = new IcebergTable(icebergSource, tableConfig);
           Map<String, Object> constraintConfig = getTableConstraints(config.getName());
@@ -4631,12 +4510,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               continue;
             }
 
-            // Ensure path separator
-            if (!basePath.endsWith("/")) {
-              basePath = basePath + "/";
-            }
-
-            String patternPath = basePath + config.getPattern();
+            String patternPath = LocalPaths.join(basePath, config.getPattern());
             partitionSource = Sources.of(patternPath);
             LOGGER.info("Recording metadata for lazy-initialized table '{}' using pattern: {}",
                 config.getName(), patternPath);
@@ -4714,7 +4588,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // so existence checking always goes through the StorageProvider abstraction.
     StorageProvider provider =
         storageProvider != null ? storageProvider : StorageProviderFactory.createFromUrl(tablePath);
-    String versionHintPath = tablePath + "/metadata/version-hint.text";
+    String versionHintPath = LocalPaths.join(tablePath, "metadata/version-hint.text");
     if (!provider.exists(versionHintPath)) {
       return false;
     }
@@ -4736,12 +4610,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           + "treating table as not materialized", versionHintPath, versionText);
       return false;
     }
-    String metadataJsonPath = tablePath + "/metadata/v" + version + ".metadata.json";
+    String metadataJsonPath =
+        LocalPaths.join(tablePath, "metadata/v" + version + ".metadata.json");
     if (provider.exists(metadataJsonPath)) {
       return true;
     }
     // Iceberg also accepts a gzip-compressed metadata file under the same version number.
-    return provider.exists(tablePath + "/metadata/v" + version + ".gz.metadata.json");
+    return provider.exists(
+        LocalPaths.join(tablePath, "metadata/v" + version + ".gz.metadata.json"));
   }
 
   /**
@@ -4788,7 +4664,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // This is the default convention used by the ETL pipeline
     if (warehousePath == null && baseDirectory != null) {
       String schemaSegment = canonicalSchemaName != null ? canonicalSchemaName : name;
-      warehousePath = baseDirectory + "/" + schemaSegment;
+      warehousePath = LocalPaths.normalize(baseDirectory + "/" + schemaSegment);
       LOGGER.debug("Using default warehouse path for table '{}': {}", tableName, warehousePath);
     }
     if (warehousePath == null) {
@@ -4802,11 +4678,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     try {
       // Build the full table location path using original s3:// format for consistency
-      String tableLocation = warehousePath;
-      if (!tableLocation.endsWith("/")) {
-        tableLocation = tableLocation + "/";
-      }
-      tableLocation = tableLocation + icebergTableName;
+      String tableLocation = LocalPaths.join(warehousePath, icebergTableName);
 
       // Check the Iceberg table exists via its metadata pointer using the StorageProvider
       // (AWS SDK v2 for S3, or local FS) rather than a HadoopCatalog — this keeps the
@@ -4922,6 +4794,11 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
   }
 
+  /** Whether a provider's paths are paths of this machine's file system, not keys or URLs. */
+  private static boolean isLocal(StorageProvider storageProvider) {
+    return "local".equals(storageProvider.getStorageType());
+  }
+
   private void collectFilesAtDepth(StorageProvider storageProvider, String path, int depth,
       String[] patternParts, List<StorageProvider.FileEntry> result) {
     try {
@@ -4934,12 +4811,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // "type=x/frequency=*/...") so it never crawls sibling directories — critical when
         // baseDirectory is a shared bucket root holding every schema's prefixes side by side.
         int segmentIndex = patternParts.length - 1 - depth;
-        PathMatcher segmentMatcher =
-            FileSystems.getDefault().getPathMatcher("glob:" + patternParts[segmentIndex]);
+        GlobMatcher segmentMatcher =
+            GlobMatcher.of(patternParts[segmentIndex], isLocal(storageProvider));
         for (StorageProvider.FileEntry entry : entries) {
-          // Paths.get here only builds an in-memory Path for glob PathMatcher.matches();
-          // no filesystem access — same idiom as the pattern filter below.
-          if (entry.isDirectory() && segmentMatcher.matches(Paths.get(entry.getName()))) {
+          if (entry.isDirectory() && segmentMatcher.matches(entry.getName())) {
             collectFilesAtDepth(storageProvider, entry.getPath(), depth - 1, patternParts, result);
           }
         }
@@ -4975,21 +4850,25 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // Fallback to local file system when no storage provider is configured
     if (storageProvider == null) {
       LOGGER.debug("findMatchingFiles: using local file system fallback for pattern={}", pattern);
+      if (LocalPaths.isUri(searchPath)) {
+        // Not a directory of the local file system, and not a path Windows accepts
+        return result;
+      }
       try {
         java.nio.file.Path basePath = java.nio.file.Paths.get(searchPath);
         if (!java.nio.file.Files.exists(basePath)) {
           return result;
         }
-        PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
-        PathMatcher rootMatcher = null;
+        GlobMatcher matcher = GlobMatcher.forLocalPaths(pattern);
+        GlobMatcher rootMatcher = null;
         if (pattern.startsWith("**/")) {
-          rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern.substring(3));
+          rootMatcher = GlobMatcher.forLocalPaths(pattern.substring(3));
         }
-        final PathMatcher finalRootMatcher = rootMatcher;
+        final GlobMatcher finalRootMatcher = rootMatcher;
         try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(basePath)) {
           walk.filter(java.nio.file.Files::isRegularFile)
               .forEach(p -> {
-                java.nio.file.Path relativePath = basePath.relativize(p);
+                String relativePath = basePath.relativize(p).toString();
                 if (matcher.matches(relativePath)
                     || (finalRootMatcher != null && finalRootMatcher.matches(relativePath))) {
                   result.add(p.toString());
@@ -5038,13 +4917,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       }
 
       // Create glob matcher for the pattern
-      PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
+      // The files may be keys of an object store, which are not paths of this file system
+      boolean local = isLocal(storageProvider);
+      GlobMatcher matcher = GlobMatcher.of(pattern, local);
 
       // Special handling for patterns starting with "**/": also match root files
-      PathMatcher rootMatcher = null;
+      GlobMatcher rootMatcher = null;
       if (pattern.startsWith("**/")) {
         String rootPattern = pattern.substring(3); // Get pattern after "**/"
-        rootMatcher = FileSystems.getDefault().getPathMatcher("glob:" + rootPattern);
+        rootMatcher = GlobMatcher.of(rootPattern, local);
       }
 
       // Filter files by pattern
@@ -5058,24 +4939,16 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         String relativePath;
 
         // Extract relative path by removing the base directory prefix
-        if (fullPath.startsWith(searchPath)) {
-          relativePath = fullPath.substring(searchPath.length());
-          // Remove leading slash if present
-          while (relativePath.startsWith("/")) {
-            relativePath = relativePath.substring(1);
-          }
-        } else {
+        relativePath = LocalPaths.relativize(searchPath, fullPath);
+        if (relativePath == null) {
           relativePath = entry.getName();
         }
-
-        // Convert to Path for glob matching
-        Path relPath = Paths.get(relativePath);
 
         // Pattern matching happens here, but no need to log every file check
 
         // Match against main pattern OR root pattern (if applicable)
-        if (matcher.matches(relPath) ||
-            (rootMatcher != null && rootMatcher.matches(relPath))) {
+        if (matcher.matches(relativePath) ||
+            (rootMatcher != null && rootMatcher.matches(relativePath))) {
           result.add(fullPath);
           LOGGER.debug("findMatchingFiles: MATCHED file: {}, relativePath: {}", fullPath, relativePath);
         }
@@ -5267,18 +5140,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Determine the base path to start from
-    String basePath = "/";
-    if (baseDirectory != null) {
-      basePath = baseDirectory;
-      // Don't normalize S3 or other cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
-    }
+    String basePath = storageBasePath();
 
     List<File> files = new ArrayList<>();
 
@@ -5342,9 +5204,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         // Skip hidden directories (e.g., .aperio, .DS_Store directories)
         // Converted files from .aperio/conversions/ are handled separately
         String dirName = entry.getName();
-        if (dirName.contains("/")) {
-          dirName = dirName.substring(dirName.lastIndexOf('/') + 1);
-        }
+        dirName = LocalPaths.fileName(dirName);
         if (dirName.startsWith(".")) {
           LOGGER.debug("Skipping hidden directory: {}", entry.getPath());
           continue;
@@ -5359,9 +5219,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       } else if (!entry.isDirectory()) {
         // Skip hidden files
         String fileName = entry.getName();
-        if (fileName.contains("/")) {
-          fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
-        }
+        fileName = LocalPaths.fileName(fileName);
         if (fileName.startsWith(".")) {
           continue;
         }
@@ -5450,18 +5308,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     }
 
     // Determine the base path to start from
-    String basePath = "/";
-    if (baseDirectory != null) {
-      basePath = baseDirectory;
-      // Don't normalize S3 or other cloud storage URIs
-      if (!basePath.startsWith("s3://") && !basePath.startsWith("gs://")
-          && !basePath.startsWith("azure://") && !basePath.startsWith("http")) {
-        // Only normalize local paths
-        if (!basePath.startsWith("/")) {
-          basePath = "/" + basePath;
-        }
-      }
-    }
+    String basePath = storageBasePath();
 
     try {
       LOGGER.debug("[processStorageProviderFiles] Processing files from storage provider at: {}, recursive={}", basePath, recursive);
@@ -5486,13 +5333,14 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       });
 
       // Create a glob matcher if a directory pattern is configured
-      final java.nio.file.PathMatcher globMatcher;
-      final java.nio.file.PathMatcher rootGlobMatcher;
+      final GlobMatcher globMatcher;
+      final GlobMatcher rootGlobMatcher;
       if (directoryPattern != null && !directoryPattern.isEmpty()) {
-        globMatcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + directoryPattern);
+        boolean local = isLocal(storageProvider);
+        globMatcher = GlobMatcher.of(directoryPattern, local);
         // Also match root-level files when pattern starts with **/
         if (directoryPattern.startsWith("**/")) {
-          rootGlobMatcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:" + directoryPattern.substring(3));
+          rootGlobMatcher = GlobMatcher.of(directoryPattern.substring(3), local);
         } else {
           rootGlobMatcher = null;
         }
@@ -5552,15 +5400,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           if (globMatcher != null) {
             // Compute relative path from base for glob matching
             String entryPath = entry.getPath();
-            String relativePath = entryPath;
-            if (entryPath.startsWith(basePath)) {
-              relativePath = entryPath.substring(basePath.length());
-              if (relativePath.startsWith("/") || relativePath.startsWith(File.separator)) {
-                relativePath = relativePath.substring(1);
-              }
+            String relativePath = LocalPaths.relativize(basePath, entryPath);
+            if (relativePath == null) {
+              relativePath = entryPath;
             }
-            if (!globMatcher.matches(java.nio.file.Paths.get(relativePath))
-                && (rootGlobMatcher == null || !rootGlobMatcher.matches(java.nio.file.Paths.get(relativePath)))) {
+            if (!globMatcher.matches(relativePath)
+                && (rootGlobMatcher == null || !rootGlobMatcher.matches(relativePath))) {
               LOGGER.debug("Skipping file {} - does not match glob pattern '{}'", entry.getName(), directoryPattern);
               continue;
             }
@@ -5570,12 +5415,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           Source sourceSansGz = source.trim(".gz");
 
           // Check for JSON/YAML files
-          Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+          Source sourceSansJson = trimExtension(sourceSansGz, ".json");
           if (sourceSansJson == null) {
-            sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+            sourceSansJson = trimExtension(sourceSansGz, ".yaml");
           }
           if (sourceSansJson == null) {
-            sourceSansJson = sourceSansGz.trimOrNull(".yml");
+            sourceSansJson = trimExtension(sourceSansGz, ".yml");
           }
           if (sourceSansJson != null) {
             String baseName =
@@ -5615,7 +5460,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for CSV files
-          final Source sourceSansCsv = sourceSansGz.trimOrNull(".csv");
+          final Source sourceSansCsv = trimExtension(sourceSansGz, ".csv");
           if (sourceSansCsv != null) {
             String baseName =
                 applyCasing(
@@ -5637,7 +5482,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for TSV files
-          final Source sourceSansTsv = sourceSansGz.trimOrNull(".tsv");
+          final Source sourceSansTsv = trimExtension(sourceSansGz, ".tsv");
           if (sourceSansTsv != null) {
             String baseName =
                 applyCasing(
@@ -5659,7 +5504,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for Parquet files
-          final Source sourceSansParquet = sourceSansGz.trimOrNull(".parquet");
+          final Source sourceSansParquet = trimExtension(sourceSansGz, ".parquet");
           if (sourceSansParquet != null) {
             String tableName =
                 applyCasing(
@@ -5706,7 +5551,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Check for Arrow files
-          final Source sourceSansArrow = sourceSansGz.trimOrNull(".arrow");
+          final Source sourceSansArrow = trimExtension(sourceSansGz, ".arrow");
           if (sourceSansArrow != null) {
             String tableName =
                 applyCasing(
@@ -5800,12 +5645,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         source = Sources.of(file);
       }
       Source sourceSansGz = source.trim(".gz");
-      Source sourceSansJson = sourceSansGz.trimOrNull(".json");
+      Source sourceSansJson = trimExtension(sourceSansGz, ".json");
       if (sourceSansJson == null) {
-        sourceSansJson = sourceSansGz.trimOrNull(".yaml");
+        sourceSansJson = trimExtension(sourceSansGz, ".yaml");
       }
       if (sourceSansJson == null) {
-        sourceSansJson = sourceSansGz.trimOrNull(".yml");
+        sourceSansJson = trimExtension(sourceSansGz, ".yml");
       }
       if (sourceSansJson != null) {
         // Use just the filename as the table name (already includes casing from conversion)
@@ -6494,10 +6339,10 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     this.constraintMetadata = constraintMetadata;
     LOGGER.info("FileSchema.setConstraintMetadata: Received constraint metadata for {} tables", constraintMetadata.size());
     for (String tableName : constraintMetadata.keySet()) {
-      LOGGER.info("  - Constraint config for table: '{}'", tableName);
+      LOGGER.debug("  - Constraint config for table: '{}'", tableName);
       Map<String, Object> config = constraintMetadata.get(tableName);
       if (config != null) {
-        LOGGER.info("    Keys in config: {}", config.keySet());
+        LOGGER.debug("    Keys in config: {}", config.keySet());
       }
     }
 
@@ -6823,5 +6668,33 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     LOGGER.debug("Target schema '{}' not yet registered when validating FK to table '{}' — "
         + "keeping FK (cannot confirm absence)", schemaName, tableName);
     return true;
+  }
+
+  /**
+   * {@code source} without the file extension {@code extension} (lower case, with its dot),
+   * matched regardless of case: FILE-061 documents {@code PRODUCTS.JSON} as a table named
+   * {@code products} (C-28). Null when the source has another extension.
+   */
+  static @Nullable Source trimExtension(Source source, String extension) {
+    Source trimmed = source.trimOrNull(extension);
+    if (trimmed != null) {
+      return trimmed;
+    }
+    String path = source.path();
+    int start = path.length() - extension.length();
+    if (start < 0 || !path.regionMatches(true, start, extension, 0, extension.length())) {
+      return null;
+    }
+    return source.trimOrNull(path.substring(start));
+  }
+
+  /**
+   * How this schema converts its source files: into {@code conversions/} of its cache directory
+   * when it has a data directory, else beside each file, with its casing and page options.
+   */
+  private SourceFileConversion sourceFileConversion() {
+    File conversionDir = baseDirectory != null ? new File(operatingCacheDirectory, "conversions") : null;
+    return new SourceFileConversion(baseDirectory, conversionDir, operatingCacheDirectory,
+        columnNameCasing, tableNameCasing, pages);
   }
 }

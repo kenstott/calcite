@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Direct comparison of query performance with and without optimizations.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("performance")
 public class BeforeAfterComparisonTest {
 
@@ -66,23 +68,23 @@ public class BeforeAfterComparisonTest {
     // Test queries
     String[] queries = {
         // Query 1: Filter that can be eliminated with statistics
-        "SELECT COUNT(*) FROM FILES.\"comparison_test\" WHERE \"amount\" > 2000",
+        "SELECT COUNT(*) FROM \"FILES\".\"comparison_test\" WHERE \"amount\" > 2000",
 
         // Query 2: COUNT(DISTINCT)
-        "SELECT COUNT(DISTINCT \"customer_id\") FROM FILES.\"comparison_test\"",
+        "SELECT COUNT(DISTINCT \"customer_id\") FROM \"FILES\".\"comparison_test\"",
 
         // Query 3: Complex aggregation with filter
         "SELECT \"region\", COUNT(*), AVG(\"amount\") " +
-        "FROM FILES.\"comparison_test\" " +
+        "FROM \"FILES\".\"comparison_test\" " +
         "WHERE \"amount\" > 500 " +
         "GROUP BY \"region\"",
 
         // Query 4: Multiple COUNT(DISTINCT)
         "SELECT COUNT(DISTINCT \"customer_id\"), COUNT(DISTINCT \"product_id\") " +
-        "FROM FILES.\"comparison_test\"",
+        "FROM \"FILES\".\"comparison_test\"",
 
         // Query 5: Filter with partial match
-        "SELECT COUNT(*) FROM FILES.\"comparison_test\" " +
+        "SELECT COUNT(*) FROM \"FILES\".\"comparison_test\" " +
         "WHERE \"amount\" BETWEEN 400 AND 600"
     };
 
@@ -154,8 +156,9 @@ public class BeforeAfterComparisonTest {
     }
 
     // Verify statistics are being used
+    // StatisticsBuilder keeps a cache directory's statistics in its .stats subdirectory
     File cacheDir = tempDir.resolve("opt_cache").toFile();
-    File statsFile = new File(cacheDir, "comparison_test.aperio_stats");
+    File statsFile = new File(new File(cacheDir, ".stats"), "comparison_test.aperio_stats");
     assertTrue(statsFile.exists(),
         "Statistics file should have been created at: "
             + statsFile.getAbsolutePath());
@@ -194,6 +197,7 @@ public class BeforeAfterComparisonTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
 
@@ -226,6 +230,7 @@ public class BeforeAfterComparisonTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
 

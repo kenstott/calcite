@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -531,7 +532,7 @@ public class EtlPipelineDeepCoverageTest4 {
   @Test void testVerifyDataExists_icebergWarehousePathUsed() throws Exception {
     StorageProvider sp = mockStorage();
     // First call for warehouse path - true; second for fallback - false
-    when(sp.isDirectory(eq("/wh/tbl/data"))).thenReturn(true);
+    when(sp.isDirectory(eq(LocalPaths.normalize("/wh/tbl/data")))).thenReturn(true);
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
@@ -550,8 +551,8 @@ public class EtlPipelineDeepCoverageTest4 {
 
   @Test void testVerifyDataExists_icebergWarehouseFallbackToBase() throws Exception {
     StorageProvider sp = mockStorage();
-    when(sp.isDirectory(eq("/wh/tbl/data"))).thenReturn(false); // warehouse miss — fallback to base
-    when(sp.isDirectory(eq("/base/tbl/data"))).thenReturn(true);
+    when(sp.isDirectory(eq(LocalPaths.normalize("/wh/tbl/data")))).thenReturn(false); // warehouse miss — fallback to base
+    when(sp.isDirectory(eq(LocalPaths.normalize("/base/tbl/data")))).thenReturn(true);
     MaterializeConfig mc = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
@@ -646,7 +647,8 @@ public class EtlPipelineDeepCoverageTest4 {
     Object result =
         invokePrivate(pipeline, "determineErrorAction", new Class[]{Throwable.class, EtlPipelineConfig.ErrorHandlingConfig.class},
         new IOException("Connection reset"), eh);
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, result);
+    // apiErrorAction=SKIP answers an HTTP status; a throw without one is a failed batch
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, result);
   }
 
   @Test void testDetermineErrorAction_nullMessageUsesApiAction() throws Exception {
@@ -887,15 +889,6 @@ public class EtlPipelineDeepCoverageTest4 {
         new EtlPipeline(config, sp, tempDir.toString(), null, null);
     IncrementalTracker actual = getField(pipeline, "incrementalTracker");
     assertEquals(IncrementalTracker.NOOP, actual);
-  }
-
-  @Test void testConstructor_operatingDirectory() throws Exception {
-    StorageProvider sp = mockStorage();
-    EtlPipelineConfig config = createHttpConfig("tbl", singleRangeDimension("y", 2020, 2020));
-    EtlPipeline pipeline =
-        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op/dir");
-    String opDir = getField(pipeline, "operatingDirectory");
-    assertEquals("/op/dir", opDir);
   }
 
   @Test void testConstructor_baseDirectoryStored() throws Exception {
@@ -1468,8 +1461,9 @@ public class EtlPipelineDeepCoverageTest4 {
     EtlPipeline pipeline =
         new EtlPipeline(config, sp, tempDir.toString(), null, tracker, prov, null);
     EtlResult result = pipeline.execute();
-    // Should not abort because consecutive failures reset on success
-    assertFalse(result.isFailed());
+    // Should not abort because consecutive failures reset on success; the failed batches still
+    // make the table partially failed
+    assertTrue(result.isPartiallyFailed());
     assertTrue(result.getSuccessfulBatches() >= 2);
   }
 
@@ -2223,5 +2217,70 @@ public class EtlPipelineDeepCoverageTest4 {
     IncrementalTracker.NOOP.markTableComplete("a", "sig");
     IncrementalTracker.NOOP.markTableCompleteWithConfig("a", "h", "s", 100);
     IncrementalTracker.NOOP.invalidateTableCompletion("a");
+  }
+
+  // -----------------------------------------------------------------------
+  // Iceberg commit locks survive the pipeline's catalog use
+  // -----------------------------------------------------------------------
+
+  /**
+   * Iceberg's in-memory lock manager keeps the commit locks of every Hadoop catalog in the
+   * JVM in one shared map, and closing any Hadoop catalog clears it. The pipeline's metadata
+   * reads and its property commit run while other tables are being committed, so they must
+   * leave a lock held by another commit in place.
+   */
+  @Test void testIcebergMetadataAccessKeepsAnotherCommitsLock() throws Exception {
+    Path warehouse = tempDir.resolve("lock_warehouse");
+    Files.createDirectories(warehouse);
+    org.apache.iceberg.Schema schema =
+        new org.apache.iceberg.Schema(
+            org.apache.iceberg.types.Types.NestedField.optional(1, "id",
+                org.apache.iceberg.types.Types.StringType.get()));
+    new org.apache.iceberg.hadoop.HadoopCatalog(
+        new org.apache.hadoop.conf.Configuration(), warehouse.toString())
+        .createTable(org.apache.iceberg.catalog.TableIdentifier.of("tbl"), schema);
+    String tableLocation = warehouse.toString() + "/tbl";
+
+    StorageProvider sp = mockStorage();
+    EtlPipelineConfig config = createHttpConfig("tbl", singleRangeDimension("y", 2020, 2020));
+    EtlPipeline pipeline = new EtlPipeline(config, sp, warehouse.toString());
+    List<ColumnConfig> cols =
+        Collections.singletonList(ColumnConfig.builder().name("id").type("VARCHAR").build());
+
+    // A commit on some other table, between taking its lock and releasing it
+    org.apache.iceberg.LockManager otherCommit =
+        org.apache.iceberg.util.LockManagers.defaultLockManager();
+    String entity = tempDir.resolve("other_table/metadata/v2.metadata.json").toString();
+    String owner = tempDir.resolve("other_table/metadata/tmp.metadata.json").toString();
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "readRowCountFromIceberg", new Class[]{String.class}, tableLocation);
+    assertTrue(otherCommit.release(entity, owner),
+        "readRowCountFromIceberg(String) left the other commit's lock in place");
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "readRowCountFromIceberg",
+        new Class[]{String.class, List.class}, tableLocation, cols);
+    assertTrue(otherCommit.release(entity, owner),
+        "readRowCountFromIceberg(String, List) left the other commit's lock in place");
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "readEtlPropertiesFromIceberg",
+        new Class[]{String.class}, tableLocation);
+    assertTrue(otherCommit.release(entity, owner),
+        "readEtlPropertiesFromIceberg left the other commit's lock in place");
+
+    assertTrue(otherCommit.acquire(entity, owner), "lock taken");
+    invokePrivate(pipeline, "storeEtlPropertiesToIceberg",
+        new Class[]{String.class, String.class, String.class, long.class},
+        tableLocation, "hash", "sig", 5L);
+    assertTrue(otherCommit.release(entity, owner),
+        "storeEtlPropertiesToIceberg left the other commit's lock in place");
+
+    // The property commit itself went through
+    org.apache.iceberg.Table table =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(tableLocation);
+    assertEquals("hash", table.properties().get("etl.config-hash"));
   }
 }

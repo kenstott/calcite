@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.io.TempDir;
+import java.io.File;
 
 /**
  * Hermetic requirement-recording tests for the HTML crawler discovery (FILE-018)
@@ -65,6 +67,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class HtmlCrawlerHttpPostRequirementsTest {
+
+  /** Where the crawler stages its downloads: a directory the test owns (REQ-1992). */
+  @TempDir File crawlerWorkDir;
 
   private HttpServer server;
   private int port;
@@ -237,7 +242,7 @@ public class HtmlCrawlerHttpPostRequirementsTest {
     // maxDepth = 0 -> only the start page is visited.
     CrawlerConfiguration depth0 = baseCrawlConfig();
     depth0.setMaxDepth(0);
-    HtmlCrawler crawler0 = new HtmlCrawler(depth0);
+    HtmlCrawler crawler0 = new HtmlCrawler(depth0, crawlerWorkDir);
     try {
       Set<String> visited0 = crawler0.crawl(start).getVisitedUrls();
       Set<String> expected0 = new HashSet<>();
@@ -250,7 +255,7 @@ public class HtmlCrawlerHttpPostRequirementsTest {
     // maxDepth = 1 -> start page plus its direct internal HTML links (B, C).
     CrawlerConfiguration depth1 = baseCrawlConfig();
     depth1.setMaxDepth(1);
-    HtmlCrawler crawler1 = new HtmlCrawler(depth1);
+    HtmlCrawler crawler1 = new HtmlCrawler(depth1, crawlerWorkDir);
     try {
       Set<String> visited1 = crawler1.crawl(start).getVisitedUrls();
       Set<String> expected1 = new HashSet<>();
@@ -265,7 +270,7 @@ public class HtmlCrawlerHttpPostRequirementsTest {
     // maxDepth = 2 -> adds D (reached via B).
     CrawlerConfiguration depth2 = baseCrawlConfig();
     depth2.setMaxDepth(2);
-    HtmlCrawler crawler2 = new HtmlCrawler(depth2);
+    HtmlCrawler crawler2 = new HtmlCrawler(depth2, crawlerWorkDir);
     try {
       Set<String> visited2 = crawler2.crawl(start).getVisitedUrls();
       Set<String> expected2 = new HashSet<>();
@@ -290,7 +295,7 @@ public class HtmlCrawlerHttpPostRequirementsTest {
     config.setMaxDepth(3);
     config.setFollowExternalLinks(false);
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     try {
       Set<String> visited = crawler.crawl(start).getVisitedUrls();
 
@@ -326,7 +331,7 @@ public class HtmlCrawlerHttpPostRequirementsTest {
     config.setMaxDepth(0); // single page A is enough; both data links live on A
     config.setLinkPattern(java.util.regex.Pattern.compile(".*\\.csv$"));
 
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, crawlerWorkDir);
     try {
       HtmlCrawler.CrawlResult result = crawler.crawl(start);
       Map<String, java.io.File> dataFiles = result.getDataFiles();

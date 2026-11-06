@@ -10,7 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import org.apache.avro.Schema;
@@ -490,7 +492,7 @@ public class StooqDownloader {
         BufferedReader reader = null;
         try {
           reader =
-              new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+              new BufferedReader(new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8));
 
           // Check Content-Length for small responses that need body inspection
           String contentLength = conn.getHeaderField("Content-Length");
@@ -724,6 +726,7 @@ public class StooqDownloader {
       conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
     }
 
+    NetworkOutageWait.connect(conn);
     return conn;
   }
 

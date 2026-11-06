@@ -127,16 +127,16 @@ import static org.junit.jupiter.api.Assertions.*;
     assertEquals("/absolute/path.txt",
         provider.resolvePath("/base/dir", "/absolute/path.txt"));
 
-    // Test relative path
-    assertEquals("/base/dir/relative.txt",
+    // Test relative path; a local path comes back in the platform's own form
+    assertEquals(new File("/base/dir/relative.txt").getPath(),
         provider.resolvePath("/base/dir", "relative.txt"));
 
     // Test relative with subdirectory
-    assertEquals("/base/dir/sub/file.txt",
+    assertEquals(new File("/base/dir/sub/file.txt").getPath(),
         provider.resolvePath("/base/dir", "sub/file.txt"));
 
     // Test base is file (current implementation doesn't check if it's a file)
-    assertEquals("/base/file.txt/relative.txt",
+    assertEquals(new File("/base/file.txt/relative.txt").getPath(),
         provider.resolvePath("/base/file.txt", "relative.txt"));
   }
 

@@ -7,6 +7,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "directory": "sftp://demo:password@test.rebex.net/",
         "recursive": false,
         "ephemeralCache": true

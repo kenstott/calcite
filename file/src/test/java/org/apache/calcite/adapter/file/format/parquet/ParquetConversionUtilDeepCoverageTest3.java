@@ -1415,7 +1415,7 @@ public class ParquetConversionUtilDeepCoverageTest3 {
 
     StorageProviderFile result =
         ParquetConversionUtil.convertToParquet(Sources.of(sourceFile), "spf_data", table,
-        cacheDirFile, null, "test", "UNCHANGED", localProvider);
+        cacheDirFile, null, "test", "UNCHANGED", localProvider, cacheDir);
 
     assertNotNull(result);
     assertTrue(result.exists());

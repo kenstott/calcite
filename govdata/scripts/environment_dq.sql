@@ -600,5 +600,49 @@ FROM (
     ON aq.county_fips = re.county_fips AND aq.year = re.year AND re.geography = 'county'
 );
 
+-- ------------------------------------------------------------
+-- TABLE: ocean_sst_monthly (partition cols: type, year, month)
+-- 11 US LMEs x months; a DQ window of one year yields <= 132 rows.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T2_row_count',
+  CASE WHEN n >= 11 THEN 'pass' ELSE 'fail' END, n, 11, 'Expected >=11 rows (one published month x 11 LMEs)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'month')));
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'month')));
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows (lme_number, year, month)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true) WHERE lme_number IS NULL OR year IS NULL OR month IS NULL);
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'mean_sst_c outside [-2,35], |anomaly| > 10, or cell_count <= 0'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true)
+  WHERE mean_sst_c < -2 OR mean_sst_c > 35 OR ABS(mean_sst_anomaly_c) > 10 OR cell_count <= 0);
+INSERT INTO dq_results
+SELECT 'environment', 'ocean_sst_monthly', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (lme_number, year, month) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT lme_number, year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/environment/ocean_sst_monthly', allow_moved_paths := true)
+  GROUP BY lme_number, year, month HAVING COUNT(*) > 1));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results ORDER BY schema, tbl, test;

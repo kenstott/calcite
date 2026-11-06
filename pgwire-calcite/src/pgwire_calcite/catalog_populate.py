@@ -474,6 +474,35 @@ def deserialize_catalog(d: dict):
 
 _CACHE_FORMAT_VERSION = 1
 
+#: Prefix of the one-line start-up progress markers this server logs, which the AskAmerica
+#: engine tail-parses to tell a caller what a start is doing (``STAGE <name> [key=value ...]``).
+STAGE_MARKER = "STAGE"
+
+
+#: Directory for files this server writes while it runs. Settable per server process, so
+#: several servers on one host (one per organisation, say) keep separate state, and so an
+#: install tree can be read-only (a Nix store path, a root-owned directory).
+STATE_DIR_ENV = "PGWIRE_CALCITE_STATE_DIR"
+
+
+def _cache_file_name(model_path: str) -> str:
+    with open(model_path, "rb") as f:
+        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+    return f"catalog-cache-{model_hash}.pkl"
+
+
+def catalog_cache_write_path(model_path: str) -> str:
+    """Where a catalog cache built by this server is written, and looked for first.
+
+    ``PGWIRE_CALCITE_STATE_DIR`` when it is set; the model's own directory when it is not
+    (a checkout or a hand-made install, where that directory is the operator's to write).
+    A bundle's launcher always sets the variable, so a bundle never writes beside its model.
+    """
+    state_dir = os.environ.get(STATE_DIR_ENV)
+    if not state_dir:
+        return catalog_cache_path(model_path)
+    return os.path.join(os.path.abspath(state_dir), _cache_file_name(model_path))
+
 
 def catalog_cache_path(model_path: str) -> str:
     """Deterministic cache filename next to ``model_path``, keyed by its content hash.
@@ -485,11 +514,9 @@ def catalog_cache_path(model_path: str) -> str:
     computation independently lands on the identical name, so the bundled release
     tarball needs no extra wiring at either build or install time.
     """
-    with open(model_path, "rb") as f:
-        model_hash = hashlib.sha256(f.read()).hexdigest()[:16]
     return os.path.join(
         os.path.dirname(os.path.abspath(model_path)),
-        f"catalog-cache-{model_hash}.pkl",
+        _cache_file_name(model_path),
     )
 
 
@@ -504,16 +531,24 @@ def build_and_cache_context(conn, model_path: str):
     served as the whole catalog on every later launch. A partial result is still
     returned for this launch, and the next launch walks live again."""
     ctx, column_types, gaps = build_context_reporting_gaps(conn)
-    cache_path = catalog_cache_path(model_path)
+    cache_path = catalog_cache_write_path(model_path)
     if gaps:
         log.error(
             "Catalog walk was incomplete (%d gap(s): %s) -- NOT writing %s; the next "
             "launch will walk live again", len(gaps), ", ".join(gaps), cache_path)
         return ctx, column_types
     tmp_path = cache_path + ".tmp"
-    with open(tmp_path, "wb") as f:
-        pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f, protocol=pickle.HIGHEST_PROTOCOL)
-    os.replace(tmp_path, cache_path)
+    try:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(tmp_path, "wb") as f:
+            pickle.dump((_CACHE_FORMAT_VERSION, ctx, column_types), f,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp_path, cache_path)
+    except PermissionError as exc:
+        # The catalog is served either way; without the file, every start walks it live
+        log.warning("Catalog cache not written: %s is not writable (%s); every start walks "
+                    "the catalog live until it is", os.path.dirname(cache_path), exc.strerror)
+        return ctx, column_types
     log.info("Wrote catalog cache to %s (%d tables)", cache_path, len(ctx.tables))
     return ctx, column_types
 
@@ -531,8 +566,16 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
     if model_path is None:
         populate_state(conn, state, role_id=role_id)
         return
-    cache_path = catalog_cache_path(model_path)
-    if os.path.isfile(cache_path):
+    # A cache this server wrote (state directory) is looked for before the one shipped beside
+    # the model; the two are the same file when no state directory is set.
+    candidates = [catalog_cache_write_path(model_path)]
+    shipped = catalog_cache_path(model_path)
+    if shipped not in candidates:
+        candidates.append(shipped)
+    unloadable = []
+    for cache_path in candidates:
+        if not os.path.isfile(cache_path):
+            continue
         try:
             with open(cache_path, "rb") as f:
                 loaded = pickle.load(f)
@@ -541,9 +584,19 @@ def populate_state_cached(conn, state, model_path: str | None, role_id: str = ""
                 raise ValueError(f"cache format version {version} != {_CACHE_FORMAT_VERSION}")
             install_catalog(state, ctx, column_types)
             log.info("Catalog loaded from cache: %s (%d tables)", cache_path, len(ctx.tables))
+            log.info("%s catalog-cache-hit path=%s tables=%d", STAGE_MARKER, cache_path,
+                     len(ctx.tables))
             return
         except Exception:
+            unloadable.append(cache_path)
             log.exception(
                 "Catalog cache at %s failed to load -- rebuilding live", cache_path)
+    # A production install ships the cache, so reaching here is a defect: the engine reads this
+    # marker from the server's log and says so, naming the files looked for and the model hash.
+    log.warning(
+        "%s catalog-cache-miss hash=%s looked=%s unloadable=%s -- walking the catalog live",
+        STAGE_MARKER, _cache_file_name(model_path)[len("catalog-cache-"):-len(".pkl")],
+        ",".join(candidates), ",".join(unloadable) or "none")
     ctx, column_types = build_and_cache_context(conn, model_path)
     install_catalog(state, ctx, column_types)
+    log.info("%s catalog-walked tables=%d", STAGE_MARKER, len(ctx.tables))

@@ -13,6 +13,8 @@ package org.apache.calcite.adapter.file.etl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -33,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests for ETL Pipeline configuration and result classes.
  */
 @Tag("unit")
+// Its tests set and clear a JVM-wide system property; the build runs test methods concurrently
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 public class EtlPipelineTest {
 
   private static final String FORCE_PROP = "GOVDATA_FORCE_REPROCESS_TABLES";

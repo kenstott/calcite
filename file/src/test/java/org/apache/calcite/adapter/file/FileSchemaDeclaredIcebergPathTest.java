@@ -59,8 +59,9 @@ class FileSchemaDeclaredIcebergPathTest {
   private FileSchema schema(List<Map<String, Object>> tables) {
     SchemaPlus parent = mock(SchemaPlus.class);
     when(parent.getName()).thenReturn("root");
-    return new FileSchema(parent, "declared_iceberg_path", tempDir.toFile(), tables,
-        new ExecutionEngineConfig());
+    return new FileSchema(parent, "declared_iceberg_path", tempDir.toFile(), tempDir.toFile(), null, tables,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
   }
 
   @Test void tableThatOmitsEnabledIsDeferredLikeOneThatSaysTrue() {

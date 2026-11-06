@@ -55,5 +55,6 @@ jobs:
           gh workflow run "pgwire-adapters release" \
             --repo "${{ github.repository }}" \
             --ref "refs/tags/${ENGINE_TAG}" \
-            --field version="${BARE}"
+            --field version="${BARE}" \
+            --field publish=true
           echo "Dispatched release workflows on ${ENGINE_TAG}"

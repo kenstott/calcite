@@ -216,6 +216,20 @@ public interface PipelineTracker extends IncrementalTracker {
     return result;
   }
 
+  /**
+   * Like {@link #bulkGetCompletedTables} for source keys that all end with {@code keySuffix} (for
+   * example a year tag), letting a store read the whole slice in one pass instead of looking each
+   * key up. The result and caching contract are identical to {@link #bulkGetCompletedTables}.
+   *
+   * @param sourceKeys source keys, every one of which ends with {@code keySuffix}
+   * @param phase      Caller-defined step label (e.g. "staging")
+   * @param keySuffix  the common suffix of every key in {@code sourceKeys}
+   */
+  default Map<String, Set<String>> bulkGetCompletedTablesByKeySuffix(
+      Collection<String> sourceKeys, String phase, String keySuffix) {
+    return bulkGetCompletedTables(sourceKeys, phase);
+  }
+
   /** Default retry window for an upstream-404 "unavailable" marker: 14 days. */
   long DEFAULT_UNAVAILABLE_RETRY_MILLIS = 14L * 24 * 60 * 60 * 1000;
 

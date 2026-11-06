@@ -122,7 +122,7 @@ for entry in "${TABLES[@]}"; do
   echo ""
   echo ">>> $table_name"
 
-  java -Xms512m -Xmx2g \
+  java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -Xms512m -Xmx2g \
     -cp "$JAR" \
     org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
     --warehouse "$warehouse" \

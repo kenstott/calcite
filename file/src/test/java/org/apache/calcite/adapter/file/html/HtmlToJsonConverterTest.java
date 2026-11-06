@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.html;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -101,7 +102,7 @@ public class HtmlToJsonConverterTest {
 
   @Test public void testSimpleHtmlConversion() throws Exception {
     File htmlFile = createSimpleHtmlFile();
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertEquals(1, jsonFiles.size());
     File jsonFile = jsonFiles.get(0);
@@ -128,7 +129,7 @@ public class HtmlToJsonConverterTest {
 
   @Test public void testMultiTableHtmlConversion() throws Exception {
     File htmlFile = createMultiTableHtmlFile();
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertEquals(2, jsonFiles.size());
 
@@ -168,7 +169,7 @@ public class HtmlToJsonConverterTest {
 
   @Test public void testNumericTypeInference() throws Exception {
     File htmlFile = createNumericHtmlFile();
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertEquals(1, jsonFiles.size());
     JsonNode data = mapper.readTree(jsonFiles.get(0));
@@ -202,7 +203,7 @@ public class HtmlToJsonConverterTest {
     assertFalse(HtmlToJsonConverter.hasExtractedFiles(htmlFile, tempDir));
 
     // Convert
-    HtmlToJsonConverter.convert(htmlFile, tempDir, tempDir);
+    HtmlToJsonConverter.convert(htmlFile, tempDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     // Now should have extracted files
     assertTrue(HtmlToJsonConverter.hasExtractedFiles(htmlFile, tempDir));
@@ -219,7 +220,7 @@ public class HtmlToJsonConverterTest {
       writer.write("<html><body><p>No tables here</p></body></html>");
     }
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
     assertEquals(0, jsonFiles.size());
 
     System.out.println("\n=== EMPTY HTML TEST ===");
@@ -239,7 +240,7 @@ public class HtmlToJsonConverterTest {
       writer.write("</body></html>\n");
     }
 
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, tempDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
     assertEquals(1, jsonFiles.size());
 
     String fileName = jsonFiles.get(0).getName();

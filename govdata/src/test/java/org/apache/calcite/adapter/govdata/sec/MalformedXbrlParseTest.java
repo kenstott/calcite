@@ -92,8 +92,7 @@ class MalformedXbrlParseTest {
   private void downloadFile(String urlStr, Path target) throws IOException {
     URL url = URI.create(urlStr).toURL();
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-    conn.setRequestProperty("User-Agent",
-        "Apache Calcite SEC Adapter apache-calcite@apache.org");
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
 

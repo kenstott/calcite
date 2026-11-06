@@ -18,7 +18,8 @@ deferral (not a shortfall).
 | `ssa_benefits_by_geography` | ✅ Delivered | `SsaBenefitsProvider` |
 | `sba_loan_approvals` | ✅ Delivered | `SbaLoansProvider` |
 | `soi_national` | ❌ **NOT BUILT** | absent from YAML; no provider/transformer exists — real gap |
-| `usaspending_awards` | ⏸ **Deferred (Phase 2)** | intentionally deferred per plan; not a shortfall |
+| `usaspending_assistance` | ✅ Delivered (assistance transactions) | `UsaSpendingAssistanceBulkProvider`; contracts not yet loaded |
+| `fac_audits`, `fac_federal_awards`, `fac_audits_historic`, `fac_federal_awards_historic` | ✅ Delivered | `Fac*Provider` (Federal Audit Clearinghouse bulk CSVs, 1998-present) |
 
 **Extension views beyond the plan (delivered):** `ssa_benefits_by_geography_acs`,
 `soi_income_by_county_year`, `federal_spending_vs_income_tax_by_state_year`, `nonprofit_financials`.
@@ -26,8 +27,8 @@ deferral (not a shortfall).
 **Not yet built:**
 - `soi_national` — SOI national + corporate historical aggregates. No `SoiNationalProvider`/
   `SoiNationalTransformer` in the code or YAML. Genuine outstanding gap.
-- `usaspending_awards` — award-level detail. **Planned Phase 2 deferral**, not a delivery
-  shortfall (see the "Phase 2 — deferred" section below).
+- `usaspending_contracts` — contract transactions from the same award data archive (the
+  assistance half is delivered as `usaspending_assistance`).
 
 ---
 
@@ -159,6 +160,13 @@ filing year. Joins to `ref` on EIN (a nonprofit analog to the `ref` SEC CIK brid
 | total_expenses | DOUBLE | Total expenses |
 | total_assets | DOUBLE | End-of-year total assets |
 | form_type | VARCHAR | 990 / 990-EZ / 990-PF |
+| salaries_comp_benefits | DOUBLE | Form 990 Part I line 15 (return_type 990 only) |
+| fundraising_expenses_16b | DOUBLE | Form 990 Part I line 16b |
+| functional_expenses_total / _program / _mgmt_general / _fundraising | DOUBLE | Form 990 Part IX line 25 columns A / B / C / D |
+| officer_comp_part_ix_line5 | DOUBLE | Form 990 Part IX line 5 column A |
+| part_vii_persons_listed, part_vii_comp_from_org / _from_related_orgs / _other_comp | INTEGER / DOUBLE | Form 990 Part VII Section A columns D / E / F summed over listed persons |
+
+The Part I line 15 / 16b, Part IX and Part VII columns are populated for full Form 990 returns only; they are null on 990-EZ, 990-PF and 990-T returns, which do not report those parts, and null on a 990 whose filer left a Part IX column blank (the XML omits it).
 
 ### `exempt_org_master` — delivered as `IrsEoBmfProvider`
 
@@ -238,7 +246,13 @@ spatial counterpart to the SOI revenue tables.
 | cfda_program | VARCHAR | Assistance listing (CFDA) program, nullable |
 | obligated_amount | DOUBLE | Total obligations |
 
-### `usaspending_awards` *(Phase 2 — deferred)* — **NOT BUILT (intentional Phase 2 deferral, not a shortfall)**
+### `usaspending_assistance` — delivered (assistance only); contracts remain
+
+Delivered from the all-agency `Full` files of the award data archive, one row per assistance
+transaction, FY2007 onward (view `fac_awards_vs_usaspending` joins it to the Federal Audit
+Clearinghouse tables on UEI and ALN; view `usaspending_assistance_by_county` aggregates it to
+place-of-performance county x ALN x fiscal year, as a view because it is a three-column aggregate
+of one table and cannot drift from it). The original Phase 2 description follows.
 
 Award-level detail (one row per award × modification), keyed to recipient EIN/UEI and
 place-of-performance. Deferred to Phase 2 because of volume; sourced from the USAspending bulk

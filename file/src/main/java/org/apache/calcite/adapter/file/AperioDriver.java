@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.UnsupportedEncodingException;
@@ -180,11 +182,11 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
             String schemaName = info.getProperty("schema", "files");
             String storage = info.getProperty("storage");
             if (storage == null || storage.isEmpty()) {
-                storage = System.getProperty("user.home") + "/.aperio";
+                storage = LocalPaths.join(System.getProperty("user.home"), ".aperio");
             } else if (storage.startsWith("~")) {
                 storage = System.getProperty("user.home") + storage.substring(1);
             }
-            baseDir = storage + "/" + schemaName;
+            baseDir = LocalPaths.join(storage, schemaName);
         }
         operand.put("baseDirectory", baseDir);
 
@@ -201,7 +203,7 @@ public class AperioDriver extends org.apache.calcite.jdbc.Driver {
             }
             Map<String, Object> materializeConfig = new HashMap<String, Object>();
             materializeConfig.put("format", "iceberg");
-            materializeConfig.put("warehousePath", baseDir + "/iceberg");
+            materializeConfig.put("warehousePath", LocalPaths.join(baseDir, "iceberg"));
             operand.put("materialize", materializeConfig);
         }
 

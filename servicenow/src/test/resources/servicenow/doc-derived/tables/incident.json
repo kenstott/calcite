@@ -1,0 +1,99 @@
+{
+  "result": [
+    {
+      "sys_id": "000000000000000000000000000000c1",
+      "number": "INC0000001",
+      "short_description": "Printer 1 is down",
+      "priority": "2",
+      "active": "true",
+      "opened_at": "2026-01-01 08:30:00",
+      "closed_at": "",
+      "start_date": "2026-02-01",
+      "caller_id": {
+        "value": "000000000000000000000000000000b1",
+        "display_value": "Abel Tuter"
+      },
+      "assigned_to": {
+        "value": "",
+        "display_value": ""
+      },
+      "u_widget": "w1"
+    },
+    {
+      "sys_id": "000000000000000000000000000000c2",
+      "number": "INC0000002",
+      "short_description": "Printer 2 is down",
+      "priority": "3",
+      "active": "false",
+      "opened_at": "2026-01-02 08:30:00",
+      "closed_at": "2026-01-02 17:00:00",
+      "start_date": "2026-02-02",
+      "caller_id": {
+        "value": "000000000000000000000000000000b1",
+        "display_value": "Abel Tuter"
+      },
+      "assigned_to": {
+        "value": "",
+        "display_value": ""
+      },
+      "u_widget": "w2"
+    },
+    {
+      "sys_id": "000000000000000000000000000000c3",
+      "number": "INC0000003",
+      "short_description": "Printer 3 is down",
+      "priority": "1",
+      "active": "true",
+      "opened_at": "2026-01-03 08:30:00",
+      "closed_at": "",
+      "start_date": "2026-02-03",
+      "caller_id": {
+        "value": "000000000000000000000000000000b1",
+        "display_value": "Abel Tuter"
+      },
+      "assigned_to": {
+        "value": "",
+        "display_value": ""
+      },
+      "u_widget": "w3"
+    },
+    {
+      "sys_id": "000000000000000000000000000000c4",
+      "number": "INC0000004",
+      "short_description": "Printer 4 is down",
+      "priority": "2",
+      "active": "false",
+      "opened_at": "2026-01-04 08:30:00",
+      "closed_at": "2026-01-04 17:00:00",
+      "start_date": "2026-02-04",
+      "caller_id": {
+        "value": "000000000000000000000000000000b2",
+        "display_value": "Beth Anglin"
+      },
+      "assigned_to": {
+        "value": "",
+        "display_value": ""
+      },
+      "u_widget": "w4"
+    },
+    {
+      "sys_id": "000000000000000000000000000000c5",
+      "number": "INC0000005",
+      "short_description": "Printer 5 is down",
+      "priority": "3",
+      "active": "true",
+      "opened_at": "2026-01-05 08:30:00",
+      "closed_at": "",
+      "start_date": "2026-02-05",
+      "caller_id": {
+        "value": "000000000000000000000000000000b2",
+        "display_value": "Beth Anglin"
+      },
+      "assigned_to": {
+        "value": "",
+        "display_value": ""
+      },
+      "u_widget": "w5"
+    }
+  ]
+}

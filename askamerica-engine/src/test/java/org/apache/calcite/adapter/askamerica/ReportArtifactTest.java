@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReportArtifactTest {
@@ -94,5 +95,32 @@ class ReportArtifactTest {
     assertEquals("https://bls.gov/cpi", src.path("url").asText());
     assertEquals("SELECT 1", src.path("sql").asText());
     assertTrue(src.path("note").isMissingNode());
+  }
+
+  private static JsonNode panelJson(String extra) throws Exception {
+    return new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+        "{\"type\":\"chart\",\"chart_type\":\"bar\",\"title\":\"T\","
+        + "\"categories\":[\"ND\",\"WY\",\"CA\"],"
+        + "\"series\":[{\"name\":\"S\",\"values\":[1,2,3]}]" + extra + "}");
+  }
+
+  @Test void highlightGroupsAndValueFormatReachTheHints() throws Exception {
+    DashboardLayout.Panel p = McpServer.readPanel(panelJson(
+        ",\"highlight_groups\":{\"bottom\":[\"ND\",\"WY\"]},\"value_format\":\"$,.0f\""));
+    JsonNode hints = firstPanel(p).path("hints");
+    assertEquals("ND", hints.path("highlight_groups").path("bottom").get(0).asText());
+    assertEquals(2, hints.path("highlight_groups").path("bottom").size());
+    assertEquals("$,.0f", hints.path("value_format").asText());
+  }
+
+  @Test void hintsOmitHighlightAndFormatWhenNotSupplied() throws Exception {
+    JsonNode hints = firstPanel(McpServer.readPanel(panelJson(""))).path("hints");
+    assertTrue(hints.path("highlight_groups").isMissingNode());
+    assertTrue(hints.path("value_format").isMissingNode());
+  }
+
+  @Test void highlightLabelOutsideCategoriesIsRefused() throws Exception {
+    assertThrows(IllegalArgumentException.class, () -> McpServer.readPanel(
+        panelJson(",\"highlight_groups\":{\"bottom\":[\"ZZ\"]}")));
   }
 }

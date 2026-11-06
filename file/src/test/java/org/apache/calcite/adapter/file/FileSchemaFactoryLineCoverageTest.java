@@ -240,7 +240,7 @@ public class FileSchemaFactoryLineCoverageTest {
 
   @Test void testWriteDebugModelCreatesFile() throws Exception {
     Method writeDebugModel =
-        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", File.class, String.class, Map.class, String.class);
     writeDebugModel.setAccessible(true);
 
     String originalUserDir = System.getProperty("user.dir");
@@ -248,10 +248,10 @@ public class FileSchemaFactoryLineCoverageTest {
       System.setProperty("user.dir", tempDir.toString());
 
       Map<String, Object> operand = new HashMap<String, Object>();
-      operand.put("directory", "/some/dir");
+      operand.put("directory",  "/some/dir");
       operand.put("executionEngine", "PARQUET");
 
-      writeDebugModel.invoke(null, "TestSchema", operand, "root");
+      writeDebugModel.invoke(null, tempDir.toFile(), "TestSchema", operand, "root");
 
       File aperioDir = new File(tempDir.toFile(), ".aperio");
       File debugFile = new File(aperioDir, "debug-model-testschema.json");
@@ -264,7 +264,7 @@ public class FileSchemaFactoryLineCoverageTest {
 
   @Test void testWriteDebugModelWithNullParent() throws Exception {
     Method writeDebugModel =
-        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", File.class, String.class, Map.class, String.class);
     writeDebugModel.setAccessible(true);
 
     String originalUserDir = System.getProperty("user.dir");
@@ -272,9 +272,9 @@ public class FileSchemaFactoryLineCoverageTest {
       System.setProperty("user.dir", tempDir.toString());
 
       Map<String, Object> operand = new HashMap<String, Object>();
-      operand.put("directory", "/some/dir");
+      operand.put("directory",  "/some/dir");
 
-      writeDebugModel.invoke(null, "NullParent", operand, null);
+      writeDebugModel.invoke(null, tempDir.toFile(), "NullParent", operand, null);
 
       File aperioDir = new File(tempDir.toFile(), ".aperio");
       File debugFile = new File(aperioDir, "debug-model-nullparent.json");
@@ -500,6 +500,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithTableConstraintsInOperand() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
 
     Map<String, Map<String, Object>> tableConstraints =
@@ -516,6 +517,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithDeclaredSchemaNameDifferentTriggersRewrite() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("declaredSchemaName", "econ");
 
@@ -541,6 +543,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithComment() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("comment", "Test schema comment");
 
@@ -551,6 +554,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithFlatten() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("flatten", Boolean.TRUE);
 
@@ -561,6 +565,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithCasingOptions() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("tableNameCasing", "LOWER_CASE");
     operand.put("columnNameCasing", "LOWER_CASE");
@@ -572,6 +577,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithSnakeCaseCasingOptions() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("table_name_casing", "UPPER_CASE");
     operand.put("column_name_casing", "UPPER_CASE");
@@ -583,6 +589,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithBatchSizeAndMemoryThreshold() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("batchSize", 5000);
     operand.put("memoryThreshold", 536870912L);
@@ -594,6 +601,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithCsvTypeInference() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     Map<String, Object> csvTypeInference = new HashMap<String, Object>();
     csvTypeInference.put("enabled", true);
@@ -606,6 +614,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithDirectoryPattern() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("directoryPattern", "*.csv");
 
@@ -616,6 +625,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithGlobPattern() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("glob", "**/*.parquet");
 
@@ -626,6 +636,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithRefreshInterval() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("refreshInterval", "30m");
 
@@ -636,6 +647,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithCanonicalSchemaName() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("canonicalSchemaName", "canonical_name");
 
@@ -646,6 +658,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithPrimeCacheFalse() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("primeCache", Boolean.FALSE);
 
@@ -656,6 +669,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithPrimeCacheSnakeCase() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("prime_cache", Boolean.FALSE);
 
@@ -666,6 +680,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateWithBaseDirectoryAsFile() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
     operand.put("baseDirectory", tempDir.toFile());
 
@@ -695,6 +710,7 @@ public class FileSchemaFactoryLineCoverageTest {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     operand.put("tables", tables);
     operand.put("executionEngine", "PARQUET");
 
@@ -728,6 +744,7 @@ public class FileSchemaFactoryLineCoverageTest {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", sourceDir.getAbsolutePath());
+    operand.put("baseDirectory", sourceDir.getAbsolutePath());
     operand.put("tables", tables);
     operand.put("materializations", materializations);
     operand.put("executionEngine", "PARQUET");
@@ -739,6 +756,7 @@ public class FileSchemaFactoryLineCoverageTest {
   @Test void testCreateAddsMetadataSchemas() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "PARQUET");
 
     Schema schema = FileSchemaFactory.INSTANCE.create(parentSchema, "test_meta_lc", operand);

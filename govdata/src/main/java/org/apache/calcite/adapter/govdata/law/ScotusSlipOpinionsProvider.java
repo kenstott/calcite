@@ -155,7 +155,7 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
   private static void readWholePdf(final ScotusSlipListing.Entry entry,
       Deque<Map<String, Object>> out) throws IOException {
     String url = SITE + entry.pdfPath();
-    File pdf = File.createTempFile("scotus-slip-", ".pdf");
+    File pdf = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("scotus-slip-", ".pdf");
     try {
       SupremeCourtSite.DEFAULT.download(url, pdf);
       final List<String> pages = new ArrayList<String>();
@@ -174,7 +174,7 @@ public class ScotusSlipOpinionsProvider implements DataProvider {
   private static void readVolumePdf(Task task, final Deque<Map<String, Object>> out)
       throws IOException {
     String url = SITE + task.pdfPath;
-    File pdf = File.createTempFile("scotus-volume-", ".pdf");
+    File pdf = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("scotus-volume-", ".pdf");
     try {
       try {
         SupremeCourtSite.DEFAULT.download(url, pdf);

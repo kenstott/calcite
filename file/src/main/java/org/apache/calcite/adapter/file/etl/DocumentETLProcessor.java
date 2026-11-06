@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.converters.FileConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Orchestrates document-based ETL processing for SEC filings and similar sources.
@@ -70,6 +72,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @see HttpSourceConfig.DocumentSourceConfig
  */
 public class DocumentETLProcessor {
+  /** Most identical per-task failures logged individually in one parallel run. */
+  private static final int MAX_LOGGED_TASK_ERRORS = 5;
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DocumentETLProcessor.class);
 
@@ -107,10 +111,23 @@ public class DocumentETLProcessor {
      *  found" result for an accession on THIS cik is then inconclusive, not confirmed absent —
      *  see {@link #fetchPrimaryDocumentFromSubmissions}. Guarded the same way as overflowMerged. */
     boolean overflowFetchFailed;
+    /** True when this entry was answered by a local copy (a nightly bulk file), which can lag the
+     *  live source by up to a day; a miss against it is rechecked live before it counts. */
+    final boolean local;
+    /** True for the entry built by the live recheck of a stale local one: its overflow pages must
+     *  be fetched live too, bypassing the local copy. */
+    final boolean live;
 
     CikSubmissions(Map<String, String> byAccession, List<PaginationFileRef> overflowFiles) {
+      this(byAccession, overflowFiles, false, false);
+    }
+
+    CikSubmissions(Map<String, String> byAccession, List<PaginationFileRef> overflowFiles,
+        boolean local, boolean live) {
       this.byAccession = byAccession;
       this.overflowFiles = overflowFiles;
+      this.local = local;
+      this.live = live;
     }
   }
 
@@ -503,11 +520,12 @@ public class DocumentETLProcessor {
       // run, for every form type, with no special-cased retry list to maintain. The error is
       // still captured into the returned DocumentETLResult's errors list and failedCount, a
       // proper error-as-value result the caller can inspect.
-      LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession, e.getMessage());
+      LOGGER.warn("Failed to fetch submissions.json for {}/{}: {}", cik, accession,
+          describeCauseChain(e));
       return new DocumentETLResult(0, 0, 1,
           Collections.<String>emptyList(),
           Collections.singletonList(
-              "submissions.json fetch failed for " + accession + ": " + e.getMessage()),
+              "submissions.json fetch failed for " + accession + ": " + describeCauseChain(e)),
           System.currentTimeMillis() - startTime);
     }
 
@@ -547,8 +565,9 @@ public class DocumentETLProcessor {
     } catch (IOException e) {
       converted = Collections.<String>emptyList();
       failed = 1;
-      errors.add("Failed to process " + accession + ": " + e.getMessage());
-      LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, e.getMessage());
+      String cause = describeCauseChain(e);
+      errors.add("Failed to process " + accession + ": " + cause);
+      LOGGER.warn("Failed to process accession {}/{}: {}", cik, accession, cause);
     }
 
     // Zero-output is a valid terminal state (mark processed), but a failure is not — retries
@@ -581,8 +600,14 @@ public class DocumentETLProcessor {
     int count = 0;
     int total = accessions.size();
     for (AccessionRef ref : accessions) {
-      DocumentETLResult result =
-          processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+      DocumentETLResult result;
+      try {
+        result = processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+      } catch (CrossProcessRateLimiter.HostCooldownException e) {
+        LOGGER.error("Host cool-down: stopping after {} of {} accessions, {} not attempted: {}",
+            count, total, total - count, e.getMessage());
+        throw e;
+      }
       totalProcessed += result.getDocumentsProcessed();
       totalSkipped += result.getDocumentsSkipped();
       totalFailed += result.getDocumentsFailed();
@@ -619,6 +644,11 @@ public class DocumentETLProcessor {
     final List<String> allErrors =
         Collections.synchronizedList(new ArrayList<String>());
 
+    // A host cool-down is a run-level condition: the first task that meets it stops the run, the
+    // tasks not yet started return without touching the tracker, and one line reports the count.
+    final AtomicReference<CrossProcessRateLimiter.HostCooldownException> cooldown =
+        new AtomicReference<CrossProcessRateLimiter.HostCooldownException>();
+    final AtomicInteger notAttempted = new AtomicInteger();
     ExecutorService executor = Executors.newFixedThreadPool(threadCount);
     List<Future<?>> futures = new ArrayList<Future<?>>();
 
@@ -626,8 +656,18 @@ public class DocumentETLProcessor {
       futures.add(
           executor.submit(new Callable<Void>() {
         @Override public Void call() {
-          DocumentETLResult result =
-              processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+          if (cooldown.get() != null) {
+            notAttempted.incrementAndGet();
+            return null;
+          }
+          DocumentETLResult result;
+          try {
+            result = processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+          } catch (CrossProcessRateLimiter.HostCooldownException e) {
+            cooldown.compareAndSet(null, e);
+            notAttempted.incrementAndGet();
+            return null;
+          }
           totalProcessed.addAndGet(result.getDocumentsProcessed());
           totalSkipped.addAndGet(result.getDocumentsSkipped());
           totalFailed.addAndGet(result.getDocumentsFailed());
@@ -642,14 +682,28 @@ public class DocumentETLProcessor {
       }));
     }
 
+    int unexpected = 0;
     for (Future<?> f : futures) {
       try {
         f.get();
       } catch (Exception e) {
-        LOGGER.error("Unexpected error waiting for accession task: {}", e.getMessage());
+        // Repeats of the same failure are counted, not logged one by one.
+        if (++unexpected <= MAX_LOGGED_TASK_ERRORS) {
+          LOGGER.error("Unexpected error waiting for accession task: {}", e.getMessage());
+        }
       }
     }
     executor.shutdown();
+    if (unexpected > MAX_LOGGED_TASK_ERRORS) {
+      LOGGER.error("{} accession tasks failed unexpectedly; the first {} are logged above",
+          unexpected, MAX_LOGGED_TASK_ERRORS);
+    }
+    CrossProcessRateLimiter.HostCooldownException stopped = cooldown.get();
+    if (stopped != null) {
+      LOGGER.error("Host cool-down: stopped with {} of {} accessions not attempted: {}",
+          notAttempted.get(), total, stopped.getMessage());
+      throw stopped;
+    }
 
     return new DocumentETLResult(totalProcessed.get(), totalSkipped.get(), totalFailed.get(),
         allOutputFiles, allErrors, System.currentTimeMillis() - startTime);
@@ -680,8 +734,8 @@ public class DocumentETLProcessor {
   private String fetchPrimaryDocumentFromSubmissions(
       DocumentSource documentSource, String cik, String accession) throws IOException {
     CikSubmissions submissions = cikSubmissionsCache.get(cik);
+    String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
     if (submissions == null) {
-      String submissionsUrl = "https://data.sec.gov/submissions/CIK" + cik + ".json";
       String submissionsJson = documentSource.fetchUrlContent(submissionsUrl);
       Map<String, String> map = parseAccessionToPrimaryDocument(submissionsJson);
       if (map.isEmpty() && submissionsParseDiagCount.get() < 5) {
@@ -692,19 +746,22 @@ public class DocumentETLProcessor {
             submissionsJson.length() > 200 ? submissionsJson.substring(0, 200) : submissionsJson);
       }
       List<PaginationFileRef> overflow = extractPaginationFiles(submissionsJson);
-      cikSubmissionsCache.putIfAbsent(cik, new CikSubmissions(map, overflow));
+      cikSubmissionsCache.putIfAbsent(cik, new CikSubmissions(map, overflow,
+          documentSource.hasLocalContent(submissionsUrl), false));
       submissions = cikSubmissionsCache.get(cik);
     }
 
-    String result = submissions.byAccession.get(accession);
-    if (result == null && !submissions.overflowFiles.isEmpty()) {
-      synchronized (submissions) {
-        if (!submissions.overflowMerged) {
-          mergeOverflowSubmissions(documentSource, cik, submissions);
-          submissions.overflowMerged = true;
-        }
-      }
-      result = submissions.byAccession.get(accession);
+    String result = lookupAccession(documentSource, cik, submissions, accession);
+    if (result == null && submissions.local) {
+      // The local copy is a nightly snapshot: an accession filed since is not in it. Only a miss
+      // against the live source is a real absence, so look once more, live, and keep that answer
+      // for this CIK from then on.
+      String liveJson = documentSource.fetchUrlContentLive(submissionsUrl);
+      CikSubmissions live = new CikSubmissions(parseAccessionToPrimaryDocument(liveJson),
+          extractPaginationFiles(liveJson), false, true);
+      cikSubmissionsCache.put(cik, live);
+      submissions = live;
+      result = lookupAccession(documentSource, cik, submissions, accession);
     }
 
     if (result == null && submissions.overflowFetchFailed) {
@@ -758,12 +815,29 @@ public class DocumentETLProcessor {
    * {@link CikSubmissions#overflowFetchFailed} so a subsequent miss for this CIK is treated as
    * inconclusive rather than a confirmed absence.
    */
+  private String lookupAccession(DocumentSource documentSource, String cik,
+      CikSubmissions submissions, String accession) {
+    String result = submissions.byAccession.get(accession);
+    if (result == null && !submissions.overflowFiles.isEmpty()) {
+      synchronized (submissions) {
+        if (!submissions.overflowMerged) {
+          mergeOverflowSubmissions(documentSource, cik, submissions);
+          submissions.overflowMerged = true;
+        }
+      }
+      result = submissions.byAccession.get(accession);
+    }
+    return result;
+  }
+
   private void mergeOverflowSubmissions(DocumentSource documentSource, String cik,
       CikSubmissions submissions) {
     for (PaginationFileRef ref : submissions.overflowFiles) {
       try {
-        String pageJson =
-            documentSource.fetchUrlContent("https://data.sec.gov/submissions/" + ref.name);
+        String pageUrl = "https://data.sec.gov/submissions/" + ref.name;
+        String pageJson = submissions.live
+            ? documentSource.fetchUrlContentLive(pageUrl)
+            : documentSource.fetchUrlContent(pageUrl);
         submissions.byAccession.putAll(parseAccessionToPrimaryDocument(pageJson));
       } catch (IOException e) {
         LOGGER.warn("Could not fetch overflow submissions page {} for CIK {}: {}",
@@ -824,6 +898,22 @@ public class DocumentETLProcessor {
       }
     }
     throw lastException;
+  }
+
+  /**
+   * Renders a throwable and its causes as {@code Class: message <- Class: message ...}, so a
+   * failure log names the root cause without a stack trace per accession.
+   */
+  static String describeCauseChain(Throwable error) {
+    StringBuilder sb = new StringBuilder();
+    Set<Throwable> seen = new HashSet<Throwable>();
+    for (Throwable t = error; t != null && seen.add(t); t = t.getCause()) {
+      if (sb.length() > 0) {
+        sb.append(" <- ");
+      }
+      sb.append(t.getClass().getName()).append(": ").append(t.getMessage());
+    }
+    return sb.toString();
   }
 
   /**
@@ -1197,7 +1287,7 @@ public class DocumentETLProcessor {
       return;
     }
     for (String year : years) {
-      String yearPrefix = outputDirectory + "/year=" + year;
+      String yearPrefix = LocalPaths.join(outputDirectory, "year=" + year);
       try {
         List<StorageProvider.FileEntry> entries = storageProvider.listFiles(yearPrefix, true);
         int count = 0;

@@ -59,6 +59,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("unit")
 public class HtmlCrawlStageTest {
+
+  /** Where the crawler stages its downloads: a directory the test owns (REQ-1992). */
+  @TempDir File crawlerWorkDir;
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final String START = "<html><body>"
@@ -160,7 +163,7 @@ public class HtmlCrawlStageTest {
   }
 
   @Test void onlyLinksInTheContentAreFollowedAndWhatThePagesHoldLandsAsFiles() throws Exception {
-    HtmlCrawlStage.run("wiki", crawl(), directory.getPath(), "local", "SMART_CASING");
+    HtmlCrawlStage.run("wiki", crawl(), directory.getPath(), "local", "SMART_CASING", crawlerWorkDir);
 
     // Navigation, the footer, the navigation box, the reference list, the file page, the page
     // not written and the other wiki are never requested; a link to a place on a page is that
@@ -196,7 +199,7 @@ public class HtmlCrawlStageTest {
   @Test void aLinkAnExclusionPatternFindsIsNotFollowed() throws Exception {
     Map<String, Object> crawl = crawl();
     crawl.put("linkExcludePatterns", Collections.singletonList("/wiki/Linked_"));
-    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING");
+    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING", crawlerWorkDir);
     assertEquals(new TreeSet<>(Arrays.asList("/wiki/Start", "/data/figures.csv")),
         new TreeSet<>(requested));
   }
@@ -204,14 +207,14 @@ public class HtmlCrawlStageTest {
   @Test void aCrawlWithinItsCacheLifetimeRequestsNothingAndAChangedOperandCrawlsAgain()
       throws Exception {
     Map<String, Object> crawl = crawl();
-    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING");
+    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING", crawlerWorkDir);
     requested.clear();
-    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING");
+    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING", crawlerWorkDir);
     assertEquals(Collections.emptyList(), requested);
 
     // Not following links any more: the linked article's table is no longer the crawl's.
     crawl.put("maxDepth", 0);
-    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING");
+    HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING", crawlerWorkDir);
     assertEquals(Arrays.asList("figures.csv", "start__population_by_region.json"), files());
   }
 
@@ -219,12 +222,12 @@ public class HtmlCrawlStageTest {
     Map<String, Object> crawl = crawl();
     crawl.put("startUrls", Collections.singletonList(base + "/wiki/Missing"));
     assertThrows(IOException.class,
-        () -> HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING"));
+        () -> HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING", crawlerWorkDir));
     crawl.remove("startUrls");
     assertThrows(IllegalArgumentException.class,
-        () -> HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING"));
+        () -> HtmlCrawlStage.run("wiki", crawl, directory.getPath(), "local", "SMART_CASING", crawlerWorkDir));
     assertThrows(IllegalArgumentException.class,
-        () -> HtmlCrawlStage.run("wiki", crawl(), "s3://bucket/x", "s3", "SMART_CASING"));
+        () -> HtmlCrawlStage.run("wiki", crawl(), "s3://bucket/x", "s3", "SMART_CASING", crawlerWorkDir));
   }
 
   @Test void aSchemaThatDeclaresACrawlHasItsTablesAndDataFilesAsTables() throws Exception {
@@ -232,6 +235,7 @@ public class HtmlCrawlStageTest {
         + "\"name\":\"wiki\",\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\"operand\":{\"directory\":" + MAPPER.writeValueAsString(directory.getPath())
+        + ",\"baseDirectory\":" + MAPPER.writeValueAsString(crawlerWorkDir.getPath())
         + ",\"ephemeralCache\":true,\"crawl\":" + MAPPER.writeValueAsString(crawl()) + "}}]}";
     Properties info = new Properties();
     info.setProperty("model", "inline:" + model);

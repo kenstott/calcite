@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -195,7 +196,7 @@ public class EtlPipelineDeepCoverageTest3 {
     m.setAccessible(true);
     Object r =
         m.invoke(pipeline, new IOException((String) null), EtlPipelineConfig.ErrorHandlingConfig.defaults());
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, r);
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, r);
   }
 
   @Test void testDetermineErrorAction_genericError() throws Exception {
@@ -206,7 +207,7 @@ public class EtlPipelineDeepCoverageTest3 {
     m.setAccessible(true);
     Object r =
         m.invoke(pipeline, new IOException("Connection timed out"), EtlPipelineConfig.ErrorHandlingConfig.defaults());
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP, r);
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN, r);
   }
 
   // ===== allIndicesSet =====
@@ -328,7 +329,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testVerifyDataExists_icebergMetadataExists() throws Exception {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory(anyString())).thenReturn(false);
-    when(sp.isDirectory(tempDir.toString() + "/t/data")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize(tempDir.toString() + "/t/data"))).thenReturn(true);
     EtlPipelineConfig config =
         createHttpConfig("t", singleRangeDimension("y", 2020, 2020), MaterializeConfig.Format.ICEBERG, null, null);
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
@@ -350,7 +351,7 @@ public class EtlPipelineDeepCoverageTest3 {
 
   @Test void testVerifyDataExists_parquetDirExists() throws Exception {
     StorageProvider sp = mockStorage();
-    when(sp.isDirectory(tempDir.toString() + "/t")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize(tempDir.toString() + "/t"))).thenReturn(true);
     EtlPipelineConfig config =
         createHttpConfig("t", singleRangeDimension("y", 2020, 2020), MaterializeConfig.Format.PARQUET, null, null);
     EtlPipeline pipeline = new EtlPipeline(config, sp, tempDir.toString());
@@ -383,7 +384,7 @@ public class EtlPipelineDeepCoverageTest3 {
 
   @Test void testVerifyDataExists_icebergWithWarehouse() throws Exception {
     StorageProvider sp = mockStorage();
-    when(sp.isDirectory("/wh/t/data")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize("/wh/t/data"))).thenReturn(true);
     MaterializeConfig mat = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
@@ -401,7 +402,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testVerifyDataExists_icebergWarehouseFallback() throws Exception {
     StorageProvider sp = mockStorage();
     when(sp.isDirectory("/wh/t/metadata")).thenReturn(false);
-    when(sp.isDirectory(tempDir.toString() + "/t/data")).thenReturn(true);
+    when(sp.isDirectory(LocalPaths.normalize(tempDir.toString() + "/t/data"))).thenReturn(true);
     MaterializeConfig mat = MaterializeConfig.builder()
         .output(MaterializeOutputConfig.builder().build())
         .format(MaterializeConfig.Format.ICEBERG)
@@ -1030,14 +1031,14 @@ public class EtlPipelineDeepCoverageTest3 {
     assertNotNull(new EtlPipeline(config, sp, tempDir.toString(), null, IncrementalTracker.NOOP));
     assertNotNull(new EtlPipeline(config, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null));
     assertNotNull(new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null));
-    assertNotNull(new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op"));
+    assertNotNull(new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null));
   }
 
   @Test void testSourceStorageDefaultsToMain() throws Exception {
     EtlPipelineConfig config = createHttpConfig("s", singleRangeDimension("y", 2020, 2020));
     StorageProvider sp = mockStorage();
     EtlPipeline pipeline =
-        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, null);
+        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
     Field f = EtlPipeline.class.getDeclaredField("sourceStorageProvider");
     f.setAccessible(true);
     assertEquals(sp, f.get(pipeline));
@@ -1046,7 +1047,7 @@ public class EtlPipelineDeepCoverageTest3 {
   @Test void testTrackerDefaultsToNoop() throws Exception {
     EtlPipelineConfig config = createHttpConfig("t", singleRangeDimension("y", 2020, 2020));
     EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage(), null, tempDir.toString(), null, null, null, null, null);
+        new EtlPipeline(config, mockStorage(), null, tempDir.toString(), null, null, null, null);
     Field f = EtlPipeline.class.getDeclaredField("incrementalTracker");
     f.setAccessible(true);
     assertNotNull(f.get(pipeline));

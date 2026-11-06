@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.util.Source;
 import org.apache.calcite.util.Sources;
@@ -108,10 +110,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File cacheDir = tempDir.toFile();
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, cacheDir, Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, cacheDir, Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertNotNull(table);
     assertEquals(Duration.ofMinutes(5), table.getRefreshInterval());
@@ -127,10 +126,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File cacheDir = tempDir.toFile();
     Source source = Sources.of(nonExistent);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, cacheDir, Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, cacheDir, Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertNotNull(table);
   }
@@ -144,10 +140,7 @@ class RefreshableParquetCacheTableCoverageTest {
     Source source = Sources.of(csvFile);
     Source originalSource = Sources.of(origFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, originalSource, parquetFile, cacheDir, Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir, Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertNotNull(table);
   }
@@ -160,10 +153,7 @@ class RefreshableParquetCacheTableCoverageTest {
     Source source = Sources.of(csvFile);
 
     // null refreshInterval => lastModifiedTime set to file's last modified
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, cacheDir, null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, cacheDir, null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertNotNull(table);
     assertNull(table.getRefreshInterval());
@@ -179,10 +169,7 @@ class RefreshableParquetCacheTableCoverageTest {
     Source source = Sources.of(csvFile);
     Source originalSource = Sources.of(nonExistentOrig);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, originalSource, parquetFile, cacheDir, Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, originalSource, parquetFile, cacheDir, Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertNotNull(table);
   }
@@ -195,10 +182,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     table.setDuckDBNames("mySchema", "myTable");
 
@@ -222,10 +206,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     table.setRefreshContext(null, "tableName");
 
@@ -246,10 +227,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("extractJsonPath",
         String.class);
@@ -279,10 +257,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("createSourceTable");
     m.setAccessible(true);
@@ -298,10 +273,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(jsonFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("createSourceTable");
     m.setAccessible(true);
@@ -323,10 +295,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(htmlFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("createSourceTable");
     m.setAccessible(true);
@@ -352,10 +321,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(xmlFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("createSourceTable");
     m.setAccessible(true);
@@ -381,10 +347,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(unknownFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("createSourceTable");
     m.setAccessible(true);
@@ -407,10 +370,7 @@ class RefreshableParquetCacheTableCoverageTest {
     Source source = Sources.of(csvFile);
 
     // Use null refreshInterval so lastModifiedTime = file.lastModified()
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     // Directly call doRefresh - file not modified since constructor
     Method doRefresh = AbstractRefreshableTable.class.getDeclaredMethod("doRefresh");
@@ -429,10 +389,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertEquals(RefreshableTable.RefreshBehavior.SINGLE_FILE, table.getRefreshBehavior());
   }
@@ -445,10 +402,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     String str = table.toString();
     assertTrue(str.contains("RefreshableParquetCacheTable"));
@@ -464,10 +418,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertEquals(parquetFile, table.getParquetFile());
     assertEquals(source, table.getSource());
@@ -481,10 +432,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), Duration.ofMinutes(5), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), Duration.ofMinutes(5), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     // First time should need refresh
     assertTrue(table.needsRefresh());
@@ -496,10 +444,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), Duration.ofHours(1), false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), Duration.ofHours(1), false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     assertTrue(table.needsRefresh());
 
@@ -520,10 +465,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     // Verify delegate table was set
     Field delegateField = RefreshableParquetCacheTable.class.getDeclaredField("delegateTable");
@@ -539,10 +481,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("rerunConversionsIfNeeded",
         File.class);
@@ -558,10 +497,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(jsonFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("rerunConversionsIfNeeded",
         File.class);
@@ -579,10 +515,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "data.parquet");
     Source source = Sources.of(jsonFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), null, false,
-        "SMART_CASING", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), null, false, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     Method m = RefreshableParquetCacheTable.class.getDeclaredMethod("refreshJsonPathExtractions",
         File.class);
@@ -600,10 +533,7 @@ class RefreshableParquetCacheTableCoverageTest {
     File parquetFile = createParquetStub(tempDir, "infer.parquet");
     Source source = Sources.of(csvFile);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, parquetFile, tempDir.toFile(), Duration.ofMinutes(10), true,
-        "UPPER", "LOWER", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "infer_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, parquetFile, tempDir.toFile(), Duration.ofMinutes(10), true, new SourceFileConversion(null, null, null, "UPPER", "LOWER", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "infer_schema");
 
     assertNotNull(table);
     assertEquals(Duration.ofMinutes(10), table.getRefreshInterval());

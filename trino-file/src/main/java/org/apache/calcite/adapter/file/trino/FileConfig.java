@@ -39,6 +39,7 @@ import jakarta.validation.constraints.NotNull;
 public class FileConfig
 {
     private String glob;
+    private String baseDirectory;
     private String schemaName = "files";
     private String executionEngine = "DUCKDB";
     private boolean recursive = true;
@@ -65,6 +66,22 @@ public class FileConfig
     public FileConfig setGlob(String glob)
     {
         this.glob = glob;
+        return this;
+    }
+
+    @NotNull
+    public String getBaseDirectory()
+    {
+        return baseDirectory;
+    }
+
+    @Config("base-directory")
+    @ConfigDescription("Local directory every file the adapter writes for this catalog goes under "
+            + "(conversion and Parquet caches, DuckDB catalog and spill, temporary files). "
+            + "Required: there is no default location.")
+    public FileConfig setBaseDirectory(String baseDirectory)
+    {
+        this.baseDirectory = baseDirectory;
         return this;
     }
 

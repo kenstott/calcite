@@ -61,23 +61,26 @@ public class FileSchemaStorageTypeCoverageTest {
     sourceDir.mkdirs();
 
     FileSchema schema =
-        new FileSchema(mockParentSchema,
-        "test_schema",
-        sourceDir,          // sourceDirectory
-        null,               // directoryPattern
-        null,               // tables
-        new ExecutionEngineConfig(),
-        false,              // recursive
-        null,               // materializations
-        null,               // views
-        null,               // partitionedTables
-        null,               // refreshInterval
-        "LOWER",            // tableNameCasing
-        "LOWER",            // columnNameCasing
-        "local",            // storageType
-        null,               // storageConfig
-        null,               // flatten
-        null,               // csvTypeInference
+        new FileSchema(mockParentSchema, "test_schema", sourceDir, sourceDir, // sourceDirectory
+        null,
+        // directoryPattern
+        null, // tables
+        new ExecutionEngineConfig(), false,
+        // recursive
+        null, // materializations
+        null, // views
+        null,
+        // partitionedTables
+        null, // refreshInterval
+        "LOWER",
+        // tableNameCasing
+        "LOWER", // columnNameCasing
+        "local",
+        // storageType
+        null, // storageConfig
+        null, // flatten
+        null,
+        // csvTypeInference
         false);             // primeCache
 
     StorageProvider provider = schema.getStorageProvider();
@@ -88,23 +91,26 @@ public class FileSchemaStorageTypeCoverageTest {
   @Test @DisplayName("FileSchema with storageType='file' creates LocalFileStorageProvider")
   void testFileStorageType() {
     FileSchema schema =
-        new FileSchema(mockParentSchema,
-        "test_schema",
-        tempDir,            // sourceDirectory
-        null,               // directoryPattern
-        null,               // tables
-        new ExecutionEngineConfig(),
-        false,              // recursive
-        null,               // materializations
-        null,               // views
-        null,               // partitionedTables
-        null,               // refreshInterval
-        "LOWER",            // tableNameCasing
-        "LOWER",            // columnNameCasing
-        "file",             // storageType
-        null,               // storageConfig
-        null,               // flatten
-        null,               // csvTypeInference
+        new FileSchema(mockParentSchema, "test_schema", tempDir, tempDir, // sourceDirectory
+        null,
+        // directoryPattern
+        null, // tables
+        new ExecutionEngineConfig(), false,
+        // recursive
+        null, // materializations
+        null, // views
+        null,
+        // partitionedTables
+        null, // refreshInterval
+        "LOWER",
+        // tableNameCasing
+        "LOWER", // columnNameCasing
+        "file",
+        // storageType
+        null, // storageConfig
+        null, // flatten
+        null,
+        // csvTypeInference
         false);             // primeCache
 
     StorageProvider provider = schema.getStorageProvider();
@@ -115,23 +121,26 @@ public class FileSchemaStorageTypeCoverageTest {
   @Test @DisplayName("FileSchema with null storageType sets storageProvider to null")
   void testNullStorageType() {
     FileSchema schema =
-        new FileSchema(mockParentSchema,
-        "test_schema",
-        tempDir,            // sourceDirectory
-        null,               // directoryPattern
-        null,               // tables
-        new ExecutionEngineConfig(),
-        false,              // recursive
-        null,               // materializations
-        null,               // views
-        null,               // partitionedTables
-        null,               // refreshInterval
-        "LOWER",            // tableNameCasing
-        "LOWER",            // columnNameCasing
-        null,               // storageType
-        null,               // storageConfig
-        null,               // flatten
-        null,               // csvTypeInference
+        new FileSchema(mockParentSchema, "test_schema", tempDir, tempDir, // sourceDirectory
+        null,
+        // directoryPattern
+        null, // tables
+        new ExecutionEngineConfig(), false,
+        // recursive
+        null, // materializations
+        null, // views
+        null,
+        // partitionedTables
+        null, // refreshInterval
+        "LOWER",
+        // tableNameCasing
+        "LOWER", // columnNameCasing
+        null,
+        // storageType
+        null, // storageConfig
+        null, // flatten
+        null,
+        // csvTypeInference
         false);             // primeCache
 
     assertNull(schema.getStorageProvider(),
@@ -148,7 +157,7 @@ public class FileSchemaStorageTypeCoverageTest {
         new FileSchema(mockParentSchema,
         "test_schema",
         null,                // sourceDirectory
-        null,                // userConfiguredBaseDirectory
+        sourceDir,           // userConfiguredBaseDirectory
         dirPath,             // directoryPath
         null,                // directoryPattern
         null,                // tables
@@ -178,23 +187,27 @@ public class FileSchemaStorageTypeCoverageTest {
     storageConfig.put("_storageProvider", preCreated);
 
     FileSchema schema =
-        new FileSchema(mockParentSchema,
-        "test_schema",
-        tempDir,             // sourceDirectory
-        null,                // directoryPattern
-        null,                // tables
-        new ExecutionEngineConfig(),
-        false,               // recursive
-        null,                // materializations
-        null,                // views
-        null,                // partitionedTables
-        null,                // refreshInterval
-        "LOWER",             // tableNameCasing
-        "LOWER",             // columnNameCasing
-        "local",             // storageType
-        storageConfig,       // storageConfig - contains _storageProvider
-        null,                // flatten
-        null,                // csvTypeInference
+        new FileSchema(mockParentSchema, "test_schema", tempDir, tempDir, // sourceDirectory
+        null,
+        // directoryPattern
+        null, // tables
+        new ExecutionEngineConfig(), false,
+        // recursive
+        null, // materializations
+        null, // views
+        null,
+        // partitionedTables
+        null, // refreshInterval
+        "LOWER",
+        // tableNameCasing
+        "LOWER", // columnNameCasing
+        "local",
+        // storageType
+        storageConfig,
+        // storageConfig - contains _storageProvider
+        null, // flatten
+        null,
+        // csvTypeInference
         false);              // primeCache
 
     assertTrue(schema.getStorageProvider() == preCreated,
@@ -245,6 +258,7 @@ public class FileSchemaStorageTypeCoverageTest {
         new FileSchema(mockParentSchema,
         "test_schema",
         null,               // sourceDirectory is null
+        tempDir,            // userConfiguredBaseDirectory (REQ-1992: always required)
         null,               // directoryPattern
         null,               // tables
         new ExecutionEngineConfig(),
@@ -270,7 +284,7 @@ public class FileSchemaStorageTypeCoverageTest {
         new FileSchema(mockParentSchema,
         "UPPER_CASE_NAME",
         tempDir,            // sourceDirectory
-        null,               // userConfiguredBaseDirectory
+        tempDir,            // userConfiguredBaseDirectory
         null,               // directoryPath
         null,               // directoryPattern
         null,               // tables

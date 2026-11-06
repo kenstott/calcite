@@ -140,7 +140,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING");
+        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(converted, "CSV files should not need conversion");
   }
 
@@ -153,7 +153,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(parquetFile, tempDir.toFile(), "SMART_CASING");
+        FileConversionManager.convertIfNeeded(parquetFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(converted, "Parquet files should not need conversion");
   }
 
@@ -166,7 +166,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING");
+        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(converted, "CSV files should not need conversion (4-arg overload)");
   }
 
@@ -179,7 +179,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", tempDir.toFile());
+        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(converted, "CSV files should not need conversion (5-arg overload)");
   }
 
@@ -192,8 +192,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(jsonFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        tempDir.toFile(), null);
+        FileConversionManager.convertIfNeeded(jsonFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(converted, "JSON file without JSONPath record should not be converted");
   }
 
@@ -206,8 +205,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(yamlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        tempDir.toFile(), null);
+        FileConversionManager.convertIfNeeded(yamlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(converted, "YAML file without JSONPath record should not be converted");
   }
 
@@ -220,8 +218,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(ymlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        tempDir.toFile(), null);
+        FileConversionManager.convertIfNeeded(ymlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(converted, "YML file without JSONPath record should not be converted");
   }
 
@@ -234,8 +231,7 @@ public class FileConversionManagerTest {
     }
 
     boolean converted =
-        FileConversionManager.convertIfNeeded(jsonGzFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        tempDir.toFile(), null);
+        FileConversionManager.convertIfNeeded(jsonGzFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", tempDir.toFile(), null, new CrawlerConfiguration());
     assertFalse(converted, "json.gz file without JSONPath record should not be converted");
   }
 
@@ -257,7 +253,7 @@ public class FileConversionManagerTest {
 
     // Now call convertIfNeeded with baseDirectory - it should check metadata
     boolean converted =
-        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", baseDir, null);
+        FileConversionManager.convertIfNeeded(csvFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", baseDir, null, new CrawlerConfiguration());
     // CSV files don't need conversion regardless of metadata
     assertFalse(converted);
   }
@@ -396,8 +392,7 @@ public class FileConversionManagerTest {
 
     // This should not throw, but return false or true depending on conversion outcome
     boolean result =
-        FileConversionManager.convertIfNeeded(htmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        null, null);
+        FileConversionManager.convertIfNeeded(htmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     // The result may vary based on the HTML converter's tolerance.
     // The key assertion is that no exception propagates.
   }
@@ -410,8 +405,7 @@ public class FileConversionManagerTest {
     }
 
     boolean result =
-        FileConversionManager.convertIfNeeded(mdFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        null, null);
+        FileConversionManager.convertIfNeeded(mdFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     // Markdown files should trigger conversion
     assertTrue(result, "Markdown files should be converted");
   }
@@ -489,8 +483,7 @@ public class FileConversionManagerTest {
 
     // Now convertIfNeeded should find the existing record and preserve table name
     boolean result =
-        FileConversionManager.convertIfNeeded(htmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        baseDir, null);
+        FileConversionManager.convertIfNeeded(htmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", baseDir, null, new CrawlerConfiguration());
     // HTML files should be converted
     assertTrue(result, "HTML file should trigger conversion");
   }
@@ -502,8 +495,7 @@ public class FileConversionManagerTest {
     }
 
     boolean result =
-        FileConversionManager.convertIfNeeded(xmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING",
-        null, null);
+        FileConversionManager.convertIfNeeded(xmlFile, tempDir.toFile(), "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(result, "XML files should trigger conversion");
   }
 }

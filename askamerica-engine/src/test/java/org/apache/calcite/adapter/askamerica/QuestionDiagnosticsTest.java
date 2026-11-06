@@ -105,6 +105,34 @@ class QuestionDiagnosticsTest {
     assertFalse(hasType(env, "small_n"));
   }
 
+  @Test void aParkUnitRankingIsNeitherStateGrainNorSmallNNorMixedUnits() {
+    String sql = "SELECT v.unit_code, u.unit_name, u.state_abbr, "
+        + "SUM(v.recreation_visits) AS rec_visits_2025 "
+        + "FROM lands.nps_visitation v LEFT JOIN lands.nps_units u ON u.unit_code = v.unit_code "
+        + "WHERE v.visit_year = 2025 GROUP BY v.unit_code, u.unit_name, u.state_abbr "
+        + "ORDER BY rec_visits_2025 DESC FETCH FIRST 10 ROWS ONLY";
+    String[] states = {"NC-VA", "TN-MS-AL", "NJ-NY", "DC", "AZ", "CA", "WY-MT-ID", "CO",
+        "ME TO GA 4/", "UT"};
+    ArrayNode ranking = MAPPER.createArrayNode();
+    for (int i = 0; i < states.length; i++) {
+      ObjectNode row = MAPPER.createObjectNode();
+      row.put("unit_code", "U" + i);
+      row.put("unit_name", "Unit " + i);
+      row.put("state_abbr", states[i]);
+      row.put("rec_visits_2025", 1000 - i);
+      ranking.add(row);
+    }
+    ObjectNode env = QuestionDiagnostics.forQuery(null, sql, ranking, 500);
+    assertFalse(hasType(env, "small_n"), env.toString());
+    assertFalse(hasType(env, "mixed_unit_kinds"), env.toString());
+    assertFalse(env.get("diagnostics").has("grain"), env.toString());
+  }
+
+  @Test void aStateGroupedRankingStillHasStateGrain() {
+    assertEquals("state", QuestionDiagnostics.grainOf(Arrays.asList("state_abbr", "v"),
+        "SELECT state_abbr, SUM(x) AS v FROM t GROUP BY state_abbr, year"));
+  }
+
   @Test void aPlainGroupedResultCountsItsOwnRows() {
     ObjectNode env = QuestionDiagnostics.forQuery(null,
         "SELECT state_fips, AVG(score) AS score FROM edu.naep_state GROUP BY state_fips",

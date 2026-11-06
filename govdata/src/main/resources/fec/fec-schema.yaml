@@ -28,6 +28,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fec}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 workerTimeoutMinutes: 480
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
@@ -47,7 +48,7 @@ dimension_templates:
 
   fec_year_dimension: &fec_year_dimension
     type: yearRange
-    start: 2010
+    start: "${GOVDATA_START_YEAR:2010}"
     cadenceStart: 2010
     cadenceLength: 2
     # A literal, not "${GOVDATA_START_YEAR:...}" - minYear is a floor describing what the
@@ -510,8 +511,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 65831
-      checkedAt: "2026-10-08T06:06:05Z"
+      rowCount: 66085
+      checkedAt: "2026-11-05T20:23:08Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -519,6 +520,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       All federal candidates registered with the FEC. Includes candidate ID,
@@ -671,8 +673,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 157012
-      checkedAt: "2026-10-08T06:06:09Z"
+      rowCount: 157189
+      checkedAt: "2026-11-05T20:23:09Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -680,6 +682,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       All political committees registered with the FEC. Includes PACs, party
@@ -825,8 +828,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 62666
-      checkedAt: "2026-10-08T06:06:12Z"
+      rowCount: 62895
+      checkedAt: "2026-11-05T20:23:09Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -834,6 +837,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Links between candidates and their authorized committees. Shows which
@@ -921,8 +925,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 273781456
-      checkedAt: "2026-10-08T06:06:26Z"
+      rowCount: 276660895
+      checkedAt: "2026-11-05T20:23:14Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -930,6 +934,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Itemized individual (donor-level) contributions to federal committees exceeding
@@ -1130,8 +1135,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 4494649
-      checkedAt: "2026-10-08T06:06:29Z"
+      rowCount: 4505659
+      checkedAt: "2026-11-05T20:23:15Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1139,6 +1144,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Committee-to-candidate transactions (PACs, party committees), spanning direct
@@ -1320,8 +1326,8 @@ partitionedTables:
       distinctYears: 8
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2022, 2024, 2026]
-      rowCount: 57906887
-      checkedAt: "2026-10-08T06:06:46Z"
+      rowCount: 57961027
+      checkedAt: "2026-11-05T20:23:16Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1329,6 +1335,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Transactions between political committees — transfers, joint fundraising
@@ -1505,8 +1512,8 @@ partitionedTables:
       distinctYears: 8
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2022, 2024, 2026]
-      rowCount: 15990837
-      checkedAt: "2026-10-08T06:06:49Z"
+      rowCount: 16046678
+      checkedAt: "2026-11-05T20:23:17Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1514,6 +1521,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Itemized operating expenditures by political committees. Shows how
@@ -1704,8 +1712,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 685760
-      checkedAt: "2026-10-08T06:06:53Z"
+      rowCount: 713230
+      checkedAt: "2026-11-05T20:23:20Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1713,6 +1721,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Independent expenditures — spending by committees and individuals for or
@@ -1912,8 +1921,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 1711
-      checkedAt: "2026-10-08T06:06:58Z"
+      rowCount: 1736
+      checkedAt: "2026-11-05T20:23:20Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1921,6 +1930,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Electioneering communications — broadcast, cable, or satellite ads that
@@ -2071,8 +2081,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 25716
-      checkedAt: "2026-10-08T06:07:02Z"
+      rowCount: 25768
+      checkedAt: "2026-11-05T20:23:23Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2080,6 +2090,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Communication costs reported by corporations and labor organizations for
@@ -2222,8 +2233,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 37507
-      checkedAt: "2026-10-08T06:07:07Z"
+      rowCount: 37572
+      checkedAt: "2026-11-05T20:23:23Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2231,6 +2242,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Aggregated per-candidate financial summary for each election cycle — one row
@@ -2430,8 +2442,8 @@ partitionedTables:
       distinctYears: 9
       contiguous: false
       years: [2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2026]
-      rowCount: 110222
-      checkedAt: "2026-10-08T06:07:10Z"
+      rowCount: 110799
+      checkedAt: "2026-11-05T20:23:25Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2439,6 +2451,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Aggregated per-committee financial summary for each election cycle — one row
@@ -2644,11 +2657,26 @@ partitionedTables:
   # treasurer/candidate names) are Cal-Access's own filer_id space — distinct from FEC's
   # candidate_id/committee_id, so no FK to the federal tables above.
   - name: ca_contributions
+    timeColumn: receipt_date  # observation time; this table has no column named 'year'
+    coverageWindow:
+      minYear: 1990
+      maxFutureYears: 0
+      reason: "Cal-Access date fields are filer-entered and carry typos in the year (0201, 1005, 2102, 3016, 9411) and 1900 placeholders. The source value is kept as received - a corrected date would be a guess - and coverage is measured over receipt_date years 1990..the check year; excluded rows are counted in observedCoverage. At the 2026-10-17 measurement 231 of 20,411,870 rows were excluded (including 27 dated 1900)."
     # Freshness gate: campaignfinance.cdn.sos.ca.gov returns a real ETag on the zip (confirmed
     # live 2026-09-14, CloudFront+S3) — skips the ~1.6GB re-download when unchanged.
     freshness:
       type: etag
     pattern: "type=ca_contributions/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 1992
+      maxYear: 2026
+      distinctYears: 30
+      contiguous: false
+      years: [1992, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+      rowCount: 20411870
+      excludedRows: 231
+      excludedOutsideYears: [1990, 2026]
+      checkedAt: "2026-10-17T13:39:30Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -2909,10 +2937,25 @@ partitionedTables:
   # CA_EXPENDITURES — California Cal-Access itemized expenditures (EXPN_CD)
   # ==========================================================================
   - name: ca_expenditures
+    timeColumn: expenditure_date  # observation time; this table has no column named 'year'
+    coverageWindow:
+      minYear: 1990
+      maxFutureYears: 0
+      reason: "Cal-Access date fields are filer-entered and carry typos in the year (0201, 1005, 2102, 3016, 9411) and 1900 placeholders. The source value is kept as received - a corrected date would be a guess - and coverage is measured over expenditure_date years 1990..the check year; excluded rows are counted in observedCoverage. At the 2026-10-17 measurement 353 of 16,061,744 rows were excluded (including 209 dated 1900)."
     # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
     freshness:
       type: etag
     pattern: "type=ca_expenditures/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 1990
+      maxYear: 2026
+      distinctYears: 32
+      contiguous: false
+      years: [1990, 1994, 1996, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+      rowCount: 16061744
+      excludedRows: 353
+      excludedOutsideYears: [1990, 2026]
+      checkedAt: "2026-10-17T13:39:30Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -3115,10 +3158,24 @@ partitionedTables:
   # CA_INDEPENDENT_EXPENDITURES — Cal-Access late independent-expenditure reports (S496_CD)
   # ==========================================================================
   - name: ca_independent_expenditures
+    timeColumn: expenditure_date  # observation time; this table has no column named 'year'
+    coverageWindow:
+      minYear: 1990
+      maxFutureYears: 0
+      reason: "Cal-Access date fields are filer-entered and carry typos in the year (0201, 1005, 2102, 3016, 9411) and 1900 placeholders. The source value is kept as received - a corrected date would be a guess - and coverage is measured over expenditure_date years 1990..the check year; excluded rows are counted in observedCoverage. At the 2026-10-17 measurement 2 of 77,722 rows were excluded (dated 2029 and 3011)."
     # Freshness gate: same ETag-based probe as ca_contributions (same source zip).
     freshness:
       type: etag
     pattern: "type=ca_independent_expenditures/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2000
+      maxYear: 2026
+      distinctYears: 27
+      contiguous: true
+      rowCount: 77722
+      excludedRows: 2
+      excludedOutsideYears: [1990, 2026]
+      checkedAt: "2026-10-17T13:39:30Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -3639,6 +3696,9 @@ views:
       FROM independent_expenditures t
 
   - name: active_candidates
+    # year passes through candidates.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Federal candidates flagged as certified active (candidate_status = 'C') in
       fec.candidates. Not filtered to a single cycle — rows span every loaded
@@ -3659,6 +3719,9 @@ views:
       WHERE candidate_status = 'C'
 
   - name: candidate_district_profile
+    # year passes through candidates.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Enriches FEC candidates with geographic state and congressional district data.
       House candidates (office=H) are matched to their TIGER district boundary via

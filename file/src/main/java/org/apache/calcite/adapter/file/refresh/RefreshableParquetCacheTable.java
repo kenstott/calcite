@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.refresh;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.DataContext;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.table.CsvTranslatableTable;
@@ -52,6 +53,8 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
   private final boolean typeInferenceEnabled;
   private final String columnNameCasing;
   private final String tableNameCasing;
+  // The conversion the schema ran on the source, re-run as it was when the source changes.
+  private final SourceFileConversion conversion;
   private final @Nullable RelProtoDataType protoRowType;
   @SuppressWarnings("UnusedVariable")
   private final ExecutionEngineConfig.ExecutionEngineType engineType;
@@ -67,11 +70,11 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
 
   public RefreshableParquetCacheTable(Source source, File initialParquetFile,
       File cacheDir, @Nullable Duration refreshInterval, boolean typeInferenceEnabled,
-      String columnNameCasing, String tableNameCasing, @Nullable RelProtoDataType protoRowType,
+      SourceFileConversion conversion, @Nullable RelProtoDataType protoRowType,
       ExecutionEngineConfig.ExecutionEngineType engineType, @Nullable SchemaPlus parentSchema,
       String fileSchemaName) {
     this(source, null, initialParquetFile, cacheDir, refreshInterval, typeInferenceEnabled,
-        columnNameCasing, tableNameCasing, protoRowType, engineType, parentSchema, fileSchemaName);
+        conversion, protoRowType, engineType, parentSchema, fileSchemaName);
   }
 
   /**
@@ -83,8 +86,8 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
    * @param cacheDir Cache directory
    * @param refreshInterval Refresh interval
    * @param typeInferenceEnabled Whether type inference is enabled
-   * @param columnNameCasing Column name casing
-   * @param tableNameCasing Table name casing
+   * @param conversion How the schema converts its source files: its name casing, and the
+   *     conversion re-run when the source changes
    * @param protoRowType Proto row type
    * @param engineType Engine type
    * @param parentSchema Parent schema
@@ -92,7 +95,7 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
    */
   public RefreshableParquetCacheTable(Source source, @Nullable Source originalSource,
       File initialParquetFile, File cacheDir, @Nullable Duration refreshInterval,
-      boolean typeInferenceEnabled, String columnNameCasing, String tableNameCasing, @Nullable RelProtoDataType protoRowType,
+      boolean typeInferenceEnabled, SourceFileConversion conversion, @Nullable RelProtoDataType protoRowType,
       ExecutionEngineConfig.ExecutionEngineType engineType, @Nullable SchemaPlus parentSchema,
       String fileSchemaName) {
     // Monitor the original source if provided, otherwise monitor the direct source
@@ -102,8 +105,9 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
     this.parquetFile = initialParquetFile;
     this.cacheDir = cacheDir;
     this.typeInferenceEnabled = typeInferenceEnabled;
-    this.columnNameCasing = columnNameCasing;
-    this.tableNameCasing = tableNameCasing;
+    this.conversion = conversion;
+    this.columnNameCasing = conversion.columnNameCasing();
+    this.tableNameCasing = conversion.tableNameCasing();
     this.protoRowType = protoRowType;
     this.engineType = engineType;
     this.parentSchema = parentSchema;
@@ -174,30 +178,14 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
           }
         }
 
-        // Force delete the old parquet file to ensure a fresh conversion
-        if (parquetFile != null && parquetFile.exists()) {
-          long oldSize = parquetFile.length();
-          long oldModified = parquetFile.lastModified();
-          boolean deleted = parquetFile.delete();
-          LOGGER.info("Deleted old parquet cache file: {} (size={}, modified={}, deleted={})",
-                      parquetFile.getAbsolutePath(), oldSize, oldModified, deleted);
-        }
-
-        // Also delete any temporary parquet files that might be lingering
-        File[] tempFiles = cacheDir.listFiles((dir, name) ->
-            name.contains(".tmp.") && name.endsWith(".parquet"));
-        if (tempFiles != null) {
-          for (File tempFile : tempFiles) {
-            tempFile.delete();
-            LOGGER.debug("Deleted temp parquet file: {}", tempFile.getName());
-          }
-        }
-
-        // Atomically update the cache using the standard conversion method
+        // Rebuild the cache whatever the timestamps say. The current parquet file is not
+        // deleted first: a query on another thread reads it until the rebuilt file replaces
+        // it in one move, so the table never has a moment without a cache file.
         // Note: createSourceTable() reads from 'source' which may be the converted JSON
         this.parquetFile =
             ParquetConversionUtil.convertToParquet(source, new File(source.path()).getName(),
-            createSourceTable(), cacheDir, parentSchema, fileSchemaName, this.tableNameCasing);
+            createSourceTable(), cacheDir, parentSchema, fileSchemaName, this.tableNameCasing,
+            true);
 
         // Update delegate table to use new parquet file
         updateDelegateTable();
@@ -232,11 +220,10 @@ public class RefreshableParquetCacheTable extends AbstractRefreshableTable
    */
   private void rerunConversionsIfNeeded(File sourceFile) {
     try {
-      File outputDir = sourceFile.getParentFile();
-
-      // First, try standard conversion (for format conversions like HTML->JSON)
+      // First, re-run the conversion the schema first ran (format conversions like HTML->JSON)
+      // Into the directory of the file this table reads: where the first conversion wrote it.
       boolean converted =
-          org.apache.calcite.adapter.file.converters.FileConversionManager.convertIfNeeded(sourceFile, outputDir, columnNameCasing, tableNameCasing);
+          conversion.reconvert(sourceFile, new File(source.path()).getParentFile());
 
       if (converted) {
         LOGGER.debug("Re-converted source file: {}", sourceFile.getName());

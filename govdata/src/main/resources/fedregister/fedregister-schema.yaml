@@ -14,6 +14,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fedregister}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
@@ -39,10 +40,17 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   partition_month: &partition_month
     name: month
     type: INTEGER
+
+  # fr_significance writes its month zero-padded ("01".."12", from fr_months_padded).
+  partition_month_padded: &partition_month_padded
+    name: month
+    type: INTEGER
+    storedDigits: 2
 
   year_month_partitions: &year_month_partitions
     style: hive
@@ -105,8 +113,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 482396
-      checkedAt: "2026-10-08T06:07:22Z"
+      rowCount: 482497
+      checkedAt: "2026-11-05T20:23:28Z"
     partitions: *year_month_partitions
     comment: >
       All Federal Register documents partitioned by publication year and month.
@@ -215,8 +223,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 487301
-      checkedAt: "2026-10-08T06:07:36Z"
+      rowCount: 487403
+      checkedAt: "2026-11-05T20:23:36Z"
     partitions: *year_month_partitions
     comment: >
       Text of each Federal Register document, one row per document_number (joins to
@@ -305,13 +313,13 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 487901
-      checkedAt: "2026-10-08T06:07:43Z"
+      rowCount: 489808
+      checkedAt: "2026-11-05T20:23:38Z"
     partitions:
       style: hive
       columnDefinitions:
         - *partition_year
-        - *partition_month
+        - *partition_month_padded
     comment: >
       OIRA EO 12866 economic-significance determination per Federal Register
       document, sourced directly from the Federal Register API's own `significant`

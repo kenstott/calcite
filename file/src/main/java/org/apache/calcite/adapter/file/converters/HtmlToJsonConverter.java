@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.file.converters;
 import org.apache.calcite.adapter.file.converters.HtmlCrawler.CrawlResult;
 import org.apache.calcite.adapter.file.converters.HtmlTableScanner.TableInfo;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.util.Source;
 import org.apache.calcite.util.Sources;
 
@@ -56,53 +57,15 @@ public class HtmlToJsonConverter {
   }
 
   /**
-   * Converts all tables in an HTML file to separate JSON files.
+   * Converts an HTML file's tables, and with {@code pages}' list option its content's lists
+   * (REQ-2186), to JSON files.
    *
-   * @param htmlFile The HTML file to convert
-   * @param outputDir The directory to write JSON files to
-   * @return List of generated JSON files
-   * @throws IOException if conversion fails
-   */
-  public static List<File> convert(File htmlFile, File outputDir, File baseDirectory) throws IOException {
-    return convert(htmlFile, outputDir, "UNCHANGED", baseDirectory);
-  }
-
-  /**
-   * Converts all tables in an HTML file to separate JSON files with column name casing.
-   *
-   * @param htmlFile The HTML file to convert
-   * @param outputDir The directory to write JSON files to
-   * @param columnNameCasing The casing strategy for column names
-   * @return List of generated JSON files
-   * @throws IOException if conversion fails
-   */
-  public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing, File baseDirectory) throws IOException {
-    return convert(htmlFile, outputDir, columnNameCasing, "SMART_CASING", baseDirectory);
-  }
-
-  /**
-   * Converts all tables in an HTML file to separate JSON files with column and table name casing.
-   *
-   * @param htmlFile The HTML file to convert
-   * @param outputDir The directory to write JSON files to
-   * @param columnNameCasing The casing strategy for column names
-   * @param tableNameCasing The casing strategy for table names
-   * @return List of generated JSON files
-   * @throws IOException if conversion fails
-   */
-  /**
-   * Converts HTML file to JSON using explicit table name.
-   *
-   * @param htmlFile The HTML file to convert
-   * @param outputDir The directory to write JSON files to
-   * @param columnNameCasing The casing strategy for column names
-   * @param tableNameCasing The casing strategy for table names
-   * @param explicitTableName The explicit name to use for the table (overrides auto-generated name)
-   * @return List of generated JSON files
-   * @throws IOException if conversion fails
+   * @param pages How the page is read: whether its lists are tables, and which part of it is
+   *     content
    */
   public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing,
-                                   String tableNameCasing, String explicitTableName, File baseDirectory, String relativePath) throws IOException {
+                                   String tableNameCasing, String explicitTableName, File baseDirectory, String relativePath,
+                                   CrawlerConfiguration pages) throws IOException {
     List<File> jsonFiles = new ArrayList<>();
     // Use HtmlTableScanner to find tables - make sure we re-scan each time
     Source source = Sources.of(htmlFile);
@@ -168,15 +131,8 @@ public class HtmlToJsonConverter {
         Element table = tables.get(i);
         String tableName = tableInfo.name;
 
-        // Generate JSON filename
-        String baseFileName = ConverterUtils.getBaseFileName(htmlFile.getName(), ".html", ".htm");
-
-        // Include directory structure in the filename if relativePath is provided
-        if (relativePath != null && relativePath.contains(File.separator)) {
-          String dirPrefix = relativePath.substring(0, relativePath.lastIndexOf(File.separator))
-              .replace(File.separator, "_");
-          baseFileName = dirPrefix + "_" + baseFileName;
-        }
+        // Generate JSON filename, with the directory structure when relativePath is provided
+        String baseFileName = baseFileName(htmlFile, relativePath);
 
         String jsonFileName = baseFileName + "__" + tableName + ".json";
         File jsonFile = new File(outputDir, jsonFileName);
@@ -193,39 +149,53 @@ public class HtmlToJsonConverter {
 
         LOGGER.info("Wrote table to " + jsonFile.getAbsolutePath());
       }
+      if (pages.isGenerateTablesFromHtmlLists()) {
+        jsonFiles.addAll(writeLists(htmlFile, outputDir, baseDirectory, relativePath, pages, jsonFiles));
+      }
     }
 
     return jsonFiles;
   }
 
-  public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory) throws IOException {
-    return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, null, baseDirectory, null);
-  }
-
-  public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath) throws IOException {
-    return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, null, baseDirectory, relativePath);
+  /**
+   * The start of the names of the files a page's tables and lists are written to, each
+   * {@code <base>__<name>.json}: the page's file name, after its directory under the source
+   * root when {@code relativePath} gives one.
+   */
+  static String baseFileName(File htmlFile, String relativePath) {
+    String baseFileName = ConverterUtils.getBaseFileName(htmlFile.getName(), ".html", ".htm");
+    String dirPrefix = relativePath == null ? null : LocalPaths.directoryPrefix(relativePath);
+    return dirPrefix == null ? baseFileName : dirPrefix + "_" + baseFileName;
   }
 
   /**
-   * Converts a specific table in an HTML file to JSON using selector and index.
-   * This is for explicit table definitions with selector and index parameters.
-   *
-   * @param htmlFile The HTML file to convert
-   * @param outputDir The directory to write JSON files to
-   * @param columnNameCasing The casing strategy for column names
-   * @param tableNameCasing The casing strategy for table names
-   * @param selector The CSS selector to find tables (e.g., "table.wikitable.sortable")
-   * @param index The index of the table to select (0-based)
-   * @param explicitTableName The explicit name to use for the table
-   * @param baseDirectory The base directory for metadata recording
-   * @return List containing the single generated JSON file
-   * @throws IOException if conversion fails
+   * Writes the lists of the page's content as JSON files, named as a crawled page's lists are,
+   * after the page's tables so a name a table took is numbered.
    */
-  public static List<File> convertWithSelector(File htmlFile, File outputDir, String columnNameCasing,
-                                               String tableNameCasing, String selector, Integer index,
-                                               String explicitTableName, File baseDirectory) throws IOException {
-    return convertWithSelector(htmlFile, outputDir, columnNameCasing, tableNameCasing, selector, index,
-                              explicitTableName, baseDirectory, null);
+  private static List<File> writeLists(File htmlFile, File outputDir, File baseDirectory,
+      String relativePath, CrawlerConfiguration pages, List<File> tableFiles) throws IOException {
+    List<File> jsonFiles = new ArrayList<>();
+    // The page's address is its file's, so a link's uri is absolute against it.
+    Document doc = Jsoup.parse(htmlFile, "UTF-8", htmlFile.toURI().toString());
+    Element content = pages.contentOf(doc);
+    if (content == null) {
+      return jsonFiles;
+    }
+    String baseFileName = baseFileName(htmlFile, relativePath);
+    Set<String> names = new HashSet<>();
+    for (File table : tableFiles) {
+      names.add(table.getName());
+    }
+    for (HtmlListScanner.ListTable list : HtmlListScanner.scan(content)) {
+      String jsonFileName = HtmlCrawlStage.unique(baseFileName + "__" + list.name + ".json", names);
+      File jsonFile = new File(outputDir, jsonFileName);
+      MAPPER.writerWithDefaultPrettyPrinter().writeValue(jsonFile, HtmlCrawlStage.jsonOf(list.rows));
+      jsonFiles.add(jsonFile);
+      ConversionRecorder.recordConversion(htmlFile, jsonFile, "HTML_TO_JSON", baseDirectory,
+          jsonFileName.substring(0, jsonFileName.lastIndexOf(".json")));
+      LOGGER.info("Wrote list to " + jsonFile.getAbsolutePath());
+    }
+    return jsonFiles;
   }
 
   /**
@@ -241,18 +211,20 @@ public class HtmlToJsonConverter {
    * @param explicitTableName The explicit name to use for the table
    * @param baseDirectory The base directory for metadata recording
    * @param fieldConfigs The field definitions for mapping HTML headers to column names
+   * @param pages How the page is read: whether its lists are tables, and which part is content
    * @return List containing the single generated JSON file
    * @throws IOException if conversion fails
    */
   public static List<File> convertWithSelector(File htmlFile, File outputDir, String columnNameCasing,
                                                String tableNameCasing, String selector, Integer index,
                                                String explicitTableName, File baseDirectory,
-                                               List<Map<String, Object>> fieldConfigs) throws IOException {
+                                               List<Map<String, Object>> fieldConfigs,
+                                               CrawlerConfiguration pages) throws IOException {
     List<File> jsonFiles = new ArrayList<>();
 
     if (selector == null || index == null) {
       LOGGER.warn("Selector or index is null, falling back to regular conversion");
-      return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, explicitTableName, baseDirectory, null);
+      return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, explicitTableName, baseDirectory, null, pages);
     }
 
     // Ensure output directory exists
@@ -294,26 +266,6 @@ public class HtmlToJsonConverter {
 
     return jsonFiles;
   }
-
-  /**
-   * Converts all tables in an HTML file to separate JSON files with explicit table name support.
-   * This overload is used by bulk conversion to preserve explicit table names from tableDef processing.
-   *
-   * @param htmlFile The HTML file to convert
-   * @param outputDir The directory to write JSON files to
-   * @param columnNameCasing The casing strategy for column names
-   * @param tableNameCasing The casing strategy for table names
-   * @param baseDirectory The base directory for metadata storage
-   * @param relativePath The relative path from source directory to the file
-   * @param existingTableName The existing table name from previous conversion record (or null)
-   * @return List of generated JSON files
-   * @throws IOException if conversion fails
-   */
-  public static List<File> convert(File htmlFile, File outputDir, String columnNameCasing, String tableNameCasing, File baseDirectory, String relativePath, String existingTableName) throws IOException {
-    return convert(htmlFile, outputDir, columnNameCasing, tableNameCasing, existingTableName, baseDirectory, relativePath);
-  }
-
-
 
   /**
    * Writes a table as a JSON array file.
@@ -607,7 +559,7 @@ public class HtmlToJsonConverter {
     }
 
     // Perform crawl
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, baseDirectory);
     CrawlResult crawlResult = crawler.crawl(startUrl);
 
     try {

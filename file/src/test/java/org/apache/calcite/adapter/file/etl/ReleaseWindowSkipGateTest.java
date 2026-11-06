@@ -100,7 +100,7 @@ class ReleaseWindowSkipGateTest {
         DataProvider dataProvider, DataWriter dataWriter,
         LocalDate fixedToday, boolean ignoreReleaseWindow) {
       super(config, storageProvider, null, baseDirectory, null, tracker,
-          dataProvider, dataWriter, null, ignoreReleaseWindow);
+          dataProvider, dataWriter, ignoreReleaseWindow);
       this.fixedToday = fixedToday;
     }
 

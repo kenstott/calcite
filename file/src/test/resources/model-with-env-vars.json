@@ -7,6 +7,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "directory": "${CALCITE_DATA_DIR:sales}",
         "executionEngine": "${CALCITE_FILE_ENGINE_TYPE:LINQ4J}",
         "batchSize": "${CALCITE_BATCH_SIZE:1000}",

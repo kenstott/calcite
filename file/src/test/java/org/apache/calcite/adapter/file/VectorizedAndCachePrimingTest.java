@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.io.PrintWriter;
@@ -27,7 +28,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Test to verify vectorized reading and cache priming configuration works correctly.
  */
-@Tag("performance")public class VectorizedAndCachePrimingTest {
+@Tag("performance")
+@ResourceLock("parquet.vectorized.property")
+public class VectorizedAndCachePrimingTest {
 
   @TempDir
   File tempDir;
@@ -46,6 +49,9 @@ import static org.junit.jupiter.api.Assertions.*;
     System.setProperty("parquet.enable.vectorized.reader", "true");
 
     Properties props = new Properties();
+    // The adapter's lower-case table names, queried unquoted, as the other file tests do
+    props.put("lex", "ORACLE");
+    props.put("unquotedCasing", "TO_LOWER");
     props.put("model", "inline:"
         + "{\n"
         + "  version: '1.0',\n"
@@ -56,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.*;
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'parquet',\n"
         + "        primeCache: false,\n"
@@ -92,6 +99,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
     // Test with cache priming enabled (default)
     Properties props = new Properties();
+    // The adapter's lower-case table names, queried unquoted, as the other file tests do
+    props.put("lex", "ORACLE");
+    props.put("unquotedCasing", "TO_LOWER");
     props.put("model", "inline:"
         + "{\n"
         + "  version: '1.0',\n"
@@ -102,6 +112,7 @@ import static org.junit.jupiter.api.Assertions.*;
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        primeCache: true,\n"
         + "        ephemeralCache: true\n"
@@ -142,6 +153,9 @@ import static org.junit.jupiter.api.Assertions.*;
     System.setProperty("parquet.enable.vectorized.reader", "true");
 
     Properties props = new Properties();
+    // The adapter's lower-case table names, queried unquoted, as the other file tests do
+    props.put("lex", "ORACLE");
+    props.put("unquotedCasing", "TO_LOWER");
     props.put("model", "inline:"
         + "{\n"
         + "  version: '1.0',\n"
@@ -152,6 +166,7 @@ import static org.junit.jupiter.api.Assertions.*;
         + "      type: 'custom',\n"
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'parquet',\n"
         + "        primeCache: true,\n"
@@ -166,7 +181,7 @@ import static org.junit.jupiter.api.Assertions.*;
       Thread.sleep(500);
 
       // Run aggregation query - should benefit from both optimizations
-      String query = "SELECT category, COUNT(*), SUM(value) " +
+      String query = "SELECT category, COUNT(*), SUM(\"value\") " +
                     "FROM large_table " +
                     "GROUP BY category";
 

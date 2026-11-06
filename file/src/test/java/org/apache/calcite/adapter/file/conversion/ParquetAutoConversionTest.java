@@ -148,6 +148,7 @@ public class ParquetAutoConversionTest {
       // Configure file schema with PARQUET execution engine
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", uniqueTempDir.getAbsolutePath());
+      operand.put("baseDirectory", uniqueTempDir.getAbsolutePath());
       // Use unique cache directory for test isolation
       operand.put("parquetCacheDirectory", cacheDir.getAbsolutePath());
       operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
@@ -268,6 +269,7 @@ public class ParquetAutoConversionTest {
       SchemaPlus rootSchema = calciteConn1.getRootSchema();
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", uniqueTempDir.getAbsolutePath());
+      operand.put("baseDirectory", uniqueTempDir.getAbsolutePath());
       // Use unique cache directory for test isolation
       operand.put("parquetCacheDirectory", cacheDir.getAbsolutePath());
       operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
@@ -318,6 +320,7 @@ public class ParquetAutoConversionTest {
       SchemaPlus rootSchema = calciteConn2.getRootSchema();
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", uniqueTempDir.getAbsolutePath());
+      operand.put("baseDirectory", uniqueTempDir.getAbsolutePath());
       // Use same cache directory to test invalidation
       operand.put("parquetCacheDirectory", cacheDir.getAbsolutePath());
       operand.put("ephemeralCache", true);  // Use ephemeral cache for test isolation
@@ -380,6 +383,7 @@ public class ParquetAutoConversionTest {
       SchemaPlus rootSchema = calciteConn1.getRootSchema();
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", testSubDir.getAbsolutePath());
+      operand.put("baseDirectory", testSubDir.getAbsolutePath());
       // Use unique cache directory for test isolation
       operand.put("parquetCacheDirectory", cacheDir.getAbsolutePath());
       // Enable refresh to use RefreshableParquetCacheTable which handles cache invalidation
@@ -432,6 +436,7 @@ public class ParquetAutoConversionTest {
       SchemaPlus rootSchema = calciteConn2.getRootSchema();
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", testSubDir.getAbsolutePath());
+      operand.put("baseDirectory", testSubDir.getAbsolutePath());
       // Use same cache directory to test invalidation
       operand.put("parquetCacheDirectory", cacheDir.getAbsolutePath());
       // Enable refresh to use RefreshableParquetCacheTable which handles cache invalidation

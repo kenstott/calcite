@@ -109,8 +109,8 @@ public class FileSchemaDeepCoverageTest4 {
    * Helper: create a FileSchema with source directory.
    */
   private FileSchema createSchema(File sourceDir) {
-    return new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, null, defaultEngineConfig);
+    return new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null, defaultEngineConfig, false,
+        null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
   }
 
   /**
@@ -118,8 +118,8 @@ public class FileSchemaDeepCoverageTest4 {
    */
   private FileSchema createSchemaWithTables(File sourceDir,
       List<Map<String, Object>> tables) {
-    return new FileSchema(parentSchema, uniqueSchemaName(),
-        sourceDir, tables, defaultEngineConfig);
+    return new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, tables, defaultEngineConfig,
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
   }
 
   /**
@@ -166,7 +166,7 @@ public class FileSchemaDeepCoverageTest4 {
     String userAssignedName = "ECON_UPPER";
     String canonicalName = "econ";
     FileSchema schema =
-        new FileSchema(parentSchema, userAssignedName, tempDir.toFile(), null, null, null, null,
+        new FileSchema(parentSchema, userAssignedName, tempDir.toFile(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false, null, canonicalName);
@@ -180,7 +180,7 @@ public class FileSchemaDeepCoverageTest4 {
   @Test void testConstructorWithoutCanonicalSchemaNameUsesName() throws Exception {
     String schemaName = "my_schema";
     FileSchema schema =
-        new FileSchema(parentSchema, schemaName, tempDir.toFile(), null, null, null, null,
+        new FileSchema(parentSchema, schemaName, tempDir.toFile(), tempDir.toFile(), null, null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false, null, null);
@@ -225,7 +225,7 @@ public class FileSchemaDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), null, null, s3Path, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), null, tempDir.toFile(), s3Path, null,
         null, defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -244,7 +244,7 @@ public class FileSchemaDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "local", storageConfig, null, null, false);
@@ -275,7 +275,8 @@ public class FileSchemaDeepCoverageTest4 {
 
   @Test void testConstructorWithNullSourceDirectory() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), (File) null, null, defaultEngineConfig);
+        new FileSchema(parentSchema, uniqueSchemaName(), (File) null, tempDir.toFile(), null, null, defaultEngineConfig,
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     assertNotNull(schema);
     assertNotNull(schema.getOperatingCacheDirectory());
@@ -387,7 +388,9 @@ public class FileSchemaDeepCoverageTest4 {
     Files.write(new File(subDir, "nested.json").toPath(), "[{}]".getBytes(StandardCharsets.UTF_8));
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), srcDir, (List<Map<String, Object>>) null, defaultEngineConfig, true);
+        new FileSchema(parentSchema, uniqueSchemaName(), srcDir, srcDir, null, (List<Map<String, Object>>) null,
+        defaultEngineConfig, true, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
 
     File[] files =
         (File[]) invokePrivate(schema, "getFilesInDir", new Class[]{File.class}, srcDir);
@@ -433,7 +436,9 @@ public class FileSchemaDeepCoverageTest4 {
     Files.write(new File(subDir, "deep.json").toPath(), "{}".getBytes(StandardCharsets.UTF_8));
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), srcDir, (List<Map<String, Object>>) null, defaultEngineConfig, true);
+        new FileSchema(parentSchema, uniqueSchemaName(), srcDir, srcDir, null, (List<Map<String, Object>>) null,
+        defaultEngineConfig, true, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
 
     List<File> jsonFiles = new ArrayList<>();
     invokePrivate(schema, "findJsonFiles",
@@ -662,7 +667,7 @@ public class FileSchemaDeepCoverageTest4 {
     Files.write(jsonFile.toPath(), "[{\"id\":1}]".getBytes(StandardCharsets.UTF_8));
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, true, null, false);
@@ -1008,7 +1013,8 @@ public class FileSchemaDeepCoverageTest4 {
     when(duckConfig.getParquetCacheDirectory()).thenReturn(null);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, duckConfig, false, null, null, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null, duckConfig,
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     org.apache.calcite.adapter.file.partition.PartitionedTableConfig config =
         mock(org.apache.calcite.adapter.file.partition.PartitionedTableConfig.class);
@@ -1027,8 +1033,9 @@ public class FileSchemaDeepCoverageTest4 {
     when(parquetConfig.getParquetCacheDirectory()).thenReturn(null);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, parquetConfig, false,
-        null, null, null, "5 minutes");
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        parquetConfig, false, null, null, null, "5 minutes", "SMART_CASING", "SMART_CASING", null,
+        null, null, null, true);
 
     org.apache.calcite.adapter.file.partition.PartitionedTableConfig config =
         mock(org.apache.calcite.adapter.file.partition.PartitionedTableConfig.class);
@@ -1518,21 +1525,23 @@ public class FileSchemaDeepCoverageTest4 {
 
   @Test void testHasRefreshableTablesWithInterval() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, null, null, "5 minutes");
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, null, null, "5 minutes", "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
     assertTrue(schema.hasRefreshableTables());
   }
 
   @Test void testHasRefreshableTablesWithoutInterval() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, null, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
     assertFalse(schema.hasRefreshableTables());
   }
 
   @Test void testGetCommentWithValue() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false, "My Schema Comment");
@@ -1541,7 +1550,7 @@ public class FileSchemaDeepCoverageTest4 {
 
   @Test void testGetCommentNull() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, null, null, false, null);
@@ -1613,8 +1622,9 @@ public class FileSchemaDeepCoverageTest4 {
     views.add(view);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, views, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, views, null, null, "SMART_CASING", "SMART_CASING", null,
+        null, null, null, true);
 
     Map<String, Table> tables = schema.getTableMap();
     assertNotNull(tables);
@@ -1628,8 +1638,9 @@ public class FileSchemaDeepCoverageTest4 {
     views.add(view);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        null, views, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, views, null, null, "SMART_CASING", "SMART_CASING", null,
+        null, null, null, true);
 
     assertNotNull(schema.getTableMap());
   }
@@ -1643,8 +1654,9 @@ public class FileSchemaDeepCoverageTest4 {
     materializations.add(mv);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, defaultEngineConfig, false,
-        materializations, null, null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, materializations, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
 
     assertNotNull(schema.getTableMap());
   }
@@ -1662,26 +1674,31 @@ public class FileSchemaDeepCoverageTest4 {
 
   @Test void testSimplestConstructor() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
     assertNotNull(schema);
   }
 
   @Test void testConstructorWithRecursiveFlag() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, defaultEngineConfig, true);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, true, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
     assertNotNull(schema);
   }
 
   @Test void testConstructorWithMaterializationsAndViews() {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, defaultEngineConfig, false,
-        null, null);
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
+        defaultEngineConfig, false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
     assertNotNull(schema);
   }
 
   @Test void testConstructorNullCasingDefaults() throws Exception {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, null, null,
         null, null, null, null, false);
@@ -1758,7 +1775,7 @@ public class FileSchemaDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1774,7 +1791,7 @@ public class FileSchemaDeepCoverageTest4 {
     storageConfig.put("_storageProvider", mockProvider);
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         "s3", storageConfig, null, null, false, null);
@@ -1909,7 +1926,7 @@ public class FileSchemaDeepCoverageTest4 {
 
   @Test void testGetFlattteningOptionsForFileSchemaLevel() throws Exception {
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), null, null, null,
+        new FileSchema(parentSchema, uniqueSchemaName(), tempDir.toFile(), tempDir.toFile(), null, null,
         defaultEngineConfig, false, null, null, null,
         null, "SMART_CASING", "SMART_CASING",
         null, null, true, null, false);
@@ -2061,7 +2078,8 @@ public class FileSchemaDeepCoverageTest4 {
         "a,b\n1,2".getBytes(StandardCharsets.UTF_8));
 
     FileSchema schema =
-        new FileSchema(parentSchema, uniqueSchemaName(), srcDir, null, defaultEngineConfig);
+        new FileSchema(parentSchema, uniqueSchemaName(), srcDir, srcDir, null, null, defaultEngineConfig, false, null,
+        null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     schema.getTableMap();
 

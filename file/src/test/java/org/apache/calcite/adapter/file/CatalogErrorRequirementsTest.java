@@ -10,7 +10,6 @@
  */
 package org.apache.calcite.adapter.file;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * FILE-110 / FILE-111 / FILE-095 — catalog-discovery and error-surface goldens for the file
- * adapter, plus {@link Disabled @Disabled} targets documenting two resolved-but-pending bugs.
+ * adapter.
  *
  * <p>These drive the real discovery/error path end-to-end: a {@link FileSchemaFactory}-backed
  * schema is built over a temp directory via a model, and the catalog is inspected through the JDBC
@@ -82,7 +81,7 @@ public class CatalogErrorRequirementsTest {
    */
   private static String model(Path dir, String recursiveLiteral) {
     StringBuilder operand = new StringBuilder();
-    operand.append("      \"directory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n");
+    operand.append("      \"directory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n      \"baseDirectory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n");
     operand.append("      \"ephemeralCache\": true,\n");
     operand.append("      \"executionEngine\": \"linq4j\",\n");
     operand.append("      \"tableNameCasing\": \"LOWER\",\n");
@@ -131,43 +130,35 @@ public class CatalogErrorRequirementsTest {
   // ----------------------------------------------------------------- FILE-110 -----------------
 
   /**
-   * A boolean {@code recursive: true} discovers a nested-subdir file as a table; a STRING
-   * {@code recursive: "true"} does NOT (the nested file is absent because the operand is not
-   * {@code Boolean.TRUE}); the default (operand absent) is non-recursive. The depth-0 file is
-   * always present, isolating recursion as the only variable.
+   * Recursion is on unless the model turns it off (FILE-110, C-01, #532): a boolean
+   * {@code recursive: true}, the default (operand absent) and the string {@code "true"} all
+   * discover a nested-subdir file as a table; {@code recursive: false} does not. The depth-0 file
+   * is always present, isolating recursion as the only variable.
    */
-  @Test @Tag("FILE-110") void recursiveBooleanEnablesStringDoesNot(@TempDir Path dir)
+  @Test @Tag("FILE-110") void recursiveDefaultsToTrueAndFalseTurnsItOff(@TempDir Path dir)
       throws Exception {
     csv(dir.resolve("top.csv"));
     csv(dir.resolve("sub/nested.csv"));
 
-    // boolean true -> recursion ON: the nested file registers.
     TreeSet<String> bool = tables(model(dir, "true"));
     assertTrue(bool.contains("top"), "depth-0 file always present");
     assertTrue(bool.contains("sub__nested"),
         "boolean recursive=true discovers the nested file (got " + bool + ")");
 
-    // string "true" -> recursion OFF: == Boolean.TRUE is false for a String, so no recursion.
-    TreeSet<String> str = tables(model(dir, "\"true\""));
-    assertTrue(str.contains("top"), "depth-0 file always present");
-    assertFalse(str.contains("sub__nested"),
-        "string recursive=\"true\" does NOT enable recursion (got " + str + ")");
-
-    // default (operand absent) -> recursion OFF.
     TreeSet<String> def = tables(model(dir, null));
     assertTrue(def.contains("top"), "depth-0 file always present");
-    assertFalse(def.contains("sub__nested"),
-        "default recursive is FALSE (got " + def + ")");
+    assertTrue(def.contains("sub__nested"),
+        "the default is recursive (got " + def + ")");
+
+    TreeSet<String> off = tables(model(dir, "false"));
+    assertTrue(off.contains("top"), "depth-0 file always present");
+    assertFalse(off.contains("sub__nested"),
+        "recursive=false does not discover the nested file (got " + off + ")");
   }
 
   /**
-   * C-01 (pending fix): the INTENDED contract is that recursion should default to true AND that a
-   * JSON string {@code "true"} should also enable recursion. This target asserts the intended
-   * behavior (string "true" enables recursion -> nested file present); it is {@link Disabled} and
-   * will FAIL against the current {@code == Boolean.TRUE} read until the fix lands. It does NOT
-   * assert the current (wrong) behavior as passing.
+   * C-01 (#532): a JSON string {@code "true"} enables recursion like a boolean does.
    */
-  @Disabled("C-01: default recursive=true AND accept string 'true' — pending code fix")
   @Test @Tag("FILE-110") void recursiveStringTrueShouldEnableRecursion(@TempDir Path dir)
       throws Exception {
     csv(dir.resolve("top.csv"));
@@ -228,14 +219,9 @@ public class CatalogErrorRequirementsTest {
   }
 
   /**
-   * C-11 (pending fix): the INTENDED contract is that a table-not-found surfaces a
-   * {@link SQLException} carrying SQLState {@code 42S02} ("base table or view not found"). This
-   * target asserts that intended SQLState contract; it is {@link Disabled} and will FAIL until the
-   * error layer is fixed to set SQLState 42S02 (today the message says "not found" but the SQLState
-   * is not the standardized 42S02). It does NOT assert the current (wrong) behavior as passing.
+   * C-11: a table-not-found surfaces a {@link SQLException} carrying SQLState {@code 42S02}
+   * ("base table or view not found").
    */
-  @Disabled("C-11: FileReaderException should be SQLException carrying SQLState 42S02 "
-      + "(table not found) etc. — pending code fix")
   @Test @Tag("FILE-095") void unknownTableShouldCarrySqlState42S02(@TempDir Path dir)
       throws Exception {
     csv(dir.resolve("present.csv"));
@@ -250,6 +236,6 @@ public class CatalogErrorRequirementsTest {
       });
     }
     assertTrue("42S02".equals(ex.getSQLState()),
-        "INTENDED: table-not-found must carry SQLState 42S02 (got SQLState: " + ex.getSQLState() + ")");
+        "table-not-found must carry SQLState 42S02 (got SQLState: " + ex.getSQLState() + ")");
   }
 }

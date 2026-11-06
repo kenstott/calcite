@@ -46,6 +46,12 @@ each other, which is the failure mode the artifact workflow spent most of its ru
 Replaces a Remediation Ledger row. **Filed as a sub-issue of the defect it serves**, so the
 Register→Ledger relationship is a real link rather than a name match across two documents.
 
+**One waiting job per table.** A remediation job for a table that already has one in
+`status:ready-to-run` or `status:on-hold` is folded into that job (its command and body are widened
+to cover the new fix) instead of being filed separately, so the table is reprocessed once for every
+fix waiting on it. A job that is `status:running` is not modified. #897 is the worked example: three
+sec_secondary fixes held in one job.
+
 Title is `<slot>:<year-range> <tables> — <what it fixes>`. Body:
 
 ```markdown
@@ -103,6 +109,7 @@ touches every schema sharing the affected code path.
 | `status:pending-etl` | Expected to resolve on a future scheduled run; no explicit job | nobody — recheck later |
 | `status:blocked` | Viable but stuck on something outside the role — usually a credential with no self-service registration | whoever can unblock it |
 | `status:watch` | Possible issue, no fix made, kept visible in case it recurs | nobody — recheck later |
+| `status:on-hold` | Planned and validated, but production work is held until the owner releases it; no daemon query reads it, so no runner touches it | the owner — release by moving it to `status:ready-to-run` |
 
 `status:blocked` is not the same as closing something as not viable: the work is known to be
 possible, and the issue stays open naming what would unblock it. Blocked items are the cheapest
@@ -131,7 +138,7 @@ refile.
 ### `schema:` — one per govdata schema
 
 `ag banking census cftc crime cyber_threat cyber_vuln disasters econ econ_reference edu energy
-environment fec fedregister fiscal geo health housing lands officials patents ref research sec
+environment fec fedregister fiscal fisheries geo health housing lands officials patents ref research sec
 transport weather`
 
 A `kind:core` defect that spans schemas takes no `schema:` label, or several if the blast radius

@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.cyber.vuln;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.DimensionConfig;
 import org.apache.calcite.adapter.file.etl.DimensionResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
@@ -129,7 +130,7 @@ public class CsafAdvisoryDimensionResolver implements DimensionResolver {
     }
 
     try (BufferedReader reader = new BufferedReader(
-        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+        new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
       return parseIndex(reader, yearFilter);
     } finally {
       conn.disconnect();

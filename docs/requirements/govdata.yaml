@@ -1158,3 +1158,28 @@
     controls; the vuln_threat_chain view bridges cyber_vuln and cyber_threat (CVE->KEV->CWE->OWASP).
   source: "cyber-threat-schema.yaml (attack_to_nist_mappings ~986-1064; vuln_threat_chain view ~979-1006)"
   tests: []
+
+- id: GOV-075
+  module: govdata
+  status: complete
+  group: types
+  category: Declared partition types
+  priority: MUST
+  type: behavioral
+  description: >
+    A table's partition columns are written as the types its partitions.columnDefinitions
+    declares, and every reader through the DuckDB engine sees those types. A table created
+    before this, which stores a declared-integer partition as text, keeps loading at the stored
+    type, with one WARN per table and column naming both types and pointing to
+    govdata/docs/operations/stored-text-columns-to-rewrite.md, until it is purged and
+    reprocessed. The DuckDB engine serves such a column as its declared type and compares a
+    filter on it with the stored text, so partition pruning is kept. A view that passes such a
+    column through declares it in its own columnDefinitions, and is served the same way: DuckDB
+    runs the view over the stored text, and a filter on the column still prunes the view's
+    source.
+  source: "IcebergMaterializationWriter.keepStoredTextTypes; EtlPipelineConfig.withDeclaredPartitionTypes; StoredTextPartitions; StoredTextPartitionFilter"
+  tests:
+    - file/StoredTextPartitionTransitionTest
+    - file/IcebergDeclaredPartitionTypeTest
+    - govdata/DeclaredPartitionTypesTest
+    - govdata/UsaSpendingCountyYearTypeDqTest

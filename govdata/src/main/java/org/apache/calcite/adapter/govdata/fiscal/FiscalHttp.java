@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.fiscal;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +52,7 @@ final class FiscalHttp {
     conn.setInstanceFollowRedirects(true);
     conn.setRequestProperty("User-Agent", USER_AGENT);
     conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/json,text/csv,*/*");
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("HTTP " + code + " for GET " + url);
@@ -103,6 +106,7 @@ final class FiscalHttp {
     conn.setRequestProperty("Accept", "application/json");
     byte[] bytes = jsonBody.getBytes(StandardCharsets.UTF_8);
     conn.setRequestProperty("Content-Length", String.valueOf(bytes.length));
+    NetworkOutageWait.connect(conn);
     OutputStream out = conn.getOutputStream();
     try {
       out.write(bytes);
@@ -192,7 +196,9 @@ final class FiscalHttp {
    * depth against transient 429/503s from either endpoint.
    */
   static byte[] fetchViaWayback(String originalUrl) throws IOException {
-    String cdxUrl = "http://web.archive.org/cdx/search/cdx?url="
+    // https, not http: a network filter answers plain-http requests to archive.org with an HTML
+    // block page, which the JSON parse below then reports as "Unexpected character '<'".
+    String cdxUrl = "https://web.archive.org/cdx/search/cdx?url="
         + java.net.URLEncoder.encode(originalUrl, "UTF-8")
         + "&output=json&filter=statuscode:200&limit=-1";
     String json;
@@ -214,7 +220,7 @@ final class FiscalHttp {
       throw new IOException("Wayback CDX: snapshot row without timestamp for " + originalUrl);
     }
     // Raw-capture form: /web/{TS}id_/<original-url>.
-    String rawUrl = "http://web.archive.org/web/" + ts + "id_/" + originalUrl;
+    String rawUrl = "https://web.archive.org/web/" + ts + "id_/" + originalUrl;
     byte[] bytes;
     InputStream raw = openGetWithRetry(rawUrl).getInputStream();
     try {

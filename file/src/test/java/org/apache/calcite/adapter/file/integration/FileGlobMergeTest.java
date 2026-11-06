@@ -54,7 +54,7 @@ public class FileGlobMergeTest extends BaseFileTest {
         + "\n    \"type\": \"custom\","
         + "\n    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\n    \"operand\": {"
-        + "\n      \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\n      \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + (getExecutionEngine() != null ? "\n      \"executionEngine\": \"" + getExecutionEngine() + "\"," : "")
         + "\n      \"tableNameCasing\": \"LOWER\","
         + "\n      \"columnNameCasing\": \"LOWER\","

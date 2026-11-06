@@ -63,7 +63,7 @@ public class EtlPipelineDeepCoverageTest {
     factoryMock.when(
         () -> MaterializationWriterFactory.createFromConfig(
         any(MaterializeConfig.class), any(StorageProvider.class),
-        anyString(), any(IncrementalTracker.class)))
+        anyString(), any(IncrementalTracker.class), any(java.io.File.class)))
         .thenReturn(mockWriter);
   }
 
@@ -115,17 +115,6 @@ public class EtlPipelineDeepCoverageTest {
 
     EtlPipeline pipeline =
         new EtlPipeline(config, mockStorage, sourceStorage, "/output", null, mockTracker, dataProvider, dataWriter);
-    assertNotNull(pipeline);
-  }
-
-  @Test void testConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = buildSimpleConfig("test_pipeline");
-    StorageProvider sourceStorage = mock(StorageProvider.class);
-    DataProvider dataProvider = mock(DataProvider.class);
-    DataWriter dataWriter = mock(DataWriter.class);
-
-    EtlPipeline pipeline =
-        new EtlPipeline(config, mockStorage, sourceStorage, "/output", null, mockTracker, dataProvider, dataWriter, tempDir.toString());
     assertNotNull(pipeline);
   }
 

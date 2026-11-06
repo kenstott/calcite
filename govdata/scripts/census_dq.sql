@@ -283,10 +283,10 @@ INSERT INTO dq_results SELECT 'census', 'bds_dynamics', 'all_null_cols', 'fail',
 INSERT INTO dq_results SELECT 'census', 'abs_characteristics', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/abs_characteristics', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'nonemployer_statistics', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/nonemployer_statistics', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 INSERT INTO dq_results SELECT 'census', 'building_permits', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/building_permits', allow_moved_paths := true)) WHERE null_percentage = 100.0;
--- Payroll is excluded: this table ingests only the LEHD QWI "SA" (Sex-by-Age) tabulation,
--- which never publishes Payroll at source (confirmed 100% null in LEHD's own raw file, not
+-- payroll is excluded: this table ingests only the LEHD QWI "SA" (Sex-by-Age) tabulation,
+-- which never publishes payroll at source (confirmed 100% null in LEHD's own raw file, not
 -- an ingestion gap).
-INSERT INTO dq_results SELECT 'census', 'qwi_employment', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name <> 'Payroll';
+INSERT INTO dq_results SELECT 'census', 'qwi_employment', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/qwi_employment', allow_moved_paths := true)) WHERE null_percentage = 100.0 AND column_name <> 'payroll';
 INSERT INTO dq_results SELECT 'census', 'lodes_workplace', 'all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/lodes_workplace', allow_moved_paths := true)) WHERE null_percentage = 100.0;
 
 -- ============================================================================
@@ -562,6 +562,159 @@ FROM (
   WHERE population IS NOT NULL AND population < 0
 );
 
+-- ----------------------------------------------------------------------------
+-- pep_components_of_change: PEP county components (bulk co-est{vintage}-alldata.csv),
+-- one row per county per data year 2010..latest. Not sampled: the whole table is read.
+-- ----------------------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T2_row_count',
+  CASE WHEN n >= 50000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '50000',
+  'Expected >= 50000 rows (16 data years 2010-2025 x about 3,140 counties)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true));
+
+SELECT 'pep_components_of_change' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true) LIMIT 1;
+
+INSERT INTO dq_results SELECT 'census', 'pep_components_of_change', 'T4_all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'pep_components_of_change', 'T5_all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0',
+  'NULL county_fips rows plus duplicate (year, county_fips) keys'
+FROM (SELECT
+        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true) WHERE county_fips IS NULL)
+      + (SELECT COUNT(*) FROM (SELECT year, county_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)) AS n);
+
+-- Both vintages present: data years 2010-2019 (vintage 2019) and 2020 onward (latest vintage).
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T7_years_and_vintages',
+  CASE WHEN y_old = 10 AND y_new >= 6 AND v_old = 1 AND v_new = 1 THEN 'pass' ELSE 'fail' END,
+  CAST(y_old AS VARCHAR) || ' + ' || CAST(y_new AS VARCHAR), '10 + >=6',
+  'Distinct data years 2010-2019 and 2020+, one vintage each'
+FROM (SELECT
+        COUNT(DISTINCT CASE WHEN CAST(year AS INTEGER) < 2020 THEN year END) AS y_old,
+        COUNT(DISTINCT CASE WHEN CAST(year AS INTEGER) >= 2020 THEN year END) AS y_new,
+        COUNT(DISTINCT CASE WHEN CAST(year AS INTEGER) < 2020 THEN vintage END) AS v_old,
+        COUNT(DISTINCT CASE WHEN CAST(year AS INTEGER) >= 2020 THEN vintage END) AS v_new
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true));
+
+-- Identities of the PEP components: natural change = births - deaths and net migration =
+-- international + domestic, per row; the domestic moves of all counties net to zero
+-- nationally in each year (a move out of one county is a move into another).
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T7_component_identities',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'Rows where natural_change <> births - deaths or net_migration <> international + domestic'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true)
+      WHERE natural_change <> births - deaths
+         OR net_migration <> international_migration + domestic_migration);
+
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T7_domestic_nets_to_zero',
+  CASE WHEN worst <= 100 THEN 'pass' ELSE 'fail' END, CAST(worst AS VARCHAR), '<= 100',
+  'Largest absolute national sum of domestic_migration over counties in any data year'
+FROM (SELECT COALESCE(MAX(ABS(s)), 0) AS worst FROM (
+        SELECT year, SUM(domestic_migration) AS s
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true)
+        GROUP BY year));
+
+-- ----------------------------------------------------------------------------
+-- acs_county_migration_flows: ACS 5-year county-to-county flows via the Census flows API,
+-- vintages 2010-2020, one request per (vintage, reference state). Not sampled.
+-- ----------------------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T2_row_count',
+  CASE WHEN n >= 5000000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '5000000',
+  'Expected >= 5000000 rows (11 vintages, 5.5 million rows measured 2026-10-16)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true));
+
+SELECT 'acs_county_migration_flows' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true) LIMIT 1;
+
+-- moved_out / net_moved are legitimately NULL for world_region partners (outbound moves abroad
+-- are not measured), so a column is flagged only when it is NULL on every row.
+INSERT INTO dq_results SELECT 'census', 'acs_county_migration_flows', 'T4_all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'acs_county_migration_flows', 'T5_all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0',
+  'NULL county_fips/other_area_name rows plus duplicate (year, county_fips, other_area_name) keys'
+FROM (SELECT
+        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true) WHERE county_fips IS NULL OR other_area_name IS NULL)
+      + (SELECT COUNT(*) FROM (SELECT year, county_fips, other_area_name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true) GROUP BY 1, 2, 3 HAVING COUNT(*) > 1)) AS n);
+
+-- All eleven vintages 2010-2020 and every reference state present.
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T7_years_and_states',
+  CASE WHEN yrs = 11 AND sts >= 51 THEN 'pass' ELSE 'fail' END,
+  CAST(yrs AS VARCHAR) || ' years / ' || CAST(sts AS VARCHAR) || ' states', '11 years / >=51 states',
+  'Distinct vintages (2010-2020) and distinct reference states'
+FROM (SELECT COUNT(DISTINCT year) AS yrs, COUNT(DISTINCT SUBSTR(county_fips, 1, 2)) AS sts
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true));
+
+-- Row invariants: 5-digit reference county; other_area_type consistent with the code length;
+-- counts and margins non-negative; net = in - out whenever both are present.
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T7_row_invariants',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'Rows violating key shape, partner type, non-negativity or net = in - out'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true)
+      WHERE LENGTH(county_fips) <> 5
+         OR other_area_type NOT IN ('county', 'county_subdivision', 'world_region')
+         OR (other_area_type = 'county' AND (other_area_fips IS NULL OR LENGTH(other_area_fips) <> 5))
+         OR (other_area_type = 'county_subdivision' AND (other_area_fips IS NULL OR LENGTH(other_area_fips) <> 10))
+         OR (other_area_type = 'world_region' AND other_area_fips IS NOT NULL)
+         OR moved_in < 0 OR moved_out < 0 OR moved_in_moe < 0 OR moved_out_moe < 0 OR net_moved_moe < 0
+         OR (moved_in IS NOT NULL AND moved_out IS NOT NULL AND net_moved <> moved_in - moved_out));
+
+-- Each county pair is published from both ends: what county A reports as moved in from B is
+-- what B reports as moved out to A.
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T7_pair_symmetry',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'County-type pairs present from both ends where A.moved_in <> B.moved_out'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true) a
+      JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true) b
+        ON a.year = b.year AND a.county_fips = b.other_area_fips AND a.other_area_fips = b.county_fips
+      WHERE a.other_area_type = 'county' AND b.other_area_type = 'county'
+        AND a.moved_in <> b.moved_out);
+
+-- Known anchor (verified live against the Census API, ACS 2016-2020): 2,629 people moved
+-- from Los Angeles County CA (06037) to Harris County TX (48201).
+INSERT INTO dq_results
+SELECT 'census', 'acs_county_migration_flows', 'T7_known_value',
+  CASE WHEN v = 2629 THEN 'pass' ELSE 'fail' END, CAST(v AS VARCHAR), '2629',
+  'Harris TX moved_in from Los Angeles CA, vintage 2020'
+FROM (SELECT COALESCE(SUM(moved_in), 0) AS v
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_county_migration_flows', allow_moved_paths := true)
+      WHERE CAST(year AS INTEGER) = 2020 AND county_fips = '48201' AND other_area_fips = '06037');
+
+-- Anchors against published Census figures: the 2019 vintage puts the U.S. resident
+-- population at 328,239,523 on July 1, 2019 (sum of the counties); every row has a
+-- positive population and non-negative births and deaths.
+INSERT INTO dq_results
+SELECT 'census', 'pep_components_of_change', 'T7_known_values',
+  CASE WHEN pop2019 = 328239523 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(pop2019 AS VARCHAR) || ' / ' || CAST(bad AS VARCHAR), '328239523 / 0',
+  'U.S. 2019 population (sum of counties) and rows with population <= 0 or births/deaths < 0'
+FROM (SELECT
+        COALESCE(SUM(CASE WHEN CAST(year AS INTEGER) = 2019 THEN population_estimate END), 0) AS pop2019,
+        COUNT(*) FILTER (WHERE population_estimate <= 0 OR births < 0 OR deaths < 0) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/pep_components_of_change', allow_moved_paths := true));
+
 -- acs_housing_tenure_by_age: B25007 tenure identity — owner + renter = total (row-weighted
 -- ACS totals are exactly additive; sentinel-normalized nulls skip the check via IS NOT NULL)
 INSERT INTO dq_results
@@ -699,6 +852,111 @@ FROM (
     ON p.county_fips = fd.county_fips
   WHERE p.geography = 'county'
 );
+
+-- ----------------------------------------------------------------------------
+-- acs_congressional_district: ACS 5-year profile by congressional district, vintages 2012+,
+-- one Census API request per vintage. Not sampled: the whole table is read.
+-- ----------------------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T2_row_count',
+  CASE WHEN n >= 5600 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '5600',
+  'Expected >= 5600 rows (13 vintages 2012-2024 x 437 districts)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true));
+
+SELECT 'acs_congressional_district' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) LIMIT 1;
+
+INSERT INTO dq_results SELECT 'census', 'acs_congressional_district', 'T4_all_null_cols', 'fail', column_name, '< 100% null', 'column is entirely NULL' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)) WHERE null_percentage = 100.0;
+INSERT INTO dq_results SELECT 'census', 'acs_congressional_district', 'T5_all_same_value', 'warn', column_name, '> 1 distinct value', 'column has only 1 distinct value' FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)) WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T6_pk_nulls_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0',
+  'NULL cd_fips/congress rows plus duplicate (year, cd_fips) keys'
+FROM (SELECT
+        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) WHERE cd_fips IS NULL OR congress IS NULL)
+      + (SELECT COUNT(*) FROM (SELECT year, cd_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)) AS n);
+
+-- Every vintage carries exactly 435 voting districts (district <> 98) and the 2 non-voting
+-- delegates (District of Columbia and Puerto Rico, district 98), under exactly one Congress.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_districts_per_vintage',
+  CASE WHEN yrs >= 13 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(yrs AS VARCHAR) || ' vintages / ' || CAST(bad AS VARCHAR) || ' bad', '>=13 vintages / 0 bad',
+  'Vintages loaded, and vintages without 435 voting rows, 2 delegate rows and a single Congress'
+FROM (SELECT COUNT(*) AS yrs, COUNT(*) FILTER (WHERE voting <> 435 OR delegates <> 2 OR congresses <> 1) AS bad
+      FROM (SELECT year,
+                   COUNT(*) FILTER (WHERE district <> '98') AS voting,
+                   COUNT(*) FILTER (WHERE district = '98') AS delegates,
+                   COUNT(DISTINCT congress) AS congresses
+            FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+            GROUP BY year));
+
+-- Congress is the Congress seated when the vintage's lines were drawn: it never decreases with
+-- the vintage year, and the code is a plausible Congress number.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_congress_monotonic',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'Vintages whose Congress is lower than an earlier vintage, or outside 111..119'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT CAST(year AS INTEGER) AS y, MIN(congress) AS c,
+               MAX(MIN(congress)) OVER (ORDER BY CAST(year AS INTEGER) ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_max
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+        GROUP BY year)
+      WHERE c < prev_max OR c < 111 OR c > 119);
+
+-- Row invariants: cd_fips = state + district, percentages within 0..100, no negative counts,
+-- parts never exceed their wholes.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_row_invariants',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, CAST(bad AS VARCHAR), '0',
+  'Rows violating key shape, percent range, non-negativity or part <= whole'
+FROM (SELECT COUNT(*) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+      WHERE LENGTH(cd_fips) <> 4 OR cd_fips <> state_fips || district
+         OR total_population <= 0 OR unemployed > civilian_labor_force OR below_poverty > poverty_universe
+         OR population_65_plus > total_population OR bachelors_or_higher > population_25_plus
+         OR foreign_born > total_population OR owner_occupied_units > occupied_housing_units
+         OR renters_cost_burdened > renter_households OR owners_cost_burdened > mortgaged_owner_households
+         OR unemployment_rate_pct NOT BETWEEN 0 AND 100 OR poverty_rate_pct NOT BETWEEN 0 AND 100
+         OR population_65_plus_pct NOT BETWEEN 0 AND 100 OR bachelors_or_higher_pct NOT BETWEEN 0 AND 100
+         OR foreign_born_pct NOT BETWEEN 0 AND 100 OR renter_cost_burden_pct NOT BETWEEN 0 AND 100
+         OR owner_cost_burden_pct NOT BETWEEN 0 AND 100 OR median_household_income <= 0);
+
+-- Districts tile the states exactly, so the districts of each state sum to the state ACS 5-year
+-- population of the same vintage (census.acs_population, geography = state, same API variable
+-- B01003 family); the sum over states is the national total.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_population_reconciles',
+  CASE WHEN n_years >= 12 AND worst = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n_years AS VARCHAR) || ' vintages / worst diff ' || CAST(worst AS VARCHAR), '>=12 vintages / 0',
+  'Largest absolute difference between the district sum and census.acs_population state sum per state-vintage'
+FROM (SELECT COUNT(DISTINCT y) AS n_years, COALESCE(MAX(ABS(d - s)), 999999999) AS worst FROM (
+        SELECT CAST(c.year AS INTEGER) AS y, c.state_fips, SUM(c.total_population) AS d, MAX(p.total_population) AS s
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true) c
+        JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_population', allow_moved_paths := true) p
+          ON p.year = c.year AND p.geography = 'state' AND p.state = c.state_fips
+        GROUP BY 1, 2));
+
+-- Anchors against published figures (ACS 5-year, Data USA / Census Bureau district profiles,
+-- checked 2026-10-17): Wyoming at-large median household income $74,815 (vintage 2023, 118th
+-- Congress) and $76,176 (2024, 119th); Mississippi 1 $60,877 (2023); New York 12 (Manhattan)
+-- 2024 population 719,940, median household income $147,775 and median age 40.3.
+INSERT INTO dq_results
+SELECT 'census', 'acs_congressional_district', 'T7_known_values',
+  CASE WHEN hits = 4 THEN 'pass' ELSE 'fail' END, CAST(hits AS VARCHAR), '4',
+  'Spot-check districts: WY-AL 2023/2024 income, MS-1 2023 income, NY-12 2024 population, income and median age'
+FROM (SELECT COUNT(*) AS hits
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/census/acs_congressional_district', allow_moved_paths := true)
+      WHERE (CAST(year AS INTEGER) = 2023 AND cd_fips = '5600' AND congress = 118 AND median_household_income = 74815)
+         OR (CAST(year AS INTEGER) = 2024 AND cd_fips = '5600' AND congress = 119 AND median_household_income = 76176)
+         OR (CAST(year AS INTEGER) = 2023 AND cd_fips = '2801' AND median_household_income = 60877)
+         OR (CAST(year AS INTEGER) = 2024 AND cd_fips = '3612' AND total_population = 719940
+             AND median_household_income = 147775 AND ROUND(median_age, 1) = 40.3));
 
 -- ============================================================================
 -- RESULTS SUMMARY

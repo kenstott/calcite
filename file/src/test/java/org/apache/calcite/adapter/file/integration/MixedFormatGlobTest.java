@@ -95,7 +95,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
         + "\n      \"type\": \"custom\","
         + "\n      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\n      \"operand\": {"
-        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + "\n        \"glob\": \"*\","
         + (getExecutionEngine() != null ? "\n        \"executionEngine\": \"" + getExecutionEngine() + "\"," : "")
         + "\n        \"tableNameCasing\": \"LOWER\","
@@ -160,7 +160,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
         + "\n      \"type\": \"custom\","
         + "\n      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\n      \"operand\": {"
-        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + "\n        \"glob\": \"*.{csv,json}\","
         + (getExecutionEngine() != null ? "\n        \"executionEngine\": \"" + getExecutionEngine() + "\"," : "")
         + "\n        \"tableNameCasing\": \"LOWER\","
@@ -206,7 +206,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
         + "\n      \"type\": \"custom\","
         + "\n      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\n      \"operand\": {"
-        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + (getExecutionEngine() != null ? "\n        \"executionEngine\": \"" + getExecutionEngine() + "\"," : "")
         + "\n        \"tableNameCasing\": \"LOWER\","
         + "\n        \"columnNameCasing\": \"LOWER\","
@@ -272,6 +272,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'parquet',\n"
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER',\n"
@@ -336,7 +337,7 @@ public class MixedFormatGlobTest extends BaseFileTest {
         + "\n      \"type\": \"custom\","
         + "\n      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\n      \"operand\": {"
-        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\n        \"directory\": \"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + "\n        \"glob\": \"**/*\","
         + (getExecutionEngine() != null ? "\n        \"executionEngine\": \"" + getExecutionEngine() + "\"," : "")
         + "\n        \"recursive\": true,"

@@ -52,7 +52,8 @@ import java.util.TreeMap;
  *
  * <p>The pages reached from the start URLs are read, and what they hold lands in the schema's
  * directory as ordinary files: each HTML table as a JSON file, each linked data file (CSV, TSV,
- * Excel, JSON, Parquet) as itself. The schema then discovers them like any other file of the
+ * Excel, JSON, Parquet) as itself. With {@code generateTablesFromHtmlLists}, each list of a
+ * page's content is a JSON file too, read by {@link HtmlListScanner}. The schema then discovers them like any other file of the
  * directory, so a crawled table is a table of the schema with nothing else to know about it.
  *
  * <p>A crawl is kept for the configured HTML cache lifetime: a schema made again within it,
@@ -71,12 +72,14 @@ public final class HtmlCrawlStage {
   }
 
   /**
-   * Runs the crawl {@code operand} declares into {@code directoryPath}.
+   * Runs the crawl {@code operand} declares into {@code directoryPath}. Its downloads are staged
+   * under {@code baseDirectory}, the schema's base directory (REQ-1992).
    *
    * @return the files the crawl holds in the directory, by the URL each came from
    */
   public static Map<String, List<String>> run(String schemaName, Map<String, Object> operand,
-      String directoryPath, String storageType, String columnNameCasing) throws IOException {
+      String directoryPath, String storageType, String columnNameCasing, File baseDirectory)
+      throws IOException {
     if (!"local".equals(storageType)) {
       throw new IllegalArgumentException("Schema '" + schemaName + "' declares a crawl with "
           + "storageType '" + storageType + "': a crawl lands its files in a local directory");
@@ -103,7 +106,7 @@ public final class HtmlCrawlStage {
     Set<String> before = manifestFile.isFile() ? filesOf(manifestFile) : new HashSet<String>();
     Map<String, List<String>> written = new LinkedHashMap<>();
     Set<String> names = new HashSet<>();
-    HtmlCrawler crawler = new HtmlCrawler(config);
+    HtmlCrawler crawler = new HtmlCrawler(config, baseDirectory);
     try {
       HtmlCrawler.CrawlResult result = crawler.crawl(startUrls);
       for (String startUrl : startUrls) {
@@ -277,7 +280,7 @@ public final class HtmlCrawlStage {
   }
 
   /** {@code name}, or the first of name_2, name_3... the crawl has not used; and marks it used. */
-  private static String unique(String name, Set<String> used) {
+  static String unique(String name, Set<String> used) {
     int dot = name.lastIndexOf('.');
     String stem = name.substring(0, dot);
     String candidate = name;
@@ -312,7 +315,6 @@ public final class HtmlCrawlStage {
       String title = caption != null && !caption.text().trim().isEmpty()
           ? caption.text().trim() : heading;
       String table = title == null || slug(title).isEmpty() ? "table_" + ++unnamed : slug(title);
-      String name = unique(page + "__" + table + ".json", names);
       ArrayNode json = MAPPER.createArrayNode();
       for (Map<String, String> row : rows) {
         ObjectNode object = MAPPER.createObjectNode();
@@ -321,11 +323,30 @@ public final class HtmlCrawlStage {
         }
         json.add(object);
       }
-      atomicWrite(new File(directory, name),
-          MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(json));
-      files.add(name);
+      files.add(write(directory, unique(page + "__" + table + ".json", names), json));
+    }
+    if (config.isGenerateTablesFromHtmlLists()) {
+      for (HtmlListScanner.ListTable list : HtmlListScanner.scan(content)) {
+        files.add(
+            write(directory, unique(page + "__" + list.name + ".json", names), jsonOf(list.rows)));
+      }
     }
     return files;
+  }
+
+  /** A list's rows as JSON: each value as it is, a list item's text never read as a number. */
+  static ArrayNode jsonOf(List<Map<String, Object>> rows) {
+    ArrayNode json = MAPPER.createArrayNode();
+    for (Map<String, Object> row : rows) {
+      json.add(MAPPER.valueToTree(row));
+    }
+    return json;
+  }
+
+  private static String write(File directory, String name, ArrayNode json) throws IOException {
+    atomicWrite(new File(directory, name),
+        MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(json));
+    return name;
   }
 
   /** One cell of a table's grid: its text, and whether it is a header cell. */

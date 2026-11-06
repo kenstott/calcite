@@ -18,7 +18,7 @@ default schema. The bundled set:
 
 `sec`, `geo`, `econ`, `econ_reference`, `census`, `crime`, `weather`, `fec`, `fedregister`, `law`,
 `officials`, `cyber_vuln`, `cyber_threat`, `energy`, `health`, `edu`, `lands`, `patents`, `disasters`,
-`housing`, `cftc`, `ag`, `ref`, `transport`, `environment`, `research`, `fiscal`, `banking`.
+`housing`, `cftc`, `ag`, `ref`, `transport`, `environment`, `research`, `fiscal`, `banking`, `fisheries`.
 
 All schemas share one DuckDB catalog (`database_filename`) so cross-schema joins/views resolve. To
 serve a subset, delete the schema entries you don't need from `model/model.json` in the extracted

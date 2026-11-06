@@ -243,7 +243,15 @@ public class IcebergTableWriterDeepCoverageTest2 {
     method.setAccessible(true);
 
     org.apache.iceberg.PartitionField field = table.spec().fields().get(0);
-    assertNull(method.invoke(writer, "not_a_number", field));
+    // A partition value that is not its column's type fails, naming the column, value and table,
+    // rather than writing a file under a NULL partition.
+    java.lang.reflect.InvocationTargetException e =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(writer, "not_a_number", field));
+    assertTrue(e.getCause() instanceof IllegalStateException, String.valueOf(e.getCause()));
+    String message = e.getCause().getMessage();
+    assertTrue(message.contains("'" + field.name() + "'") && message.contains("'not_a_number'")
+        && message.contains(table.name()), message);
   }
 
   // ===== computeRelativePath tests (via reflection) =====

@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.law;
 
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
@@ -65,9 +66,10 @@ import javax.xml.stream.XMLStreamReader;
  * subparagraph, clause...) into units small enough to embed as one chunk, so no paragraph is cut.
  *
  * <p>The current release point ({@code congress}-{@code release}, e.g. {@code 119-111}) is
- * scraped once per provider instance from the {@code xml_uscAll} link on the OLRC download
- * page and then pinned, so every title fetched by one run comes from the same release point
- * even if OLRC publishes a new one mid-run.
+ * read once per provider instance from the "current through Public Law" line on the OLRC currency
+ * page, stepped down to the newest release point whose zips are published, and then pinned, so
+ * every title fetched by one run comes from the same release point even if OLRC publishes a
+ * new one mid-run.
  *
  * <p>Statutory notes ({@code <notes>}/{@code <note>}) and tables of contents are not part of
  * a section's operative text and are skipped; the section's enactment history
@@ -77,14 +79,17 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UsCodeXmlDataProvider.class);
 
-  private static final String RELEASE_PAGE_URL = "https://uscode.house.gov/download/download.shtml";
+  private static final String RELEASE_PAGE_URL = "https://uscode.house.gov/currency.html";
 
   @SuppressWarnings("InlineFormatString")
   private static final String ZIP_URL_TEMPLATE =
       "https://uscode.house.gov/download/releasepoints/us/pl/%s/%s/xml_usc%s@%s-%s.zip";
 
   private static final Pattern RELEASE_POINT_PATTERN =
-      Pattern.compile("releasepoints/us/pl/(\\d+)/([^/\"]+)/xml_uscAll@");
+      Pattern.compile("current through Public Law (\\d+)-(\\d+)");
+
+  /** How many release numbers below the stated one are probed for published zips. */
+  private static final int MAX_RELEASE_STEP_BACK = 40;
 
   private static final String USLM_NS = "http://xml.house.gov/schemas/uslm/1.0";
 
@@ -193,8 +198,15 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     return new UnitRows(new SectionStream(xmlFile, tempDir, releasePoint));
   }
 
-  /** Reads the OLRC download page line by line straight off the HTTP response and pins the
-   *  current release point. Not routed through {@link ZipDownloadUtils#downloadToFile}: that
+  /** {congress, release} from a page line stating "current through Public Law N-M", else null. */
+  static String[] releasePointIn(String line) {
+    Matcher m = RELEASE_POINT_PATTERN.matcher(line);
+    return m.find() ? new String[] {m.group(1), m.group(2)} : null;
+  }
+
+  /** Reads the OLRC currency page line by line straight off the HTTP response and pins the
+   *  current release point (the page states "current through Public Law {congress}-{release}").
+   *  The per-title zips are served at the paths in {@link #ZIP_URL_TEMPLATE}. Not routed through {@link ZipDownloadUtils#downloadToFile}: that
    *  helper rejects text/html responses by design (WAF-block detection), and this page is HTML. */
   private synchronized void resolveReleasePoint() throws IOException {
     if (release != null) {
@@ -206,6 +218,7 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
     try {
+      NetworkOutageWait.connect(conn);
       int status = conn.getResponseCode();
       if (status != HttpURLConnection.HTTP_OK) {
         throw new IOException(tableName() + ": HTTP " + status + " from " + RELEASE_PAGE_URL);
@@ -214,11 +227,12 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
           new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
         String line;
         while ((line = reader.readLine()) != null) {
-          Matcher m = RELEASE_POINT_PATTERN.matcher(line);
-          if (m.find()) {
-            congress = m.group(1);
-            release = m.group(2);
-            LOGGER.info("{}: current release point is {}-{}", tableName(), congress, release);
+          String[] point = releasePointIn(line);
+          if (point != null) {
+            congress = point[0];
+            release = latestPublishedRelease(point[0], Integer.parseInt(point[1]));
+            LOGGER.info("{}: current release point is {}-{} (currency page states {}-{})",
+                tableName(), congress, release, point[0], point[1]);
             return;
           }
         }
@@ -226,8 +240,53 @@ public class UsCodeXmlDataProvider implements StorageAwareDataProvider {
     } finally {
       conn.disconnect();
     }
-    throw new IOException(tableName() + ": no xml_uscAll release point link found on "
+    throw new IOException(tableName() + ": no current-through-Public-Law release point found on "
         + RELEASE_PAGE_URL);
+  }
+
+  /** The newest release number at or below {@code stated} whose zips are published. The currency
+   *  page states the latest Public Law before OLRC has built a release point for it, and OLRC
+   *  does not build one for every Public Law number, so the stated number can have no zips.
+   *  Title 1 is probed with HEAD, stepping down at most {@link #MAX_RELEASE_STEP_BACK} numbers;
+   *  throws when none is published within that range. */
+  private String latestPublishedRelease(String congressNumber, int stated) throws IOException {
+    for (int candidate = stated; candidate > stated - MAX_RELEASE_STEP_BACK && candidate > 0;
+        candidate--) {
+      String probe = String.format(Locale.US, ZIP_URL_TEMPLATE, congressNumber, candidate, "01",
+          congressNumber, candidate);
+      if (isPublished(probe)) {
+        if (candidate != stated) {
+          LOGGER.warn("{}: release point {}-{} has no published zips; using {}-{}", tableName(),
+              congressNumber, stated, congressNumber, candidate);
+        }
+        return Integer.toString(candidate);
+      }
+    }
+    throw new IOException(tableName() + ": no published release point from " + congressNumber
+        + "-" + stated + " down to " + congressNumber + "-"
+        + (stated - MAX_RELEASE_STEP_BACK + 1));
+  }
+
+  /** True on HTTP 200 for a HEAD of {@code url}, false on 404; any other status is an error. */
+  private boolean isPublished(String url) throws IOException {
+    HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+    conn.setRequestMethod("HEAD");
+    conn.setConnectTimeout(30000);
+    conn.setReadTimeout(120000);
+    conn.setRequestProperty("User-Agent", "Apache-Calcite-GovData/1.0");
+    try {
+      NetworkOutageWait.connect(conn);
+      int status = conn.getResponseCode();
+      if (status == HttpURLConnection.HTTP_OK) {
+        return true;
+      }
+      if (status == HttpURLConnection.HTTP_NOT_FOUND) {
+        return false;
+      }
+      throw new IOException(tableName() + ": HTTP " + status + " from " + url);
+    } finally {
+      conn.disconnect();
+    }
   }
 
   /** Which text buffer element characters are currently routed to. */

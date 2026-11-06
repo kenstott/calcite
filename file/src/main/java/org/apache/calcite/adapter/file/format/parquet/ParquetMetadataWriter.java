@@ -123,8 +123,11 @@ public class ParquetMetadataWriter {
     Path inputPath = new Path(filePath);
     Configuration conf = new Configuration();
 
-    // Create temp file path for output (create then delete to get unique name)
-    java.nio.file.Path tempFile = Files.createTempFile("parquet_meta_", ".parquet");
+    // Create temp file path for output (create then delete to get unique name), beside the file
+    // it replaces: never the JVM temp directory (REQ-1992)
+    java.nio.file.Path tempFile = Files.createTempFile(
+        java.nio.file.Paths.get(filePath).toAbsolutePath().getParent(), ".parquet_meta_",
+        ".parquet");
     Files.delete(tempFile);  // Delete so ParquetWriter can create it
     Path outputPath = new Path(tempFile.toString());
 

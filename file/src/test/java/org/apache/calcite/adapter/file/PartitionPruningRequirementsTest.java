@@ -144,6 +144,7 @@ public class PartitionPruningRequirementsTest {
   private Connection openWithSalesSchema() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
     operand.put("partitionedTables",

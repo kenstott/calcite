@@ -187,6 +187,52 @@ SELECT 'ag', 'nass_farm_operations', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_farm_operations', allow_moved_paths := true) WHERE short_desc IS NULL);
 
 -- ------------------------------------------------------------
+-- TABLE: nass_aquaculture (partition cols: type, year; PK id col: short_desc)
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'nass_aquaculture', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_aquaculture', 'T2_row_count',
+  CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END, n, 500, 'Expected >=500 rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'nass_aquaculture', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'asd_code', 'asd_desc', 'county_ansi', 'county_code', 'county_fips', 'county_name')));
+INSERT INTO dq_results
+-- asd_*/county_* are excluded: NASS publishes aquaculture at state/national/territory grain only
+-- (no county or ASD rows in 2023-2025), so they are expected-empty.
+-- sector_desc/group_desc are excluded: this table is intentionally scoped to NASS's
+-- AQUACULTURE group (ANIMALS & PRODUCTS) — constant across every year, not an ingestion gap.
+SELECT 'ag', 'nass_aquaculture', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'asd_code', 'asd_desc', 'county_ansi', 'county_code', 'county_fips', 'county_name', 'sector_desc', 'group_desc')));
+INSERT INTO dq_results
+SELECT 'ag', 'nass_aquaculture', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL short_desc rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true) WHERE short_desc IS NULL);
+
+INSERT INTO dq_results
+SELECT 'ag', 'nass_aquaculture', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate natural-key groups'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/nass_aquaculture', allow_moved_paths := true)
+  GROUP BY year, source_desc, short_desc, agg_level_desc, state_alpha, state_fips_code, location_desc,
+           reference_period_desc, domain_desc, domaincat_desc, class_desc, commodity_desc, statisticcat_desc, unit_desc
+  HAVING COUNT(*) > 1));
+
+-- ------------------------------------------------------------
 -- TABLE: nass_land_values (partition cols: type, year; PK id col: short_desc)
 -- ------------------------------------------------------------
 INSERT INTO dq_results

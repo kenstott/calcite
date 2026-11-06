@@ -111,7 +111,7 @@ public class LbnlInterconnectionQueueProvider implements CachingDataProvider {
       throw new IOException("LBNL Queued Up: source.url (Zenodo deposit zip) is required");
     }
     final String zipUrl = url;
-    File xlsx = File.createTempFile("lbnl-ix-", ".xlsx");
+    File xlsx = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("lbnl-ix-", ".xlsx");
     try {
       try (InputStream cached = rawCache.openStream(zipUrl, () -> extractWorkbook(zipUrl));
           FileOutputStream out = new FileOutputStream(xlsx)) {
@@ -136,8 +136,8 @@ public class LbnlInterconnectionQueueProvider implements CachingDataProvider {
    * that is deleted when the returned stream is closed.
    */
   private InputStream extractWorkbook(String zipUrl) throws IOException {
-    File tempZip = File.createTempFile("lbnl-ix-zip-", ".zip");
-    File tempXlsx = File.createTempFile("lbnl-ix-entry-", ".xlsx");
+    File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("lbnl-ix-zip-", ".zip");
+    File tempXlsx = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("lbnl-ix-entry-", ".xlsx");
     try {
       ZipDownloadUtils.downloadToFile(zipUrl, null, tempZip);
       try (ZipFile zip = new ZipFile(tempZip)) {

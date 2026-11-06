@@ -513,8 +513,8 @@ public class ParquetTranslatableTable extends AbstractTable implements Translata
       // Register optimization rules based on configuration
       // HLL rule is enabled by default but only applies to APPROX_COUNT_DISTINCT, not regular COUNT(DISTINCT)
       if (!"false".equals(System.getProperty("calcite.file.statistics.hll.enabled"))) {
-        // Use INSTANCE for all COUNT(DISTINCT) queries for performance testing
-        planner.addRule(org.apache.calcite.adapter.file.rules.SimpleHLLCountDistinctRule.INSTANCE);
+        planner.addRule(
+            org.apache.calcite.adapter.file.rules.SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE);
       }
 
       if (!"false".equals(System.getProperty("calcite.file.statistics.filter.enabled"))) {

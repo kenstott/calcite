@@ -76,7 +76,7 @@ public class ParquetMaterializationWriterTest {
     // Use a non-existent path so DuckDB can create it as a file or directory
     File outputPath = new File(tempDir, "single_batch_output");
     // Do NOT mkdirs - let DuckDB create the output structure
-    writer = new ParquetMaterializationWriter(storageProvider, outputPath.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputPath.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputPath.getAbsolutePath());
     writer.initialize(config);
@@ -100,7 +100,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testWriteMultiplePartitionsCreatesDirectoryStructure() throws Exception {
     File outputDir = new File(tempDir, "partitioned_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildPartitionedConfig(outputDir.getAbsolutePath(), "region");
     writer.initialize(config);
@@ -136,7 +136,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testSchemaPreservationInWrittenParquet() throws Exception {
     // Use a non-existent path so DuckDB can create the output
     File outputPath = new File(tempDir, "schema_test_output");
-    writer = new ParquetMaterializationWriter(storageProvider, outputPath.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputPath.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputPath.getAbsolutePath());
     writer.initialize(config);
@@ -161,7 +161,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testOverwriteOrIgnoreBehavior() throws Exception {
     // Use a non-existent path so DuckDB can create it
     File outputPath = new File(tempDir, "overwrite_test_output");
-    writer = new ParquetMaterializationWriter(storageProvider, outputPath.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputPath.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputPath.getAbsolutePath());
     writer.initialize(config);
@@ -181,7 +181,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testWriteEmptyBatchReturnsZero() throws Exception {
     File outputDir = new File(tempDir, "empty_batch_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputDir.getAbsolutePath());
     writer.initialize(config);
@@ -198,7 +198,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testWriteWithoutInitializeThrowsException() throws Exception {
     File outputDir = new File(tempDir, "uninit_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     List<Map<String, Object>> rows = createTestRows(1);
     assertThrows(IllegalStateException.class,
@@ -209,7 +209,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testInitializeWithNullConfigThrowsException() throws Exception {
     File outputDir = new File(tempDir, "null_config_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     assertThrows(IllegalArgumentException.class,
         () -> writer.initialize(null),
@@ -219,7 +219,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testInitializeWithDisabledConfigThrowsException() throws Exception {
     File outputDir = new File(tempDir, "disabled_config_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = MaterializeConfig.builder()
         .enabled(false)
@@ -235,7 +235,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testGetFormatReturnsParquet() throws Exception {
     File outputDir = new File(tempDir, "format_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     assertEquals(MaterializeConfig.Format.PARQUET, writer.getFormat(),
         "Format should be PARQUET");
@@ -244,7 +244,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testGetTableLocationReturnsOutputPath() throws Exception {
     File outputDir = new File(tempDir, "location_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputDir.getAbsolutePath());
     writer.initialize(config);
@@ -258,7 +258,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testCommitIsNoOpForParquet() throws Exception {
     File outputDir = new File(tempDir, "commit_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputDir.getAbsolutePath());
     writer.initialize(config);
@@ -270,7 +270,7 @@ public class ParquetMaterializationWriterTest {
   @Test public void testCloseResetsInitializedState() throws Exception {
     File outputDir = new File(tempDir, "close_output");
     outputDir.mkdirs();
-    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath());
+    writer = new ParquetMaterializationWriter(storageProvider, outputDir.getAbsolutePath(), tempDir);
 
     MaterializeConfig config = buildSimpleConfig(outputDir.getAbsolutePath());
     writer.initialize(config);

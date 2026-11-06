@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.io.IOException;
@@ -55,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>All tests are pure unit tests with no external dependencies.
  */
 @Tag("unit")
+@ResourceLock("parquet.vectorized.property")
 public class ExecutionEngineCoverageTest {
 
   // =========================================================================

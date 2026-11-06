@@ -79,8 +79,9 @@ public class CsvTableScan extends TableScan implements EnumerableRel {
 
   @Override public void register(RelOptPlanner planner) {
     planner.addRule(FileRules.PROJECT_SCAN);
-    // Use the working SimpleHLLCountDistinctRule instead of the placeholder
-    planner.addRule(org.apache.calcite.adapter.file.rules.SimpleHLLCountDistinctRule.INSTANCE);
+    // HLL estimates answer APPROX_COUNT_DISTINCT only; an exact COUNT(DISTINCT) stays exact
+    planner.addRule(
+        org.apache.calcite.adapter.file.rules.SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE);
     // Also register VALUES converter rule so LogicalValues can become EnumerableValues
     planner.addRule(org.apache.calcite.adapter.enumerable.EnumerableRules.ENUMERABLE_VALUES_RULE);
 

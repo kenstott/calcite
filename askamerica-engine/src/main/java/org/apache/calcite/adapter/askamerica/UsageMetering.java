@@ -364,6 +364,9 @@ final class UsageMetering {
 
   // ── async reporter ─────────────────────────────────────────────────────────
 
+  private static final java.util.logging.Logger USAGE_LOG =
+      java.util.logging.Logger.getLogger(UsageMetering.class.getName());
+
   private static void reportUsageAsync(final String apiKey, final String sql,
       final long rowCount, final long egressBytes, final long durationMs) {
     Runnable task = new Runnable() {
@@ -406,9 +409,14 @@ final class UsageMetering {
       } finally {
         os.close();
       }
-      c.getResponseCode(); // drive the request; response body is ignored
-    } catch (Throwable ignore) {
-      // metering is best-effort — never surface to the caller
+      int status = c.getResponseCode(); // drive the request; response body is ignored
+      if (status / 100 != 2) {
+        USAGE_LOG.warning("usage report was not accepted: HTTP " + status);
+      }
+    } catch (Throwable t) {
+      // best-effort — never surface to the caller, but leave a trace: a report that does
+      // not arrive otherwise shows up only as usage reading zero
+      USAGE_LOG.warning("usage report failed: " + t);
     } finally {
       if (c != null) {
         c.disconnect();

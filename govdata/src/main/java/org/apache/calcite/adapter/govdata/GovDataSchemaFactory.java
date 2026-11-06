@@ -30,6 +30,7 @@ import org.apache.calcite.adapter.govdata.econ.EconSchemaFactory;
 import org.apache.calcite.adapter.govdata.fec.FecSchemaFactory;
 import org.apache.calcite.adapter.govdata.fedregister.FedRegisterSchemaFactory;
 import org.apache.calcite.adapter.govdata.fiscal.FiscalSchemaFactory;
+import org.apache.calcite.adapter.govdata.fisheries.FisheriesSchemaFactory;
 import org.apache.calcite.adapter.govdata.geo.GeoSchemaFactory;
 import org.apache.calcite.adapter.govdata.edu.EduSchemaFactory;
 import org.apache.calcite.adapter.govdata.energy.EnergySchemaFactory;
@@ -90,6 +91,7 @@ import org.apache.calcite.adapter.file.etl.VariableResolver;
  *   <li>ref - Reference data (GLEIF entities, CIK mapping, OpenFIGI instruments)</li>
  *   <li>fec - Federal Election Commission campaign finance data</li>
  *   <li>fedregister - U.S. Federal Register (rules, proposed rules, notices, presidential docs)</li>
+ *   <li>fisheries - NOAA Fisheries landings (commercial/recreational, salmon by state)</li>
  *   <li>law - The legal corpus; currently the U.S. Code (codified federal statutes) from OLRC
  *       USLM XML release points</li>
  *   <li>officials - Federal elected/appointed officeholders (Congress.gov members and
@@ -151,7 +153,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     try {
       if (parentSchema.subSchemas().get("information_schema") == null) {
         parentSchema.add("information_schema",
-            new org.apache.calcite.adapter.file.metadata.InformationSchema(parentSchema, "CALCITE"));
+            new org.apache.calcite.schema.impl.InformationSchema(parentSchema, "CALCITE"));
       }
       if (parentSchema.subSchemas().get("pg_catalog") == null) {
         parentSchema.add("pg_catalog",
@@ -169,6 +171,13 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     if (dataSource == null) {
       dataSource = "sec";
       LOGGER.info("No dataSource specified, defaulting to 'sec'");
+    }
+
+    // A serving connection never builds its catalog: the jar's seed is put in place before
+    // any DuckDB connection opens, whichever way the connection arrived (ASKAM-002).
+    File servedCatalog = servedCatalogFile(operand);
+    if (servedCatalog != null) {
+      GovDataSeedInstaller.ensureCatalog(servedCatalog);
     }
 
     // Check if this schema was already created (e.g., as a dependency of another schema).
@@ -257,6 +266,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         .operatingDirectory(operatingDirectory)
         .incrementalTracker(tracker)
         .addSchema(name, factory, enrichedOperand);
+
+    // Publish this schema's operand to ModelOperand before ETL runs. FileSchemaFactory captures the
+    // fully-derived operand only after the ETL phase, so an ETL-time reader (a DataProvider that
+    // opens its own DuckDB connection, for one) otherwise reads every model path back as absent.
+    org.apache.calcite.adapter.file.etl.ModelOperand.capture(name, enrichedOperand);
 
     // Run ETL for all schemas; retry once with refreshed R2 credentials on S3 auth failure
     ModelLifecycleProcessor.ProcessResult result;
@@ -362,6 +376,10 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
       case "fr":
         return new FedRegisterSchemaFactory();
 
+      case "fisheries":
+      case "noaa_fisheries":
+        return new FisheriesSchemaFactory();
+
       case "law":
         return new LawSchemaFactory();
 
@@ -450,7 +468,7 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
             "Unsupported government data source: '" + dataSource + "'. " +
             "Supported sources: sec, geo, econ_reference, econ, census, crime, weather, ref, fec,"
             + " fedregister, law, officials, cyber_vuln, cyber_threat, health, energy, edu, patents, lands,"
-            + " cftc, ag, housing, transport, environment, research, fiscal, banking");
+            + " cftc, ag, housing, transport, environment, research, fiscal, banking, fisheries");
     }
   }
 
@@ -661,6 +679,43 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
   }
 
   /**
+   * The shared DuckDB catalog file a SERVING connection is about to open, or null when this
+   * connection is not one: a model that serves reads from the store names a shared
+   * {@code database_filename}, runs on the DuckDB engine over an {@code s3://} directory and
+   * does not download. A model over local files is a test's or a tool's, not a server's. An ingest
+   * model ({@code autoDownload}) builds what it reads, and the release path that makes the
+   * seed (the seed-build switch, {@link GovDataDriver#SEED_BUILD_PROPERTY}) builds the catalog
+   * itself.
+   *
+   * <p>A relative name is resolved as the file adapter resolves it
+   * (DuckDBJdbcSchemaFactory): under {@code <working dir>/.aperio/.duckdb/}.
+   */
+  static @Nullable File servedCatalogFile(Map<String, Object> operand) {
+    if (Boolean.getBoolean(GovDataDriver.SEED_BUILD_PROPERTY)) {
+      return null;
+    }
+    Object filename = operand.get("database_filename");
+    if (!(filename instanceof String) || ((String) filename).isEmpty()) {
+      return null;
+    }
+    if (!"duckdb".equalsIgnoreCase(String.valueOf(operand.get("executionEngine")))) {
+      return null;
+    }
+    if ("true".equalsIgnoreCase(String.valueOf(operand.get("autoDownload")))) {
+      return null;
+    }
+    if (!String.valueOf(operand.get("directory")).startsWith("s3://")) {
+      return null;
+    }
+    File file = new File((String) filename);
+    if (file.isAbsolute()) {
+      return file;
+    }
+    File duckdbDir = new File(new File(System.getProperty("user.dir"), ".aperio"), ".duckdb");
+    return new File(duckdbDir, (String) filename);
+  }
+
+  /**
    * Establish the operating directory (.aperio/<dataSource>/).
    * Always on local filesystem (for file locking).
    *
@@ -693,8 +748,9 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
               userHome);
           workingDir = userHome;
         } else {
-          LOGGER.warn("Working directory and home directory both invalid; falling back to temp directory");
-          workingDir = System.getProperty("java.io.tmpdir");
+          // REQ-1992: no JVM temp directory fallback for the operating directory
+          throw new IllegalStateException("govdata.operating.dir.base is not set, and neither the "
+              + "working directory nor the home directory can hold the operating directory");
         }
       }
       base = workingDir + "/.aperio";

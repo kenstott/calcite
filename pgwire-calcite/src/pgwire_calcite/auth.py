@@ -173,6 +173,37 @@ class TrustProvider(AuthProvider):
         return None
 
 
+class AskAmericaKeyProvider(AuthProvider):
+    """pgwire-govdata's sign-in: the password of every connection is its AskAmerica API key.
+
+    Owner rule 2026-10-10: "every connection to the pgwire-govdata server must pass the
+    askamerica_api_key as the password. That instance of the connection must pass that key
+    for use in metering." The exchange is cleartext because the server must hold the key
+    itself to check quota and report usage under it; SCRAM proves knowledge of a secret
+    without giving it to the server, so it cannot serve here.
+
+    A missing or empty password, or a key the key service refuses, does not authenticate.
+    A key service that cannot be asked raises ``metering.KeyServiceUnavailable``: sign-in
+    fails closed. The server keeps the accepted key with the connection
+    (``password_is_metering_key``) and never logs it.
+    """
+
+    name = "askamerica-key"
+    #: The server stores an accepted password on the session as its metering identity.
+    password_is_metering_key = True
+
+    def authenticate(self, username: str, password: str) -> Optional[str]:
+        from pgwire_calcite import metering
+
+        if not password:
+            return None
+        return (username or "askamerica") if metering.verify_key(password) else None
+
+    @property
+    def accepts_bearer(self) -> bool:
+        return True
+
+
 class LocalAccountsProvider(AuthProvider):
     """Persisted accounts verified against SCRAM-SHA-256 verifiers at rest.
 

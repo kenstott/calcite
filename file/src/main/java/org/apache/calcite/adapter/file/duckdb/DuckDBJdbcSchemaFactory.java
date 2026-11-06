@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.RotatingS3Credentials;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.Lex;
@@ -347,6 +348,48 @@ public class DuckDBJdbcSchemaFactory {
    * Creates a JDBC schema for DuckDB with files registered as views.
    * Configures with Oracle Lex and unquoted casing to lower.
    */
+  /**
+   * The {@code columnDefinitions} each declared SQL view gives its output columns, by view name:
+   * from the operand's {@code views:} entries and its {@code tables:} entries of type view. A
+   * view declares a column it passes through from a column its source stores as text and
+   * declares as an integer, so the engine serves it as that type (see StoredTextPartitions).
+   */
+  @SuppressWarnings("unchecked")
+  static Map<String, List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>>
+      declaredViewColumns(@Nullable Map<String, Object> operand) {
+    Map<String, List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>>
+        result = new HashMap<>();
+    if (operand == null) {
+      return result;
+    }
+    List<Map<String, Object>> entries = new ArrayList<>();
+    Object views = operand.get("views");
+    if (views instanceof List) {
+      entries.addAll((List<Map<String, Object>>) views);
+    }
+    Object tables = operand.get("tables");
+    if (tables instanceof List) {
+      for (Map<String, Object> table : (List<Map<String, Object>>) tables) {
+        if ("view".equals(table.get("type"))) {
+          entries.add(table);
+        }
+      }
+    }
+    for (Map<String, Object> view : entries) {
+      Object definitions = view.get("columnDefinitions");
+      if (view.get("name") instanceof String && definitions instanceof List) {
+        List<org.apache.calcite.adapter.file.partition.PartitionedTableConfig.ColumnDefinition>
+            columns = new ArrayList<>();
+        for (Object definition : (List<Object>) definitions) {
+          columns.add(org.apache.calcite.adapter.file.partition.PartitionedTableConfig
+              .ColumnDefinition.fromMap((Map<String, Object>) definition));
+        }
+        result.put((String) view.get("name"), columns);
+      }
+    }
+    return result;
+  }
+
   public static JdbcSchema create(SchemaPlus parentSchema, String schemaName, File directory) {
     return create(parentSchema, schemaName, directory.getPath(), false, null);
   }
@@ -416,6 +459,13 @@ public class DuckDBJdbcSchemaFactory {
     LOGGER.info("Creating DuckDB JDBC schema for: {} with name: {} (recursive={}, hasFileSchema={}, databaseFilename={})",
                 directoryPath, schemaName, recursive, fileSchema != null, databaseFilename);
 
+    // Every file DuckDB writes for the schema (catalog, spill) goes under the schema's base
+    // directory, <base>/.aperio, the parent of its operating cache directory (REQ-1992)
+    if (fileSchema == null || fileSchema.getOperatingCacheDirectory() == null) {
+      throw new IllegalStateException(
+          "FileSchema with operatingCacheDirectory is required for DuckDB catalog storage");
+    }
+    final File aperioDir = fileSchema.getOperatingCacheDirectory().getAbsoluteFile().getParentFile();
     try {
       Class.forName("org.duckdb.DuckDBDriver");
 
@@ -425,10 +475,8 @@ public class DuckDBJdbcSchemaFactory {
         // Resolve database_filename path
         File dbFile = new File(databaseFilename);
         if (!dbFile.isAbsolute()) {
-          // Relative path - resolve against working directory's .aperio/.duckdb/ directory
-          // This ensures all schemas can find the same shared database file
-          File workingDir = new File(System.getProperty("user.dir"));
-          File aperioDir = new File(workingDir, ".aperio");
+          // Relative path - resolve against the base directory's .aperio/.duckdb/ directory, so
+          // the schemas of one model (which share a base directory) find the same database file
           File duckdbDir = new File(aperioDir, ".duckdb");
 
           // Ensure the .duckdb directory exists
@@ -450,10 +498,6 @@ public class DuckDBJdbcSchemaFactory {
         LOGGER.info("Using configured database filename: {} (resolved to: {})", databaseFilename, catalogPath);
       } else {
         // Use FileSchema's operating cache directory for catalog storage (always local filesystem)
-        if (fileSchema == null || fileSchema.getOperatingCacheDirectory() == null) {
-          throw new IllegalStateException(
-              "FileSchema with operatingCacheDirectory is required for DuckDB catalog storage");
-        }
         String baseDirForCatalog = fileSchema.getOperatingCacheDirectory().getAbsolutePath();
         catalogPath = determineCatalogPath(schemaName, baseDirForCatalog);
       }
@@ -567,7 +611,13 @@ public class DuckDBJdbcSchemaFactory {
       setupConn.createStatement().execute("SET threads TO " + duckdbThreads);
       setupConn.createStatement().execute("SET memory_limit = '" + duckdbMemoryLimit + "'");  // Prevent OOM
       setupConn.createStatement().execute("SET max_memory = '" + duckdbMemoryLimit + "'");  // Hard limit
-      setupConn.createStatement().execute("SET temp_directory = '" + System.getProperty("java.io.tmpdir") + "'");  // Spill location
+      // Spill location: under the base directory, never the JVM temp directory (REQ-1992)
+      // createDirectories, not mkdirs: schemas of one base directory are created concurrently
+      // (a Trino catalog), and mkdirs reports failure when another thread made it first
+      final File spillDir = java.nio.file.Files.createDirectories(
+          new File(new File(aperioDir, ".duckdb"), "spill").toPath()).toFile();
+      setupConn.createStatement().execute("SET temp_directory = '"
+          + spillDir.getAbsolutePath().replace("'", "''") + "'");
       setupConn.createStatement().execute("SET preserve_insertion_order = false");  // Better performance
       setupConn.createStatement().execute("SET enable_progress_bar = false");  // Cleaner output
 
@@ -696,7 +746,7 @@ public class DuckDBJdbcSchemaFactory {
           finalUseSSL != null && finalUseSSL);
 
       // Load query-time extensions for optimization (vss, fts)
-      loadQueryExtensions(setupConn);
+      loadQueryExtensions(setupConn, aperioDir);
 
       // Create a schema matching the FileSchema name
       // ALWAYS quote the schema name to preserve casing as-is
@@ -743,15 +793,17 @@ public class DuckDBJdbcSchemaFactory {
         }
       }
 
-      // Debug: List all registered views
-      try (Statement stmt = setupConn.createStatement();
-           ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables")) {
-        LOGGER.info("All DuckDB tables and views:");
-        while (rs.next()) {
-          LOGGER.info("  - Schema: {}, Name: {}, Type: {}",
-                     rs.getString("table_schema"),
-                     rs.getString("table_name"),
-                     rs.getString("table_type"));
+      // Debug: List all registered views (one line per table, so only when debugging)
+      if (LOGGER.isDebugEnabled()) {
+        try (Statement stmt = setupConn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables")) {
+          LOGGER.debug("All DuckDB tables and views:");
+          while (rs.next()) {
+            LOGGER.debug("  - Schema: {}, Name: {}, Type: {}",
+                       rs.getString("table_schema"),
+                       rs.getString("table_name"),
+                       rs.getString("table_type"));
+          }
         }
       }
 
@@ -760,6 +812,7 @@ public class DuckDBJdbcSchemaFactory {
 
       // Create a DataSource that creates new connections to the named database
       final String finalJdbcUrl = jdbcUrl;
+      final long metadataPinTtlMillis = metadataPinTtlMillis(operand);
       DataSource dataSource = new DataSource() {
         @Override public Connection getConnection() throws SQLException {
           // Create a new connection to the named in-memory database
@@ -802,7 +855,7 @@ public class DuckDBJdbcSchemaFactory {
           // DataSource. Wrap it so a live Iceberg commit racing a read (version-hint.text
           // advancing mid-session — see EtagRetryConnection) is retried once instead of failing
           // the query outright.
-          return EtagRetryConnection.wrap(conn, fileSchema);
+          return EtagRetryConnection.wrap(conn, fileSchema, metadataPinTtlMillis);
         }
 
         @Override public Connection getConnection(String username, String password) throws SQLException {
@@ -839,6 +892,7 @@ public class DuckDBJdbcSchemaFactory {
           new DuckDBJdbcSchema(dataSource, dialect, convention, dbName, duckdbSchema,
               directoryPath, recursive, EtagRetryConnection.wrap(setupConn, fileSchema),
               fileSchema, catalogPath);
+      schema.setDeclaredViewColumns(declaredViewColumns(operand));
 
       // Add to connection pool if this is a persistent database (for future schema sharing)
       if (catalogPath != null) {
@@ -903,15 +957,17 @@ public class DuckDBJdbcSchemaFactory {
       // Enqueue SQL views for deferred creation
       registerSqlViewsInDuckDB(setupConn, sharedInfo.catalogPath, duckdbSchema, operand);
 
-      // Debug: List all registered views
-      try (Statement stmt = setupConn.createStatement();
-           ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = '" + duckdbSchema + "'")) {
-        LOGGER.info("DuckDB tables and views in schema '{}':", duckdbSchema);
-        while (rs.next()) {
-          LOGGER.info("  - Schema: {}, Name: {}, Type: {}",
-                     rs.getString("table_schema"),
-                     rs.getString("table_name"),
-                     rs.getString("table_type"));
+      // Debug: List all registered views (one line per table, so only when debugging)
+      if (LOGGER.isDebugEnabled()) {
+        try (Statement stmt = setupConn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = '" + duckdbSchema + "'")) {
+          LOGGER.debug("DuckDB tables and views in schema '{}':", duckdbSchema);
+          while (rs.next()) {
+            LOGGER.debug("  - Schema: {}, Name: {}, Type: {}",
+                       rs.getString("table_schema"),
+                       rs.getString("table_name"),
+                       rs.getString("table_type"));
+          }
         }
       }
 
@@ -928,12 +984,33 @@ public class DuckDBJdbcSchemaFactory {
           new DuckDBJdbcSchema(sharedInfo.dataSource, dialect, convention, null, duckdbSchema,
               directoryPath, recursive, EtagRetryConnection.wrap(setupConn, fileSchema),
               fileSchema, sharedInfo.catalogPath);
+      schema.setDeclaredViewColumns(declaredViewColumns(operand));
 
       return schema;
 
     } catch (Exception e) {
       throw new RuntimeException("Failed to create schema in shared DuckDB database", e);
     }
+  }
+
+  /** Model operand naming the Iceberg metadata pin lifetime in seconds; 0 turns pinning off. */
+  static final String METADATA_PIN_TTL_OPERAND = "icebergMetadataPinTtlSeconds";
+
+  /** Default pin lifetime: the longest a read may lag a commit made by another process. */
+  static final long DEFAULT_METADATA_PIN_TTL_SECONDS = 30;
+
+  /** The pin lifetime in milliseconds from the model operand, {@link #DEFAULT_METADATA_PIN_TTL_SECONDS} when it is not set. */
+  static long metadataPinTtlMillis(Map<String, Object> operand) {
+    Object value = operand == null ? null : operand.get(METADATA_PIN_TTL_OPERAND);
+    if (value == null) {
+      return DEFAULT_METADATA_PIN_TTL_SECONDS * 1000L;
+    }
+    long seconds = value instanceof Number ? ((Number) value).longValue()
+        : Long.parseLong(value.toString().trim());
+    if (seconds < 0) {
+      throw new IllegalArgumentException(METADATA_PIN_TTL_OPERAND + " must be >= 0, got " + seconds);
+    }
+    return seconds * 1000L;
   }
 
   /**
@@ -1502,7 +1579,7 @@ public class DuckDBJdbcSchemaFactory {
    *
    * @param conn DuckDB connection to load extensions into
    */
-  private static void loadQueryExtensions(Connection conn) {
+  private static void loadQueryExtensions(Connection conn, File aperioDir) {
     List<String[]> extList = new ArrayList<>();
     extList.add(new String[]{"spatial", ""});   // Geospatial: ST_Point, ST_Contains, ST_Intersects
     extList.add(new String[]{"vss", ""});       // Vector Similarity Search: HNSW approximate nearest neighbor
@@ -1535,7 +1612,7 @@ public class DuckDBJdbcSchemaFactory {
       }
     }
 
-    configureCacheHttpfs(conn);
+    configureCacheHttpfs(conn, aperioDir);
 
     LOGGER.info("Query extension loading complete");
   }
@@ -1546,7 +1623,7 @@ public class DuckDBJdbcSchemaFactory {
    *
    * Cache directory priority:
    * 1. System property {@code duckdb.cache_httpfs.directory}
-   * 2. {@code {user.home}/.aperio/.duckdb_httpfs_cache}
+   * 2. {@code <base directory>/.aperio/.duckdb_httpfs_cache}, the schema's own (REQ-1992)
    */
   /**
    * True when {@code cache_httpfs} should not be loaded: on Windows (unsupported there), or when
@@ -1561,15 +1638,15 @@ public class DuckDBJdbcSchemaFactory {
         || Boolean.getBoolean("duckdb.cache_httpfs.disable");
   }
 
-  private static void configureCacheHttpfs(Connection conn) {
+  private static void configureCacheHttpfs(Connection conn, File aperioDir) {
     if (isCacheHttpfsDisabled()) {
       return;
     }
 
     String cacheDir = System.getProperty("duckdb.cache_httpfs.directory");
     if (cacheDir == null || cacheDir.isEmpty()) {
-      cacheDir = System.getProperty("user.home") + File.separator
-          + ".aperio" + File.separator + ".duckdb_httpfs_cache";
+      // The cache holds the source's remote file content, so it is the schema's (REQ-1992)
+      cacheDir = new File(aperioDir, ".duckdb_httpfs_cache").getAbsolutePath();
     }
 
     // Always create the directory first — harmless if the extension didn't load
@@ -1839,7 +1916,17 @@ public class DuckDBJdbcSchemaFactory {
       return;
     }
 
-    java.util.Set<String> declaredNames = fileSchema.getDeclaredTableNames();
+    java.util.Set<String> declaredNames = new java.util.LinkedHashSet<>();
+    for (String declared : fileSchema.getDeclaredTableNames()) {
+      // A declared SQL view is registered from its SQL by registerSqlViewsInDuckDB. It is not a
+      // table "not deterministically resolvable from config": counting it as one made
+      // eagerCount > 0 for every schema that declares a view (econ, census, weather), which
+      // sent the whole schema through registerFilesAsViews -> getAllTableRecords ->
+      // getTableMap(), i.e. per-table object-store discovery at mount.
+      if (!fileSchema.isDeclaredSqlView(declared)) {
+        declaredNames.add(declared);
+      }
+    }
     if (declaredNames.isEmpty()) {
       // No explicit tables:/partitionedTables: entries (a plain directory-scan schema — table
       // names come only from FileSchema scanning the filesystem, so there's nothing to defer by
@@ -2109,7 +2196,8 @@ public class DuckDBJdbcSchemaFactory {
               icebergTablePath = record.sourceFile;
             } else {
               // Fallback: compute from baseDirectory + schemaName + tableName
-              icebergTablePath = directoryPath + "/" + calciteSchemaName + "/" + tableName;
+              icebergTablePath =
+                  LocalPaths.normalize(directoryPath + "/" + calciteSchemaName + "/" + tableName);
               LOGGER.warn("ICEBERG_PARQUET table '{}' has unexpected sourceFile '{}', using computed path: {}",
                          tableName, record.sourceFile, icebergTablePath);
             }

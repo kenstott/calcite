@@ -17,6 +17,7 @@ import org.apache.calcite.adapter.file.iceberg.IcebergCatalogManager;
 import org.apache.calcite.adapter.file.iceberg.IcebergTableWriter;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
@@ -118,6 +119,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
   private final StorageProvider storageProvider;
   private final String warehousePath;
+  /** A local directory the schema owns: temporary and locally staged files go here (REQ-1992). */
+  private final File workDirectory;
   @SuppressWarnings("UnusedVariable")
   private final IncrementalTracker incrementalTracker;
 
@@ -136,6 +139,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private boolean deferSchemaInference;
   private String deferredTargetTableId;
   private List<String> deferredPartitionColumns;
+  /**
+   * Set when the existing table's columns drifted from the config. The drop-and-recreate that
+   * resolves drift is physical (purge), so it waits for the first flush: a run whose batches all
+   * fail then leaves the existing table and its history untouched.
+   */
+  private PendingRecreate pendingRecreate;
   private long totalRowsWritten;
   private int totalFilesWritten;
   /**
@@ -247,9 +256,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * @param incrementalTracker Tracker for incremental processing
    */
   public IcebergMaterializationWriter(StorageProvider storageProvider, String warehousePath,
-      IncrementalTracker incrementalTracker) {
+      IncrementalTracker incrementalTracker, File workDirectory) {
     this.storageProvider = storageProvider;
     this.warehousePath = warehousePath;
+    this.workDirectory = workDirectory;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
     this.totalRowsWritten = 0;
     this.totalRecordsCommitted = 0;
@@ -456,6 +466,55 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     }
 
     return hadoopConfig;
+  }
+
+  /** Table/column pairs {@link #keepStoredTextTypes} has warned about in this process. */
+  private static final Set<String> STORED_TEXT_WARNED =
+      java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** Iceberg types a column may be declared as while its existing table stores it as text. */
+  private static final Set<org.apache.iceberg.types.Type.TypeID> TEXT_STORED_DECLARED_TYPES =
+      java.util.EnumSet.of(org.apache.iceberg.types.Type.TypeID.INTEGER,
+          org.apache.iceberg.types.Type.TypeID.LONG, org.apache.iceberg.types.Type.TypeID.DATE);
+
+  /**
+   * Keeps writing an existing table's text column as text where the table declares it as an
+   * integer or a date, replacing that column's declared type in {@code expectedColumns} with
+   * STRING and logging one WARN per table and column per process.
+   *
+   * <p>Designed transition behavior (GOV-075): 211 govdata tables were written with their
+   * INTEGER year partitions as text before the writer took the declared partition types.
+   * Failing their loads on {@link #checkTypeMismatch} until each is rewritten would stop the
+   * pipeline; instead each keeps loading at its stored type, the DuckDB engine serves the
+   * declared type (cast, with filters rewritten to the stored text), and the table takes the
+   * declared type when it is purged and reprocessed. The tables are listed in
+   * govdata/docs/operations/stored-text-columns-to-rewrite.md. Any other type difference still
+   * fails in {@link #checkTypeMismatch}.
+   */
+  private static void keepStoredTextTypes(String targetTableId, Table existingTable,
+      List<IcebergCatalogManager.ColumnDef> expectedColumns) {
+    org.apache.iceberg.Schema existingSchema = existingTable.schema();
+    for (int i = 0; i < expectedColumns.size(); i++) {
+      IcebergCatalogManager.ColumnDef col = expectedColumns.get(i);
+      org.apache.iceberg.types.Types.NestedField existingField =
+          existingSchema.findField(col.getName());
+      if (existingField == null
+          || existingField.type().typeId() != org.apache.iceberg.types.Type.TypeID.STRING) {
+        continue;
+      }
+      org.apache.iceberg.types.Type declared = IcebergCatalogManager.mapToIcebergType(col.getType());
+      if (!TEXT_STORED_DECLARED_TYPES.contains(declared.typeId())) {
+        continue;
+      }
+      expectedColumns.set(i,
+          new IcebergCatalogManager.ColumnDef(col.getName(), "STRING", col.getDoc()));
+      if (STORED_TEXT_WARNED.add(targetTableId + "." + col.getName())) {
+        LOGGER.warn("Iceberg table '{}' stores column '{}' as {} but declares it {}: writing {}"
+            + " until the table is purged and reprocessed (listed in"
+            + " stored-text-columns-to-rewrite.md)", targetTableId, col.getName(),
+            existingField.type(), declared, existingField.type());
+      }
+    }
   }
 
   /**
@@ -678,6 +737,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       // count-based drift dangerous (kenstott/govdata-ops#226). Failing loudly and requiring an
       // explicit data_purge.sh + reprocess keeps the operator's intent auditable instead of
       // guessing at it.
+      keepStoredTextTypes(targetTableId, existingTable, expectedColumns);
       checkTypeMismatch(targetTableId, existingTable, expectedColumns);
 
       // Check whether the existing table matches the expected columns. This handles the case where
@@ -689,37 +749,13 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         return existingTable;
       }
 
-      // Schema drift → drop + recreate. This physically purges the table, so it MUST run under the
-      // per-table commit lock: an unlocked purge can race a sibling writer that is mid-append (or
-      // another process that also observed drift), which is how a table gets left completely empty.
-      // After taking the lock we re-check against freshly-loaded metadata, so if a sibling already
-      // dropped+recreated the table we reuse its result instead of purging good data a second time.
-      final Table[] result = new Table[1];
-      CrossProcessCommitLock.runExclusive(existingTable.location(), () -> {
-        Table current = IcebergCatalogManager.tableExists(catalogConfig, targetTableId)
-            ? IcebergCatalogManager.loadTable(catalogConfig, targetTableId)
-            : null;
-        String reason = current == null ? null
-            : schemaDriftReason(current, expectedColumns, actualPartitionColumnNames);
-        if (current != null && reason == null) {
-          LOGGER.debug("Iceberg table '{}' schema OK after acquiring lock "
-              + "(recreated by a sibling)", targetTableId);
-          result[0] = current;
-          return;
-        }
-        LOGGER.warn("Iceberg table '{}' {}. Dropping and recreating table.",
-            targetTableId, current == null ? "no longer exists" : "has " + reason);
-        if (current != null) {
-          IcebergCatalogManager.dropTable(catalogConfig, targetTableId, true);
-        }
-        result[0] = IcebergCatalogManager.createTableFromColumns(
-            catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
-        // The table's columns just changed, so any published schema cache now describes a schema
-        // that no longer exists. Withdraw it: readers fall back to the live read (slower but
-        // correct) until seed generation republishes. Leaving it would serve a wrong row type.
-        withdrawPublishedSchemaCache(result[0]);
-      });
-      return result[0];
+      // Schema drift → drop + recreate. The purge is deferred to the first flush that has rows to
+      // commit (see applyPendingRecreate), so until then the existing table stays readable and intact.
+      LOGGER.warn("Iceberg table '{}' has {}. Dropping and recreating it is deferred until the first "
+          + "batch has rows ready to commit.", targetTableId, driftReason);
+      this.pendingRecreate = new PendingRecreate(targetTableId, expectedColumns,
+          actualPartitionColumnNames);
+      return existingTable;
     }
 
     // Create new table
@@ -727,6 +763,64 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         targetTableId, expectedColumns.size(), actualPartitionColumnNames);
     return IcebergCatalogManager.createTableFromColumns(
         catalogConfig, targetTableId, expectedColumns, actualPartitionColumnNames);
+  }
+
+  /** Drift-driven recreate waiting for the first batch that has rows to commit. */
+  private static final class PendingRecreate {
+    final String tableId;
+    final List<IcebergCatalogManager.ColumnDef> expectedColumns;
+    final List<String> partitionColumnNames;
+
+    PendingRecreate(String tableId, List<IcebergCatalogManager.ColumnDef> expectedColumns,
+        List<String> partitionColumnNames) {
+      this.tableId = tableId;
+      this.expectedColumns = expectedColumns;
+      this.partitionColumnNames = partitionColumnNames;
+    }
+  }
+
+  /**
+   * Performs the drop-and-recreate deferred by {@link #ensureTableExists}, if one is pending.
+   *
+   * <p>The purge MUST run under the per-table commit lock: an unlocked purge can race a sibling
+   * writer that is mid-append (or another process that also observed drift), which is how a table
+   * gets left completely empty. After taking the lock the drift is re-checked against freshly
+   * loaded metadata, so if a sibling already dropped and recreated the table its result is reused
+   * instead of purging good data a second time.
+   */
+  private synchronized void applyPendingRecreate() {
+    final PendingRecreate pending = pendingRecreate;
+    if (pending == null) {
+      return;
+    }
+    final Table[] result = new Table[1];
+    CrossProcessCommitLock.runExclusive(table.location(), () -> {
+      Table current = IcebergCatalogManager.tableExists(catalogConfig, pending.tableId)
+          ? IcebergCatalogManager.loadTable(catalogConfig, pending.tableId)
+          : null;
+      String reason = current == null ? null
+          : schemaDriftReason(current, pending.expectedColumns, pending.partitionColumnNames);
+      if (current != null && reason == null) {
+        LOGGER.debug("Iceberg table '{}' schema OK after acquiring lock "
+            + "(recreated by a sibling)", pending.tableId);
+        result[0] = current;
+        return;
+      }
+      LOGGER.warn("Iceberg table '{}' {}. Dropping and recreating table.",
+          pending.tableId, current == null ? "no longer exists" : "has " + reason);
+      if (current != null) {
+        IcebergCatalogManager.dropTable(catalogConfig, pending.tableId, true);
+      }
+      result[0] = IcebergCatalogManager.createTableFromColumns(
+          catalogConfig, pending.tableId, pending.expectedColumns, pending.partitionColumnNames);
+      // The table's columns just changed, so any published schema cache now describes a schema
+      // that no longer exists. Withdraw it: readers fall back to the live read (slower but
+      // correct) until seed generation republishes. Leaving it would serve a wrong row type.
+      withdrawPublishedSchemaCache(result[0]);
+    });
+    this.table = result[0];
+    this.tableWriter = new IcebergTableWriter(table, storageProvider, onCoercionFailurePolicies);
+    this.pendingRecreate = null;
   }
 
   /**
@@ -1198,6 +1292,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     Map<String, String> partVars = partitionVarsMap.get(partitionKey);
     int rowCount = rows.size();
 
+    applyPendingRecreate();
+
     // Deferred-schema materialize (FILE-186): first flush infers the schema and creates the table.
     ensureTableCreated(rows, partVars);
 
@@ -1367,8 +1463,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
 
-    java.io.File tmpJson = java.io.File.createTempFile("iceberg-infer-", ".json");
-    java.io.File tmpParquet = java.io.File.createTempFile("iceberg-infer-", ".parquet");
+    java.io.File tmpJson = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "iceberg-infer-", ".json");
+    java.io.File tmpParquet = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "iceberg-infer-", ".parquet");
     tmpJson.deleteOnExit();
     tmpParquet.deleteOnExit();
     try {
@@ -2086,7 +2184,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Write rows to a temp file — read_json_auto treats string args as file paths,
     // not inline JSON, so passing content directly causes a glob-pattern error.
     String json = MAPPER.writeValueAsString(rows);
-    java.io.File tmpJson = java.io.File.createTempFile("dq-expr-src-", ".json");
+    java.io.File tmpJson = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "dq-expr-src-", ".json");
     tmpJson.deleteOnExit();
     try {
       java.nio.file.Files.write(tmpJson.toPath(), json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -2365,7 +2464,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * Gets the parent path for a remote path.
    */
   private String getRemoteParentPath(String path) {
-    int lastSlash = path.lastIndexOf('/');
+    int lastSlash = LocalPaths.lastSeparator(path);
     if (lastSlash <= 0) {
       return null;
     }
@@ -2389,8 +2488,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     // Extract partition values from Hive-style path
     org.apache.iceberg.PartitionData partitionData =
         new org.apache.iceberg.PartitionData(spec.partitionType());
-    int dataIdx = pathStr.indexOf("/data/");
-    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
+    // Read by "/": a local path on Windows is separated by "\\"
+    String slashed = LocalPaths.toSlashes(pathStr);
+    int dataIdx = slashed.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? slashed.substring(dataIdx + 6) : slashed;
     String[] pathParts = relativePath.split("/");
 
     for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename
@@ -2478,7 +2579,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       throws IOException {
     String timestamp = utcFormat("yyyyMMdd_HHmmss").format(new Date());
     String jsonFileName = "batch_" + timestamp + "_" + UUID.randomUUID().toString().substring(0, 8) + ".json";
-    String jsonPath = stagingPath + "/" + jsonFileName;
+    String jsonPath = LocalPaths.join(stagingPath, jsonFileName);
 
     // Build JSON content
     StringBuilder jsonContent = new StringBuilder();
@@ -2562,9 +2663,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
 
     String stagingPath;
     if (stagingMode == MaterializeOptionsConfig.StagingMode.LOCAL) {
-      // Use local temp directory for faster staging
-      java.io.File tempDir =
-          new File(System.getProperty("java.io.tmpdir"), "iceberg-staging/" + stagingSubpath);
+      // Stage locally for speed, under the schema's work directory (REQ-1992)
+      java.io.File tempDir = new File(
+          org.apache.calcite.adapter.file.WorkFiles.tempDirectory(workDirectory).toFile(),
+          "iceberg-staging/" + stagingSubpath);
       tempDir.mkdirs();
       stagingPath = tempDir.getAbsolutePath();
       LOGGER.debug("Created local staging path: {}", stagingPath);

@@ -113,6 +113,7 @@ public class PartitionedTableTest {
     // Create schema configuration
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);  // Use temp cache directory for test isolation
     operand.put(
@@ -167,6 +168,7 @@ public class PartitionedTableTest {
     // Create schema configuration with no partition config
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
     operand.put(
@@ -225,6 +227,7 @@ public class PartitionedTableTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));
@@ -292,6 +295,7 @@ public class PartitionedTableTest {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", "parquet");
     operand.put("ephemeralCache", true);
     operand.put("partitionedTables", java.util.Arrays.asList(tableConfig));

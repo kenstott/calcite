@@ -67,6 +67,10 @@ import java.util.NoSuchElementException;
  */
 public class EntityBridgeListener implements TableLifecycleListener {
 
+  /** Local directory for the writers' temporary files; set by buildBridges (REQ-1992). */
+  private java.io.File workDirectory;
+
+
   private static final Logger LOGGER = LoggerFactory.getLogger(EntityBridgeListener.class);
 
   /** The one table this listener is wired to in ref-schema.yaml; all others computed here too. */
@@ -192,11 +196,14 @@ public class EntityBridgeListener implements TableLifecycleListener {
   static final String HONOREE_FIRST =
       "CASE WHEN " + HONOREE_COMMA + " THEN list_element(" + HONOREE_AFTER_COMMA + ", 1) "
       + "ELSE list_element(" + HONOREE_TOKENS + ", 1) END";
+  // Each middle name below is NULLIF(array_to_string(..), ''): no middle name is NULL, not ''.
+  // DuckDB 1.4 gave NULL for an empty list; 1.5 gives '', and any_value(middle_name) in
+  // stagePersonSource skips a NULL but not an '', so another row's real middle name would lose.
   static final String HONOREE_MIDDLE =
-      "CASE WHEN " + HONOREE_COMMA + " THEN array_to_string(list_slice(" + HONOREE_AFTER_COMMA
-      + ", 2, len(" + HONOREE_AFTER_COMMA + ")), ' ') "
-      + "ELSE array_to_string(list_slice(" + HONOREE_TOKENS + ", 2, len(" + HONOREE_TOKENS
-      + ") - 1), ' ') END";
+      "CASE WHEN " + HONOREE_COMMA + " THEN NULLIF(array_to_string(list_slice("
+      + HONOREE_AFTER_COMMA + ", 2, len(" + HONOREE_AFTER_COMMA + ")), ' '), '') "
+      + "ELSE NULLIF(array_to_string(list_slice(" + HONOREE_TOKENS + ", 2, len(" + HONOREE_TOKENS
+      + ") - 1), ' '), '') END";
 
   /** Person-shaped: not committee-shaped, and at least two name tokens once titles are stripped
    *  (a bare surname such as "Sen. Boozman" cannot be matched on first and last name). */
@@ -210,7 +217,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
   static final String JUSTICE_LAST = "list_element(" + JUSTICE_TOKENS + ", -1)";
   static final String JUSTICE_FIRST = "list_element(" + JUSTICE_TOKENS + ", 1)";
   static final String JUSTICE_MIDDLE =
-      "array_to_string(list_slice(" + JUSTICE_TOKENS + ", 2, len(" + JUSTICE_TOKENS + ") - 1), ' ')";
+      "NULLIF(array_to_string(list_slice(" + JUSTICE_TOKENS + ", 2, len(" + JUSTICE_TOKENS
+      + ") - 1), ' '), '')";
   static final String JUSTICE_FILTER = JUSTICE_CLEAN + " LIKE '% %'";
 
   /** One row per org-type entry in entity-resolution-plan.md's "Org-type sources" table. */
@@ -377,17 +385,17 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "s.candidate_id", "s.candidate_name",
           "split_part(s.candidate_name, ',', 1)",
           "list_element(string_split(trim(split_part(s.candidate_name, ',', 2)), ' '), 1)",
-          "array_to_string(list_slice(string_split("
+          "NULLIF(array_to_string(list_slice(string_split("
               + "trim(split_part(s.candidate_name, ',', 2)), ' '), 2, "
-              + "len(string_split(trim(split_part(s.candidate_name, ',', 2)), ' '))), ' ')",
+              + "len(string_split(trim(split_part(s.candidate_name, ',', 2)), ' '))), ' '), '')",
           null, "s.year", "fec_candidate_id"),
       new PersonSource(
           "sec", "insider_transactions", null,
           "s.reporting_person_cik", "s.reporting_person_name",
           "list_element(string_split(trim(s.reporting_person_name), ' '), 1)",
           "list_element(string_split(trim(s.reporting_person_name), ' '), 2)",
-          "array_to_string(list_slice(string_split(trim(s.reporting_person_name), ' '), 3, "
-              + "len(string_split(trim(s.reporting_person_name), ' '))), ' ')",
+          "NULLIF(array_to_string(list_slice(string_split(trim(s.reporting_person_name), ' '), 3, "
+              + "len(string_split(trim(s.reporting_person_name), ' '))), ' '), '')",
           SEC_PERSON_FILTER, null, "sec_reporting_person_cik"),
       new PersonSource(
           "health", "cms_open_payments", null,
@@ -403,8 +411,8 @@ public class EntityBridgeListener implements TableLifecycleListener {
           null, "s.registrant_name",
           "list_element(string_split(trim(s.registrant_name), ' '), 1)",
           "list_element(string_split(trim(s.registrant_name), ' '), 2)",
-          "array_to_string(list_slice(string_split(trim(s.registrant_name), ' '), 3, "
-              + "len(string_split(trim(s.registrant_name), ' '))), ' ')",
+          "NULLIF(array_to_string(list_slice(string_split(trim(s.registrant_name), ' '), 3, "
+              + "len(string_split(trim(s.registrant_name), ' '))), ' '), '')",
           FAA_PERSON_FILTER, null, "faa_registrant_name"),
       // assignee_type '4'/'5' (US/foreign individual) — a patent assigned directly to a person
       // rather than a company; distinct from and excluded by the org-track's patents entry
@@ -425,9 +433,9 @@ public class EntityBridgeListener implements TableLifecycleListener {
           "s.bioguide_id", "s.name_last_first",
           "split_part(s.name_last_first, ',', 1)",
           "list_element(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '), 1)",
-          "array_to_string(list_slice(string_split("
+          "NULLIF(array_to_string(list_slice(string_split("
               + "trim(split_part(s.name_last_first, ',', 2)), ' '), 2, "
-              + "len(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '))), ' ')",
+              + "len(string_split(trim(split_part(s.name_last_first, ',', 2)), ' '))), ' '), '')",
           null, "s.congress", "officials_member_bioguide_id"),
       new PersonSource(
           "officials", "federal_judges", null,
@@ -464,14 +472,16 @@ public class EntityBridgeListener implements TableLifecycleListener {
    *
    * @param pgConn Postgres connection (closed by caller)
    * @param materializeDir Parquet materialization directory (e.g., s3://govdata-parquet-v1)
+   * @param workDirectory local directory for the writers' temporary files (REQ-1992)
    * @throws Exception on SQL, I/O, or configuration errors
    */
-  public void buildBridges(Connection pgConn, String materializeDir) throws Exception {
-    buildBridges(pgConn, materializeDir, materializeDir);
+  public void buildBridges(Connection pgConn, String materializeDir, java.io.File workDirectory)
+      throws Exception {
+    buildBridges(pgConn, materializeDir, materializeDir, workDirectory);
   }
 
   /**
-   * As {@link #buildBridges(Connection, String)}, but writes the four result tables somewhere
+   * As {@link #buildBridges(Connection, String, java.io.File)}, but writes the four result tables somewhere
    * other than where the sources were read.
    *
    * <p>Reads and writes shared one directory until now, which made this sweep impossible to
@@ -482,8 +492,15 @@ public class EntityBridgeListener implements TableLifecycleListener {
    *
    * @param readDir where source tables are read from
    * @param writeDir where entity_org_bridge / canonical_org_entity / the person pair are written
+   * @param workDirectory local directory for the writers' temporary files (REQ-1992)
    */
-  public void buildBridges(Connection pgConn, String readDir, String writeDir) throws Exception {
+  public void buildBridges(Connection pgConn, String readDir, String writeDir,
+      java.io.File workDirectory) throws Exception {
+    if (workDirectory == null) {
+      throw new IllegalArgumentException("EntityBridgeListener: no work directory for the "
+          + "writers' temporary files");
+    }
+    this.workDirectory = workDirectory;
     String runId = Instant.now().toString();
     LOGGER.info("EntityBridgeListener: starting entity-resolution build, runId={}, read={}, "
         + "write={}", runId, readDir, writeDir);
@@ -1109,6 +1126,29 @@ public class EntityBridgeListener implements TableLifecycleListener {
         + "strip_legal_suffix_once(strip_legal_suffix_once(regexp_replace(regexp_replace("
         + "regexp_replace(lower(trim(x)), '&', ' and ', 'g'), '[.,]', '', 'g'), "
         + "'^(the|a|an) +', '', 'i')))), '\\s+', ' ', 'g')))");
+    // Narrower sibling of strip_legal_suffix_once/norm_org_name, used only by
+    // stageGleifCikMapping's CIK enrichment join. That join asserts a specific CIK value, not
+    // just a blocking/fuzzy candidate, so it cannot afford norm_org_name's full suffix list:
+    // "holdings|partners|fund|trust|group|management" mark a genuinely different kind of legal
+    // vehicle from the operating company itself (e.g. "Oracle Trust" and "Oracle Partners, L.P."
+    // are not Oracle Corporation, even though they normalize to the same "oracle" under
+    // norm_org_name). Stripping only the generic corporate-form tokens keeps those vehicles
+    // distinguishable from the entity that actually holds the CIK. Includes the spelled-out
+    // "incorporated" alongside "inc" — sec.filing_metadata.company_name and gleif_entities.
+    // legal_name pick different forms for the same real company (confirmed live: QUALCOMM's
+    // GLEIF legal_name is "QUALCOMM INCORPORATED", its SEC company_name is "QUALCOMM INC/DE";
+    // only the abbreviation was covered here, so this join produced no CIK for it at all).
+    execute(conn,
+        "CREATE OR REPLACE MACRO strip_generic_corp_suffix_once(x) AS (trim(regexp_replace(x, "
+        + "'\\s+(inc|incorporated|llc|corp|corporation|co|company|ltd|llp|lp|plc|pc|pa|na|n a|"
+        + "partnership)\\.?\\s*$', '', 'i')))");
+    execute(conn,
+        "CREATE OR REPLACE MACRO sec_cik_norm_name(x) AS (trim(regexp_replace("
+        + "strip_generic_corp_suffix_once(strip_generic_corp_suffix_once("
+        + "strip_generic_corp_suffix_once(regexp_replace(regexp_replace(regexp_replace("
+        + "regexp_replace(lower(trim(x)), '\\s*/[a-z]{2}\\s*$', ''), "
+        + "'&', ' and ', 'g'), '[.,]', '', 'g'), '^(the|a|an) +', '', 'i')))), "
+        + "'\\s+', ' ', 'g')))");
     execute(conn,
         "CREATE OR REPLACE MACRO org_block_key(x) AS (split_part(norm_org_name(x), ' ', 1))");
     // Every fuzzy candidate pair already shares block_key (the first normalized token) by
@@ -1210,20 +1250,34 @@ public class EntityBridgeListener implements TableLifecycleListener {
     // gleif_cik_mapping (GLEIF's own RegistrationAuthorityID='RA000665' data) covers only a
     // small subset of SEC filers — mega-caps like Apple, Microsoft, Alphabet have LEIs in
     // gleif_entities but no CIK linkage recorded via that authority mechanism. Enrich the
-    // lookup by joining gleif_entities.legal_name to sec.filing_metadata.company_name (both
-    // normalized) — the SEC filing metadata authoritatively links CIKs to filer names, and
-    // GLEIF's own legal_name for the same entity typically normalizes to the same value.
-    // QUALIFY keeps at most one (lei, cik) pair per LEI so downstream LEFT JOINs on lei do
-    // not multiply matched-name rows. Only inserts LEIs not already present in gleif_cik.
+    // lookup by joining gleif_entities.legal_name to sec.filing_metadata.company_name — the SEC
+    // filing metadata authoritatively links CIKs to filer names, and GLEIF's own legal_name for
+    // the same entity typically normalizes to the same value. QUALIFY keeps at most one
+    // (lei, cik) pair per LEI so downstream LEFT JOINs on lei do not multiply matched-name rows.
+    // Only inserts LEIs not already present in gleif_cik.
+    //
+    // Uses sec_cik_norm_name, not the shared norm_org_name/blocking macro: norm_org_name strips
+    // "trust"/"partners"/"fund"/"holdings"/"group"/"management" as if they were generic
+    // corporate-form noise (inc/corp/ltd/...), which is fine for blocking a fuzzy search but
+    // wrong for asserting a specific CIK — it let unrelated legal vehicles sharing an operating
+    // company's base name inherit that company's real CIK. Confirmed live before this fix:
+    // "Oracle Trust" and "Oracle Partners, L.P." both carried CIK 1341439 (the actual Oracle
+    // Corporation's), and "Apple Trust"/"THE APPLE TRUST"/"Apple Management Corp." /
+    // "APPLE MANAGEMENT INC." all carried Apple Inc.'s CIK 320193. sec_cik_norm_name strips only
+    // the generic corporate-form tokens, so those vehicles no longer collide with the operating
+    // company's own normalized name and correctly get no CIK via this join instead. This does not
+    // resolve every name collision (e.g. an unrelated "X Ltd" still collides with "X Inc" here,
+    // same as it does in norm_org_name) — that residual class needs an actual authority
+    // cross-reference, not a normalization tweak, and is out of scope for this fix.
     execute(conn,
         "INSERT INTO gleif_cik "
         + "SELECT lei, cik FROM ("
         + "  SELECT ge.lei, LPAD(fm.cik, 10, '0') AS cik "
-        + "  FROM (SELECT lei, norm_org_name(legal_name) AS norm_name "
+        + "  FROM (SELECT lei, sec_cik_norm_name(legal_name) AS norm_name "
         + "        FROM iceberg_scan('" + loc(base, "ref", "gleif_entities")
         + "', allow_moved_paths=true) "
         + "        WHERE lei IS NOT NULL AND legal_name IS NOT NULL) ge "
-        + "  JOIN (SELECT DISTINCT cik, norm_org_name(company_name) AS norm_name "
+        + "  JOIN (SELECT DISTINCT cik, sec_cik_norm_name(company_name) AS norm_name "
         + "        FROM iceberg_scan('" + loc(base, "sec", "filing_metadata")
         + "', allow_moved_paths=true) "
         + "        WHERE cik IS NOT NULL AND company_name IS NOT NULL) fm "
@@ -1240,8 +1294,9 @@ public class EntityBridgeListener implements TableLifecycleListener {
       stmt.execute("SET threads=2");
       stmt.execute("SET preserve_insertion_order=false");
       stmt.execute("SET memory_limit='2GB'");
-      String tempDir = System.getProperty("java.io.tmpdir", "/tmp") + "/entity-bridge-duckdb";
-      stmt.execute("SET temp_directory='" + tempDir + "'");
+      // DuckDB spill in the run's staging directory (REQ-1992), never the JVM temp directory
+      String tempDir = new java.io.File(org.apache.calcite.adapter.file.StagingDirectory.get(), "entity-bridge-duckdb").getPath();
+      stmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
       stmt.execute("PRAGMA max_temp_directory_size='30GB'");
       try {
         stmt.execute("INSTALL parquet");
@@ -1362,7 +1417,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     return StorageProviderFactory.createFromType("s3", s3Config);
   }
 
-  private static long writeTableBridges(String tableName, CloseableRowIterator rows,
+  private long writeTableBridges(String tableName, CloseableRowIterator rows,
       String materializeDir) throws IOException {
     if (materializeDir == null || materializeDir.isEmpty()) {
       throw new IOException("EntityBridgeListener: no write directory — cannot write ref."
@@ -1371,7 +1426,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
     MaterializeConfig matConfig = standaloneMaterializeConfig(tableName);
     StorageProvider storageProvider = standaloneStorageProvider(materializeDir);
     MaterializationWriter writer = MaterializationWriterFactory.createFromConfig(
-        matConfig, storageProvider, materializeDir + "/ref");
+        matConfig, storageProvider, materializeDir + "/ref", workDirectory);
     writer.initialize(matConfig);
     try {
       writer.writeBatch(rows, Collections.<String, String>emptyMap());
@@ -1386,7 +1441,7 @@ public class EntityBridgeListener implements TableLifecycleListener {
   }
 
   /** Standalone non-streaming write (for the {@link #buildBridges} orchestrator path). */
-  private static void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows,
+  private void writeTableBridgesSync(String tableName, List<Map<String, Object>> rows,
       String materializeDir) throws IOException {
     writeTableBridges(tableName, new ListRowIterator(rows), materializeDir);
   }

@@ -10,7 +10,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # attaches the jar and the Central bundle to the engine-v release
       packages: write
 
     steps:
@@ -129,7 +129,7 @@ jobs:
           cp "$JAVADOC" "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-javadoc.jar"
 
           # SBOM (CycloneDX), same as the pgwire-adapters release bundles and
-          # askamerica-engine's Maven Central publish.
+          # askamerica-engine's Maven Central bundle.
           syft "${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}.jar" \
             -o cyclonedx-json="${BUNDLE_DIR}/${ARTIFACT_ID}-${VERSION}-cyclonedx.json"
 
@@ -154,26 +154,20 @@ jobs:
           (cd bundle && zip -r "../govdata-bundle.zip" .)
           echo "Bundle: $(du -sh govdata-bundle.zip | cut -f1)"
 
-      - name: Upload to Sonatype Central Portal
+      # Central is no longer uploaded from a tag (its free tier caps monthly publishing). The
+      # signed bundle is attached to the release for "Promote to Maven Central" to upload, and the
+      # jar Central carried as io.simpleishard:govdata is attached beside it, each with a sha256,
+      # so it downloads without auth.
+      - name: Attach the jar and the Central bundle to the release
         env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          VERSION:           ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION:  ${{ steps.version.outputs.version }}
         run: |
-          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
-            -H "Authorization: Bearer ${AUTH}" \
-            -H "Accept: application/json" \
-            -F "bundle=@govdata-bundle.zip;type=application/zip" \
-            -F "name=govdata-${VERSION}" \
-            -F "publishingType=AUTOMATIC")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "Response ($HTTP_CODE): $BODY"
-
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "ERROR: Maven Central upload failed"
-            exit 1
-          fi
+          mkdir -p central
+          JAR="govdata-${VERSION}.jar"
+          BUNDLE="govdata-${VERSION}-central-bundle.zip"
+          cp "bundle/io/simpleishard/govdata/${VERSION}/${JAR}" "central/${JAR}"
+          cp govdata-bundle.zip "central/${BUNDLE}"
+          (cd central && sha256sum "${JAR}" > "${JAR}.sha256" && sha256sum "${BUNDLE}" > "${BUNDLE}.sha256")
+          gh release upload "engine-v${VERSION}" --repo "${{ github.repository }}" --clobber \
+            "central/${JAR}" "central/${JAR}.sha256" "central/${BUNDLE}" "central/${BUNDLE}.sha256"

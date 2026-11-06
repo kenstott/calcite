@@ -81,7 +81,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config =
         buildIcebergConfig(
@@ -104,7 +104,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_write");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config =
         buildIcebergConfig(
@@ -137,7 +137,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_partition");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     List<String> partitionColumns = Arrays.asList("region");
     MaterializeConfig config =
@@ -177,7 +177,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_infer");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     // No declared columns — the schema must be inferred from the first batch (FILE-186).
     MaterializeConfig config =
@@ -249,7 +249,7 @@ public class IcebergMaterializationWriterTest {
 
     // First write: 2 columns.
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config);
     Map<String, Object> row1 = new HashMap<String, Object>();
     row1.put("id", 1);
@@ -262,7 +262,7 @@ public class IcebergMaterializationWriterTest {
     // Second write (fresh writer instance, same table): introduces a new "amount" column that
     // was never declared and never seen by the first batch.
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     writer.initialize(config);
     Map<String, Object> row2 = new HashMap<String, Object>();
     row2.put("id", 2);
@@ -316,7 +316,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_drift_missing");
     warehouseDir.mkdirs();
 
-    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     MaterializeConfig configV1 =
         buildIcebergConfig(warehouseDir, "drift_missing_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
@@ -331,7 +331,7 @@ public class IcebergMaterializationWriterTest {
     writer.close();
 
     // Second writer's config expects a column ("extra") the existing table does not have.
-    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     MaterializeConfig configV2 =
         buildIcebergConfig(warehouseDir, "drift_missing_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
@@ -339,6 +339,12 @@ public class IcebergMaterializationWriterTest {
             createColumnConfig("extra", "VARCHAR")),
         Collections.<String>emptyList());
     writer.initialize(configV2);
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("id", 2);
+    row2.put("name", "second");
+    row2.put("extra", "x");
+    writer.writeBatch(Collections.singletonList(row2).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
 
     org.apache.iceberg.Table reloaded =
         new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
@@ -356,8 +362,55 @@ public class IcebergMaterializationWriterTest {
         rowCount++;
       }
     }
-    assertEquals(0, rowCount,
-        "a genuinely missing expected column must still purge prior data (existing behavior)");
+    assertEquals(1, rowCount,
+        "a genuinely missing expected column must still purge prior data once the first batch "
+            + "is committed; only the new batch's row remains");
+  }
+
+  @Test public void testDriftWithNoBatchLeavesExistingTableUntouched() throws Exception {
+    // A run whose every batch fails never reaches a flush. The drift drop-and-recreate purges
+    // physically, so it must not happen until a batch has rows to commit.
+    File warehouseDir = new File(tempDir, "warehouse_drift_deferred");
+    warehouseDir.mkdirs();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
+    MaterializeConfig configV1 =
+        buildIcebergConfig(warehouseDir, "drift_deferred_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configV1);
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("name", "first");
+    writer.writeBatch(Collections.singletonList(row).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
+    MaterializeConfig configV2 =
+        buildIcebergConfig(warehouseDir, "drift_deferred_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("name", "VARCHAR"),
+            createColumnConfig("extra", "VARCHAR")),
+        Collections.<String>emptyList());
+    writer.initialize(configV2);
+    writer.commit();
+    writer.close();
+
+    org.apache.iceberg.Table reloaded =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(writer.getTableLocation());
+    assertEquals(2, reloaded.schema().columns().size(),
+        "table with no batch written must keep its original columns");
+    int rowCount = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(reloaded).build()) {
+      for (org.apache.iceberg.data.Record ignored : records) {
+        rowCount++;
+      }
+    }
+    assertEquals(1, rowCount, "an all-failed run must not purge existing rows");
   }
 
   @Test public void testAddingPartitionColumnAlreadyPresentAsDataTriggersDropAndRecreate()
@@ -372,7 +425,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_drift_partition");
     warehouseDir.mkdirs();
 
-    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     MaterializeConfig configV1 =
         buildIcebergConfig(warehouseDir, "drift_partition_table", Arrays.asList(
             createColumnConfig("type", "VARCHAR"),
@@ -390,7 +443,7 @@ public class IcebergMaterializationWriterTest {
 
     // Second writer's config adds "year" to partition.columns; "year" is already present as an
     // ordinary data column, so the name-only check must not be fooled into thinking nothing changed.
-    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     MaterializeConfig configV2 =
         buildIcebergConfig(warehouseDir, "drift_partition_table", Arrays.asList(
             createColumnConfig("type", "VARCHAR"),
@@ -398,6 +451,12 @@ public class IcebergMaterializationWriterTest {
             createColumnConfig("name", "VARCHAR")),
         Arrays.asList("type", "year"));
     writer.initialize(configV2);
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("type", "widget");
+    row2.put("year", 2025);
+    row2.put("name", "second");
+    writer.writeBatch(Collections.singletonList(row2).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
 
     org.apache.iceberg.Table reloaded =
         new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
@@ -421,7 +480,7 @@ public class IcebergMaterializationWriterTest {
 
     // First writer: "up to date" config with 3 columns, including one ("extra") a later, stale
     // writer won't know about.
-    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     MaterializeConfig configCurrent =
         buildIcebergConfig(warehouseDir, "drift_extra_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
@@ -439,7 +498,7 @@ public class IcebergMaterializationWriterTest {
 
     // Second writer: "stale" config missing "extra" — simulates a worker running an older jar
     // against a table a different, up-to-date worker already rebuilt.
-    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
     MaterializeConfig configStale =
         buildIcebergConfig(warehouseDir, "drift_extra_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
@@ -476,7 +535,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_array_type");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config =
         buildIcebergConfig(
@@ -514,7 +573,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_array_ids");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config =
         buildIcebergConfig(
@@ -558,7 +617,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_format_check");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     // Build config with PARQUET format instead of ICEBERG
     MaterializeConfig config = MaterializeConfig.builder()
@@ -577,7 +636,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_null");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     assertThrows(IllegalArgumentException.class,
         () -> writer.initialize(null),
@@ -588,7 +647,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_disabled");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config = MaterializeConfig.builder()
         .enabled(false)
@@ -606,7 +665,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_format");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     assertEquals(MaterializeConfig.Format.ICEBERG, writer.getFormat(),
         "Format should be ICEBERG");
@@ -616,7 +675,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_uninit");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     Map<String, Object> row = new HashMap<String, Object>();
@@ -633,7 +692,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_no_table");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     // Config without targetTableId or name
     MaterializeConfig config = MaterializeConfig.builder()
@@ -657,7 +716,7 @@ public class IcebergMaterializationWriterTest {
 
     // First write with 2 columns
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config1 =
         buildIcebergConfig(
@@ -679,7 +738,7 @@ public class IcebergMaterializationWriterTest {
 
     // Second write with 3 columns (new column "amount")
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config2 =
         buildIcebergConfig(
@@ -711,13 +770,13 @@ public class IcebergMaterializationWriterTest {
     warehouseDir.mkdirs();
 
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config1 =
         buildIcebergConfig(
             warehouseDir, "type_mismatch_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
-            createColumnConfig("year", "VARCHAR")),
+            createColumnConfig("year", "INTEGER")),
         Collections.<String>emptyList());
 
     writer.initialize(config1);
@@ -725,22 +784,24 @@ public class IcebergMaterializationWriterTest {
     List<Map<String, Object>> rows1 = new ArrayList<Map<String, Object>>();
     Map<String, Object> row1 = new HashMap<String, Object>();
     row1.put("id", 1);
-    row1.put("year", "2023");
+    row1.put("year", 2023);
     rows1.add(row1);
     writer.writeBatch(rows1.iterator(), Collections.<String, String>emptyMap());
     writer.commit();
     writer.close();
 
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config2 =
         buildIcebergConfig(
             warehouseDir, "type_mismatch_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
-            createColumnConfig("year", "INTEGER")),
+            createColumnConfig("year", "VARCHAR")),
         Collections.<String>emptyList());
 
+    // A stored integer declared as text is no designed transition (GOV-075 covers only text
+    // declared as an integer or a date), so the type change still fails.
     IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> {
       writer.initialize(config2);
     });
@@ -757,7 +818,7 @@ public class IcebergMaterializationWriterTest {
     warehouseDir.mkdirs();
 
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config1 =
         buildIcebergConfig(
@@ -778,7 +839,7 @@ public class IcebergMaterializationWriterTest {
     writer.close();
 
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config2 =
         buildIcebergConfig(
@@ -814,7 +875,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_dateformat_fallback");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     ColumnConfig idCol = createColumnConfig("id", "INTEGER");
     ColumnConfig dateCol = ColumnConfig.builder()
@@ -861,7 +922,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_empty");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     MaterializeConfig config =
         buildIcebergConfig(
@@ -882,7 +943,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_replace");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     // county_code is raw integer in source; replace: true wraps it with printf
     ColumnConfig idCol = ColumnConfig.builder().name("id").type("INTEGER").build();
@@ -997,7 +1058,7 @@ public class IcebergMaterializationWriterTest {
     File warehouseDir = new File(tempDir, "warehouse_valuesource");
     warehouseDir.mkdirs();
     writer =
-        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null);
+        new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
 
     List<String> partitionColumns = Arrays.asList("month");
     MaterializeConfig config =

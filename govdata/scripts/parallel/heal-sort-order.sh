@@ -219,7 +219,7 @@ for entry in "${TABLES[@]}"; do
 
   set +e
   # shellcheck disable=SC2086
-  java -Xms512m -Xmx"$HEAP" $BUDGET_ARG \
+  java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -Xms512m -Xmx"$HEAP" $BUDGET_ARG \
     -cp "$JAR" \
     org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
     --warehouse "$WAREHOUSE_BASE/$schema" \

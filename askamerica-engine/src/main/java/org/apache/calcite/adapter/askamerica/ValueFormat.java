@@ -35,10 +35,17 @@ final class ValueFormat {
     private static final Pattern D3 =
         Pattern.compile("^(\\+)?(\\$)?(,)?(?:\\.(\\d{1,2}))?([f%])?$");
 
+    private final String spec;
     private final String pattern;
 
-    private ValueFormat(String pattern) {
+    private ValueFormat(String spec, String pattern) {
+        this.spec = spec;
         this.pattern = pattern;
+    }
+
+    /** The format exactly as the caller wrote it. */
+    String spec() {
+        return spec;
     }
 
     /** Parses a spec; {@code null} or empty means the caller asked for no format. */
@@ -56,7 +63,7 @@ final class ValueFormat {
                 + "\"$#,##0\" or \"0.0'%'\", or a d3-style one such as \"$,.0f\" or \"+.1%\": "
                 + e.getMessage(), e);
         }
-        return new ValueFormat(pattern);
+        return new ValueFormat(spec, pattern);
     }
 
     private static String fromD3(Matcher m) {

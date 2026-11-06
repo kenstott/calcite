@@ -302,7 +302,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     m.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "/path/to/data");
+    operand.put("directory",  "/path/to/data");
     operand.put("recursive", Boolean.TRUE);
     operand.put("batchSize", Integer.valueOf(1000));
 
@@ -741,14 +741,14 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
   @Test void testWriteDebugModel() throws Exception {
     Method m =
-        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", File.class, String.class, Map.class, String.class);
     m.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "/path/to/data");
+    operand.put("directory",  "/path/to/data");
 
     // Should not throw
-    m.invoke(null, "testSchema", operand, "parentSchema");
+    m.invoke(null, tempDir.toFile(), "testSchema", operand, "parentSchema");
   }
 
   // ===== create() with various operand configurations =====
@@ -771,6 +771,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
 
@@ -784,6 +785,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeral_cache", Boolean.TRUE);
 
@@ -797,6 +799,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.resolve("cache").toString());
 
@@ -810,6 +813,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.resolve("filecache").toFile());
 
@@ -823,6 +827,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("sourceDirectory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
 
@@ -836,6 +841,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("batchSize", Integer.valueOf(5000));
@@ -861,6 +867,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("table_name_casing", "SMART_CASING");
@@ -877,6 +884,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("glob", "*.csv");
@@ -897,6 +905,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("views", views);
@@ -915,6 +924,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("csvTypeInference", csvTypeInference);
@@ -928,6 +938,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("baseDirectory", tempDir.toString());
     // No directory, no tables, no storageType => should throw
 
     assertThrows(IllegalStateException.class, () ->
@@ -938,7 +949,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("directory",  "s3://my-bucket/data");
 
     assertThrows(IllegalArgumentException.class, () ->
         factory.create(parentSchema, "s3noauth", operand));
@@ -948,7 +959,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "https://example.com/data");
+    operand.put("directory",  "https://example.com/data");
     operand.put("ephemeralCache", Boolean.TRUE);
 
     // This will fail later since HTTP storage isn't fully implemented, but it exercises the
@@ -994,6 +1005,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     writeTempCsv("test.csv");
 
     Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("tables", tables);
     operand.put("ephemeralCache", Boolean.TRUE);
 
@@ -1012,6 +1024,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     partitionedTables.add(ptable);
 
     Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("partitionedTables", partitionedTables);
     operand.put("ephemeralCache", Boolean.TRUE);
 
@@ -1025,6 +1038,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("declaredSchemaName", "canonical_name");
@@ -1051,6 +1065,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("executionEngine", "PARQUET");
@@ -1068,6 +1083,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("duckdbConfig", duckdbConfig);
@@ -1088,6 +1104,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("materializations", materializations);
@@ -1102,6 +1119,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     // Simulate Calcite's ModelHandler setting baseDirectory as a File
@@ -1117,6 +1135,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     // Simulate Calcite's ModelHandler setting baseDirectory as a String
@@ -1131,6 +1150,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
 
@@ -1147,6 +1167,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     operand.put("_storageProvider", mockProvider);
@@ -1160,7 +1181,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
     SchemaPlus parentSchema = CalciteSchema.createRootSchema(true).plus();
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "relative/path");
+    operand.put("directory",  "relative/path");
     operand.put("storageType", "local");
     operand.put("ephemeralCache", Boolean.TRUE);
     // Set baseDirectory to model file dir (Calcite sets this automatically)
@@ -1176,6 +1197,7 @@ class FileSchemaFactoryDeepCoverageTest6 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", "true");
 

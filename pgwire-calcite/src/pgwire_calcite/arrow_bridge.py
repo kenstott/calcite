@@ -60,6 +60,7 @@ class _ArrowClasses:
                 ),
                 "ByteArrayOutputStream": jpype.JClass("java.io.ByteArrayOutputStream"),
                 "Channels": jpype.JClass("java.nio.channels.Channels"),
+                "RoundingMode": jpype.JClass("java.math.RoundingMode"),
             }
         return cls._cache
 
@@ -227,6 +228,10 @@ def stream_ipc_batches(
             .setCalendar(C["JdbcToArrowUtils"].getUtcCalendar())
             .setTargetBatchSize(int(batch_size))
             .setJdbcConsumerGetter(_consumer_factory(C))
+            # A DECIMAL value arrives at the scale its source wrote it (Salesforce's 500000 in
+            # a DECIMAL(19,2) column is scale 0), and the decimal vector takes only its own
+            # scale. Each value is rescaled exactly; one that would lose digits fails.
+            .setBigDecimalRoundingMode(C["RoundingMode"].UNNECESSARY)
             .build()
         )
         iterator = C["JdbcToArrow"].sqlToArrowVectorIterator(rs, config)

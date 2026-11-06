@@ -111,10 +111,11 @@ jdbc:calcite:model=inline:{
 ### Numeric Types
 - **INTEGER**: Whole numbers that fit in 32-bit range
 - **BIGINT**: Whole numbers outside INTEGER range
-- **DOUBLE**: Numbers with decimal points or scientific notation
+- **DOUBLE**: Numbers with a decimal point, an exponent, or both (`1.5`, `1e5`, `2.5E-3`)
 
 ### Boolean Type
-- **BOOLEAN**: Matches true/false, TRUE/FALSE, True/False, 0/1
+- **BOOLEAN**: Matches true/false, yes/no, y/n and t/f in any case; 0 and 1 are INTEGER, because
+  the integer check comes first
 
 ### Temporal Types
 - **DATE**: Common date formats (yyyy-MM-dd, MM/dd/yyyy, dd/MM/yyyy, etc.)

@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.sec;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -42,7 +44,6 @@ import java.util.Map;
 public class EdgarDownloader {
   private static final Logger LOGGER = LoggerFactory.getLogger(EdgarDownloader.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String USER_AGENT = "Apache Calcite SEC Adapter (apache-calcite@apache.org)";
 
   // SEC API endpoints
   @SuppressWarnings("InlineFormatString")
@@ -160,7 +161,7 @@ public class EdgarDownloader {
 
     HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
     conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", USER_AGENT);
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
@@ -183,6 +184,7 @@ public class EdgarDownloader {
     // Host-wide shared budget so parallel worker processes don't collectively exceed it.
     EdgarRateLimiter.acquire();
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
 
     if (responseCode == 304) {
@@ -205,7 +207,7 @@ public class EdgarDownloader {
       String lastModified = conn.getHeaderField("Last-Modified");
 
       try (BufferedReader reader =
-          new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+          new BufferedReader(new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
 
         // Read response into string for both parsing and caching
         StringBuilder responseBuilder = new StringBuilder();
@@ -409,17 +411,18 @@ public class EdgarDownloader {
       try {
         HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
         conn.setRequestMethod("GET");
-        conn.setRequestProperty("User-Agent", USER_AGENT);
+        conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
         conn.setConnectTimeout(30000);
         conn.setReadTimeout(30000);
 
         // Rate limiting — host-wide shared per-IP budget
         EdgarRateLimiter.acquire();
 
+        NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
         if (responseCode == 200) {
           // Download the file
-          try (InputStream in = conn.getInputStream();
+          try (InputStream in = CompleteBody.of(conn);
                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             byte[] buffer = new byte[8192];
@@ -499,7 +502,7 @@ public class EdgarDownloader {
     try {
       HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
       conn.setRequestMethod("GET");
-      conn.setRequestProperty("User-Agent", USER_AGENT);
+      conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(30000);
       try {
@@ -507,10 +510,11 @@ public class EdgarDownloader {
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != 200) {
         return null;
       }
-      try (InputStream in = conn.getInputStream();
+      try (InputStream in = CompleteBody.of(conn);
            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
         byte[] buffer = new byte[8192];
         int bytesRead;

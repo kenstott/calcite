@@ -291,6 +291,7 @@ public class CsvNextGenPerformanceTest {
       Object fileSchema = fileSchemaFactory.getDeclaredConstructor().newInstance();
 
       java.util.Map<String, Object> operand = new java.util.HashMap<>();
+      operand.put("baseDirectory", testDir.getAbsolutePath());
       operand.put("directory", testDir.getAbsolutePath());
 
       org.apache.calcite.schema.Schema originalSchema =

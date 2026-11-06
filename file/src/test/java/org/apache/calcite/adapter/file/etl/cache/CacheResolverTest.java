@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.etl.cache;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ public class CacheResolverTest {
     String result = resolver.resolve("data/file.csv");
 
     assertNotNull(result);
-    assertEquals(cacheDir.toString() + "/data/file.csv", result);
+    assertEquals(LocalPaths.join(cacheDir.toString(), "data/file.csv"), result);
   }
 
   @Test void testResolveReturnsNullForMissingLocalFile() {

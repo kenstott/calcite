@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -103,7 +105,8 @@ public class AperioDriverOperandTest {
 
   @Test @Tag("FILE-185") void storageDefaultsToHomeAperioNamespacedBySchema() throws Exception {
     Map<String, Object> op = buildOperand("/data", new Properties());
-    assertEquals(System.getProperty("user.home") + "/.aperio/files", op.get("baseDirectory"),
+    assertEquals(LocalPaths.join(System.getProperty("user.home"), ".aperio/files"),
+        op.get("baseDirectory"),
         "default storage root is ~/.aperio (per-user, local), namespaced by schema (default 'files')");
   }
 
@@ -112,7 +115,8 @@ public class AperioDriverOperandTest {
     info.setProperty("storage", "~/lakes");
     info.setProperty("schema", "sales");
     Map<String, Object> op = buildOperand("/data", info);
-    assertEquals(System.getProperty("user.home") + "/lakes/sales", op.get("baseDirectory"),
+    assertEquals(LocalPaths.join(System.getProperty("user.home"), "lakes/sales"),
+        op.get("baseDirectory"),
         "storage param sets the root (~ expands to home), namespaced by schema");
   }
 
@@ -148,7 +152,7 @@ public class AperioDriverOperandTest {
     Map<String, Object> m = (Map<String, Object>) op.get("materialize");
     assertNotNull(m, "materialize=iceberg emits a schema-level materialize default (applied to all tables)");
     assertEquals("iceberg", m.get("format"));
-    assertEquals("/lake/sales/iceberg", m.get("warehousePath"),
+    assertEquals(LocalPaths.normalize("/lake/sales/iceberg"), m.get("warehousePath"),
         "the lake warehouse lives under the storage root, namespaced by schema");
   }
 

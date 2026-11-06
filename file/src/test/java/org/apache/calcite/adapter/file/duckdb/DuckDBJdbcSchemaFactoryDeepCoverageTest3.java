@@ -815,15 +815,17 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest3 {
 
   // ===== loadQueryExtensions tests (via reflection) =====
 
-  @Test void testLoadQueryExtensions() throws Exception {
+  @Test void testLoadQueryExtensions(@org.junit.jupiter.api.io.TempDir java.io.File aperioDir)
+      throws Exception {
     Class.forName("org.duckdb.DuckDBDriver");
     Connection conn = DriverManager.getConnection("jdbc:duckdb:");
     try {
       Method method =
-          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
+          DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class,
+              java.io.File.class);
       method.setAccessible(true);
       // Should not throw - gracefully handles extension load failures
-      method.invoke(null, conn);
+      method.invoke(null, conn, aperioDir);
     } finally {
       conn.close();
     }

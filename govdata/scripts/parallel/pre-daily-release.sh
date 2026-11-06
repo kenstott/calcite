@@ -12,6 +12,16 @@
 #               regenerate the seed with it, commit the seed files and push, so the release and
 #               the jar below carry the new seed. A failed seed rebuild is reported and the
 #               release continues on the committed seed.
+#   2c. CI gate the release and the staged jar ship only code whose CI is green. Commits above the
+#               newest non-generated (code) commit are auto-generated seed or coverage-metadata
+#               commits that change no code, so the gate judges HEAD: its newest "CI" workflow run
+#               (main.yml) on kenstott/calcite must be completed with conclusion success. A run
+#               still queued or in progress is waited for (CI_WAIT_SECS, default 90 min; a head with
+#               no run yet gets CI_NONE_GRACE_SECS, default 5 min). A cancelled, failed or missing
+#               run, a timeout, or a run that cannot be read, is not green: nothing is released or
+#               staged, the reason (sha, run state, URL) is logged and the script exits 1, so the
+#               window continues on the jar already staged. The seed rebuild and its push above
+#               are not gated. --dry-run prints the decision and never waits.
 #   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag
 #               AND we're about to build a fresh jar for this head_sha (step 4's own gate) —
 #               a release always accompanies the build it corresponds to, not a wall-clock timer.
@@ -175,6 +185,85 @@ else
   fi
 fi
 
+# ── 2c. CI gate ──────────────────────────────────────────────────────────────
+CI_WORKFLOW="main.yml"
+# Subjects of commits that carry no code and get no CI run of their own.
+CI_WAIT_SECS="${CI_WAIT_SECS:-5400}"
+CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-300}"
+CI_POLL_SECS="${CI_POLL_SECS:-60}"
+GENERATED_SUBJECTS='^(chore\(govdata\): rebuild the DuckDB seed for changed schema models|chore\(govdata\): refresh observed-coverage metadata)'
+
+# ci_query <sha>: prints "<status>\t<conclusion>\t<url>" for the newest CI run of <sha>
+# ("none" when it has no run); non-zero with the reason on stdout when it cannot be read.
+ci_query() {
+  local runs
+  if ! runs="$(gh run list --repo "$FORK" --workflow "$CI_WORKFLOW" --commit "$1" \
+                 --limit 20 --json status,conclusion,url,createdAt 2>&1)"; then
+    echo "CI for $1 could not be read: $runs"; return 1
+  fi
+  python3 -I -c '
+import json, sys
+runs = json.loads(sys.stdin.read())
+if not runs:
+    print("none\t\t")
+else:
+    r = max(runs, key=lambda x: x["createdAt"])
+    print("%s\t%s\t%s" % (r["status"], r["conclusion"], r["url"]))
+' <<<"$runs" 2>&1 || { echo "CI for $1 could not be parsed"; return 1; }
+}
+
+# ci_gate: 0 when CI is completed/success for HEAD; otherwise 1. Sets ci_reason.
+# Every commit above the code commit is a generated seed/coverage commit that changes no code, so
+# the head's run covers the code commit too (a seed push cancels the code commit's own run through
+# the workflow's concurrency group, or leaves it with no run at all). A run that is still queued or
+# in progress is waited for, up to CI_WAIT_SECS; a head with no run yet gets CI_NONE_GRACE_SECS
+# for GitHub to start one. --dry-run never waits.
+ci_gate() {
+  local code_sha subject head state waited=0 limit="$CI_WAIT_SECS" grace="$CI_NONE_GRACE_SECS"
+  code_sha=""
+  while IFS=$'\t' read -r sha subject; do
+    if ! grep -qE "$GENERATED_SUBJECTS" <<<"$subject"; then code_sha="$sha"; break; fi
+  done < <(git log -n 50 --format='%H%x09%s' main)
+  if [ -z "$code_sha" ]; then
+    ci_reason="no code commit among the last 50 commits on main"; return 1
+  fi
+  head="$(git rev-parse main)"
+  if $DRY_RUN; then limit=0; grace=0; fi
+  while :; do
+    if ! state="$(ci_query "$head")"; then ci_reason="$state"; return 1; fi
+    IFS=$'\t' read -r run_status run_conclusion run_url <<<"$state"
+    case "$run_status" in
+      completed)
+        if [ "$run_conclusion" = success ]; then
+          ci_reason="CI green for $head, covering code commit $code_sha ($run_url)"; return 0
+        fi
+        ci_reason="CI not green for $head (code commit $code_sha): status=completed conclusion=${run_conclusion:-none} $run_url"
+        return 1 ;;
+      none)
+        if [ "$waited" -ge "$grace" ]; then
+          ci_reason="no $CI_WORKFLOW run for $head (code commit $code_sha)"; return 1
+        fi ;;
+      *)
+        if [ "$waited" -ge "$limit" ]; then
+          ci_reason="CI not green for $head (code commit $code_sha): status=$run_status conclusion=${run_conclusion:-none} after waiting ${waited}s $run_url"
+          return 1
+        fi ;;
+    esac
+    log "CI gate: $head status=$run_status; waiting ${CI_POLL_SECS}s (${waited}s waited)"
+    sleep "$CI_POLL_SECS"; waited=$((waited + CI_POLL_SECS))
+  done
+}
+
+ci_ok=true
+ci_reason=""
+if ci_gate; then
+  log "CI gate: $ci_reason"
+else
+  ci_ok=false
+  release_ok=false
+  log "ERROR: CI gate: $ci_reason; not releasing and not staging a new jar"
+fi
+
 # ── 3. release ───────────────────────────────────────────────────────────────
 # Gated on the same signal step 4 uses to decide whether to build: a real release only
 # happens on a window where we're actually building a new jar for this head_sha, so it
@@ -203,7 +292,8 @@ if $release_ok; then
       log "would release engine-v$next (code changed since $last_tag)"
     else
       log "releasing engine-v$next on $FORK (code changed since $last_tag)"
-      gh release create "engine-v$next" --repo "$FORK" --target "$head_sha" \
+      git tag "engine-v$next" "$head_sha" && git push origin "engine-v$next"
+      gh release create "engine-v$next" --repo "$FORK" --verify-tag --draft \
         --title "AskAmerica Engine v$next" --generate-notes
     fi
   fi
@@ -221,13 +311,35 @@ if [ -d "$snap_dir" ] && ! $DRY_RUN; then
       log "removing unused pinned jar $(basename "$old_jar")"
       rm -f "$old_jar"
     fi
-  done < <(find "$snap_dir" -maxdepth 1 -name '*.jar' -mmin +1440)
+  # The trailing slash matters: .jars is a symlink to the large disk, and find does not descend into
+  # a symlink named as its start. Without it this matched nothing and 79 GB of pinned copies piled up
+  # for 18 days (2026-09-26 to 2026-10-15).
+  done < <(find "$snap_dir/" -maxdepth 1 -name '*.jar' -mmin +1440)
+fi
+
+# ── private jars ─────────────────────────────────────────────────────────────
+# Runners build private jars (sih-govdata-<topic>.jar) to test a fix and to run a remediation from.
+# One is deleted once it is a day old, no live process uses it and no open ops issue names it
+# (scripts/clean-private-jars.py). If the issue list cannot be read nothing is deleted, and that is
+# logged: a jar a job still needs is worth more than the disk it takes.
+if ! $DRY_RUN; then
+  jar_rc=0
+  jar_out="$(python3 "$GOVDATA_ROOT/scripts/clean-private-jars.py" --delete 2>&1)" || jar_rc=$?
+  while IFS= read -r line; do log "private jars: $line"; done <<<"$jar_out"
+  [ "$jar_rc" -eq 0 ] || log "WARNING: clean-private-jars.py exited $jar_rc; private jars were not cleaned"
 fi
 
 # ── 4. build ─────────────────────────────────────────────────────────────────
 # stamp/dest/will_build are computed above, ahead of step 3, so the release step can gate on
 # the same "are we building fresh for this head_sha" signal.
 
+if ! $ci_ok; then
+  if $DRY_RUN; then
+    log "would not release or stage a new jar (CI gate)"
+    exit 0
+  fi
+  exit 1
+fi
 if ! $will_build; then
   log "the staged jar is already built from $head_sha"
   exit 0

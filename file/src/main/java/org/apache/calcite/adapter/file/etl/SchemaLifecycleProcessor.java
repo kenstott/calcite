@@ -15,6 +15,7 @@ package org.apache.calcite.adapter.file.etl;
 import org.apache.calcite.adapter.file.etl.cache.BundleArchiver;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -312,6 +313,11 @@ public class SchemaLifecycleProcessor {
       long elapsed = System.currentTimeMillis() - startTime;
       resultBuilder.elapsedMs(elapsed);
       SchemaResult result = resultBuilder.build();
+      for (Map.Entry<String, EtlResult> tableEntry : result.getTableResults().entrySet()) {
+        if (tableEntry.getValue().isFailed()) {
+          EtlFailureLedger.record(schemaName, tableEntry.getKey(), tableEntry.getValue());
+        }
+      }
 
       LOGGER.info("Phase 5: Schema post-processing hooks");
       schemaListener.afterSchema(schemaContext, result);
@@ -363,11 +369,7 @@ public class SchemaLifecycleProcessor {
     String schemaName = context.getSchemaContext().getConfig().getName();
     String schemaMaterializeDir = baseMaterializeDir;
     if (baseMaterializeDir != null && schemaName != null && !schemaName.isEmpty()) {
-      if (!baseMaterializeDir.endsWith("/")) {
-        schemaMaterializeDir = baseMaterializeDir + "/" + schemaName;
-      } else {
-        schemaMaterializeDir = baseMaterializeDir + schemaName;
-      }
+      schemaMaterializeDir = LocalPaths.join(baseMaterializeDir, schemaName);
     }
 
     // Create and execute the ETL pipeline
@@ -382,7 +384,6 @@ public class SchemaLifecycleProcessor {
         context.getIncrementalTracker(),
         dataProvider,
         dataWriter,
-        context.getSchemaContext().getOperatingDirectory(),
         context.getSchemaContext().isIgnoreReleaseWindow());
 
     return pipeline.execute();
@@ -455,7 +456,7 @@ public class SchemaLifecycleProcessor {
     if (opDir == null) {
       return false;
     }
-    java.io.File cacheDir = new java.io.File(opDir + "/cache/raw");
+    java.io.File cacheDir = new java.io.File(LocalPaths.join(opDir, "cache/raw"));
     if (!cacheDir.exists() || !cacheDir.isDirectory()) {
       return false;
     }
@@ -471,7 +472,7 @@ public class SchemaLifecycleProcessor {
     if (opDir == null) {
       return;
     }
-    String localCacheDir = opDir + "/cache/raw";
+    String localCacheDir = LocalPaths.join(opDir, "cache/raw");
     java.io.File cacheDir = new java.io.File(localCacheDir);
     if (!cacheDir.exists() || !cacheDir.isDirectory()) {
       return;
@@ -791,7 +792,7 @@ public class SchemaLifecycleProcessor {
     // Full path in source directory (fall back to materialize directory if source not set)
     String baseDir = sourceDirectory != null ? sourceDirectory : materializeDirectory;
     String fullCachePath = baseDir != null
-        ? baseDir + "/" + cachePath
+        ? LocalPaths.join(baseDir, cachePath)
         : cachePath;
 
     // Create variable key for storing in context
@@ -892,6 +893,7 @@ public class SchemaLifecycleProcessor {
     conn.setRequestProperty("User-Agent",
         "Apache-Calcite-DataAdapter/1.0 (https://calcite.apache.org; data-analysis-tool)");
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("HTTP " + responseCode + " for " + url);

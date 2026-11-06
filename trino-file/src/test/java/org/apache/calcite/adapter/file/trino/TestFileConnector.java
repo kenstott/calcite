@@ -28,6 +28,7 @@ import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import static io.trino.testing.TestingSession.testSessionBuilder;
@@ -62,6 +63,7 @@ class TestFileConnector
         queryRunner.installPlugin(new FilePlugin());
         queryRunner.createCatalog("file", "file", ImmutableMap.of(
                 "glob", dir,
+                "base-directory", Files.createTempDirectory("trino-file-base").toString(),
                 // Uses the connector's default DUCKDB engine, which reads CSV natively without the
                 // Hadoop dependency that breaks the PARQUET engine on the JDK 25 Trino requires.
                 "case-insensitive-name-matching", "true"));
@@ -88,10 +90,30 @@ class TestFileConnector
                 testSessionBuilder().setCatalog("file_no_flag").setSchema("files").build()).build()) {
             runner.installPlugin(new FilePlugin());
             RuntimeException thrown = assertThrows(RuntimeException.class, () ->
-                    runner.createCatalog("file_no_flag", "file", ImmutableMap.of("glob", dir)));
+                    runner.createCatalog("file_no_flag", "file", ImmutableMap.of("glob", dir,
+                            "base-directory",
+                            Files.createTempDirectory("trino-file-base").toString())));
             assertTrue(
                     Throwables.getStackTraceAsString(thrown).contains("case-insensitive-name-matching"),
                     "expected an actionable case-insensitive-name-matching error, got: " + thrown);
+        }
+    }
+
+    @Test
+    void testACatalogWithoutABaseDirectoryIsRefused()
+            throws Exception
+    {
+        // REQ-1992: there is no default location for the files the adapter writes
+        String dir = Paths.get(getClass().getResource("/files").toURI()).toString();
+        try (QueryRunner runner = DistributedQueryRunner.builder(
+                testSessionBuilder().setCatalog("file_no_base").setSchema("files").build()).build()) {
+            runner.installPlugin(new FilePlugin());
+            RuntimeException thrown = assertThrows(RuntimeException.class, () ->
+                    runner.createCatalog("file_no_base", "file", ImmutableMap.of("glob", dir,
+                            "case-insensitive-name-matching", "true")));
+            assertTrue(Throwables.getStackTraceAsString(thrown).contains("base-directory")
+                            || Throwables.getStackTraceAsString(thrown).contains("baseDirectory"),
+                    "expected a refusal naming the base directory, got: " + thrown);
         }
     }
 

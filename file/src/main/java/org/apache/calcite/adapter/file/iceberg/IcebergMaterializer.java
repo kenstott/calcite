@@ -14,6 +14,7 @@ package org.apache.calcite.adapter.file.iceberg;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
@@ -97,21 +98,18 @@ public class IcebergMaterializer {
       System.getenv("DUCKDB_MEMORY_LIMIT") != null
           ? System.getenv("DUCKDB_MEMORY_LIMIT") : "4GB";
 
-  /** DuckDB spill directory - DUCKDB_TEMP_DIR env var, else TMP/TEMP/java.io.tmpdir + "/duckdb". */
-  private static final String DUCKDB_TEMP_DIR = resolveDuckDbTempDir();
-
-  private static String resolveDuckDbTempDir() {
+  /**
+   * DuckDB spill directory: the DUCKDB_TEMP_DIR environment variable when an operator set it,
+   * else {@code duckdb} in the process's staging directory (REQ-1992); never the JVM temp
+   * directory.
+   */
+  private static String duckDbTempDir() {
     String override = System.getenv("DUCKDB_TEMP_DIR");
     if (override != null && !override.isEmpty()) {
       return override;
     }
-    for (String var : new String[]{"TMP", "TEMP"}) {
-      String val = System.getenv(var);
-      if (val != null && !val.isEmpty()) {
-        return val + "/duckdb";
-      }
-    }
-    return System.getProperty("java.io.tmpdir") + "/duckdb";
+    return new java.io.File(org.apache.calcite.adapter.file.StagingDirectory.get(), "duckdb")
+        .getPath();
   }
 
   private final String warehousePath;
@@ -1564,7 +1562,7 @@ public class IcebergMaterializer {
       memStmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
       String tempDir = warehousePath != null
           ? warehousePath + "/.duckdb_tmp"
-          : System.getProperty("java.io.tmpdir");
+          : duckDbTempDir();
       memStmt.execute("SET temp_directory='" + tempDir.replace("'", "''") + "'");
     }
 
@@ -1773,7 +1771,8 @@ public class IcebergMaterializer {
       parts.add(k + "=" + batch.get(k));
     }
     String key = parts.isEmpty() ? "all" : join("_", parts);
-    return warehousePath + "/chunk-progress/" + config.getTargetTableId() + "/" + key + ".json";
+    return LocalPaths.join(warehousePath,
+        "chunk-progress/" + config.getTargetTableId() + "/" + key + ".json");
   }
 
   private static String join(String sep, List<String> parts) {
@@ -2444,7 +2443,7 @@ public class IcebergMaterializer {
    * interprets.
    */
   private static String deriveFileSuffix(String sourcePattern) {
-    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    int lastSlashIdx = LocalPaths.lastSeparator(sourcePattern);
     if (lastSlashIdx > 0) {
       String filePattern = sourcePattern.substring(lastSlashIdx + 1);
       int starIdx = filePattern.indexOf('*');
@@ -2453,6 +2452,19 @@ public class IcebergMaterializer {
       }
     }
     return "_metadata.parquet";
+  }
+
+  /**
+   * The name of the directory that holds the first {@code year=} partition in a slash-separated
+   * path or pattern, or null when the text has no {@code year=} partition below a directory.
+   */
+  private static String directoryBeforeYear(String slashedPath) {
+    int yearIdx = slashedPath.indexOf("/year=");
+    if (yearIdx <= 0) {
+      return null;
+    }
+    int parentStart = slashedPath.lastIndexOf('/', yearIdx - 1);
+    return slashedPath.substring(parentStart + 1, yearIdx);
   }
 
   /**
@@ -2530,14 +2542,24 @@ public class IcebergMaterializer {
     }
     String fileSuffix = deriveFileSuffix(sourcePattern);
     String yearMarker = "year=" + year + "/";
+    String partitionParent = directoryBeforeYear(LocalPaths.toSlashes(sourcePattern));
     List<String> matched = new ArrayList<String>();
     for (String path : staged) {
-      int markerIdx = path.indexOf(yearMarker);
+      // Read by "/": a staged local file on Windows is separated by "\\"
+      String slashed = LocalPaths.toSlashes(path);
+      int markerIdx = slashed.indexOf(yearMarker);
       if (markerIdx < 0) {
         continue;
       }
-      String remainder = path.substring(markerIdx + yearMarker.length());
+      String remainder = slashed.substring(markerIdx + yearMarker.length());
       if (remainder.indexOf('/') >= 0) {
+        continue;
+      }
+      // A suffix such as ".parquet" also fits every other table's files sitting in a sibling
+      // year= partition, so the directory holding the partitions must be the pattern's own.
+      if (partitionParent != null
+          && !partitionParent.equals(directoryBeforeYear(slashed.substring(0, markerIdx
+              + yearMarker.length())))) {
         continue;
       }
       if (matchesFileSuffix(remainder, fileSuffix)) {
@@ -2608,7 +2630,7 @@ public class IcebergMaterializer {
   private Map<String, Set<String>> getSourceAccessions(String sourcePattern, String year) {
     // Extract file suffix from source pattern (e.g., "_facts.parquet" from "year=*/*_facts.parquet")
     String fileSuffix = "_metadata.parquet"; // default
-    int lastSlashIdx = sourcePattern.lastIndexOf('/');
+    int lastSlashIdx = LocalPaths.lastSeparator(sourcePattern);
     if (lastSlashIdx > 0) {
       String filePattern = sourcePattern.substring(lastSlashIdx + 1);
       // Pattern is like "*_facts.parquet" - extract "_facts.parquet"
@@ -2660,9 +2682,10 @@ public class IcebergMaterializer {
         if (file.isDirectory()) {
           continue;
         }
-        int markerIdx = file.getPath().indexOf(yearMarker);
+        String slashed = LocalPaths.toSlashes(file.getPath());
+        int markerIdx = slashed.indexOf(yearMarker);
         if (markerIdx >= 0
-            && file.getPath().indexOf('/', markerIdx + yearMarker.length()) >= 0) {
+            && slashed.indexOf('/', markerIdx + yearMarker.length()) >= 0) {
           continue;
         }
         String fileName = file.getName();
@@ -3537,7 +3560,7 @@ public class IcebergMaterializer {
     int wildcardIdx = basePath.indexOf('*');
     if (wildcardIdx >= 0) {
       basePath = basePath.substring(0, wildcardIdx);
-      int lastSlash = basePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(basePath);
       if (lastSlash >= 0) {
         basePath = basePath.substring(0, lastSlash + 1);
       }
@@ -3622,7 +3645,7 @@ public class IcebergMaterializer {
     if (sourcePattern == null) {
       return null;
     }
-    String fileName = sourcePattern.substring(sourcePattern.lastIndexOf('/') + 1);
+    String fileName = LocalPaths.fileName(sourcePattern);
     int open = fileName.indexOf('*');
     if (open < 0) {
       return null;
@@ -3946,6 +3969,8 @@ public class IcebergMaterializer {
           values.add(rs.getString(1));
         }
       }
+      LOGGER.info("Read '{}' from {}/{} staged files ({} distinct values so far)", column,
+          Math.min(offset + chunk, files.size()), files.size(), values.size());
     }
     return values;
   }
@@ -3961,7 +3986,7 @@ public class IcebergMaterializer {
       stmt.execute("SET preserve_insertion_order=false");
       // Limit memory to avoid OOM on memory-constrained systems
       stmt.execute("SET memory_limit='" + DUCKDB_MEMORY_LIMIT + "'");
-      stmt.execute("SET temp_directory='" + DUCKDB_TEMP_DIR + "'");
+      stmt.execute("SET temp_directory='" + duckDbTempDir().replace("'", "''") + "'");
 
       // Load extensions
       try {

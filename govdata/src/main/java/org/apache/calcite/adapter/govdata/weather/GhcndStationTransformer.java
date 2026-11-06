@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +26,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -364,7 +364,7 @@ public class GhcndStationTransformer implements ResponseTransformer {
 
   private static String fetchText(String urlStr, HttpSourceConfig.RateLimitConfig rateLimit)
       throws Exception {
-    HttpURLConnection conn = RetryableHttp.openWithRetry(urlStr, null, rateLimit, true);
+    SharedHttpClient.Response conn = RetryableHttp.openWithRetry(urlStr, null, rateLimit, true);
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
     StringBuilder sb = new StringBuilder();

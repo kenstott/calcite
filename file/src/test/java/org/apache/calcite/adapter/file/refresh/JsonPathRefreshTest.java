@@ -317,7 +317,7 @@ public class JsonPathRefreshTest extends BaseFileTest {
     model.append("      \"type\": \"custom\",\n");
     model.append("      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n");
     model.append("      \"operand\": {\n");
-    model.append("        \"directory\": \"").append(info.getProperty("directory").replace("\\", "\\\\")).append("\",\n");
+    model.append("        \"directory\": \"").append(info.getProperty("directory").replace("\\", "\\\\")).append("\",\n        \"baseDirectory\": \"").append(info.getProperty("directory").replace("\\", "\\\\")).append("\",\n");
     model.append("        \"ephemeralCache\": true,\n");
 
     if (info.containsKey("refreshInterval")) {

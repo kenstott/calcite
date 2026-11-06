@@ -13,6 +13,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:geo}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 # TIGER {Y} is released ~Sep {Y+1}, so the current year is never published mid-year.
 # Lag by 1 so we request through current_year-1 instead of 404-ing on the current year.
 dataLagYears: 1
@@ -84,6 +85,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   # --- Standard Partition Set ---
 
@@ -98,6 +100,11 @@ column_templates:
     columnDefinitions:
       - *partition_type
       - *partition_year
+
+  static_partitions: &static_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
 
 # ============================================================================
 # DIMENSION VALUES
@@ -115,6 +122,7 @@ dimension_values:
   tiger_year_range: &tiger_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2021  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     dataLag: 1
 
   # --- Year Range for HUD crosswalk data ---
@@ -122,6 +130,7 @@ dimension_values:
   hud_year_range: &hud_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2013  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     dataLag: 3
 
   # All 50 states + DC (FIPS 01-56, excluding 03, 07, 14, 43, 52)
@@ -232,7 +241,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 892
-      checkedAt: "2026-10-08T06:08:59Z"
+      checkedAt: "2026-11-05T20:24:03Z"
     comment: >
       U.S. state boundaries and attributes (FIPS code, name, 2-letter postal abbreviation,
       land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row per state
@@ -583,7 +592,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 51729
-      checkedAt: "2026-10-08T06:09:04Z"
+      checkedAt: "2026-11-05T20:24:04Z"
     comment: >
       U.S. county boundaries and attributes (FIPS code, name, GEOID, land/water area,
       WKT geometry) from Census TIGER/Line shapefiles, one row per county per TIGER
@@ -655,7 +664,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 484210
-      checkedAt: "2026-10-08T06:09:58Z"
+      checkedAt: "2026-11-05T20:24:25Z"
     comment: >
       Census designated places (incorporated cities/towns and census-designated
       places/CDPs) with place FIPS code, name, place type, and WKT geometry, one row
@@ -729,7 +738,7 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 236537
-      checkedAt: "2026-10-08T06:10:01Z"
+      checkedAt: "2026-11-05T20:24:26Z"
     comment: >
       ZIP Code Tabulation Area boundaries (ZCTA code, land/water area, WKT geometry)
       from Census TIGER/Line shapefiles, one row per ZCTA per TIGER vintage year.
@@ -820,7 +829,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 1169345
-      checkedAt: "2026-10-08T06:10:09Z"
+      checkedAt: "2026-11-05T20:24:28Z"
     comment: >
       Census tract boundary geometry (tract FIPS code, parent state/county FIPS, tract
       number, land/water area, WKT geometry) from Census TIGER/Line shapefiles, one row
@@ -894,7 +903,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 3363454
-      checkedAt: "2026-10-08T06:10:20Z"
+      checkedAt: "2026-11-05T20:24:32Z"
     comment: >
       Census block group boundary geometry (block group FIPS code, parent
       state/county/tract FIPS, land/water area, WKT geometry) from Census TIGER/Line
@@ -968,7 +977,7 @@ partitionedTables:
       contiguous: false
       years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2023, 2024, 2025]
       rowCount: 14108
-      checkedAt: "2026-10-08T06:10:22Z"
+      checkedAt: "2026-11-05T20:24:33Z"
     comment: >
       Core Based Statistical Area boundaries (CBSA code, name, Metropolitan/Micropolitan
       designation via metro_micro, land/water area, WKT geometry) from Census TIGER/Line
@@ -1044,7 +1053,7 @@ partitionedTables:
       distinctYears: 4
       contiguous: true
       rowCount: 1776
-      checkedAt: "2026-10-08T06:10:24Z"
+      checkedAt: "2026-11-05T20:24:33Z"
     comment: >
       U.S. Congressional district boundaries for the House of Representatives (district
       code, parent state FIPS, district name, land/water area, WKT geometry), one row
@@ -1075,7 +1084,8 @@ partitionedTables:
         - boundary
       year:
         type: yearRange
-        start: "2023"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2023  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 2
       # No state_fips fan-out here even though 2022-and-later vintages ARE published per state:
@@ -1130,7 +1140,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 174302
-      checkedAt: "2026-10-08T06:10:27Z"
+      checkedAt: "2026-11-05T20:24:34Z"
     comment: >
       Elementary, secondary, and unified school district boundaries (LEA code, parent
       state FIPS, district name, district type — elementary/secondary/unified,
@@ -1206,7 +1216,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 76618
-      checkedAt: "2026-10-08T06:11:20Z"
+      checkedAt: "2026-11-05T20:24:55Z"
     comment: >
       State legislative district boundaries for lower chambers (State House/Assembly) —
       SLDL code, parent state FIPS, district name, land/water area, WKT geometry — one
@@ -1282,7 +1292,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 31290
-      checkedAt: "2026-10-08T06:12:04Z"
+      checkedAt: "2026-11-05T20:25:09Z"
     comment: >
       State legislative district boundaries for upper chambers (State Senate) — SLDU
       code, parent state FIPS, district name, land/water area, WKT geometry — one row
@@ -1354,7 +1364,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 570250
-      checkedAt: "2026-10-08T06:12:50Z"
+      checkedAt: "2026-11-05T20:25:29Z"
     comment: >
       County subdivisions including Minor Civil Divisions (MCDs), census county divisions,
       and unorganized territories. Represents administrative or statistical subdivisions
@@ -1429,7 +1439,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 13471
-      checkedAt: "2026-10-08T06:12:52Z"
+      checkedAt: "2026-11-05T20:25:29Z"
     comment: >
       American Indian reservations, Alaska Native village statistical areas, and Native
       Hawaiian home lands (area code, name, area type — federal reservation, state
@@ -1507,7 +1517,7 @@ partitionedTables:
       distinctYears: 2
       contiguous: true
       rowCount: 5288
-      checkedAt: "2026-10-08T06:12:54Z"
+      checkedAt: "2026-11-05T20:25:30Z"
     comment: >
       Census Bureau urban area boundaries, one row per urban area per TIGER vintage
       year. The 2020-Census-cycle definition (minimum threshold 5,000 people or 2,000
@@ -1609,7 +1619,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 33358
-      checkedAt: "2026-10-08T06:12:58Z"
+      checkedAt: "2026-11-05T20:25:32Z"
     comment: >
       Public Use Microdata Areas for Census microdata products. Each PUMA contains
       at least 100,000 people and is built from census tracts and counties.
@@ -1712,7 +1722,7 @@ partitionedTables:
       contiguous: false
       years: [2012, 2020, 2021, 2022, 2023, 2024, 2025]
       rowCount: 829906
-      checkedAt: "2026-10-08T06:13:03Z"
+      checkedAt: "2026-11-05T20:25:33Z"
     comment: >
       Voting district boundaries (precincts, wards, election districts) as reported
       by states for redistricting. TigerDataProvider handles two distinct URL
@@ -1810,7 +1820,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 731205
-      checkedAt: "2026-10-08T06:13:08Z"
+      checkedAt: "2026-11-05T20:25:35Z"
     comment: >
       ZIP Code to County crosswalk mapping ZIP codes to counties, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -1892,7 +1902,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 653911
-      checkedAt: "2026-10-08T06:13:13Z"
+      checkedAt: "2026-11-05T20:25:36Z"
     comment: >
       ZIP Code to Core Based Statistical Area crosswalk mapping ZIP codes to
       metropolitan/micropolitan statistical areas, with residential/business/other/total
@@ -1977,7 +1987,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 2355514
-      checkedAt: "2026-10-08T06:13:17Z"
+      checkedAt: "2026-11-05T20:25:37Z"
     comment: >
       Census tract to ZIP Code crosswalk mapping tract FIPS to ZIP codes, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -2062,7 +2072,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 2355514
-      checkedAt: "2026-10-08T06:13:20Z"
+      checkedAt: "2026-11-05T20:25:38Z"
     comment: >
       ZIP Code to Census Tract crosswalk mapping ZIP codes to census tracts, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -2148,7 +2158,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 639682
-      checkedAt: "2026-10-08T06:13:24Z"
+      checkedAt: "2026-11-05T20:25:39Z"
     comment: >
       ZIP Code to Congressional District crosswalk mapping ZIP codes to congressional
       districts, with residential/business/other/total address-ratio splits (res_ratio,
@@ -2233,7 +2243,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 731205
-      checkedAt: "2026-10-08T06:13:30Z"
+      checkedAt: "2026-11-05T20:25:41Z"
     comment: >
       County to ZIP Code crosswalk for allocating county-level data to ZIP codes, with
       residential/business/other/total address-ratio splits (res_ratio, bus_ratio,
@@ -2315,7 +2325,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 639682
-      checkedAt: "2026-10-08T06:13:36Z"
+      checkedAt: "2026-11-05T20:25:43Z"
     comment: >
       Congressional District to ZIP Code crosswalk for allocating district-level data
       to ZIP codes, with residential/business/other/total address-ratio splits
@@ -2405,7 +2415,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 3235
-      checkedAt: "2026-10-08T06:13:38Z"
+      checkedAt: "2026-11-05T20:25:43Z"
     comment: >
       USDA Economic Research Service Rural-Urban Continuum Codes (RUCC) classifying
       counties by degree of urbanization and adjacency to metro areas, with a
@@ -2446,7 +2456,8 @@ partitionedTables:
         - classification
       year:
         type: yearRange
-        start: "2023"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2023  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "2023"
 
     source:
@@ -2489,7 +2500,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 85528
-      checkedAt: "2026-10-08T06:13:39Z"
+      checkedAt: "2026-11-05T20:25:44Z"
     comment: >
       USDA Rural-Urban Commuting Area (RUCA) codes at census tract level (2020-vintage
       FIPS), more granular than the county-level geo.rural_urban_continuum (RUCC)
@@ -2543,7 +2554,8 @@ partitionedTables:
         - classification
       year:
         type: yearRange
-        start: "2020"
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2020  # earliest year the source has data (literal-start); GOVDATA_START_YEAR cannot reach below it
         end: "2020"
 
     source:
@@ -2589,7 +2601,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 45092
-      checkedAt: "2026-10-08T06:13:43Z"
+      checkedAt: "2026-11-05T20:25:44Z"
     comment: >
       Census Bureau Gazetteer file for counties: county FIPS code, name, land/water
       area in square miles, and centroid latitude/longitude, one row per county per
@@ -2672,7 +2684,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 429461
-      checkedAt: "2026-10-08T06:13:47Z"
+      checkedAt: "2026-11-05T20:25:46Z"
     comment: >
       Census Bureau Gazetteer file for incorporated places and CDPs: place FIPS code,
       name, place type, land/water area in square miles, and centroid latitude/longitude,
@@ -2780,7 +2792,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 467251
-      checkedAt: "2026-10-08T06:13:51Z"
+      checkedAt: "2026-11-05T20:25:46Z"
     comment: >
       Census Bureau Gazetteer file for ZIP Code Tabulation Areas: ZCTA code, land/water
       area in square miles, and centroid latitude/longitude, one row per ZCTA per TIGER
@@ -2884,7 +2896,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 374
-      checkedAt: "2026-10-08T06:13:53Z"
+      checkedAt: "2026-11-05T20:25:47Z"
     comment: >
       USGS Watershed Boundary Dataset HUC2 regions - the largest hydrologic units
       dividing the country into 22 major drainage basins.
@@ -2955,7 +2967,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 4165
-      checkedAt: "2026-10-08T06:13:55Z"
+      checkedAt: "2026-11-05T20:25:48Z"
     comment: >
       USGS Watershed Boundary Dataset HUC4 subregions - subdivisions of HUC2
       regions into approximately 223 subregions.
@@ -3030,7 +3042,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 41752
-      checkedAt: "2026-10-08T06:13:57Z"
+      checkedAt: "2026-11-05T20:25:48Z"
     comment: >
       USGS Watershed Boundary Dataset HUC8 subbasins - commonly used watershed
       level for water quality and resource management with ~2,300 units.
@@ -3105,8 +3117,8 @@ partitionedTables:
       distinctYears: 14
       contiguous: false
       years: [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2023, 2025]
-      rowCount: 1752139
-      checkedAt: "2026-10-08T06:13:59Z"
+      rowCount: 1649072
+      checkedAt: "2026-11-05T20:25:49Z"
     comment: >
       USGS Watershed Boundary Dataset HUC12 subwatersheds - the smallest standard
       hydrologic units with approximately 100,000 units nationally.
@@ -3183,11 +3195,10 @@ partitionedTables:
     observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
       minYear: 2010
       maxYear: 2026
-      distinctYears: 12
-      contiguous: false
-      years: [2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2024, 2025, 2026]
-      rowCount: 227592
-      checkedAt: "2026-10-08T06:14:02Z"
+      distinctYears: 17
+      contiguous: true
+      rowCount: 322422
+      checkedAt: "2026-11-05T20:25:50Z"
     comment: >
       Real Census Bureau County Adjacency File (https://www2.census.gov/geo/docs/
       reference/county_adjacency.txt) — one row per adjacent county pair,
@@ -3267,7 +3278,7 @@ partitionedTables:
         # dispatch modes (2025 = historical, 2026 = daily/current-year) on this table rather
         # than a full historical backfill. No dataLag/minYear: the source is a single evergreen
         # file with no real per-year availability constraint to model.
-        start: "${GOVDATA_START_YEAR:2025}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:2026}"
 
     materialize:
@@ -3289,6 +3300,159 @@ partitionedTables:
         runCompaction: true
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
+        compactionSmallFileSizeBytes: 10485760
+
+  # --------------------------------------------------------------------------
+  # County to CBSA delineation (OMB metropolitan / micropolitan statistical areas)
+  # --------------------------------------------------------------------------
+  - name: county_cbsa_delineation
+    # All six OMB delineations in one table (vintage is a column, not a partition): the Census
+    # Bureau publishes each as a fixed workbook that never changes once released, so the whole
+    # table is ~11,500 rows re-read as a snapshot; the hash probe skips the write when the
+    # parsed rows are unchanged. A new OMB delineation (Bulletin) is added to
+    # CbsaDelineationProvider.FILES.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=county_cbsa_delineation/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      County to Core Based Statistical Area (metropolitan and micropolitan area) membership
+      from the OMB delineations as republished by the Census Bureau ("List 1" of the
+      delineation files): one row per county per delineation vintage, with the CBSA code and
+      title, metropolitan or micropolitan type, the metropolitan division (31 divisions in
+      2013 to 2020, 37 in 2023, e.g. division 35614 within CBSA 35620 New York), the
+      combined statistical area (CSA), and whether the county is a central or an outlying
+      county of the CBSA. Six vintages: 2013 (Feb 2013, 1,882 counties), 2015 (Jul 2015,
+      1,899), 2017 (Aug 2017, 1,899), 2018 (Sep 2018, 1,915), 2020 (Mar 2020, 1,916) and 2023
+      (Jul 2023, 1,915; Connecticut counties are replaced by its nine planning regions,
+      09110 to 09190). Counties that belong to no CBSA (rural counties outside every metro and
+      micro area, about 1,200 of the ~3,140) are simply absent: a left join from a county
+      table gives null cbsa_code for them. (vintage, county_fips) is unique: a county is in at
+      most one CBSA per vintage. Which vintage to join: for a time-varying join pick the
+      latest vintage in force at the observation date, i.e. the largest vintage with
+      delineation_date on or before it (2013 for data through mid-2015, 2015 from Jul 2015,
+      2017 from Aug 2017, 2018 from Sep 2018, 2020 from Mar 2020, 2023 from Jul 2023); for a
+      single current mapping use vintage 2023 (the latest), but note that its Connecticut codes
+      are planning regions, so Connecticut county data keyed on the legacy 09001 to 09015
+      codes needs vintage 2020. Exact county membership as OMB defines it, unlike the
+      ZIP-weighted approximation of geo.zip_county_crosswalk x geo.zip_cbsa_crosswalk.
+      Boundaries are in geo.cbsa. Joins to geo.counties on county_fips and to geo.cbsa on
+      cbsa_code = cbsa_fips. Source: Census Bureau metro-micro delineation files
+      (www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/{vintage}/
+      delineation-files/list1*.xls[x]). The April 2018 delineation (Bulletin 18-03) that the
+      September 2018 one replaced is not included.
+
+    dimensions:
+      type:
+        - county_cbsa_delineation
+
+    columns:
+      - name: vintage
+        type: integer
+        nullable: false
+        comment: >-
+          Year of the OMB delineation: 2013, 2015, 2017, 2018, 2020 or 2023 (PK component).
+          delineation_date gives the month it took effect
+      - name: delineation_date
+        type: string
+        nullable: false
+        comment: >-
+          Month of the OMB delineation as YYYY-MM, taken from the source file title (2013-02,
+          2015-07, 2017-08, 2018-09, 2020-03, 2023-07); use it to pick the vintage in force at
+          an observation date
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: >-
+          5-digit county FIPS (state + county), PK component. FK to geo.counties.county_fips.
+          Vintage 2023 uses Connecticut planning regions (09110 to 09190) in place of its eight
+          counties (09001 to 09015)
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: '2-digit state FIPS code (FK to geo.state_ref.state_fips)'
+      - name: county_name
+        type: string
+        nullable: false
+        comment: 'County or county-equivalent name as published, e.g. Bronx County, Orleans Parish'
+      - name: state_name
+        type: string
+        nullable: false
+        comment: 'State name as published, e.g. New York (includes Puerto Rico)'
+      - name: cbsa_code
+        type: string
+        nullable: false
+        comment: >-
+          5-digit CBSA code of the metropolitan or micropolitan area the county belongs to; FK to
+          geo.cbsa.cbsa_fips and the key of geo.zip_cbsa_crosswalk and housing MSA series
+      - name: cbsa_title
+        type: string
+        nullable: false
+        comment: 'CBSA title, principal cities and states, e.g. New York-Newark-Jersey City, NY-NJ-PA'
+      - name: cbsa_type
+        type: string
+        nullable: false
+        comment: "'metropolitan' (urban core of 50,000 or more) or 'micropolitan' (10,000 to 49,999)"
+      - name: metro_division_code
+        type: string
+        nullable: true
+        comment: >-
+          5-digit metropolitan division code, set only for counties of a metropolitan CBSA that
+          is divided (e.g. 35614 within CBSA 35620); null otherwise. FHFA HPI and BLS publish
+          some large metros by division
+      - name: metro_division_title
+        type: string
+        nullable: true
+        comment: 'Metropolitan division title; null when metro_division_code is null'
+      - name: csa_code
+        type: string
+        nullable: true
+        comment: >-
+          3-digit Combined Statistical Area code; null for CBSAs not in any CSA (most
+          micropolitan areas)
+      - name: csa_title
+        type: string
+        nullable: true
+        comment: 'Combined Statistical Area title; null when csa_code is null'
+      - name: central_outlying
+        type: string
+        nullable: false
+        comment: >-
+          'central' if the county is a central county of the CBSA (contains or anchors the urban
+          core), 'outlying' if it is included through commuting ties
+
+    source:
+      type: http
+      # Placeholder URL: CbsaDelineationProvider downloads the six Excel workbooks through
+      # rawCache itself and returns the parsed rows; HttpSource's own fetch path is never used.
+      url: "https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/2023/delineation-files/list1_2023.xlsx"
+      method: GET
+      response:
+        format: json  # ignored: CbsaDelineationProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.geo.CbsaDelineationProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=county_cbsa_delineation/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        warehousePath: "${GOVDATA_PARQUET_DIR}/geo"
+        tableName: county_cbsa_delineation
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
         compactionSmallFileSizeBytes: 10485760
 
 # ============================================================================
@@ -3347,6 +3511,22 @@ constraints:
       - columns: [state_fips]
         targetTable: state_ref
         targetColumns: [state_fips]
+
+  county_cbsa_delineation:
+    primaryKey: [vintage, county_fips]
+    foreignKeys:
+      - columns: [county_fips]
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [state_fips]
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [cbsa_code]
+        targetTable: cbsa
+        targetColumns: [cbsa_fips]
+    indexes:
+      - [county_fips]
+      - [cbsa_code]
 
   county_adjacency:
     primaryKey: [county_fips, neighbor_county_fips, year]

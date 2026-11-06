@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.file.iceberg;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -64,7 +66,8 @@ public class IcebergCatalogManager {
       return S3FileIOTables.loadWritable(path, s3Creds(config));
     }
     // Check if this is a direct file path (starts with / or contains file://)
-    if (tablePath.startsWith("/") || tablePath.startsWith("file://") || tablePath.contains("warehouse")) {
+    if (LocalPaths.isAbsolute(tablePath) || tablePath.startsWith("file://")
+        || tablePath.contains("warehouse")) {
       // Direct path loading - load table directly from filesystem
       try {
         Configuration hadoopConf = new Configuration();
@@ -576,6 +579,8 @@ public class IcebergCatalogManager {
    * @return true if the table was dropped, false if it didn't exist
    */
   public static boolean dropTable(Map<String, Object> config, String tableId, boolean purge) {
+    // A dropped table's version numbers are reused by its successor, so no pin may survive it.
+    org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidateAll();
     if (isS3Warehouse(config)) {
       String path = s3TablePath(config, tableId);
       Map<String, String> creds = s3Creds(config);

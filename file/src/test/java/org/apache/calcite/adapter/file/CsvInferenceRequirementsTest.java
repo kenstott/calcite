@@ -81,7 +81,6 @@ public class CsvInferenceRequirementsTest {
   }
 
   @Test @Tag("FILE-097")
-  @Disabled("blocked on C-09: dot-less scientific notation (1e5) should infer DOUBLE")
   void scientificNotationIsNumeric_target(@TempDir Path dir) throws Exception {
     assertEquals(SqlTypeName.DOUBLE, infer(dir, "v\n1e5\n2e5\n").get(0).inferredType);
   }

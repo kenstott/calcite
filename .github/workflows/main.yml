@@ -37,10 +37,11 @@ on:
       - '**'
 
 concurrency:
-  # On main/release, we don't want any jobs cancelled so the sha is used to name the group
-  # On PR branches, we cancel the job if new commits are pushed
+  # On release, no run is cancelled, so the sha names the group.
+  # On main and PR branches, a new push cancels the ref's run in progress: superseded main runs
+  # otherwise stack up and hold the account's concurrent-job slots, which provisa shares.
   # More info: https://stackoverflow.com/a/68422069/253468
-  group: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release' ) && format('ci-main-{0}', github.sha) || format('ci-main-{0}', github.ref) }}
+  group: ${{ github.ref == 'refs/heads/release' && format('ci-main-{0}', github.sha) || format('ci-main-{0}', github.ref) }}
   cancel-in-progress: true
 
 # Throw OutOfMemoryError in case less than 35% is free after full GC
@@ -51,6 +52,9 @@ env:
   GUAVA_MIN: '21.0' # oldest supported Guava version
   GUAVA_MAX: '33.4.8-jre' # latest supported Guava version
   GUAVA: '21.0' # most jobs test against oldest Guava version
+  # Testcontainers (the Redis adapter's tests) takes its images from this repository's public
+  # mirror on ghcr.io instead of Docker Hub: see .github/ci-images/testcontainers.txt.
+  TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'ghcr.io/kenstott/calcite/ci-hub/'
 
 jobs:
   windows-jdk11:
@@ -58,20 +62,36 @@ jobs:
     name: 'Windows (JDK 11)'
     runs-on: windows-latest
     steps:
+    - name: 'Install winutils'
+      # Hadoop's local file system needs winutils.exe and hadoop.dll on Windows. Apache publishes no
+      # binaries; these are the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
+      shell: pwsh
+      run: |
+        $bin = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\hadoop\bin"
+        foreach ($file in "winutils.exe", "hadoop.dll") {
+          Invoke-WebRequest -OutFile "$bin\$file" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/$file"
+        }
+        "HADOOP_HOME=$env:RUNNER_TEMP\hadoop" >> $env:GITHUB_ENV
+        # hadoop.dll is found through the library path, which Windows takes from PATH
+        "$bin" >> $env:GITHUB_PATH
     - uses: actions/checkout@v5
       with:
         fetch-depth: 50
     - name: 'Set up JDK 11'
       uses: actions/setup-java@v5
       with:
-        java-version: 11
+        # The Trino modules compile with a JDK 25 toolchain, which the Windows image does not
+        # carry; the last version listed is the one the build runs on.
+        java-version: |
+          25
+          11
         distribution: 'zulu'
     - uses: burrunan/gradle-cache-action@v1
       name: Test
       with:
         job-id: jdk${{ matrix.jdk }}
         remote-build-cache-proxy-enabled: false
-        arguments: --scan --no-parallel --no-daemon build javadoc
+        arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build javadoc
     - name: 'sqlline and sqllsh'
       shell: cmd
       run: |
@@ -88,20 +108,36 @@ jobs:
     name: 'Windows (JDK 17)'
     runs-on: windows-latest
     steps:
+      - name: 'Install winutils'
+        # Hadoop's local file system needs winutils.exe and hadoop.dll on Windows. Apache publishes no
+        # binaries; these are the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
+        shell: pwsh
+        run: |
+          $bin = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\hadoop\bin"
+          foreach ($file in "winutils.exe", "hadoop.dll") {
+            Invoke-WebRequest -OutFile "$bin\$file" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/$file"
+          }
+          "HADOOP_HOME=$env:RUNNER_TEMP\hadoop" >> $env:GITHUB_ENV
+          # hadoop.dll is found through the library path, which Windows takes from PATH
+          "$bin" >> $env:GITHUB_PATH
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
       - name: 'Set up JDK 17'
         uses: actions/setup-java@v5
         with:
-          java-version: 17
+          # The Trino modules compile with a JDK 25 toolchain, which the Windows image does not
+          # carry; the last version listed is the one the build runs on.
+          java-version: |
+            25
+            17
           distribution: 'zulu'
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
-          arguments: --scan --no-parallel --no-daemon build
+          arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build
       - name: 'sqlline and sqllsh'
         shell: cmd
         run: |
@@ -118,20 +154,36 @@ jobs:
     name: 'Windows (JDK 21)'
     runs-on: windows-latest
     steps:
+      - name: 'Install winutils'
+        # Hadoop's local file system needs winutils.exe and hadoop.dll on Windows. Apache publishes no
+        # binaries; these are the 3.4.0 build from kontext-tech/winutils, pinned to one commit.
+        shell: pwsh
+        run: |
+          $bin = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\hadoop\bin"
+          foreach ($file in "winutils.exe", "hadoop.dll") {
+            Invoke-WebRequest -OutFile "$bin\$file" -Uri "https://raw.githubusercontent.com/kontext-tech/winutils/ff8e529a72bde2ec95b06ab76e797bdcbade9685/hadoop-3.4.0-win10-x64/bin/$file"
+          }
+          "HADOOP_HOME=$env:RUNNER_TEMP\hadoop" >> $env:GITHUB_ENV
+          # hadoop.dll is found through the library path, which Windows takes from PATH
+          "$bin" >> $env:GITHUB_PATH
       - uses: actions/checkout@v5
         with:
           fetch-depth: 50
       - name: 'Set up JDK 21'
         uses: actions/setup-java@v5
         with:
-          java-version: 21
+          # The Trino modules compile with a JDK 25 toolchain, which the Windows image does not
+          # carry; the last version listed is the one the build runs on.
+          java-version: |
+            25
+            21
           distribution: 'zulu'
       - uses: burrunan/gradle-cache-action@v1
         name: Test
         with:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
-          arguments: --scan --no-parallel --no-daemon build
+          arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build
       - name: 'sqlline and sqllsh'
         shell: cmd
         run: |
@@ -364,6 +416,10 @@ jobs:
     name: 'Druid Tests'
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
+        path: calcite
     - name: 'Set up JDK 17'
       uses: actions/setup-java@v5
       with:
@@ -373,13 +429,33 @@ jobs:
       uses: actions/checkout@v5
       with:
         repository: zabetak/calcite-druid-dataset
+        # Pinned: its docker-compose.yml names the services whose images are replaced below.
+        ref: 79288d25aa6e79217d783b5aa8a2dee945a2dd90
         fetch-depth: 1
         path: druid-dataset
+    # The stack's images come from this repository's public mirror on ghcr.io, pinned by
+    # digest, not from Docker Hub, whose anonymous pull quota is shared by every job on the
+    # runner's address (see calcite/.github/ci-images/druid.txt and mirror-ci-images.yml).
     - name: 'Start Druid containers'
       working-directory: ./druid-dataset
       run: |
+        set -euo pipefail
+        image() {
+          awk -v name="$1" '$1 == name { n = split($2, part, "@"); print "ghcr.io/kenstott/calcite/ci-" name "@" part[n] }' \
+            ../calcite/.github/ci-images/druid.txt
+        }
+        {
+          echo "services:"
+          echo "  postgres: { image: \"$(image postgres)\" }"
+          echo "  zookeeper: { image: \"$(image zookeeper)\" }"
+          for service in coordinator broker historical middlemanager router; do
+            echo "  ${service}: { image: \"$(image druid)\" }"
+          done
+        } > mirror.override.yml
+        cat mirror.override.yml
+        grep -c 'ghcr.io/kenstott/calcite/ci-[a-z]*@sha256:[0-9a-f]\{64\}' mirror.override.yml | grep -qx 7
         chmod -R 777 storage
-        docker compose up -d
+        docker compose -f docker-compose.yml -f mirror.override.yml up -d
     - name: 'Wait Druid nodes to startup'
       run: |
         until docker logs coordinator | grep "Successfully started lifecycle \[module\]"; do sleep 1s; done
@@ -390,10 +466,6 @@ jobs:
     - name: 'Index Foodmart/Wikipedia datasets'
       working-directory: ./druid-dataset
       run: ./index.sh 30s
-    - uses: actions/checkout@v5
-      with:
-        fetch-depth: 1
-        path: calcite
     - uses: burrunan/gradle-cache-action@v1
       name: 'Run Druid tests'
       timeout-minutes: 10

@@ -605,6 +605,6 @@ class LdaApiProviderTest {
   }
 
   @Test void everyTableTheSchemaNeedsHasASpec() {
-    assertEquals(17, LdaApiProvider.tables().size());
+    assertEquals(18, LdaApiProvider.tables().size());
   }
 }

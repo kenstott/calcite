@@ -162,6 +162,7 @@ public final class EmbeddingService {
       return null;
     }
     try {
+      // An immutable runtime, machine-wide by ruling (REQ-1992 amendment), not org state
       java.io.File cache = new java.io.File(
           System.getProperty("java.io.tmpdir"), "calcite-embedder");
       java.io.File marker = new java.io.File(cache, "bin/hugot-embed");

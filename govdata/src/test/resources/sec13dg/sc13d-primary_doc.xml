@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+<schemaVersion>X0202</schemaVersion>
+<headerData>
+<submissionType>SCHEDULE 13D/A</submissionType>
+<previousAccessionNumber>0000929638-20-000064</previousAccessionNumber>
+<filerInfo>
+<filer>
+<filerCredentials>
+<cik>0001009289</cik>
+<ccc>XXXXXXXX</ccc>
+</filerCredentials>
+</filer>
+<liveTestFlag>LIVE</liveTestFlag>
+
+
+
+</filerInfo>
+</headerData>
+<formData>
+<coverPageHeader>
+<amendmentNo>2</amendmentNo>
+<securitiesClassTitle>Shares of beneficial interest</securitiesClassTitle>
+<dateOfEvent>08/31/2026</dateOfEvent>
+<previouslyFiledFlag>false</previouslyFiledFlag>
+<issuerInfo>
+<issuerCIK>0001690996</issuerCIK>
+<issuerCusips>
+<issuerCusipNumber>17801L108</issuerCusipNumber>
+</issuerCusips>
+<issuerName>City National Rochdale Select Strategies Fund</issuerName>
+<address>
+<com:street1>400 Park Avenue</com:street1>
+<com:city>New York</com:city>
+<com:stateOrCountry>NY</com:stateOrCountry>
+<com:zipCode>10022</com:zipCode>
+</address>
+</issuerInfo>
+<authorizedPersons>
+<notificationInfo>
+<personName>Christina Weber</personName>
+<personPhoneNum>212-702-3500</personPhoneNum>
+<personAddress>
+<com:street1>RBC Rochdale, LLC</com:street1>
+<com:street2>400 Park Avenue</com:street2>
+<com:city>New York</com:city>
+<com:stateOrCountry>NY</com:stateOrCountry>
+<com:zipCode>10022</com:zipCode>
+</personAddress>
+</notificationInfo>
+</authorizedPersons>
+</coverPageHeader>
+<reportingPersons>
+<reportingPersonInfo>
+<reportingPersonCIK>0001009289</reportingPersonCIK>
+<reportingPersonName>RBC Rochdale, LLC</reportingPersonName>
+<fundType>OO</fundType>
+<citizenshipOrOrganization>DE</citizenshipOrOrganization>
+<soleVotingPower>0</soleVotingPower>
+<sharedVotingPower>0</sharedVotingPower>
+<soleDispositivePower>13506519</soleDispositivePower>
+<sharedDispositivePower>0</sharedDispositivePower>
+<aggregateAmountOwned>13506519</aggregateAmountOwned>
+<isAggregateExcludeShares>N</isAggregateExcludeShares>
+<percentOfClass>97.3</percentOfClass>
+<typeOfReportingPerson>IA</typeOfReportingPerson>
+</reportingPersonInfo>
+</reportingPersons>
+
+<signatureInfo>
+<signaturePerson>
+<signatureReportingPerson>RBC Rochdale, LLC</signatureReportingPerson>
+<signatureDetails>
+<signature>/s/ Christina Weber</signature>
+<title>Christina Weber / Chief Compliance Officer</title>
+<date>10/20/2026</date>
+</signatureDetails>
+</signaturePerson>
+</signatureInfo>
+</formData>
+
+</edgarSubmission>

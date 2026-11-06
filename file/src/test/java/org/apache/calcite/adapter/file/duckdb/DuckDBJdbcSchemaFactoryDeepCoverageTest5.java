@@ -322,7 +322,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
 
   @Test void testLoadQueryExtensionsSuccess() throws Exception {
     Method m =
-        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class, java.io.File.class);
     m.setAccessible(true);
 
     Connection conn = mock(Connection.class);
@@ -331,14 +331,14 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
     when(stmt.execute(anyString())).thenReturn(true);
 
     // Should not throw
-    m.invoke(null, conn);
+    m.invoke(null, conn, tempDir.toFile());
     // Should attempt to install and load spatial, vss, fts => 6 calls minimum
     verify(stmt, atLeast(6)).execute(anyString());
   }
 
   @Test void testLoadQueryExtensionsPartialFailure() throws Exception {
     Method m =
-        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class);
+        DuckDBJdbcSchemaFactory.class.getDeclaredMethod("loadQueryExtensions", Connection.class, java.io.File.class);
     m.setAccessible(true);
 
     Connection conn = mock(Connection.class);
@@ -353,7 +353,7 @@ class DuckDBJdbcSchemaFactoryDeepCoverageTest5 {
         .thenReturn(true); // LOAD fts
 
     // Should not throw - graceful degradation
-    m.invoke(null, conn);
+    m.invoke(null, conn, tempDir.toFile());
   }
 
   // ========== SharedDatabaseInfo (inner class coverage) ==========

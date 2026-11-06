@@ -31,6 +31,9 @@ git commit -qam cov; expect "coverage metadata only is ignored" ""
 # a new observedCoverage block on bb
 printf '    observedCoverage:\n      minYear: 2010\n' >> $R/bb/bb-schema.yaml
 git commit -qam cov2; expect "a new coverage block is ignored" ""
+# a coverageWindow declaration (input of the measurer, not part of the model)
+printf '    coverageWindow:\n      minYear: 1976\n' >> $R/bb/bb-schema.yaml
+git commit -qam win; expect "a coverageWindow declaration is ignored" ""
 # comment / formatting only
 sed -i 's/^partitionedTables:/# a comment\npartitionedTables:/' $R/aa/aa-schema.yaml
 git commit -qam cmt; expect "a comment is ignored" ""

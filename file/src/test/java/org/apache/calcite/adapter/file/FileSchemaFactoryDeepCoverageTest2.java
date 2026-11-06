@@ -97,7 +97,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
     method.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "/tmp/data");
+    operand.put("directory",  "/tmp/data");
     operand.put("password", "secret123");
     operand.put("secretKey", "xyz");
     operand.put("nullValue", null);
@@ -246,15 +246,16 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
   @Test void testWriteDebugModel() throws Exception {
     Method method =
-        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", File.class, String.class, Map.class, String.class);
     method.setAccessible(true);
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
 
     // This should not throw - failures are caught internally
-    method.invoke(null, "test_schema", operand, "parent");
+    method.invoke(null, tempDir.toFile(), "test_schema", operand, "parent");
   }
 
   // ======= validateUniqueSchemaName =======
@@ -463,6 +464,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeralCache", true);
 
@@ -482,6 +484,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("ephemeral_cache", "true"); // snake_case string
 
@@ -501,6 +504,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.resolve("base").toString());
 
@@ -520,6 +524,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.resolve("base_file").toFile());
 
@@ -539,6 +544,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     // No explicit storageType - should auto-detect "local"
 
     Schema schema = factory.create(parentSchema, "autodetect_test", operand);
@@ -556,6 +562,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
     SchemaPlus parentSchema = createMockParentSchema();
 
     Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("sourceDirectory", tempDir.toString()); // Use sourceDirectory instead of directory
     operand.put("storageType", "local");
 
@@ -575,6 +582,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("batchSize", 500);
     operand.put("memoryThreshold", 1024L * 1024L);
@@ -595,6 +603,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("recursive", Boolean.TRUE);
     operand.put("glob", "*.csv");
@@ -615,6 +624,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("refreshInterval", "5m");
 
@@ -634,6 +644,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("flatten", Boolean.TRUE);
 
@@ -653,6 +664,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("table_name_casing", "LOWER_CASE");
     operand.put("column_name_casing", "LOWER_CASE");
@@ -673,6 +685,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("primeCache", Boolean.FALSE);
 
@@ -692,6 +705,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("prime_cache", Boolean.FALSE);
 
@@ -711,6 +725,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("comment", "This is a test schema");
 
@@ -730,6 +745,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("canonicalSchemaName", "my_canonical");
 
@@ -760,6 +776,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("declaredSchemaName", "econ");
     operand.put("tableConstraints", constraints);
@@ -773,6 +790,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     // When no directory and no model file path, uses cwd
     Map<String, Object> operand = new HashMap<String, Object>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
 
     Schema schema = factory.create(parentSchema, "nodir_test", operand);
@@ -783,7 +801,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
     SchemaPlus parentSchema = createMockParentSchema();
 
     Map<String, Object> operand = new HashMap<String, Object>();
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("directory",  "s3://my-bucket/data");
     // No storageConfig with credentials
 
     assertThrows(IllegalArgumentException.class, () ->
@@ -805,6 +823,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("csvTypeInference", csvTypeInference);
 
@@ -824,6 +843,7 @@ class FileSchemaFactoryDeepCoverageTest2 {
 
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.toFile()); // File type baseDirectory
 

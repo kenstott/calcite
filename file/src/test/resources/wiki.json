@@ -57,6 +57,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "ephemeralCache": true,
         "tables": [
           {

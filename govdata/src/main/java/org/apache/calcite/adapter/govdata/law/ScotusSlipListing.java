@@ -47,7 +47,7 @@ final class ScotusSlipListing {
 
   private static final int CELLS = 6;
 
-  private static final Pattern DATE = Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2})$");
+  private static final Pattern DATE = Pattern.compile("^(\\d{1,2})/(\\d{1,2})/(\\d{2}|\\d{4})$");
 
   /** {@code 606 U.S. 942}, tolerating the spacing and missing periods seen in the listings. */
   private static final Pattern CITATION =
@@ -159,13 +159,15 @@ final class ScotusSlipListing {
         href, page.find() ? Integer.valueOf(page.group(1)) : null);
   }
 
-  /** {@code 6/30/25} becomes {@code 2025-06-30}. */
+  /** {@code 6/30/25} or {@code 6/30/2025} becomes {@code 2025-06-30}. The Court's listing used a
+   *  two-digit year until 2026-10, when {@code 10/14/2026} appeared. */
   private static String isoDate(String date) {
     Matcher m = DATE.matcher(date);
     if (!m.matches()) {
-      throw new IllegalArgumentException("Slip-opinion date is not M/D/YY: " + date);
+      throw new IllegalArgumentException("Slip-opinion date is not M/D/YY or M/D/YYYY: " + date);
     }
-    return String.format("20%s-%02d-%02d", m.group(3), Integer.parseInt(m.group(1)),
+    String year = m.group(3).length() == 2 ? "20" + m.group(3) : m.group(3);
+    return String.format("%s-%02d-%02d", year, Integer.parseInt(m.group(1)),
         Integer.parseInt(m.group(2)));
   }
 }

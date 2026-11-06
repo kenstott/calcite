@@ -54,7 +54,7 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
   void setUp() {
     storageProvider = new LocalFileStorageProvider();
     String warehousePath = tempDir.resolve("warehouse").toString();
-    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null);
+    writer = new IcebergMaterializationWriter(storageProvider, warehousePath, null, tempDir.toFile());
   }
 
   @AfterEach
@@ -71,7 +71,7 @@ public class IcebergMaterializationWriterDeepCoverageTest2 {
 
   @Test void testConstructorWithNullTracker() {
     IcebergMaterializationWriter w =
-        new IcebergMaterializationWriter(storageProvider, "/warehouse", null);
+        new IcebergMaterializationWriter(storageProvider, "/warehouse", null, tempDir.toFile());
     assertNotNull(w);
     assertEquals(0, w.getTotalRowsWritten());
     assertEquals(0, w.getTotalFilesWritten());

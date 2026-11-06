@@ -18,6 +18,8 @@ metadata until the file was deleted by hand.
 
 from __future__ import annotations
 
+import errno
+import logging
 import os
 
 from pgwire_calcite import catalog_populate
@@ -167,3 +169,25 @@ def test_gaps_are_reported(tmp_path):
         _Connection(_DatabaseMetaData(
             _TABLES, broken_schemas=["law"], broken_tables=[("econ", "cpi")])))
     assert gaps == ["schema law", "table econ.cpi"]
+
+
+def test_an_unwritable_state_directory_is_one_warning_and_the_catalog_is_served(
+        tmp_path, monkeypatch, caplog):
+    # The maintainer's ~/.local/state was root-owned: creating the state directory is refused
+    model_path = _model(tmp_path)
+    state = tmp_path / "state"
+    monkeypatch.setenv(catalog_populate.STATE_DIR_ENV, str(state))
+
+    def refuse(path, exist_ok=False):
+        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), path)
+
+    monkeypatch.setattr(catalog_populate.os, "makedirs", refuse)
+    caplog.set_level(logging.WARNING, logger=catalog_populate.__name__)
+    ctx, _ = catalog_populate.build_and_cache_context(
+        _Connection(_DatabaseMetaData(_TABLES)), model_path)
+    assert set(ctx.tables) == {"econ.gdp", "econ.cpi", "law.bills"}
+    assert not state.exists()
+    records = [r for r in caplog.records if r.name == catalog_populate.__name__]
+    assert [r.levelno for r in records] == [logging.WARNING]
+    assert f"{state} is not writable" in records[0].getMessage()
+    assert records[0].exc_info is None

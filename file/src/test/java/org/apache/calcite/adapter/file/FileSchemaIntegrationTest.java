@@ -343,7 +343,7 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
         + "\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\"operand\":{"
-        + "\"directory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\"directory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + "\"recursive\":true,"
         + "\"ephemeralCache\":true"
         + "}}]}";
@@ -500,7 +500,7 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
         + "\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\"operand\":{"
-        + "\"directory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\"directory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + "\"ephemeralCache\":true,"
         + "\"tables\":[{"
         + "\"name\":\"deep\","
@@ -576,10 +576,10 @@ public class FileSchemaIntegrationTest extends BaseFileTest {
         + "\"schemas\":["
         + "{\"name\":\"s1\",\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
-        + "\"operand\":{\"directory\":\"" + dir1.getAbsolutePath().replace("\\", "\\\\") + "\",\"ephemeralCache\":true}},"
+        + "\"operand\":{\"directory\":\"" + dir1.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir1.getAbsolutePath().replace("\\", "\\\\") + "\",\"ephemeralCache\":true}},"
         + "{\"name\":\"s2\",\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
-        + "\"operand\":{\"directory\":\"" + dir2.getAbsolutePath().replace("\\", "\\\\") + "\",\"ephemeralCache\":true}}"
+        + "\"operand\":{\"directory\":\"" + dir2.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir2.getAbsolutePath().replace("\\", "\\\\") + "\",\"ephemeralCache\":true}}"
         + "]}";
 
     Properties info = new Properties();

@@ -37,7 +37,7 @@ def test_select_one(calcite_backend):
 def test_count_star(calcite_backend):
     r = calcite_backend.execute_sql("SELECT count(*) AS n FROM EMPS", "u")
     assert r.rows == [(10,)]
-    assert r.column_names == ["N"]
+    assert r.column_names == ["n"]  # unquoted folds lower
 
 
 def test_join_filter_group_aggregate_limit(calcite_backend):
@@ -47,7 +47,7 @@ def test_join_filter_group_aggregate_limit(calcite_backend):
         "WHERE e.SAL > 1000 GROUP BY d.DNAME ORDER BY c DESC LIMIT 5"
     )
     r = calcite_backend.execute_sql(sql, "u")
-    assert r.column_names == ["DNAME", "C", "A"]
+    assert r.column_names == ["dname", "c", "a"]
     assert r.column_types == ["VARCHAR", "BIGINT", "DOUBLE"]
     assert r.rows == [
         ("SALES", 5, 1690.0),
@@ -81,7 +81,7 @@ def test_end_to_end_through_wire_server(calcite_backend):
                 "JOIN DEPTS d ON e.DEPTNO = d.DEPTNO GROUP BY d.DNAME ORDER BY d.DNAME"
             )
             assert r["error"] is None, r["error"]
-            assert r["columns"] == ["DNAME", "C"]
+            assert r["columns"] == ["dname", "c"]
             # Values arrive as text over the simple-query protocol.
             assert r["rows"] == [["ACCOUNTING", "2"], ["RESEARCH", "3"], ["SALES", "5"]]
         finally:

@@ -55,7 +55,7 @@ if [[ -n "$BUNDLE_ID" ]]; then
   EXTRA_ARGS="--bundle-id $BUNDLE_ID"
 fi
 
-exec java -Xms512m -Xmx4g \
+exec java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -Xms512m -Xmx4g \
   -cp "$JAR" \
   org.apache.calcite.adapter.govdata.etl.BundleArchiverRunner \
   --schema "$SCHEMA" \

@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.govdata.ag;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -192,6 +194,7 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
       conn.setReadTimeout(60000);
       conn.setInstanceFollowRedirects(false);
       conn.setRequestMethod("HEAD");
+      NetworkOutageWait.connect(conn);
       int code = conn.getResponseCode();
       if (code >= 300 && code < 400) {
         String location = conn.getHeaderField("Location");
@@ -267,11 +270,12 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(300000);
       conn.setInstanceFollowRedirects(true);
+      NetworkOutageWait.connect(conn);
       int code = conn.getResponseCode();
       if (code < 200 || code >= 300) {
         throw new IOException("USGS pesticide use: HTTP " + code + " for " + url);
       }
-      return conn.getInputStream();
+      return CompleteBody.of(conn);
     }
 
     private boolean openNextFile() throws IOException {
@@ -419,12 +423,13 @@ public class UsgsPesticideCountyUseProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(60000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("USGS pesticide use: HTTP " + code + " for " + url);
     }
     ByteArrayOutputStream buf = new ByteArrayOutputStream();
-    try (InputStream in = conn.getInputStream()) {
+    try (InputStream in = CompleteBody.of(conn)) {
       byte[] chunk = new byte[65536];
       int n;
       while ((n = in.read(chunk)) != -1) {

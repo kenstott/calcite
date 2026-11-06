@@ -357,9 +357,61 @@ FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
 
 INSERT INTO dq_results
 SELECT 'research', 'nih_publications', 'T6_pk_nulls',
-  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL appl_id or pmid rows'
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'NULL appl_id, or NULL pmid on a row not marked invalid_source_record'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true)
-      WHERE appl_id IS NULL OR pmid IS NULL);
+      WHERE appl_id IS NULL OR (pmid IS NULL AND record_status IS DISTINCT FROM 'invalid_source_record'));
+
+-- Invalid rows are marked at load (record_status), never dropped: the marker must be internally consistent.
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T7_record_status_consistent',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows violating: record_status in (valid, invalid_source_record); invalid => pmid NULL and record_issue set; valid => pmid set and record_issue NULL'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true)
+      WHERE record_status IS NULL OR record_status NOT IN ('valid', 'invalid_source_record')
+         OR (record_status = 'invalid_source_record' AND (pmid IS NOT NULL OR record_issue IS NULL))
+         OR (record_status = 'valid' AND (pmid IS NULL OR record_issue IS NOT NULL)));
+
+-- A slice (year x agency_ic) over maxInvalidRecordsPerSlice (100, research-schema.yaml) fails the load, so
+-- no committed year should carry a large invalid share; the slice column is not in the table, so check per year.
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T7_invalid_share_per_year',
+  CASE WHEN COALESCE(worst, 0) <= 0.01 THEN 'pass' ELSE 'fail' END, COALESCE(worst, 0), 0.01,
+  'Highest per-year fraction of rows marked invalid_source_record'
+FROM (SELECT MAX(share) AS worst FROM (
+  SELECT year, AVG(CASE WHEN record_status = 'invalid_source_record' THEN 1.0 ELSE 0.0 END) AS share
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true) GROUP BY year));
+
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T7_invalid_share',
+  CASE WHEN share <= 0.01 THEN 'pass' ELSE 'fail' END, share, 0.01,
+  'Fraction of all rows marked invalid_source_record (high = outage mis-recorded as bad records)'
+FROM (SELECT COALESCE(AVG(CASE WHEN record_status = 'invalid_source_record' THEN 1.0 ELSE 0.0 END), 0) AS share
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true));
+
+-- Every year the forced reprocess covers (2022-2026) must be present; the table is empty after a refused commit.
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T7_years_2022_2026_present',
+  CASE WHEN n = 5 THEN 'pass' ELSE 'fail' END, n, 5,
+  'Distinct fiscal years present among 2022..2026'
+FROM (SELECT COUNT(DISTINCT fiscal_year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true)
+      WHERE fiscal_year BETWEEN 2022 AND 2026);
+
+-- Every IC with awards in a year should have publications that year (a partially committed table fails this).
+INSERT INTO dq_results
+SELECT 'research', 'nih_publications', 'T7_award_ics_have_publications',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'Award (fiscal_year, agency_ic) groups 2022-2026 with no publication row in that fiscal_year'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT DISTINCT a.fiscal_year, a.agency_ic
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true) a
+  WHERE a.fiscal_year BETWEEN 2022 AND 2026 AND a.agency_ic IS NOT NULL
+) g
+WHERE NOT EXISTS (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_publications', allow_moved_paths := true) p
+  JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nih_award_projects', allow_moved_paths := true) a2
+    ON p.appl_id = a2.appl_id
+  WHERE p.fiscal_year = g.fiscal_year AND a2.agency_ic = g.agency_ic));
 
 INSERT INTO dq_results
 SELECT 'research', 'nih_publications', 'T6_pk_dupes',

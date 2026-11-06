@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.health;
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.govdata.energy.EiaBulkXlsxTransformer;
 
@@ -76,6 +77,7 @@ public class SsaOasdiCountyTransformer extends EiaBulkXlsxTransformer {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
     conn.setRequestProperty("User-Agent", "Wget/1.21.3");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);

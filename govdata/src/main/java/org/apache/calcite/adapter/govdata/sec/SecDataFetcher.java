@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.DocumentSource;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -421,7 +423,7 @@ public class SecDataFetcher {
     URI uri = URI.create(SEC_TICKERS_URL);
     HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
     conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-XBRL/1.0 (admin@example.com)");
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
@@ -433,6 +435,7 @@ public class SecDataFetcher {
       Thread.currentThread().interrupt();
     }
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("SEC API returned status " + responseCode);
@@ -623,6 +626,7 @@ public class SecDataFetcher {
       conn.setConnectTimeout(30000);
       conn.setReadTimeout(30000);
 
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != 200) {
         LOGGER.warn("Wikipedia returned status " + conn.getResponseCode());
         return ciks;
@@ -725,7 +729,7 @@ public class SecDataFetcher {
     URI uri = URI.create(SEC_TICKERS_URL);
     HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
     conn.setRequestMethod("GET");
-    conn.setRequestProperty("User-Agent", "Apache-Calcite-XBRL/1.0 (admin@example.com)");
+    conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
     conn.setRequestProperty("Accept", "application/json");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
@@ -737,6 +741,7 @@ public class SecDataFetcher {
       Thread.currentThread().interrupt();
     }
 
+    NetworkOutageWait.connect(conn);
     if (conn.getResponseCode() != 200) {
       throw new IOException("SEC API returned status " + conn.getResponseCode());
     }
@@ -1087,6 +1092,7 @@ public class SecDataFetcher {
           + "\"messages\": [{\"role\": \"user\", \"content\": \"" + prompt.replace("\"", "\\\"") + "\"}]"
           + "}";
 
+      NetworkOutageWait.connect(conn);
       try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(conn.getOutputStream())) {
         writer.write(requestBody);
         writer.flush();
@@ -1825,6 +1831,7 @@ public class SecDataFetcher {
           + "}";
 
       // Send request
+      NetworkOutageWait.connect(conn);
       try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(conn.getOutputStream())) {
         writer.write(requestBody);
         writer.flush();
@@ -3065,12 +3072,16 @@ public class SecDataFetcher {
   /** CIKs whose overflow submission files have been read, so the work happens at most once. */
   private static final Set<String> OVERFLOW_LOADED =
       java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+  /** CIKs answered from the nightly bulk file, which lacks the newest filings. */
+  private static final Set<String> BULK_SERVED =
+      java.util.Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
   private static final String SUBMISSIONS_URL_TMPL =
       "https://data.sec.gov/submissions/CIK%s.json";
 
   /**
    * Returns company_name, ticker, sic_code, and fiscal_year_end (MMDD) for a CIK from EDGAR
-   * submissions.json. Results are cached in-process for the lifetime of the JVM.
+   * submissions.json. Successful results are cached in-process for the lifetime of the JVM; a failed
+   * fetch throws {@link IllegalStateException} and is not cached.
    */
   public static Map<String, String> getCompanyInfoForCik(String cik) {
     String normalized = cik.replaceAll("[^0-9]", "");
@@ -3080,40 +3091,43 @@ public class SecDataFetcher {
     if (COMPANY_INFO_CACHE.containsKey(normalized)) {
       return COMPANY_INFO_CACHE.get(normalized);
     }
-    Map<String, String> info = new HashMap<>();
+    JsonNode node;
     try {
-      JsonNode node = readSubmissionsJsonWithCache(normalized);
-      if (node != null) {
-        info = parseSubmissionsJson(node);
-      }
+      node = readSubmissionsJsonWithCache(normalized);
     } catch (Exception e) {
-      LOGGER.warn("Failed to fetch submissions.json for CIK {}: {}", normalized, e.getMessage());
+      throw new IllegalStateException(
+          "Failed to fetch submissions.json for CIK " + normalized + ": " + e.getMessage(), e);
     }
+    Map<String, String> info = parseSubmissionsJson(node);
     COMPANY_INFO_CACHE.put(normalized, info);
     return info;
   }
 
-  private static JsonNode readSubmissionsJsonWithCache(String cik) throws Exception {
+  private static java.io.File cacheFileFor(String cik) {
     String cacheDir = System.getenv("ETL_RAW_CACHE_DIR");
     if (cacheDir == null) {
       cacheDir = System.getProperty("user.home") + "/.govdata/.etl-cache";
     }
     java.io.File submissionsDir = new java.io.File(cacheDir, "sec/submissions");
     submissionsDir.mkdirs();
-    java.io.File cacheFile = new java.io.File(submissionsDir, cik + ".json");
+    return new java.io.File(submissionsDir, cik + ".json");
+  }
 
+  private static JsonNode readSubmissionsJsonWithCache(String cik) throws Exception {
+    java.io.File cacheFile = cacheFileFor(cik);
     String url = String.format(SUBMISSIONS_URL_TMPL, cik);
+
+    String local = DocumentSource.resolveLocalContent(url);
+    if (local != null) {
+      BULK_SERVED.add(cik);
+      return MAPPER.readTree(local);
+    }
 
     // Check cache validity by comparing content size (submissions.json is append-only)
     if (cacheFile.exists()) {
       try {
-        HttpURLConnection headConn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
-        headConn.setRequestMethod("HEAD");
-        headConn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
-        headConn.setConnectTimeout(8000);
-        headConn.setReadTimeout(10000);
-        int headStatus = headConn.getResponseCode();
-        if (headStatus == 200) {
+        HttpURLConnection headConn = EdgarRateLimiter.connect(url, "HEAD", 8000, 10000);
+        if (headConn.getResponseCode() == 200) {
           long remoteSize = headConn.getContentLengthLong();
           long cachedSize = cacheFile.length();
           if (remoteSize == cachedSize && remoteSize > 0) {
@@ -3130,12 +3144,14 @@ public class SecDataFetcher {
       }
     }
 
-    HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
-    conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
-    conn.setRequestProperty("Connection", "close");
-    conn.setConnectTimeout(8000);
-    conn.setReadTimeout(10000);
-    if (conn.getResponseCode() == 200) {
+    return fetchSubmissionsLive(url, cik, cacheFile);
+  }
+
+  private static JsonNode fetchSubmissionsLive(String url, String cik, java.io.File cacheFile)
+      throws Exception {
+    HttpURLConnection conn = EdgarRateLimiter.connect(url, "GET", 8000, 10000);
+    int status = conn.getResponseCode();
+    if (status == 200) {
       JsonNode node = MAPPER.readTree(conn.getInputStream());
       try {
         MAPPER.writeValue(cacheFile, node);
@@ -3144,7 +3160,7 @@ public class SecDataFetcher {
       }
       return node;
     }
-    return null;
+    throw new java.io.IOException("HTTP " + status + " from " + url);
   }
 
   private static Map<String, String> parseSubmissionsJson(JsonNode node) {
@@ -3276,7 +3292,21 @@ public class SecDataFetcher {
       return found;
     }
     loadOverflowSubmissions(normalized);
-    return FILING_ITEMS_CACHE.get(accession);
+    found = FILING_ITEMS_CACHE.get(accession);
+    if (found == null && BULK_SERVED.contains(normalized)) {
+      // The bulk file is regenerated nightly, so a filing newer than it is only live.
+      String url = String.format(SUBMISSIONS_URL_TMPL, normalized);
+      try {
+        indexFilingItems(fetchSubmissionsLive(url, normalized, cacheFileFor(normalized))
+            .path("filings").path("recent"));
+      } catch (Exception e) {
+        throw new IllegalStateException(
+            "Failed to recheck live submissions for CIK " + normalized + " accession "
+                + accession + ": " + e.getMessage(), e);
+      }
+      found = FILING_ITEMS_CACHE.get(accession);
+    }
+    return found;
   }
 
   /** Reads the overflow submission files listed by a CIK's payload into the items cache. */
@@ -3305,10 +3335,11 @@ public class SecDataFetcher {
   /** Fetches and parses a submissions JSON document, or null when EDGAR does not return one. */
   private static JsonNode readSubmissionsJson(String url) {
     try {
-      HttpURLConnection conn = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
-      conn.setRequestProperty("User-Agent", "calcite-govdata-adapter contact@example.com");
-      conn.setConnectTimeout(8000);
-      conn.setReadTimeout(10000);
+      String local = DocumentSource.resolveLocalContent(url);
+      if (local != null) {
+        return MAPPER.readTree(local);
+      }
+      HttpURLConnection conn = EdgarRateLimiter.connect(url, "GET", 8000, 10000);
       if (conn.getResponseCode() != 200) {
         return null;
       }

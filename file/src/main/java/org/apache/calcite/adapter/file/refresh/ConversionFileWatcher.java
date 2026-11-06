@@ -11,12 +11,7 @@
 package org.apache.calcite.adapter.file.refresh;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
-import org.apache.calcite.adapter.file.converters.DocxTableScanner;
-import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
-import org.apache.calcite.adapter.file.converters.MarkdownTableScanner;
-import org.apache.calcite.adapter.file.converters.PptxTableScanner;
-import org.apache.calcite.adapter.file.converters.SafeExcelToJsonConverter;
-import org.apache.calcite.adapter.file.converters.XmlToJsonConverter;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,18 +39,20 @@ public class ConversionFileWatcher {
   private final ScheduledExecutorService executor;
   // Schema-aware watched files: schema -> file -> info
   private final Map<String, Map<File, FileInfo>> schemaWatchedFiles = new ConcurrentHashMap<>();
-  // Schema base directories for conversion output
-  private final Map<String, File> schemaBaseDirectories = new ConcurrentHashMap<>();
 
   private static class FileInfo {
     final FileType type;
     final String schemaName;
+    // The conversion the schema first ran on the file, re-run as it was on every change.
+    final SourceFileConversion conversion;
     long lastModified;
     long lastChecked;
 
-    FileInfo(FileType type, String schemaName, long lastModified) {
+    FileInfo(FileType type, String schemaName, SourceFileConversion conversion,
+        long lastModified) {
       this.type = type;
       this.schemaName = schemaName;
+      this.conversion = conversion;
       this.lastModified = lastModified;
       this.lastChecked = System.currentTimeMillis();
     }
@@ -84,37 +81,15 @@ public class ConversionFileWatcher {
   }
 
   /**
-   * Registers the base directory for a schema.
-   *
-   * @param schemaName The schema name
-   * @param baseDirectory The base directory for conversion output
-   */
-  public void registerSchemaBaseDirectory(String schemaName, File baseDirectory) {
-    if (schemaName != null && baseDirectory != null) {
-      schemaBaseDirectories.put(schemaName, baseDirectory);
-      LOGGER.debug("Registered base directory for schema '{}': {}",
-                  schemaName, baseDirectory.getAbsolutePath());
-    }
-  }
-
-  /**
-   * Registers a file to be watched for changes.
-   *
-   * @param file The file to watch
-   * @param refreshInterval How often to check for changes
-   */
-  public void watchFile(File file, Duration refreshInterval) {
-    watchFile(null, file, refreshInterval);
-  }
-
-  /**
    * Registers a file to be watched for changes with schema awareness.
    *
    * @param schemaName The schema name (optional)
    * @param file The file to watch
    * @param refreshInterval How often to check for changes
+   * @param conversion The conversion the schema ran on the file, re-run on each change
    */
-  public void watchFile(String schemaName, File file, Duration refreshInterval) {
+  public void watchFile(String schemaName, File file, Duration refreshInterval,
+      SourceFileConversion conversion) {
     if (file == null || !file.exists()) {
       return;
     }
@@ -142,7 +117,7 @@ public class ConversionFileWatcher {
       Map<File, FileInfo> watchedFiles =
           schemaWatchedFiles.computeIfAbsent(effectiveSchema, k -> new ConcurrentHashMap<>());
 
-      FileInfo info = new FileInfo(type, effectiveSchema, file.lastModified());
+      FileInfo info = new FileInfo(type, effectiveSchema, conversion, file.lastModified());
       FileInfo existing = watchedFiles.putIfAbsent(file, info);
 
       if (existing == null) {
@@ -183,29 +158,6 @@ public class ConversionFileWatcher {
   }
 
   /**
-   * Resolves the directory that converted JSON output should be written to for
-   * a watched file. Uses the schema's registered base directory's
-   * {@code conversions/} subdirectory when available, otherwise falls back to
-   * the source file's parent directory.
-   *
-   * @param schemaName The schema the file belongs to
-   * @param sourceFile The source file being converted
-   * @return The output directory for converted JSON
-   */
-  private File resolveConversionsDir(String schemaName, File sourceFile) {
-    File baseDir = schemaBaseDirectories.get(schemaName);
-    if (baseDir != null) {
-      File outputDir = new File(baseDir, "conversions");
-      if (!outputDir.exists()) {
-        outputDir.mkdirs();
-      }
-      return outputDir;
-    }
-    LOGGER.warn("No base directory registered for schema '{}', using source directory", schemaName);
-    return sourceFile.getParentFile();
-  }
-
-  /**
    * Checks if a file has been modified and re-runs conversion if needed.
    */
   private void checkFile(String schemaName, File file) {
@@ -230,88 +182,9 @@ public class ConversionFileWatcher {
       LOGGER.info("Detected change in {} file: {}", info.type, file.getName());
 
       try {
-        // Re-run the appropriate conversion
-        switch (info.type) {
-        case EXCEL:
-          // Use conversions directory under base directory for this schema
-          File baseDirExcel = schemaBaseDirectories.get(schemaName);
-          File outputDirExcel;
-          if (baseDirExcel != null) {
-            outputDirExcel = new File(baseDirExcel, "conversions");
-            if (!outputDirExcel.exists()) {
-              outputDirExcel.mkdirs();
-            }
-          } else {
-            // Fallback to parent directory if no base directory registered
-            LOGGER.warn("No base directory registered for schema '{}', using source directory", schemaName);
-            outputDirExcel = file.getParentFile();
-          }
-          SafeExcelToJsonConverter.convertIfNeeded(
-              file, outputDirExcel, true, "SMART_CASING", "SMART_CASING", baseDirExcel != null ? baseDirExcel : outputDirExcel.getParentFile());
-          LOGGER.info("Re-converted Excel file to JSON: {}", file.getName());
-          break;
-
-        case HTML:
-          // HTML conversion
-          try {
-            // Use conversions directory under base directory for this schema
-            File baseDir = schemaBaseDirectories.get(schemaName);
-            File outputDir;
-            if (baseDir != null) {
-              outputDir = new File(baseDir, "conversions");
-              if (!outputDir.exists()) {
-                outputDir.mkdirs();
-              }
-            } else {
-              // Fallback to parent directory if no base directory registered
-              LOGGER.warn("No base directory registered for schema '{}', using source directory", schemaName);
-              outputDir = file.getParentFile();
-            }
-            HtmlToJsonConverter.convert(file, outputDir, baseDir != null ? baseDir : file.getParentFile());
-            LOGGER.info("Re-converted HTML file to JSON: {}", file.getName());
-          } catch (Exception e) {
-            LOGGER.error("Failed to re-convert HTML file: {}", file.getName(), e);
-          }
-          break;
-
-        case XML:
-          // XML conversion
-          try {
-            // Use conversions directory under base directory for this schema
-            File baseDirXml = schemaBaseDirectories.get(schemaName);
-            File outputDirXml;
-            if (baseDirXml != null) {
-              outputDirXml = new File(baseDirXml, "conversions");
-              if (!outputDirXml.exists()) {
-                outputDirXml.mkdirs();
-              }
-            } else {
-              // Fallback to parent directory if no base directory registered
-              LOGGER.warn("No base directory registered for schema '{}', using source directory", schemaName);
-              outputDirXml = file.getParentFile();
-            }
-            XmlToJsonConverter.convert(file, outputDirXml, baseDirXml != null ? baseDirXml : file.getParentFile());
-            LOGGER.info("Re-converted XML file to JSON: {}", file.getName());
-          } catch (Exception e) {
-            LOGGER.error("Failed to re-convert XML file: {}", file.getName(), e);
-          }
-          break;
-
-        case MARKDOWN:
-          MarkdownTableScanner.scanAndConvertTables(file, resolveConversionsDir(schemaName, file));
-          LOGGER.info("Re-converted Markdown file to JSON: {}", file.getName());
-          break;
-
-        case DOCX:
-          DocxTableScanner.scanAndConvertTables(file, resolveConversionsDir(schemaName, file));
-          LOGGER.info("Re-converted DOCX file to JSON: {}", file.getName());
-          break;
-
-        case PPTX:
-          PptxTableScanner.scanAndConvertTables(file, resolveConversionsDir(schemaName, file));
-          LOGGER.info("Re-converted PPTX file to JSON: {}", file.getName());
-          break;
-        }
+        // Re-run the conversion the schema first ran, so it writes what that one wrote.
+        info.conversion.reconvert(file, info.conversion.outputDirectoryOf(file));
+        LOGGER.info("Re-converted {} file: {}", info.type, file.getName());
 
         // Update the last modified time
         info.lastModified = currentModified;

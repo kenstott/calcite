@@ -503,7 +503,7 @@ public class TableIntegrationTest extends BaseFileTest {
         + "\"type\":\"custom\","
         + "\"factory\":\"org.apache.calcite.adapter.file.FileSchemaFactory\","
         + "\"operand\":{"
-        + "\"directory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\","
+        + "\"directory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + dir.getAbsolutePath().replace("\\", "\\\\") + "\","
         + "\"ephemeralCache\":true,"
         + "\"tables\":[{"
         + "\"name\":\"nested_obj\","

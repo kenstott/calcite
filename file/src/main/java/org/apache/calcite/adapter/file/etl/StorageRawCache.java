@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.etl;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,8 @@ final class StorageRawCache implements RawCache {
   private final StorageProvider storageProvider;
   private final String cacheDir;
   private final boolean enabled;
+  /** The schema's operating directory: a miss is staged in a temporary file here (REQ-1992). */
+  private final File workDirectory;
 
   /**
    * Entries a bypassing handle downloaded and committed in this JVM. A bypassing run must not
@@ -58,9 +61,11 @@ final class StorageRawCache implements RawCache {
    * @param cacheDir resolved cache directory for this batch, or null when not caching
    * @param bypass whether this run must ignore existing entries (force-download / full reprocess)
    */
-  StorageRawCache(StorageProvider storageProvider, String cacheDir, boolean bypass) {
+  StorageRawCache(StorageProvider storageProvider, String cacheDir, boolean bypass,
+      File workDirectory) {
     this.storageProvider = storageProvider;
     this.cacheDir = cacheDir;
+    this.workDirectory = workDirectory;
     this.enabled = storageProvider != null && cacheDir != null && !bypass;
   }
 
@@ -75,12 +80,12 @@ final class StorageRawCache implements RawCache {
    * @return a handle; caching when the table and run allow it, downloading every time otherwise
    */
   static RawCache forBatch(EtlPipelineConfig config, Map<String, String> variables,
-      StorageProvider storageProvider, String rawCachePath, boolean bypass) {
+      StorageProvider storageProvider, String rawCachePath, boolean bypass, File workDirectory) {
     HttpSourceConfig source = config != null ? config.getSource() : null;
     HttpSourceConfig.RawCacheConfig rawCache = source != null ? source.getRawCache() : null;
     if (rawCache == null || !rawCache.isEnabled() || storageProvider == null
         || rawCachePath == null) {
-      return new StorageRawCache(null, null, true);
+      return new StorageRawCache(null, null, true, workDirectory);
     }
     boolean gzip = source.getResponse() != null
         && "gzip".equalsIgnoreCase(source.getResponse().getCompressed());
@@ -90,9 +95,9 @@ final class StorageRawCache implements RawCache {
     // a provider may fetch several URLs within one batch (the IRS business master file is four
     // regional shards), and a single fixed filename would make them overwrite one another and
     // serve whichever landed last for all four.
-    int slash = path.lastIndexOf('/');
+    int slash = LocalPaths.lastSeparator(path);
     String dir = slash > 0 ? path.substring(0, slash) : path;
-    return new StorageRawCache(storageProvider, dir, bypass);
+    return new StorageRawCache(storageProvider, dir, bypass, workDirectory);
   }
 
   /**
@@ -119,7 +124,8 @@ final class StorageRawCache implements RawCache {
     if (tail.isEmpty()) {
       tail = "response";
     }
-    return cacheDir + "/" + HttpSource.sanitizePathComponent(tail) + "_" + digest(url);
+    return LocalPaths.join(cacheDir,
+        HttpSource.sanitizePathComponent(tail) + "_" + digest(url));
   }
 
   /** Short, stable digest of the full URL. */
@@ -155,7 +161,8 @@ final class StorageRawCache implements RawCache {
       return storageProvider.openInputStream(entry);
     }
     LOGGER.debug("Provider raw cache miss, fetching: {}", key);
-    File temp = File.createTempFile("provider-raw-cache-", ".bin");
+    File temp = org.apache.calcite.adapter.file.WorkFiles.newTempFile(workDirectory,
+        "provider-raw-cache-", ".bin");
     temp.deleteOnExit();
     try {
       try (InputStream in = onMiss.open(); FileOutputStream out = new FileOutputStream(temp)) {

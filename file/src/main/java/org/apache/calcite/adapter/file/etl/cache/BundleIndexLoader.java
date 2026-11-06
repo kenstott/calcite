@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.etl.cache;
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,11 +80,7 @@ public class BundleIndexLoader {
           String content = readAsString(storageProvider, indexFile);
           // Derive bundle filename from index filename:
           // run-20260310T1423.idx.jsonl -> run-20260310T1423.bin
-          String fileName = indexFile;
-          int lastSlash = fileName.lastIndexOf('/');
-          if (lastSlash >= 0) {
-            fileName = fileName.substring(lastSlash + 1);
-          }
+          String fileName = LocalPaths.fileName(indexFile);
           // Strip index suffix: .idx.jsonl or .idx-NNN.jsonl → .bin
           String bundleFile = fileName.replaceAll("\\.idx(-\\d+)?\\.jsonl$", ".bin");
           index.mergeFromJsonl(content, bundleFile);

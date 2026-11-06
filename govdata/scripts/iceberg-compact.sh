@@ -99,7 +99,7 @@ for TABLE in "${SELECTED_TABLES[@]}"; do
   echo "Compacting: $TABLE"
   echo "------------------------------------------------------------"
 
-  if java -Xmx4g -cp "$CLASSPATH" \
+  if java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -Xmx4g -cp "$CLASSPATH" \
     org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
     --warehouse "s3a://govdata-parquet-v1/sec" \
     --table "$TABLE" \

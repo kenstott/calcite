@@ -29,6 +29,7 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.lookup.LikePattern;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -36,18 +37,20 @@ import org.apache.calcite.util.ImmutableBitSet;
 
 import com.google.common.collect.ImmutableList;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -58,15 +61,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Requirement-pinning tests for the file-adapter HLL-rule {@code shouldOptimize()} GATING
  * (FILE-124) and the FileSchemaFactory operand DEFAULTS golden (FILE-047).
  *
- * <p>FILE-124 pins the CURRENT (intentionally-aggressive) gating of
- * {@link SimpleHLLCountDistinctRule}: despite
- * {@link SimpleHLLCountDistinctRule#APPROX_ONLY_INSTANCE} being configured with
- * {@code approxOnly=true}, the private {@code shouldOptimize(AggregateCall)} IGNORES the
- * {@code approxOnly} flag and returns {@code true} for EVERY {@code COUNT(DISTINCT)} (only
- * gating on {@code SqlKind.COUNT} + {@code isDistinct()}). It also pins the no-op safety
- * property: with no cached HLL sketch the rule leaves the plan unchanged. The
- * {@code @Disabled} C-18 method documents the INTENDED (not-yet-implemented) behavior and
- * deliberately does NOT assert the current behavior as passing.
+ * <p>FILE-124 pins the gating of {@link SimpleHLLCountDistinctRule}:
+ * {@link SimpleHLLCountDistinctRule#APPROX_ONLY_INSTANCE} ({@code approxOnly=true}) optimizes
+ * only an approximate {@code COUNT(DISTINCT)} (APPROX_COUNT_DISTINCT), so an exact one stays
+ * exact (C-18). It also pins the no-op safety property: with no cached HLL sketch the rule
+ * leaves the plan unchanged.
  *
  * <p>This class is about the RULE's gating, not sketch accuracy or end-to-end EXPLAIN
  * folding (covered by {@code SimpleHLLCountDistinctRuleTest} /
@@ -97,13 +96,19 @@ public class HllRuleOperandDefaultsRequirementsTest {
   // (empty group set). Returns the LogicalAggregate so its AggCall list yields real
   // AggregateCall instances for shouldOptimize() reflection and a real plan for the no-op run.
   private static LogicalAggregate countAggregate(RelOptCluster cluster, boolean distinct) {
+    return countAggregate(cluster, distinct, false);
+  }
+
+  // As above; approximate=true builds APPROX_COUNT_DISTINCT's call (COUNT, distinct, approximate).
+  private static LogicalAggregate countAggregate(RelOptCluster cluster, boolean distinct,
+      boolean approximate) {
     RelDataType intType =
         cluster.getTypeFactory().createSqlType(SqlTypeName.INTEGER);
     RelDataType rowType =
         cluster.getTypeFactory().builder().add("c0", intType).build();
     LogicalValues input = LogicalValues.createEmpty(cluster, rowType);
     AggregateCall countCall =
-        AggregateCall.create(SqlStdOperatorTable.COUNT, distinct, false, false,
+        AggregateCall.create(SqlStdOperatorTable.COUNT, distinct, approximate, false,
             ImmutableList.of(), ImmutableList.of(0), -1, null,
             RelCollations.EMPTY, true, input, null, "cd");
     return LogicalAggregate.create(input, ImmutableList.of(), ImmutableBitSet.of(),
@@ -111,7 +116,7 @@ public class HllRuleOperandDefaultsRequirementsTest {
         Collections.singletonList(countCall));
   }
 
-  // Reach the private gating method directly, so we assert the CURRENT behavior of
+  // Reach the private gating method directly, so we assert the behavior of
   // shouldOptimize() itself rather than only an end-to-end folding side effect.
   private static boolean invokeShouldOptimize(SimpleHLLCountDistinctRule rule,
       AggregateCall aggCall) throws Exception {
@@ -126,25 +131,18 @@ public class HllRuleOperandDefaultsRequirementsTest {
   // ------------------------------------------------------------------
 
   /**
-   * FILE-124: shouldOptimize() ignores the {@code approxOnly} flag — it optimizes EVERY
-   * exact {@code COUNT(DISTINCT)} regardless of which instance (DEFAULT vs APPROX_ONLY) owns
-   * it — and only gates on {@code COUNT} + {@code isDistinct()}.
+   * FILE-124: shouldOptimize() gates on {@code COUNT} + {@code isDistinct()}, and the
+   * approx-only instance also on {@code isApproximate()}.
    *
-   * <p>Asserts the CURRENT (to-be-fixed) behavior:
    * <ul>
-   *   <li>{@code APPROX_ONLY_INSTANCE} is genuinely configured {@code approxOnly=true}
-   *       (so the flag exists and is set), yet</li>
-   *   <li>both {@code INSTANCE} (approxOnly=false) and {@code APPROX_ONLY_INSTANCE}
-   *       (approxOnly=true) return {@code true} for an EXACT {@code COUNT(DISTINCT $0)}
-   *       — proving the flag is not consulted; and</li>
-   *   <li>both return {@code false} for a non-distinct {@code COUNT($0)} (the only real
-   *       gate is COUNT + distinct).</li>
+   *   <li>{@code APPROX_ONLY_INSTANCE} is configured {@code approxOnly=true};</li>
+   *   <li>it optimizes an approximate {@code COUNT(DISTINCT $0)} and leaves an exact one
+   *       exact, while {@code INSTANCE} (approxOnly=false) optimizes both; and</li>
+   *   <li>neither optimizes a non-distinct {@code COUNT($0)}.</li>
    * </ul>
    */
   @Test @Tag("unit") @Tag("FILE-124")
-  public void file124ShouldOptimizeIgnoresApproxOnlyFlag() throws Exception {
-    // The flag is genuinely set on APPROX_ONLY (and unset on DEFAULT) — the bug is that
-    // shouldOptimize() never reads it, not that the config is missing.
+  public void file124ShouldOptimizeHonorsApproxOnlyFlag() throws Exception {
     assertTrue(SimpleHLLCountDistinctRule.Config.APPROX_ONLY.approxOnly(),
         "FILE-124: APPROX_ONLY config must declare approxOnly=true");
     assertFalse(SimpleHLLCountDistinctRule.Config.DEFAULT.approxOnly(),
@@ -153,23 +151,27 @@ public class HllRuleOperandDefaultsRequirementsTest {
     RelOptCluster cluster = newCluster();
     AggregateCall exactCountDistinct =
         countAggregate(cluster, true).getAggCallList().get(0);
+    AggregateCall approxCountDistinct =
+        countAggregate(cluster, true, true).getAggCallList().get(0);
     AggregateCall nonDistinctCount =
         countAggregate(cluster, false).getAggCallList().get(0);
 
-    // Sanity: the distinct flag actually survived onto the AggregateCall we built.
-    assertTrue(exactCountDistinct.isDistinct(),
-        "FILE-124: built call must be COUNT(DISTINCT)");
+    // Sanity: the flags actually survived onto the AggregateCalls we built.
+    assertTrue(exactCountDistinct.isDistinct() && !exactCountDistinct.isApproximate(),
+        "FILE-124: built call must be an exact COUNT(DISTINCT)");
+    assertTrue(approxCountDistinct.isDistinct() && approxCountDistinct.isApproximate(),
+        "FILE-124: built call must be an approximate COUNT(DISTINCT)");
     assertFalse(nonDistinctCount.isDistinct(),
         "FILE-124: built call must be a non-distinct COUNT");
 
-    // CURRENT behavior: approxOnly is ignored — BOTH instances optimize the exact
-    // COUNT(DISTINCT), and NEITHER optimizes the non-distinct COUNT.
     assertTrue(invokeShouldOptimize(SimpleHLLCountDistinctRule.INSTANCE, exactCountDistinct),
         "FILE-124: DEFAULT instance optimizes exact COUNT(DISTINCT)");
-    assertTrue(
+    assertFalse(
         invokeShouldOptimize(SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE, exactCountDistinct),
-        "FILE-124: APPROX_ONLY instance ALSO optimizes exact COUNT(DISTINCT) "
-            + "(approxOnly flag ignored)");
+        "FILE-124: APPROX_ONLY instance leaves an exact COUNT(DISTINCT) exact");
+    assertTrue(
+        invokeShouldOptimize(SimpleHLLCountDistinctRule.APPROX_ONLY_INSTANCE, approxCountDistinct),
+        "FILE-124: APPROX_ONLY instance optimizes APPROX_COUNT_DISTINCT");
     assertFalse(invokeShouldOptimize(SimpleHLLCountDistinctRule.INSTANCE, nonDistinctCount),
         "FILE-124: non-distinct COUNT is not optimized (DEFAULT)");
     assertFalse(
@@ -210,18 +212,11 @@ public class HllRuleOperandDefaultsRequirementsTest {
   }
 
   /**
-   * C-18 (INTENDED behavior, pending code fix): an EXACT {@code COUNT(DISTINCT)} must stay
-   * EXACT — the HLL approximation must apply ONLY to {@code APPROX_COUNT_DISTINCT} or an
-   * explicit opt-in. Under the desired contract, {@code APPROX_ONLY_INSTANCE}
-   * ({@code approxOnly=true}) must NOT optimize an exact {@code COUNT(DISTINCT)}.
-   *
-   * <p>Disabled until {@code shouldOptimize()} honors {@code approxOnly}: it asserts the
-   * INTENDED result ({@code false}), which the current code does not satisfy, so it is not
-   * green-washing the present (wrong) behavior.
+   * C-18: an exact {@code COUNT(DISTINCT)} stays exact; the HLL approximation applies only to
+   * {@code APPROX_COUNT_DISTINCT}. {@code APPROX_ONLY_INSTANCE} ({@code approxOnly=true}) does
+   * not optimize an exact {@code COUNT(DISTINCT)}.
    */
   @Test @Tag("unit") @Tag("FILE-124")
-  @Disabled("C-18: exact COUNT(DISTINCT) must stay exact; HLL only for "
-      + "APPROX_COUNT_DISTINCT or explicit opt-in — pending code fix")
   public void file124ApproxOnlyMustNotOptimizeExactCountDistinct() throws Exception {
     RelOptCluster cluster = newCluster();
     AggregateCall exactCountDistinct =
@@ -286,33 +281,17 @@ public class HllRuleOperandDefaultsRequirementsTest {
    * constructing a schema through {@link FileSchemaFactory} with BOTH operands omitted.
    *
    * <p>{@code ephemeralCache} default is {@code false}: the factory resolves it to
-   * {@code Boolean.FALSE} ("Default to persistent cache"). With {@code ephemeralCache} omitted
-   * (false) and {@code baseDirectory} omitted, the factory does NOT create the ephemeral
-   * {@code java.io.tmpdir/<uuid>} cache directory — so no such directory exists for this
-   * schema. (We assert the schema builds and the documented default is the persistent path,
-   * i.e. ephemeral was not taken.)
+   * {@code Boolean.FALSE} ("Default to persistent cache"), so the schema's cache lives under its
+   * {@code baseDirectory}.
    *
-   * <p>RECURSIVE default — KNOWN DOC CONFLICT: README/driver doc says the default is
-   * {@code false} while config-reference says {@code true}. The ACTUAL code default is read
-   * here from the factory's resolution expression {@code operand.get("recursive") == Boolean.TRUE}:
-   * with the operand omitted ({@code null}), that evaluates to {@code false}. So the ACTUAL
-   * recursive default is {@code FALSE} (the README/driver value), and config-reference's
-   * {@code true} is the stale/incorrect doc. This test asserts that ACTUAL resolution.
+   * <p>{@code recursive} default is {@code true} (FILE-110, C-01): a file in a subdirectory of
+   * the schema's directory is a table.
    */
   @Test @Tag("integration") @Tag("FILE-047")
   public void file047BooleanDefaultsEphemeralAndRecursive(@TempDir Path dir) throws Exception {
-    // RECURSIVE: assert the ACTUAL code default by replicating the factory's exact resolution
-    // expression on an operand map that omits "recursive". Result: false.
-    Map<String, Object> noRecursiveOperand = new LinkedHashMap<>();
-    boolean recursiveDefault = noRecursiveOperand.get("recursive") == Boolean.TRUE;
-    assertFalse(recursiveDefault,
-        "FILE-047: ACTUAL recursive default is FALSE "
-            + "(operand.get(\"recursive\") == Boolean.TRUE with operand omitted); "
-            + "config-reference's 'true' is the stale doc");
-
     // EPHEMERAL: replicate the factory's exact resolution for an omitted operand: parse of a
     // null operand value yields null on both camelCase and snake_case, so the documented
-    // Boolean.FALSE default is taken (persistent cache, no java.io.tmpdir/<uuid> created).
+    // Boolean.FALSE default is taken (persistent cache under the base directory).
     Map<String, Object> noEphemeralOperand = new LinkedHashMap<>();
     Boolean ephemeralDefault =
         noEphemeralOperand.get("ephemeralCache") == null
@@ -321,10 +300,15 @@ public class HllRuleOperandDefaultsRequirementsTest {
     assertFalse(ephemeralDefault,
         "FILE-047: omitted ephemeralCache must default to false (persistent cache)");
 
+    // A file one level down: found only if the omitted recursive operand defaults to true
+    Path data = dir.resolve("data");
+    Files.createDirectories(data.resolve("nested"));
+    Files.write(data.resolve("nested").resolve("deep.csv"),
+        "id:int,name:string\n1,a\n".getBytes(StandardCharsets.UTF_8));
+
     // End-to-end: a schema built through the factory with BOTH operands omitted must succeed.
-    // We supply only a directory (required so storageType auto-detects "local") and force the
-    // PARQUET engine so the construction stays hermetic (no JDBC engine spin-up). The schema
-    // object proves the omitted-operand defaults are accepted by the real factory path.
+    // We supply a directory and the base directory the schema may write to, and force the
+    // PARQUET engine so the construction stays hermetic (no JDBC engine spin-up).
     Connection conn =
         DriverManager.getConnection("jdbc:calcite:lex=ORACLE;unquotedCasing=TO_LOWER");
     try {
@@ -332,14 +316,19 @@ public class HllRuleOperandDefaultsRequirementsTest {
       SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
       Map<String, Object> operand = new LinkedHashMap<>();
-      operand.put("directory", dir.toFile().getAbsolutePath());
+      operand.put("directory", data.toFile().getAbsolutePath());
+      operand.put("baseDirectory", dir.resolve("base").toFile().getAbsolutePath());
       operand.put("executionEngine", "parquet");
       // ephemeralCache and recursive deliberately OMITTED to exercise their defaults.
 
-      Object schema =
+      org.apache.calcite.schema.Schema schema =
           FileSchemaFactory.INSTANCE.create(rootSchema, "files047", operand);
       assertNotNull(schema,
           "FILE-047: factory must build a schema with ephemeralCache/recursive omitted");
+      Set<String> tables =
+          rootSchema.add("files047", schema).tables().getNames(LikePattern.any());
+      assertTrue(tables.stream().anyMatch(t -> t.endsWith("deep")),
+          "FILE-047: recursive defaults to true, so nested/deep.csv is a table: " + tables);
     } finally {
       conn.close();
     }

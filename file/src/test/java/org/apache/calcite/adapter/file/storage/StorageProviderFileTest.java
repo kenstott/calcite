@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -48,7 +49,8 @@ public class StorageProviderFileTest {
 
     assertNotNull(file);
     assertTrue(file.isLocal());
-    assertEquals("/tmp/test.txt", file.getPath());
+    // File.getPath is in the platform's own form
+    assertEquals(new File("/tmp/test.txt").getPath(), file.getPath());
   }
 
   @Test void testLocalFileExists() throws IOException {

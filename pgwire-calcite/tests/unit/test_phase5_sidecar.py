@@ -46,7 +46,7 @@ def test_bridge_executes_query(child):
     b = BridgeBackend(port=port)
     r = b.execute_sql("SELECT count(*) AS n FROM EMPS", "u")
     assert list(r.iter_rows()) == [(10,)]
-    assert r.column_names == ["N"]
+    assert r.column_names == ["n"]  # unquoted folds lower
 
 
 def test_bridge_streams_large_result_over_socket(child):

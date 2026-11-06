@@ -20,11 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -50,7 +45,6 @@ public final class RetryableHttp {
   private static final int DEFAULT_MAX_RETRIES = 6;
   private static final long DEFAULT_BASE_BACKOFF_MS = 2_000L;
   private static final long MAX_BACKOFF_MS = 60_000L;
-  private static final int CONNECT_TIMEOUT_MS = 60_000;
   private static final int READ_TIMEOUT_MS = 1_800_000;   // 30 min — large bulk downloads (FAO zips)
   private static final String DEFAULT_USER_AGENT = "GovData/1.0";
 
@@ -63,10 +57,21 @@ public final class RetryableHttp {
   /** Signals a non-retryable, non-200 HTTP status so callers can apply their own handling. */
   public static final class HttpStatusException extends IOException {
     private final int status;
+    private final long retryAfterMs;
 
     public HttpStatusException(int status, String message) {
+      this(status, message, -1L);
+    }
+
+    public HttpStatusException(int status, String message, long retryAfterMs) {
       super(message);
       this.status = status;
+      this.retryAfterMs = retryAfterMs;
+    }
+
+    /** The response's Retry-After in milliseconds, or -1 when the server sent none. */
+    public long getRetryAfterMs() {
+      return retryAfterMs;
     }
 
     public int getStatus() {
@@ -75,15 +80,17 @@ public final class RetryableHttp {
   }
 
   /**
-   * Opens {@code url} and returns a connected {@link HttpURLConnection} at HTTP 200, retrying on
-   * 429/500/503 and connection errors per {@code rateLimit}. The caller owns the returned
-   * connection (read {@code getInputStream()} then {@code disconnect()}).
+   * Opens {@code url} through the {@link SharedHttpClient} and returns the {@link
+   * SharedHttpClient.Response} at HTTP 200, retrying on 429/5xx and connection errors per
+   * {@code rateLimit}. The caller owns the returned response (read {@code getInputStream()} then
+   * {@code disconnect()}). The read timeout applies to the response headers and to each stalled
+   * body read, so a long download that keeps flowing is not cut off.
    *
    * @param url             fully-resolved request URL
    * @param requestProps    request headers to set (override the default User-Agent if present)
    * @param rateLimit       the source's declared rate-limit config, or null for defaults
    * @param followRedirects whether to follow HTTP redirects
-   * @return a connected 200 connection
+   * @return a 200 response
    * @throws HttpStatusException on a non-retryable non-200 status (e.g. 404)
    * @throws IOException         if retries are exhausted
    */
@@ -120,7 +127,7 @@ public final class RetryableHttp {
     return false;
   }
 
-  public static HttpURLConnection openWithRetry(String url, Map<String, String> requestProps,
+  public static SharedHttpClient.Response openWithRetry(String url, Map<String, String> requestProps,
       HttpSourceConfig.RateLimitConfig rateLimit, boolean followRedirects) throws IOException {
     int maxRetries = rateLimit != null && rateLimit.getMaxRetries() > 0
         ? rateLimit.getMaxRetries() : DEFAULT_MAX_RETRIES;
@@ -131,31 +138,31 @@ public final class RetryableHttp {
     IOException last = null;
     for (int attempt = 0; attempt <= maxRetries; attempt++) {
       throttle(requestsPerSecond);
-      HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-      conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
-      conn.setReadTimeout(READ_TIMEOUT_MS);
-      conn.setInstanceFollowRedirects(followRedirects);
-      conn.setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
+      SharedHttpClient.Request request = new SharedHttpClient.Request("GET", url)
+          .setReadTimeoutMs(READ_TIMEOUT_MS)
+          .setFollowRedirects(followRedirects)
+          .setRequestProperty("User-Agent", DEFAULT_USER_AGENT);
       if (requestProps != null) {
         for (Map.Entry<String, String> h : requestProps.entrySet()) {
-          conn.setRequestProperty(h.getKey(), h.getValue());
+          request.setRequestProperty(h.getKey(), h.getValue());
         }
       }
+      SharedHttpClient.Response conn;
       int status;
       try {
+        conn = SharedHttpClient.execute(request);
         status = conn.getResponseCode();
       } catch (IOException e) {
-        conn.disconnect();
         last = e;
         if (attempt < maxRetries) {
           backoff(attempt, -1L, baseBackoffMs);
         }
         continue;
       }
-      if (status == HttpURLConnection.HTTP_OK) {
+      if (status == 200) {
         return conn;
       }
-      long retryAfterMs = retryAfterMillis(conn);
+      long retryAfterMs = parseRetryAfterMs(conn);
       conn.disconnect();
       if (isRetryableStatus(status, rateLimit)) {
         last = new HttpStatusException(status,
@@ -169,10 +176,24 @@ public final class RetryableHttp {
         continue;
       }
       throw new HttpStatusException(status,
-          "HTTP " + status + " from " + SecretRedaction.redact(url));
+          "HTTP " + status + " from " + SecretRedaction.redact(url), retryAfterMs);
     }
     throw last != null ? last
         : new IOException("retries exhausted for " + SecretRedaction.redact(url));
+  }
+
+  /**
+   * Waits before re-running a whole request whose response body failed mid-stream, using the same
+   * exponential backoff (from the source's {@code retryBackoffMs}) as {@link #openWithRetry}.
+   *
+   * @param attempt   zero-based number of the attempt that just failed
+   * @param rateLimit the source's declared rate-limit config
+   */
+  public static void backoffBeforeRetry(int attempt,
+      HttpSourceConfig.RateLimitConfig rateLimit) {
+    long baseBackoffMs = rateLimit.getRetryBackoffMs() > 0
+        ? rateLimit.getRetryBackoffMs() : DEFAULT_BASE_BACKOFF_MS;
+    backoff(attempt, -1L, baseBackoffMs);
   }
 
   /** Enforces a minimum spacing of {@code 1000/requestsPerSecond} ms between calls, JVM-wide. */
@@ -214,26 +235,26 @@ public final class RetryableHttp {
     }
   }
 
-  /** Parses the {@code Retry-After} response header to milliseconds; -1 if absent/unparseable. */
-  private static long retryAfterMillis(HttpURLConnection conn) {
-    String value = conn.getHeaderField("Retry-After");
+  /**
+   * Parses the {@code Retry-After} response header (delta-seconds or RFC 1123 HTTP-date) to
+   * milliseconds; -1 if absent/unparseable. Not capped: each caller applies its own cap.
+   */
+  public static long parseRetryAfterMs(SharedHttpClient.Response response) {
+    String value = response.getHeaderField("Retry-After");
     if (value == null || value.trim().isEmpty()) {
       return -1L;
     }
     value = value.trim();
     try {
       return Long.parseLong(value) * 1000L;   // delta-seconds form
-    // fallback-guard: allow retryAfterMillis's javadoc documents -1 as the sentinel for an absent/unparseable Retry-After header
+    // fallback-guard: allow parseRetryAfterMs's javadoc documents -1 as the sentinel for an absent/unparseable Retry-After header
     } catch (NumberFormatException notSeconds) {
-      try {                                    // HTTP-date form (RFC 1123)
-        long whenMs = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
-            .toInstant().toEpochMilli();
-        long deltaMs = whenMs - System.currentTimeMillis();
-        return deltaMs > 0 ? deltaMs : 0L;
-      // fallback-guard: allow same retryAfterMillis -1 sentinel contract as the delta-seconds branch above, for the HTTP-date parse failure
-      } catch (DateTimeParseException notDate) {
+      long whenMs = response.getHeaderFieldDate("Retry-After", -1L);   // HTTP-date form
+      if (whenMs < 0L) {
         return -1L;
       }
+      long deltaMs = whenMs - System.currentTimeMillis();
+      return deltaMs > 0 ? deltaMs : 0L;
     }
   }
 }

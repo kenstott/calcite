@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 
@@ -68,7 +69,7 @@ public class SimpleRefreshTest {
     }
 
     // Convert to JSON
-    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, schemaDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, "UNCHANGED", "SMART_CASING", null, schemaDir, null, new CrawlerConfiguration());
     assertEquals(1, jsonFiles.size());
     File jsonFile = jsonFiles.get(0);
 
@@ -95,7 +96,7 @@ public class SimpleRefreshTest {
     }
 
     // Re-convert to JSON
-    jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, schemaDir);
+    jsonFiles = HtmlToJsonConverter.convert(htmlFile, schemaDir, "UNCHANGED", "SMART_CASING", null, schemaDir, null, new CrawlerConfiguration());
     assertEquals(1, jsonFiles.size());
     jsonFile = jsonFiles.get(0);
 

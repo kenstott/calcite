@@ -198,7 +198,7 @@ public class ScotusReportsProvider implements StorageAwareDataProvider {
   // ---------------------------------------------------------------------------------------
 
   private static JsonNode getJson(String url, Map<String, String> headers) throws IOException {
-    File file = File.createTempFile("scotus-json-", ".json");
+    File file = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("scotus-json-", ".json");
     try {
       ZipDownloadUtils.downloadToFile(url, headers, file);
       try (InputStream in = new FileInputStream(file)) {
@@ -272,7 +272,7 @@ public class ScotusReportsProvider implements StorageAwareDataProvider {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("volume", Integer.valueOf(volume));
 
-    File modsFile = File.createTempFile("scotus-mods-", ".xml");
+    File modsFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("scotus-mods-", ".xml");
     try {
       ZipDownloadUtils.downloadToFile(
           API + "/packages/USREPORTS-" + volume + "/granules/" + granuleId + "/mods",
@@ -287,7 +287,7 @@ public class ScotusReportsProvider implements StorageAwareDataProvider {
     String pdfUrl = CONTENT + "/USREPORTS-" + volume + "/pdf/" + granuleId + ".pdf";
     final List<String> firstPages = new ArrayList<String>(ScotusDispositionParser.MAX_PAGES);
     final StringBuilder text = new StringBuilder();
-    File pdf = File.createTempFile("scotus-pdf-", ".pdf");
+    File pdf = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("scotus-pdf-", ".pdf");
     int pageCount;
     try {
       // The PDF is served from the content host, which needs no key; the key is not sent to it.

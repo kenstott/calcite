@@ -21,6 +21,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:disasters}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
@@ -71,6 +72,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   standard_partitions: &standard_partitions
     style: hive
@@ -125,8 +127,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 74
       contiguous: true
-      rowCount: 70423
-      checkedAt: "2026-10-08T05:55:20Z"
+      rowCount: 70434
+      checkedAt: "2026-11-05T20:19:12Z"
     partitions: *standard_partitions
     comment: >
       Canonical FEMA disaster-declaration record. One row per
@@ -300,8 +302,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 405755
-      checkedAt: "2026-10-08T05:55:24Z"
+      rowCount: 406310
+      checkedAt: "2026-11-05T20:19:13Z"
     partitions: *standard_partitions
     comment: >
       FEMA Public Assistance grants to state/local governments and nonprofits
@@ -439,7 +441,7 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 31039
-      checkedAt: "2026-10-08T05:55:27Z"
+      checkedAt: "2026-11-05T20:19:13Z"
     partitions: *standard_partitions
     comment: >
       FEMA Hazard Mitigation Assistance projects (program_area: HMGP, BRIC,
@@ -574,7 +576,7 @@ partitionedTables:
       distinctYears: 49
       contiguous: true
       rowCount: 2755527
-      checkedAt: "2026-10-08T05:55:33Z"
+      checkedAt: "2026-11-05T20:19:16Z"
     partitions: *standard_partitions
     comment: >
       Paid NFIP flood-insurance claims — amount_paid_building,
@@ -736,8 +738,8 @@ partitionedTables:
       distinctYears: 15
       contiguous: false
       years: [2010, 2011, 2013, 2014, 2015, 2016, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
-      rowCount: 2485000
-      checkedAt: "2026-10-08T05:55:36Z"
+      rowCount: 2415000
+      checkedAt: "2026-11-05T20:19:17Z"
     partitions: *standard_partitions
     dqRowLimit: 50000
     comment: >
@@ -1068,6 +1070,697 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # IHP HOUSING ASSISTANCE — FEMA OpenFEMA HousingAssistanceOwners / Renters (v2)
+  # ---------------------------------------------------------------------------
+  - name: ihp_housing_assistance_owners
+    # Latest-snapshot table (no year axis): OpenFEMA republishes the full dataset as a
+    # replace, and the rows carry only a disaster number (the declaration date is in
+    # disaster_declarations). The hash probe skips the write when nothing changed;
+    # dataset_type: snapshot makes a run that writes zero rows fail loudly.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=ihp_housing_assistance_owners/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA Individuals and Households Program (IHP) housing assistance to HOMEOWNERS, one
+      row per disaster number x county x city x ZIP (about 160,000 rows): valid
+      registrations, FEMA inspections and the inspected damage in dollars and in bands,
+      and the assistance approved (repair/replacement, rental, other needs). total_damage
+      and the inspected_damage bands are FEMA's own measure of how much housing was
+      damaged, which a declaration alone cannot tell (a few homes or thousands). Joins to
+      disaster_declarations on disaster_number and to geo.counties on county_fips.
+      county_fips is taken from the declaration of the same disaster number and county
+      name in disaster_declarations' source (DisasterDeclarationsSummaries designated
+      areas), which is how FEMA spells the area; it is null for tribal areas (FEMA gives
+      them no county) and for area names no declaration lists, and those rows still carry
+      the ZIP code to join geo.zip_county_crosswalk. The county is as the applicant reported
+      it (the system infers it from the address and the applicant may override it).
+      Aggregate to county with GROUP BY disaster_number, county_fips; the view
+      disasters_ihp_housing_by_county does that for owners and renters together. Declared
+      disasters from DR-1439 (November 2002) on; only registrations in Individual Assistance
+      declared counties appear, so a county that was not IA-declared has no row. Source:
+      fema.gov/api/open/v2/HousingAssistanceOwners.
+
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - ihp_housing_assistance_owners
+
+    columns:
+      - name: disaster_number
+        type: integer
+        nullable: true
+        comment: 'FEMA disaster number (FK to disaster_declarations.disaster_number)'
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: '2-letter USPS state abbreviation of the state where the disaster was declared (FK to geo.state_ref)'
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: 'County as FEMA spells it, with its type in parentheses (for example Aransas (County), Orleans (Parish), San Juan (Municipio))'
+      - name: city
+        type: string
+        nullable: true
+        comment: 'City of the registrant address'
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: '5-digit ZIP code of the registrant address (FK to geo.zcta_ref)'
+      - name: valid_registrations
+        type: integer
+        nullable: true
+        comment: >-
+          Valid FEMA registrations by owners in this disaster, county and ZIP (a valid
+          registration is in an Individual Assistance declared county and inside the
+          registration period)
+      - name: average_inspected_damage
+        type: double
+        nullable: true
+        comment: 'Average FEMA-inspected damage (USD) of the owners in this row who had a completed inspection'
+      - name: total_inspected
+        type: integer
+        nullable: true
+        comment: 'Owners in this row who received a FEMA inspection'
+      - name: total_damage
+        type: double
+        nullable: true
+        comment: 'Total damage recorded at the latest inspection (USD): FEMA Verified Loss on the home plus personal property; transportation damage not included'
+      - name: inspected_no_damage
+        type: integer
+        nullable: true
+        comment: 'Inspected owners with no damage recorded'
+      - name: inspected_damage_1_to_10000
+        type: integer
+        nullable: true
+        comment: 'Inspected owners with FEMA-inspected damage between $1 and $10,000'
+      - name: inspected_damage_10001_to_20000
+        type: integer
+        nullable: true
+        comment: 'Inspected owners with FEMA-inspected damage between $10,001 and $20,000'
+      - name: inspected_damage_20001_to_30000
+        type: integer
+        nullable: true
+        comment: 'Inspected owners with FEMA-inspected damage between $20,001 and $30,000'
+      - name: inspected_damage_over_30000
+        type: integer
+        nullable: true
+        comment: 'Inspected owners with FEMA-inspected damage over $30,000'
+      - name: approved_for_assistance
+        type: integer
+        nullable: true
+        comment: 'Applicants approved for IHP assistance'
+      - name: total_approved_ihp_amount
+        type: double
+        nullable: true
+        comment: 'Total IHP assistance approved (USD), housing assistance plus other needs'
+      - name: repair_replace_amount
+        type: double
+        nullable: true
+        comment: 'Repair and replacement assistance approved (USD)'
+      - name: rental_amount
+        type: double
+        nullable: true
+        comment: 'Rental assistance approved (USD)'
+      - name: other_needs_amount
+        type: double
+        nullable: true
+        comment: 'Other Needs Assistance approved (USD): personal property, transportation, medical, dental, funeral, tools, moving and storage'
+      - name: approved_1_to_10000
+        type: integer
+        nullable: true
+        comment: 'Registrations granted between $1 and $10,000'
+      - name: approved_10001_to_25000
+        type: integer
+        nullable: true
+        comment: 'Registrations granted between $10,001 and $25,000'
+      - name: approved_25001_to_max
+        type: integer
+        nullable: true
+        comment: 'Registrations granted between $25,001 and the maximum grant'
+      - name: total_max_grants
+        type: integer
+        nullable: true
+        comment: 'Registrations granted the maximum IHP grant'
+      - name: id
+        type: string
+        nullable: false
+        comment: OpenFEMA row UUID (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v2/HousingAssistanceOwners"
+      method: GET
+      parameters:
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "HousingAssistanceOwners"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+        # One run pages 148,000-161,000 rows (about 160 requests) and OpenFEMA answers 503
+        # (its "technical difficulties" page) for 20-60 seconds at a time; the default 1 s
+        # backoff exhausts all retries inside one outage (observed 2026-10-16).
+        retryBackoffMs: 15000
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaHousingAssistanceOwnersTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ihp_housing_assistance_owners/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: ihp_housing_assistance_owners
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: ihp_housing_assistance_renters
+    # Latest-snapshot table (no year axis): OpenFEMA republishes the full dataset as a
+    # replace, and the rows carry only a disaster number (the declaration date is in
+    # disaster_declarations). The hash probe skips the write when nothing changed;
+    # dataset_type: snapshot makes a run that writes zero rows fail loudly.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=ihp_housing_assistance_renters/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA Individuals and Households Program (IHP) housing assistance to RENTERS, one row
+      per disaster number x county x city x ZIP (about 148,000 rows): valid registrations,
+      FEMA inspections with a degree of damage (none, moderate, major, substantial; renters
+      get no dollar damage figure because FEMA inspects only the items they own), and the
+      assistance approved (rental, other needs; repair/replacement is not available to
+      renters). Pair with ihp_housing_assistance_owners for the owner side. Joins to
+      disaster_declarations on disaster_number and to geo.counties on county_fips.
+      county_fips is taken from the declaration of the same disaster number and county
+      name in disaster_declarations' source (DisasterDeclarationsSummaries designated
+      areas), which is how FEMA spells the area; it is null for tribal areas (FEMA gives
+      them no county) and for area names no declaration lists, and those rows still carry
+      the ZIP code to join geo.zip_county_crosswalk. The county is as the applicant reported
+      it (the system infers it from the address and the applicant may override it).
+      Aggregate to county with GROUP BY disaster_number, county_fips; the view
+      disasters_ihp_housing_by_county does that for owners and renters together. Declared
+      disasters from DR-1439 (November 2002) on; only registrations in Individual Assistance
+      declared counties appear, so a county that was not IA-declared has no row. Source:
+      fema.gov/api/open/v2/HousingAssistanceRenters.
+
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - ihp_housing_assistance_renters
+
+    columns:
+      - name: disaster_number
+        type: integer
+        nullable: true
+        comment: 'FEMA disaster number (FK to disaster_declarations.disaster_number)'
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: '2-letter USPS state abbreviation of the state where the disaster was declared (FK to geo.state_ref)'
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: county_name
+        type: string
+        nullable: true
+        comment: 'County as FEMA spells it, with its type in parentheses (for example Aransas (County), Orleans (Parish), San Juan (Municipio))'
+      - name: city
+        type: string
+        nullable: true
+        comment: 'City of the registrant address'
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: '5-digit ZIP code of the registrant address (FK to geo.zcta_ref)'
+      - name: valid_registrations
+        type: integer
+        nullable: true
+        comment: >-
+          Valid FEMA registrations by renters in this disaster, county and ZIP (a valid
+          registration is in an Individual Assistance declared county and inside the
+          registration period)
+      - name: total_inspected
+        type: integer
+        nullable: true
+        comment: 'Renters in this row who received a FEMA inspection'
+      - name: inspected_no_damage
+        type: integer
+        nullable: true
+        comment: 'Inspected renters deemed to have no damage (renters get a degree of damage, not a full home inspection)'
+      - name: moderate_damage
+        type: integer
+        nullable: true
+        comment: 'Inspected renters deemed to have moderate damage'
+      - name: major_damage
+        type: integer
+        nullable: true
+        comment: 'Inspected renters deemed to have major damage'
+      - name: substantial_damage
+        type: integer
+        nullable: true
+        comment: 'Inspected renters deemed to have substantial damage'
+      - name: approved_for_assistance
+        type: integer
+        nullable: true
+        comment: 'Applicants approved for IHP assistance'
+      - name: total_approved_ihp_amount
+        type: double
+        nullable: true
+        comment: 'Total IHP assistance approved (USD), housing assistance plus other needs'
+      - name: repair_replace_amount
+        type: double
+        nullable: true
+        comment: 'Repair and replacement assistance approved (USD)'
+      - name: rental_amount
+        type: double
+        nullable: true
+        comment: 'Rental assistance approved (USD)'
+      - name: other_needs_amount
+        type: double
+        nullable: true
+        comment: 'Other Needs Assistance approved (USD): personal property, transportation, medical, dental, funeral, tools, moving and storage'
+      - name: approved_1_to_10000
+        type: integer
+        nullable: true
+        comment: 'Registrations granted between $1 and $10,000'
+      - name: approved_10001_to_25000
+        type: integer
+        nullable: true
+        comment: 'Registrations granted between $10,001 and $25,000'
+      - name: approved_25001_to_max
+        type: integer
+        nullable: true
+        comment: 'Registrations granted between $25,001 and the maximum grant'
+      - name: total_max_grants
+        type: integer
+        nullable: true
+        comment: 'Registrations granted the maximum IHP grant'
+      - name: id
+        type: string
+        nullable: false
+        comment: OpenFEMA row UUID (PK)
+
+    source:
+      type: http
+      url: "https://www.fema.gov/api/open/v2/HousingAssistanceRenters"
+      method: GET
+      parameters:
+        $orderby: "id"
+        $inlinecount: "allpages"
+      response:
+        format: json
+        dataPath: "HousingAssistanceRenters"
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$top"
+          offsetParam: "$skip"
+          countPath: "metadata.count"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 4
+        # One run pages 148,000-161,000 rows (about 160 requests) and OpenFEMA answers 503
+        # (its "technical difficulties" page) for 20-60 seconds at a time; the default 1 s
+        # backoff exhausts all retries inside one outage (observed 2026-10-16).
+        retryBackoffMs: 15000
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.FemaHousingAssistanceRentersTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ihp_housing_assistance_renters/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: ihp_housing_assistance_renters
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: ihp_valid_registrations_by_county
+    # Latest-snapshot table (no year axis): OpenFEMA republishes the full dataset as a
+    # replace, and the rows carry only a disaster number (the declaration date is in
+    # disaster_declarations). The hash probe skips the write when nothing changed;
+    # dataset_type: snapshot makes a run that writes zero rows fail loudly. The provider
+    # fetches twice per batch (hash, then write); the second fetch is served from rawCache.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=ihp_valid_registrations_by_county/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      FEMA Individuals and Households Program (IHP) valid registrations aggregated to one row
+      per disaster number x county (about 11,000 rows over the 634 disasters from DR-1439,
+      November 2002, on), from OpenFEMA IndividualsAndHouseholdsProgramValidRegistrations v2
+      (26.2 million registration-level rows). Per row: registrations and their split by
+      owner/renter, primary residence, reported home damage, destroyed, flood damage and
+      FEMA inspection; eligibility and award counts for IHP, Housing Assistance, Other Needs
+      Assistance, SBA, Transitional Sheltering; homeowner and flood insurance; the
+      self-reported gross income bands and household size; and the dollars awarded, FEMA
+      verified loss and unmet need. Adds to ihp_housing_assistance_owners/_renters (which
+      are disaster x county x city x ZIP, keyed on FEMA's area name): income bands,
+      insurance, household size, awards by type, destroyed and unmet need exist only here;
+      the county is the damaged dwelling's own county, so a tribal area's registrations are
+      assigned to the counties they sit in (the owners/renters tables leave those with a
+      null county); and the registrations are not limited to the rows the housing-assistance
+      tables publish. Joins to disaster_declarations on disaster_number and to geo.counties
+      on county_fips. county_fips is the registration's own fips; about 3 percent of the
+      registrations (whole counties of some disasters) carry none and take the code from
+      the declaration of the same disaster number, state and area name (counted in
+      fips_from_declaration_registrations); those a declaration does not resolve to one
+      county have a null county_fips and one row per state and area name (80 rows, 1.0
+      percent of registrations). Nearly all of those are FEMA's catch-all disaster numbers
+      6001, 6405, 6501, 6502 and 9801-9808 (about 264,000 registrations, 1.0 percent, among
+      them 199,864 in Camden County GA under DR-6502): they have no declaration, so they
+      join to nothing in disaster_declarations and carry dates that do not match a disaster.
+      Only registrations in Individual Assistance declared counties appear. Amounts are sums over registrations and are 0, never null,
+      when nothing was awarded. Source: the OpenFEMA bulk Parquet file of the dataset
+      (fema.gov/about/reports-and-data/openfema/v2/
+      IndividualsAndHouseholdsProgramValidRegistrationsV2.parquet), aggregated with DuckDB.
+
+    dqRowLimit: 200000
+
+    dimensions:
+      type:
+        - ihp_valid_registrations_by_county
+
+    columns:
+      - name: disaster_number
+        type: integer
+        nullable: false
+        comment: 'FEMA disaster number (FK to disaster_declarations.disaster_number)'
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: >-
+          2-letter USPS state abbreviation of the damaged dwellings (most frequent value in the
+          row)
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: >-
+          2-digit state FIPS code (FK to geo.state_ref); null only when neither the
+          registrations nor the declarations give a code
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: >-
+          5-digit county FIPS code of the damaged dwellings (FK to geo.counties); null for the
+          registrations of a tribal or statewide area that no county code could be assigned to,
+          which form one row per area name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: >-
+          County as FEMA spells it, with its type in parentheses; for a tribal area the area
+          name (most frequent value in the row)
+      - name: registrations
+        type: long
+        nullable: false
+        comment: >-
+          Valid FEMA registrations in this disaster and county (a valid registration is in an
+          Individual Assistance declared county and inside the registration period)
+      - name: fips_from_declaration_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations that carry no county code of their own and got it from the declaration
+          of the same disaster number, state and area name (the housing-assistance tables'
+          rule); the rest of the row's registrations carry their own
+      - name: owner_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations by owners of the damaged dwelling'
+      - name: renter_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations by renters of the damaged dwelling'
+      - name: tenure_unknown_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations where FEMA records neither owner nor renter'
+      - name: primary_residence_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations where the damaged dwelling is the applicant's primary residence
+      - name: home_damage_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations where the applicant reported home damage'
+      - name: destroyed_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations where FEMA marked the home destroyed (the majority of two or more major
+          structural components needs replacing)
+      - name: flood_damage_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with flood damage recorded'
+      - name: inspections_issued
+        type: long
+        nullable: false
+        comment: 'Registrations for which a FEMA inspection was issued'
+      - name: inspections_returned
+        type: long
+        nullable: false
+        comment: 'Registrations for which the issued FEMA inspection was performed'
+      - name: ihp_eligible_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations eligible for the Individuals and Households Program (received a Housing
+          Assistance and/or Other Needs Assistance award)
+      - name: ihp_awarded_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with a total IHP award above zero'
+      - name: ha_eligible_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations eligible for Housing Assistance'
+      - name: ona_eligible_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations eligible for Other Needs Assistance'
+      - name: sba_approved_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations approved for a Small Business Administration loan (approval, not
+          acceptance)
+      - name: tsa_eligible_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations eligible for Transitional Sheltering Assistance'
+      - name: tsa_checked_in_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations whose applicant checked in to a Transitional Sheltering Assistance
+          property
+      - name: homeowners_insurance_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations whose applicant reports homeowner''s insurance'
+      - name: flood_insurance_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations whose applicant reports flood insurance'
+      - name: income_zero_registrations
+        type: long
+        nullable: false
+        comment: >-
+          Registrations whose self-reported gross income is recorded as 0 (a code outside the
+          six published ranges)
+      - name: income_under_15000_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with self-reported gross income under $15,000'
+      - name: income_15000_to_30000_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with self-reported gross income $15,000-$30,000'
+      - name: income_30001_to_60000_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with self-reported gross income $30,001-$60,000'
+      - name: income_60001_to_120000_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with self-reported gross income $60,001-$120,000'
+      - name: income_120001_to_175000_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with self-reported gross income $120,001-$175,000'
+      - name: income_over_175000_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with self-reported gross income over $175,000'
+      - name: income_unreported_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations with no gross income recorded'
+      - name: household_1_person_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations from one-person households at the time of the disaster'
+      - name: household_2_person_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations from two-person households'
+      - name: household_3_person_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations from three-person households'
+      - name: household_4_person_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations from four-person households'
+      - name: household_5_person_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations from five-person households'
+      - name: household_over_5_person_registrations
+        type: long
+        nullable: false
+        comment: 'Registrations from households of more than five people'
+      - name: ihp_amount
+        type: double
+        nullable: false
+        comment: 'Total IHP award (USD): Housing Assistance plus Other Needs Assistance'
+      - name: ha_amount
+        type: double
+        nullable: false
+        comment: >-
+          Housing Assistance awarded (USD): includes repair, replacement and rental assistance
+          and other housing awards, so it is not the sum of those three columns
+      - name: ona_amount
+        type: double
+        nullable: false
+        comment: 'Other Needs Assistance awarded (USD)'
+      - name: repair_amount
+        type: double
+        nullable: false
+        comment: 'Home repair assistance awarded (USD)'
+      - name: replacement_amount
+        type: double
+        nullable: false
+        comment: 'Home replacement assistance awarded (USD)'
+      - name: rental_assistance_amount
+        type: double
+        nullable: false
+        comment: 'Rental assistance awarded (USD), to owners and renters'
+      - name: personal_property_amount
+        type: double
+        nullable: false
+        comment: 'Other Needs Assistance awarded for personal property (USD)'
+      - name: transient_accommodation_amount
+        type: double
+        nullable: false
+        comment: 'Transient accommodations amount (USD)'
+      - name: flood_insurance_premium_amount
+        type: double
+        nullable: false
+        comment: 'Flood insurance premiums paid for the applicants by FEMA (USD)'
+      - name: real_property_verified_loss
+        type: double
+        nullable: false
+        comment: >-
+          FEMA-verified disaster-caused damage to real property (USD): floors, walls, access
+          roads, electrical, plumbing, HVAC; land damage is not included
+      - name: personal_property_verified_loss
+        type: double
+        nullable: false
+        comment: >-
+          FEMA-verified disaster-caused damage to personal property (USD): appliances, furniture
+      - name: unmet_need_real_property
+        type: double
+        nullable: false
+        comment: >-
+          FEMA real property verified loss minus the real property award (USD), summed over the
+          registrations
+      - name: unmet_need_personal_property
+        type: double
+        nullable: false
+        comment: >-
+          FEMA personal property verified loss minus the personal property award (USD), summed
+          over the registrations
+      - name: flood_damage_amount
+        type: double
+        nullable: false
+        comment: >-
+          FEMA-determined real and personal property damage due to flooding (USD)
+
+    source:
+      type: http
+      # Placeholder URL: FemaIhpRegistrationsProvider fetches the bulk Parquet file through
+      # rawCache itself (one ~760 MB download, resumed if the connection drops) and returns
+      # the disaster x county aggregate; HttpSource's own fetch path is never used.
+      url: "https://www.fema.gov/about/reports-and-data/openfema/v2/IndividualsAndHouseholdsProgramValidRegistrationsV2.parquet"
+      method: GET
+      response:
+        format: json  # ignored: FemaIhpRegistrationsProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.disasters.FemaIhpRegistrationsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=ihp_valid_registrations_by_county/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: ihp_valid_registrations_by_county
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # STORM EVENTS — NOAA NCEI Storm Events bulk CSV.gz (streaming, per year)
   # ---------------------------------------------------------------------------
   - name: storm_events
@@ -1077,8 +1770,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 23
       contiguous: true
-      rowCount: 1427137
-      checkedAt: "2026-10-08T05:55:40Z"
+      rowCount: 1438563
+      checkedAt: "2026-11-05T20:19:19Z"
     partitions: *standard_partitions
     comment: >
       NOAA NCEI Storm Events Database — one row per storm event detail record
@@ -1118,6 +1811,15 @@ partitionedTables:
       to geo.counties silently drops these rows, expect the gap rather than treating it as a
       join bug.
 
+      Zone-coded events (cz_type = 'Z', ~41% of rows and ~half of 2011-2023 property damage —
+      mostly hurricane, wildfire, coastal flood and storm-surge events) have NULL county_fips by
+      design: NOAA records an NWS zone number, not a county. cz_fips keeps that zone number and
+      nws_zone_county maps it to counties: join on s.state_fips = z.state_fips AND s.cz_fips =
+      z.zone. About 10% of zones span more than one county, so the join can fan out one event
+      into several counties — damage summed after that join double counts unless allocated
+      (e.g. divide by the zone's county count). Zone numbering follows the current NWS file;
+      zones NWS retired or renumbered since the event do not match.
+
     dimensions:
       type:
         - storm_events
@@ -1154,6 +1856,18 @@ partitionedTables:
         type: string
         nullable: true
         comment: C (county), Z (NWS zone), M (marine)
+      - name: cz_fips
+        type: string
+        nullable: true
+        comment: >
+          NOAA's CZ_FIPS, zero-padded to 3 digits. A county FIPS suffix when cz_type = 'C'; the NWS
+          public-zone number when cz_type = 'Z' (county_fips is NULL for those rows). Zone rows
+          join to nws_zone_county on (state_fips, cz_fips = zone) to find the county or counties
+          the zone covers.
+      - name: cz_name
+        type: string
+        nullable: true
+        comment: NOAA's CZ_NAME — county, NWS zone, or marine-area name for the row
       - name: magnitude
         type: double
         nullable: true
@@ -1234,7 +1948,16 @@ partitionedTables:
   # WILDFIRE PERIMETERS — NIFC WFIGS ArcGIS (streaming: resultOffset + geometry)
   # ---------------------------------------------------------------------------
   - name: wildfire_perimeters
+    timeColumn: fire_year  # observation time; this table has no column named 'year'
     pattern: "type=wildfire_perimeters/*.parquet"
+    observedCoverage:  # auto-generated by update-coverage-metadata.sh — do not hand-edit
+      minYear: 2016
+      maxYear: 2026
+      distinctYears: 10
+      contiguous: false
+      years: [2016, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+      rowCount: 42671
+      checkedAt: "2026-10-17T14:00:00Z"
     partitions: *static_partitions
     comment: >
       NIFC WFIGS Interagency wildfire perimeters — one row per fire perimeter
@@ -1382,6 +2105,111 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
         tableName: wildfire_perimeters
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  - name: nws_zone_county
+    # NWS republishes the zone-county correlation file a few times a year; the hash probe skips the
+    # write when unchanged. snapshot makes a zero-row run fail loudly.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=nws_zone_county/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NOAA National Weather Service zone-to-county correlation file — one row per (NWS public
+      forecast zone, county) pair, ~4,800 rows covering ~3,980 zones. Crosswalk for
+      storm_events rows with cz_type = 'Z', whose county_fips is NULL: join storm_events.state_fips
+      = state_fips AND storm_events.cz_fips = zone. A zone covering several counties appears
+      once per county (~10% of zones), so the join fans out; count rows per (state_abbr, zone)
+      to allocate. Built from every NWS release still downloadable (weather.gov/gis/ZoneCounty
+      lists the current one; the Mar 2024 file is also still served): each zone takes its
+      counties from the newest release containing it, recorded in release, so zones NWS has
+      since retired stay joinable. Zones absent from all of those releases (e.g. Guam, parts of
+      Louisiana) are not covered. zone_lat/zone_lon are NWS's zone centroid, repeated on each county row.
+      Source: weather.gov (NWS), keyless.
+
+    dimensions:
+      type:
+        - nws_zone_county
+
+    columns:
+      - <<: *state_fips_column
+      - <<: *county_fips_column
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: 2-letter USPS state abbreviation (NWS STATE)
+      - name: zone
+        type: string
+        nullable: true
+        comment: 3-digit NWS public-zone number within the state (matches storm_events.cz_fips)
+      - name: state_zone
+        type: string
+        nullable: true
+        comment: State abbreviation + zone number, e.g. NM201
+      - name: zone_name
+        type: string
+        nullable: true
+        comment: NWS zone name
+      - name: county_name
+        type: string
+        nullable: true
+        comment: County name (no state suffix)
+      - name: cwa
+        type: string
+        nullable: true
+        comment: NWS county warning area (forecast office id)
+      - name: time_zone
+        type: string
+        nullable: true
+        comment: NWS time zone code
+      - name: zone_lat
+        type: double
+        nullable: true
+        comment: Zone centroid latitude
+      - name: zone_lon
+        type: double
+        nullable: true
+        comment: Zone centroid longitude
+      - name: release
+        type: string
+        nullable: true
+        comment: >
+          Date (yyyy-mm-dd) of the NWS correlation-file release that supplied this zone. A zone
+          retired in a later release keeps its counties from the last release that listed it.
+
+    source:
+      type: http
+      url: "https://www.weather.gov/gis/ZoneCounty"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # NwsZoneCountyTransformer resolves the latest release file from this listing page
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.NwsZoneCountyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nws_zone_county/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: nws_zone_county
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
@@ -1812,6 +2640,51 @@ constraints:
         targetColumns: [zcta]
         comment: 5-digit reported ZIP to the conformed ZCTA dimension
 
+  ihp_housing_assistance_owners:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit registrant ZIP to the conformed ZCTA dimension
+
+  ihp_housing_assistance_renters:
+    primaryKey: [id]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+      - columns: [zip_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: zcta_ref
+        targetColumns: [zcta]
+        comment: 5-digit registrant ZIP to the conformed ZCTA dimension
+
+  ihp_valid_registrations_by_county:
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: geo
+        targetTable: state_ref
+        targetColumns: [state_fips]
+      - columns: [county_fips]
+        targetSchema: geo
+        targetTable: counties
+        targetColumns: [county_fips]
+
   storm_events:
     primaryKey: [event_id]
     foreignKeys:
@@ -1867,6 +2740,9 @@ constraints:
 views:
 
   - name: disasters_declarations_by_state_year
+    # year passes through disaster_declarations.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Annual disaster-declaration counts by state, incident_type, and year —
       disaster_count plus counts of declarations with IA (Individual
@@ -1888,6 +2764,9 @@ views:
       GROUP BY d.year, d.state_fips, d.incident_type
 
   - name: disasters_pa_obligated_by_county
+    # year passes through public_assistance_projects.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Public Assistance federal obligations aggregated by county, incident_type,
       and declaration year — project_count, total_project_amount, and
@@ -1907,6 +2786,9 @@ views:
       GROUP BY p.year, p.state_fips, p.county_fips, p.incident_type
 
   - name: disasters_nfip_claims_by_county
+    # year passes through nfip_claims.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Paid NFIP flood claims aggregated by county and year of loss —
       claim_count, total_paid_building, total_paid_contents, and total_paid
@@ -1925,6 +2807,9 @@ views:
       GROUP BY c.year, c.state_fips, c.county_fips
 
   - name: disasters_storm_impact_by_county
+    # year passes through storm_events.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Storm-event human and economic impact aggregated by county and year —
       event_count, total_deaths, total_injuries, total_property_damage, and
@@ -1943,3 +2828,46 @@ views:
         SUM(s.damage_crops)               AS total_crop_damage
       FROM storm_events s
       GROUP BY s.year, s.state_fips, s.county_fips
+
+  - name: disasters_ihp_housing_by_county
+    comment: >
+      FEMA Individuals and Households Program housing assistance rolled up to county and
+      disaster, owners and renters together: valid_registrations, inspected homes
+      (owners_inspected, renters_inspected), owners_total_damage (USD, FEMA-inspected, owners
+      only because renters have no dollar damage), owners_major_damage_over_30000 (owners
+      whose inspected damage exceeded $30,000, the closest count to destroyed or
+      uninhabitable homes), approved_for_assistance and total_approved_ihp_amount (USD). The
+      county-level measure of how much housing a disaster damaged. Rows with a null
+      county_fips (tribal areas, area names no declaration lists) are left out here; they
+      stay in ihp_housing_assistance_owners and _renters with their ZIP codes. Join to
+      disaster_declarations on disaster_number for the date and incident type, and to
+      census.pep_components_of_change on county_fips and year for domestic migration.
+    sql: >
+      SELECT
+        u.disaster_number,
+        u.state_fips,
+        u.county_fips,
+        SUM(u.valid_registrations)         AS valid_registrations,
+        SUM(u.owners_inspected)            AS owners_inspected,
+        SUM(u.renters_inspected)           AS renters_inspected,
+        SUM(u.owners_total_damage)         AS owners_total_damage,
+        SUM(u.owners_major_damage_over_30000) AS owners_major_damage_over_30000,
+        SUM(u.approved_for_assistance)     AS approved_for_assistance,
+        SUM(u.total_approved_ihp_amount)   AS total_approved_ihp_amount
+      FROM (
+        SELECT disaster_number, state_fips, county_fips, valid_registrations,
+               total_inspected AS owners_inspected, 0 AS renters_inspected,
+               total_damage AS owners_total_damage,
+               inspected_damage_over_30000 AS owners_major_damage_over_30000,
+               approved_for_assistance, total_approved_ihp_amount
+        FROM ihp_housing_assistance_owners
+        WHERE county_fips IS NOT NULL
+        UNION ALL
+        SELECT disaster_number, state_fips, county_fips, valid_registrations,
+               0 AS owners_inspected, total_inspected AS renters_inspected,
+               0 AS owners_total_damage, 0 AS owners_major_damage_over_30000,
+               approved_for_assistance, total_approved_ihp_amount
+        FROM ihp_housing_assistance_renters
+        WHERE county_fips IS NOT NULL
+      ) u
+      GROUP BY u.disaster_number, u.state_fips, u.county_fips

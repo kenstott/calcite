@@ -24,7 +24,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -271,6 +274,100 @@ class ChunkOrganizerVcStagingTest {
 
     assertTrue(ChunkOrganizer.sourceNeedsSweep(conn, "owasp_top10"),
         "completed_at moved past the pre-scan watermark -- the next sweep must rescan");
+  }
+
+  // ========================================================================
+  // Per-year watermarks: a year with no row of its own inherits the source-level one
+  // ========================================================================
+
+  private static final String FAKE_YEAR_SOURCE = "__year_watermark_test_source__";
+
+  private static void resetFakeYearSource() throws Exception {
+    for (String table : new String[] {"vc_sync_state", "vc_sync_state_year"}) {
+      try (PreparedStatement ps = conn.prepareStatement(
+          "DELETE FROM " + table + " WHERE source_table = ?")) {
+        ps.setString(1, FAKE_YEAR_SOURCE);
+        ps.executeUpdate();
+      }
+    }
+    conn.commit();
+  }
+
+  private static Map<Integer, Long> yearsCompletedAt(long y2016, long y2017) {
+    Map<Integer, Long> years = new HashMap<Integer, Long>();
+    years.put(2016, y2016);
+    years.put(2017, y2017);
+    return years;
+  }
+
+  @Test void yearWithoutOwnRowInheritsTheSourceLevelWatermark() throws Exception {
+    resetFakeYearSource();
+    // The source finished a whole sweep (as of 1000) before per-year rows existed. 2016 completed
+    // at 900, before that sweep, so it is already covered; 2017 completed at 1100, after it.
+    ChunkOrganizer.markSwept(conn, "test", FAKE_YEAR_SOURCE, 1000L);
+
+    Set<Integer> changed = ChunkOrganizer.selectChangedYears(conn, FAKE_YEAR_SOURCE,
+        yearsCompletedAt(900L, 1100L));
+
+    assertEquals(Collections.singleton(2017), changed);
+    resetFakeYearSource();
+  }
+
+  @Test void neverSweptSourceScansEveryYear() throws Exception {
+    resetFakeYearSource();
+
+    Set<Integer> changed = ChunkOrganizer.selectChangedYears(conn, FAKE_YEAR_SOURCE,
+        yearsCompletedAt(900L, 1100L));
+
+    assertEquals(new HashSet<Integer>(Arrays.asList(2016, 2017)), changed);
+    resetFakeYearSource();
+  }
+
+  @Test void yearsOwnWatermarkWinsOverTheSourceLevelOne() throws Exception {
+    resetFakeYearSource();
+    ChunkOrganizer.markSwept(conn, "test", FAKE_YEAR_SOURCE, 1000L);
+    // 2017 completed at 1100 (after the source-level sweep) but its own sweep already covered it.
+    ChunkOrganizer.markYearSwept(conn, "test", FAKE_YEAR_SOURCE, 2017, 1100L);
+
+    Set<Integer> changed = ChunkOrganizer.selectChangedYears(conn, FAKE_YEAR_SOURCE,
+        yearsCompletedAt(900L, 1100L));
+
+    assertTrue(changed.isEmpty(), "both years are covered: " + changed);
+    resetFakeYearSource();
+  }
+
+  // ========================================================================
+  // Snapshot check: an ETL re-run that committed nothing does not re-queue a source
+  // ========================================================================
+
+  @Test void sourceWithNoCommitSinceTheLastSweepIsNotRescanned() throws Exception {
+    String accessKey = System.getenv("AWS_ACCESS_KEY_ID");
+    Assumptions.assumeTrue(accessKey != null, "AWS_ACCESS_KEY_ID not set -- skipping");
+    String base = System.getenv("GOVDATA_PARQUET_DIR");
+    Assumptions.assumeTrue(base != null, "GOVDATA_PARQUET_DIR not set -- skipping");
+    try (PreparedStatement ps = conn.prepareStatement(
+        "DELETE FROM vc_sync_state WHERE source_table = 'owasp_top10'")) {
+      ps.executeUpdate();
+    }
+    conn.commit();
+    String loc = base + "/cyber_threat/owasp_top10";
+
+    try (Connection duckdb = openStandaloneDuckDbForTest()) {
+      long latestCommit = ChunkOrganizer.selectLatestSnapshotMillis(duckdb, loc);
+      assertTrue(latestCommit > 0 && latestCommit <= System.currentTimeMillis(),
+          "latest snapshot time must be a real past instant: " + latestCommit);
+
+      assertTrue(ChunkOrganizer.sourceHasCommitsSinceLastSweep(duckdb, conn, loc, "owasp_top10"),
+          "never swept -- must scan");
+
+      ChunkOrganizer.markSwept(conn, "cyber_threat", "owasp_top10", latestCommit);
+      assertFalse(ChunkOrganizer.sourceHasCommitsSinceLastSweep(duckdb, conn, loc, "owasp_top10"),
+          "swept at the latest commit -- nothing new");
+
+      ChunkOrganizer.markSwept(conn, "cyber_threat", "owasp_top10", latestCommit - 1);
+      assertTrue(ChunkOrganizer.sourceHasCommitsSinceLastSweep(duckdb, conn, loc, "owasp_top10"),
+          "a commit after the swept watermark -- must scan");
+    }
   }
 
   // ========================================================================

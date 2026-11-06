@@ -14,19 +14,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,8 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("unit")
 class PostProcessExecutorTest {
 
-  private static final Logger LOGGER =
-      LoggerFactory.getLogger(PostProcessExecutorTest.class);
+  private static final boolean WINDOWS =
+      System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win");
 
   @TempDir
   Path tempDir;
@@ -55,7 +53,8 @@ class PostProcessExecutorTest {
 
   @Test void testExecuteSuccessfulScript() throws Exception {
     // Create a simple script that exits 0
-    Path script = createScript("success.sh", "#!/bin/bash\necho \"Hello World\"\nexit 0");
+    Path script = createScript("success", "echo \"Hello World\"\nexit 0",
+        "echo Hello World\r\nexit /b 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_success")
@@ -71,7 +70,7 @@ class PostProcessExecutorTest {
   }
 
   @Test void testExecuteFailingScriptWithWarn() throws Exception {
-    Path script = createScript("fail.sh", "#!/bin/bash\nexit 1");
+    Path script = createScript("fail", "exit 1", "exit /b 1");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_fail_warn")
@@ -85,7 +84,7 @@ class PostProcessExecutorTest {
   }
 
   @Test void testExecuteFailingScriptWithError() throws Exception {
-    Path script = createScript("fail.sh", "#!/bin/bash\nexit 1");
+    Path script = createScript("fail", "exit 1", "exit /b 1");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_fail_error")
@@ -103,7 +102,8 @@ class PostProcessExecutorTest {
     // Script that writes variables to a file for verification
     Path outputFile = tempDir.resolve("output.txt");
     Path script =
-        createScript("vars.sh", "#!/bin/bash\necho \"$1 $2\" > " + outputFile.toString() + "\nexit 0");
+        createScript("vars", "echo \"$1 $2\" > " + outputFile + "\nexit 0",
+            "> \"" + outputFile + "\" echo %~1 %~2\r\nexit /b 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_vars")
@@ -127,7 +127,8 @@ class PostProcessExecutorTest {
   @Test void testBaseDirectoryVariableSubstitution() throws Exception {
     Path outputFile = tempDir.resolve("basedir_output.txt");
     Path script =
-        createScript("basedir.sh", "#!/bin/bash\necho \"$1\" > " + outputFile.toString() + "\nexit 0");
+        createScript("basedir", "echo \"$1\" > " + outputFile + "\nexit 0",
+            "> \"" + outputFile + "\" echo %~1\r\nexit /b 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_basedir")
@@ -146,8 +147,8 @@ class PostProcessExecutorTest {
   @Test void testEnvironmentVariables() throws Exception {
     Path outputFile = tempDir.resolve("env_output.txt");
     Path script =
-        createScript("env.sh", "#!/bin/bash\necho \"$POSTPROCESS_YEAR $MY_VAR\" > "
-            + outputFile.toString() + "\nexit 0");
+        createScript("env", "echo \"$POSTPROCESS_YEAR $MY_VAR\" > " + outputFile + "\nexit 0",
+            "> \"" + outputFile + "\" echo %POSTPROCESS_YEAR% %MY_VAR%\r\nexit /b 0");
 
     Map<String, String> env = new HashMap<String, String>();
     env.put("MY_VAR", "custom_value");
@@ -184,7 +185,7 @@ class PostProcessExecutorTest {
 
   @Test void testRelativeScriptPath() throws Exception {
     // Script in base directory should be resolved
-    Path script = createScript("relative.sh", "#!/bin/bash\nexit 0");
+    Path script = createScript("relative", "exit 0", "exit /b 0");
     // Use relative path (just filename since it's in tempDir)
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_relative")
@@ -197,7 +198,7 @@ class PostProcessExecutorTest {
   }
 
   @Test void testAbsoluteScriptPath() throws Exception {
-    Path script = createScript("absolute.sh", "#!/bin/bash\nexit 0");
+    Path script = createScript("absolute", "exit 0", "exit /b 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_absolute")
@@ -233,7 +234,8 @@ class PostProcessExecutorTest {
 
   @Test void testAsyncExecution() throws Exception {
     Path script =
-        createScript("async.sh", "#!/bin/bash\necho \"async running\"\nexit 0");
+        createScript("async", "echo \"async running\"\nexit 0",
+            "echo async running\r\nexit /b 0");
 
     PostProcessConfig config = PostProcessConfig.builder()
         .name("test_async")
@@ -261,18 +263,35 @@ class PostProcessExecutorTest {
     assertEquals(cause, ex.getCause());
   }
 
-  private Path createScript(String name, String content) throws IOException {
-    Path script = tempDir.resolve(name);
-    Files.write(script, content.getBytes());
-    Set<PosixFilePermission> perms = new HashSet<PosixFilePermission>();
-    perms.add(PosixFilePermission.OWNER_READ);
-    perms.add(PosixFilePermission.OWNER_WRITE);
-    perms.add(PosixFilePermission.OWNER_EXECUTE);
+  /**
+   * Writes a script the operating system can start directly, which is what the
+   * executor does with it: a bash script, or a batch file on Windows where a
+   * {@code .sh} file is not a program.
+   */
+  private Path createScript(String name, String bashBody, String batchBody)
+      throws IOException {
+    if (WINDOWS) {
+      Path script = tempDir.resolve(name + ".cmd");
+      Files.write(script,
+          ("@echo off\r\n" + batchBody + "\r\n").getBytes(StandardCharsets.UTF_8));
+      return script;
+    }
+    Path script = tempDir.resolve(name + ".sh");
+    // Written by a child process, never held open for writing by this JVM: a process another
+    // test forks meanwhile inherits every descriptor this JVM holds, and while it holds one
+    // open for writing on the script, executing the script fails with ETXTBSY
+    // ("Text file busy").
+    Process writer =
+        new ProcessBuilder("/bin/sh", "-c", "cat > \"$0\" && chmod 700 \"$0\"",
+            script.toString()).start();
+    try (OutputStream in = writer.getOutputStream()) {
+      in.write(("#!/bin/bash\n" + bashBody).getBytes(StandardCharsets.UTF_8));
+    }
     try {
-      Files.setPosixFilePermissions(script, perms);
-    } catch (UnsupportedOperationException e) {
-      // Windows doesn't support POSIX permissions
-      LOGGER.debug("POSIX permissions not supported: {}", e.getMessage());
+      assertEquals(0, writer.waitFor(), "writing " + script);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("interrupted writing " + script, e);
     }
     return script;
   }

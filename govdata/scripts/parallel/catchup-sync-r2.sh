@@ -94,7 +94,7 @@ sync_iceberg_table() {
   local warehouse="s3://${BUCKET}/${schema}"
 
   local resolved
-  if ! resolved=$(java -cp "$JAR" org.apache.calcite.adapter.file.iceberg.ClosureResolver \
+  if ! resolved=$(java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -cp "$JAR" org.apache.calcite.adapter.file.iceberg.ClosureResolver \
       --warehouse "$warehouse" --table "$table" 2>&1); then
     log_error "catchup-sync-r2: [$schema/$table] closure resolution FAILED:"
     echo "$resolved" | tail -20 | while IFS= read -r line; do log_error "catchup-sync-r2:   $line"; done

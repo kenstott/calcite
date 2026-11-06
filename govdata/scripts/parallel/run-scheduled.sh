@@ -22,6 +22,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Load credentials/config from .env.prod (storage points at MinIO directly there now;
 # the old .env.preprod redirect is retired). Needed for the PROD_* publish gate below.
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/../sec-cooldown.sh"
+export GOVDATA_TMPDIR
+sec_cooldown_init
 load_env
 
 LOG_DIR="$SCRIPT_DIR/runs"
@@ -210,6 +213,56 @@ run_x_schema_if_needed() {
   fi
 }
 
+# SEC's nightly submissions.zip answers the per-filer submissions JSON fetches (the ones that draw
+# the HTTP 429s). Historical windows only: it lags live by up to a day, and a daily run needs
+# yesterday's and today's filings. A backfill does not need the latest filings, so a zip already
+# on disk is reused with no network call (SEC rebuilds the file nightly, so a fetch would pull the
+# full ~1.5 GB every day); only when none is present is it fetched, one conditional GET per attempt. A failed
+# fetch (DNS not up after a boot, connect/reset, HTTP error) is not a result: it is retried with
+# backoff until it succeeds or the window ends, and the pool is not started without the zip, because
+# live per-filer fetches exhaust the SEC request budget. Returns 1 when the window ended first.
+SUBMISSIONS_BULK_DIR="${SEC_SUBMISSIONS_BULK_DIR:-/var/tmp/govdata/bulk-submissions}"
+SUBMISSIONS_RETRY_MIN_SECS="${SEC_SUBMISSIONS_RETRY_MIN_SECS:-30}"
+SUBMISSIONS_RETRY_MAX_SECS="${SEC_SUBMISSIONS_RETRY_MAX_SECS:-900}"
+prepare_sec_submissions_bulk() {
+  local window_log="$1" window_end="$2"
+  local delay="$SUBMISSIONS_RETRY_MIN_SECS" tries=0 wait_s
+  if [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
+    export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
+    echo "[$(ts)] submissions.zip: reused existing $SEC_BULK_SUBMISSIONS_ZIP (no fetch)" >> "$window_log"
+    return 0
+  fi
+  while true; do
+    tries=$(( tries + 1 ))
+    local rc=0
+    "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" >> "$window_log" 2>&1 || rc=$?
+    if [ "$rc" -eq 0 ] && [ -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
+      export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
+      echo "[$(ts)] submissions.zip: fetched (attempt $tries)" >> "$window_log"
+      return 0
+    fi
+    unset SEC_BULK_SUBMISSIONS_ZIP 2>/dev/null || true
+    wait_s="$delay"
+    if [ "$rc" -eq "$SEC_COOLDOWN_EXIT" ]; then
+      # sec.gov refused this host: no call until the marker's end, not the backoff delay.
+      wait_s=$(sec_cooldown_remaining)
+      [ "$wait_s" -gt 0 ] || wait_s="$delay"
+      echo "[$(ts)] submissions.zip: sec.gov cool-down (attempt $tries); next fetch in ${wait_s}s, when it ends" >> "$window_log"
+    fi
+    if [ $(( $(date +%s) + wait_s )) -ge "$window_end" ]; then
+      log_error "ERROR: could not fetch SEC's submissions.zip in $tries attempts before the window ended - the historical pool was not started (see $window_log)"
+      echo "[$(ts)] submissions.zip fetch failed ($tries attempts); window ends before the next retry - pool not started" >> "$window_log"
+      return 1
+    fi
+    echo "[$(ts)] submissions.zip fetch failed (attempt $tries); retrying in ${wait_s}s - the pool waits for the zip" >> "$window_log"
+    sleep "$wait_s"
+    if [ "$rc" -ne "$SEC_COOLDOWN_EXIT" ]; then
+      delay=$(( delay * 2 ))
+      [ "$delay" -gt "$SUBMISSIONS_RETRY_MAX_SECS" ] && delay="$SUBMISSIONS_RETRY_MAX_SECS"
+    fi
+  done
+}
+
 # ── Window runner ─────────────────────────────────────────────────────────────
 #
 # Runs the pool in the given mode for up to WINDOW_SECS.
@@ -257,8 +310,11 @@ run_window() {
     # Re-evaluated each iteration because $current can switch to the fill mode mid-window.
     if [ "$current" = "historical" ]; then
       export GOVDATA_START_YEAR=2010
+      prepare_sec_submissions_bulk "$window_log" "$window_end" || break
     else
       unset GOVDATA_START_YEAR 2>/dev/null || true
+      # Daily runs fetch submissions live: a filing made since the nightly zip was built is not in it.
+      unset SEC_BULK_SUBMISSIONS_ZIP 2>/dev/null || true
     fi
 
     attempt=$(( attempt + 1 ))

@@ -370,7 +370,7 @@ class FileSchemaDeepLineCoverageTest {
     SchemaPlus p = rootSchema();
     // 22-arg constructor with comment
     FileSchema s =
-        new FileSchema(p, "t11", d, (File) null, (String) null, (String) null,
+        new FileSchema(p, "t11", d, d, (String) null, (String) null,
         (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
@@ -666,7 +666,7 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     FileSchema s =
-        new FileSchema(p, "UPPER_NAME", d, (File) null, (String) null, (String) null,
+        new FileSchema(p, "UPPER_NAME", d, d, (String) null, (String) null,
         (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
@@ -920,7 +920,7 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     FileSchema s =
-        new FileSchema(p, "t45", d, (File) null, (String) null,
+        new FileSchema(p, "t45", d, d, (String) null,
         (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
         (List<Map<String, Object>>) null,
@@ -1223,25 +1223,29 @@ class FileSchemaDeepLineCoverageTest {
 
     // 5-arg constructor
     FileSchema s2 =
-        new FileSchema(p, "s2", d1, (List<Map<String, Object>>) null, LINQ4J);
+        new FileSchema(p, "s2", d1, d1, null, (List<Map<String, Object>>) null, LINQ4J, false, null, null, null, null,
+        "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(s2.getTableMap());
 
     // 6-arg constructor with recursive
     FileSchema s3 =
-        new FileSchema(p, "s3", d2, (List<Map<String, Object>>) null, LINQ4J, false);
+        new FileSchema(p, "s3", d2, d2, null, (List<Map<String, Object>>) null, LINQ4J, false, null, null, null, null,
+        "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     assertNotNull(s3.getTableMap());
 
     // 8-arg constructor with materializations and views
     FileSchema s4 =
-        new FileSchema(p, "s4", d3, (List<Map<String, Object>>) null, LINQ4J, false,
-        (List<Map<String, Object>>) null, (List<Map<String, Object>>) null);
+        new FileSchema(p, "s4", d3, d3, null, (List<Map<String, Object>>) null, LINQ4J, false,
+        (List<Map<String, Object>>) null, (List<Map<String, Object>>) null, null, null, "SMART_CASING",
+        "SMART_CASING", null, null, null, null, true);
     assertNotNull(s4.getTableMap());
 
     // 11-arg with refreshInterval
     FileSchema s5 =
-        new FileSchema(p, "s5", d4, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
+        new FileSchema(p, "s5", d4, d4, (String) null, (List<Map<String, Object>>) null, LINQ4J, false,
         (List<Map<String, Object>>) null, (List<Map<String, Object>>) null,
-        (List<Map<String, Object>>) null, (String) null);
+        (List<Map<String, Object>>) null, (String) null, "SMART_CASING", "SMART_CASING", null, null,
+        null, null, true);
     assertNotNull(s5.getTableMap());
   }
 
@@ -1447,7 +1451,7 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     FileSchema s =
-        new FileSchema(p, "t69", d, null, null, null, null, LINQ4J, false, null, null, null, null,
+        new FileSchema(p, "t69", d, d, null, null, null, LINQ4J, false, null, null, null, null,
         "SMART_CASING", "SMART_CASING", null, null, null, csvTI, false, null, null);
     p.add("t69", s);
 
@@ -1463,7 +1467,7 @@ class FileSchemaDeepLineCoverageTest {
 
     SchemaPlus p = rootSchema();
     FileSchema s =
-        new FileSchema(p, "t70", d, null, null, null, null, LINQ4J, false, null, null, null, null,
+        new FileSchema(p, "t70", d, d, null, null, null, LINQ4J, false, null, null, null, null,
         "SMART_CASING", "SMART_CASING", null, null, null, null, false, null, null);
     p.add("t70", s);
 

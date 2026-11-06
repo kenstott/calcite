@@ -14,6 +14,7 @@ import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.partition.PipelineTracker;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
@@ -96,7 +98,6 @@ public class EtlPipeline {
   private final String baseDirectory;
   private final ProgressListener progressListener;
   private final IncrementalTracker incrementalTracker;
-  private final String operatingDirectory;
   private final DataProvider dataProvider;
   private final DataWriter dataWriter;
   private final boolean ignoreReleaseWindow;
@@ -235,7 +236,7 @@ public class EtlPipeline {
       String baseDirectory, ProgressListener progressListener,
       IncrementalTracker incrementalTracker, DataProvider dataProvider, DataWriter dataWriter) {
     this(config, storageProvider, null, baseDirectory, progressListener, incrementalTracker,
-        dataProvider, dataWriter, null);
+        dataProvider, dataWriter);
   }
 
   /**
@@ -255,28 +256,7 @@ public class EtlPipeline {
       ProgressListener progressListener, IncrementalTracker incrementalTracker,
       DataProvider dataProvider, DataWriter dataWriter) {
     this(config, storageProvider, sourceStorageProvider, baseDirectory, progressListener,
-        incrementalTracker, dataProvider, dataWriter, null);
-  }
-
-  /**
-   * Creates a new ETL pipeline with separate source storage provider and operating directory.
-   *
-   * @param config Pipeline configuration
-   * @param storageProvider Storage provider for materialized output (parquet)
-   * @param sourceStorageProvider Storage provider for raw cache; if null, uses storageProvider
-   * @param baseDirectory Base directory for output (parquet/materialized data)
-   * @param progressListener Listener for progress updates
-   * @param incrementalTracker Tracker for incremental processing
-   * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
-   * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
-   * @param operatingDirectory Operating directory for local caching; may be null
-   */
-  public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
-      StorageProvider sourceStorageProvider, String baseDirectory,
-      ProgressListener progressListener, IncrementalTracker incrementalTracker,
-      DataProvider dataProvider, DataWriter dataWriter, String operatingDirectory) {
-    this(config, storageProvider, sourceStorageProvider, baseDirectory, progressListener,
-        incrementalTracker, dataProvider, dataWriter, operatingDirectory, false);
+        incrementalTracker, dataProvider, dataWriter, false);
   }
 
   /**
@@ -291,7 +271,6 @@ public class EtlPipeline {
    * @param incrementalTracker Tracker for incremental processing
    * @param dataProvider Custom data provider (if null, uses built-in HttpSource)
    * @param dataWriter Custom data writer (if null, uses built-in MaterializationWriter)
-   * @param operatingDirectory Operating directory for local caching; may be null
    * @param ignoreReleaseWindow When true, bypasses the table's {@code releaseWindow:} gate (see
    *     {@link EtlPipelineConfig#getReleaseWindow()}) for this run — the effect of the
    *     {@code ignoreReleaseWindow} schema operand, threaded through
@@ -300,8 +279,7 @@ public class EtlPipeline {
   public EtlPipeline(EtlPipelineConfig config, StorageProvider storageProvider,
       StorageProvider sourceStorageProvider, String baseDirectory,
       ProgressListener progressListener, IncrementalTracker incrementalTracker,
-      DataProvider dataProvider, DataWriter dataWriter, String operatingDirectory,
-      boolean ignoreReleaseWindow) {
+      DataProvider dataProvider, DataWriter dataWriter, boolean ignoreReleaseWindow) {
     this.config = config;
     this.storageProvider = storageProvider;
     // Default to main storageProvider if sourceStorageProvider not specified
@@ -309,7 +287,6 @@ public class EtlPipeline {
     this.baseDirectory = baseDirectory;
     this.progressListener = progressListener;
     this.incrementalTracker = incrementalTracker != null ? incrementalTracker : IncrementalTracker.NOOP;
-    this.operatingDirectory = operatingDirectory;
     this.dataProvider = dataProvider;
     this.dataWriter = dataWriter;
     this.ignoreReleaseWindow = ignoreReleaseWindow;
@@ -498,6 +475,12 @@ public class EtlPipeline {
             totalBatches);
       } else {
         combinations = dimensionIterator.expand(effectiveDimensions, referencedCompanions(config));
+        int expanded = combinations.size();
+        combinations = withoutExcluded(combinations, config);
+        if (combinations.size() < expanded) {
+          LOGGER.info("excludeCombinations dropped {} of {} dimension combinations",
+              expanded - combinations.size(), expanded);
+        }
         totalBatches = combinations.size();
         dimensionSignature = IncrementalTracker.computeDimensionSignature(combinations);
         LOGGER.info("Expanded to {} dimension combinations", totalBatches);
@@ -878,11 +861,7 @@ public class EtlPipeline {
       String tableDirectory = baseDirectory;
       if (format != MaterializeConfig.Format.ICEBERG
           && tableName != null && !tableName.isEmpty()) {
-        if (!baseDirectory.endsWith("/")) {
-          tableDirectory = baseDirectory + "/" + tableName;
-        } else {
-          tableDirectory = baseDirectory + tableName;
-        }
+        tableDirectory = LocalPaths.join(baseDirectory, tableName);
       }
 
       // materialize.enabled: false means "run the pipeline, write nothing" — a supported
@@ -895,7 +874,8 @@ public class EtlPipeline {
         LOGGER.info("Materialization disabled for table {} - running without a writer", tableName);
       } else {
         writer =
-            MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider, tableDirectory, incrementalTracker);
+            MaterializationWriterFactory.createFromConfig(materializeConfig, storageProvider,
+                tableDirectory, incrementalTracker, workDirectory());
         writer.initialize(materializeConfig);
         LOGGER.info("Initialized {} writer for table {}", format, tableName);
       }
@@ -1031,7 +1011,8 @@ public class EtlPipeline {
                 pi + 1, partCount, partitionPlan.getContextKey(), contextValue);
             continue;
           }
-          List<Map<String, String>> partCombos = partition.getCombinations();
+          List<Map<String, String>> partCombos =
+              withoutExcluded(partition.getCombinations(), config);
           actualTotalBatches += partCombos.size();
 
           // Filter unprocessed within this partition
@@ -1147,6 +1128,9 @@ public class EtlPipeline {
             final int partCountFinal = partCount;
             final long startTimeFinal = startTime;
 
+            final AtomicReference<SourceExhaustedException> partExhausted =
+                new AtomicReference<SourceExhaustedException>();
+            final AtomicInteger partNotAttempted = new AtomicInteger();
             ExecutorService partExecutor = Executors.newFixedThreadPool(partThreadCount);
             List<Future<Void>> partFutures = new ArrayList<Future<Void>>();
 
@@ -1156,6 +1140,10 @@ public class EtlPipeline {
               partFutures.add(
                   partExecutor.submit(new Callable<Void>() {
                 @Override public Void call() {
+                  if (partExhausted.get() != null) {
+                    partNotAttempted.incrementAndGet();
+                    return null;
+                  }
                   int currentBatch = partProcessed.incrementAndGet();
                   if (progressListener != null) {
                     synchronized (writeLock) {
@@ -1183,11 +1171,25 @@ public class EtlPipeline {
                     }
                   } catch (SkippedBatchException e) {
                     partSkipped.incrementAndGet();
+                    if (e instanceof CircuitOpenSkipException) {
+                      partErrors.add(PartialPartitionGuard.circuitOpenError(
+                          String.valueOf(currentBatch), (CircuitOpenSkipException) e, variables));
+                    }
                     LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
                         e.getMessage());
                   } catch (Exception e) {
+                    SourceExhaustedException exhausted = findExhausted(e);
+                    if (exhausted != null) {
+                      partExhausted.compareAndSet(null, exhausted);
+                      LOGGER.error("Batch {} failed: {}", currentBatch, exhausted.getMessage());
+                      partFailed.incrementAndGet();
+                      synchronized (writeLock) {
+                        incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                      }
+                      return null;
+                    }
                     String errorMsg =
-                        String.format("Batch %d (partition %d/%d) failed: %s", currentBatch, piFinal + 1, partCountFinal, e.getMessage());
+                        String.format("Batch %d (partition %d/%d) failed: %s (fetch=%s)", currentBatch, piFinal + 1, partCountFinal, e.getMessage(), variables);
                     LOGGER.error(errorMsg, e);
                     partErrors.add(errorMsg);
                     if (progressListener != null) {
@@ -1256,6 +1258,9 @@ public class EtlPipeline {
               }
             }
             partExecutor.shutdown();
+            if (partExhausted.get() != null) {
+              throw exhaustedFailure(pipelineName, partExhausted.get(), partNotAttempted.get());
+            }
 
             totalRows += partRows.get();
             successfulBatches += partSucceeded.get();
@@ -1303,12 +1308,22 @@ public class EtlPipeline {
               } catch (SkippedBatchException e) {
                 skippedBatches++;
                 consecutiveFailures = 0;
+                if (e instanceof CircuitOpenSkipException) {
+                  errors.add(PartialPartitionGuard.circuitOpenError(
+                      String.valueOf(processedCount), (CircuitOpenSkipException) e, variables));
+                }
                 LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
               } catch (Exception e) {
+                SourceExhaustedException exhausted = findExhausted(e);
+                if (exhausted != null) {
+                  LOGGER.error("Batch {} failed: {}", processedCount, exhausted.getMessage());
+                  incrementalTracker.invalidateTableCompletion(pipelineName);
+                  throw exhaustedFailure(pipelineName, exhausted, neededCount - processedCount);
+                }
                 consecutiveFailures++;
                 String errorMsg =
-                    String.format("Batch %d (partition %d/%d) failed: %s",
-                        processedCount, pi + 1, partCount, e.getMessage());
+                    String.format("Batch %d (partition %d/%d) failed: %s (fetch=%s)",
+                        processedCount, pi + 1, partCount, e.getMessage(), variables);
                 LOGGER.error(errorMsg, e);
                 errors.add(errorMsg);
                 incrementalTracker.invalidateTableCompletion(pipelineName);
@@ -1422,6 +1437,10 @@ public class EtlPipeline {
           final String pipelineNameFinal = pipelineName;
           final int unitCountFinal = unitCount;
 
+          final AtomicReference<SourceExhaustedException> unitExhausted =
+              new AtomicReference<SourceExhaustedException>();
+          final AtomicInteger unitNotAttempted = new AtomicInteger();
+
           ExecutorService executor = Executors.newFixedThreadPool(threadCount);
           List<Future<Void>> futures = new ArrayList<Future<Void>>();
 
@@ -1431,6 +1450,10 @@ public class EtlPipeline {
             futures.add(
                 executor.submit(new Callable<Void>() {
               @Override public Void call() {
+                if (unitExhausted.get() != null) {
+                  unitNotAttempted.incrementAndGet();
+                  return null;
+                }
                 int currentBatch = parallelProcessed.incrementAndGet();
                 if (progressListener != null) {
                   synchronized (writeLock) {
@@ -1458,11 +1481,27 @@ public class EtlPipeline {
                   }
                 } catch (SkippedBatchException e) {
                   parallelSkipped.incrementAndGet();
+                  if (e instanceof CircuitOpenSkipException) {
+                    parallelErrors.add(PartialPartitionGuard.circuitOpenError(
+                        String.valueOf(currentBatch), (CircuitOpenSkipException) e,
+                        unit.getFetchVariables()));
+                  }
                   LOGGER.debug("Batch {} skipped (skipOn match): {}", currentBatch,
                       e.getMessage());
                 } catch (Exception e) {
+                  SourceExhaustedException exhausted = findExhausted(e);
+                  if (exhausted != null) {
+                    unitExhausted.compareAndSet(null, exhausted);
+                    LOGGER.error("Batch {}/{} failed: {}", currentBatch, unitCountFinal,
+                        exhausted.getMessage());
+                    parallelFailed.incrementAndGet();
+                    synchronized (writeLock) {
+                      incrementalTracker.invalidateTableCompletion(pipelineNameFinal);
+                    }
+                    return null;
+                  }
                   String errorMsg =
-                      String.format("Batch %d/%d failed: %s", currentBatch, unitCountFinal, e.getMessage());
+                      String.format("Batch %d/%d failed: %s (fetch=%s)", currentBatch, unitCountFinal, e.getMessage(), unit.getFetchVariables());
                   LOGGER.error(errorMsg, e);
                   parallelErrors.add(errorMsg);
                   if (progressListener != null) {
@@ -1557,6 +1596,9 @@ public class EtlPipeline {
             }
           }
           executor.shutdown();
+          if (unitExhausted.get() != null) {
+            throw exhaustedFailure(pipelineName, unitExhausted.get(), unitNotAttempted.get());
+          }
 
           totalRows += parallelTotalRows.get();
           successfulBatches += parallelSucceeded.get();
@@ -1604,11 +1646,23 @@ public class EtlPipeline {
             } catch (SkippedBatchException e) {
               skippedBatches++;
               consecutiveFailures = 0;
+              if (e instanceof CircuitOpenSkipException) {
+                errors.add(PartialPartitionGuard.circuitOpenError(
+                    String.valueOf(processedCount), (CircuitOpenSkipException) e,
+                    unit.getFetchVariables()));
+              }
               LOGGER.debug("Batch {} skipped (skipOn match): {}", processedCount, e.getMessage());
             } catch (Exception e) {
+              SourceExhaustedException exhausted = findExhausted(e);
+              if (exhausted != null) {
+                LOGGER.error("Batch {}/{} failed: {}", processedCount, unitCount,
+                    exhausted.getMessage());
+                incrementalTracker.invalidateTableCompletion(pipelineName);
+                throw exhaustedFailure(pipelineName, exhausted, unitCount - processedCount);
+              }
               consecutiveFailures++;
               String errorMsg =
-                  String.format("Batch %d/%d failed: %s", processedCount, unitCount, e.getMessage());
+                  String.format("Batch %d/%d failed: %s (fetch=%s)", processedCount, unitCount, e.getMessage(), unit.getFetchVariables());
 
               // Enhanced diagnostics for HTTP/S3 errors
               String msg = e.getMessage();
@@ -2610,7 +2664,8 @@ public class EtlPipeline {
     // committed state must re-fetch rather than replay an entry whose existence is its only
     // validity check.
     boolean bypass = isTableForceDownloaded(config.getName()) || !freshnessSkipAllowed;
-    return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass);
+    return StorageRawCache.forBatch(config, variables, sourceStorageProvider, rawCachePath, bypass,
+        workDirectory());
   }
 
   private Iterator<Map<String, Object>> fetchDataChain(EtlPipelineConfig config,
@@ -2904,6 +2959,22 @@ public class EtlPipeline {
     }
   }
 
+  /** The {@link SourceExhaustedException} in {@code e}'s cause chain, or null. */
+  private static SourceExhaustedException findExhausted(Throwable e) {
+    for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+      if (t instanceof SourceExhaustedException) {
+        return (SourceExhaustedException) t;
+      }
+    }
+    return null;
+  }
+
+  private static IOException exhaustedFailure(String table, SourceExhaustedException cause,
+      int notAttempted) {
+    return new IOException("Table '" + table + "' stopped on its first source refusal: "
+        + cause.getMessage() + "; " + notAttempted + " batches not attempted", cause);
+  }
+
   /**
    * Determines the error action based on the exception type.
    */
@@ -2931,9 +3002,15 @@ public class EtlPipeline {
       }
     }
 
+    // An exception that carries no HTTP status is not an API answer either: it is a data-invariant,
+    // parse or I/O failure inside the pipeline (a row-count invariant, a missing index column).
+    // apiErrorAction defaults to SKIP, which filed such a throw under "skipped" and let a load in
+    // which two of three periods threw report as successful. SKIP stays what it always was — a
+    // response to an HTTP status (404 notFoundAction, 5xx apiErrorAction) — and anything else that
+    // throws is a failed batch (WARN: counted failed, other batches continue, retried next run).
     String message = e.getMessage();
-    if (message == null) {
-      return errorHandling.getApiErrorAction();
+    if (message == null || !message.contains("HTTP ")) {
+      return EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN;
     }
 
     if (message.contains("HTTP 401") || message.contains("HTTP 403")) {
@@ -3017,7 +3094,7 @@ public class EtlPipeline {
     // the live fetch that "reprocess" was supposed to guarantee.
     boolean bypassRawCache = isTableForceDownloaded(config.getName()) || forceReprocessAll;
     return new HttpSource(sourceConfig, config.getHooks(), sourceStorageProvider, rawCachePath,
-        operatingDirectory, config.getColumns(), bypassRawCache);
+        workDirectory().getPath(), config.getColumns(), bypassRawCache);
   }
 
   /**
@@ -3631,14 +3708,26 @@ public class EtlPipeline {
   }
 
   /**
-   * Removes from {@code unprocessedIndices} any combination whose period is already
-   * marked complete (authoritative per-period skip). Periods are deduplicated so each
-   * distinct period key is checked once even when many combos share it.
+   * Drops the combinations the table declares as {@code excludeCombinations}.
    *
-   * @param pipelineName       the pipeline name
-   * @param combinations       all combinations (indexed by the set entries)
-   * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
+   * @param combinations expanded dimension combinations
+   * @param config       the pipeline config
+   * @return the combinations that should be requested
    */
+  private static List<Map<String, String>> withoutExcluded(List<Map<String, String>> combinations,
+      EtlPipelineConfig config) {
+    if (config.getExcludeCombinations().isEmpty()) {
+      return combinations;
+    }
+    List<Map<String, String>> kept = new ArrayList<Map<String, String>>(combinations.size());
+    for (Map<String, String> combination : combinations) {
+      if (!config.isExcluded(combination)) {
+        kept.add(combination);
+      }
+    }
+    return kept;
+  }
+
   /**
    * The opt-in derived companions this pipeline's templates actually reference.
    *
@@ -3670,6 +3759,15 @@ public class EtlPipeline {
     return requested;
   }
 
+  /**
+   * Removes from {@code unprocessedIndices} any combination whose period is already
+   * marked complete (authoritative per-period skip). Periods are deduplicated so each
+   * distinct period key is checked once even when many combos share it.
+   *
+   * @param pipelineName       the pipeline name
+   * @param combinations       all combinations (indexed by the set entries)
+   * @param unprocessedIndices mutable set of indices considered unprocessed; pruned in place
+   */
   private void removePeriodCompleteIndices(String pipelineName,
       List<Map<String, String>> combinations, Set<Integer> unprocessedIndices) {
     if (unprocessedIndices.isEmpty()) {
@@ -3838,13 +3936,13 @@ public class EtlPipeline {
             && !materializeConfig.getIceberg().getWarehousePath().isEmpty()) {
           icebergBase = materializeConfig.getIceberg().getWarehousePath();
         }
-        String dataPath = icebergBase + "/" + pipelineName + "/data";
+        String dataPath = LocalPaths.join(icebergBase, pipelineName + "/data");
         if (storageProvider.isDirectory(dataPath)) {
           LOGGER.debug("Verified Iceberg data exists at {}", dataPath);
           return true;
         }
         if (!icebergBase.equals(baseDirectory)) {
-          String fallbackPath = baseDirectory + "/" + pipelineName + "/data";
+          String fallbackPath = LocalPaths.join(baseDirectory, pipelineName + "/data");
           if (storageProvider.isDirectory(fallbackPath)) {
             LOGGER.debug("Verified Iceberg data exists at fallback {}", fallbackPath);
             return true;
@@ -3852,7 +3950,7 @@ public class EtlPipeline {
         }
       } else {
         // For Parquet format, check if data directory has files
-        String dataPath = baseDirectory + "/" + pipelineName;
+        String dataPath = LocalPaths.join(baseDirectory, pipelineName);
         if (storageProvider.isDirectory(dataPath)) {
           LOGGER.debug("Verified data exists at {}", dataPath);
           return true;
@@ -3929,70 +4027,64 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
 
-      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
-      try {
-        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+      org.apache.iceberg.hadoop.HadoopCatalog catalog =
+          openHadoopCatalog(hadoopConf, warehousePath);
 
-        String tableName = tableLocation.substring(lastSlash + 1);
-        org.apache.iceberg.catalog.TableIdentifier tableId =
-            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+      String tableName = tableLocation.substring(lastSlash + 1);
+      org.apache.iceberg.catalog.TableIdentifier tableId =
+          org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
-        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+      org.apache.iceberg.Table table = catalog.loadTable(tableId);
 
-        // Schema validation if expected columns provided
-        if (expectedColumns != null && !expectedColumns.isEmpty()) {
-          org.apache.iceberg.Schema icebergSchema = table.schema();
-          Set<String> existingColumns = new HashSet<String>();
-          for (org.apache.iceberg.types.Types.NestedField field : icebergSchema.columns()) {
-            existingColumns.add(field.name().toLowerCase());
-          }
+      // Schema validation if expected columns provided
+      if (expectedColumns != null && !expectedColumns.isEmpty()) {
+        org.apache.iceberg.Schema icebergSchema = table.schema();
+        Set<String> existingColumns = new HashSet<String>();
+        for (org.apache.iceberg.types.Types.NestedField field : icebergSchema.columns()) {
+          existingColumns.add(field.name().toLowerCase());
+        }
 
-          Set<String> missingColumns = new HashSet<String>();
-          for (ColumnConfig col : expectedColumns) {
-            String colName = col.getName().toLowerCase();
-            if (!existingColumns.contains(colName)) {
-              missingColumns.add(col.getName());
-            }
-          }
-
-          if (!missingColumns.isEmpty()) {
-            LOGGER.warn("Iceberg table '{}' schema mismatch: missing columns {}. "
-                + "Dropping table for recreation.",
-                tableLocation, missingColumns);
-            catalog.dropTable(tableId, true);
-            return 0;
+        Set<String> missingColumns = new HashSet<String>();
+        for (ColumnConfig col : expectedColumns) {
+          String colName = col.getName().toLowerCase();
+          if (!existingColumns.contains(colName)) {
+            missingColumns.add(col.getName());
           }
         }
 
-        org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
-
-        if (snapshot == null) {
-          LOGGER.debug("Iceberg table '{}' has no snapshot, returning 0 row count", tableLocation);
+        if (!missingColumns.isEmpty()) {
+          LOGGER.warn("Iceberg table '{}' schema mismatch: missing columns {}. "
+              + "Dropping table for recreation.",
+              tableLocation, missingColumns);
+          org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidateAll();
+          catalog.dropTable(tableId, true);
           return 0;
         }
+      }
 
-        long totalRecords = 0;
-        for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
-          Long addedRows = manifest.addedRowsCount();
-          if (addedRows != null) {
-            totalRecords += addedRows;
-          }
-        }
+      org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
 
-        LOGGER.info("Read row count {} from Iceberg metadata for skipped table: {}",
-            totalRecords, tableLocation);
-        return totalRecords;
+      if (snapshot == null) {
+        LOGGER.debug("Iceberg table '{}' has no snapshot, returning 0 row count", tableLocation);
+        return 0;
+      }
 
-      } finally {
-        if (catalog != null) {
-          catalog.close();
+      long totalRecords = 0;
+      for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
+        Long addedRows = manifest.addedRowsCount();
+        if (addedRows != null) {
+          totalRecords += addedRows;
         }
       }
+
+      LOGGER.info("Read row count {} from Iceberg metadata for skipped table: {}",
+          totalRecords, tableLocation);
+      return totalRecords;
     // fallback-guard: allow The single caller (EtlPipeline around line 520-527) explicitly documents and implements a compensating fallback: 'If we couldn't read from Iceberg ... use the tracker's cached row count as the authoritative figure' — the 0 return is a known, handled signal.
     } catch (Exception e) {
       LOGGER.warn("Failed to read row count from Iceberg for '{}': {}", tableLocation, e.getMessage());
@@ -4053,62 +4145,55 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
 
-      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
-      try {
-        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+      org.apache.iceberg.hadoop.HadoopCatalog catalog =
+          openHadoopCatalog(hadoopConf, warehousePath);
 
-        String tableName = tableLocation.substring(lastSlash + 1);
-        org.apache.iceberg.catalog.TableIdentifier tableId =
-            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+      String tableName = tableLocation.substring(lastSlash + 1);
+      org.apache.iceberg.catalog.TableIdentifier tableId =
+          org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
-        if (!catalog.tableExists(tableId)) {
-          return null;
-        }
+      if (!catalog.tableExists(tableId)) {
+        return null;
+      }
 
-        org.apache.iceberg.Table table = catalog.loadTable(tableId);
+      org.apache.iceberg.Table table = catalog.loadTable(tableId);
 
-        // Read ETL properties
-        String configHash = table.properties().get("etl.config-hash");
-        String signature = table.properties().get("etl.signature");
-        String rowCountStr = table.properties().get("etl.row-count");
+      // Read ETL properties
+      String configHash = table.properties().get("etl.config-hash");
+      String signature = table.properties().get("etl.signature");
+      String rowCountStr = table.properties().get("etl.row-count");
 
-        if (configHash == null || signature == null) {
-          LOGGER.debug("Iceberg table '{}' has no cached ETL properties", tableLocation);
-          return null;
-        }
+      if (configHash == null || signature == null) {
+        LOGGER.debug("Iceberg table '{}' has no cached ETL properties", tableLocation);
+        return null;
+      }
 
-        long rowCount = 0;
-        if (rowCountStr != null) {
-          try {
-            rowCount = Long.parseLong(rowCountStr);
-          } catch (NumberFormatException e) {
-            // Fall back to reading from manifest
-            org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
-            if (snapshot != null) {
-              for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
-                Long addedRows = manifest.addedRowsCount();
-                if (addedRows != null) {
-                  rowCount += addedRows;
-                }
+      long rowCount = 0;
+      if (rowCountStr != null) {
+        try {
+          rowCount = Long.parseLong(rowCountStr);
+        } catch (NumberFormatException e) {
+          // Fall back to reading from manifest
+          org.apache.iceberg.Snapshot snapshot = table.currentSnapshot();
+          if (snapshot != null) {
+            for (org.apache.iceberg.ManifestFile manifest : snapshot.allManifests(table.io())) {
+              Long addedRows = manifest.addedRowsCount();
+              if (addedRows != null) {
+                rowCount += addedRows;
               }
             }
           }
         }
-
-        LOGGER.debug("Read cached ETL properties from '{}': configHash={}, signature={}, rows={}",
-            tableLocation, configHash, signature, rowCount);
-        return new CachedEtlProperties(configHash, signature, rowCount);
-
-      } finally {
-        if (catalog != null) {
-          catalog.close();
-        }
       }
+
+      LOGGER.debug("Read cached ETL properties from '{}': configHash={}, signature={}, rows={}",
+          tableLocation, configHash, signature, rowCount);
+      return new CachedEtlProperties(configHash, signature, rowCount);
     // fallback-guard: allow readEtlPropertiesFromIceberg is a fast-path cache lookup (per its class javadoc); null is the standard 'cache unavailable' contract for such an accessor, and it currently has no caller so nothing is masked in practice.
     } catch (Exception e) {
       LOGGER.debug("Failed to read ETL properties from Iceberg for '{}': {}",
@@ -4155,46 +4240,53 @@ public class EtlPipeline {
 
       // Extract warehouse path from table location
       String warehousePath = tableLocation;
-      int lastSlash = warehousePath.lastIndexOf('/');
+      int lastSlash = LocalPaths.lastSeparator(warehousePath);
       if (lastSlash > 0) {
         warehousePath = warehousePath.substring(0, lastSlash);
       }
 
-      org.apache.iceberg.hadoop.HadoopCatalog catalog = null;
-      try {
-        catalog = new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
+      org.apache.iceberg.hadoop.HadoopCatalog catalog =
+          openHadoopCatalog(hadoopConf, warehousePath);
 
-        String tableName = tableLocation.substring(lastSlash + 1);
-        org.apache.iceberg.catalog.TableIdentifier tableId =
-            org.apache.iceberg.catalog.TableIdentifier.of(tableName);
+      String tableName = tableLocation.substring(lastSlash + 1);
+      org.apache.iceberg.catalog.TableIdentifier tableId =
+          org.apache.iceberg.catalog.TableIdentifier.of(tableName);
 
-        if (!catalog.tableExists(tableId)) {
-          LOGGER.debug("Cannot store ETL properties: table doesn't exist at {}", tableLocation);
-          return;
-        }
-
-        org.apache.iceberg.Table table = catalog.loadTable(tableId);
-
-        // Store ETL properties
-        table.updateProperties()
-            .set("etl.config-hash", configHash)
-            .set("etl.signature", signature)
-            .set("etl.row-count", String.valueOf(rowCount))
-            .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
-            .commit();
-
-        LOGGER.info("Stored ETL properties to Iceberg table '{}' for fast-path skip: configHash={}",
-            tableLocation, configHash);
-
-      } finally {
-        if (catalog != null) {
-          catalog.close();
-        }
+      if (!catalog.tableExists(tableId)) {
+        LOGGER.debug("Cannot store ETL properties: table doesn't exist at {}", tableLocation);
+        return;
       }
+
+      org.apache.iceberg.Table table = catalog.loadTable(tableId);
+
+      // Store ETL properties
+      table.updateProperties()
+          .set("etl.config-hash", configHash)
+          .set("etl.signature", signature)
+          .set("etl.row-count", String.valueOf(rowCount))
+          .set("etl.completed-timestamp", String.valueOf(System.currentTimeMillis()))
+          .commit();
+
+      LOGGER.info("Stored ETL properties to Iceberg table '{}' for fast-path skip: configHash={}",
+          tableLocation, configHash);
     } catch (Exception e) {
       LOGGER.debug("Failed to store ETL properties to Iceberg for '{}': {}",
           tableLocation, e.getMessage());
     }
+  }
+
+  /**
+   * Opens a Hadoop catalog on {@code warehousePath}. The catalog is never closed, on purpose.
+   * Closing a Hadoop catalog closes its lock manager, and Iceberg's in-memory lock manager
+   * keeps every catalog's commit locks and heartbeats in maps shared by the whole JVM: its
+   * {@code close()} clears those maps. A close here therefore dropped the lock of any commit
+   * in flight on any other table, and that commit then failed releasing it with a
+   * NullPointerException in {@code InMemoryLockManager.release}. The catalog owns nothing
+   * else that a close would free (the heartbeat scheduler is JVM-wide too).
+   */
+  private static org.apache.iceberg.hadoop.HadoopCatalog openHadoopCatalog(
+      org.apache.hadoop.conf.Configuration hadoopConf, String warehousePath) {
+    return new org.apache.iceberg.hadoop.HadoopCatalog(hadoopConf, warehousePath);
   }
 
   /**
@@ -4775,5 +4867,13 @@ public class EtlPipeline {
           granularity, variables, e.getMessage());
       return variables;
     }
+  }
+
+  /**
+   * Where the pipeline's temporary files go: the process's staging directory (REQ-1992), the
+   * disk-backed scratch the offline ETL run declares; never the operating directory.
+   */
+  private java.io.File workDirectory() {
+    return org.apache.calcite.adapter.file.StagingDirectory.get();
   }
 }

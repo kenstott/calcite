@@ -30,6 +30,7 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
+import org.apache.calcite.schema.impl.InformationSchema;
 
 import com.google.common.collect.ImmutableList;
 
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.calcite.schema.lookup.LikePattern;
 
 /**
  * Coverage tests for all inner table scan() methods in {@link InformationSchema}.
@@ -293,7 +295,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "catalog1");
 
-    ScannableTable schemataTable = (ScannableTable) infoSchema.getTableMap().get("SCHEMATA");
+    ScannableTable schemataTable = (ScannableTable) tableMap(infoSchema).get("SCHEMATA");
     assertNotNull(schemataTable);
 
     List<Object[]> rows = schemataTable.scan(dataContext).toList();
@@ -313,7 +315,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("hr", new PlainSchema(new HashMap<String, Table>()));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "my_catalog");
-    ScannableTable schemataTable = (ScannableTable) infoSchema.getTableMap().get("SCHEMATA");
+    ScannableTable schemataTable = (ScannableTable) tableMap(infoSchema).get("SCHEMATA");
 
     List<Object[]> rows = schemataTable.scan(dataContext).toList();
 
@@ -348,7 +350,7 @@ public class InformationSchemaScanCoverageTest {
         new CommentedSchema(tables, "This schema contains user data"));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable schemataTable = (ScannableTable) infoSchema.getTableMap().get("SCHEMATA");
+    ScannableTable schemataTable = (ScannableTable) tableMap(infoSchema).get("SCHEMATA");
 
     List<Object[]> rows = schemataTable.scan(dataContext).toList();
     // 1 user schema + 2 metadata schemas
@@ -363,7 +365,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testSchemataTableGetStatistic() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Table schemataTable = infoSchema.getTableMap().get("SCHEMATA");
+    Table schemataTable = tableMap(infoSchema).get("SCHEMATA");
     assertEquals(Statistics.UNKNOWN, schemataTable.getStatistic());
   }
 
@@ -375,7 +377,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "catalog1");
 
-    ScannableTable tablesTable = (ScannableTable) infoSchema.getTableMap().get("TABLES");
+    ScannableTable tablesTable = (ScannableTable) tableMap(infoSchema).get("TABLES");
     assertNotNull(tablesTable);
 
     List<Object[]> rows = tablesTable.scan(dataContext).toList();
@@ -391,7 +393,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("hr", new PlainSchema(tables));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "my_catalog");
-    ScannableTable tablesTable = (ScannableTable) infoSchema.getTableMap().get("TABLES");
+    ScannableTable tablesTable = (ScannableTable) tableMap(infoSchema).get("TABLES");
 
     List<Object[]> rows = tablesTable.scan(dataContext).toList();
     assertEquals(2, rows.size());
@@ -414,7 +416,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("s1", new PlainSchema(tables));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable tablesTable = (ScannableTable) infoSchema.getTableMap().get("TABLES");
+    ScannableTable tablesTable = (ScannableTable) tableMap(infoSchema).get("TABLES");
 
     List<Object[]> rows = tablesTable.scan(dataContext).toList();
     assertEquals(2, rows.size());
@@ -442,7 +444,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("s2", new PlainSchema(tables2));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable tablesTable = (ScannableTable) infoSchema.getTableMap().get("TABLES");
+    ScannableTable tablesTable = (ScannableTable) tableMap(infoSchema).get("TABLES");
 
     List<Object[]> rows = tablesTable.scan(dataContext).toList();
     assertEquals(3, rows.size());
@@ -451,7 +453,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testTablesTableGetStatistic() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Table tablesTable = infoSchema.getTableMap().get("TABLES");
+    Table tablesTable = tableMap(infoSchema).get("TABLES");
     assertEquals(Statistics.UNKNOWN, tablesTable.getStatistic());
   }
 
@@ -463,7 +465,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    ScannableTable columnsTable = (ScannableTable) infoSchema.getTableMap().get("COLUMNS");
+    ScannableTable columnsTable = (ScannableTable) tableMap(infoSchema).get("COLUMNS");
     assertNotNull(columnsTable);
 
     List<Object[]> rows = columnsTable.scan(dataContext).toList();
@@ -478,7 +480,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("test_schema", new PlainSchema(tables));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable columnsTable = (ScannableTable) infoSchema.getTableMap().get("COLUMNS");
+    ScannableTable columnsTable = (ScannableTable) tableMap(infoSchema).get("COLUMNS");
 
     List<Object[]> rows = columnsTable.scan(dataContext).toList();
     // MultiTypeTable has 15 columns
@@ -567,7 +569,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("s1", new PlainSchema(tables));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable columnsTable = (ScannableTable) infoSchema.getTableMap().get("COLUMNS");
+    ScannableTable columnsTable = (ScannableTable) tableMap(infoSchema).get("COLUMNS");
 
     List<Object[]> rows = columnsTable.scan(dataContext).toList();
     assertEquals(2, rows.size());
@@ -597,7 +599,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("s", new PlainSchema(tables));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable columnsTable = (ScannableTable) infoSchema.getTableMap().get("COLUMNS");
+    ScannableTable columnsTable = (ScannableTable) tableMap(infoSchema).get("COLUMNS");
 
     List<Object[]> rows = columnsTable.scan(dataContext).toList();
     assertTrue(rows.size() > 0);
@@ -613,7 +615,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testColumnsTableGetStatistic() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Table columnsTable = infoSchema.getTableMap().get("COLUMNS");
+    Table columnsTable = tableMap(infoSchema).get("COLUMNS");
     assertEquals(Statistics.UNKNOWN, columnsTable.getStatistic());
   }
 
@@ -626,7 +628,7 @@ public class InformationSchemaScanCoverageTest {
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
     ScannableTable constraintsTable =
-        (ScannableTable) infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("TABLE_CONSTRAINTS");
     assertNotNull(constraintsTable);
 
     List<Object[]> rows = constraintsTable.scan(dataContext).toList();
@@ -642,7 +644,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable constraintsTable =
-        (ScannableTable) infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("TABLE_CONSTRAINTS");
 
     List<Object[]> rows = constraintsTable.scan(dataContext).toList();
     assertEquals(1, rows.size());
@@ -668,7 +670,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable constraintsTable =
-        (ScannableTable) infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("TABLE_CONSTRAINTS");
 
     List<Object[]> rows = constraintsTable.scan(dataContext).toList();
     assertEquals(2, rows.size());
@@ -691,7 +693,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable constraintsTable =
-        (ScannableTable) infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("TABLE_CONSTRAINTS");
 
     List<Object[]> rows = constraintsTable.scan(dataContext).toList();
 
@@ -720,7 +722,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable constraintsTable =
-        (ScannableTable) infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("TABLE_CONSTRAINTS");
 
     List<Object[]> rows = constraintsTable.scan(dataContext).toList();
     // Statistics.UNKNOWN should have null keys, so no rows
@@ -730,7 +732,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testTableConstraintsTableGetStatistic() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Table constraintsTable = infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+    Table constraintsTable = tableMap(infoSchema).get("TABLE_CONSTRAINTS");
     assertEquals(Statistics.UNKNOWN, constraintsTable.getStatistic());
   }
 
@@ -743,7 +745,7 @@ public class InformationSchemaScanCoverageTest {
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
     ScannableTable refTable =
-        (ScannableTable) infoSchema.getTableMap().get("REFERENTIAL_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("REFERENTIAL_CONSTRAINTS");
     assertNotNull(refTable);
 
     List<Object[]> rows = refTable.scan(dataContext).toList();
@@ -760,7 +762,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable refTable =
-        (ScannableTable) infoSchema.getTableMap().get("REFERENTIAL_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("REFERENTIAL_CONSTRAINTS");
 
     List<Object[]> rows = refTable.scan(dataContext).toList();
 
@@ -788,7 +790,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable refTable =
-        (ScannableTable) infoSchema.getTableMap().get("REFERENTIAL_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("REFERENTIAL_CONSTRAINTS");
 
     List<Object[]> rows = refTable.scan(dataContext).toList();
     // PK-only table has no foreign keys
@@ -798,7 +800,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testReferentialConstraintsTableGetStatistic() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Table refTable = infoSchema.getTableMap().get("REFERENTIAL_CONSTRAINTS");
+    Table refTable = tableMap(infoSchema).get("REFERENTIAL_CONSTRAINTS");
     assertEquals(Statistics.UNKNOWN, refTable.getStatistic());
   }
 
@@ -810,7 +812,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    ScannableTable table = (ScannableTable) infoSchema.getTableMap().get("CHECK_CONSTRAINTS");
+    ScannableTable table = (ScannableTable) tableMap(infoSchema).get("CHECK_CONSTRAINTS");
     assertNotNull(table);
 
     // Verify row type
@@ -833,7 +835,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    ScannableTable table = (ScannableTable) infoSchema.getTableMap().get("VIEWS");
+    ScannableTable table = (ScannableTable) tableMap(infoSchema).get("VIEWS");
     assertNotNull(table);
 
     // Verify row type
@@ -856,7 +858,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    ScannableTable table = (ScannableTable) infoSchema.getTableMap().get("ROUTINES");
+    ScannableTable table = (ScannableTable) tableMap(infoSchema).get("ROUTINES");
     assertNotNull(table);
 
     // Verify row type has many columns
@@ -876,7 +878,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    ScannableTable table = (ScannableTable) infoSchema.getTableMap().get("PARAMETERS");
+    ScannableTable table = (ScannableTable) tableMap(infoSchema).get("PARAMETERS");
     assertNotNull(table);
 
     // Verify row type
@@ -901,7 +903,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    Table table = infoSchema.getTableMap().get("SCHEMATA");
+    Table table = tableMap(infoSchema).get("SCHEMATA");
     RelDataType rowType = table.getRowType(typeFactory);
     assertEquals(8, rowType.getFieldCount());
     assertEquals("CATALOG_NAME", rowType.getFieldNames().get(0));
@@ -913,7 +915,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    Table table = infoSchema.getTableMap().get("TABLES");
+    Table table = tableMap(infoSchema).get("TABLES");
     RelDataType rowType = table.getRowType(typeFactory);
     assertEquals(13, rowType.getFieldCount());
     assertEquals("TABLE_CATALOG", rowType.getFieldNames().get(0));
@@ -927,7 +929,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    Table table = infoSchema.getTableMap().get("COLUMNS");
+    Table table = tableMap(infoSchema).get("COLUMNS");
     RelDataType rowType = table.getRowType(typeFactory);
     assertEquals(45, rowType.getFieldCount());
     assertEquals("TABLE_CATALOG", rowType.getFieldNames().get(0));
@@ -941,7 +943,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    Table table = infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+    Table table = tableMap(infoSchema).get("TABLE_CONSTRAINTS");
     RelDataType rowType = table.getRowType(typeFactory);
     assertEquals(9, rowType.getFieldCount());
     assertEquals("CONSTRAINT_CATALOG", rowType.getFieldNames().get(0));
@@ -952,7 +954,7 @@ public class InformationSchemaScanCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
 
-    Table table = infoSchema.getTableMap().get("REFERENTIAL_CONSTRAINTS");
+    Table table = tableMap(infoSchema).get("REFERENTIAL_CONSTRAINTS");
     RelDataType rowType = table.getRowType(typeFactory);
     assertEquals(9, rowType.getFieldCount());
     assertEquals("CONSTRAINT_CATALOG", rowType.getFieldNames().get(0));
@@ -968,7 +970,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testLowerCaseAccess() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
 
     assertNotNull(tableMap.get("schemata"));
     assertNotNull(tableMap.get("tables"));
@@ -984,7 +986,7 @@ public class InformationSchemaScanCoverageTest {
   @Test void testTitleCaseAccess() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
 
     // Title case: first char upper, rest lower
     assertNotNull(tableMap.get("Schemata"));
@@ -1017,7 +1019,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("constrained_schema", new PlainSchema(schema2Tables));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "full_cat");
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
 
     // Scan SCHEMATA
     ScannableTable schemataTable = (ScannableTable) tableMap.get("SCHEMATA");
@@ -1065,7 +1067,7 @@ public class InformationSchemaScanCoverageTest {
     rootSchema.add("s2", new PlainSchema(tables2));
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
-    ScannableTable columnsTable = (ScannableTable) infoSchema.getTableMap().get("COLUMNS");
+    ScannableTable columnsTable = (ScannableTable) tableMap(infoSchema).get("COLUMNS");
 
     List<Object[]> rows = columnsTable.scan(dataContext).toList();
     // PKTable has 2 columns, CommentedTable has 2 columns = 4 total
@@ -1098,7 +1100,7 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable constraintsTable =
-        (ScannableTable) infoSchema.getTableMap().get("TABLE_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("TABLE_CONSTRAINTS");
 
     List<Object[]> rows = constraintsTable.scan(dataContext).toList();
     // schema_a: 1 PK, schema_b: 1 PK + 1 UK = 3
@@ -1131,11 +1133,20 @@ public class InformationSchemaScanCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "cat");
     ScannableTable refTable =
-        (ScannableTable) infoSchema.getTableMap().get("REFERENTIAL_CONSTRAINTS");
+        (ScannableTable) tableMap(infoSchema).get("REFERENTIAL_CONSTRAINTS");
 
     List<Object[]> rows = refTable.scan(dataContext).toList();
     // Only schema_b has FK
     assertEquals(1, rows.size());
     assertEquals("SCHEMA_B", rows.get(0)[1]);
+  }
+
+  /** The schema's tables by name; {@code getTableMap} is protected in its package. */
+  private static Map<String, Table> tableMap(InformationSchema schema) {
+    Map<String, Table> tables = new HashMap<>();
+    for (String name : schema.tables().getNames(LikePattern.any())) {
+      tables.put(name, schema.tables().get(name));
+    }
+    return tables;
   }
 }

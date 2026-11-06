@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -54,8 +56,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNotNull(table);
     assertEquals("RefreshableJsonTable(test_table)", table.toString());
@@ -67,8 +68,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
     RelDataType rowType = table.getRowType(typeFactory);
@@ -81,8 +81,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
     RelDataType rowType1 = table.getRowType(typeFactory);
@@ -97,8 +96,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertEquals(RefreshableTable.RefreshBehavior.SINGLE_FILE, table.getRefreshBehavior());
   }
@@ -108,8 +106,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMinutes(5), "SMART_CASING");
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
 
     RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
     RelDataType rowType = table.getRowType(typeFactory);
@@ -121,8 +118,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNull(table.getRefreshInterval());
     assertFalse(table.needsRefresh());
@@ -134,8 +130,7 @@ public class RefreshableJsonTableCoverageTest {
     Source source = Sources.of(file);
 
     Duration interval = Duration.ofMinutes(10);
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", interval);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", interval, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertEquals(interval, table.getRefreshInterval());
     // First time should need refresh
@@ -147,8 +142,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "my_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "my_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertEquals("RefreshableJsonTable(my_table)", table.toString());
   }
@@ -158,8 +152,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMillis(1));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMillis(1), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     // Initially no last refresh time
     assertNull(table.getLastRefreshTime());
@@ -176,8 +169,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMillis(1));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMillis(1), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     // First refresh
     table.refresh();
@@ -205,8 +197,7 @@ public class RefreshableJsonTableCoverageTest {
     Source source = Sources.of(file);
     File cacheDir = tempDir.toFile();
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMinutes(5), "UNCHANGED", cacheDir);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, cacheDir, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     assertNotNull(table);
     assertEquals("RefreshableJsonTable(test_table)", table.toString());
@@ -220,8 +211,7 @@ public class RefreshableJsonTableCoverageTest {
     }
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", Duration.ofMillis(1));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", Duration.ofMillis(1), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     // Delete the file
     file.delete();
@@ -236,8 +226,7 @@ public class RefreshableJsonTableCoverageTest {
     File file = createJsonFile(json);
     Source source = Sources.of(file);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "test_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "test_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
     RelDataType rowType = table.getRowType(typeFactory);

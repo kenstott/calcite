@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.weather;
 
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -22,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -130,7 +130,7 @@ public class ClimateNormalsTransformer implements StreamingResponseTransformer {
 
   private static JsonNode fetchPage(String pageUrl, Map<String, String> headers,
       RequestContext context) throws IOException {
-    HttpURLConnection conn =
+    SharedHttpClient.Response conn =
         RetryableHttp.openWithRetry(pageUrl, headers, context.getRateLimit(), false);
     try (InputStream in = conn.getInputStream()) {
       JsonNode root = MAPPER.readTree(in);

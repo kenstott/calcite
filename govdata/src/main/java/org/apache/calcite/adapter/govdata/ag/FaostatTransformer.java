@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.ag;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import org.slf4j.Logger;
@@ -73,7 +74,7 @@ public class FaostatTransformer implements StreamingResponseTransformer {
     if (context.getHeaders() != null) {
       reqProps.putAll(context.getHeaders());
     }
-    HttpURLConnection conn;
+    SharedHttpClient.Response conn;
     try {
       // Shared retryable open (Retry-After + backoff + declared rateLimit), following redirects.
       conn = RetryableHttp.openWithRetry(url, reqProps, context.getRateLimit(), true);
@@ -138,13 +139,13 @@ public class FaostatTransformer implements StreamingResponseTransformer {
   /** Lazy row iterator over the normalized CSV inside the ZIP; closes on exhaustion. */
   private static final class FaoRowIterator implements Iterator<Map<String, Object>> {
     private final BufferedReader reader;
-    private final HttpURLConnection conn;
+    private final SharedHttpClient.Response conn;
     private final Map<String, Integer> idx;
     private final String domain;
     private Map<String, Object> mapped;
     private boolean done;
 
-    FaoRowIterator(BufferedReader reader, HttpURLConnection conn, Map<String, Integer> idx,
+    FaoRowIterator(BufferedReader reader, SharedHttpClient.Response conn, Map<String, Integer> idx,
         String domain, String url) {
       this.reader = reader;
       this.conn = conn;

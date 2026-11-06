@@ -11,8 +11,10 @@
 package org.apache.calcite.adapter.govdata.health;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -84,6 +86,17 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
 
   private static final String[] REQUIRED_HEADERS = {"provnum", "workdate", "mdscensus"};
 
+  /** Retry count for a quarterly CSV that fails mid-download; required in the schema YAML. */
+  private static int maxRetries(EtlPipelineConfig config) {
+    Map<String, Object> source = config.getRawSourceConfig();
+    Object v = source == null ? null : source.get("maxRetries");
+    if (!(v instanceof Number)) {
+      throw new IllegalStateException(
+          "cms_pbj_nurse_staffing: source.maxRetries is required in the schema YAML, got " + v);
+    }
+    return ((Number) v).intValue();
+  }
+
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables, RawCache rawCache) throws IOException {
     String catalogUrl = config.getSource() != null ? config.getSource().getUrl() : null;
@@ -99,14 +112,15 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
     }
     LOGGER.info("CMS PBJ nurse staffing: resolved {} quarterly distribution(s)", quarters.size());
 
-    return new MultiQuarterRowIterator(quarters, userAgent, rawCache);
+    return new MultiQuarterRowIterator(quarters, userAgent, rawCache, maxRetries(config),
+        10_000L);
   }
 
   // ---------------------------------------------------------------------
   // Discovery: data.json catalog -> matching dataset -> per-quarter CSVs
   // ---------------------------------------------------------------------
 
-  private static final class QuarterFile {
+  static final class QuarterFile {
     final int year;
     final int quarter;
     final String csvUrl;
@@ -120,34 +134,54 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
 
   private List<QuarterFile> resolveQuarters(String catalogUrl, String userAgent)
       throws IOException {
-    JsonNode datasets = MAPPER.readTree(getText(catalogUrl, userAgent)).path("dataset");
+    return quartersIn(MAPPER.readTree(getText(catalogUrl, userAgent)));
+  }
+
+  /**
+   * Picks the quarterly CSVs out of the data.json catalog. data.cms.gov publishes each quarter as
+   * its own dataset titled "{@value #DATASET_TITLE} : {date}" (not one dataset with a distribution
+   * per quarter), and gives a distribution's {@code temporal} as a list of
+   * {@code {startDate, endDate}} objects. Distributions without a download URL are placeholders.
+   */
+  static List<QuarterFile> quartersIn(JsonNode catalog) {
+    JsonNode datasets = catalog.path("dataset");
     List<QuarterFile> quarters = new ArrayList<>();
     if (!datasets.isArray()) {
       return quarters;
     }
+    java.util.Set<Integer> seen = new java.util.HashSet<>();
     for (JsonNode dataset : datasets) {
-      if (!DATASET_TITLE.equals(dataset.path("title").asText(""))) {
+      String title = dataset.path("title").asText("");
+      if (!DATASET_TITLE.equals(title) && !title.startsWith(DATASET_TITLE + " : ")) {
         continue;
       }
       for (JsonNode dist : dataset.path("distribution")) {
-        String downloadUrl = dist.path("downloadURL").asText(null);
-        String temporal = dist.path("temporal").asText(null);
-        if (downloadUrl == null || temporal == null || !temporal.contains("/")) {
+        String downloadUrl = dist.path("downloadURL").asText("");
+        if (downloadUrl.isEmpty()) {
           continue;
         }
-        String startDate = temporal.substring(0, temporal.indexOf('/'));
+        String startDate = startDateOf(dist.path("temporal"));
+        if (startDate == null) {
+          LOGGER.info("CMS PBJ nurse staffing: no usable temporal on distribution {} — skipping",
+              downloadUrl);
+          continue;
+        }
         LocalDate start;
         try {
           start = LocalDate.parse(startDate);
         } catch (RuntimeException e) {
-          LOGGER.info("CMS PBJ nurse staffing: unparseable temporal '{}' on distribution {} "
-              + "— skipping", temporal, downloadUrl);
+          LOGGER.info("CMS PBJ nurse staffing: unparseable start date '{}' on distribution {} "
+              + "— skipping", startDate, downloadUrl);
           continue;
         }
         int quarter = ((start.getMonthValue() - 1) / 3) + 1;
+        if (!seen.add(start.getYear() * 10 + quarter)) {
+          LOGGER.warn("CMS PBJ nurse staffing: second distribution for {}Q{} ({}) — keeping the "
+              + "first", start.getYear(), quarter, downloadUrl);
+          continue;
+        }
         quarters.add(new QuarterFile(start.getYear(), quarter, downloadUrl));
       }
-      break;
     }
     // Newest first: a dqRowLimit-capped DQ sample then exercises the current CSV shape,
     // not the earliest (aliased-header) vintage.
@@ -156,24 +190,65 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
     return quarters;
   }
 
+  /** Start date from a list of {startDate,endDate} objects, or from a "start/end" string. */
+  private static String startDateOf(JsonNode temporal) {
+    if (temporal.isArray() && temporal.size() > 0) {
+      String d = temporal.get(0).path("startDate").asText("");
+      return d.isEmpty() ? null : d;
+    }
+    String text = temporal.asText("");
+    return text.contains("/") ? text.substring(0, text.indexOf('/')) : null;
+  }
+
   // ---------------------------------------------------------------------
   // Row streaming: one quarter's CSV at a time, one row at a time
   // ---------------------------------------------------------------------
 
-  private static final class MultiQuarterRowIterator implements Iterator<Map<String, Object>> {
+  static final class MultiQuarterRowIterator implements Iterator<Map<String, Object>> {
     private final List<QuarterFile> quarters;
     private final String userAgent;
     private final RawCache rawCache;
+    private final int maxRetries;
+    private final long retryPauseMs;
     private int quarterIndex;
     private BufferedReader reader;
     private Map<String, Integer> headerIndex;
     private Map<String, Object> nextRow;
     private boolean done;
 
-    MultiQuarterRowIterator(List<QuarterFile> quarters, String userAgent, RawCache rawCache) {
+    MultiQuarterRowIterator(List<QuarterFile> quarters, String userAgent, RawCache rawCache,
+        int maxRetries, long retryPauseMs) {
+      this.retryPauseMs = retryPauseMs;
       this.quarters = quarters;
       this.userAgent = userAgent;
       this.rawCache = rawCache;
+      this.maxRetries = maxRetries;
+    }
+
+    /**
+     * Opens the quarter's CSV through the raw cache, which downloads it whole before returning.
+     * A TLS, reset or timeout failure part-way (seen 2026-10-21: bad_record_mac on 2023Q1 after
+     * three quarters had been cached) repeats the download; completed quarters stay cached.
+     */
+    private InputStream openWithRetry(String csvUrl, String ua) throws IOException {
+      for (int attempt = 1;; attempt++) {
+        try {
+          return rawCache.openStream(csvUrl, () -> openWithUserAgent(csvUrl, ua));
+        } catch (javax.net.ssl.SSLException | java.net.SocketException
+            | java.net.SocketTimeoutException | java.io.EOFException e) {
+          if (attempt > maxRetries) {
+            throw e;
+          }
+          LOGGER.warn("CMS PBJ nurse staffing: download of {} failed (attempt {}/{}): {}", csvUrl,
+              attempt, maxRetries + 1, e.toString());
+          try {
+            Thread.sleep(retryPauseMs * attempt);
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while backing off a CMS PBJ download retry", ie);
+          }
+        }
+      }
     }
 
     private void advance() throws IOException {
@@ -206,8 +281,7 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
           quarter.csvUrl);
       final String csvUrl = quarter.csvUrl;
       final String ua = userAgent;
-      reader = new BufferedReader(new InputStreamReader(
-          rawCache.openStream(csvUrl, () -> openWithUserAgent(csvUrl, ua)),
+      reader = new BufferedReader(new InputStreamReader(openWithRetry(csvUrl, ua),
           StandardCharsets.UTF_8));
       String header = CsvRecordReader.readRecord(reader);
       if (header == null) {
@@ -383,11 +457,12 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("CMS PBJ nurse staffing: HTTP " + code + " for " + url);
     }
-    return conn.getInputStream();
+    return CompleteBody.of(conn);
   }
 
   private static String headerOrDefault(EtlPipelineConfig config, String name, String dflt) {
@@ -408,12 +483,13 @@ public class CmsPbjNurseStaffingProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(60000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("CMS PBJ nurse staffing: HTTP " + code + " for " + url);
     }
     ByteArrayOutputStream buf = new ByteArrayOutputStream();
-    try (InputStream in = conn.getInputStream()) {
+    try (InputStream in = CompleteBody.of(conn)) {
       byte[] chunk = new byte[65536];
       int n;
       while ((n = in.read(chunk)) != -1) {

@@ -10,6 +10,9 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -62,7 +65,7 @@ public class ConversionFileWatcherDeepCoverageTest {
   }
 
   private void watch(String schema, File file, Duration interval) {
-    ConversionFileWatcher.getInstance().watchFile(schema, file, interval);
+    ConversionFileWatcher.getInstance().watchFile(schema, file, interval, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
     watchedEntries.add(new String[]{schema, file.getAbsolutePath()});
   }
 
@@ -83,7 +86,6 @@ public class ConversionFileWatcherDeepCoverageTest {
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
     File base = new File(tempDir, "cycle_base");
     base.mkdirs();
-    watcher.registerSchemaBaseDirectory(schema, base);
 
     File xlsxFile = new File(tempDir, "cycle_test.xlsx");
     Files.write(xlsxFile.toPath(), new byte[]{0x50, 0x4B});
@@ -106,7 +108,6 @@ public class ConversionFileWatcherDeepCoverageTest {
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
     File baseDir = new File(tempDir, "checkfile_base");
     baseDir.mkdirs();
-    watcher.registerSchemaBaseDirectory(schema, baseDir);
 
     File xlsxFile = new File(tempDir, "checkfile_test.xlsx");
     Files.write(xlsxFile.toPath(), new byte[]{0x50, 0x4B, 0x03, 0x04});
@@ -132,7 +133,6 @@ public class ConversionFileWatcherDeepCoverageTest {
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
     File baseDir = new File(tempDir, "htm_base");
     baseDir.mkdirs();
-    watcher.registerSchemaBaseDirectory(schema, baseDir);
 
     File htmFile = new File(tempDir, "checkfile_" + System.nanoTime() + ".htm");
     Files.write(htmFile.toPath(),
@@ -153,7 +153,6 @@ public class ConversionFileWatcherDeepCoverageTest {
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
     File baseDir = new File(tempDir, "xml_base");
     baseDir.mkdirs();
-    watcher.registerSchemaBaseDirectory(schema, baseDir);
 
     File xmlFile = new File(tempDir, "checkfile_" + System.nanoTime() + ".xml");
     Files.write(xmlFile.toPath(), "<root><item>value</item></root>".getBytes());
@@ -211,8 +210,8 @@ public class ConversionFileWatcherDeepCoverageTest {
     Files.write(xlsxFile.toPath(), new byte[]{0x50, 0x4B, 0x03, 0x04});
 
     // Watch the same file twice — should be idempotent
-    ConversionFileWatcher.getInstance().watchFile(schema, xlsxFile, Duration.ofMinutes(60));
-    ConversionFileWatcher.getInstance().watchFile(schema, xlsxFile, Duration.ofMinutes(60));
+    ConversionFileWatcher.getInstance().watchFile(schema, xlsxFile, Duration.ofMinutes(60), new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
+    ConversionFileWatcher.getInstance().watchFile(schema, xlsxFile, Duration.ofMinutes(60), new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
     watchedEntries.add(new String[]{schema, xlsxFile.getAbsolutePath()});
 
     ConversionFileWatcher.getInstance().unwatchFile(schema, xlsxFile);

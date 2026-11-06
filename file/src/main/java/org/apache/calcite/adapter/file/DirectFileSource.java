@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.util.Source;
 
 import java.io.File;
@@ -83,11 +84,8 @@ public class DirectFileSource implements Source {
     String basePath = source.path();
     String thisPath = this.path();
 
-    if (thisPath.startsWith(basePath)) {
-      String relativePath = thisPath.substring(basePath.length());
-      if (relativePath.startsWith(File.separator)) {
-        relativePath = relativePath.substring(1);
-      }
+    String relativePath = LocalPaths.relativize(basePath, thisPath);
+    if (relativePath != null) {
       return new DirectFileSource(new File(relativePath));
     }
 

@@ -1,0 +1,119 @@
+{
+ "count": 1,
+ "next": null,
+ "previous": null,
+ "results": [
+  {
+   "url": "https://lda.gov/api/v1/filings/8149a0b7-637b-4080-ae40-9fb7dceddc4f/",
+   "filing_uuid": "8149a0b7-637b-4080-ae40-9fb7dceddc4f",
+   "filing_type": "Q2",
+   "filing_type_display": "2nd Quarter - Report",
+   "filing_year": 2025,
+   "filing_period": "second_quarter",
+   "filing_period_display": "2nd Quarter (Apr 1 - June 30)",
+   "filing_document_url": "https://lda.gov/filings/public/filing/8149a0b7-637b-4080-ae40-9fb7dceddc4f/print/",
+   "filing_document_content_type": "text/html",
+   "income": "5500.00",
+   "expenses": null,
+   "expenses_method": null,
+   "expenses_method_display": null,
+   "posted_by_name": null,
+   "dt_posted": "2025-06-03T11:04:32-04:00",
+   "termination_date": null,
+   "registrant_country": "United States of America",
+   "registrant_ppb_country": null,
+   "registrant_address_1": "8052 Sky Blue Dr Alexandria VA 22315",
+   "registrant_address_2": null,
+   "registrant_different_address": false,
+   "registrant_city": "Alexandria",
+   "registrant_state": "VA",
+   "registrant_zip": "22315",
+   "registrant": {
+    "id": 401108124,
+    "url": "https://lda.gov/api/v1/registrants/401108124/",
+    "house_registrant_id": 66907,
+    "name": "HOLLINGER GROUP CONSULTING",
+    "description": null,
+    "address_1": "7100 point replete circle",
+    "address_2": null,
+    "address_3": null,
+    "address_4": null,
+    "city": "fort belvoir",
+    "state": "VA",
+    "state_display": "Virginia",
+    "zip": "22060",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "contact_name": null,
+    "contact_telephone": null,
+    "dt_updated": "2026-05-08T14:26:19.594238-04:00"
+   },
+   "client": {
+    "id": 64967,
+    "url": "https://lda.gov/api/v1/clients/64967/",
+    "client_id": 64967,
+    "name": "MYHY",
+    "general_description": "Defense Sport Nutrition",
+    "client_government_entity": null,
+    "client_self_select": false,
+    "state": "LA",
+    "state_display": "Louisiana",
+    "country": "US",
+    "country_display": "United States of America",
+    "ppb_state": "VA",
+    "ppb_state_display": "Virginia",
+    "ppb_country": "US",
+    "ppb_country_display": "United States of America",
+    "effective_date": "2025-02-06"
+   },
+   "lobbying_activities": [
+    {
+     "general_issue_code": "DEF",
+     "general_issue_code_display": "Defense",
+     "description": "hydration supplements for servicemembers; H.R. 1234 (118th Congress) and S. 56",
+     "foreign_entity_issues": "",
+     "lobbyists": [
+      {
+       "lobbyist": {
+        "id": 149015,
+        "prefix": null,
+        "prefix_display": null,
+        "first_name": "KEVIN",
+        "nickname": null,
+        "middle_name": null,
+        "last_name": "HOLLINGER",
+        "suffix": null,
+        "suffix_display": null
+       },
+       "covered_position": "Principal",
+       "new": false
+      }
+     ],
+     "government_entities": [
+      {
+       "id": 30,
+       "name": "Army, Dept of (Other)"
+      },
+      {
+       "id": 2,
+       "name": "HOUSE OF REPRESENTATIVES"
+      },
+      {
+       "id": 242,
+       "name": "Natl Guard"
+      },
+      {
+       "id": 1,
+       "name": "SENATE"
+      }
+     ]
+    }
+   ],
+   "conviction_disclosures": [],
+   "foreign_entities": [],
+   "affiliated_organizations": []
+  }
+ ]
+}

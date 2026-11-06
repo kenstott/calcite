@@ -70,6 +70,7 @@ from pgwire_calcite.backend import (
     QueryCanceled,
 )
 from pgwire_calcite.dialect import transpile_pg_to_calcite
+from pgwire_calcite.errors import error_text
 from pgwire_calcite.types import QueryResult
 
 log = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ def read_frame(reader) -> Optional[bytes]:
 def _error_payload(exc: BaseException) -> bytes:
     """Serialize an exception with its SQLSTATE when it has one."""
     sqlstate = exc.sqlstate if isinstance(exc, PgProtocolError) else None
-    return json.dumps({"sqlstate": sqlstate, "message": str(exc)}).encode("utf-8")
+    return json.dumps({"sqlstate": sqlstate, "message": error_text(exc)}).encode("utf-8")
 
 
 def _raise_from_payload(raw: bytes) -> None:

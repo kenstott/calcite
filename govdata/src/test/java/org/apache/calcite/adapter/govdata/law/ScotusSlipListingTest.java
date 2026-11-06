@@ -76,6 +76,12 @@ class ScotusSlipListingTest {
     assertNull(e.pdfPage);
   }
 
+  @Test void aFourDigitYearIsAccepted() {
+    Entry e = ScotusSlipListing.parse(page(row("1", "10/14/2026", "26-1",
+        "/opinions/26pdf/1.pdf", "Reversed.", "A v. B", "PC", "610 U.S. 1"))).get(0);
+    assertEquals("2026-10-14", e.decisionDate);
+  }
+
   @Test void holdingSummaryIsTheLinkTitleTrimmed() {
     Entry e = ScotusSlipListing.parse(page(INTO_VOLUME)).get(0);
     assertEquals("The District Court’s order is affirmed in part.", e.holdingSummary);

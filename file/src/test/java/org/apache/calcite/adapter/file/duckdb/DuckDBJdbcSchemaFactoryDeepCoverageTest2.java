@@ -82,7 +82,9 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
 
     // Create a FileSchema to provide operatingCacheDirectory
     FileSchema fileSchema =
-        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
 
     try {
       JdbcSchema schema =
@@ -105,7 +107,9 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     fw.close();
 
     FileSchema fileSchema =
-        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
 
     try {
       JdbcSchema schema =
@@ -127,7 +131,9 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     fw.close();
 
     FileSchema fileSchema =
-        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("database_filename", tempDir.resolve("shared.duckdb").toString());
@@ -162,9 +168,11 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     String schemaNameA = uniqueSchemaName();
     String schemaNameB = uniqueSchemaName();
     FileSchema fileSchemaA =
-        new FileSchema(parentSchema, schemaNameA, sourceDirA, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, schemaNameA, sourceDirA, sourceDirA, null, null, new ExecutionEngineConfig(),
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
     FileSchema fileSchemaB =
-        new FileSchema(parentSchema, schemaNameB, sourceDirB, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, schemaNameB, sourceDirB, sourceDirB, null, null, new ExecutionEngineConfig(),
+        false, null, null, null, null, "SMART_CASING", "SMART_CASING", null, null, null, null, true);
 
     // Schemas.subSchemaExpression(parentSchema, ...) needs a real Expression back from the mock
     // parent, or building the (unevaluated) sub-schema-lookup AST throws before create() ever
@@ -201,7 +209,9 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     sourceDir.mkdirs();
 
     FileSchema fileSchema =
-        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("database_filename", "shared.duckdb");
@@ -240,7 +250,9 @@ public class DuckDBJdbcSchemaFactoryDeepCoverageTest2 {
     fw.close();
 
     FileSchema fileSchema =
-        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, null, new ExecutionEngineConfig());
+        new FileSchema(parentSchema, uniqueSchemaName(), sourceDir, sourceDir, null, null,
+        new ExecutionEngineConfig(), false, null, null, null, null, "SMART_CASING", "SMART_CASING",
+        null, null, null, null, true);
 
     try {
       JdbcSchema schema =

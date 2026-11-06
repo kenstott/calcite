@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.etl.HooksConfig.HookErrorHandling;
 import org.apache.calcite.adapter.file.etl.HooksConfig.HookErrorHandling.ErrorAction;
 import org.apache.calcite.adapter.file.etl.RequestContext;
@@ -274,10 +276,7 @@ public class EtlMetadataRequirementsTest {
     }
     Source source = Sources.of(xml);
 
-    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(
-        source, existingCache, cacheDir, Duration.ofMillis(1), true,
-        "TO_LOWER", "SMART_CASING", null,
-        ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
+    RefreshableParquetCacheTable table = new RefreshableParquetCacheTable(source, existingCache, cacheDir, Duration.ofMillis(1), true, new SourceFileConversion(null, null, null, "TO_LOWER", "SMART_CASING", new CrawlerConfiguration()), null, ExecutionEngineConfig.ExecutionEngineType.PARQUET, null, "test_schema");
 
     // The table initializes lastModifiedTime to 0 when a refreshInterval is set, and the
     // freshly written xml has a current mtime, so isFileModified() is already true and

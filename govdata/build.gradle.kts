@@ -139,12 +139,12 @@ dependencies {
     implementation("ai.djl.huggingface:tokenizers:0.25.0")
 
     // DuckDB for JSON to Parquet conversion
-    implementation("org.duckdb:duckdb_jdbc:1.4.4.0")
+    implementation("org.duckdb:duckdb_jdbc:1.5.6.0")
 
     testImplementation(project(":testkit"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.duckdb:duckdb_jdbc:1.4.4.0")
-    implementation("org.apache.iceberg:iceberg-core:1.4.0")
+    testImplementation("org.duckdb:duckdb_jdbc:1.5.6.0")
+    implementation("org.apache.iceberg:iceberg-core:1.5.2")
     // hadoop-aws 3.4.x puts S3AFileSystem on AWS SDK v2; 3.3.x pulled the 296MB SDK v1
     // uber-bundle and was the sole reason v1 was on the classpath. Its v2 bundle is bigger
     // still, so it is excluded here in favour of the modular jars declared below.
@@ -221,6 +221,12 @@ tasks.named("compileJava") {
 }
 
 tasks.test {
+    // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+    systemProperty("iceberg.metadata.cache.directory",
+        layout.buildDirectory.dir("iceberg-schema-cache").get().asFile.absolutePath)
+    // Nor do temporary files no schema owns (REQ-1992)
+    systemProperty("calcite.file.staging.directory",
+        layout.buildDirectory.dir("test-staging").get().asFile.absolutePath)
     dependsOn("cleanMacResourceForks", "cleanTestLogs")
     workingDir = layout.buildDirectory.get().asFile
 
@@ -314,7 +320,7 @@ tasks.register("downloadDuckDbExtensions") {
     description = "Download DuckDB extensions for all platforms (linux_amd64, osx_amd64, osx_arm64, windows_amd64)"
 
     doLast {
-        val duckdbVersion = "1.4.4"
+        val duckdbVersion = "1.5.6"
         val extensionsDir = file("src/main/resources/duckdb/extensions")
         val platforms = listOf("linux_amd64", "osx_amd64", "osx_arm64", "windows_amd64")
         // NOTE: only core-repo extensions belong here. zipfs is a community extension (served from
@@ -374,7 +380,6 @@ tasks.register("bundleGovdataSeed") {
 
         val catalog = file("$base/.duckdb/govdata.duckdb")
         val wal = file("$base/.duckdb/govdata.duckdb.wal")
-        val aperio = file("$base/.aperio")
 
         // Fail loudly on anything that would produce a broken or non-portable seed.
         if (!catalog.isFile) {
@@ -385,13 +390,13 @@ tasks.register("bundleGovdataSeed") {
             throw GradleException("Uncheckpointed WAL present ($wal) — CHECKPOINT/close the catalog "
                 + "before bundling so the seed is a clean single file.")
         }
-        val trackers = if (aperio.isDirectory) {
-            aperio.walk().filter { it.isFile && it.name == ".conversions.json" }.toList()
-        } else {
-            emptyList()
-        }
+        // A schema keeps its tracker under its own base directory: <base>/<schema>/.aperio/<schema>.
+        val trackers = (base.listFiles { d -> d.isDirectory && !d.name.startsWith(".") } ?: emptyArray())
+            .map { File(it, ".aperio/${it.name}/.conversions.json") }
+            .filter { it.isFile }
+            .sortedBy { it.path }
         if (trackers.isEmpty()) {
-            throw GradleException("No .aperio/*/.conversions.json trackers under $base — nothing to seed.")
+            throw GradleException("No <schema>/.aperio/<schema>/.conversions.json trackers under $base — nothing to seed.")
         }
 
         // Every declared schema must be represented. A partial seed installs and works, so a
@@ -450,6 +455,19 @@ tasks.register("bundleGovdataSeed") {
             throw GradleException("No Iceberg schema cache at $schemaCacheSrc — generation did not "
                 + "read any Iceberg table live, so a cold start would have nothing to seed.")
         }
+        // Every entry must carry its row count and the snapshot it was read at (snapshot-summary
+        // total-records). A runtime that finds none must ask the object store, which is exactly
+        // what describe_table and restart may not do. No silent skips.
+        @Suppress("UNCHECKED_CAST")
+        val cacheTables = (groovy.json.JsonSlurper().parse(schemaCacheSrc) as Map<String, Any?>)["tables"]
+            as Map<String, Map<String, Any?>>
+        val noStats = cacheTables.filter { (_, v) -> v["rowCount"] == null || v["statsSnapshotId"] == null }
+            .keys.toSortedSet()
+        if (cacheTables.isEmpty() || noStats.isNotEmpty()) {
+            throw GradleException("Iceberg schema cache $schemaCacheSrc is incomplete: "
+                + "${cacheTables.size} entries, ${noStats.size} without rowCount/statsSnapshotId: "
+                + noStats.joinToString(", "))
+        }
         val schemaCacheDest = file("$seedDir/iceberg-schema-cache.json")
         schemaCacheSrc.copyTo(schemaCacheDest, overwrite = true)
 
@@ -459,6 +477,23 @@ tasks.register("bundleGovdataSeed") {
             + "(${schemaCacheDest.length() / 1024} KB)")
     }
 }
+
+// Writes the schema the bundled seed declares (schema.table.column:type, sorted) beside the
+// seed zip. GovDataSeedInstaller compares an installed catalog with the seed by this listing
+// and by nothing else, so it is produced by the same class that reads an installed catalog.
+tasks.register<JavaExec>("writeGovdataSeedSchema") {
+    group = "build"
+    description = "Write the schema listing of the bundled govdata seed"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.apache.calcite.adapter.govdata.GovDataSeedSchema")
+    systemProperty("calcite.file.staging.directory",
+        layout.buildDirectory.dir("seed-schema-staging").get().asFile.absolutePath)
+    args(
+        file("src/main/resources/duckdb/seed/govdata-seed.zip").absolutePath,
+        file("src/main/resources/duckdb/seed/govdata-seed.schema").absolutePath
+    )
+}
+tasks.named("bundleGovdataSeed") { finalizedBy("writeGovdataSeedSchema") }
 
 // Task to run ETL runner directly from Gradle
 tasks.register<JavaExec>("etlRunner") {

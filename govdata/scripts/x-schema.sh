@@ -71,8 +71,8 @@ _xschema_restore_budget() {
 }
 trap _xschema_restore_budget EXIT
 _xschema_total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
-{ echo "RESERVE_MB=$((_xschema_total_mem_mb - 2000))"; echo "MAX_WORKERS=0"; } > "$POOL_BUDGET_FILE"
-echo "[x-schema] claimed exclusive pool budget (MAX_WORKERS=0) — restored on exit"
+{ echo "RESERVE_MB=$((_xschema_total_mem_mb - 2000 - 5000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
+echo "[x-schema] claimed pool budget (MAX_WORKERS=1, minimal ETL kept) — restored on exit"
 
 : "${CALCITE_TRACKER_PG_URL:?CALCITE_TRACKER_PG_URL not set -- required to reach vc_staging}"
 
@@ -82,10 +82,14 @@ echo "[x-schema] claimed exclusive pool budget (MAX_WORKERS=0) — restored on e
 run_step() {
   local label="$1" limit="$2" main_class="$3"
   echo "[x-schema] $label (jar: $JAR)"
+  # The file adapter refuses to start without a staging directory (REQ-1992); common.sh gives that
+  # to the pool workers through GOVDATA_JAVA_OPTS, but the heap/direct-memory limits in that
+  # variable are sized for a worker, so only the two directory properties are passed here.
+  local dirs=("-Djava.io.tmpdir=$GOVDATA_TMPDIR" "-Dcalcite.file.staging.directory=$GOVDATA_TMPDIR")
   if [ -n "$limit" ]; then
-    timeout "$limit" "$GOVDATA_JAVA_BIN" -cp "$JAR" "$main_class"
+    timeout "$limit" "$GOVDATA_JAVA_BIN" "${dirs[@]}" -cp "$JAR" "$main_class"
   else
-    "$GOVDATA_JAVA_BIN" -cp "$JAR" "$main_class"
+    "$GOVDATA_JAVA_BIN" "${dirs[@]}" -cp "$JAR" "$main_class"
   fi
 }
 

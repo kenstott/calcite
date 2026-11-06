@@ -117,6 +117,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   private Map<String, Object> baseOperand() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     return operand;
   }
@@ -175,6 +176,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testTablesArrayWithUrlAndFormatCsv() throws Exception {
     File csvFile = createCsvFile("data1.csv", "id,name\n1,Alice\n");
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -193,6 +195,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     File jsonFile =
         createJsonFile("items.json", "[{\"id\":1,\"val\":\"x\"},{\"id\":2,\"val\":\"y\"}]");
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -210,6 +213,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     File csv1 = createCsvFile("orders.csv", "oid,amount\n1,100\n2,200\n");
     File csv2 = createCsvFile("customers.csv", "cid,name\n1,Alice\n");
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
 
@@ -235,6 +239,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testTablesArrayWithExplicitTableName() throws Exception {
     File csvFile = createCsvFile("raw_data.csv", "id,val\n1,hello\n");
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -280,6 +285,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     File jsonFile =
         createJsonFile("nested.json", "[{\"id\":1,\"info\":{\"name\":\"test\"}}]");
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
@@ -309,6 +315,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testStorageTypeLocalExplicit() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
 
     Schema schema = createSchema(operand);
@@ -348,7 +355,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testAutoDetectS3StorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("baseDirectory", tempDir.toString());
+    operand.put("directory",  "s3://my-bucket/data");
     operand.put("storageConfig", createS3Credentials());
 
     // S3 auto-detected should pass validation
@@ -358,7 +366,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testAutoDetectHttpStorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "http://example.com/data");
+    operand.put("baseDirectory", tempDir.toString());
+    operand.put("directory",  "http://example.com/data");
 
     Schema schema = createSchema(operand);
     assertNotNull(schema);
@@ -366,7 +375,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testAutoDetectHttpsStorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "https://example.com/data");
+    operand.put("baseDirectory", tempDir.toString());
+    operand.put("directory",  "https://example.com/data");
 
     Schema schema = createSchema(operand);
     assertNotNull(schema);
@@ -374,7 +384,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testAutoDetectHdfsStorageFromDirectory() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "hdfs://namenode:8020/data");
+    operand.put("baseDirectory", tempDir.toString());
+    operand.put("directory",  "hdfs://namenode:8020/data");
 
     Schema schema = createSchema(operand);
     assertNotNull(schema);
@@ -401,7 +412,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testS3WithoutCredentialsThrows() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("directory",  "s3://my-bucket/data");
 
     assertThrows(IllegalArgumentException.class, () ->
         createSchema(operand));
@@ -409,7 +420,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testS3WithPartialCredentialsThrows() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "s3://my-bucket/data");
+    operand.put("directory",  "s3://my-bucket/data");
     Map<String, Object> storageConfig = new HashMap<>();
     storageConfig.put("accessKeyId", "AKID12345");
     // Missing secretAccessKey
@@ -421,6 +432,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testAutoDetectLocalStorageFromTables() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     List<Map<String, Object>> tables = new ArrayList<>();
     Map<String, Object> table = new HashMap<>();
     table.put("name", "data");
@@ -439,6 +451,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testAutoDetectLocalStorageFromPartitionedTables() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     List<Map<String, Object>> ptables = new ArrayList<>();
     Map<String, Object> pt = new HashMap<>();
     pt.put("name", "partdata");
@@ -452,6 +465,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testNoStorageTypeNoDirectoryThrows() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     assertThrows(IllegalStateException.class, () ->
         createSchema(operand));
   }
@@ -1086,6 +1100,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testBaseDirectoryAsString() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.resolve("custom_base").toString());
 
@@ -1096,6 +1111,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testBaseDirectoryAsFileObject() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", tempDir.resolve("file_base").toFile());
 
@@ -1106,6 +1122,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testBaseDirectoryRelativeToModel() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("baseDirectory", "relative_cache");
     operand.put("modelUri", tempDir.toFile().getAbsolutePath() + "/model.json");
@@ -1118,6 +1135,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testModelBaseDirectoryAsFileObject() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("_basedir", tempDir.toFile());
 
@@ -1128,6 +1146,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testModelBaseDirectoryAsString() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("_basedir", tempDir.toFile().getAbsolutePath());
 
@@ -1346,7 +1365,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test @SuppressWarnings("unchecked")
   void testSanitizeOperandPassThroughValues() throws Exception {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/some/path");
+    operand.put("directory",  "/some/path");
     operand.put("recursive", Boolean.TRUE);
     operand.put("batchSize", 1024);
 
@@ -1845,6 +1864,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testSourceDirectoryAlias() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("sourceDirectory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
 
     Schema schema = createSchema(operand);
@@ -1854,7 +1874,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testDirectoryTakesPrecedenceOverSourceDirectory() {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
-    operand.put("sourceDirectory", "/nonexistent/path");
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
+    operand.put("sourceDirectory",  "/nonexistent/path");
     operand.put("storageType", "local");
 
     Schema schema = createSchema(operand);
@@ -1863,6 +1884,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testNoDirectoryUsesWorkingDir() {
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
     // No directory or sourceDirectory
 
@@ -1872,7 +1894,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
   @Test void testRelativeDirectoryResolvedAgainstModel() {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "data");
+    operand.put("baseDirectory", tempDir.toString());
+    operand.put("directory",  "data");
     operand.put("storageType", "local");
     operand.put("_basedir", tempDir.toFile());
 
@@ -1965,6 +1988,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
 
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("storageType", "local");
     operand.put("recursive", Boolean.TRUE);
     operand.put("directoryPattern", "*.csv");
@@ -1992,6 +2016,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     File csvFile = createCsvFile("tbase.csv", "id,value\n1,100\n");
 
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
 
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -2017,6 +2042,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     File csvFile = createCsvFile("ptbase.csv", "id,value\n1,100\n");
 
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
 
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -2041,6 +2067,7 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     File csvFile = createCsvFile("constrained.csv", "id,name\n1,Alice\n");
 
     Map<String, Object> operand = new HashMap<>();
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("storageType", "local");
 
     List<Map<String, Object>> tables = new ArrayList<>();
@@ -2093,11 +2120,12 @@ public class FileSchemaFactoryDeepCoverageTest5 {
   @Test void testWriteDebugModelCreatesFile() throws Exception {
     Map<String, Object> operand = new HashMap<>();
     operand.put("directory", tempDir.toFile().getAbsolutePath());
+    operand.put("baseDirectory", tempDir.toFile().getAbsolutePath());
     operand.put("setting", "value");
 
     invokePrivateStatic(FileSchemaFactory.class, "writeDebugModel",
-        new Class<?>[]{String.class, Map.class, String.class},
-        "debugtest", operand, "parentName");
+        new Class<?>[]{File.class, String.class, Map.class, String.class},
+        tempDir.toFile(), "debugtest", operand, "parentName");
     // Should not throw; file is written to .aperio/debug-model-debugtest.json
   }
 
@@ -2106,8 +2134,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     operand.put("key", "value");
 
     invokePrivateStatic(FileSchemaFactory.class, "writeDebugModel",
-        new Class<?>[]{String.class, Map.class, String.class},
-        "nullparent", operand, null);
+        new Class<?>[]{File.class, String.class, Map.class, String.class},
+        tempDir.toFile(), "nullparent", operand, null);
     // Should not throw
   }
 
@@ -2115,8 +2143,8 @@ public class FileSchemaFactoryDeepCoverageTest5 {
     Map<String, Object> operand = new HashMap<>();
 
     invokePrivateStatic(FileSchemaFactory.class, "writeDebugModel",
-        new Class<?>[]{String.class, Map.class, String.class},
-        "empty_op", operand, "root");
+        new Class<?>[]{File.class, String.class, Map.class, String.class},
+        tempDir.toFile(), "empty_op", operand, "root");
     // Should not throw
   }
 

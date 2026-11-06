@@ -1,0 +1,102 @@
+name: Promote to Maven Central
+
+# The only way a release reaches Maven Central. Central's free tier caps monthly publishing, so
+# a tag (engine-v*, sih-v*) never uploads there itself: its workflows build and sign the Central
+# bundles and attach them, each with a sha256, to the tag's GitHub release. This takes an
+# existing tag, fetches that release's bundles, verifies them, and uploads each to the Sonatype
+# Central Portal unchanged. The bundles a tag must carry are named by
+# .github/scripts/central-bundles.sh; one missing fails the run, naming it, before any upload.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "existing release tag to promote (e.g. engine-v0.124.0 or sih-v1.2.0)"
+        required: true
+        type: string
+
+# One promotion per tag at a time, queued, never cancelled: cancelling could cut a run between
+# two bundle uploads.
+concurrency:
+  group: promote-maven-central-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch and verify the release's Central bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          names="$(.github/scripts/central-bundles.sh "$TAG")"
+          if ! assets="$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')"; then
+            echo "::error::cannot read release $TAG of $REPO"
+            exit 1
+          fi
+          missing=0
+          for name in $names; do
+            for f in "$name" "${name}.sha256"; do
+              if ! grep -Fxq -- "$f" <<<"$assets"; then
+                echo "::error::release $TAG has no $f"
+                missing=$((missing + 1))
+              fi
+            done
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "$missing bundle asset(s) missing from $TAG; nothing uploaded"
+            exit 1
+          fi
+          mkdir -p bundles
+          for name in $names; do
+            gh release download "$TAG" --repo "$REPO" --dir bundles --pattern "$name" --pattern "${name}.sha256"
+          done
+          cd bundles
+          for name in $names; do
+            sha256sum -c "${name}.sha256"
+          done
+          echo "all $(wc -w <<<"$names") bundles of $TAG match their sha256"
+
+      - name: Upload to Sonatype Central Portal
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64 -w0)
+          failed=()
+          echo "### Maven Central promotion of $TAG" >> "$GITHUB_STEP_SUMMARY"
+          for name in $(.github/scripts/central-bundles.sh "$TAG"); do
+            deployment="${name%-central-bundle.zip}"
+            RESPONSE=$(curl -s -w "\n%{http_code}" \
+              -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
+              -H "Authorization: Bearer ${AUTH}" \
+              -H "Accept: application/json" \
+              -F "bundle=@bundles/${name};type=application/zip" \
+              -F "name=${deployment}" \
+              -F "publishingType=AUTOMATIC")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            echo "${deployment}: response ($HTTP_CODE): $BODY"
+            if [ "$HTTP_CODE" -ge 400 ]; then
+              echo "::error::Maven Central upload failed for ${deployment} (HTTP $HTTP_CODE)"
+              echo "- ${deployment}: FAILED (HTTP $HTTP_CODE)" >> "$GITHUB_STEP_SUMMARY"
+              failed+=("$deployment")
+            else
+              echo "- ${deployment}: uploaded, deployment $BODY" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          if [ "${#failed[@]}" -ne 0 ]; then
+            echo "failed: ${failed[*]}"
+            exit 1
+          fi

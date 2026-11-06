@@ -33,8 +33,10 @@ def test_stream_query_multi_batch_large_result(calcite_backend):
     names, labels, gen = arrow_bridge.stream_query(
         calcite_backend.connection, calcite_backend._lock, _LARGE_SQL, batch_size=256
     )
-    assert names == ["EMPNO"] and labels == ["INTEGER"]
+    # Drained before any assertion: an undrained generator holds the backend lock, and every
+    # later test on the shared backend would wait on it.
     n = sum(1 for _ in gen)  # small batch_size => ~40 Arrow batches, one in memory at a time
+    assert names == ["empno"] and labels == ["INTEGER"]  # unquoted folds lower
     assert n == _LARGE_N
 
 

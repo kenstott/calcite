@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.iceberg;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
@@ -27,6 +28,8 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
+import org.apache.iceberg.exceptions.CommitStateUnknownException;
+import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.DataWriter;
@@ -47,6 +50,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -69,6 +73,14 @@ import java.util.concurrent.TimeUnit;
  */
 public class IcebergTableWriter {
   private static final Logger LOGGER = LoggerFactory.getLogger(IcebergTableWriter.class);
+
+  /** Read-then-commit passes {@code deleteRows} makes before surfacing a concurrent-rewrite conflict. */
+  private static final int DELETE_ROWS_MAX_ATTEMPTS = 3;
+
+  /** Plan-rewrite-commit passes one partition's compaction makes before surfacing a conflict. */
+  private static final int COMPACT_PARTITION_MAX_ATTEMPTS = 3;
+
+  private static final String MISSING_FILES_TO_DELETE = "Missing required files to delete";
 
   /**
    * Floor on the per-record byte estimate used to size compaction output files. The estimate is
@@ -411,7 +423,7 @@ public class IcebergTableWriter {
         // immutability (corrupts time-travel, and lets a concurrent reader/cache observe a
         // mutating object). Keep the partition directory, but give each moved file a unique name,
         // matching writeRecords()/compaction.
-        int relLastSlash = relativePath.lastIndexOf('/');
+        int relLastSlash = LocalPaths.lastSeparator(relativePath);
         String partitionDir = relLastSlash >= 0 ? relativePath.substring(0, relLastSlash + 1) : "";
         String uniqueName = "data_"
             + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
@@ -451,12 +463,10 @@ public class IcebergTableWriter {
     // file in a Hive-partitioned staging dir landed at table-root/data/<file>.parquet with no
     // partition value, corrupting partition-pruning metadata while the column data stayed
     // correct). Strip the scheme from both sides before comparing so partition dirs survive.
-    String normalizedBase = stripS3Scheme(basePath);
-    normalizedBase = normalizedBase.endsWith("/") ? normalizedBase : normalizedBase + "/";
-    String normalizedFull = stripS3Scheme(fullPath);
-
-    if (normalizedFull.startsWith(normalizedBase)) {
-      return normalizedFull.substring(normalizedBase.length());
+    String relativePath =
+        LocalPaths.relativize(stripS3Scheme(basePath), stripS3Scheme(fullPath));
+    if (relativePath != null && !relativePath.isEmpty()) {
+      return relativePath;
     }
 
     throw new IllegalStateException("Staged file " + fullPath
@@ -468,7 +478,7 @@ public class IcebergTableWriter {
    * Gets the parent path of a file path.
    */
   private String getParentPath(String path) {
-    int lastSlash = path.lastIndexOf('/');
+    int lastSlash = LocalPaths.lastSeparator(path);
     if (lastSlash <= 0) {
       return null;
     }
@@ -492,8 +502,10 @@ public class IcebergTableWriter {
 
     // Extract partition values from Hive-style path
     org.apache.iceberg.PartitionData partitionData = new org.apache.iceberg.PartitionData(spec.partitionType());
-    int dataIdx = pathStr.indexOf("/data/");
-    String relativePath = dataIdx >= 0 ? pathStr.substring(dataIdx + 6) : pathStr;
+    // Read by "/": a local path on Windows is separated by "\\"
+    String slashed = LocalPaths.toSlashes(pathStr);
+    int dataIdx = slashed.indexOf("/data/");
+    String relativePath = dataIdx >= 0 ? slashed.substring(dataIdx + 6) : slashed;
     String[] pathParts = relativePath.split("/");
 
     for (int i = 0; i < pathParts.length - 1; i++) { // Exclude filename
@@ -579,11 +591,11 @@ public class IcebergTableWriter {
         default:
           return value;
       }
-    // fallback-guard: allow non-empty unparseable partition value becomes null (correct three-valued-logic semantics, not a fabricated value), matching the field's own "-" null-indicator handling above
     } catch (NumberFormatException e) {
-      LOGGER.debug("Partition value '{}' is not a valid {}, using NULL: {}", value,
-          sourceType.typeId(), e.getMessage());
-      return null;
+      // A partition value is the path every row of its file lands under: one that is not its
+      // column's declared type is a defect in what wrote it, not a value to null out.
+      throw new IllegalStateException("Partition column '" + field.name() + "' value '" + value
+          + "' is not a valid " + sourceType.typeId() + " (table " + table.name() + ")", e);
     }
   }
 
@@ -655,7 +667,7 @@ public class IcebergTableWriter {
     if (values == null || values.isEmpty()) {
       return;
     }
-    deleteRowsMatching(Expressions.in(column, values),
+    deleteRowsMatching(Expressions.in(column, values), Collections.singleton(column),
         record -> {
           Object fieldValue = record.getField(column);
           return fieldValue != null && values.contains(String.valueOf(fieldValue));
@@ -691,7 +703,7 @@ public class IcebergTableWriter {
       scanFilter = Expressions.and(scanFilter,
           Expressions.equal(entry.getKey(), coerceToColumnType(deleteScanSchema, entry)));
     }
-    deleteRowsMatching(scanFilter,
+    deleteRowsMatching(scanFilter, equalityFilter.keySet(),
         record -> {
           for (Map.Entry<String, String> entry : equalityFilter.entrySet()) {
             Object fieldValue = record.getField(entry.getKey());
@@ -745,8 +757,37 @@ public class IcebergTableWriter {
    * deleted outright with no replacement.
    */
   private void deleteRowsMatching(org.apache.iceberg.expressions.Expression scanFilter,
-      java.util.function.Predicate<Record> rowMatches, String description) throws IOException {
+      Collection<String> matchColumns, java.util.function.Predicate<Record> rowMatches,
+      String description) throws IOException {
+    for (int attempt = 1;; attempt++) {
+      table.refresh();
+      try {
+        deleteRowsMatchingOnce(scanFilter, matchColumns, rowMatches, description);
+        return;
+      } catch (ValidationException e) {
+        String message = e.getMessage();
+        if (message == null || !message.startsWith(MISSING_FILES_TO_DELETE)
+            || attempt >= DELETE_ROWS_MAX_ATTEMPTS) {
+          throw e;
+        }
+        LOGGER.warn("deleteRows: files read for {} were replaced by another writer before the "
+            + "commit (attempt {}/{}); re-reading against the current table state",
+            description, attempt, DELETE_ROWS_MAX_ATTEMPTS);
+      }
+    }
+  }
+
+  /**
+   * One read-then-commit pass of {@link #deleteRowsMatching}. {@code matchColumns} names the only
+   * columns {@code rowMatches} reads, so the match pass projects just those instead of decoding
+   * every column of every candidate file; null means the predicate needs the whole row. A file
+   * that does match is still re-read in full by {@link #copyRowsNotMatching}.
+   */
+  private void deleteRowsMatchingOnce(org.apache.iceberg.expressions.Expression scanFilter,
+      Collection<String> matchColumns, java.util.function.Predicate<Record> rowMatches,
+      String description) throws IOException {
     Schema schema = table.schema();
+    final Schema matchSchema = matchColumns == null ? schema : schema.select(matchColumns);
     PartitionSpec spec = table.spec();
 
     List<DataFile> filesToDelete = new ArrayList<>();
@@ -757,22 +798,25 @@ public class IcebergTableWriter {
              table.newScan().filter(scanFilter).planFiles()) {
       for (FileScanTask task : tasks) {
         DataFile oldFile = task.file();
-        List<Map<String, Object>> keepRows = new ArrayList<>();
         long matchedInFile = 0;
+        // Which rows matched, by position. The predicate is asked once per row: one that counts
+        // what it has kept (dedupeCopies) answers differently the second time.
+        java.util.BitSet matched = new java.util.BitSet();
+        long position = 0;
 
         InputFile in = table.io().newInputFile(oldFile.path().toString());
         try (CloseableIterable<Record> records = Parquet.read(in)
-            .project(schema)
+            .project(matchSchema)
             .createReaderFunc(fileSchema ->
                 org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(
-                    schema, fileSchema))
+                    matchSchema, fileSchema))
             .build()) {
           for (Record record : records) {
             if (rowMatches.test(record)) {
+              matched.set(Math.toIntExact(position));
               matchedInFile++;
-            } else {
-              keepRows.add(recordToMap(record, schema));
             }
+            position++;
           }
         }
 
@@ -784,7 +828,7 @@ public class IcebergTableWriter {
         deletedRows += matchedInFile;
         filesToDelete.add(oldFile);
 
-        if (!keepRows.isEmpty()) {
+        if (matchedInFile < oldFile.recordCount()) {
           Map<String, String> partitionValues = new HashMap<>();
           for (int i = 0; i < spec.fields().size(); i++) {
             Object value = oldFile.partition().get(i, Object.class);
@@ -792,7 +836,7 @@ public class IcebergTableWriter {
               partitionValues.put(spec.fields().get(i).name(), String.valueOf(value));
             }
           }
-          DataFile replacement = writeRecords(keepRows, partitionValues);
+          DataFile replacement = copyRowsNotMatching(oldFile, matched, partitionValues);
           if (replacement != null) {
             replacementFiles.add(replacement);
           }
@@ -809,19 +853,26 @@ public class IcebergTableWriter {
     final long finalDeletedRows = deletedRows;
     final List<DataFile> finalFilesToDelete = filesToDelete;
     final List<DataFile> finalReplacementFiles = replacementFiles;
-    underCommitLock(() -> {
-      RewriteFiles rewrite = table.newRewrite();
-      if (table.currentSnapshot() != null) {
-        rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-      }
-      for (DataFile f : finalFilesToDelete) {
-        rewrite.deleteFile(f);
-      }
+    try {
+      underCommitLock(() -> {
+        RewriteFiles rewrite = table.newRewrite();
+        if (table.currentSnapshot() != null) {
+          rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+        }
+        for (DataFile f : finalFilesToDelete) {
+          rewrite.deleteFile(f);
+        }
+        for (DataFile f : finalReplacementFiles) {
+          rewrite.addFile(f);
+        }
+        rewrite.commit();
+      });
+    } catch (RuntimeException e) {
       for (DataFile f : finalReplacementFiles) {
-        rewrite.addFile(f);
+        table.io().deleteFile(f.path().toString());
       }
-      rewrite.commit();
-    });
+      throw e;
+    }
     LOGGER.info("deleteRows: removed {} row(s) across {} file(s) ({} replacement file(s) written)",
         finalDeletedRows, finalFilesToDelete.size(), finalReplacementFiles.size());
   }
@@ -892,7 +943,7 @@ public class IcebergTableWriter {
     final List<Types.NestedField> allColumns = schema.columns();
     final int[] groupGcd = before.groupGcd;
     final java.util.concurrent.atomic.AtomicLong removed = new java.util.concurrent.atomic.AtomicLong();
-    deleteRowsMatching(scanFilter, record -> {
+    deleteRowsMatching(scanFilter, null, record -> {
       RowDigestCounts.digest(md, record, allColumns, d);
       int slot = digests.find(d[0], d[1]);
       if (slot < 0) {
@@ -1005,15 +1056,6 @@ public class IcebergTableWriter {
     }
   }
 
-  /** Converts an Iceberg {@link Record} to a plain map, for feeding back into {@link #writeRecords}. */
-  private static Map<String, Object> recordToMap(Record record, Schema schema) {
-    Map<String, Object> row = new HashMap<>();
-    for (org.apache.iceberg.types.Types.NestedField field : schema.columns()) {
-      row.put(field.name(), record.getField(field.name()));
-    }
-    return row;
-  }
-
   /**
    * Writes records to Iceberg using the native Parquet writer with proper field IDs.
    *
@@ -1035,23 +1077,7 @@ public class IcebergTableWriter {
     Schema schema = table.schema();
     PartitionSpec spec = table.spec();
 
-    // Generate unique file path in data location
-    String dataLocation = table.location() + "/data";
-    String partitionPath = buildPartitionPath(partitionValues);
-    // buildPartitionPath returns "" for a table whose spec has no fields (materialize.partition.
-    // columns: []). Concatenating a separator on both sides of that empty string yields
-    // "data//data_x.parquet", and S3/MinIO reject the empty path segment with HTTP 400 "Object name
-    // contains unsupported characters" — which failed EVERY write for the unpartitioned geo
-    // reference tables (state_ref, zcta_ref, census_regions, census_divisions), losing the whole
-    // batch each run ("Closing writer with N unflushed partition buffers - data will be lost").
-    String filePath = dataLocation + "/"
-        + (partitionPath.isEmpty() ? "" : partitionPath + "/")
-        + "data_" + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
-
-    // Normalize to s3a:// for Iceberg/Hadoop compatibility
-    if (filePath.startsWith("s3://")) {
-      filePath = "s3a://" + filePath.substring(5);
-    }
+    String filePath = newDataFilePath(partitionValues);
 
     LOGGER.debug("Writing {} records to {} with partition {}", records.size(), filePath, partitionValues);
 
@@ -1109,6 +1135,69 @@ public class IcebergTableWriter {
         dataFile.path(), dataFile.recordCount(), dataFile.fileSizeInBytes());
 
     return dataFile;
+  }
+
+  /** Generates a unique data-file path under the table's data location for a partition. */
+  private String newDataFilePath(Map<String, String> partitionValues) {
+    String dataLocation = table.location() + "/data";
+    String partitionPath = buildPartitionPath(partitionValues);
+    // buildPartitionPath returns "" for a table whose spec has no fields (materialize.partition.
+    // columns: []). Concatenating a separator on both sides of that empty string yields
+    // "data//data_x.parquet", and S3/MinIO reject the empty path segment with HTTP 400 "Object name
+    // contains unsupported characters" — which failed EVERY write for the unpartitioned geo
+    // reference tables (state_ref, zcta_ref, census_regions, census_divisions), losing the whole
+    // batch each run ("Closing writer with N unflushed partition buffers - data will be lost").
+    String filePath = dataLocation + "/"
+        + (partitionPath.isEmpty() ? "" : partitionPath + "/")
+        + "data_" + java.util.UUID.randomUUID().toString().substring(0, 8) + ".parquet";
+
+    // Normalize to s3a:// for Iceberg/Hadoop compatibility
+    if (filePath.startsWith("s3://")) {
+      filePath = "s3a://" + filePath.substring(5);
+    }
+    return filePath;
+  }
+
+  /**
+   * Streams the rows of {@code oldFile} whose position is not set in {@code matched} into a new
+   * data file, holding one row at a time. Rows are read in the order they were read when
+   * {@code matched} was filled. They already conform to the table schema, so no coercion is
+   * applied.
+   */
+  private DataFile copyRowsNotMatching(DataFile oldFile, java.util.BitSet matched,
+      Map<String, String> partitionValues) throws IOException {
+    Schema schema = table.schema();
+    PartitionSpec spec = table.spec();
+    PartitionKey partitionKey = new PartitionKey(spec, schema);
+    setPartitionKeyValues(partitionKey, spec, schema, partitionValues);
+
+    OutputFile outputFile = table.io().newOutputFile(newDataFilePath(partitionValues));
+    InputFile in = table.io().newInputFile(oldFile.path().toString());
+    DataWriter<Record> writer = Parquet.writeData(outputFile)
+        .schema(schema)
+        .withSpec(spec)
+        .withPartition(partitionKey)
+        .createWriterFunc(GenericParquetWriter::buildWriter)
+        .overwrite()
+        .build();
+    long kept = 0;
+    int position = 0;
+    try (CloseableIterable<Record> records = Parquet.read(in)
+        .project(schema)
+        .createReaderFunc(fileSchema ->
+            org.apache.iceberg.data.parquet.GenericParquetReaders.buildReader(schema, fileSchema))
+        .build()) {
+      for (Record record : records) {
+        if (!matched.get(position)) {
+          writer.write(record);
+          kept++;
+        }
+        position++;
+      }
+    } finally {
+      writer.close();
+    }
+    return kept == 0 ? null : writer.toDataFile();
   }
 
   /**
@@ -1527,6 +1616,8 @@ public class IcebergTableWriter {
     // set, so it can never pull a file out from under the CURRENT snapshot regardless of window.
     try {
       underCommitLock(() -> {
+        table.refresh();
+        supersedeAgedRemovingSnapshot(expireSnapshotsMillis);
         table.expireSnapshots()
             .expireOlderThan(expireSnapshotsMillis)
             .deleteWith(this::deleteExpiredFile)
@@ -1536,6 +1627,33 @@ public class IcebergTableWriter {
     } catch (Exception e) {
       LOGGER.warn("Failed to expire snapshots: {}", e.getMessage());
     }
+  }
+
+  /**
+   * Commits an empty snapshot when the current snapshot is older than the retention cutoff and
+   * removed data files (a compaction or an overwrite).
+   *
+   * <p>Iceberg's incremental cleanup deletes the files a snapshot removed only when that snapshot
+   * is itself expired, and the current snapshot is never expired. A table that compacts on its
+   * last write and then idles would therefore keep every replaced file indefinitely. The empty
+   * snapshot makes the aged one non-current so the expiry that follows can reclaim its files; it
+   * carries no removals itself, so the next pass finds nothing further to supersede.
+   */
+  private void supersedeAgedRemovingSnapshot(long cutoffMillis) {
+    org.apache.iceberg.Snapshot current = table.currentSnapshot();
+    if (current == null || current.timestampMillis() >= cutoffMillis) {
+      return;
+    }
+    Map<String, String> summary = current.summary();
+    String removed = summary == null ? null : summary.get(
+        org.apache.iceberg.SnapshotSummary.DELETED_FILES_PROP);
+    if (removed == null || Long.parseLong(removed) <= 0) {
+      return;
+    }
+    table.newAppend().commit();
+    table.refresh();
+    LOGGER.info("Committed an empty snapshot over {}'s aged snapshot {} that removed {} files so "
+        + "its files can be reclaimed", table.name(), current.snapshotId(), removed);
   }
 
   /**
@@ -1634,7 +1752,7 @@ public class IcebergTableWriter {
     java.util.TreeMap<Integer, String> versionToPath = new java.util.TreeMap<>();
     for (StorageProvider.FileEntry entry : metadataFiles) {
       String path = entry.getPath();
-      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      String fileName = LocalPaths.fileName(path);
       java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
       if (matcher.find()) {
         versionToPath.put(Integer.parseInt(matcher.group(1)), path);
@@ -1881,11 +1999,14 @@ public class IcebergTableWriter {
       if (smallFiles.size() >= minFilesToCompact) {
         LOGGER.info("Compacting partition {} with {} small files", partitionKey, smallFiles.size());
         try {
-          boolean sorted = compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
+          boolean allRewrittenSorted = compactPartitionAgainstCurrentState(partitionKey, tasks,
+              smallFiles, minFilesToCompact, smallFileSizeBytes, targetFileSizeBytes, sortOrder);
           compactedPartitions++;
-          if (!sorted || smallFiles.size() != tasks.size()) {
+          if (!allRewrittenSorted) {
             fullySorted = false;
           }
+        } catch (ValidationException e) {
+          throw e;
         } catch (Throwable e) {
           LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
           fullySorted = false;
@@ -2190,7 +2311,7 @@ public class IcebergTableWriter {
     copyPartitionValues(partitionKey, partitionData, spec);
     int recordsPerFile = computeRecordsPerFile(totalBytes, totalRecords, targetFileSizeBytes);
 
-    java.io.File spillDir = java.nio.file.Files.createTempDirectory("iceberg-sort-").toFile();
+    java.io.File spillDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("iceberg-sort-").toFile();
     List<java.io.File> runs = new ArrayList<>();
     try {
       // Pass 1 — sorted runs.
@@ -2294,19 +2415,7 @@ public class IcebergTableWriter {
       }
       LOGGER.info("External sort wrote {} records to {} files", written, newFiles.size());
 
-      RewriteFiles rewrite = table.newRewrite();
-      if (table.currentSnapshot() != null) {
-        rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-      }
-      for (DataFile oldFile : filesToDelete) {
-        rewrite.deleteFile(oldFile);
-      }
-      for (DataFile newFile : newFiles) {
-        rewrite.addFile(newFile);
-      }
-      underCommitLock(() -> {
-        rewrite.commit();
-      });
+      commitCompactionRewrite(filesToDelete, newFiles);
     } finally {
       for (java.io.File run : runs) {
         if (run.exists() && !run.delete()) {
@@ -2430,6 +2539,90 @@ public class IcebergTableWriter {
     return out;
   }
 
+  /**
+   * Commits a compaction rewrite swapping {@code filesToDelete} for {@code newFiles}. When the
+   * commit fails, the replacement files it wrote are unreferenced by any snapshot and are
+   * deleted, so a re-planned attempt does not leave them behind. A commit whose outcome is
+   * unknown keeps them, since the snapshot may already reference them.
+   */
+  private void commitCompactionRewrite(Set<DataFile> filesToDelete, List<DataFile> newFiles) {
+    try {
+      underCommitLock(() -> {
+        RewriteFiles rewrite = table.newRewrite();
+        if (table.currentSnapshot() != null) {
+          rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
+        }
+        for (DataFile oldFile : filesToDelete) {
+          rewrite.deleteFile(oldFile);
+        }
+        for (DataFile newFile : newFiles) {
+          rewrite.addFile(newFile);
+        }
+        rewrite.commit();
+      });
+    } catch (CommitStateUnknownException e) {
+      throw e;
+    } catch (RuntimeException e) {
+      for (DataFile newFile : newFiles) {
+        table.io().deleteFile(newFile.path().toString());
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Compacts one partition, re-planning its files from the current table state when another
+   * writer replaced one of them between planning and the rewrite commit. Planning happens once
+   * for the whole table before any partition is rewritten, and a sorted rewrite of a large
+   * partition runs long enough for a concurrent writer to commit over the planned files, so the
+   * rewrite's whole-file delete then names a file that is no longer live. A conflict that
+   * persists past {@link #COMPACT_PARTITION_MAX_ATTEMPTS} attempts propagates.
+   *
+   * @return true when the partition was rewritten entirely, in sorted order
+   */
+  boolean compactPartitionAgainstCurrentState(String partitionKey,
+      List<FileScanTask> plannedTasks, List<FileScanTask> plannedSmallFiles, int minFilesToCompact,
+      long smallFileSizeBytes, long targetFileSizeBytes, java.util.List<String> sortOrder)
+      throws IOException {
+    List<FileScanTask> tasks = plannedTasks;
+    List<FileScanTask> smallFiles = plannedSmallFiles;
+    for (int attempt = 1;; attempt++) {
+      try {
+        boolean sorted = compactPartition(smallFiles, targetFileSizeBytes, sortOrder);
+        return sorted && smallFiles.size() == tasks.size();
+      } catch (ValidationException e) {
+        String message = e.getMessage();
+        if (message == null || !message.startsWith(MISSING_FILES_TO_DELETE)
+            || attempt >= COMPACT_PARTITION_MAX_ATTEMPTS) {
+          throw e;
+        }
+        LOGGER.warn("compactSmallFiles: files planned for partition {} were replaced by another "
+            + "writer before the commit (attempt {}/{}); re-planning against the current table "
+            + "state", partitionKey, attempt, COMPACT_PARTITION_MAX_ATTEMPTS);
+        table.refresh();
+        tasks = new ArrayList<>();
+        try (CloseableIterable<FileScanTask> planned = table.newScan().planFiles()) {
+          for (FileScanTask task : planned) {
+            if (task.file().partition().toString().equals(partitionKey)) {
+              tasks.add(task);
+            }
+          }
+        }
+        smallFiles = new ArrayList<>();
+        for (FileScanTask task : tasks) {
+          if (task.file().fileSizeInBytes() < smallFileSizeBytes) {
+            smallFiles.add(task);
+          }
+        }
+        if (smallFiles.size() < minFilesToCompact) {
+          LOGGER.info("Partition {} no longer has {} small files after the concurrent rewrite; "
+              + "nothing left to compact", partitionKey, minFilesToCompact);
+          return false;
+        }
+      }
+    }
+  }
+
   private boolean compactPartition(List<FileScanTask> smallFiles, long targetFileSizeBytes,
       java.util.List<String> sortOrder) throws IOException {
     if (smallFiles.isEmpty()) {
@@ -2551,22 +2744,7 @@ public class IcebergTableWriter {
 
     LOGGER.info("Java compaction wrote {} records to {} files", totalWritten, newFiles.size());
 
-    // Commit the rewrite: delete old files, add new files
-    RewriteFiles rewrite = table.newRewrite();
-    // Set validation snapshot to current to avoid lineage errors
-    // when old snapshots have been expired
-    if (table.currentSnapshot() != null) {
-      rewrite.validateFromSnapshot(table.currentSnapshot().snapshotId());
-    }
-    for (DataFile oldFile : filesToDelete) {
-      rewrite.deleteFile(oldFile);
-    }
-    for (DataFile newFile : newFiles) {
-      rewrite.addFile(newFile);
-    }
-    underCommitLock(() -> {
-      rewrite.commit();
-    });
+    commitCompactionRewrite(filesToDelete, newFiles);
 
     LOGGER.info("Compacted {} files into {} files", filesToDelete.size(), newFiles.size());
     return false;
@@ -2655,11 +2833,7 @@ public class IcebergTableWriter {
       int maxVersion = 0;
       java.util.regex.Pattern versionPattern = java.util.regex.Pattern.compile("v(\\d+)\\.metadata\\.json$");
       for (StorageProvider.FileEntry entry : metadataFiles) {
-        String fileName = entry.getPath();
-        int lastSlash = fileName.lastIndexOf('/');
-        if (lastSlash >= 0) {
-          fileName = fileName.substring(lastSlash + 1);
-        }
+        String fileName = LocalPaths.fileName(entry.getPath());
         java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
         if (matcher.find()) {
           int version = Integer.parseInt(matcher.group(1));
@@ -2756,7 +2930,7 @@ public class IcebergTableWriter {
     java.util.TreeSet<Integer> candidates = new java.util.TreeSet<>(java.util.Collections.reverseOrder());
     for (StorageProvider.FileEntry entry : metadataFiles) {
       String path = entry.getPath();
-      String fileName = path.substring(path.lastIndexOf('/') + 1);
+      String fileName = LocalPaths.fileName(path);
       java.util.regex.Matcher matcher = versionPattern.matcher(fileName);
       if (matcher.find()) {
         candidates.add(Integer.parseInt(matcher.group(1)));

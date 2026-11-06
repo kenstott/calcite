@@ -56,12 +56,22 @@ final class EngineInstaller {
     private EngineInstaller() {
     }
 
-    /** The engine jar's asset name on every release. */
+    /** The universal engine jar's asset name on every release: every platform's native libraries. */
     static final String ENGINE_ASSET = "askamerica-engine.jar";
 
-    /** Stable, version-less asset URL — always the latest engine release. */
-    private static final String DEFAULT_URL =
-        "https://github.com/kenstott/calcite/releases/latest/download/askamerica-engine.jar";
+    /**
+     * This machine's engine jar: the same classes with only its own operating system's native
+     * libraries (OpenBLAS, DuckDB), about 70% smaller than the universal jar, which carries the
+     * natives of every platform. The names match the pgwire-govdata bundle's platforms.
+     */
+    static String platformAsset() {
+        return "askamerica-engine-" + PlatformVariant.osVariant() + ".jar";
+    }
+
+    /** Stable, version-less asset URL of this machine's jar — always the latest engine release. */
+    static String defaultUrl() {
+        return "https://github.com/kenstott/calcite/releases/latest/download/" + platformAsset();
+    }
 
     /** Newest published release; {@code tag_name} is {@code engine-vX.Y.Z}. */
     private static final String LATEST_API =
@@ -134,7 +144,7 @@ final class EngineInstaller {
             report("Using pinned engine jar " + existing + " (" + describe(existing) + ").");
             return existing;
         }
-        String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", DEFAULT_URL);
+        String url = System.getenv().getOrDefault("ASKAMERICA_ENGINE_URL", defaultUrl());
         if (existing != null && serverMode) {
             background.execute(() -> updateInBackground(dest, url));
             return existing;
@@ -143,7 +153,31 @@ final class EngineInstaller {
             return existing;
         }
         Files.createDirectories(dest.getParent());
-        return lockAndDownload(dest, url, serverMode);
+        try {
+            return lockAndDownload(dest, url, serverMode);
+        } catch (IOException e) {
+            // Windows will not replace a jar another process has open, and Claude Desktop's own
+            // MCP processes hold it open for as long as they run. Launching the wizard right
+            // after installing a new version therefore died with exit code 1 although the older
+            // jar in the cache works. Say so, and use that jar; the update lands on the next
+            // launch when nothing holds it. With no jar at all there is nothing to use.
+            if (existing != null && isFileInUse(e)) {
+                report("The engine update cannot replace " + dest + " while another AskAmerica "
+                    + "process (Claude Desktop's connector) is using it — continuing with the "
+                    + "installed engine " + describe(existing) + ". Quit Claude Desktop and "
+                    + "reopen AskAmerica to finish the update.");
+                return existing;
+            }
+            throw e;
+        }
+    }
+
+    /** Whether {@code e} is the operating system refusing to replace a file another process has
+     *  open (Windows: "being used by another process"). */
+    static boolean isFileInUse(IOException e) {
+        return e instanceof java.nio.file.FileSystemException
+            && String.valueOf(((java.nio.file.FileSystemException) e).getReason())
+                .toLowerCase(java.util.Locale.ROOT).contains("used by another process");
     }
 
     private static void startDaemon(Runnable task) {
@@ -304,7 +338,7 @@ final class EngineInstaller {
         // A release is published before its workflow attaches the jar; until then the
         // download URL answers 404, so the cached jar is still the newest engine there is.
         if (!hasEngineJar(release)) {
-            report("Engine release " + latest + " has no " + ENGINE_ASSET
+            report("Engine release " + latest + " has no " + platformAsset()
                 + " attached yet — keeping the cached jar.");
             return false;
         }
@@ -349,10 +383,15 @@ final class EngineInstaller {
         return m.find() ? m.group(1) : null;
     }
 
-    /** Whether a release response lists the engine jar among its assets. */
+    /** Whether a release response lists this machine's engine jar among its assets. */
     static boolean hasEngineJar(String releaseJson) {
+        return hasAsset(releaseJson, platformAsset());
+    }
+
+    /** Whether a release response lists an asset of exactly this name. */
+    static boolean hasAsset(String releaseJson, String name) {
         return java.util.regex.Pattern
-            .compile("\"name\"\\s*:\\s*\"" + java.util.regex.Pattern.quote(ENGINE_ASSET) + "\"")
+            .compile("\"name\"\\s*:\\s*\"" + java.util.regex.Pattern.quote(name) + "\"")
             .matcher(releaseJson)
             .find();
     }
@@ -464,10 +503,18 @@ final class EngineInstaller {
         }
         verifyDownloadedJar(tmp, url);
         try {
-            Files.move(tmp, dest,
-                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException atomicUnsupported) {
-            Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(tmp, dest,
+                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicUnsupported) {
+                Files.move(tmp, dest, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            // The replace failed (on Windows: another process has the cached jar open). The
+            // downloaded copy is useless and was left behind as an orphaned .part each time.
+            Files.deleteIfExists(tmp);
+            progress.done();
+            throw e;
         }
         progress.done();
     }

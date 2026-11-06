@@ -7,6 +7,7 @@
 # ============================================================================
 
 schemaName: "edu"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
@@ -43,12 +44,13 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 232288
-      checkedAt: "2026-10-08T06:02:54Z"
+      checkedAt: "2026-11-05T20:21:48Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES Common Core of Data — Local Education Agency (district) directory.
@@ -257,12 +259,13 @@ partitionedTables:
       distinctYears: 15
       contiguous: true
       rowCount: 1537589
-      checkedAt: "2026-10-08T06:02:58Z"
+      checkedAt: "2026-11-05T20:21:49Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES Common Core of Data — individual school directory.
@@ -500,12 +503,13 @@ partitionedTables:
       contiguous: false
       years: [2013, 2015, 2017, 2019, 2022, 2024]
       rowCount: 1248
-      checkedAt: "2026-10-08T06:03:01Z"
+      checkedAt: "2026-11-05T20:21:49Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NAEP (National Assessment of Educational Progress) state-level mean scale scores for
@@ -633,12 +637,13 @@ partitionedTables:
       contiguous: false
       years: [2013, 2015, 2017, 2019, 2022, 2024]
       rowCount: 3744
-      checkedAt: "2026-10-08T06:03:04Z"
+      checkedAt: "2026-11-05T20:21:50Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NAEP proficiency level distributions sourced from GetAdhocData ALD stattype calls.
@@ -789,13 +794,14 @@ partitionedTables:
       distinctYears: 6
       contiguous: false
       years: [2013, 2015, 2017, 2020, 2021, 2022]
-      rowCount: 16372237
-      checkedAt: "2026-10-08T06:03:11Z"
+      rowCount: 18159226
+      checkedAt: "2026-11-05T20:21:52Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: crdc_topic
           type: VARCHAR
 
@@ -1042,12 +1048,13 @@ partitionedTables:
       distinctYears: 16
       contiguous: true
       rowCount: 1058875
-      checkedAt: "2026-10-08T06:03:14Z"
+      checkedAt: "2026-11-05T20:21:55Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES IPEDS Institutional Characteristics (HD survey) directory.
@@ -1254,12 +1261,13 @@ partitionedTables:
       distinctYears: 18
       contiguous: true
       rowCount: 5114193
-      checkedAt: "2026-10-08T06:03:20Z"
+      checkedAt: "2026-11-05T20:21:57Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     # DQ sample cap (GOVDATA_DQ mode): completions is ~4.2M rows/year fully disaggregated.
     # Each year is a separate ZIP fetch-unit, so the cap samples every year while bounding
@@ -1490,12 +1498,13 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 77184
-      checkedAt: "2026-10-08T06:03:26Z"
+      checkedAt: "2026-11-05T20:21:58Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: form_type
           type: VARCHAR
 
@@ -1742,12 +1751,13 @@ partitionedTables:
       distinctYears: 7
       contiguous: true
       rowCount: 125143
-      checkedAt: "2026-10-08T06:03:29Z"
+      checkedAt: "2026-11-05T20:21:59Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       NCES IPEDS IC_AY (Institutional Characteristics — Academic Year) survey.
@@ -1870,13 +1880,14 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 9
       contiguous: true
-      rowCount: 56457
-      checkedAt: "2026-10-08T06:03:32Z"
+      rowCount: 56462
+      checkedAt: "2026-11-05T20:22:00Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Dept of Ed College Scorecard institution-level outcomes. Earnings, debt,
@@ -2072,13 +2083,14 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 9
       contiguous: true
-      rowCount: 1933472
-      checkedAt: "2026-10-08T06:03:37Z"
+      rowCount: 1932416
+      checkedAt: "2026-11-05T20:22:01Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     # DQ sample cap (GOVDATA_DQ mode): ~150k program rows/year, paginated 100/page (~1,500
     # API calls/year). Each year is a separate fetch-unit, so the cap samples every year and
@@ -2215,12 +2227,13 @@ partitionedTables:
       distinctYears: 6
       contiguous: true
       rowCount: 105178
-      checkedAt: "2026-10-08T06:03:41Z"
+      checkedAt: "2026-11-05T20:22:02Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       IMLS Public Libraries Survey (PLS), outlet-level file — one row per
@@ -2371,12 +2384,13 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 243892
-      checkedAt: "2026-10-08T06:03:46Z"
+      checkedAt: "2026-11-05T20:22:03Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
 
     comment: >
       Census Bureau Annual Survey of School System Finances ("F-33"),
@@ -2559,7 +2573,7 @@ partitionedTables:
         # lookbackPeriods is set, so already-fresh years are skipped on subsequent runs.
         # minYear: 2000 caps a low operator override at the pattern's own verified floor
         # (elsec{yy}t.txt resolves back to FY2000; earlier is unverified).
-        start: "${GOVDATA_START_YEAR:2013}"
+        start: "${GOVDATA_START_YEAR:2010}"
         minYear: 2000
         dataLag: 2
 
@@ -2596,12 +2610,13 @@ partitionedTables:
       contiguous: false
       years: [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2020]
       rowCount: 1091910
-      checkedAt: "2026-10-08T06:03:57Z"
+      checkedAt: "2026-11-05T20:22:05Z"
     partitions:
       style: hive
       columnDefinitions:
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: grade
           type: INTEGER
 

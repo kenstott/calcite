@@ -46,12 +46,20 @@ WORKER_NATIVE_MB="${WORKER_NATIVE_MB:-1024}"
 # Hard cap on concurrent SEC-family (sec_primary/sec_secondary/sec_13f) workers, whatever else is
 # queued: SEC's historical slot count (up to 16 years x 3 sub-schemas) would otherwise take every
 # worker slot, and the workers all hit sec.gov.
-SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-3}"
-# Swap-used threshold (percent) above which fill_pool holds new admissions. MemAvailable alone
-# doesn't carry this signal: it only reports free/reclaimable RAM, so it stays "healthy" even once
-# swap has absorbed most of the pressure — right up until swap itself runs out, at which point
-# already-running workers (not just a newly admitted one) can no longer get a page fault satisfied.
+SEC_FAMILY_CAP="${SEC_FAMILY_CAP:-5}"
+# Swap gate. Swap-used percent alone cannot gate admission: pages swapped out during a past peak
+# stay in swap until touched, so a stale high percentage says nothing about current pressure. The
+# gate holds on active swapping (pswpin+pswpout pages/sec from /proc/vmstat between fill_pool
+# passes), and on swap-used percent only when it is high AND free RAM could not absorb the job.
+#   SWAP_PRESSURE_PCT       swap-used percent at which free RAM must also cover the job (default 70)
+#   SWAP_HARD_PCT           swap-used percent above which any swap activity holds (default 90)
+#   SWAP_ACTIVE_PAGES_SEC   swap in+out page rate that counts as heavy swapping (default 200)
 SWAP_PRESSURE_PCT="${SWAP_PRESSURE_PCT:-70}"
+SWAP_HARD_PCT="${SWAP_HARD_PCT:-90}"
+SWAP_ACTIVE_PAGES_SEC="${SWAP_ACTIVE_PAGES_SEC:-200}"
+_swap_prev_pages=""
+_swap_prev_ts=0
+_swap_rate=0
 PARALLEL_THREADS=0   # 0 = not set (default sequential); >1 = parallel entity threads
 RESET_BUDGET_FILE=false  # --reset-budget forces this invocation's -j/-r to become the new baseline
 
@@ -128,7 +136,7 @@ if [ $# -eq 0 ]; then
   echo "    all        — union of historical + daily"
   echo ""
   echo "  Valid schemas: sec_primary, sec_secondary, sec_13f, sec_prices, sec, econ, census, geo, crime, weather,"
-  echo "                 ref, fec, fedregister, law, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking"
+  echo "                 ref, fec, fedregister, law, officials, econ_reference, cyber_threat, cyber_vuln, health, edu, energy, patents, lands, cftc, ag, disasters, housing, transport, environment, research, fiscal, banking, fisheries"
   echo ""
   echo "  DQ aliases (only schemas with *_dq.sql scripts):"
   echo "    dq         — DQ checks only for all DQ schemas (data must already be in R2)  [ag: PENDING until first ETL run]"
@@ -205,6 +213,7 @@ for arg in "$@"; do
       queue+=(research:historical research:daily)
       queue+=(fiscal:historical fiscal:daily)
       queue+=(banking:historical banking:daily)
+      queue+=(fisheries:historical fisheries:daily)
       queue+=(econ_reference:daily law:daily)
       # See the daily) alias below for why ref:daily is queued last here too.
       queue+=(ref:daily)
@@ -280,12 +289,12 @@ for arg in "$@"; do
       # sequential :serial worker over all years; the per-year housing slots below skip them.
       hcy_enqueue housing serial
       # Year loop (current year is daily's slot, so start at cy-1).
-      # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
-      # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
+      # sec_secondary runs a year over several days (the tracker resumes it after each window),
+      # and SEC_FAMILY_CAP bounds how many SEC-family years run at once.
       _year_schemas=(
-        sec_primary sec_13f
+        sec_primary sec_secondary sec_13f
         econ census geo crime weather energy
-        fec fedregister cftc
+        fec fedregister cftc fisheries
         health edu patents lands
         # Split-schema year-addressable tables (snapshots handled by the :once slots above).
         housing transport environment ag disasters fiscal banking
@@ -306,7 +315,7 @@ for arg in "$@"; do
         sec:dq sec_secondary:dq sec_prices:dq weather:dq edu:dq census:dq econ:dq crime:dq geo:dq
         fec:dq fedregister:dq officials:dq law:dq lands:dq health:dq patents:dq ref:dq
         energy:dq econ_reference:dq cyber_threat:dq cyber_vuln:dq
-        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq banking:dq
+        cftc:dq disasters:dq housing:dq transport:dq environment:dq ag:dq research:dq fiscal:dq banking:dq fisheries:dq
       )
       ;;
 
@@ -319,7 +328,7 @@ for arg in "$@"; do
         crime:dq-rebuild geo:dq-rebuild fec:dq-rebuild fedregister:dq-rebuild officials:dq-rebuild law:dq-rebuild
         lands:dq-rebuild health:dq-rebuild patents:dq-rebuild ref:dq-rebuild
         energy:dq-rebuild econ_reference:dq-rebuild cyber_threat:dq-rebuild cyber_vuln:dq-rebuild
-        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild banking:dq-rebuild
+        cftc:dq-rebuild disasters:dq-rebuild housing:dq-rebuild transport:dq-rebuild environment:dq-rebuild ag:dq-rebuild research:dq-rebuild fiscal:dq-rebuild banking:dq-rebuild fisheries:dq-rebuild
       )
       ;;
 
@@ -332,7 +341,7 @@ for arg in "$@"; do
         crime:dq-etl-resume geo:dq-etl-resume fec:dq-etl-resume fedregister:dq-etl-resume officials:dq-etl-resume law:dq-etl-resume
         lands:dq-etl-resume health:dq-etl-resume patents:dq-etl-resume ref:dq-etl-resume
         energy:dq-etl-resume econ_reference:dq-etl-resume cyber_threat:dq-etl-resume cyber_vuln:dq-etl-resume
-        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume banking:dq-etl-resume
+        cftc:dq-etl-resume disasters:dq-etl-resume housing:dq-etl-resume transport:dq-etl-resume environment:dq-etl-resume ag:dq-etl-resume research:dq-etl-resume fiscal:dq-etl-resume banking:dq-etl-resume fisheries:dq-etl-resume
       )
       ;;
 
@@ -340,38 +349,43 @@ for arg in "$@"; do
       # Recurring workers — run every day on the production server.
       export GOVDATA_RUN_MODE="daily"
       _cy=$(date +%Y)
+      # Longest-running schemas first. Admission is capped at -j 8 concurrent, so this is a
+      # makespan problem: a slow schema queued late starts late and the whole window waits on
+      # it (2026-10-09: housing:daily was queued near the end, started ~09:41 and ran 226m, so
+      # the 30-worker pool finished at 13:27 when the work itself totals ~3h of 8-wide
+      # capacity). Order = typical wall time from the 2026-10-09 daily run, longest first;
+      # re-sort from a fresh run's "finished OK (Nm)" lines when the mix changes.
       queue+=(
-        "sec_primary:${_cy}"
-        econ:daily census:daily geo:daily crime:daily weather:daily
-        # sec_secondary is deliberately absent: it is not part of the scheduled rotation.
-        # Queue it explicitly (run-pool.sh sec_secondary:<year>) when it is wanted.
-        "sec_13f:${_cy}"
-        "sec_prices:daily"
-        fec:daily fedregister:daily officials:daily
-        cyber_vuln:daily cyber_threat:daily
-        health:daily
-        edu:daily
-        energy:daily
-        patents:daily lands:daily cftc:daily
-        ag:daily
-        disasters:daily
-        housing:daily
-        transport:daily
-        environment:daily
-        research:daily
-        fiscal:daily
-        banking:daily
-        econ_reference:daily
-        law:daily
-        # ref:daily is queued last, not for a hard ordering guarantee (this pool has none —
-        # admission is memory-budget-gated, not dependency-gated, so ref can still start
-        # concurrently with a still-running earlier slot) but because queue position is a real,
-        # if soft, bias on admission order: ref's entity-resolution bridge (EntityBridgeListener)
-        # reads live iceberg_scan snapshots of fec/patents/sec/health/environment/energy/
-        # transport/fiscal, so queuing it after them makes it more likely to see each schema's
-        # same-day data rather than yesterday's. Harmless either way if it doesn't: the bridge
-        # fully rebuilds (overwritePartitions: true) every day, so a same-day miss is at most a
-        # one-day-stale cross-reference that self-corrects on tomorrow's run, not a lasting gap.
+        housing:daily                 # 226m
+        health:daily                  # 136m
+        econ:daily                    # 136m
+        law:daily                     # 128m
+        fec:daily                     # 97m
+        cftc:daily                    # 83m
+        transport:daily               # 68m
+        environment:daily             # 62m
+        weather:daily                 # 48m
+        geo:daily                     # 47m
+        disasters:daily               # 44m
+        ag:daily                      # 43m
+        "sec_primary:${_cy}"          # 41m
+        "sec_secondary:${_cy}"        # multi-day for a full year: restarts across windows, the tracker resumes it
+        census:daily crime:daily      # 33m
+        "sec_13f:${_cy}"              # 33m
+        banking:daily                 # 27m
+        energy:daily                  # 25m
+        lands:daily                   # 20m
+        cyber_threat:daily            # 17m
+        fiscal:daily                  # 16m
+        econ_reference:daily          # 12m
+        research:daily                # 10m
+        officials:daily cyber_vuln:daily edu:daily
+        fedregister:daily "sec_prices:daily" patents:daily
+        fisheries:daily
+        # ref:daily stays last (29m): queue position is a soft bias so its entity-resolution
+        # bridge sees the same-day data of the schemas it reads (fec/patents/sec/health/
+        # environment/energy/transport/fiscal). The bridge fully rebuilds every day, so a
+        # same-day miss self-corrects on the next run.
         ref:daily
       )
       [ -z "$SCHEMA_FILTER" ] && RUN_EMBEDDINGS=true
@@ -631,11 +645,28 @@ committed_mb=0          # Sum of max heaps of all active workers
 queue_idx=0
 done_count=0
 failed_count=0
+deferred_count=0
 requeue_count=0
 declare -A _conflict_logged=()   # slot -> last schema+year conflict message logged
 _sec_hold_logged=""        # SEC-family running count a hold was last logged for
 failed_list=()
+deferred_list=()
 restart_count=0
+
+# A non-zero worker exit: the sec.gov cool-down code is deferred (retried in the next window, not
+# a failure); anything else is failed.
+count_unsuccessful_exit() {
+  local id=$1 exit_code=$2 mins=$3
+  if [ "$exit_code" -eq "$SEC_COOLDOWN_EXIT" ]; then
+    ((deferred_count++)) || true
+    deferred_list+=("$id")
+    log_info "$id DEFERRED by sec.gov cool-down (${mins}m): retries in the next window after the marker expires"
+  else
+    ((failed_count++)) || true
+    failed_list+=("$id")
+    log_info "$id FAILED (${mins}m): check launch.log for details"
+  fi
+}
 
 # Convert a heap size string (e.g., "3g", "2048m") to MB
 heap_to_mb() {
@@ -807,6 +838,44 @@ get_swap_used_pct() {
   awk '/^SwapTotal:/ {t=$2} /^SwapFree:/ {f=$2} END {if (t>0) print int((t-f)*100/t); else print 0}' /proc/meminfo
 }
 
+# Swap in+out page rate (pages/sec) since the previous call, left in the global _swap_rate (0 on the
+# first call or off Linux; unchanged when no time has elapsed). Sets a global rather than echoing so
+# the previous sample survives between calls -- a command substitution would run in a subshell.
+# Usage: get_swap_rate_pages_sec [now_epoch]
+get_swap_rate_pages_sec() {
+  local now="${1:-$(date +%s)}" pages
+  if [ "$(uname)" != "Linux" ]; then
+    _swap_rate=0
+    return
+  fi
+  pages=$(awk '/^pswpin / {i=$2} /^pswpout / {o=$2} END {print i+o}' "${VMSTAT_FILE:-/proc/vmstat}")
+  if [ -z "$_swap_prev_pages" ]; then
+    _swap_prev_pages=$pages
+    _swap_prev_ts=$now
+    _swap_rate=0
+    return
+  fi
+  if [ "$now" -le "$_swap_prev_ts" ]; then
+    return
+  fi
+  _swap_rate=$(( (pages - _swap_prev_pages) / (now - _swap_prev_ts) ))
+  _swap_prev_pages=$pages
+  _swap_prev_ts=$now
+}
+
+# Pure admission decision. Usage: swap_gate_reason <swap_pct> <rate_pages_sec> <avail_mb> <need_mb>
+# Prints the reason to hold, or nothing to admit.
+swap_gate_reason() {
+  local pct=$1 rate=$2 avail=$3 need=$4
+  if [ "$rate" -ge "$SWAP_ACTIVE_PAGES_SEC" ]; then
+    echo "actively swapping (${rate} pages/s, threshold ${SWAP_ACTIVE_PAGES_SEC}), ${pct}% swap used"
+  elif [ "$pct" -ge "$SWAP_HARD_PCT" ] && [ "$rate" -gt 0 ]; then
+    echo "${pct}% swap used (hard limit ${SWAP_HARD_PCT}%) and swapping (${rate} pages/s)"
+  elif [ "$pct" -ge "$SWAP_PRESSURE_PCT" ] && [ "$avail" -lt "$((need + OS_RESERVE_MB))" ]; then
+    echo "${pct}% swap used (threshold ${SWAP_PRESSURE_PCT}%) and only ${avail}MB available"
+  fi
+}
+
 # Fill the pool up to MAX_WORKERS, respecting the memory budget.
 fill_pool() {
   local scan_idx=$queue_idx
@@ -955,16 +1024,18 @@ fill_pool() {
       break
     fi
 
-    # Check 3: swap saturation. Distinct from Check 2 above — MemAvailable can still look fine
-    # while swap is already most of the way to full, since a worker's real footprint grows past
-    # its static heap+native estimate over its lifetime and spills into swap rather than showing up
-    # as reduced MemAvailable right away. Hold new admissions once swap crosses the threshold so
-    # already-running workers keep whatever swap headroom is left, instead of packing more workers
-    # in on top of a system that's already run out of the room those static estimates assumed.
-    local swap_pct
+    # Check 3: swap activity. MemAvailable can look fine while workers are already paging, but a
+    # swap-used percentage left over from a past peak is not pressure by itself (see the swap gate
+    # notes at SWAP_PRESSURE_PCT). Holds when swap is being actively read/written, or when swap is
+    # mostly full and free RAM could not absorb this job.
+    local swap_pct swap_rate swap_reason
     swap_pct=$(get_swap_used_pct)
-    if [ "$swap_pct" -ge "$SWAP_PRESSURE_PCT" ]; then
-      log_info "Swap pressure: ${swap_pct}% swap used (threshold ${SWAP_PRESSURE_PCT}%), ${next_id} needs ${next_foot_mb}MB — holding"
+    get_swap_rate_pages_sec
+    swap_rate=$_swap_rate
+    swap_reason=$(swap_gate_reason "$swap_pct" "$swap_rate" "$avail_mb" "$next_foot_mb")
+    if [ -n "$swap_reason" ]; then
+      log_info "Swap pressure: ${swap_reason}, ${next_id} needs ${next_foot_mb}MB — holding"
+      flock -u 9
       break
     fi
 
@@ -1117,9 +1188,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
           fi
         fi
       else
-        ((failed_count++)) || true
-        failed_list+=("$id")
-        log_info "$id FAILED (${mins}m): check launch.log for details"
+        count_unsuccessful_exit "$id" "$exit_code" "$mins"
       fi
 
       remove_active "$i"
@@ -1188,7 +1257,7 @@ while [ "${#active_pids[@]}" -gt 0 ] || [ "$queue_idx" -lt "$total" ]; do
 
   # Status line
   # Queued = total jobs - done - failed - requeued (tracked separately to avoid inflation) - currently running
-  remaining=$((total - done_count - failed_count - requeue_count - ${#active_pids[@]}))
+  remaining=$((total - done_count - failed_count - deferred_count - requeue_count - ${#active_pids[@]}))
   active_str=""
   if [ "${#active_labels[@]}" -gt 0 ]; then
     active_str="| ${active_labels[*]}"
@@ -1228,7 +1297,8 @@ done
 echo ""
 echo ""
 echo "=== Pool Complete ==="
-echo "Total: $total  Done: $done_count  Failed: $failed_count  Restarts: $restart_count"
+echo "Total: $total  Done: $done_count  Failed: $failed_count  Deferred: $deferred_count  Restarts: $restart_count"
+[ "$deferred_count" -eq 0 ] || echo "Deferred by sec.gov cool-down: ${deferred_list[*]}"
 if [ "$failed_count" -gt 0 ]; then
   echo "Failed workers: ${failed_list[*]}"
   # Exit 2 == "queue fully drained, but N workers failed after their in-pool

@@ -202,8 +202,12 @@ public class IcebergTableWriterDeepCoverageTest3 {
     // Valid integer
     assertEquals(2020, method.invoke(writer, "2020", yearField));
 
-    // Invalid integer
-    assertNull(method.invoke(writer, "not_a_number", yearField));
+    // Invalid integer: the partition value is not its column's type, so the write fails
+    java.lang.reflect.InvocationTargetException e =
+        assertThrows(java.lang.reflect.InvocationTargetException.class,
+            () -> method.invoke(writer, "not_a_number", yearField));
+    assertTrue(e.getCause() instanceof IllegalStateException, String.valueOf(e.getCause()));
+    assertTrue(e.getCause().getMessage().contains("'not_a_number'"), e.getCause().getMessage());
   }
 
   // ====================================================================

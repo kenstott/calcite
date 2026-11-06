@@ -18,7 +18,7 @@
  *
  * <p>Key components:</p>
  * <ul>
- *   <li>{@link org.apache.calcite.adapter.file.metadata.InformationSchema} - Standard SQL information schema tables</li>
+ *   <li>{@link org.apache.calcite.schema.impl.InformationSchema} - Standard SQL information schema tables</li>
  *   <li>{@link org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema} - PostgreSQL-compatible metadata views</li>
  *   <li>{@link org.apache.calcite.adapter.file.metadata.RemoteFileMetadata} - Metadata for remote file sources</li>
  *   <li>{@link org.apache.calcite.adapter.file.metadata.FileFieldType} - Type system for file fields</li>

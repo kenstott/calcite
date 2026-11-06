@@ -17,6 +17,7 @@ import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Tag("unit")
 @TestMethodOrder(MethodOrderer.MethodName.class)
+@ResourceLock("calcite.file.statistics")
 public class StatisticsConfigurationTest {
 
   private String originalHllEnabled;

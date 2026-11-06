@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.ref;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -169,6 +170,7 @@ public class HolidaysDataProvider implements CachingDataProvider {
     conn.setRequestProperty("User-Agent", "govdata-etl kennethstott@gmail.com");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(60000);
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("HTTP " + responseCode + " from " + urlStr);

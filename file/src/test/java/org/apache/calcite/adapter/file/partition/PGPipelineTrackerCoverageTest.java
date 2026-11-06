@@ -1049,4 +1049,62 @@ class PGPipelineTrackerCoverageTest {
     // Fail loud: a tracker write that cannot persist must not be silently swallowed.
     assertThrows(RuntimeException.class, () -> tracker.markComplete("src1", "table1", "download", 100));
   }
+
+  // ===== bulk read by key suffix =====
+
+  @Test void testSuffixBulkReadUsesOnePassForLargeKeySets() throws Exception {
+    PreparedStatement ps = mock(PreparedStatement.class);
+    ResultSet rs = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(ps);
+    when(ps.executeQuery()).thenReturn(rs);
+    when(rs.next()).thenReturn(true, true, true, false);
+    when(rs.getString(1)).thenReturn("k0__year=2024", "k0__year=2024", "other__year=2024");
+    when(rs.getString(2)).thenReturn("filing_metadata", "financial_line_items", "ignored");
+
+    List<String> keys = new ArrayList<>();
+    for (int i = 0; i < 50_000; i++) {
+      keys.add("k" + i + "__year=2024");
+    }
+    Map<String, Set<String>> result =
+        tracker.bulkGetCompletedTablesByKeySuffix(keys, "staging", "__year=2024");
+
+    verify(mockConnection).prepareStatement(
+        "SELECT source_key, table_name FROM pipeline_tracker "
+            + "WHERE phase = ? AND state = 'complete' AND right(source_key, ?) = ?");
+    verify(ps).setString(1, "staging");
+    verify(ps).setInt(2, "__year=2024".length());
+    verify(ps).setString(3, "__year=2024");
+    verify(mockConnection, never()).createArrayOf(anyString(), org.mockito.ArgumentMatchers.any());
+    assertEquals(1, result.size(), "only keys with completed tables are returned: " + result);
+    assertEquals(2, result.get("k0__year=2024").size());
+    // Every requested key is now cached: a key with no rows is answered as "nothing complete".
+    assertTrue(tracker.getCompletedTables("k49999__year=2024", "staging").isEmpty());
+    assertFalse(tracker.isComplete("k49999__year=2024", "filing_metadata", "staging"));
+    assertTrue(tracker.isComplete("k0__year=2024", "financial_line_items", "staging"));
+  }
+
+  @Test void testSuffixBulkReadUsesKeyLookupForSmallKeySets() throws Exception {
+    PreparedStatement ps = mock(PreparedStatement.class);
+    ResultSet rs = mock(ResultSet.class);
+    when(mockConnection.prepareStatement(anyString())).thenReturn(ps);
+    when(ps.executeQuery()).thenReturn(rs);
+    when(rs.next()).thenReturn(false);
+
+    tracker.bulkGetCompletedTablesByKeySuffix(
+        java.util.Arrays.asList("a__year=2024", "b__year=2024"), "staging", "__year=2024");
+
+    verify(mockConnection).prepareStatement(
+        "SELECT source_key, table_name FROM pipeline_tracker "
+            + "WHERE phase = ? AND state = 'complete' AND source_key = ANY(?)");
+  }
+
+  @Test void testSuffixBulkReadRejectsKeyOutsideSuffix() {
+    List<String> keys = new ArrayList<>();
+    for (int i = 0; i < 50_000; i++) {
+      keys.add("k" + i + "__year=2024");
+    }
+    keys.set(7, "k7__year=2023");
+    assertThrows(IllegalArgumentException.class,
+        () -> tracker.bulkGetCompletedTablesByKeySuffix(keys, "staging", "__year=2024"));
+  }
 }

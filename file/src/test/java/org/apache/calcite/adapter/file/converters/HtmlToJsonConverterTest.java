@@ -91,7 +91,7 @@ public class HtmlToJsonConverterTest {
         + "</table></body></html>";
 
     File file = createHtmlFile(html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(file, outputDir, tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertFalse(jsonFiles.isEmpty());
@@ -111,7 +111,7 @@ public class HtmlToJsonConverterTest {
         + "</table></body></html>";
 
     File file = createHtmlFile(html);
-    List<File> jsonFiles = HtmlToJsonConverter.convert(file, outputDir, "TO_LOWER", tempDir);
+    List<File> jsonFiles = HtmlToJsonConverter.convert(file, outputDir, "TO_LOWER", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertFalse(jsonFiles.isEmpty());
@@ -130,7 +130,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", tempDir);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
   }
@@ -143,8 +143,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "my_table", tempDir, null);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", "my_table", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -162,8 +161,7 @@ public class HtmlToJsonConverterTest {
     baseDir.mkdirs();
 
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "explicit_name", baseDir, null);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", "explicit_name", baseDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -178,8 +176,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "my_table2", null, null);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", "my_table2", null, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -195,7 +192,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", tempDir);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(2, jsonFiles.size());
@@ -210,8 +207,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "biggest_table", tempDir, null);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", "biggest_table", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -227,8 +223,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        null, Integer.valueOf(0), "test_table", tempDir);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", null, Integer.valueOf(0), "test_table", tempDir, null, new CrawlerConfiguration());
 
     // Falls back to regular conversion since selector is null
     assertNotNull(jsonFiles);
@@ -241,8 +236,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table", null, "test_table", tempDir);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table", null, "test_table", tempDir, null, new CrawlerConfiguration());
 
     // Falls back to regular conversion since index is null
     assertNotNull(jsonFiles);
@@ -256,8 +250,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.data", Integer.valueOf(1), "second_table", tempDir);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.data", Integer.valueOf(1), "second_table", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -271,8 +264,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.nonexistent", Integer.valueOf(0), "test_table", tempDir);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.nonexistent", Integer.valueOf(0), "test_table", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertTrue(jsonFiles.isEmpty());
@@ -285,8 +277,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.wiki", Integer.valueOf(5), "test_table", tempDir);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.wiki", Integer.valueOf(5), "test_table", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertTrue(jsonFiles.isEmpty());
@@ -319,9 +310,7 @@ public class HtmlToJsonConverterTest {
     fieldConfigs.add(field3);
 
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.data", Integer.valueOf(0), "mapped_table", tempDir,
-        fieldConfigs);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.data", Integer.valueOf(0), "mapped_table", tempDir, fieldConfigs, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -344,8 +333,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.data", Integer.valueOf(0), "test_table", null);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.data", Integer.valueOf(0), "test_table", null, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -363,7 +351,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", tempDir);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertFalse(jsonFiles.isEmpty());
@@ -391,7 +379,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", tempDir);
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", null, tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertFalse(jsonFiles.isEmpty());
@@ -513,8 +501,7 @@ public class HtmlToJsonConverterTest {
 
     File file = createHtmlFile(html);
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", tempDir,
-        "subdir" + File.separator + "test.html");
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", null, tempDir, "subdir" + File.separator + "test.html", new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertFalse(jsonFiles.isEmpty());
@@ -633,9 +620,7 @@ public class HtmlToJsonConverterTest {
     fieldConfigs.add(field1);
 
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.data", Integer.valueOf(0), "test_table", tempDir,
-        fieldConfigs);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.data", Integer.valueOf(0), "test_table", tempDir, fieldConfigs, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -651,7 +636,7 @@ public class HtmlToJsonConverterTest {
     File file = createHtmlFile(html);
     // This calls convert(file, outputDir, casing, tableCasing, baseDir, relativePath, existingTableName)
     List<File> jsonFiles =
-        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", tempDir, null, "existing_name");
+        HtmlToJsonConverter.convert(file, outputDir, "UNCHANGED", "SMART_CASING", "existing_name", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -666,8 +651,7 @@ public class HtmlToJsonConverterTest {
     File file = createHtmlFile(html);
     // Uses the overload without fieldConfigs
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING",
-        "table.wiki", Integer.valueOf(0), "wiki_table", tempDir);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "UNCHANGED", "SMART_CASING", "table.wiki", Integer.valueOf(0), "wiki_table", tempDir, null, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());
@@ -691,9 +675,7 @@ public class HtmlToJsonConverterTest {
     fieldConfigs.add(field1);
 
     List<File> jsonFiles =
-        HtmlToJsonConverter.convertWithSelector(file, outputDir, "TO_LOWER", "SMART_CASING",
-        "table.data", Integer.valueOf(0), "test_table", tempDir,
-        fieldConfigs);
+        HtmlToJsonConverter.convertWithSelector(file, outputDir, "TO_LOWER", "SMART_CASING", "table.data", Integer.valueOf(0), "test_table", tempDir, fieldConfigs, new CrawlerConfiguration());
 
     assertNotNull(jsonFiles);
     assertEquals(1, jsonFiles.size());

@@ -19,8 +19,8 @@ import java.io.InputStream;
 /**
  * Utility methods for reading YAML files with proper anchor/alias resolution.
  *
- * <p>Jackson's YAML parser does not properly resolve YAML anchors (*anchor_name)
- * and aliases (&anchor_name) for simple values and collections. This utility uses
+ * <p>Jackson's YAML parser does not properly resolve YAML anchors ({@code &anchor_name})
+ * and aliases ({@code *anchor_name}) for simple values and collections. This utility uses
  * SnakeYAML directly to parse YAML with full anchor support, then converts to
  * Jackson JsonNode for compatibility with existing code.
  */

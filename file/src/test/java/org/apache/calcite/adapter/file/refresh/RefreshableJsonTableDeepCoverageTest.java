@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file.refresh;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.DataContext;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
@@ -67,8 +69,7 @@ public class RefreshableJsonTableDeepCoverageTest {
     cacheDir.mkdirs();
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "refresh_test", Duration.ofMillis(1), "UNCHANGED", cacheDir);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "refresh_test", Duration.ofMillis(1), new SourceFileConversion(null, null, cacheDir, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     // Trigger doRefresh - should initialize ConversionMetadata and check for original source
     table.refresh();
@@ -83,8 +84,7 @@ public class RefreshableJsonTableDeepCoverageTest {
     cacheDir.mkdirs();
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "modified_table", Duration.ofMillis(1), "UNCHANGED", cacheDir);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "modified_table", Duration.ofMillis(1), new SourceFileConversion(null, null, cacheDir, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     // First refresh
     table.refresh();
@@ -112,8 +112,7 @@ public class RefreshableJsonTableDeepCoverageTest {
     // Do NOT create cacheDir
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "no_cache_table", Duration.ofMillis(1), "UNCHANGED", cacheDir);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "no_cache_table", Duration.ofMillis(1), new SourceFileConversion(null, null, cacheDir, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     // Should handle initialization failure gracefully
     table.refresh();
@@ -128,8 +127,7 @@ public class RefreshableJsonTableDeepCoverageTest {
         "[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]");
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "scan_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "scan_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     JavaTypeFactory typeFactory = new JavaTypeFactoryImpl();
 
@@ -160,8 +158,7 @@ public class RefreshableJsonTableDeepCoverageTest {
         "[{\"x\":10},{\"x\":20},{\"x\":30}]");
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "scan_refresh_table", Duration.ofMinutes(5));
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "scan_refresh_table", Duration.ofMinutes(5), new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     JavaTypeFactory typeFactory = new JavaTypeFactoryImpl();
     DataContext dataContext = mock(DataContext.class);
@@ -186,8 +183,7 @@ public class RefreshableJsonTableDeepCoverageTest {
     File jsonFile = createJsonFile("empty_scan.json", "[]");
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "empty_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "empty_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     JavaTypeFactory typeFactory = new JavaTypeFactoryImpl();
     DataContext dataContext = mock(DataContext.class);
@@ -212,8 +208,7 @@ public class RefreshableJsonTableDeepCoverageTest {
         "[{\"v\":1},{\"v\":2}]");
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "cached_table", null);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "cached_table", null, new SourceFileConversion(null, null, null, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     JavaTypeFactory typeFactory = new JavaTypeFactoryImpl();
     DataContext dataContext = mock(DataContext.class);
@@ -249,8 +244,7 @@ public class RefreshableJsonTableDeepCoverageTest {
     cacheDir.mkdirs();
     Source source = Sources.of(jsonFile);
 
-    RefreshableJsonTable table = new RefreshableJsonTable(
-        source, "cache_scan_table", null, "UNCHANGED", cacheDir);
+    RefreshableJsonTable table = new RefreshableJsonTable(source, "cache_scan_table", null, new SourceFileConversion(null, null, cacheDir, "UNCHANGED", "SMART_CASING", new CrawlerConfiguration()));
 
     JavaTypeFactory typeFactory = new JavaTypeFactoryImpl();
     DataContext dataContext = mock(DataContext.class);

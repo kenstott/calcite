@@ -22,7 +22,7 @@
 # phases:
 #   1. GENERATE — connect every govdata schema against S3 (via model-verify.sh) into a CLEAN,
 #      dedicated staging operating directory, so GovDataDriver builds a pristine
-#      <staging>/.duckdb/govdata.duckdb (all schemas) + <staging>/.aperio/*/.conversions.json.
+#      <staging>/.duckdb/govdata.duckdb (all schemas) + <staging>/<schema>/.aperio/<schema>/.conversions.json.
 #   2. PACKAGE — ./gradlew :govdata:bundleGovdataSeed zips those into
 #      govdata/src/main/resources/duckdb/seed/{govdata-seed.zip,govdata-seed.version}.
 #
@@ -32,7 +32,10 @@
 #
 # After it finishes, review and commit the two staged files:
 #   git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \
-#           govdata/src/main/resources/duckdb/seed/govdata-seed.version
+#           govdata/src/main/resources/duckdb/seed/govdata-seed.version \
+#           govdata/src/main/resources/duckdb/seed/govdata-seed.schema
+#   (the .schema listing is written by the same Gradle task; an installed catalog is compared
+#   with the seed by it, so the three are committed together)
 #
 # Exit codes: 0 seed built, 1/2 error, 10 seed not needed (only with --if-needed or --check).
 #
@@ -136,7 +139,7 @@ echo "Warehouse:             $GOVDATA_PARQUET_DIR"
 rm -rf "$STAGING"
 mkdir -p "$STAGING"
 
-VERIFY_ARGS=(--no-probes --no-dup --publish-schema-cache)
+VERIFY_ARGS=(--no-probes --no-dup --read-all-tables --publish-schema-cache)
 if [[ -n "$SOURCE" ]]; then
     VERIFY_ARGS+=(--source "$SOURCE")
     echo "WARNING: --source given; the resulting seed is PARTIAL (missing schemas cold-start normally)."
@@ -172,7 +175,9 @@ SCHEMA_CACHE_DIR="$STAGING/.iceberg_metadata_cache"
 # a staging-scoped dir so generation gets real disk too, without touching the live workers' own.
 TMPDIR_STAGING="$STAGING/tmp"
 mkdir -p "$TMPDIR_STAGING"
-export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING"
+# -Dgovdata.seed.build=true: this is the one place a govdata catalog is built by discovery.
+# Without it GovDataDriver refuses to connect from a jar that carries no seed.
+export JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m} -Diceberg.metadata.cache.directory=$SCHEMA_CACHE_DIR -Djava.io.tmpdir=$TMPDIR_STAGING -Dcalcite.file.staging.directory=$TMPDIR_STAGING -Dgovdata.seed.build=true -Diceberg.schema.cache.ignorePublished=true"
 
 # GENERATE must build every view fresh from the CURRENT schema YAML. GovDataSeedInstaller
 # (invoked by GovDataDriver on first connect) extracts the classpath jar's OWN bundled seed
@@ -241,6 +246,14 @@ if ! command -v duckdb >/dev/null 2>&1; then
     echo "       Install: https://duckdb.org/docs/installation/" >&2
     exit 1
 fi
+# Write the schema YAMLs' table and column descriptions into the catalog as DuckDB comments, so the
+# seed carries the metadata (DuckDB cannot comment a schema; those are skipped). Uses the same
+# seedless jar generation ran with. A failure aborts: a seed without descriptions is the defect this
+# step exists to prevent.
+echo "=== build-seed: writing YAML descriptions into the staged catalog ==="
+java -cp "$GENERATE_JAR" org.apache.calcite.adapter.govdata.GovDataSeedComments "$CATALOG" \
+    || { echo "ERROR: could not write descriptions into $CATALOG" >&2; exit 1; }
+
 echo "=== build-seed: checkpointing staged catalog ==="
 if ! duckdb "$CATALOG" -c "CHECKPOINT;"; then
     echo "ERROR: CHECKPOINT of $CATALOG failed — refusing to bundle a torn catalog." >&2
@@ -275,4 +288,5 @@ ls -lh "$SEED_DIR/govdata-seed.zip" "$SEED_DIR/govdata-seed.version" 2>/dev/null
 echo
 echo "Review the size, then commit them in-tree:"
 echo "  git add govdata/src/main/resources/duckdb/seed/govdata-seed.zip \\"
-echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.version"
+echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.version \\"
+echo "          govdata/src/main/resources/duckdb/seed/govdata-seed.schema"

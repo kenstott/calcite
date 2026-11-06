@@ -83,14 +83,16 @@ pg_tracker_exec() {
       -d "$db" -v ON_ERROR_STOP=1 -At -c "$sql"
 }
 
-# Deletes every tracker row for one materialized table: the per-source_key markers and the
-# completion record. Equivalent to the S3 path's "delete marker dirs where table_name=<table>"
-# plus the _table_complete marker.
+# Deletes every tracker row for one materialized table: the per-source_key markers (including the
+# per-unit freshness tokens, stored as table_name "<table>::<unit>") and the completion record.
+# Equivalent to the S3 path's "delete marker dirs where table_name=<table>" plus the
+# _table_complete marker.
 pg_tracker_purge_table() {
   local ns="$1" table="$2" dry_run="$3"
-  local counts
+  local counts match
+  match="(table_name = '${table}' OR left(table_name, ${#table} + 2) = '${table}::')"
   counts=$(pg_tracker_exec "
-    SELECT (SELECT count(*) FROM \"${ns}\".pipeline_tracker WHERE table_name = '${table}')
+    SELECT (SELECT count(*) FROM \"${ns}\".pipeline_tracker WHERE ${match})
         || '|'
         || (SELECT count(*) FROM \"${ns}\".table_completion WHERE pipeline_name = '${table}')") || return 1
   local markers="${counts%%|*}" completions="${counts##*|}"
@@ -100,7 +102,7 @@ pg_tracker_purge_table() {
   fi
   pg_tracker_exec "
     BEGIN;
-    DELETE FROM \"${ns}\".pipeline_tracker WHERE table_name = '${table}';
+    DELETE FROM \"${ns}\".pipeline_tracker WHERE ${match};
     DELETE FROM \"${ns}\".table_completion WHERE pipeline_name = '${table}';
     COMMIT;" > /dev/null || return 1
   echo "        Deleted ${markers} marker row(s) and ${completions} completion row(s) from ${ns}"

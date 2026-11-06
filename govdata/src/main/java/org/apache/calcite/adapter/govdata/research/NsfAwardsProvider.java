@@ -11,7 +11,9 @@
 package org.apache.calcite.adapter.govdata.research;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -209,6 +211,7 @@ public class NsfAwardsProvider implements CachingDataProvider {
     conn.setRequestProperty("User-Agent", "GovData/1.0");
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(120000);
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status < 200 || status >= 300) {
       StringBuilder err = new StringBuilder();
@@ -224,7 +227,7 @@ public class NsfAwardsProvider implements CachingDataProvider {
       }
       throw new IOException("NSF Award Search HTTP " + status + " for " + url + ": " + err);
     }
-    return conn.getInputStream();
+    return CompleteBody.of(conn);
   }
 
   private static String text(JsonNode node, String field) {

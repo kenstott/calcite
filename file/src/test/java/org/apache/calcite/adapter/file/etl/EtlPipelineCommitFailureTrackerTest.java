@@ -20,6 +20,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -156,6 +162,37 @@ class EtlPipelineCommitFailureTrackerTest {
     return candidate;
   }
 
+  /**
+   * Makes a directory refuse new files, and returns what undoes it.
+   *
+   * <p>On Windows {@link File#setWritable(boolean, boolean)} is refused for a directory; what
+   * stops files being added to one there is an access-control entry that denies it.
+   */
+  private static Runnable denyNewFiles(File dir) throws IOException {
+    final AclFileAttributeView acl =
+        Files.getFileAttributeView(dir.toPath(), AclFileAttributeView.class);
+    if (acl == null) {
+      assertTrue(dir.setWritable(false, false), "must be able to make " + dir + " read-only");
+      return () -> dir.setWritable(true, false);
+    }
+    final List<AclEntry> original = acl.getAcl();
+    List<AclEntry> denying = new ArrayList<AclEntry>();
+    denying.add(AclEntry.newBuilder()
+        .setType(AclEntryType.DENY)
+        .setPrincipal(acl.getOwner())
+        .setPermissions(AclEntryPermission.ADD_FILE, AclEntryPermission.ADD_SUBDIRECTORY)
+        .build());
+    denying.addAll(original);
+    acl.setAcl(denying);
+    return () -> {
+      try {
+        acl.setAcl(original);
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
+      }
+    };
+  }
+
   @Test void failedCommitLeavesNoPerComboTrackerMark() throws IOException {
     File warehouseDir = new File(tempDir, "warehouse");
     warehouseDir.mkdirs();
@@ -174,9 +211,8 @@ class EtlPipelineCommitFailureTrackerTest {
     // vN.metadata.json differently than S3 does), but the same class of failure: writer.commit()
     // throws after rows were already buffered/flushed. That is the property this test guards.
     File metadataDir = findMetadataDir(warehouseDir);
-    assertTrue(metadataDir.setWritable(false, false), "must be able to make metadata dir read-only");
-    assertTrue(metadataDir.getParentFile().setWritable(false, false),
-        "must be able to make table dir read-only");
+    Runnable restoreMetadataDir = denyNewFiles(metadataDir);
+    Runnable restoreTableDir = denyNewFiles(metadataDir.getParentFile());
     try {
       // Second run: a different combo (year=2024) — its commit must fail on the read-only dir.
       EtlPipeline second = new EtlPipeline(config(warehouseDir, yearDim(2024)), sp,
@@ -191,8 +227,8 @@ class EtlPipelineCommitFailureTrackerTest {
       // A thrown exception is also an acceptable failure signal — see comment above.
     } finally {
       // Restore permissions so JUnit's @TempDir cleanup can delete the tree.
-      metadataDir.getParentFile().setWritable(true, false);
-      metadataDir.setWritable(true, false);
+      restoreTableDir.run();
+      restoreMetadataDir.run();
     }
 
     assertTrue(tracker.processedCalls.isEmpty(),

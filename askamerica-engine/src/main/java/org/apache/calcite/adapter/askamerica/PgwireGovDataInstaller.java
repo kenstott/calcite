@@ -77,8 +77,8 @@ final class PgwireGovDataInstaller {
 
     private static final String LATEST_API =
         "https://api.github.com/repos/kenstott/calcite/releases/latest";
-    private static final String RELEASE_BY_TAG =
-        "https://api.github.com/repos/kenstott/calcite/releases/tags/";
+    private static final String RELEASE_DOWNLOAD =
+        "https://github.com/kenstott/calcite/releases/download/";
 
     static Path cacheDir() {
         return Paths.get(System.getProperty("user.home"), ".askamerica", "pgwire-govdata");
@@ -122,6 +122,82 @@ final class PgwireGovDataInstaller {
      */
     static File ensureLauncher() {
         return ensureLauncher(cacheDir(), ownEngineVersion(), PgwireGovDataInstaller::startDaemon);
+    }
+
+    /**
+     * The installed bundle's launcher, or null when none is installed. Never downloads: the MCP
+     * server starts inside a tool call that has seconds, and the bundle is about a gigabyte, so
+     * a download there is killed with the process and restarted by the next call. Keeping the
+     * bundle current is the installer's job; the server only says when it is not
+     * ({@link #outOfDateNotice()}).
+     */
+    static File installedLauncher() {
+        File launcher = launcherPath(cacheDir());
+        return launcher.isFile() ? launcher : null;
+    }
+
+    /** {@link #outOfDateNotice(Path, String)} for the shared bundle and this engine's release. */
+    static String outOfDateNotice() {
+        return outOfDateNotice(cacheDir(), ownEngineVersion());
+    }
+
+    /**
+     * A one-line notice when the installed bundle is older than the engine ({@code own}), else
+     * null: "AskAmerica 0.102.0 is out of date." A bundle with no release stamp predates stamped
+     * installs and is out of date by definition. A local build has no release of its own, so
+     * there is nothing to compare against.
+     */
+    static String outOfDateNotice(Path dir, String own) {
+        if (own == null || !launcherPath(dir).isFile()) {
+            return null;
+        }
+        String installed = readMarker(dir);
+        if (installed == null) {
+            return "AskAmerica (installed version unknown) is out of date.";
+        }
+        return compareVersions(installed, own) < 0
+            ? "AskAmerica " + installed + " is out of date." : null;
+    }
+
+    /**
+     * Installs or updates the bundle to this engine's release and returns its launcher, waiting
+     * for the download. This is the installer's asset step, run by the setup window where the
+     * user is watching ({@link #installProgress()}); the MCP server never calls it.
+     */
+    static File installOrUpdateBlocking() {
+        Path dir = cacheDir();
+        String own = ownEngineVersion();
+        String target;
+        try {
+            target = targetVersion(own);
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new InstallFailedException("Could not determine which pgwire-govdata release "
+                + "to install: " + e.getMessage(), e);
+        }
+        File existing = launcherPath(dir);
+        Action action = decide(existing.isFile(), existing.isFile() ? readMarker(dir) : null,
+            target);
+        if (action == Action.KEEP || action == Action.KEEP_NEWER) {
+            return existing;
+        }
+        if (action == Action.INSTALL) {
+            File installed = installUnderLock(dir, target);
+            if (installed == null) {
+                throw new InstallFailedException("Release engine-v" + target + " publishes no "
+                    + "pgwire-govdata bundle for this operating system.", null);
+            }
+            return installed;
+        }
+        updateInBackground(dir, target); // synchronous here: the caller waits on this thread
+        File adopted = adoptPrepared(dir, target);
+        if (adopted == null) {
+            throw new InstallFailedException("pgwire-govdata " + target + " could not be put in "
+                + "place; see the messages above.", null);
+        }
+        return adopted;
     }
 
     /** {@link #ensureLauncher()} over an explicit bundle directory and engine release, with the
@@ -298,14 +374,13 @@ final class PgwireGovDataInstaller {
         }
     }
 
-    /** The action for a bundle directory: install when there is none, update when the installed
-     *  release is older than {@code target} or unstamped, keep otherwise. Never downgrades. */
+    /** The action for a bundle directory: install when there is none or it is unstamped (a copy
+     *  from before stamping, or a half-written one, is not a release that can be trusted to
+     *  start), update when the installed release is older than {@code target}, keep otherwise.
+     *  Never downgrades. */
     static Action decide(boolean haveLauncher, String installed, String target) {
-        if (!haveLauncher) {
+        if (!haveLauncher || installed == null) {
             return Action.INSTALL;
-        }
-        if (installed == null) {
-            return Action.UPDATE;
         }
         int c = compareVersions(installed, target);
         if (c == 0) {
@@ -353,6 +428,30 @@ final class PgwireGovDataInstaller {
         report("This engine carries no version stamp (a local build) — matching pgwire-govdata "
             + "to the latest release, " + latest + ".");
         return latest;
+    }
+
+    /** What the download in progress has fetched so far, for the message a data call gets while
+     *  the bundle is installing; null when none is running. */
+    private static volatile String installProgress;
+
+    /** A human-readable line on the bundle download running in this process, or null. */
+    static String installProgress() {
+        return installProgress;
+    }
+
+    private static volatile long installFetchedBytes;
+    private static volatile long installTotalBytes;
+
+    /** Bytes fetched and bytes expected (0 when the server did not say) of the bundle download
+     *  running in this process, or null when no download is running; for a progress bar. */
+    static long[] installBytes() {
+        return installProgress == null
+            ? null : new long[] {installFetchedBytes, installTotalBytes};
+    }
+
+    static String progressLine(String version, long fetched, long total) {
+        return "downloading pgwire-govdata " + version + ": " + (fetched / (1024 * 1024))
+            + (total > 0 ? " of " + (total / (1024 * 1024)) : "") + " MB";
     }
 
     private static volatile String ownVersionCache;
@@ -426,7 +525,7 @@ final class PgwireGovDataInstaller {
                      StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  FileLock ignored = ch.lock()) {
                 File now = launcherPath(dir);
-                if (now.isFile()) {
+                if (now.isFile() && readMarker(dir) != null) {
                     return now;
                 }
                 Path staging = prepareRelease(dir, version);
@@ -485,22 +584,18 @@ final class PgwireGovDataInstaller {
      */
     private static Path prepareRelease(Path dir, String version) {
         String variant = osVariant();
-        String json;
+        String assetUrl = bundleUrl(version, variant);
+        String expectedSha256;
         try {
-            json = fetchText(RELEASE_BY_TAG + "engine-v" + version, "application/vnd.github+json");
-        } catch (Exception e) {
-            throw new InstallFailedException("Could not look up release engine-v" + version
-                + " on GitHub: " + e.getMessage(), e);
+            expectedSha256 = requiredChecksum(assetUrl + ".sha256", url -> fetchText(url));
+        } catch (InstallFailedException e) {
+            if (isAssetMissing(e)) {
+                report("Release engine-v" + version + " publishes no pgwire-govdata-" + version
+                    + "-" + variant + ".tar.gz — nothing to install.");
+                return null;
+            }
+            throw e;
         }
-        String assetUrl = firstMatch(json,
-            "\"browser_download_url\"\\s*:\\s*\"([^\"]*pgwire-govdata-[^\"]*-"
-            + Pattern.quote(variant) + "\\.tar\\.gz)\"");
-        if (assetUrl == null) {
-            report("No pgwire-govdata-*-" + variant + ".tar.gz asset in release engine-v"
-                + version + " — nothing to install.");
-            return null;
-        }
-        String expectedSha256 = requiredChecksum(assetUrl + ".sha256", url -> fetchText(url));
         report("Downloading pgwire-govdata " + version + " (" + variant + ") from " + assetUrl);
         Path staging = dir.resolveSibling(dir.getFileName() + ".staging-"
             + ProcessHandle.current().pid());
@@ -508,7 +603,15 @@ final class PgwireGovDataInstaller {
         try {
             removeOrphans(dir, version, part);
             // A failed download keeps the partial file so the next attempt resumes it.
-            download(assetUrl, part);
+            try {
+                download(assetUrl, part, (fetched, total) -> {
+                    installFetchedBytes = fetched;
+                    installTotalBytes = total;
+                    installProgress = progressLine(version, fetched, total);
+                });
+            } finally {
+                installProgress = null;
+            }
             try {
                 verifySha256(part, expectedSha256);
                 Files.createDirectories(staging);
@@ -644,21 +747,42 @@ final class PgwireGovDataInstaller {
      * (see .github/workflows/pgwire-adapters-release.yml): {@code linux-x86_64},
      * {@code macos-arm64}, {@code windows-x86_64}. Intel Macs are not published yet.
      */
-    private static String osVariant() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            return "windows-x86_64";
+    /**
+     * The bundle of release {@code engine-v<version>} for {@code variant}, at its fixed download
+     * address. Looking the asset up through the GitHub API instead meant a 250 KB release
+     * listing fetched under a ten-second limit and GitHub's 60 requests an hour for an
+     * unauthenticated address, and the install failed with "Could not look up release" whenever
+     * that one call did (a Windows install, 2026-10-15).
+     */
+    static String bundleUrl(String version, String variant) {
+        return RELEASE_DOWNLOAD + "engine-v" + version + "/pgwire-govdata-" + version + "-"
+            + variant + ".tar.gz";
+    }
+
+    /** A non-200 answer; the status is kept so a caller can tell "not published" (404) from a fault. */
+    static final class HttpStatusException extends IOException {
+        final int status;
+
+        HttpStatusException(int status, String url) {
+            super("HTTP " + status + " from " + url);
+            this.status = status;
         }
-        if (os.contains("mac")) {
-            if (!arch.contains("aarch64") && !arch.contains("arm")) {
-                throw new IllegalStateException(
-                    "pgwire-govdata is only published for Apple Silicon Macs (macos-arm64); "
-                    + "this machine reports os.arch=" + arch);
+    }
+
+    /** True when {@code e} says the address does not exist: this release publishes no such file. */
+    static boolean isAssetMissing(Throwable e) {
+        Throwable c = e;
+        while (c != null) {
+            if (c instanceof HttpStatusException && ((HttpStatusException) c).status == 404) {
+                return true;
             }
-            return "macos-arm64";
+            c = c.getCause();
         }
-        return "linux-x86_64";
+        return false;
+    }
+
+    static String osVariant() {
+        return PlatformVariant.osVariant();
     }
 
     private static String fetchLatestReleaseJson() throws IOException, InterruptedException {
@@ -683,7 +807,7 @@ final class PgwireGovDataInstaller {
         }
         HttpResponse<String> resp = client.send(b.build(), HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() != 200) {
-            throw new IOException("HTTP " + resp.statusCode() + " from " + url);
+            throw new HttpStatusException(resp.statusCode(), url);
         }
         return resp.body();
     }
@@ -693,13 +817,19 @@ final class PgwireGovDataInstaller {
         return m.find() ? m.group(1) : null;
     }
 
+    /** Receives the bytes of the asset fetched so far and its full size (0 when unknown). */
+    interface ProgressSink {
+        void update(long fetched, long total);
+    }
+
     /**
      * Downloads {@code url} into {@code part}, resuming from the bytes already there. A server
      * that ignores the range answers 200 with the whole asset, which overwrites the partial
      * file; 416 means the partial file already holds every byte, which the caller's sha256
      * check confirms or rejects.
      */
-    static void download(String url, Path part) throws IOException, InterruptedException {
+    static void download(String url, Path part, ProgressSink progress)
+            throws IOException, InterruptedException {
         long have = Files.isRegularFile(part) ? Files.size(part) : 0L;
         HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
@@ -718,12 +848,15 @@ final class PgwireGovDataInstaller {
             resp.body().close();
             return;
         }
+        long length = resp.headers().firstValueAsLong("Content-Length").orElse(0L);
         if (status != 200 && status != 206) {
             resp.body().close();
             throw new IOException("pgwire-govdata download failed: HTTP " + status
                 + " from " + url);
         }
         boolean resume = have > 0 && status == 206;
+        long total = length > 0 ? length + (resume ? have : 0L) : 0L;
+        long fetched = resume ? have : 0L;
         if (resume) {
             report("Resuming the pgwire-govdata download at " + (have / (1024 * 1024)) + " MB.");
         }
@@ -734,6 +867,8 @@ final class PgwireGovDataInstaller {
             int n;
             while ((n = in.read(buf)) != -1) {
                 out.write(buf, 0, n);
+                fetched += n;
+                progress.update(fetched, total);
             }
         }
     }

@@ -58,6 +58,9 @@ import java.util.Properties;
  * automatically redirecting to "jdbc:govdata:source=sec".
  */
 public class GovDataDriver extends Driver {
+  /** Set only by the release path's seed build (govdata/scripts/build-seed.sh). */
+  static final String SEED_BUILD_PROPERTY = "govdata.seed.build";
+
   private static final Logger LOGGER = LoggerFactory.getLogger(GovDataDriver.class);
 
   static {
@@ -100,6 +103,17 @@ public class GovDataDriver extends Driver {
       if (System.getProperty("duckdb.cache_httpfs.directory") == null) {
         System.setProperty("duckdb.cache_httpfs.directory",
             resolveOperatingDirBase(home) + "/.duckdb_httpfs_cache");
+      }
+      // The file adapter's Iceberg schema cache has no default directory (REQ-1992)
+      if (System.getProperty("iceberg.metadata.cache.directory") == null) {
+        System.setProperty("iceberg.metadata.cache.directory",
+            resolveOperatingDirBase(home) + "/.iceberg_metadata_cache");
+      }
+      // Nor do temporary files no schema owns: this driver names the staging directory under
+      // its operating directory (REQ-1992)
+      if (System.getProperty("calcite.file.staging.directory") == null) {
+        System.setProperty("calcite.file.staging.directory",
+            resolveOperatingDirBase(home) + "/.staging");
       }
     }
 
@@ -174,19 +188,16 @@ public class GovDataDriver extends Driver {
         LOGGER.info("No data source specified, defaulting to 'sec'");
       }
 
-      // Debug: rebuild the shared DuckDB catalog from scratch (?rebuildCatalog=true or
-      // -Dgovdata.rebuild.catalog=true) so a run never serves stale views/tables from a catalog
-      // built before a code fix.
-      boolean rebuildCatalog =
-          "true".equalsIgnoreCase(extractParameter(paramString, "rebuildCatalog"))
-          || "true".equalsIgnoreCase(System.getProperty("govdata.rebuild.catalog"));
-      if (rebuildCatalog) {
-        deleteSharedCatalog();
+      // Put the official catalog (the seed packaged in this jar) in place before any DuckDB
+      // connection opens. The catalog is never built at run time: a jar without a usable seed
+      // stops the connection here with the reason.
+      // The one exception is the release path that MAKES the official seed
+      // (govdata/scripts/build-seed.sh), which sets govdata.seed.build so that this connection
+      // builds the catalog from the schema definitions instead of installing an older seed.
+      if (Boolean.getBoolean(SEED_BUILD_PROPERTY)) {
+        LOGGER.warn("{} is set: building the govdata catalog by discovery. This is the seed "
+            + "build of the release path, never a way to serve.", SEED_BUILD_PROPERTY);
       } else {
-        // Seed the shared catalog + .conversions.json trackers from the JAR-bundled artifact
-        // before any DuckDB connection opens (so the catalog file is not overwritten under
-        // DuckDB's single-writer lock). Pure accelerator: a missing/failed seed falls through to
-        // the normal cold path. Skipped when rebuildCatalog forces a from-scratch rebuild.
         GovDataSeedInstaller.ensureSeeded(System.getProperty("govdata.operating.dir.base"));
       }
 
@@ -279,8 +290,12 @@ public class GovDataDriver extends Driver {
     String base = System.getProperty("govdata.operating.dir.base");
     if (base == null || base.isEmpty()) {
       String home = System.getProperty("user.home");
-      base = resolveOperatingDirBase((home != null && !home.isEmpty())
-          ? home : System.getProperty("java.io.tmpdir"));
+      if (home == null || home.isEmpty()) {
+        // REQ-1992: no JVM temp directory fallback for the operating directory
+        throw new IllegalStateException("govdata.operating.dir.base is not set and there is no "
+            + "user.home to derive it from");
+      }
+      base = resolveOperatingDirBase(home);
     }
     return new File(base, ".duckdb/govdata.duckdb");
   }
@@ -288,21 +303,6 @@ public class GovDataDriver extends Driver {
   private String sharedCatalogPath() {
     // JSON-escape backslashes so Windows-style paths embed safely in the generated model.
     return sharedCatalogFile().getAbsolutePath().replace("\\", "\\\\");
-  }
-
-  /**
-   * Debug aid: delete the shared DuckDB catalog (and its WAL) so the next connection rebuilds it
-   * from scratch. A persistent catalog built before a code fix can otherwise keep serving stale
-   * views/tables; rebuilding guarantees the catalog reflects the current code.
-   */
-  private void deleteSharedCatalog() {
-    File db = sharedCatalogFile();
-    File[] targets = new File[] {db, new File(db.getAbsolutePath() + ".wal")};
-    for (int i = 0; i < targets.length; i++) {
-      if (targets[i].exists() && targets[i].delete()) {
-        LOGGER.info("rebuildCatalog: deleted {}", targets[i].getAbsolutePath());
-      }
-    }
   }
 
   private String createSingleSourceModel(String paramString, String dataSource)
@@ -505,7 +505,7 @@ public class GovDataDriver extends Driver {
     }
     File tempFile = modelDir != null
         ? File.createTempFile(prefix, ".json", modelDir)
-        : File.createTempFile(prefix, ".json");
+        : org.apache.calcite.adapter.file.StagingDirectory.newTempFile(prefix, ".json");
     tempFile.deleteOnExit();
     try (java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(
         new java.io.FileOutputStream(tempFile), java.nio.charset.StandardCharsets.UTF_8)) {

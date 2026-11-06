@@ -129,23 +129,6 @@ _REG_CAST_TYPES = frozenset(
     }
 )
 
-# Row-count sourcing for pg_class.reltuples (PGW-051). "count" issues one COUNT(*) per table
-# through the backend at catalog-build time (once per memoized catalog, never per query);
-# "off" leaves reltuples at 0, which is PG's "never analyzed" value. Counting is exact but
-# O(tables) full scans, so a deployment over a very large or slow adapter sets "off" via
-# set_row_count_mode(). Only a backend that implements table_row_count() is ever counted.
-_ROW_COUNT_MODES = ("count", "off")
-_ROW_COUNT_MODE = "count"
-
-
-def set_row_count_mode(mode: str) -> None:
-    """Select how pg_class.reltuples is sourced. Called once at startup."""
-    global _ROW_COUNT_MODE
-    if mode not in _ROW_COUNT_MODES:
-        raise ValueError(f"row count mode must be one of {_ROW_COUNT_MODES}, got {mode!r}")
-    _ROW_COUNT_MODE = mode
-
-
 def set_database_name(name: str) -> None:
     """Set the catalog/database name reported to clients. Called once at startup;
     no silent default — an empty name is a configuration error (CLAUDE.md rule 6)."""
@@ -169,17 +152,14 @@ _SCALAR_FN_RE = re.compile(
 )
 
 _INTERCEPT_SCHEMAS = frozenset({"pg_catalog"})
-# information_schema was intercepted here too until 2026-09-18: this module's own memoized
-# in-memory DuckDB catalog (_get_catalog_db/_build_catalog_db) answers it by eagerly computing
-# row counts for EVERY table via _fetch_row_counts, so even a single-table, WHERE-filtered
-# information_schema.tables lookup (e.g. describe_table) paid for a live Iceberg touch of the
-# entire catalog on first use -- confirmed live, minutes for a describe_table call that timed
-# out client-side twice. Unlike pg_catalog (Postgres-proprietary, not fully replicated by
-# Calcite's PostgresMetadataSchema, so still intercepted here), information_schema is standard
-# SQL that Calcite's own InformationSchema.java already answers directly -- correctly
-# filter-pushed-down, and now benefiting from that class's own row-count cache too -- so this
-# is architecturally the right connection for it: PASS_THROUGH lets it reach the real Calcite
-# connection instead of this parallel, eagerly-eager DuckDB reimplementation.
+#: The information_schema views Calcite's own InformationSchema answers, which info_schema.py
+#: scopes to the role. Every other information_schema relation this module serves (the constraint
+#: views, the grants, routines, ...) does not exist there, so a statement that reads one is
+#: answered here: forwarded, it fails with "Object 'referential_constraints' not found".
+CALCITE_INFORMATION_SCHEMA_VIEWS = frozenset({"schemata", "tables", "views", "columns"})
+# information_schema was intercepted here too until 2026-09-18. It is standard SQL that
+# Calcite's own InformationSchema.java answers directly, filter-pushed-down, so PASS_THROUGH
+# sends it to the real Calcite connection instead of this module's memoized DuckDB catalog.
 
 _TABLE_MAP: dict[tuple[str, str], str] = {
     ("information_schema", "schemata"): "_is_schemata",
@@ -202,7 +182,7 @@ _TABLE_MAP: dict[tuple[str, str], str] = {
     ("pg_catalog", "pg_settings"): "_pg_settings",
     ("pg_catalog", "pg_tables"): "_pg_tables",
     ("pg_catalog", "pg_stat_user_tables"): "_pg_stat_user_tables",
-    ("pg_catalog", "pg_statio_user_tables"): "_pg_stat_user_tables",
+    ("pg_catalog", "pg_statio_user_tables"): "_pg_statio_user_tables",
     ("pg_catalog", "pg_am"): "_pg_am",
     ("pg_catalog", "pg_tablespace"): "_pg_tablespace",
     ("pg_catalog", "pg_conversion"): "_pg_conversion",
@@ -244,6 +224,13 @@ _TABLE_MAP: dict[tuple[str, str], str] = {
     ("information_schema", "key_column_usage"): "_is_key_column_usage",
     ("information_schema", "table_constraints"): "_is_table_constraints",
     ("information_schema", "referential_constraints"): "_is_referential_constraints",
+    ("information_schema", "constraint_column_usage"): "_is_constraint_column_usage",
+    ("information_schema", "constraint_table_usage"): "_is_constraint_table_usage",
+    ("information_schema", "check_constraints"): "_is_check_constraints",
+    ("pg_catalog", "pg_views"): "_pg_views",
+    ("pg_catalog", "pg_sequences"): "_pg_sequences",
+    ("pg_catalog", "pg_prepared_statements"): "_pg_prepared_statements",
+    ("pg_catalog", "pg_indexes"): "_pg_indexes",
     ("information_schema", "role_table_grants"): "_is_role_table_grants",
     ("information_schema", "role_column_grants"): "_is_role_column_grants",
     ("information_schema", "triggers"): "_is_triggers",
@@ -277,6 +264,9 @@ _IS_VIEW_NAMES: list[str] = [
     "parameters",
     "enabled_roles",
     "applicable_roles",
+    "constraint_column_usage",
+    "constraint_table_usage",
+    "check_constraints",
 ]
 _IS_VIEW_OIDS: dict[str, int] = {n: 9001 + i for i, n in enumerate(_IS_VIEW_NAMES)}
 
@@ -364,6 +354,65 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("is_trigger_updatable", "character varying"),
         ("is_trigger_deletable", "character varying"),
         ("is_trigger_insertable_into", "character varying"),
+    ],
+    "check_constraints": [
+        ("constraint_catalog", "name"),
+        ("constraint_schema", "name"),
+        ("constraint_name", "name"),
+        ("check_clause", "text"),
+    ],
+    "pg_views": [
+        ("schemaname", "name"),
+        ("viewname", "name"),
+        ("viewowner", "name"),
+        ("definition", "text"),
+    ],
+    "pg_sequences": [
+        ("schemaname", "name"),
+        ("sequencename", "name"),
+        ("sequenceowner", "name"),
+        ("data_type", "text"),
+        ("start_value", "bigint"),
+        ("min_value", "bigint"),
+        ("max_value", "bigint"),
+        ("increment_by", "bigint"),
+        ("cycle", "boolean"),
+        ("cache_size", "bigint"),
+        ("last_value", "bigint"),
+    ],
+    "pg_prepared_statements": [
+        ("name", "text"),
+        ("statement", "text"),
+        ("prepare_time", "timestamp with time zone"),
+        ("parameter_types", "ARRAY"),
+        ("result_types", "ARRAY"),
+        ("from_sql", "boolean"),
+        ("generic_plans", "bigint"),
+        ("custom_plans", "bigint"),
+    ],
+    "pg_indexes": [
+        ("schemaname", "name"),
+        ("tablename", "name"),
+        ("indexname", "name"),
+        ("tablespace", "name"),
+        ("indexdef", "text"),
+    ],
+    "constraint_column_usage": [
+        ("table_catalog", "name"),
+        ("table_schema", "name"),
+        ("table_name", "name"),
+        ("column_name", "name"),
+        ("constraint_catalog", "name"),
+        ("constraint_schema", "name"),
+        ("constraint_name", "name"),
+    ],
+    "constraint_table_usage": [
+        ("table_catalog", "name"),
+        ("table_schema", "name"),
+        ("table_name", "name"),
+        ("constraint_catalog", "name"),
+        ("constraint_schema", "name"),
+        ("constraint_name", "name"),
     ],
     "key_column_usage": [
         ("constraint_catalog", "name"),
@@ -560,6 +609,7 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("attbyval", "boolean"),
         ("attalign", "char"),
         ("attstorage", "char"),
+        ("attcompression", "char"),
         ("attnotnull", "boolean"),
         ("atthasdef", "boolean"),
         ("atthasmissing", "boolean"),
@@ -573,6 +623,7 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("attacl", "ARRAY"),
         ("attoptions", "ARRAY"),
         ("attfdwoptions", "ARRAY"),
+        ("attmissingval", "ARRAY"),
     ],
     "pg_type": [
         ("oid", "oid"),
@@ -1109,6 +1160,191 @@ _SYSTEM_TABLE_COLUMNS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# Relations the server has no data of its own for (or derives from the catalog it already built):
+# PostgreSQL's exact columns, so a client's query is answered instead of failing. Filled by
+# _populate_extra_relations; the rest stay empty, which is the accurate answer.
+_EXTRA_RELATIONS: dict[tuple[str, str], list[tuple[str, str, str]]] = {
+    ("information_schema", "collation_character_set_applicability"): [
+        ("collation_catalog", "name", "VARCHAR"),
+        ("collation_schema", "name", "VARCHAR"),
+        ("collation_name", "name", "VARCHAR"),
+        ("character_set_catalog", "name", "VARCHAR"),
+        ("character_set_schema", "name", "VARCHAR"),
+        ("character_set_name", "name", "VARCHAR"),
+    ],
+    ("information_schema", "collations"): [
+        ("collation_catalog", "name", "VARCHAR"),
+        ("collation_schema", "name", "VARCHAR"),
+        ("collation_name", "name", "VARCHAR"),
+        ("pad_attribute", "text", "VARCHAR"),
+    ],
+    ("information_schema", "column_privileges"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("table_catalog", "name", "VARCHAR"),
+        ("table_schema", "name", "VARCHAR"),
+        ("table_name", "name", "VARCHAR"),
+        ("column_name", "name", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "data_type_privileges"): [
+        ("object_catalog", "name", "VARCHAR"),
+        ("object_schema", "name", "VARCHAR"),
+        ("object_name", "name", "VARCHAR"),
+        ("object_type", "text", "VARCHAR"),
+        ("dtd_identifier", "name", "VARCHAR"),
+    ],
+    ("information_schema", "information_schema_catalog_name"): [
+        ("catalog_name", "name", "VARCHAR"),
+    ],
+    ("information_schema", "role_routine_grants"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("specific_catalog", "name", "VARCHAR"),
+        ("specific_schema", "name", "VARCHAR"),
+        ("specific_name", "name", "VARCHAR"),
+        ("routine_catalog", "name", "VARCHAR"),
+        ("routine_schema", "name", "VARCHAR"),
+        ("routine_name", "name", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "role_udt_grants"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("udt_catalog", "name", "VARCHAR"),
+        ("udt_schema", "name", "VARCHAR"),
+        ("udt_name", "name", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "role_usage_grants"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("object_catalog", "name", "VARCHAR"),
+        ("object_schema", "name", "VARCHAR"),
+        ("object_name", "name", "VARCHAR"),
+        ("object_type", "text", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "routine_privileges"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("specific_catalog", "name", "VARCHAR"),
+        ("specific_schema", "name", "VARCHAR"),
+        ("specific_name", "name", "VARCHAR"),
+        ("routine_catalog", "name", "VARCHAR"),
+        ("routine_schema", "name", "VARCHAR"),
+        ("routine_name", "name", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "table_privileges"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("table_catalog", "name", "VARCHAR"),
+        ("table_schema", "name", "VARCHAR"),
+        ("table_name", "name", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+        ("with_hierarchy", "text", "VARCHAR"),
+    ],
+    ("information_schema", "udt_privileges"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("udt_catalog", "name", "VARCHAR"),
+        ("udt_schema", "name", "VARCHAR"),
+        ("udt_name", "name", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "usage_privileges"): [
+        ("grantor", "name", "VARCHAR"),
+        ("grantee", "name", "VARCHAR"),
+        ("object_catalog", "name", "VARCHAR"),
+        ("object_schema", "name", "VARCHAR"),
+        ("object_name", "name", "VARCHAR"),
+        ("object_type", "text", "VARCHAR"),
+        ("privilege_type", "text", "VARCHAR"),
+        ("is_grantable", "text", "VARCHAR"),
+    ],
+    ("information_schema", "view_column_usage"): [
+        ("view_catalog", "name", "VARCHAR"),
+        ("view_schema", "name", "VARCHAR"),
+        ("view_name", "name", "VARCHAR"),
+        ("table_catalog", "name", "VARCHAR"),
+        ("table_schema", "name", "VARCHAR"),
+        ("table_name", "name", "VARCHAR"),
+        ("column_name", "name", "VARCHAR"),
+    ],
+    ("information_schema", "view_routine_usage"): [
+        ("table_catalog", "name", "VARCHAR"),
+        ("table_schema", "name", "VARCHAR"),
+        ("table_name", "name", "VARCHAR"),
+        ("specific_catalog", "name", "VARCHAR"),
+        ("specific_schema", "name", "VARCHAR"),
+        ("specific_name", "name", "VARCHAR"),
+    ],
+    ("information_schema", "view_table_usage"): [
+        ("view_catalog", "name", "VARCHAR"),
+        ("view_schema", "name", "VARCHAR"),
+        ("view_name", "name", "VARCHAR"),
+        ("table_catalog", "name", "VARCHAR"),
+        ("table_schema", "name", "VARCHAR"),
+        ("table_name", "name", "VARCHAR"),
+    ],
+    ("pg_catalog", "pg_available_extension_versions"): [
+        ("name", "name", "VARCHAR"),
+        ("version", "text", "VARCHAR"),
+        ("installed", "boolean", "BOOLEAN"),
+        ("superuser", "boolean", "BOOLEAN"),
+        ("trusted", "boolean", "BOOLEAN"),
+        ("relocatable", "boolean", "BOOLEAN"),
+        ("schema", "name", "VARCHAR"),
+        ("requires", "ARRAY", "VARCHAR"),
+        ("comment", "text", "VARCHAR"),
+    ],
+    ("pg_catalog", "pg_available_extensions"): [
+        ("name", "name", "VARCHAR"),
+        ("default_version", "text", "VARCHAR"),
+        ("installed_version", "text", "VARCHAR"),
+        ("comment", "text", "VARCHAR"),
+    ],
+    ("pg_catalog", "pg_default_acl"): [
+        ("oid", "oid", "INTEGER"),
+        ("defaclrole", "oid", "INTEGER"),
+        ("defaclnamespace", "oid", "INTEGER"),
+        ("defaclobjtype", "char", "VARCHAR"),
+        ("defaclacl", "ARRAY", "VARCHAR"),
+    ],
+    ("pg_catalog", "pg_group"): [
+        ("groname", "name", "VARCHAR"),
+        ("grosysid", "oid", "INTEGER"),
+        ("grolist", "ARRAY", "VARCHAR"),
+    ],
+    ("pg_catalog", "pg_matviews"): [
+        ("schemaname", "name", "VARCHAR"),
+        ("matviewname", "name", "VARCHAR"),
+        ("matviewowner", "name", "VARCHAR"),
+        ("tablespace", "name", "VARCHAR"),
+        ("hasindexes", "boolean", "BOOLEAN"),
+        ("ispopulated", "boolean", "BOOLEAN"),
+        ("definition", "text", "VARCHAR"),
+    ],
+}
+
+for (_schema, _rel), _cols in _EXTRA_RELATIONS.items():
+    _TABLE_MAP[(_schema, _rel)] = ("_is_" + _rel) if _schema == "information_schema" else ("_" + _rel)
+    _SYSTEM_TABLE_COLUMNS[_rel] = [(_c, _st) for _c, _st, _dt in _cols]
+    if _schema == "information_schema":
+        _IS_VIEW_NAMES.append(_rel)
+_CATALOG_TABLE_NAMES = frozenset(t for _, t in _TABLE_MAP)
+_PG_CAT_TABLE_NAMES = sorted(k[1] for k in _TABLE_MAP if k[0] == "pg_catalog")
+_PG_CAT_TABLE_OIDS = {n: 8001 + i for i, n in enumerate(_PG_CAT_TABLE_NAMES)}
+_IS_VIEW_OIDS = {n: 9001 + i for i, n in enumerate(_IS_VIEW_NAMES)}
+
 _PG_TYPE_ROWS = [
     # (oid, typname, typnamespace, typlen, typtype, typcategory, typnotnull, typbasetype, typbyval, typalign, typstorage)
     (16, "bool", 11, 1, "b", "B", False, 0, True, "c", "p"),
@@ -1446,6 +1682,12 @@ def classify(sql: str) -> str:  # REQ-127, REQ-128, REQ-363
             tname = tbl.name.lower() if tbl.name else ""
             if db in _INTERCEPT_SCHEMAS:
                 return "INTERCEPT"
+            if (
+                db == "information_schema"
+                and tname not in CALCITE_INFORMATION_SCHEMA_VIEWS
+                and (db, tname) in _TABLE_MAP
+            ):
+                return "INTERCEPT"
             if not db and tname in _CATALOG_TABLE_NAMES:
                 return "INTERCEPT"
         for func in tree.find_all(exp.Anonymous):
@@ -1670,7 +1912,7 @@ def _populate_pg_namespace(db, idx: CatalogIndex) -> None:
     db.executemany("INSERT INTO _pg_namespace VALUES (?,?,?,?)", ns_rows)
 
 
-def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | None = None) -> None:
+def _populate_pg_class(db, idx: CatalogIndex) -> None:
     db.execute("""CREATE TABLE _pg_class (
         oid INTEGER, relname VARCHAR, relnamespace INTEGER, reltype INTEGER,
         reloftype INTEGER, relowner INTEGER, relam INTEGER, relfilenode INTEGER,
@@ -1689,7 +1931,6 @@ def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | Non
     for _, s, t, _, toid in idx.tables:
         ns_oid = idx.ns_map.get(s, 2200)
         natts = natts_by_toid.get(toid, 0)
-        reltuples = float(row_counts.get(toid, 0.0)) if row_counts else 0.0
         pg_class_rows.append(
             (
                 toid,
@@ -1702,7 +1943,11 @@ def _populate_pg_class(db, idx: CatalogIndex, row_counts: dict[int, float] | Non
                 toid,
                 0,
                 0,
-                reltuples,
+                # reltuples 0 is PG's "never analyzed". Rows are never counted to build the
+                # catalog: a COUNT(*) per table is a full scan of every table served, which
+                # for govdata held the first pg_catalog query for over 30 minutes; and
+                # PGW-023 reports relpages/reltuples ~ 0 so DuckDB scans in one stream.
+                0.0,
                 0,
                 0,
                 False,
@@ -1845,32 +2090,51 @@ def _populate_pg_description(
             continue
         ns_oid = idx.ns_map.get(domain_to_sql_name(_did))
         if ns_oid is not None:
-            desc_rows.append((ns_oid, "pg_namespace", 0, _ddesc))
+            desc_rows.append((ns_oid, _CATALOG_CLASS_OIDS["pg_namespace"], 0, _ddesc))
 
     for _, _, _, table_id, toid in idx.tables:
         tdesc = tid_desc.get(table_id)
         if tdesc:
-            desc_rows.append((toid, "pg_class", 0, tdesc))
+            desc_rows.append((toid, _CATALOG_CLASS_OIDS["pg_class"], 0, tdesc))
         for cname, cdesc_val in (tid_col_desc.get(table_id) or {}).items():
             attnum = idx.col_attnum.get((toid, cname))
             if attnum is not None:
-                desc_rows.append((toid, "pg_class", attnum, cdesc_val))
+                desc_rows.append((toid, _CATALOG_CLASS_OIDS["pg_class"], attnum, cdesc_val))
 
     if desc_rows:
         db.executemany("INSERT INTO _pg_description VALUES (?,?,?,?)", desc_rows)
 
 
+# Rows are written in the order below and reordered to the table's (PostgreSQL's) column order on
+# insert; a column-named INSERT is an order of magnitude slower in DuckDB's executemany.
+#   0 attrelid, 1 attname, 2 atttypid, 3 attstattarget, 4 attlen, 5 attnum, 6 attndims,
+#   7 attcacheoff, 8 atttypmod, 9 attbyval, 10 attalign, 11 attstorage, 12 attnotnull,
+#   13 atthasdef, 14 atthasmissing, 15 attidentity, 16 attgenerated, 17 attisdropped,
+#   18 attislocal, 19 attinhcount, 20 attcollation, 21 attacl, 22 attoptions, 23 attfdwoptions
+_PG_ATTRIBUTE_INSERT = "INSERT INTO _pg_attribute VALUES (" + ",".join(["?"] * 26) + ")"
+
+
+def _pg_attribute_table_row(t: tuple) -> tuple:
+    return (
+        t[0], t[1], t[2], t[4], t[5], t[7], t[8], t[6], t[9], t[10], t[11], "",
+        t[12], t[13], t[14], t[15], t[16], t[17], t[18], t[19], t[3], t[20],
+        t[21], t[22], t[23], None,
+    )
+
+
 def _populate_pg_attribute(db, idx: CatalogIndex, pk_notnull_cols: set = None) -> None:
     if pk_notnull_cols is None:
         pk_notnull_cols = set()
+    # Column order is PostgreSQL's (a client reading SELECT * by position depends on it); the
+    # row tuples below keep the order they were written in and name their columns on insert.
     db.execute("""CREATE TABLE _pg_attribute (
-        attrelid INTEGER, attname VARCHAR, atttypid INTEGER, attstattarget INTEGER,
-        attlen SMALLINT, attnum SMALLINT, attndims INTEGER, attcacheoff INTEGER,
-        atttypmod INTEGER, attbyval BOOLEAN, attalign VARCHAR, attstorage VARCHAR,
+        attrelid INTEGER, attname VARCHAR, atttypid INTEGER, attlen SMALLINT, attnum SMALLINT,
+        attcacheoff INTEGER, atttypmod INTEGER, attndims INTEGER, attbyval BOOLEAN,
+        attalign VARCHAR, attstorage VARCHAR, attcompression VARCHAR,
         attnotnull BOOLEAN, atthasdef BOOLEAN, atthasmissing BOOLEAN,
         attidentity VARCHAR, attgenerated VARCHAR, attisdropped BOOLEAN,
-        attislocal BOOLEAN, attinhcount INTEGER, attcollation INTEGER,
-        attacl VARCHAR, attoptions VARCHAR, attfdwoptions VARCHAR)""")
+        attislocal BOOLEAN, attinhcount INTEGER, attstattarget INTEGER, attcollation INTEGER,
+        attacl VARCHAR, attoptions VARCHAR, attfdwoptions VARCHAR, attmissingval VARCHAR)""")
     attr_rows = []
     for toid, col_name, col_type, is_nullable, ordinal in idx.all_cols:
         pg_oid = _trino_to_pg_oid(col_type)
@@ -1909,7 +2173,7 @@ def _populate_pg_attribute(db, idx: CatalogIndex, pk_notnull_cols: set = None) -
             )
         )
     if attr_rows:
-        db.executemany(f"INSERT INTO _pg_attribute VALUES ({','.join(['?'] * 24)})", attr_rows)
+        db.executemany(_PG_ATTRIBUTE_INSERT, [_pg_attribute_table_row(r) for r in attr_rows])
 
 
 def _populate_system_attributes(db) -> None:
@@ -2002,7 +2266,10 @@ def _populate_system_attributes(db) -> None:
                 )
             )
     if attr_rows:
-        db.executemany(f"INSERT INTO _pg_attribute VALUES ({','.join(['?'] * 24)})", attr_rows)
+        db.executemany(_PG_ATTRIBUTE_INSERT, [_pg_attribute_table_row(r) for r in attr_rows])
+
+
+_PG_TYPE_INSERT = "INSERT INTO _pg_type VALUES (" + ",".join(["?"] * 32) + ")"
 
 
 def _populate_pg_type(db) -> None:
@@ -2010,14 +2277,14 @@ def _populate_pg_type(db) -> None:
         oid INTEGER, typname VARCHAR, typnamespace INTEGER, typowner INTEGER,
         typlen SMALLINT, typbyval BOOLEAN, typtype VARCHAR, typcategory VARCHAR,
         typispreferred BOOLEAN, typisdefined BOOLEAN, typdelim VARCHAR,
-        typrelid INTEGER, typelem INTEGER, typarray INTEGER,
+        typrelid INTEGER, typsubscript VARCHAR, typelem INTEGER, typarray INTEGER,
         typinput VARCHAR, typoutput VARCHAR, typreceive VARCHAR, typsend VARCHAR,
         typmodin VARCHAR, typmodout VARCHAR, typanalyze VARCHAR,
         typalign VARCHAR, typstorage VARCHAR, typnotnull BOOLEAN,
         typbasetype INTEGER, typtypmod INTEGER, typndims INTEGER, typcollation INTEGER,
         typdefaultbin VARCHAR, typdefault VARCHAR, typacl VARCHAR)""")
     db.executemany(
-        f"INSERT INTO _pg_type VALUES ({','.join(['?'] * 31)})",
+        _PG_TYPE_INSERT,
         [
             (
                 oid,
@@ -2032,6 +2299,7 @@ def _populate_pg_type(db) -> None:
                 True,
                 ",",
                 0,
+                "-",  # typsubscript, the 13th column
                 0,
                 0,
                 "-",
@@ -2062,7 +2330,7 @@ def _populate_empty_system_tables(db) -> None:
         "CREATE TABLE _pg_attrdef (oid INTEGER, adrelid INTEGER, adnum SMALLINT, adbin VARCHAR)"
     )
     db.execute(
-        "CREATE TABLE _pg_description (objoid INTEGER, classoid VARCHAR, objsubid INTEGER, description VARCHAR)"
+        "CREATE TABLE _pg_description (objoid INTEGER, classoid INTEGER, objsubid INTEGER, description VARCHAR)"
     )
     db.execute("""CREATE TABLE _pg_index (
         indexrelid INTEGER, indrelid INTEGER, indnatts SMALLINT, indnkeyatts SMALLINT,
@@ -2101,12 +2369,12 @@ def _populate_empty_system_tables(db) -> None:
     db.execute("""CREATE TABLE _pg_enum (
         oid INTEGER, enumtypid INTEGER, enumsortorder REAL, enumlabel VARCHAR)""")
     db.execute("""CREATE TABLE _pg_stat_activity (
-        datid INTEGER, datname VARCHAR, pid INTEGER, usesysid INTEGER,
+        datid INTEGER, datname VARCHAR, pid INTEGER, leader_pid INTEGER, usesysid INTEGER,
         usename VARCHAR, application_name VARCHAR, client_addr VARCHAR,
         client_hostname VARCHAR, client_port INTEGER, backend_start VARCHAR,
         xact_start VARCHAR, query_start VARCHAR, state_change VARCHAR,
         wait_event_type VARCHAR, wait_event VARCHAR, state VARCHAR,
-        backend_xid INTEGER, backend_xmin INTEGER, query VARCHAR,
+        backend_xid INTEGER, backend_xmin INTEGER, query_id BIGINT, query VARCHAR,
         backend_type VARCHAR)""")
     db.execute("""CREATE TABLE _pg_stat_user_tables (
         relid INTEGER, schemaname VARCHAR, relname VARCHAR,
@@ -2116,6 +2384,35 @@ def _populate_empty_system_tables(db) -> None:
         n_ins_since_vacuum BIGINT, last_vacuum VARCHAR, last_autovacuum VARCHAR,
         last_analyze VARCHAR, last_autoanalyze VARCHAR, vacuum_count BIGINT,
         autovacuum_count BIGINT, analyze_count BIGINT, autoanalyze_count BIGINT)""")
+    # Relations DuckDB also has natively; left unmapped, a client got DuckDB's own rows (pg_views
+    # listed DuckDB's internal views). The server has no views, sequences or prepared-statement
+    # registry of its own to report, so these are empty with PostgreSQL's shape; pg_indexes is
+    # derived from the index rows (_populate_pg_indexes).
+    db.execute("""CREATE TABLE _pg_views (
+        schemaname VARCHAR, viewname VARCHAR, viewowner VARCHAR, definition VARCHAR)""")
+    db.execute("""CREATE TABLE _pg_sequences (
+        schemaname VARCHAR, sequencename VARCHAR, sequenceowner VARCHAR, data_type VARCHAR,
+        start_value BIGINT, min_value BIGINT, max_value BIGINT, increment_by BIGINT,
+        cycle BOOLEAN, cache_size BIGINT, last_value BIGINT)""")
+    db.execute("""CREATE TABLE _pg_prepared_statements (
+        name VARCHAR, statement VARCHAR, prepare_time VARCHAR, parameter_types VARCHAR,
+        result_types VARCHAR, from_sql BOOLEAN, generic_plans BIGINT, custom_plans BIGINT)""")
+    db.execute("""CREATE TABLE _pg_indexes (
+        schemaname VARCHAR, tablename VARCHAR, indexname VARCHAR, tablespace VARCHAR,
+        indexdef VARCHAR)""")
+    for (_schema, _rel), _cols in _EXTRA_RELATIONS.items():
+        db.execute(
+            f"CREATE TABLE {_TABLE_MAP[(_schema, _rel)]} ("
+            + ", ".join(f"{_c} {_dt}" for _c, _st, _dt in _cols) + ")"
+        )
+    db.execute("""CREATE TABLE _is_check_constraints (
+        constraint_catalog VARCHAR, constraint_schema VARCHAR, constraint_name VARCHAR,
+        check_clause VARCHAR)""")
+    db.execute("""CREATE TABLE _pg_statio_user_tables (
+        relid INTEGER, schemaname VARCHAR, relname VARCHAR,
+        heap_blks_read BIGINT, heap_blks_hit BIGINT, idx_blks_read BIGINT, idx_blks_hit BIGINT,
+        toast_blks_read BIGINT, toast_blks_hit BIGINT, tidx_blks_read BIGINT,
+        tidx_blks_hit BIGINT)""")
     db.execute("""CREATE TABLE _is_views (
         table_catalog VARCHAR, table_schema VARCHAR, table_name VARCHAR,
         view_definition VARCHAR, check_option VARCHAR, is_updatable VARCHAR,
@@ -2271,10 +2568,10 @@ _PG_SYSTEM_ROLES: list[tuple] = [
 
 def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
     db.execute("""CREATE TABLE _pg_roles (
-        oid INTEGER, rolname VARCHAR, rolsuper BOOLEAN, rolinherit BOOLEAN,
+        rolname VARCHAR, rolsuper BOOLEAN, rolinherit BOOLEAN,
         rolcreaterole BOOLEAN, rolcreatedb BOOLEAN, rolcanlogin BOOLEAN,
         rolreplication BOOLEAN, rolconnlimit INTEGER, rolpassword VARCHAR,
-        rolvaliduntil VARCHAR, rolbypassrls BOOLEAN, rolconfig VARCHAR)""")
+        rolvaliduntil VARCHAR, rolbypassrls BOOLEAN, rolconfig VARCHAR, oid INTEGER)""")
 
     rows: list[tuple] = []
     seen_names: set[str] = set()
@@ -2304,9 +2601,14 @@ def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
             )
             seen_names.add(name)
 
-    db.executemany("INSERT INTO _pg_roles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+    db.executemany(
+        "INSERT INTO _pg_roles (oid, rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, "
+        "rolcanlogin, rolreplication, rolconnlimit, rolpassword, rolvaliduntil, rolbypassrls, "
+        "rolconfig) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        rows,
+    )
     db.execute("""CREATE TABLE _pg_user AS
-        SELECT oid AS usesysid, rolname AS usename,
+        SELECT rolname AS usename, oid AS usesysid,
                rolcreatedb AS usecreatedb, rolsuper AS usesuper,
                rolreplication AS userepl, rolbypassrls AS usebypassrls,
                '********' AS passwd, rolvaliduntil AS valuntil,
@@ -2777,6 +3079,36 @@ def _build_fk_constraint_rows(
     return rows, con_oid
 
 
+_SEARCH_PATH = ("pg_catalog", "public")
+
+
+def _quote_ident(name: str) -> str:
+    """``name`` as PostgreSQL's quote_ident writes it: bare when it is a lowercase identifier."""
+    if re.fullmatch(r"[a-z_][a-z0-9_$]*", name):
+        return name
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _constraint_definition(row: tuple, idx: CatalogIndex) -> str:
+    """``row``'s definition as pg_get_constraintdef writes it: ``PRIMARY KEY (a, b)``,
+    ``UNIQUE (a)``, or ``FOREIGN KEY (a) REFERENCES schema.table(b)`` -- the referenced table
+    named with its schema unless that schema is on the search path."""
+    contype, conrelid, confrelid, conkey, confkey = row[3], row[7], row[11], row[18], row[19]
+    cols = ", ".join(_quote_ident(idx.attnum_to_col[(conrelid, int(a))]) for a in conkey)
+    if contype == "p":
+        return f"PRIMARY KEY ({cols})"
+    if contype == "u":
+        return f"UNIQUE ({cols})"
+    _catalog, schema, table = idx.toid_to_table[confrelid]
+    target = (
+        _quote_ident(table)
+        if schema in _SEARCH_PATH
+        else f"{_quote_ident(schema)}.{_quote_ident(table)}"
+    )
+    refs = ", ".join(_quote_ident(idx.attnum_to_col[(confrelid, int(a))]) for a in confkey)
+    return f"FOREIGN KEY ({cols}) REFERENCES {target}({refs})"
+
+
 def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
     db.execute("""CREATE TABLE _pg_constraint (
         oid INTEGER, conname VARCHAR, connamespace INTEGER, contype VARCHAR,
@@ -2793,7 +3125,12 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
         uq_rows, next_oid = _build_unique_constraint_rows(ctx, idx, next_oid)
         constraint_rows.extend(uq_rows)
         fk_rows, _ = _build_fk_constraint_rows(ctx, idx, next_oid)
-        constraint_rows.extend(fk_rows)
+        # A PostgreSQL foreign key always references a primary or unique key of its target. A
+        # relationship whose target columns are no declared key is a semantic join, not a foreign
+        # key, so it is not published as one: clients reading the catalog (referential_constraints,
+        # SQLAlchemy reflection) require every FK to name the key it references.
+        keys = {(r[7], frozenset(r[18] or [])) for r in constraint_rows if r[3] in ("p", "u")}
+        constraint_rows.extend(r for r in fk_rows if (r[11], frozenset(r[19] or [])) in keys)
     # Every PK/unique constraint needs a backing index: DataGrip reads PK/unique COLUMNS
     # from pg_index.indkey (+ the index's pg_class row, relkind='i'), NOT pg_constraint.conkey.
     # Without this the constraint name renders but with empty columns (`primary key ()`).
@@ -2849,10 +3186,86 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
             f"INSERT INTO _pg_constraint VALUES ({','.join(['?'] * 25)})",
             constraint_rows,
         )
+    # What pg_get_constraintdef(oid) answers (see _rewrite_for_duckdb): each constraint's
+    # definition as PostgreSQL writes it.
+    db.execute("CREATE TABLE _pg_constraintdef (conoid INTEGER, definition VARCHAR)")
+    if constraint_rows:
+        db.executemany(
+            "INSERT INTO _pg_constraintdef VALUES (?, ?)",
+            [(r[0], _constraint_definition(r, idx)) for r in constraint_rows],
+        )
     if index_rows:
         db.executemany(f"INSERT INTO _pg_index VALUES ({','.join(['?'] * 20)})", index_rows)
         db.executemany(f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", index_class_rows)
     return constraint_rows
+
+
+def _populate_pg_indexes(db, idx: CatalogIndex) -> None:
+    """pg_indexes: one row per index relation _populate_pg_constraint recorded (the backing index
+    of each primary and unique key), with the CREATE INDEX statement PostgreSQL would print."""
+    rows = db.execute(
+        "SELECT x.indrelid, x.indisunique, x.indkey, i.relname, t.relname, n.nspname "
+        "FROM _pg_index x JOIN _pg_class i ON i.oid = x.indexrelid "
+        "JOIN _pg_class t ON t.oid = x.indrelid JOIN _pg_namespace n ON n.oid = t.relnamespace"
+    ).fetchall()
+    out = []
+    for relid, unique, indkey, index_name, table_name, schema in rows:
+        cols = ", ".join(idx.attnum_to_col[(relid, int(a))] for a in indkey)
+        ddl = (f"CREATE {'UNIQUE ' if unique else ''}INDEX {index_name} ON "
+               f"{schema}.{table_name} USING btree ({cols})")
+        out.append((schema, table_name, index_name, None, ddl))
+    if out:
+        db.executemany("INSERT INTO _pg_indexes VALUES (?,?,?,?,?)", out)
+
+
+def _populate_extra_relations(db, idx: CatalogIndex, role_id: str, state) -> None:
+    """Fill the _EXTRA_RELATIONS the catalog can derive; the others stay empty.
+
+    The catalog is built per role and lists only what that role can see, so the connected role
+    holds SELECT on every table and column listed (the server states no other privilege), and is
+    the owner and grantor of them, as pg_namespace.nspowner already says.
+    """
+    from pgwire_calcite.extensions import pg_extension_rows
+
+    db_name = _DATABASE_NAME
+    table_grants, column_grants = [], []
+    for _, _, _, _table_id, toid in idx.tables:
+        cat, sch, name = idx.toid_to_table[toid]
+        table_grants.append((role_id, role_id, cat, sch, name, "SELECT", "NO", "NO"))
+    for toid, col_name, _t, _n, _o in idx.all_cols:
+        cat, sch, name = idx.toid_to_table[toid]
+        column_grants.append((role_id, role_id, cat, sch, name, col_name, "SELECT", "NO"))
+    for table in ("_is_table_privileges", "_is_role_table_grants"):
+        if table_grants:
+            db.executemany(f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)", table_grants)
+    for table in ("_is_column_privileges", "_is_role_column_grants"):
+        if column_grants:
+            db.executemany(f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)", column_grants)
+    db.execute("INSERT INTO _is_information_schema_catalog_name VALUES (?)", [db_name])
+    db.execute(
+        "INSERT INTO _pg_group SELECT rolname, oid, NULL FROM _pg_roles WHERE NOT rolcanlogin"
+    )
+    backend = getattr(state, "backend", None)
+    enabled = backend.extensions if backend is not None else frozenset()
+    for _oid, ext_name, version, comment in pg_extension_rows(set(enabled)):
+        db.execute(
+            "INSERT INTO _pg_available_extensions VALUES (?,?,?,?)",
+            [ext_name, version, version, comment],
+        )
+        db.execute(
+            "INSERT INTO _pg_available_extension_versions VALUES (?,?,TRUE,FALSE,FALSE,FALSE,"
+            "NULL,NULL,?)",
+            [ext_name, version, comment],
+        )
+    # The built-in collations every database has; the charset is the database's.
+    for coll in ("default", "C", "POSIX"):
+        db.execute(
+            "INSERT INTO _is_collations VALUES (?,?,?,?)", [db_name, "pg_catalog", coll, "NO PAD"]
+        )
+        db.execute(
+            "INSERT INTO _is_collation_character_set_applicability VALUES (?,?,?,NULL,NULL,?)",
+            [db_name, "pg_catalog", coll, "UTF8"],
+        )
 
 
 def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex) -> None:
@@ -2865,25 +3278,29 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         constraint_catalog VARCHAR, constraint_schema VARCHAR, constraint_name VARCHAR,
         table_catalog VARCHAR, table_schema VARCHAR, table_name VARCHAR,
         column_name VARCHAR, ordinal_position INTEGER, position_in_unique_constraint INTEGER)""")
+    db.execute("""CREATE TABLE _is_constraint_column_usage (
+        table_catalog VARCHAR, table_schema VARCHAR, table_name VARCHAR, column_name VARCHAR,
+        constraint_catalog VARCHAR, constraint_schema VARCHAR, constraint_name VARCHAR)""")
+    db.execute("""CREATE TABLE _is_constraint_table_usage (
+        table_catalog VARCHAR, table_schema VARCHAR, table_name VARCHAR,
+        constraint_catalog VARCHAR, constraint_schema VARCHAR, constraint_name VARCHAR)""")
     if not constraint_rows:
         return
     oid_to_ns: dict[int, str] = {v: k for k, v in idx.ns_map.items()}
-    # PK/unique constraint name per table OID: information_schema.referential_constraints
-    # points each FK at the unique constraint it references (the target table's PK).
-    # con_row[3]=contype, con_row[7]=conrelid, con_row[1]=conname.
-    pk_name_by_relid: dict[int, str] = {
-        row[7]: row[1] for row in constraint_rows if row[3] == "p"
-    }
     # (target relid, referenced-column attnum set) -> PK/UNIQUE constraint name, so an FK
     # referencing a non-PK unique column links to the correct key (counties.state_fips ->
     # state_ref UNIQUE(state_fips)), not blindly the target's primary key.
     key_name_by_relid_cols: dict[tuple[int, frozenset], str] = {}
+    key_order_by_relid_cols: dict[tuple[int, frozenset], list[int]] = {}
     for row in constraint_rows:
         if row[3] in ("p", "u"):
             key_name_by_relid_cols[(row[7], frozenset(row[18] or []))] = row[1]
+            key_order_by_relid_cols[(row[7], frozenset(row[18] or []))] = list(row[18] or [])
     is_tc_rows: list[tuple] = []
     is_kcu_rows: list[tuple] = []
     is_rc_rows: list[tuple] = []
+    is_ccu_rows: list[tuple] = []
+    is_ctu_rows: list[tuple] = []
     for con_row in constraint_rows:
         conname_v: str = con_row[1]
         conns_oid_v: int = con_row[2]
@@ -2913,9 +3330,13 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
             confrelid_v: int = con_row[11]
             confkey_v = frozenset(con_row[19] or [])
             _, ref_sch_v, _ = idx.toid_to_table.get(confrelid_v, (_DATABASE_NAME, "public", ""))
-            ref_key_name = key_name_by_relid_cols.get(
-                (confrelid_v, confkey_v)
-            ) or pk_name_by_relid.get(confrelid_v)
+            ref_key_name = key_name_by_relid_cols.get((confrelid_v, confkey_v))
+            if ref_key_name is None:
+                # _populate_pg_constraint publishes no foreign key without a key to reference.
+                raise ValueError(
+                    f"referential_constraints: FK {conname_v!r} references table oid "
+                    f"{confrelid_v} columns {sorted(confkey_v)} that are no key of it"
+                )
             is_rc_rows.append(
                 (
                     _DATABASE_NAME,
@@ -2929,8 +3350,31 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                     "NO ACTION",
                 )
             )
+        # The table and columns a constraint depends on: its own for a key, the referenced
+        # table's for a foreign key.
+        if contype_v == "f":
+            use_relid, use_attnums = con_row[11], list(con_row[19] or [])
+        else:
+            use_relid, use_attnums = conrelid_v, list(con_row[18] or [])
+        u_c, u_sch, u_tname = idx.toid_to_table.get(use_relid, (_DATABASE_NAME, "public", ""))
+        is_ctu_rows.append((u_c, u_sch, u_tname, _DATABASE_NAME, con_schema_v, conname_v))
+        for use_attnum in use_attnums:
+            use_col = idx.attnum_to_col.get((use_relid, int(use_attnum)), "")
+            if use_col:
+                is_ccu_rows.append(
+                    (u_c, u_sch, u_tname, use_col, _DATABASE_NAME, con_schema_v, conname_v)
+                )
         conkeys_raw = con_row[18]
         conkeys_list: list[int] = list(conkeys_raw) if conkeys_raw else []
+        # PostgreSQL: NULL for a primary or unique key; for a foreign key, the position (in the
+        # referenced key's own column order) of the column this one references. A client pairs
+        # a foreign key's columns with the key's by joining on it.
+        fk_targets: list[int] = list(con_row[19] or []) if contype_v == "f" else []
+        ref_order: list[int] = (
+            key_order_by_relid_cols.get((con_row[11], frozenset(fk_targets)), [])
+            if contype_v == "f"
+            else []
+        )
         for pos, attnum_v in enumerate(conkeys_list, 1):
             col_name_v = idx.attnum_to_col.get((conrelid_v, int(attnum_v)), "")
             if col_name_v:
@@ -2944,7 +3388,7 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                         c_tname_v,
                         col_name_v,
                         pos,
-                        pos if contype_v in ("p", "u") else None,
+                        ref_order.index(fk_targets[pos - 1]) + 1 if contype_v == "f" else None,
                     )
                 )
     if is_tc_rows:
@@ -2961,6 +3405,16 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
         db.executemany(
             f"INSERT INTO _is_referential_constraints VALUES ({','.join(['?'] * 9)})",
             is_rc_rows,
+        )
+    if is_ccu_rows:
+        db.executemany(
+            f"INSERT INTO _is_constraint_column_usage VALUES ({','.join(['?'] * 7)})",
+            is_ccu_rows,
+        )
+    if is_ctu_rows:
+        db.executemany(
+            f"INSERT INTO _is_constraint_table_usage VALUES ({','.join(['?'] * 6)})",
+            is_ctu_rows,
         )
 
 
@@ -2985,49 +3439,9 @@ def _populate_pg_extension(db, state) -> None:
     # PG keeps an extension's description in pg_description, not in pg_extension; that is
     # where obj_description(oid, 'pg_extension') and DataGrip's extension node read it.
     db.executemany(
-        "INSERT INTO _pg_description VALUES (?, 'pg_extension', 0, ?)",
-        [(oid, comment) for oid, _n, _v, comment in rows],
+        "INSERT INTO _pg_description VALUES (?, ?, 0, ?)",
+        [(oid, _CATALOG_CLASS_OIDS["pg_extension"], comment) for oid, _n, _v, comment in rows],
     )
-
-
-def _fetch_row_counts(ctx, idx: CatalogIndex, backend) -> dict[int, float]:
-    """Real pg_class.reltuples per table, sourced from the backend (PGW-051).
-
-    Runs ONCE per catalog build (the catalog DB is memoized per role and invalidated on
-    DDL / re-populate), never per query. Backends that cannot count — the Phase-0 stub, the
-    bridge backend whose JVM lives in the child — do not implement ``table_row_count`` and
-    contribute nothing, leaving reltuples at 0 (PG's "never analyzed"). Counting is skipped
-    entirely under ``set_row_count_mode("off")``.
-    """
-    if _ROW_COUNT_MODE == "off" or ctx is None or backend is None:
-        return {}
-    counter = getattr(backend, "table_row_count", None)
-    if counter is None:
-        return {}
-    physical = {tm.table_id: (tm.schema_name, tm.table_name) for tm in ctx.tables.values()}
-    counts: dict[int, float] = {}
-    for _cat, _sch, _tname, table_id, toid in idx.tables:
-        schema_name, table_name = physical[table_id]
-        try:
-            counts[toid] = float(counter(schema_name, table_name))
-        except Exception as e:
-            # A COUNT(*) failure here means this table's ETL hasn't (fully) materialized
-            # it yet — normal, expected transient state for a warehouse this large, not
-            # corruption (see the matching guard in catalog_populate.build_context, which
-            # hits the same class of not-yet-ETL'd table earlier in startup). Must not take
-            # the whole catalog build down with it: every OTHER table in a 26-schema
-            # warehouse having already mounted successfully is the normal case, and one
-            # still-materializing table falls back to reltuples=0 ("never analyzed" in PG's
-            # own semantics, the same value already used for backends that cannot count at
-            # all) exactly like FileSchema's own per-table metadata recording already
-            # tolerates a missing table elsewhere in the same schema instead of aborting
-            # the whole schema.
-            log.warning(
-                "table_row_count failed for %s.%s (%s: %s) — leaving reltuples=0",
-                schema_name, table_name, type(e).__name__, e,
-            )
-            counts[toid] = 0.0
-    return counts
 
 
 def _populate_function_catalog(db, state) -> None:
@@ -3099,13 +3513,11 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     col_types: dict = state.schema_build_cache.get("column_types", {})
     idx = _build_catalog_index(ctx, col_types)
 
-    row_counts = _fetch_row_counts(ctx, idx, getattr(state, "backend", None))
-
     _populate_is_schemata(db, idx)
     _populate_is_tables(db, idx)
     _populate_is_columns(db, idx)
     _populate_pg_namespace(db, idx)
-    _populate_pg_class(db, idx, row_counts)
+    _populate_pg_class(db, idx)
     # A PK column is NOT NULL by definition in PostgreSQL. DataGrip's DDL generator omits
     # nullable columns from the generated `primary key (...)` clause, so if our catalog reports
     # PK columns as nullable (attnotnull=false) the PK renders with no columns for EVERY table
@@ -3134,6 +3546,8 @@ def _build_catalog_db(role_id: str, state):  # REQ-127, REQ-128, REQ-363
     _populate_pg_settings(db)
     _populate_pg_tables_and_am(db, idx)
     _populate_is_constraints(db, constraint_rows, idx)
+    _populate_pg_indexes(db, idx)
+    _populate_extra_relations(db, idx, role_id, state)
 
     return db
 
@@ -3197,13 +3611,17 @@ def _rewrite_pg_cast(node, _transform):
     dtype = node.args.get("to")
     dtype_str = str(dtype).lower() if dtype else ""
     if dtype_str in _REG_CAST_TYPES:
-        # `'[schema.]name'::regclass` -> unqualified `'name'`. The synthetic pg_description
-        # stores classoid as the short relation name (e.g. 'pg_class'), and DataGrip's comment
-        # queries filter `classoid = 'pg_catalog.pg_class'::regclass`. Map the literal to its
-        # last dotted component so the comparison matches — else every description drops.
+        # `'[schema.]name'::regclass` -> the catalog's class oid when `name` is a system catalog.
+        # The synthetic pg_description stores classoid as that oid (as real PG does), so DataGrip's
+        # `classoid = 'pg_catalog.pg_class'::regclass` and PgJDBC's `pg_class.oid = classoid` join
+        # both compare integers. Any other name keeps its unqualified text.
         inner = node.this
         if isinstance(inner, exp.Literal) and inner.is_string:
-            return exp.Literal.string(inner.this.rsplit(".", 1)[-1])
+            short = inner.this.rsplit(".", 1)[-1]
+            class_oid = _CATALOG_CLASS_OIDS.get(short)
+            if class_oid is not None:
+                return exp.Literal.number(class_oid)
+            return exp.Literal.string(short)
         return inner.transform(_transform)
     if dtype_str in ("oid", "xid", "xid8", "tid", "cid"):
         # DuckDB has no oid/xid/tid/cid types. Preserve the operand's VALUE by re-casting to
@@ -3378,6 +3796,19 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
                 return exp.Subquery(this=base)
             if "pg_get_userbyid" in fn or "pg_get_role_name" in fn:
                 return exp.Literal.string(_DATABASE_NAME)
+            if "pg_get_constraintdef" in fn:
+                # The definition _populate_pg_constraint recorded for the constraint, as
+                # PostgreSQL writes it; the pretty flag changes nothing for a key or foreign key.
+                # SQLAlchemy reflects a table's foreign keys by matching this text. The lookup
+                # column is not named oid: an unqualified oid argument would bind to it.
+                args = node.args.get("expressions", [])
+                oid_expr = args[0].transform(_transform) if args else exp.null()
+                subq = (
+                    exp.select(exp.column("definition"))
+                    .from_("_pg_constraintdef")
+                    .where(exp.EQ(this=exp.column("conoid"), expression=oid_expr))
+                )
+                return exp.Subquery(this=subq)
             if fn.startswith("pg_get_") or "pg_tablespace_location" in fn:
                 return exp.null()
             if "pg_encoding_to_char" in fn:
@@ -3416,7 +3847,6 @@ def _rewrite_for_duckdb(sql: str, role_id: str = "") -> str:
             if any(
                 p in fn
                 for p in (
-                    "pg_get_constraintdef",
                     "pg_get_expr",
                     "pg_get_indexdef",
                     "pg_get_partkeydef",
@@ -3664,6 +4094,95 @@ def _handle_current_setting(sql: str):
     key = m.group(1).lower()
     value = setting_value(key)
     return QueryResult(rows=[(value,)], column_names=["current_setting"])
+
+
+_PARAMETER_MARK_RE = re.compile(r"^__pgwire_parameter_(\d+)__$")
+
+#: The SQL type a catalog parameter is reported as, by the type of what it is compared with in
+#: the catalog database. A type absent here leaves the parameter as it was reported before.
+_CATALOG_PARAMETER_TYPE = {
+    "VARCHAR": "VARCHAR",
+    "BOOLEAN": "BOOLEAN",
+    "TINYINT": "SMALLINT",
+    "SMALLINT": "SMALLINT",
+    "UTINYINT": "SMALLINT",
+    "INTEGER": "INTEGER",
+    "USMALLINT": "INTEGER",
+    "BIGINT": "BIGINT",
+    "UINTEGER": "BIGINT",
+    "UBIGINT": "BIGINT",
+    "FLOAT": "REAL",
+    "DOUBLE": "DOUBLE",
+}
+
+
+def parameter_types(sql: str, role_id: str, state) -> "list | None":
+    """The SQL type of each ``$N`` of a catalog statement, by what the statement compares it
+    with (kenstott/calcite#463); None in the place of a parameter compared with nothing.
+
+    The catalog database does not say what it types a parameter as, so each is typed as the
+    other side of its comparison is: ``relname = $1`` is a VARCHAR, ``oid = $1`` a number.
+    None for a statement the catalog database is not asked (it is not a query)."""
+    import sqlglot
+    import sqlglot.expressions as exp
+
+    stripped = sql.strip().rstrip(";")
+    indices = [int(n) for n in re.findall(r"\$(\d+)", stripped)]
+    if not indices or not re.match(r"^\s*(SELECT|WITH)\b", stripped, re.IGNORECASE):
+        return None
+    marked = re.sub(
+        r"\$(\d+)(?:::[^\s,)]+)?", lambda m: f"'__pgwire_parameter_{m.group(1)}__'", stripped
+    )
+    tree = sqlglot.parse_one(_rewrite_for_duckdb(marked, role_id), read="duckdb")
+    types: list = [None] * max(indices)
+    cur = _get_catalog_db(role_id, state).cursor()
+    try:
+        for literal in list(tree.find_all(exp.Literal)):
+            mark = _PARAMETER_MARK_RE.match(literal.name) if literal.is_string else None
+            if mark is None:
+                continue
+            other = _compared_with(literal)
+            select = literal.find_ancestor(exp.Select)
+            if other is None or select is None:
+                continue
+            probe = select.copy()
+            probe.set("expressions", [exp.alias_(other.copy(), "compared")])
+            for clause in ("where", "group", "having", "qualify", "order", "limit", "offset", "distinct"):
+                probe.set(clause, None)
+            with_ = tree.args.get("with_")
+            if with_ is not None and probe.args.get("with_") is None:
+                probe.set("with_", with_.copy())
+            for leftover in list(probe.find_all(exp.Literal)):
+                if leftover.is_string and _PARAMETER_MARK_RE.match(leftover.name):
+                    leftover.replace(exp.Null())
+            try:
+                described = cur.execute("DESCRIBE " + probe.sql(dialect="duckdb")).fetchall()
+            except Exception as exc:
+                # What the parameter is compared with cannot be read on its own (it names a
+                # row of an outer query). Running the statement says so if it is wrong.
+                log.info("[CATALOG] parameter $%s of %r is not typed: %s", mark.group(1), stripped[:200], exc)
+                continue
+            duck_type = str(described[0][1]).split("(")[0]
+            types[int(mark.group(1)) - 1] = _CATALOG_PARAMETER_TYPE.get(duck_type)
+    finally:
+        cur.close()
+    return types
+
+
+def _compared_with(literal):
+    """The expression a parameter's place is compared with, or None when it is in no
+    comparison."""
+    import sqlglot.expressions as exp
+
+    parent = literal.parent
+    if isinstance(
+        parent,
+        (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE, exp.Like, exp.ILike, exp.NullSafeEQ, exp.NullSafeNEQ),
+    ):
+        return parent.expression if parent.this is literal else parent.this
+    if isinstance(parent, (exp.In, exp.Between)) and parent.this is not literal:
+        return parent.this
+    return None
 
 
 def answer(sql: str, role_id: str, state):  # REQ-532

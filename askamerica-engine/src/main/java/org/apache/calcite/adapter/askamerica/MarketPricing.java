@@ -311,6 +311,33 @@ final class MarketPricing {
         return new Forecast(values, true, "samples");
     }
 
+    /** Points standing in for a stated probability; it is held to this resolution. */
+    static final int PROBABILITY_POINTS = 10000;
+
+    /**
+     * A stated probability that a discrete outcome happens, as the 0/1 value of the event:
+     * a market whose condition is {@code above 0.5} is priced at {@code p}, one whose
+     * condition is {@code below 0.5} at {@code 1 - p}. The probability must come with the
+     * source that states it (a measured model, a published forecast); this never derives one.
+     */
+    static Forecast probability(double p, String source) {
+        if (!(p > 0 && p < 1)) {
+            throw new IllegalArgumentException("probability must be strictly between 0 and 1, "
+                + "got " + p);
+        }
+        if (source == null || source.trim().isEmpty()) {
+            throw new IllegalArgumentException("probability needs probability_source: the "
+                + "model or publication that states it. A probability with no source is not "
+                + "priced");
+        }
+        int ones = (int) Math.round(p * PROBABILITY_POINTS);
+        double[] v = new double[PROBABILITY_POINTS];
+        for (int i = PROBABILITY_POINTS - ones; i < PROBABILITY_POINTS; i++) {
+            v[i] = 1;
+        }
+        return new Forecast(v, false, "probability " + p + " (source: " + source.trim() + ")");
+    }
+
     private static double[] standardQuantiles() {
         NormalDistribution std = new NormalDistribution();
         double[] z = new double[NORMAL_POINTS];

@@ -10,7 +10,9 @@
  */
 package org.apache.calcite.adapter.govdata.disasters;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -77,12 +79,13 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
     conn.setReadTimeout(READ_TIMEOUT_MS);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != HttpURLConnection.HTTP_OK) {
       conn.disconnect();
       throw new IOException("HTTP " + status + " from " + fileUrl);
     }
-    InputStream raw = conn.getInputStream();
+    InputStream raw = CompleteBody.of(conn);
     BufferedReader reader = new BufferedReader(
         new InputStreamReader(new GZIPInputStream(raw), StandardCharsets.UTF_8));
 
@@ -103,6 +106,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
     conn.setReadTimeout(CONNECT_TIMEOUT_MS);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
     try {
+      NetworkOutageWait.connect(conn);
       if (conn.getResponseCode() != HttpURLConnection.HTTP_OK) {
         throw new IOException("HTTP " + conn.getResponseCode() + " listing " + dirUrl);
       }
@@ -111,7 +115,7 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       String best = null;
       long bestProc = -1L;
       try (BufferedReader r = new BufferedReader(
-          new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+          new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
         String line;
         while ((line = r.readLine()) != null) {
           Matcher m = p.matcher(line);
@@ -215,6 +219,8 @@ public class StormEventsStreamingTransformer implements StreamingResponseTransfo
       row.put("state_name", str(cols, "STATE"));
       row.put("event_type", str(cols, "EVENT_TYPE"));
       row.put("cz_type", czType);
+      row.put("cz_fips", czFips);
+      row.put("cz_name", str(cols, "CZ_NAME"));
       row.put("magnitude", dbl(str(cols, "MAGNITUDE")));
       row.put("magnitude_type", str(cols, "MAGNITUDE_TYPE"));
       row.put("injuries_direct", intg(str(cols, "INJURIES_DIRECT")));

@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +24,7 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -302,22 +305,14 @@ class FileJdbcDriverDeepCoverageTest {
   // parseConfiguration() - default paths
   // =====================================================================
 
-  @Test void testDefaultStoragePathWhenNoneProvided() throws Exception {
+  @Test void testNoStoragePathIsRefused() {
+    // REQ-1992: the storage path is the schema's base directory, and there is no default
     FileJdbcDriver driver = new FileJdbcDriver();
-    Properties info = new Properties();
-
-    Object config =
-        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", info);
-
-    List<?> schemas = invokeGetSchemas(config);
-    assertEquals(1, schemas.size());
-
-    Object schemaConfig = schemas.get(0);
-    String storagePath = (String) invokeGetter(schemaConfig, "getStoragePath");
-    String expectedDefault =
-        System.getProperty("java.io.tmpdir") + "/calcite_file_storage";
-    assertEquals(expectedDefault, storagePath,
-        "Default storage path should use java.io.tmpdir");
+    Exception e = assertThrows(Exception.class,
+        () -> invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", new Properties()));
+    Throwable cause = e instanceof java.lang.reflect.InvocationTargetException ? e.getCause() : e;
+    assertTrue(cause instanceof IllegalArgumentException, String.valueOf(cause));
+    assertTrue(cause.getMessage().contains("storage_path"), cause.getMessage());
   }
 
   @Test void testDefaultDataPathWhenNoneProvided() throws Exception {
@@ -325,14 +320,14 @@ class FileJdbcDriverDeepCoverageTest {
     Properties info = new Properties();
 
     Object config =
-        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file", info);
+        invokeParseConfiguration(driver, "jdbc:calcite:;schema=file;storage_path=/s", info);
 
     List<?> schemas = invokeGetSchemas(config);
     assertEquals(1, schemas.size());
 
     Object schemaConfig = schemas.get(0);
     String dataPath = (String) invokeGetter(schemaConfig, "getDataPath");
-    String expectedDefault = System.getProperty("user.dir") + "/data";
+    String expectedDefault = LocalPaths.join(System.getProperty("user.dir"), "data");
     assertEquals(expectedDefault, dataPath,
         "Default data path should use user.dir/data");
   }

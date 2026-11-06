@@ -64,15 +64,24 @@
 #   fix-sec.sh --confirm                        # repair every gap, oldest year first
 #   fix-sec.sh --year 2026 --confirm            # repair one filing year
 #   fix-sec.sh --table metadata                 # report one staging table's gap
+#   fix-sec.sh --form 10-K,10-K/A               # report and repair only these form types
 #   fix-sec.sh --batch-size 1000 --confirm      # smaller worker invocations
 #   fix-sec.sh --max-accessions 500 --confirm   # cap the run (rehearsal)
+#   fix-sec.sh --reoffer-attempted --confirm    # accepted for compatibility; attempted pairs that are absent are always offered
 #   fix-sec.sh --threads 12 --heap 16 --confirm # push harder on an otherwise idle box
 #   fix-sec.sh --threads 2 --heap 3 --confirm   # back off to pool-sized resources
+#   fix-sec.sh --wait-for-workers[=MINUTES] --confirm  # hand over from a running pool (default 120 min)
+#
+#   --wait-for-workers takes the schema write lock FIRST (the pool then starts no new sec workers), then
+#   waits for the live sec workers to exit, logging each minute who is left. It never signals a worker.
+#   On timeout it releases the lock and exits 1 naming the workers still alive. Without the flag a live
+#   worker is refused at once.
 #
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
+source "$SCRIPT_DIR/fix-sec-lib.sh"
 load_env
 
 # Which Iceberg tables each SEC form type is defined to produce.
@@ -130,7 +139,9 @@ VECTORIZATION_ENABLED="${GOVDATA_VECTORIZATION_ENABLED:-true}"
 
 CONFIRM=false
 ONLY_TABLE=""
+REOFFER_ATTEMPTED=false
 ONLY_YEAR=""
+ONLY_FORMS=""
 BATCH_SIZE=2000
 MAX_ACCESSIONS=0
 # Reprocessing is a bulk backfill, not the steady-state pipeline, so it is sized for the
@@ -142,17 +153,23 @@ MAX_ACCESSIONS=0
 # the run above sat at 2.48G RSS against -Xmx3g with only two of them.
 THREADS=8
 HEAP_GB=12
+WAIT_MINUTES=0
+WAIT_POLL_SECONDS=60
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --confirm)        CONFIRM=true ;;
     --table)          shift; ONLY_TABLE="${1:-}" ;;
+    --reoffer-attempted) REOFFER_ATTEMPTED=true ;;
     --year)           shift; ONLY_YEAR="${1:-}" ;;
+    --form)           shift; ONLY_FORMS="${1:-}" ;;
     --batch-size)     shift; BATCH_SIZE="${1:-}" ;;
     --max-accessions) shift; MAX_ACCESSIONS="${1:-}" ;;
     --threads)        shift; THREADS="${1:-}" ;;
     --heap)           shift; HEAP_GB="${1:-}" ;;
-    -h|--help)        sed -n '18,62p' "$0" >&2; exit 0 ;;
+    --wait-for-workers) WAIT_MINUTES=120 ;;
+    --wait-for-workers=*) WAIT_MINUTES="${1#*=}" ;;
+    -h|--help)        sed -n '18,63p' "$0" >&2; exit 0 ;;
     *) echo "fix-sec: unknown argument '$1'" >&2; exit 2 ;;
   esac
   shift
@@ -162,6 +179,8 @@ done
   || { echo "fix-sec: --batch-size must be a positive integer" >&2; exit 2; }
 [[ "$MAX_ACCESSIONS" =~ ^[0-9]+$ ]] \
   || { echo "fix-sec: --max-accessions must be an integer" >&2; exit 2; }
+[[ "$WAIT_MINUTES" =~ ^[0-9]+$ ]] \
+  || { echo "fix-sec: --wait-for-workers=MINUTES must be a non-negative integer" >&2; exit 2; }
 [ -z "$ONLY_YEAR" ] || [[ "$ONLY_YEAR" =~ ^[0-9]{4}$ ]] \
   || { echo "fix-sec: --year must be a 4-digit year" >&2; exit 2; }
 
@@ -234,24 +253,36 @@ STAMP="$(date +%Y%m%d_%H%M%S)"
 ACC_FILE="$WORK_DIR/missing-$STAMP.txt"
 REPORT_FILE="$WORK_DIR/report-$STAMP.txt"
 
+# --form: every requested form must be one the matrix defines, so a typo is refused rather than
+# silently reporting an empty gap.
+if [ -n "$ONLY_FORMS" ]; then
+  _known_forms=$(printf '%s\n' "${FORM_TABLES[@]}" | cut -d: -f1)
+  IFS=',' read -ra _req_forms <<< "$ONLY_FORMS"
+  for _f in "${_req_forms[@]}"; do
+    printf '%s\n' "$_known_forms" | grep -qxF -- "$_f" \
+      || { echo "fix-sec: --form '$_f' is not a form in FORM_TABLES" >&2; exit 2; }
+  done
+fi
+
 # Expand FORM_TABLES into (form, table) rows, dropping vectorized_chunks when vectorization is
 # off so a table nobody asked for is never reported missing.
 _matrix_sql=""
+_matrix_tables=""
 for entry in "${FORM_TABLES[@]}"; do
   form="${entry%%:*}"; tbls="${entry##*:}"
   IFS=',' read -ra _t <<< "$tbls"
   for tbl in "${_t[@]}"; do
     [ "$tbl" = "vectorized_chunks" ] && [ "$VECTORIZATION_ENABLED" != "true" ] && continue
     [ -z "$ONLY_TABLE" ] || [ "$ONLY_TABLE" = "$tbl" ] || continue
+    [ -z "$ONLY_FORMS" ] || [[ ",${ONLY_FORMS}," == *",${form},"* ]] || continue
     _matrix_sql="${_matrix_sql}${_matrix_sql:+,}('${form//\'/\'\'}','${tbl}')"
+    _matrix_tables="${_matrix_tables}${tbl}"$'\n'
   done
 done
-[ -n "$_matrix_sql" ] || { echo "fix-sec: --table '$ONLY_TABLE' is not a SEC Iceberg table" >&2; exit 2; }
+[ -n "$_matrix_sql" ] || { echo "fix-sec: no (form, table) pair matches --table '$ONLY_TABLE' --form '$ONLY_FORMS'" >&2; exit 2; }
 
-# Distinct Iceberg tables the matrix references — one scan each, no more.
-_scanned=$(printf '%s\n' "${FORM_TABLES[@]}" | cut -d: -f2- | tr ',' '\n' | sort -u)
-[ "$VECTORIZATION_ENABLED" = "true" ] || _scanned=$(printf '%s\n' "$_scanned" | grep -v '^vectorized_chunks$')
-[ -z "$ONLY_TABLE" ] || _scanned="$ONLY_TABLE"
+# Distinct Iceberg tables the (filtered) matrix references — one scan each, no more.
+_scanned=$(printf '%s' "$_matrix_tables" | sort -u)
 
 _year_filter=""
 [ -z "$ONLY_YEAR" ] || _year_filter="AND acc LIKE '%-${ONLY_YEAR:2:2}-%'"
@@ -310,6 +341,7 @@ log_info "fix-sec: scanning Iceberg for filings missing a table their form shoul
   echo "CREATE TEMP TABLE acc_form AS SELECT acc, any_value(form) AS form FROM"
   echo "  (SELECT acc, form FROM meta UNION ALL SELECT acc, form FROM idx) GROUP BY acc;"
   echo "COPY (SELECT DISTINCT g.acc FROM gaps g ORDER BY 1) TO '${ACC_FILE}' (HEADER false);"
+  echo "COPY (SELECT DISTINCT g.acc || '|' || g.tbl FROM gaps g ORDER BY 1) TO '${ACC_FILE}.pairs' (HEADER false);"
   echo "COPY (SELECT g.acc, CASE"
   echo "    WHEN f.form IN ('10-K','10-K/A','10-Q','10-Q/A') THEN 'sec_primary'"
   echo "    WHEN f.form IN ('13F-HR','13F-HR/A') THEN 'sec_13f'"
@@ -340,20 +372,28 @@ fi
 # accession once, and converge whether or not rows appeared.
 # -------------------------------------------------------------------------------------
 
-psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
-             accession   VARCHAR PRIMARY KEY,
-             attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
-
-# retired_by names the code that decided an accession's one pass was done — the jar's own content
-# hash, not a version string, so it survives an unbumped rebuild. Without it a retirement outlives
-# the bug that caused it: 194 13F-HR filings were marked attempted by a converter that guessed at
-# four fixed information-table filenames and 404'd on every non-standard one, the guess was
-# replaced by reading index.json (f1a5dc431) thirteen hours later, and the 165 markers written
-# before that fix stayed retired regardless — because nothing recorded which converter had looked.
-# They surfaced only by cross-referencing attempted_at against `git log`, which does not scale past
-# one investigation. A retired_by cksum turns "which of these predate the fix" into a WHERE clause.
-psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted
-             ADD COLUMN IF NOT EXISTS retired_by VARCHAR" >/dev/null
+# The attempted-list schema is created and migrated only under --confirm: a dry run reads the
+# list when it exists and writes nothing. retired_by names the code that decided a pair's one pass
+# was done — the jar's own content hash, not a version string, so it survives an unbumped rebuild.
+# tbl scopes a retirement to the table whose gap the pass was run for. An accession-only key hid a
+# filing from every table's gap once any pass had touched it, so a filing_metadata gap could never
+# be re-offered after a pass that was enumerated for another table. Rows written before the column
+# existed have tbl NULL: their scope is unknown, so they retire nothing and the still-open gaps
+# behind them are offered once more, then recorded with their table.
+if $CONFIRM; then
+  psql_q -c "CREATE TABLE IF NOT EXISTS ${PG_SCHEMA}.fix_sec_attempted (
+               accession   VARCHAR NOT NULL,
+               attempted_at TIMESTAMPTZ NOT NULL DEFAULT now())" >/dev/null
+  psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted
+               ADD COLUMN IF NOT EXISTS retired_by VARCHAR" >/dev/null
+  psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted ADD COLUMN IF NOT EXISTS tbl VARCHAR" >/dev/null
+  psql_q -c "ALTER TABLE ${PG_SCHEMA}.fix_sec_attempted DROP CONSTRAINT IF EXISTS fix_sec_attempted_pkey" >/dev/null
+  psql_q -c "CREATE UNIQUE INDEX IF NOT EXISTS fix_sec_attempted_acc_tbl
+               ON ${PG_SCHEMA}.fix_sec_attempted (accession, tbl)" >/dev/null
+fi
+HAVE_ATTEMPTED_TBL=$(psql_q -tA -c "SELECT count(*) FROM information_schema.columns
+                                     WHERE table_schema = '${PG_SCHEMA}'
+                                       AND table_name = 'fix_sec_attempted' AND column_name = 'tbl'")
 
 JAR_CKSUM=""
 for _jar in "$SCRIPT_DIR"/../../build/libs/sih-govdata.jar \
@@ -365,14 +405,19 @@ done
 [ -n "$JAR_CKSUM" ] || log_info "fix-sec: WARNING could not identify the worker jar —" \
   "retired_by will be recorded empty for this run"
 
-ATTEMPTED=$(psql_q -c "SELECT count(*) FROM ${PG_SCHEMA}.fix_sec_attempted")
-if [ "${ATTEMPTED:-0}" -gt 0 ]; then
-  psql_q -c "\\copy (SELECT accession FROM ${PG_SCHEMA}.fix_sec_attempted ORDER BY accession) TO '$ACC_FILE.attempted'" >/dev/null
-  sort -u "$ACC_FILE" > "$ACC_FILE.all"
-  comm -23 "$ACC_FILE.all" "$ACC_FILE.attempted" > "$ACC_FILE"
-  log_info "fix-sec: $(wc -l < "$ACC_FILE.all") in gap, $ATTEMPTED already attempted, $(wc -l < "$ACC_FILE") remaining"
-  rm -f "$ACC_FILE.all" "$ACC_FILE.attempted"
+# The gap list is built from the tables, so a pair in it is absent whether or not an earlier pass
+# attempted it. The attempted-list never removes a pair: only a row in the table closes a gap.
+# Attempted pairs that are still absent are reported and offered again.
+sort -u "$ACC_FILE.pairs" > "$ACC_FILE.pairs.all"
+: > "$ACC_FILE.attempted"
+if [ "$HAVE_ATTEMPTED_TBL" = "1" ]; then
+  psql_q -c "\\copy (SELECT accession || '|' || tbl FROM ${PG_SCHEMA}.fix_sec_attempted WHERE tbl IS NOT NULL ORDER BY 1) TO '$ACC_FILE.attempted'" >/dev/null
 fi
+ATTEMPTED_ABSENT=$(fix_sec_attempted_absent "$ACC_FILE.pairs.all" "$ACC_FILE.attempted")
+log_info "fix-sec: $(wc -l < "$ACC_FILE.pairs.all") gap pair(s) before this pass, attempted, not materialized: ${ATTEMPTED_ABSENT}"
+cut -d'|' -f1 "$ACC_FILE.pairs.all" | sort -u > "$ACC_FILE"
+cp "$ACC_FILE.pairs.all" "$ACC_FILE.pairs"
+rm -f "$ACC_FILE.attempted"
 
 TOTAL=$(wc -l < "$ACC_FILE" | tr -d ' ')
 TOTAL="${TOTAL:-0}"
@@ -410,23 +455,35 @@ fi
 # running, a repair racing a worker would lose the rows it just rewrote.
 # -------------------------------------------------------------------------------------
 
-_pid_dir="$SCRIPT_DIR/runs/pids"
-_live=""
-if [ -d "$_pid_dir" ]; then
-  for _pf in "$_pid_dir"/worker-sec*.pid; do
-    [ -e "$_pf" ] || continue
-    _id=$(basename "$_pf" .pid)
-    [ -f "$_pid_dir/${_id}.exit" ] && continue
-    _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
-    { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue
-    _live="$_live $_id"
-  done
-fi
-if [ -n "$_live" ]; then
-  echo "fix-sec: REFUSING to reprocess — live SEC worker(s):${_live}" >&2
-  echo "  These write the same sec/year=*/ partitions. Stop the pool" >&2
-  echo "  (stop-pool.sh) and re-run, or wait for them to finish." >&2
-  exit 1
+if target_is_dq_bucket; then
+  log_info "fix-sec: target ${GOVDATA_PARQUET_DIR} is a DQ bucket; skipping the live-writer guard (production writers do not touch it)"
+else
+  if [ "$WAIT_MINUTES" -eq 0 ]; then
+    _live=$(live_sec_workers "$SCRIPT_DIR/runs/pids")
+    if [ -n "$_live" ]; then
+      echo "fix-sec: REFUSING to reprocess — live SEC worker(s):${_live}" >&2
+      echo "  These write the same sec/year=*/ partitions. Stop the pool" >&2
+      echo "  (stop-pool.sh) and re-run, wait for them to finish, or pass --wait-for-workers." >&2
+      exit 1
+    fi
+  fi
+  # Hold the write lock for the whole pass: the check above sees only workers live NOW, and the
+  # scheduler's pool may start sec workers at any point in a multi-hour pass (2026-11-03, #1064).
+  _SEC_LOCKS="sec_primary sec_secondary sec_13f"
+  # shellcheck disable=SC2086
+  acquire_schema_lock "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$$" fix-sec.sh $_SEC_LOCKS || exit 1
+  # shellcheck disable=SC2064
+  trap "release_schema_lock '$(schema_lock_dir "$SCRIPT_DIR/runs/pids")' $$ $_SEC_LOCKS" EXIT
+  export GOVDATA_SCHEMA_LOCK_OWNER=$$
+  if [ "$WAIT_MINUTES" -gt 0 ]; then
+    # Lock first: the pool starts no new sec workers, so the set of live ones can only shrink.
+    log_info "fix-sec: holding the SEC write lock; waiting up to ${WAIT_MINUTES} min for live SEC workers to exit"
+    if ! wait_for_sec_workers "$SCRIPT_DIR/runs/pids" $(( WAIT_MINUTES * 60 )) "$WAIT_POLL_SECONDS"; then
+      echo "fix-sec: REFUSING to reprocess — live SEC worker(s) did not exit within ${WAIT_MINUTES} min; lock released" >&2
+      exit 1
+    fi
+    log_info "fix-sec: no live SEC worker remains; proceeding"
+  fi
 fi
 
 # -------------------------------------------------------------------------------------
@@ -438,6 +495,8 @@ if [ "$MAX_ACCESSIONS" -gt 0 ] && [ "$TOTAL" -gt "$MAX_ACCESSIONS" ]; then
   head -n "$MAX_ACCESSIONS" "$ACC_FILE" > "$ACC_FILE.capped"
   mv "$ACC_FILE.capped" "$ACC_FILE"
 fi
+# The pairs this pass offers: every gap pair of the accessions being reprocessed.
+awk -F'|' 'NR==FNR{a[$1]; next} $1 in a' "$ACC_FILE" "$ACC_FILE.pairs.all" > "$ACC_FILE.pairs"
 
 # Bucket by the filing year the accession encodes. One year per worker invocation keeps
 # the EDGAR full-index load to a single year: worker-sec-reprocess.sh derives its model's
@@ -457,21 +516,25 @@ record_attempted() {
   # psql_q opens a fresh connection per call — a TEMP TABLE would not survive between the
   # statements below, so this stages through a real (unlogged, so no WAL cost) table instead,
   # scoped per invocation of this script so two concurrent fix-sec runs cannot collide on it.
+  # Each listed accession is recorded against the tables it was a gap in.
   _rf="$1"
+  _pf="$_rf.pairs"
+  awk -F'|' 'NR==FNR{a[$1]; next} $1 in a' "$_rf" "$ACC_FILE.pairs" > "$_pf"
   _stage="_fix_sec_batch_$$"
-  psql_q -c "CREATE UNLOGGED TABLE ${_stage} (accession VARCHAR)" >/dev/null 2>&1 || return 1
-  ( psql_q -c "\\copy ${_stage} (accession) FROM '$_rf'" >/dev/null 2>&1 \
-      || psql_q -c "INSERT INTO ${_stage} (accession)
-                    SELECT unnest(string_to_array(pg_read_file('$_rf'), E'\\n'))" >/dev/null 2>&1 )
+  psql_q -c "CREATE UNLOGGED TABLE ${_stage} (pair VARCHAR)" >/dev/null 2>&1 || return 1
+  ( psql_q -c "\\copy ${_stage} (pair) FROM '$_pf'" >/dev/null 2>&1 \
+      || psql_q -c "INSERT INTO ${_stage} (pair)
+                    SELECT unnest(string_to_array(pg_read_file('$_pf'), E'\\n'))" >/dev/null 2>&1 )
   _copy_rc=$?
   if [ "$_copy_rc" -eq 0 ]; then
-    psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession, retired_by)
-               SELECT accession, NULLIF('$JAR_CKSUM', '') FROM ${_stage}
-               WHERE accession <> ''
-               ON CONFLICT (accession) DO NOTHING" >/dev/null 2>&1
+    psql_q -c "INSERT INTO ${PG_SCHEMA}.fix_sec_attempted (accession, tbl, retired_by)
+               SELECT split_part(pair, '|', 1), split_part(pair, '|', 2), NULLIF('$JAR_CKSUM', '')
+                 FROM ${_stage} WHERE pair <> ''
+               ON CONFLICT (accession, tbl) DO NOTHING" >/dev/null 2>&1
     _copy_rc=$?
   fi
   psql_q -c "DROP TABLE IF EXISTS ${_stage}" >/dev/null 2>&1
+  rm -f "$_pf"
   return $_copy_rc
 }
 
@@ -582,6 +645,21 @@ done
 
 echo
 log_info "fix-sec: $batches batch(es) attempted, $failed failed"
+
+# Re-read the tables: a pair is closed only if its table now holds the row.
+POST="$ACC_FILE.post"
+sed -e "s#${ACC_FILE}#${POST}#g" "$WORK_DIR/enumerate-$STAMP.sql" > "$WORK_DIR/enumerate-post-$STAMP.sql"
+if ! duckdb -noheader -list < "$WORK_DIR/enumerate-post-$STAMP.sql" > "$REPORT_FILE.post" 2>&1; then
+  echo "fix-sec: post-pass Iceberg enumeration failed — see $REPORT_FILE.post" >&2
+  exit 1
+fi
+_before=$(wc -l < "$ACC_FILE.pairs.all" | tr -d ' ')
+read -r _materialized _absent <<< "$(fix_sec_outcome "$ACC_FILE.pairs" "$POST.pairs")"
+log_info "fix-sec: gap pairs before: ${_before}; materialized by this pass: ${_materialized}; attempted but still absent: ${_absent}"
+if [ "$_absent" -gt 0 ]; then
+  echo "fix-sec: ${_absent} pair(s) attempted but not materialized; the next run offers them again" >&2
+  exit 1
+fi
 if [ "$failed" -gt 0 ]; then
   echo "fix-sec: re-run to retry — the report is rebuilt from the tracker each time," >&2
   echo "  so anything genuinely repaired drops out and only real gaps remain." >&2

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime
 import decimal
+import json
 import logging
 import re
 import os
@@ -86,6 +87,37 @@ def _question_marks(sql: str) -> Tuple[str, List[int]]:
             out.append(ch)
             i += 1
     return "".join(out), numbers
+#: Home of the Java runtime the Calcite JVM is started from. A bundle's launcher sets it to
+#: the runtime the bundle carries, so the host needs neither a JDK nor JAVA_HOME. Unset, JPype
+#: finds a JVM the way it always has (JAVA_HOME, then the host's install locations).
+JAVA_HOME_ENV = "PGWIRE_CALCITE_JAVA_HOME"
+
+#: Where libjvm sits under a Java home, by platform layout.
+_LIBJVM_RELATIVE = (
+    os.path.join("lib", "server", "libjvm.so"),
+    os.path.join("lib", "server", "libjvm.dylib"),
+    os.path.join("bin", "server", "jvm.dll"),
+)
+
+
+def bundled_jvm_path() -> Optional[str]:
+    """The JVM library under ``PGWIRE_CALCITE_JAVA_HOME``, or None when it is not set.
+
+    A home that is set but holds no JVM library is an error by name: starting some other
+    JVM found on the host instead would hide a broken bundle.
+    """
+    java_home = os.environ.get(JAVA_HOME_ENV)
+    if not java_home:
+        return None
+    for relative in _LIBJVM_RELATIVE:
+        candidate = os.path.join(java_home, relative)
+        if os.path.isfile(candidate):
+            return candidate
+    raise RuntimeError(
+        f"{JAVA_HOME_ENV} names {java_home}, which holds no JVM library "
+        f"(looked for {', '.join(_LIBJVM_RELATIVE)})"
+    )
+
 
 def _attach_current_thread_to_jvm() -> None:
     """Make the calling thread able to call Java.
@@ -432,6 +464,81 @@ class CalciteBackend:
         "-Dcalcite.bindable.cache.maxSize=1000",
     )
 
+    _FILE_SCHEMA_FACTORY = "org.apache.calcite.adapter.file.FileSchemaFactory"
+
+    def _connection_model_path(self) -> str:
+        """The model the connection opens. The file adapter writes only under a schema's base
+        directory and has no default one (REQ-1992); a file schema that names none (a bundle's
+        model, whose install tree may be read-only) gets one under this server's state
+        directory, through a copy of the model written there. Its relative ``directory`` is made
+        absolute against the original model's directory, which the copy no longer sits in.
+        Without a state directory the model is used as it is, and the adapter refuses such a
+        schema, naming it."""
+        assert self._model_path is not None
+        from pgwire_calcite.catalog_populate import STATE_DIR_ENV
+
+        with open(self._model_path, encoding="utf-8") as f:
+            model = json.load(f)
+        unset = [
+            schema
+            for schema in model.get("schemas") or []
+            if schema.get("factory") == self._FILE_SCHEMA_FACTORY
+            and not {"baseDirectory", "operatingDirectory"} & set(schema.get("operand") or {})
+        ]
+        state_dir = os.environ.get(STATE_DIR_ENV)
+        if not unset or not state_dir:
+            return self._model_path
+        state_dir = os.path.abspath(state_dir)
+        model_dir = os.path.dirname(os.path.abspath(self._model_path))
+        for schema in unset:
+            operand = schema.setdefault("operand", {})
+            directory = operand.get("directory")
+            if directory and "://" not in directory and not os.path.isabs(directory):
+                operand["directory"] = os.path.join(model_dir, directory)
+            operand["baseDirectory"] = os.path.join(state_dir, "file-base", schema["name"])
+        os.makedirs(state_dir, exist_ok=True)
+        path = os.path.join(state_dir, "connection-model.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(model, f, indent=2)
+        log.info("[CALCITE] file schemas %s write under %s", [s["name"] for s in unset], state_dir)
+        return path
+
+    _ICEBERG_SCHEMA_CACHE = "-Diceberg.metadata.cache.directory="
+    _STAGING_DIRECTORY = "-Dcalcite.file.staging.directory="
+
+    def _state_dir_arg(self, args: List[str], prefix: str, name: str) -> Optional[str]:
+        """``prefix`` naming ``name`` under this server's state directory (or beside its model),
+        or None when a JVM argument already sets it or there is neither. The file adapter
+        requires these directories and has no default for them (REQ-1992)."""
+        if any(a.startswith(prefix) for a in args):
+            return None
+        from pgwire_calcite.catalog_populate import STATE_DIR_ENV
+
+        state_dir = os.environ.get(STATE_DIR_ENV)
+        if not state_dir and self._model_path:
+            state_dir = os.path.dirname(os.path.abspath(self._model_path))
+        if not state_dir:
+            return None
+        return prefix + os.path.join(os.path.abspath(state_dir), name)
+
+    def _iceberg_schema_cache_arg(self, args: List[str]) -> Optional[str]:
+        """The file adapter's Iceberg schema cache directory, which it requires (REQ-1992): under
+        this server's state directory, where the catalog cache goes too (catalog_populate), or
+        None when a JVM argument already names one or the server has neither a state directory
+        nor a model (the cache then refuses when first used)."""
+        if any(a.startswith(self._ICEBERG_SCHEMA_CACHE) for a in args):
+            return None
+        from pgwire_calcite.catalog_populate import STATE_DIR_ENV
+
+        state_dir = os.environ.get(STATE_DIR_ENV)
+        if not state_dir and self._model_path:
+            state_dir = os.path.dirname(os.path.abspath(self._model_path))
+        if not state_dir:
+            return None
+        return self._ICEBERG_SCHEMA_CACHE + os.path.join(
+            os.path.abspath(state_dir), "iceberg-schema-cache"
+        )
+
     def _start_jvm(self) -> None:
         import jpype
 
@@ -443,7 +550,18 @@ class CalciteBackend:
                 key = prop.split("=", 1)[0]
                 if not any(a.startswith(key) for a in args):
                     args.append(prop)
-            jpype.startJVM(*args, classpath=self._classpath, convertStrings=True)
+            schema_cache = self._iceberg_schema_cache_arg(args)
+            if schema_cache is not None:
+                args.append(schema_cache)
+            staging = self._state_dir_arg(args, self._STAGING_DIRECTORY, "staging")
+            if staging is not None:
+                args.append(staging)
+            jvm_path = bundled_jvm_path()
+            log.info("[CALCITE] JVM library: %s", jvm_path or "found by JPype on the host")
+            if jvm_path is None:
+                jpype.startJVM(*args, classpath=self._classpath, convertStrings=True)
+            else:
+                jpype.startJVM(jvm_path, *args, classpath=self._classpath, convertStrings=True)
             log.info("[CALCITE] JVM started with %d classpath entries", len(self._classpath))
 
     def _connect(self) -> None:
@@ -460,8 +578,9 @@ class CalciteBackend:
         props.setProperty("lex", self._lex)
         props.setProperty("fun", self._fun)
         props.setProperty("caseSensitive", "false")
+        props.setProperty("unquotedCasing", "TO_LOWER")
         if self._model_path:
-            props.setProperty("model", self._model_path)
+            props.setProperty("model", self._connection_model_path())
         if self._default_schema:
             props.setProperty("schema", self._default_schema)
         # Arbitrary JDBC connection properties, mirroring what the Calcite/Avatica
@@ -474,7 +593,24 @@ class CalciteBackend:
         self._conn = DriverManager.getConnection("jdbc:calcite:", props)
         # The model's schema is shared across connections, so this open is cheap.
         self._probe_conn = DriverManager.getConnection("jdbc:calcite:", props)
+        for conn in (self._conn, self._probe_conn):
+            self._ensure_information_schema(JClass, conn)
         log.info("[CALCITE] connected (model=%s, lex=%s)", self._model_path, self._lex)
+
+    @staticmethod
+    def _ensure_information_schema(JClass, conn) -> None:
+        """Give the connection's root an ``information_schema`` when the model's schema factory
+        did not register one (#518). info_schema.py rewrites PG clients' information_schema
+        reads over it; without it every such read fails with "Object 'INFORMATION_SCHEMA' not
+        found". A factory that registers its own (file, govdata, splunk, sharepoint, cloud-ops)
+        keeps it."""
+        calcite = conn.unwrap(JClass("org.apache.calcite.jdbc.CalciteConnection"))
+        root = calcite.getRootSchema()
+        if root.subSchemas().get("information_schema") is not None:
+            return
+        info = JClass("org.apache.calcite.schema.impl.InformationSchema")(root, "CALCITE")
+        root.add("information_schema", info)
+        log.info("[CALCITE] the model registers no information_schema; added Calcite's")
 
     @staticmethod
     def _resolve_stats_rewriter(JClass):
@@ -501,26 +637,6 @@ class CalciteBackend:
     def function_library(self) -> str:
         """The connection's ``fun`` library list, the source for pg_proc (PGW-051)."""
         return self._fun
-
-    def table_row_count(self, schema: str, table: str) -> int:
-        """Exact ``COUNT(*)`` for one table, for pg_class.reltuples (PGW-051).
-
-        Runs on the JDBC connection directly rather than through ``execute_sql`` so no
-        PG->Calcite transpile stands between the catalog and the count. Called once per
-        table per catalog build (the catalog DB is memoized), never per query.
-        """
-        if self._conn is None:
-            raise RuntimeError("Calcite connection is not open")
-        quoted = f'"{schema.replace(chr(34), chr(34) * 2)}"."{table.replace(chr(34), chr(34) * 2)}"'
-        with self._lock:
-            stmt = self._conn.createStatement()
-            try:
-                rs = stmt.executeQuery(f"SELECT COUNT(*) FROM {quoted}")
-                if not bool(rs.next()):
-                    raise RuntimeError(f"COUNT(*) on {quoted} returned no row")
-                return int(rs.getLong(1))
-            finally:
-                stmt.close()
 
     @property
     def connection(self):

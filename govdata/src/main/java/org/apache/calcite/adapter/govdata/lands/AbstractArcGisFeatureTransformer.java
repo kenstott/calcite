@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.govdata.lands;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -200,9 +202,10 @@ abstract class AbstractArcGisFeatureTransformer implements StreamingResponseTran
       conn.setRequestProperty("User-Agent", "GovData/1.0");
       conn.setRequestProperty("Accept", "application/json");
       try {
+        NetworkOutageWait.connect(conn);
         int status = conn.getResponseCode();
         if (status == HttpURLConnection.HTTP_OK) {
-          return readBody(conn.getInputStream());
+          return readBody(CompleteBody.of(conn));
         }
         if (status != 429 && status < 500) {
           throw new IOException("HTTP " + status + " from " + url);

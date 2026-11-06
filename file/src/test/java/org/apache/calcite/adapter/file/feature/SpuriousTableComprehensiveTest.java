@@ -403,6 +403,7 @@ public class SpuriousTableComprehensiveTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + engineLine
         + "        ephemeralCache: true,\n"  // Use ephemeral cache for test isolation
         + "        tableNameCasing: 'LOWER',\n"

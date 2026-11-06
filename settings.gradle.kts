@@ -81,9 +81,11 @@ include(
     "mongodb",
     // "pig",    // Disabled due to heavy dependencies
     // "piglet", // Disabled due to heavy dependencies
+    "jira",
     "plus",
     "openapi",
     "salesforce",
+    "servicenow",
     "graphql",
     "redis",
     "server",
@@ -100,6 +102,7 @@ include(
     "trino-cloudops",
     "trino-file",
     "trino-salesforce",
+    "trino-servicenow",
     "trino-sharepoint",
     "trino-splunk"
 )

@@ -25,6 +25,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "storageType": "s3",
         "directory": "s3://my-data-bucket/analytics",
         "recursive": true,

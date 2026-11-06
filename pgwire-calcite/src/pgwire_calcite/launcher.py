@@ -352,7 +352,11 @@ def main(argv: list | None = None) -> int:
         help="extra Calcite JDBC connection property (repeatable)",
     )
     parser.add_argument(
-        "--auth", choices=["none", "simple", "trust", "local", "scram"], default="none"
+        "--auth",
+        choices=["none", "simple", "trust", "local", "scram", "askamerica-key"],
+        default="none",
+        help="askamerica-key: every connection's password is its AskAmerica API key, checked "
+        "with the key service and used to meter that connection (pgwire-govdata's default)",
     )
     parser.add_argument(
         "--auth-store", default=None, help="accounts JSON path for --auth local/scram (Phase 5b)"
@@ -474,11 +478,18 @@ def main(argv: list | None = None) -> int:
 
     from pgwire_calcite.extensions import resolve as _resolve_ext
 
+    log.info("STAGE socket-claimed host=%s port=%d", args.host, args.port)
     enabled_ext = _resolve_ext(args.extension)
+    log.info("STAGE backend-building model=%s", args.model)
     backend = build_backend(
         args.backend, args.model, jdbc=jdbc, calcite_child=args.calcite_child, extensions=enabled_ext
     )
+    log.info("STAGE backend-built")
     auth_provider = None
+    if args.auth == "askamerica-key":
+        from pgwire_calcite.auth import AskAmericaKeyProvider
+
+        auth_provider = AskAmericaKeyProvider()
     if args.auth in ("trust", "local", "scram"):
         from pgwire_calcite.auth import AccountStore, LocalAccountsProvider, TrustProvider
 
@@ -519,7 +530,7 @@ def main(argv: list | None = None) -> int:
             allow_writes=args.allow_writes,
             sock=listen_sock,
         )
-    except OSError:
+    except OSError as exc:
         # No bind can fail here anymore — claim_listen_socket() already holds the real
         # listening socket, and CalciteServer adopts it rather than rebinding (see its
         # __init__). This is a last-resort safety net for a genuinely unexpected failure,
@@ -532,10 +543,14 @@ def main(argv: list | None = None) -> int:
         # exception to be enough.
         log.error(
             "[PGWIRE] unexpected failure starting the server on %s:%d after the listen "
-            "socket was already claimed — forcing immediate exit rather than lingering.",
-            args.host, args.port,
+            "socket was already claimed — forcing immediate exit rather than lingering: %s",
+            args.host, args.port, exc,
+            # The cause (a PermissionError on the state directory, say) is the only thing the
+            # operator has to go on; os._exit leaves no traceback of its own.
+            exc_info=exc,
         )
         os._exit(1)
+    log.info("STAGE ready")
     log.info(
         "pgwire-calcite (%s backend) listening on %s:%d — Ctrl-C to stop",
         args.backend,

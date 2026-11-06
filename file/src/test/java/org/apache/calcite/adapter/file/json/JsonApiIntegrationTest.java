@@ -187,7 +187,7 @@ public class JsonApiIntegrationTest extends BaseFileTest {
   +
         "      \"operand\": {\n"
   +
-        "        \"directory\": \"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\n"
+        "        \"directory\": \"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\"baseDirectory\":\"" + tempDir.toFile().getAbsolutePath().replace("\\", "\\\\") + "\",\n"
   +
         "        \"ephemeralCache\": true,\n"
   +
@@ -290,23 +290,24 @@ public class JsonApiIntegrationTest extends BaseFileTest {
 
     // Create FileSchema with HTTP storage
     FileSchema schema =
-        new FileSchema(null,
-        "api",
-        tempDir.toFile(),
-        null,  // directoryPattern
-        null,  // tables
-        getEngineConfig(),
-        false,  // recursive
-        null,  // materializations
-        null,  // views
-        null,  // partitionedTables
-        null,  // refreshInterval
-        "UPPER",  // tableNameCasing
-        "UNCHANGED",  // columnNameCasing
-        "http",  // storageType
-        storageConfig,  // storageConfig
-        null,  // flatten
-        null,   // csvTypeInference
+        new FileSchema(null, "api", tempDir.toFile(), tempDir.toFile(), null, // directoryPattern
+        null,
+        // tables
+        getEngineConfig(), false, // recursive
+        null,
+        // materializations
+        null, // views
+        null, // partitionedTables
+        null,
+        // refreshInterval
+        "UPPER", // tableNameCasing
+        "UNCHANGED",
+        // columnNameCasing
+        "http", // storageType
+        storageConfig,
+        // storageConfig
+        null, // flatten
+        null, // csvTypeInference
         false);   // primeCache
 
     // Verify the schema was created

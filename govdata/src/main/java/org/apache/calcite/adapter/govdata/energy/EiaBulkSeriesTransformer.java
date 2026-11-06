@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.adapter.govdata.energy;
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
@@ -107,11 +109,12 @@ public abstract class EiaBulkSeriesTransformer implements StreamingResponseTrans
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("EIA bulk download HTTP " + code + ": " + url);
     }
-    ZipInputStream zis = new ZipInputStream(conn.getInputStream());
+    ZipInputStream zis = new ZipInputStream(CompleteBody.of(conn));
     if (zis.getNextEntry() == null) {
       zis.close();
       throw new IOException("EIA bulk ZIP is empty: " + url);

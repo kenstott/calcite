@@ -11,8 +11,17 @@ on:
         required: true
         default: '0.1.0'
 
-# actions: write is needed by the installer job's "Ensure pgwire-govdata bundle" step,
-# which dispatches the separate "pgwire-adapters release" workflow (its `release: types:
+# One run per release at a time (queued, never cancelled). Two runs for one release (a manual
+# dispatch beside the automatic one, engine-v0.110.0; a tag pushed twice, engine-v0.110.1) uploaded
+# the same assets with --clobber concurrently, and each lost an upload to the other's delete
+# (HTTP 404). Queued, the second run re-uploads after the first instead of racing it; cancelling
+# could kill a half-finished upload.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version && format('engine-v{0}', inputs.version) || github.ref_name }}
+  cancel-in-progress: false
+
+# actions: write is needed by the bundles job, which dispatches the separate
+# "pgwire-adapters release" workflow (its `release: types:
 # [created]` trigger does not fire reliably — confirmed live, every prior run this
 # project has ever had was a manual workflow_dispatch) when this version's bundle isn't
 # already published.
@@ -96,6 +105,7 @@ jobs:
             :trino-sharepoint:trinoPlugin \
             :trino-splunk:trinoPlugin \
             :trino-salesforce:trinoPlugin \
+            :trino-servicenow:trinoPlugin \
             :trino-file:trinoPlugin \
             :trino-cloudops:trinoPlugin \
             -Porg.gradle.java.installations.paths="${JAVA_HOME_25_X64},${JAVA_HOME_21_X64}" \
@@ -106,7 +116,7 @@ jobs:
       - name: Collect plugin archives (stable names)
         run: |
           mkdir -p trino-assets
-          for m in trino-calcite trino-sharepoint trino-splunk trino-salesforce trino-file trino-cloudops; do
+          for m in trino-calcite trino-sharepoint trino-splunk trino-salesforce trino-servicenow trino-file trino-cloudops; do
             src=$(ls ${m}/build/distributions/${m}-plugin-*.zip | head -1)
             cp "$src" "trino-assets/${m}-plugin.zip"
           done
@@ -177,15 +187,22 @@ jobs:
             c=$(echo "$entries" | grep -cE "^${pat}" || true)
             [ "$c" -eq 0 ] || { echo "FAIL: orphan '$pat' present ($c)"; fail=1; }
           done
+          # ASKAM-007: no embedder in the engine jar; semantic search is served by the data server.
+          c=$(echo "$entries" | grep -cE '^ai/onnxruntime/|^models/snowflake-arctic-embed-xs/|\.onnx$' || true)
+          [ "$c" -eq 0 ] || { echo "FAIL: $c embedder entries (ONNX Runtime or a model) in the engine jar"; fail=1; }
           # Tier-3: Arrow Gandiva must be stripped (reached only via reflective .arrow path).
           for pat in 'gandiva_jni/' 'org/apache/arrow/gandiva/'; do
             c=$(echo "$entries" | grep -cE "^${pat}" || true)
             [ "$c" -eq 0 ] || { echo "FAIL: gandiva '$pat' present ($c)"; fail=1; }
           done
-          # Regression guard: the govdata resource under config/ must be preserved
-          # (proves the models/*.json exclude did not over-match).
-          k=$(echo "$entries" | grep -cE '^config/djia-wiki-model\.json$' || true)
-          [ "$k" -eq 1 ] || { echo "FAIL: config/djia-wiki-model.json missing (over-broad exclude)"; fail=1; }
+          # ASKAM-008/009: a thin engine. Nothing that opens the store is in the jar: no govdata
+          # beyond the three shared classes (plus the two JDK-only file helpers VariableResolver and PeriodFormat), no file adapter, hadoop, iceberg, aws, parquet, arrow.
+          c=$(echo "$entries" | grep -E '^org/apache/hadoop/|^org/apache/iceberg/|^software/amazon/|^com/amazonaws/|^org/apache/parquet/|^org/apache/arrow/|^org/apache/calcite/adapter/driver/|^org/apache/calcite/adapter/file/|^org/apache/calcite/adapter/govdata/.*\.class$' \
+              | grep -cvE '^org/apache/calcite/adapter/govdata/(R2CredentialProvider|GovDataCatalog|YamlUtils)(\$[^/]*)?\.class$|^org/apache/calcite/adapter/file/etl/((VariableResolver|PeriodFormat)[^/]*\.class)?$|^org/apache/calcite/adapter/file/$' || true)
+          [ "$c" -eq 0 ] || { echo "FAIL: $c entries of the data stack in the engine jar"; fail=1; }
+          # The catalog the tools describe: the schema YAMLs must be in the jar.
+          y=$(echo "$entries" | grep -cE -- '-schema\.yaml$' || true)
+          [ "$y" -ge 20 ] || { echo "FAIL: only $y schema YAMLs in the jar; search_catalog would be empty"; fail=1; }
           # Logging binding: slf4j-reload4j and log4j-slf4j-impl both ship
           # org/slf4j/impl/StaticLoggerBinder.class, so which backend SLF4J 1.7 binds to is decided
           # by jar merge order. Bound to reload4j — which nothing in this jar configures — every
@@ -209,8 +226,9 @@ jobs:
             echo "FAIL: log4j2.xml Console appender targets SYSTEM_OUT (corrupts MCP stdio)"
             fail=1
           fi
-          # Size ceiling — catches a bloat regression (current ~441 MB after Tier-1/2a/3).
-          sz=$(stat -c%s "$JAR"); ceil=$((500*1024*1024))
+          # Size ceiling — catches a bloat regression (436 MB at 0.109.1; about 336 MB once
+          # ONNX Runtime and the embedding model were taken out, ASKAM-007).
+          sz=$(stat -c%s "$JAR"); ceil=$((400*1024*1024))
           echo "JAR size: $((sz/1024/1024)) MB (ceiling $((ceil/1024/1024)) MB)"
           [ "$sz" -le "$ceil" ] || { echo "FAIL: jar exceeds size ceiling"; fail=1; }
           [ "$fail" -eq 0 ] && echo "All slimming guards passed." || exit 1
@@ -230,6 +248,57 @@ jobs:
         with:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/askamerica-engine.jar
+          retention-days: 30
+
+      # One engine jar per OS: the shadow jar minus the other platforms' native libraries (OpenBLAS,
+      # DuckDB), about half the download. The launcher fetches its own (EngineInstaller.platformAsset);
+      # the universal askamerica-engine.jar above stays for the pip client and the site's JAR link.
+      - name: Build per-OS engine jars
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          ./gradlew :askamerica-engine:platformJars --no-daemon -PreleaseVersion="$VERSION"
+          fail=0
+          check() {  # variant, its bytedeco platform, its duckdb native suffix
+            jar="askamerica-engine/build/platform-jars/askamerica-engine-$1.jar"
+            [ -f "$jar" ] || { echo "FAIL: $jar was not built"; fail=1; return; }
+            entries=$(unzip -Z1 "$jar")
+            for p in linux-x86_64 macosx-x86_64 macosx-arm64 windows-x86_64; do
+              c=$(echo "$entries" | grep -cE "^org/bytedeco/[a-z]+/$p/" || true)
+              if [ "$p" = "$2" ]; then
+                [ "$c" -gt 0 ] || { echo "FAIL: $1 has none of its own $p natives"; fail=1; }
+              else
+                [ "$c" -eq 0 ] || { echo "FAIL: $1 carries $c $p native entries"; fail=1; }
+              fi
+            done
+            for d in linux_amd64 linux_arm64 osx_universal windows_amd64; do
+              c=$(echo "$entries" | grep -cE "^libduckdb_java\.so_$d$" || true)
+              if [ "$d" = "$3" ]; then
+                [ "$c" -eq 1 ] || { echo "FAIL: $1 lacks its DuckDB native $d"; fail=1; }
+              else
+                [ "$c" -eq 0 ] || { echo "FAIL: $1 carries the DuckDB native $d"; fail=1; }
+              fi
+            done
+            # The launcher compares this stamp with the release to decide whether to update.
+            unzip -p "$jar" META-INF/MANIFEST.MF | tr -d '\r' \
+              | grep -qx "AskAmerica-Engine-Version: $VERSION" \
+              || { echo "FAIL: $1 manifest lacks AskAmerica-Engine-Version: $VERSION"; fail=1; }
+            sz=$(stat -Lc%s "$jar")
+            echo "$1: $((sz/1024/1024)) MB (ceiling 170 MB)"
+            [ "$sz" -le $((170*1024*1024)) ] || { echo "FAIL: $1 exceeds its size ceiling"; fail=1; }
+          }
+          check windows-x86_64 windows-x86_64 windows_amd64
+          check macos-arm64 macosx-arm64 osx_universal
+          check linux-x86_64 linux-x86_64 linux_amd64
+          [ "$fail" -eq 0 ] && echo "Per-OS jar guards passed." || exit 1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload per-OS engine jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: askamerica-engine-platform-jars
+          path: askamerica-engine/build/platform-jars/askamerica-engine-*.jar
           retention-days: 30
 
   # ── Browser extension (source lives in kenstott/askamerica) ────────────────
@@ -302,6 +371,96 @@ jobs:
           AWS_REGION:              auto
           GOVDATA_PARQUET_DIR:     ${{ secrets.GOVDATA_PARQUET_DIR }}
 
+  # ── Data-server bundles ───────────────────────────────────────────────────
+  # The release must not go public before the pgwire-govdata bundle of every platform is attached,
+  # and the workflow that builds them (pgwire-adapters release) has to be started: its
+  # `release: created` trigger does not fire reliably. This job starts it when no run for this
+  # version is in flight, waits for the three tarballs, and checks each against its published
+  # sha256. One light Linux runner holds the wait; the installers do not wait at all.
+  # BUNDLE_MAX_WAIT_MINUTES and BUNDLE_POLL_SECONDS exist so the logic can be tested quickly.
+  bundles:
+    name: Data-server bundles
+    runs-on: ubuntu-latest
+    needs: [jar]
+    timeout-minutes: 340
+    steps:
+      - name: Start the bundle build if none is running, then wait for the three bundles
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_MAX_WAIT_MINUTES: "300"
+          BUNDLE_POLL_SECONDS: "30"
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          VERSION="${VERSION#engine-v}"
+          TAG="engine-v${VERSION}"
+          ASSETS=("pgwire-govdata-${VERSION}-windows-x86_64.tar.gz" \
+                  "pgwire-govdata-${VERSION}-macos-arm64.tar.gz" \
+                  "pgwire-govdata-${VERSION}-linux-x86_64.tar.gz")
+
+          # Assets not on the release yet. A failed lookup counts as "all missing", so a
+          # transient error keeps the wait going and never reads as "published".
+          missing() {
+            local names
+            names=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' 2>/dev/null) || names=""
+            for a in "${ASSETS[@]}"; do grep -qx "$a" <<<"$names" || echo "$a"; done
+          }
+
+          if [ -n "$(missing)" ]; then
+            echo "Not yet on $TAG: $(missing | tr '\n' ' ')"
+            # Dispatch once, not once per leg: skip when a run for THIS version is in flight,
+            # filtered by displayTitle (see pgwire-adapters-release.yml's run-name). A leftover run
+            # of a different version produces assets tagged for that version, never for $TAG
+            # (three releases in quick succession each hung 45 minutes on one, 2026-09-18).
+            IN_FLIGHT=$(gh run list --repo "$REPO" --workflow "pgwire-adapters release" \
+              --json status,displayTitle \
+              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
+            if [ "${IN_FLIGHT:-0}" = "0" ]; then
+              echo "Dispatching pgwire-adapters release for $VERSION"
+              gh workflow run "pgwire-adapters release" --repo "$REPO" -f version="$VERSION" -f publish=true
+            else
+              echo "A pgwire-adapters release run for $VERSION is already in flight; waiting on it."
+            fi
+            deadline=$(( $(date +%s) + BUNDLE_MAX_WAIT_MINUTES * 60 ))
+            last=""
+            while [ -n "$(missing)" ]; do
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                echo "::error::still missing on $TAG after ${BUNDLE_MAX_WAIT_MINUTES} minutes: $(missing | tr '\n' ' ')"
+                exit 1
+              fi
+              now="$(missing | tr '\n' ' ')"
+              [ "$now" = "$last" ] || { echo "$(date -u +%H:%M) waiting for: $now"; last="$now"; }
+              sleep "$BUNDLE_POLL_SECONDS"
+            done
+          fi
+          echo "All three bundles are on $TAG; verifying their sha256."
+
+          # An authenticated gh download, not the public URL: the release is still a draft, and a
+          # draft's public asset URL answers "NotFound" (engine-v0.100.1). Retried: transient HTTP/2
+          # stream errors against the release CDN have aborted this before.
+          for ASSET in "${ASSETS[@]}"; do
+            WORKDIR=$(mktemp -d)
+            ok=0
+            for attempt in 1 2 3 4; do
+              if gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --pattern "${ASSET}.sha256" \
+                   --dir "$WORKDIR" --clobber; then ok=1; break; fi
+              echo "gh release download of $ASSET, attempt $attempt failed; retrying"
+              sleep $((attempt * 5))
+            done
+            [ "$ok" = "1" ] || { echo "::error::could not download $ASSET from $TAG"; exit 1; }
+            EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/${ASSET}.sha256" | cut -c1-64)
+            ACTUAL=$(sha256sum "$WORKDIR/$ASSET" | awk '{print $1}')
+            if [ "$EXPECTED" != "$ACTUAL" ]; then
+              echo "::error::$ASSET sha256 mismatch: expected $EXPECTED got $ACTUAL"
+              exit 1
+            fi
+            echo "$ASSET matches its published sha256."
+            rm -rf "$WORKDIR"
+          done
+
   # ── Native installers (per-platform, bundled JRE) ─────────────────────────
   installer:
     name: Build installer — ${{ matrix.os }}
@@ -344,136 +503,16 @@ jobs:
           name: askamerica-engine-jar
           path: askamerica-engine/build/libs/
 
-      # Bundles pgwire-govdata (and, via it, the EMBED() model — see
-      # pgwire-adapters-release.yml) directly into the installer, so a fresh install never
-      # needs a first-run download at all. That separate release workflow's own `release:
-      # types: [created]` trigger does not fire reliably (confirmed live: every prior run
-      # this project has had was a manual workflow_dispatch) -- so this step is
-      # self-sufficient: it dispatches that workflow itself if this version's bundle isn't
-      # already published, then waits.
+      # The installer is small and has a step to download its assets: it does NOT carry the
+      # pgwire-govdata bundle (about a gigabyte); the installed engine downloads the bundle of its
+      # own version on first use and verifies its sha256 (PgwireGovDataInstaller). From 0.91.0 to
+      # 0.109.1 the .msi and the .deb did carry it and were about 920 MB and 1,220 MB; the
+      # "Installer stays small" step below fails the build if that returns.
       #
-      # NOT on macOS: the bundle's jars carry native libraries (duckdb_jdbc, tokenizers,
-      # netty, onnxruntime, zstd-jni, jna, snappy-java, and the shaded sih-aperio jar that
-      # re-bundles several of these) that are unsigned inside their jar entries. Apple's
-      # notary service scans recursively into every jar/zip in the app bundle -- codesign
-      # on the assembled .app never reaches those nested entries, since they are zip
-      # contents, not files on disk -- so embedding this bundle made every macOS
-      # notarization submission fail (confirmed live via `xcrun notarytool log`, 2026-09-18:
-      # ~40 "binary is not signed" / "no secure timestamp" errors, all under
-      # pgwire-govdata/jars/). `prepareJpackageInput` in build.gradle.kts already treats a
-      # missing staged dir as the local-dev fallback (no bundled pgwire-govdata, matching
-      # PgwireGovDataInstaller's lazy-download-on-first-use path) -- skipping this step for
-      # macOS reaches that same fallback deliberately, keeping the notarized .app thin
-      # instead of re-signing dozens of nested native libraries on every build.
-      - name: Ensure pgwire-govdata bundle for this version
-        if: matrix.os != 'macos-latest'
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          VERSION="${{ github.event.inputs.version || github.ref_name }}"
-          VERSION="${VERSION#engine-v}"
-          TAG="engine-v${VERSION}"
-          case "${{ matrix.os }}" in
-            windows-latest) VARIANT=windows-x86_64 ;;
-            macos-latest)   VARIANT=macos-arm64 ;;
-            ubuntu-latest)  VARIANT=linux-x86_64 ;;
-            *) echo "unknown matrix.os ${{ matrix.os }}"; exit 1 ;;
-          esac
-          ASSET="pgwire-govdata-${VERSION}-${VARIANT}.tar.gz"
-
-          have_asset() {
-            gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
-              --jq ".assets[].name" 2>/dev/null | grep -qx "$ASSET"
-          }
-
-          if ! have_asset; then
-            echo "No $ASSET on $TAG yet."
-            # Avoid dispatching 3x (once per OS in this matrix) if a run for THIS version is
-            # already in flight from another leg or a prior manual trigger -- filtered by
-            # displayTitle (see pgwire-adapters-release.yml's run-name), not just "any run",
-            # since an in-flight run left over from a DIFFERENT version satisfies neither this
-            # check nor the wait loop below it: the asset it produces is tagged for its own
-            # version, never for $TAG. Confirmed live (2026-09-18): three releases cut in quick
-            # succession each saw a stale older-version run in flight, skipped dispatching, and
-            # then hung the full 45-minute wait below for an asset nothing was ever building.
-            IN_FLIGHT=$(gh run list --repo "${{ github.repository }}" \
-              --workflow "pgwire-adapters release" \
-              --json status,displayTitle \
-              --jq "[.[] | select((.status==\"in_progress\" or .status==\"queued\") and (.displayTitle | contains(\"$VERSION\")))] | length")
-            if [ "${IN_FLIGHT:-0}" = "0" ]; then
-              echo "Dispatching pgwire-adapters release for $VERSION"
-              gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" \
-                -f version="$VERSION"
-            else
-              echo "A pgwire-adapters release run for $VERSION is already in flight -- waiting on it."
-            fi
-            echo "Waiting for $ASSET to appear on $TAG (up to 45 min)..."
-            found=0
-            for i in $(seq 1 90); do
-              sleep 30
-              if have_asset; then found=1; break; fi
-            done
-            if [ "$found" != "1" ]; then
-              echo "::error::$ASSET never appeared on $TAG after 45 minutes"
-              exit 1
-            fi
-          fi
-          echo "Found $ASSET"
-
-          # A dedicated mktemp -d, not /tmp directly, for the extraction destination --
-          # confirmed live this matters: macOS's /tmp is a symlink to /private/tmp, and
-          # `find /tmp -maxdepth 1 -type d -name "pgwire-govdata-*"` matched NOTHING through
-          # it (silently -- no error, just an empty result), which made $EXTRACTED empty and
-          # `cp -R "$EXTRACTED"/.` become `cp -R /.` -- copying the ENTIRE root filesystem
-          # into the staging dir until the runner's disk filled. A dedicated scratch dir
-          # side-steps the symlink question entirely, and the explicit empty-check below
-          # means a similar failure fails loudly instead of silently substituting "/".
-          WORKDIR=$(mktemp -d)
-          # Authenticated gh download, not the public releases/download URL: release-please
-          # creates the release as a draft (published only once the jar is attached), and a
-          # draft's public asset URL answers "NotFound" -- which curl -sL saved as the file
-          # and the sha256 check then reported as "expected NotFound" (engine-v0.100.1).
-          # Retried because transient HTTP/2 stream errors against GitHub's release CDN
-          # have aborted this step before.
-          downloaded=0
-          for attempt in 1 2 3 4; do
-            if gh release download "$TAG" --repo "${{ github.repository }}" \
-                 --pattern "$ASSET" --pattern "${ASSET}.sha256" --dir "$WORKDIR" --clobber; then
-              downloaded=1; break
-            fi
-            echo "gh release download attempt $attempt failed; retrying"
-            sleep $((attempt * 5))
-          done
-          if [ "$downloaded" != "1" ]; then
-            echo "::error::could not download $ASSET from $TAG"
-            exit 1
-          fi
-          mv "$WORKDIR/$ASSET" "$WORKDIR/pgwire-govdata.tar.gz"
-          mv "$WORKDIR/${ASSET}.sha256" "$WORKDIR/pgwire-govdata.tar.gz.sha256"
-          EXPECTED=$(tr -d '[:space:]' < "$WORKDIR/pgwire-govdata.tar.gz.sha256" | cut -c1-64)
-          if command -v sha256sum >/dev/null 2>&1; then
-            ACTUAL=$(sha256sum "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
-          else
-            ACTUAL=$(shasum -a 256 "$WORKDIR/pgwire-govdata.tar.gz" | awk '{print $1}')
-          fi
-          if [ "$EXPECTED" != "$ACTUAL" ]; then
-            echo "::error::pgwire-govdata sha256 mismatch: expected $EXPECTED got $ACTUAL"
-            exit 1
-          fi
-          mkdir "$WORKDIR/extracted"
-          tar -xzf "$WORKDIR/pgwire-govdata.tar.gz" -C "$WORKDIR/extracted"
-          EXTRACTED=$(find "$WORKDIR/extracted" -mindepth 1 -maxdepth 1 -type d | head -1)
-          if [ -z "$EXTRACTED" ] || [ ! -d "$EXTRACTED" ]; then
-            echo "::error::tar extraction produced no directory under $WORKDIR/extracted"
-            ls -la "$WORKDIR/extracted"
-            exit 1
-          fi
-          mkdir -p askamerica-engine/build/pgwire-govdata-staged
-          cp -R "$EXTRACTED"/. askamerica-engine/build/pgwire-govdata-staged/
-          rm -rf "$WORKDIR"
-          echo "Staged pgwire-govdata bundle: $(du -sh askamerica-engine/build/pgwire-govdata-staged | cut -f1)"
+      # That the bundles are published is waited for in the `bundles` job, not here: this job
+      # used to wait up to 45 minutes on a Windows and an Ubuntu runner and failed whenever
+      # GitHub's runner queue held the bundle build back longer (engine-v0.112.0 and v0.112.1 each
+      # had both installers rerun by hand).
 
       - name: Import Apple signing certificate (macOS only)
         if: matrix.os == 'macos-latest'
@@ -675,6 +714,32 @@ jobs:
           xcrun stapler staple "$PKG"
           echo "Notarization and stapling complete"
 
+      # The rule: the installer is small and has a step to download its assets. Before the
+      # pgwire-govdata bundle was put into them (0.91.0), the installers were 54 MB (.msi),
+      # 37 MB (.deb) and 33 MB (.pkg). 100 MB leaves room to grow and is a tenth of what an
+      # installer carrying the bundle weighs, so a build that bundles it again fails here.
+      - name: Installer stays small
+        shell: bash
+        env:
+          LIMIT_MB: "100"
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' installer; do
+            found=1
+            bytes=$(wc -c < "$installer" | tr -d '[:space:]')
+            mb=$(( (bytes + 1048575) / 1048576 ))
+            echo "$installer: ${mb} MB (limit ${LIMIT_MB} MB)"
+            if [ "$mb" -gt "$LIMIT_MB" ]; then
+              echo "::error::$installer is ${mb} MB; an installer must stay under ${LIMIT_MB} MB and download its assets instead of carrying them"
+              exit 1
+            fi
+          done < <(find askamerica-engine/build/jpackage -maxdepth 1 -type f -name '${{ matrix.artifact_glob }}' -print0)
+          if [ "$found" != "1" ]; then
+            echo "::error::no installer matching ${{ matrix.artifact_glob }} under askamerica-engine/build/jpackage"
+            exit 1
+          fi
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -682,9 +747,12 @@ jobs:
           path: askamerica-engine/build/jpackage/${{ matrix.artifact_glob }}
           retention-days: 30
 
-  # ── Publish to Maven Central (Sonatype Central Portal) ───────────────────
+  # ── Maven Central bundle (built and signed here; uploaded only by promote-maven-central.yml) ──
+  # Central's free tier caps monthly publishing, so a tag no longer uploads to Central. This job
+  # builds the signed bundle and hands it to the release job, which attaches it to the release;
+  # the "Promote to Maven Central" workflow uploads it from there when the maintainer chooses.
   publish:
-    name: Publish to Maven Central
+    name: Build Maven Central bundle
     runs-on: ubuntu-latest
     needs: [jar, test]
     if: startsWith(github.ref, 'refs/tags/')
@@ -788,31 +856,24 @@ jobs:
           (cd bundle && zip -r "../askamerica-engine-bundle.zip" .)
           echo "Bundle: $(du -sh askamerica-engine-bundle.zip | cut -f1)"
 
-      - name: Upload to Sonatype Central Portal
+      - name: Name the bundle for the release, with its sha256
         env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          VERSION:           ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          AUTH=$(echo -n "${SONATYPE_USERNAME}:${SONATYPE_PASSWORD}" | base64)
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "https://central.sonatype.com/api/v1/publisher/upload" \
-            -H "Authorization: Bearer ${AUTH}" \
-            -H "Accept: application/json" \
-            -F "bundle=@askamerica-engine-bundle.zip;type=application/zip" \
-            -F "name=askamerica-engine-${VERSION}" \
-            -F "publishingType=AUTOMATIC")
+          mkdir -p central
+          BUNDLE="askamerica-engine-${VERSION}-central-bundle.zip"
+          mv askamerica-engine-bundle.zip "central/${BUNDLE}"
+          (cd central && sha256sum "${BUNDLE}" > "${BUNDLE}.sha256")
+          ls -l central
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "Response ($HTTP_CODE): $BODY"
+      - name: Upload Central bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: askamerica-engine-central-bundle
+          path: central/
+          retention-days: 30
 
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "ERROR: Maven Central upload failed"
-            exit 1
-          fi
-
-  # ── Publish to GitHub Packages (temporary — remove once Maven Central namespace verified) ──
+  # ── Publish to GitHub Packages (every tag; Maven Central only through promote-maven-central.yml) ──
   publish-github:
     name: Publish to GitHub Packages
     runs-on: ubuntu-latest
@@ -961,7 +1022,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────
   release:
     name: Create GitHub Release
-    needs: [jar, govdata-jar, trino-plugins, browser-extension, installer, publish, publish-python]
+    needs: [jar, govdata-jar, trino-plugins, browser-extension, installer, bundles, publish, publish-python]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -979,6 +1040,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: govdata-jar
+          path: release-assets/
+
+      - name: Download per-OS engine jars
+        uses: actions/download-artifact@v4
+        with:
+          name: askamerica-engine-platform-jars
           path: release-assets/
 
       - name: Download all installers
@@ -999,6 +1066,18 @@ jobs:
         with:
           name: askamerica-extension
           path: release-assets/
+
+      # The signed bundle that "Promote to Maven Central" uploads, and its sha256.
+      - name: Download Central bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: askamerica-engine-central-bundle
+          path: release-assets/
+
+      # Central carried ai.askamerica:askamerica-engine; the same jar is the release asset
+      # askamerica-engine.jar, and its sha256 lets a consumer verify the unauthenticated download.
+      - name: Checksum the engine jar
+        run: (cd release-assets && sha256sum askamerica-engine.jar > askamerica-engine.jar.sha256)
 
       # softprops/action-gh-release's own "fetch existing release by tag" API call fails here
       # with "Resource not accessible by integration" even though the job's GITHUB_TOKEN
@@ -1073,6 +1152,7 @@ jobs:
             | `trino-sharepoint-plugin.zip` | `sharepoint` | SharePoint Lists (`jdbc:sharepoint:`) |
             | `trino-splunk-plugin.zip` | `splunk` | Splunk (`jdbc:splunk:`) |
             | `trino-salesforce-plugin.zip` | `salesforce` | Salesforce sObjects (`jdbc:salesforce:`) |
+            | `trino-servicenow-plugin.zip` | `servicenow` | ServiceNow tables (`jdbc:servicenow:`) |
             | `trino-file-plugin.zip` | `file` | files / S3 globs (file adapter) |
             | `trino-cloudops-plugin.zip` | `cloudops` | Azure/AWS/GCP inventory (`jdbc:cloudops:`) |
 
@@ -1084,12 +1164,12 @@ jobs:
             --title "AskAmerica Engine ${TAG}" --notes-file /tmp/release-notes.md
           shopt -s globstar
           gh release upload "$TAG" --repo "${{ github.repository }}" --clobber release-assets/**/*
-          # release-please creates the release as a draft (release-please-config.json), so it
-          # is not releases/latest until now. Published before its jar was attached, every
-          # installed launcher saw a newer version, downloaded
-          # releases/latest/download/askamerica-engine.jar, got 404, and could not start
-          # (engine-v0.100.1, 2026-09-30).
-          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest
+          # NOT published here. The release stays a draft, and so is not releases/latest,
+          # until every download it must have is attached: see the publish-release job. Published
+          # before its jar was attached, every installed launcher saw a newer version,
+          # downloaded releases/latest/download/askamerica-engine.jar, got 404, and could not
+          # start (engine-v0.100.1, 2026-09-30); published before its server bundles, an engine
+          # at that version found no data server to install.
 
       # The pgwire-calcite installers attach on a release event, but a release created above by
       # GITHUB_TOKEN does not emit one. Dispatch that workflow explicitly now that the release
@@ -1101,5 +1181,52 @@ jobs:
           BARE="${{ github.ref_name }}"
           BARE="${BARE#engine-v}"
           gh workflow run "pgwire-calcite release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
-          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}"
+          gh workflow run "pgwire-adapters release" --repo "${{ github.repository }}" --ref main --field version="${BARE}" --field publish=true
           echo "Dispatched pgwire-calcite + pgwire-adapters releases for version ${BARE}"
+
+  # The one place a release becomes public. Owner rule 2026-10-10: only a successful build
+  # flips the release; otherwise it stays a draft. The server bundles are attached by the two
+  # workflows dispatched above, which this workflow cannot wait on by run, so this waits on the
+  # result itself: the release's own asset list, complete by name. If a build fails the wait
+  # runs out, the release stays a draft and the previous release stays "latest"; re-running
+  # the failed jobs and then this one completes it.
+  publish-release:
+    name: Publish the release when it is complete
+    runs-on: ubuntu-latest
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 300
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for every download to be attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          deadline=$(( $(date +%s) + 270 * 60 ))
+          until .github/scripts/release-assets-complete.sh "${{ github.repository }}" "$TAG" > assets.txt; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              cat assets.txt
+              {
+                echo "### $TAG was NOT published"
+                echo "It is still a draft; the previous release is still \"latest\". Missing:"
+                echo '```'
+                grep '^missing' assets.txt || true
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error::$TAG is incomplete after 270 minutes and stays a draft"
+              exit 1
+            fi
+            tail -1 assets.txt
+            sleep 120
+          done
+          cat assets.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest
+          echo "### $TAG published as the latest release, complete" >> "$GITHUB_STEP_SUMMARY"

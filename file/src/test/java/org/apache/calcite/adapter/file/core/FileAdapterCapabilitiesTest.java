@@ -62,6 +62,7 @@ public class FileAdapterCapabilitiesTest {
       // Add file schema with engine configuration if set
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       // Use global engine configuration if set

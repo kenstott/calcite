@@ -1,0 +1,48 @@
+name: Mirror CI images
+
+# Copies the images listed in .github/ci-images/*.txt from their upstream registry to
+# ghcr.io/kenstott/calcite/ci-<name>, digest preserved. Started by hand, and only when a
+# digest in one of those files changes: the copies are otherwise never touched.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    name: Copy images to ghcr.io
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Copy each image with its digest preserved
+        run: |
+          set -euo pipefail
+          for list in .github/ci-images/*.txt; do
+            grep -v '^[[:space:]]*#' "$list" | while read -r name upstream tag; do
+              [ -n "$name" ] || continue
+              digest="${upstream##*@}"
+              if [ -n "${tag:-}" ]; then
+                # A third column: the image is asked for by that tag under ci-hub/<path>
+                # (see testcontainers.txt).
+                target="ghcr.io/kenstott/calcite/ci-hub/${name}"
+              else
+                target="ghcr.io/kenstott/calcite/ci-${name}"
+                tag="mirror"
+              fi
+              echo "copying ${upstream} -> ${target}:${tag} (${digest})"
+              skopeo copy --all --preserve-digests "docker://${upstream}" "docker://${target}:${tag}"
+              # The copy is addressed by the upstream digest; a different digest is a failed copy.
+              skopeo inspect --raw "docker://${target}@${digest}" > /dev/null
+            done
+          done

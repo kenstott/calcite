@@ -12,11 +12,13 @@ package org.apache.calcite.adapter.file.table;
 // storage-provider-guard:ignore-file - audited: filesystem ops here are genuinely local infra (DuckDB catalog / temp working dir / local glob+metadata+lock / scheme-guarded local mkdir), not object-store I/O.
 
 import org.apache.calcite.DataContext;
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.HtmlToJsonConverter;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.format.parquet.ParquetConversionUtil;
 import org.apache.calcite.adapter.file.refresh.RefreshableTable;
 import org.apache.calcite.adapter.file.refresh.RefreshableTable.RefreshBehavior;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
@@ -79,6 +81,8 @@ public class GlobParquetTable extends AbstractTable
   @SuppressWarnings("UnusedVariable")
   private final BufferAllocator allocator;
   private final String columnNameCasing;
+  private final String tableNameCasing;
+  private final CrawlerConfiguration pages;
   private final @Nullable String sourceFileColumn;  // REQ-788: opt-in per-row file path column
 
   private File parquetCacheFile;
@@ -150,16 +154,15 @@ public class GlobParquetTable extends AbstractTable
 
   private @Nullable CacheMetadata cacheMetadata;
 
+  /**
+   * @param tableNameCasing The casing of the names of the tables an HTML file of the glob gives
+   * @param pages How an HTML file of the glob is read: its content, and whether its lists are
+   *     tables (REQ-2186)
+   */
   public GlobParquetTable(String globPattern, String tableName, File cacheDir,
       @Nullable Duration refreshInterval, CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig,
-      String columnNameCasing) {
-    this(globPattern, tableName, cacheDir, refreshInterval, csvTypeInferenceConfig,
-        columnNameCasing, null);
-  }
-
-  public GlobParquetTable(String globPattern, String tableName, File cacheDir,
-      @Nullable Duration refreshInterval, CsvTypeInferrer.TypeInferenceConfig csvTypeInferenceConfig,
-      String columnNameCasing, @Nullable String sourceFileColumn) {
+      String columnNameCasing, String tableNameCasing, CrawlerConfiguration pages,
+      @Nullable String sourceFileColumn) {
     this.sourceFileColumn = sourceFileColumn;
     this.globPattern = globPattern;
     this.tableName = tableName;
@@ -167,6 +170,8 @@ public class GlobParquetTable extends AbstractTable
     this.refreshInterval = refreshInterval;
     this.csvTypeInferenceConfig = csvTypeInferenceConfig;
     this.columnNameCasing = columnNameCasing;
+    this.tableNameCasing = tableNameCasing;
+    this.pages = pages;
     this.allocator = new RootAllocator();
 
     // Initialize cache file path
@@ -277,7 +282,7 @@ public class GlobParquetTable extends AbstractTable
     String pattern;
 
     // Extract base path and pattern
-    int lastSeparator = globPattern.lastIndexOf(File.separator);
+    int lastSeparator = LocalPaths.lastSeparator(globPattern);
     if (lastSeparator >= 0) {
       basePath = Paths.get(globPattern.substring(0, lastSeparator));
       pattern = globPattern.substring(lastSeparator + 1);
@@ -313,6 +318,9 @@ public class GlobParquetTable extends AbstractTable
       }
     }
 
+    // In path order: a directory lists its files in whatever order its filesystem keeps, and the
+    // first file is the column set every other one is checked against (requireSameColumns).
+    files.sort(java.util.Comparator.comparing(File::getPath));
     return files;
   }
 
@@ -335,7 +343,8 @@ public class GlobParquetTable extends AbstractTable
           conversionsDir.mkdirs();
         }
         List<File> jsonFiles =
-            HtmlToJsonConverter.convert(file, conversionsDir, columnNameCasing, cacheDir);
+            HtmlToJsonConverter.convert(file, conversionsDir, columnNameCasing, tableNameCasing,
+                null, cacheDir, null, pages);
         allFiles.addAll(jsonFiles);
       } else {
         // Other files (CSV, JSON, Parquet) - add directly

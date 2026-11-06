@@ -14,7 +14,6 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeConverter;
 import org.apache.calcite.adapter.file.util.NullEquivalents;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -57,9 +56,8 @@ public class ResolvedBugTargetsTest {
 
 
   // FILE-125 (C-19) — the DuckDB HLL rule must not write hard-coded /tmp debug artifacts on load.
-  // (Static initializer writes the marker on first class load; the fix gates it behind a debug flag.)
+  // (The rule used to write a marker in a static initializer on first class load; it writes none now.)
   @Test @Tag("FILE-125")
-  @Disabled("blocked on C-19: gate debug behind a flag — no hard-coded /tmp markers")
   void duckdbHllRuleWritesNoTmpArtifacts() throws Exception {
     File loaded = new File("/tmp/duckdb_hll_rule_loaded.txt");
     File matched = new File("/tmp/duckdb_hll_rule_matched.txt");

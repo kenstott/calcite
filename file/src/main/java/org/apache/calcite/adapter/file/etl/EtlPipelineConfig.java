@@ -10,9 +10,11 @@
  */
 package org.apache.calcite.adapter.file.etl;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -83,6 +85,7 @@ public class EtlPipelineConfig {
   private final Map<String, Object> rawSourceConfig;
   private final String bulkDownload;
   private final Map<String, DimensionConfig> dimensions;
+  private final List<Map<String, List<String>>> excludeCombinations;
   private final List<ColumnConfig> columns;
   private final MaterializeConfig materialize;
   private final ErrorHandlingConfig errorHandling;
@@ -104,6 +107,9 @@ public class EtlPipelineConfig {
     this.dimensions = builder.dimensions != null
         ? Collections.unmodifiableMap(new LinkedHashMap<String, DimensionConfig>(builder.dimensions))
         : Collections.<String, DimensionConfig>emptyMap();
+    this.excludeCombinations = builder.excludeCombinations != null
+        ? Collections.unmodifiableList(builder.excludeCombinations)
+        : Collections.<Map<String, List<String>>>emptyList();
     this.columns = builder.columns != null
         ? Collections.unmodifiableList(builder.columns)
         : Collections.<ColumnConfig>emptyList();
@@ -176,6 +182,37 @@ public class EtlPipelineConfig {
    */
   public Map<String, DimensionConfig> getDimensions() {
     return dimensions;
+  }
+
+  /**
+   * Returns the dimension-value combinations that are never requested.
+   *
+   * <p>Each entry maps dimension names to the values it matches; a combination is dropped when it
+   * matches every dimension of at least one entry.
+   */
+  public List<Map<String, List<String>>> getExcludeCombinations() {
+    return excludeCombinations;
+  }
+
+  /**
+   * Returns whether the combination matches an {@code excludeCombinations} entry.
+   *
+   * @param combination dimension name to value for one expanded batch
+   */
+  public boolean isExcluded(Map<String, String> combination) {
+    for (Map<String, List<String>> entry : excludeCombinations) {
+      boolean matches = true;
+      for (Map.Entry<String, List<String>> dim : entry.entrySet()) {
+        if (!dim.getValue().contains(combination.get(dim.getKey()))) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -298,6 +335,7 @@ public class EtlPipelineConfig {
         .rawSourceConfig(rawSourceConfig)
         .bulkDownload(bulkDownload)
         .dimensions(resolvedDimensions)
+        .excludeCombinations(excludeCombinations)
         .columns(columns)
         .materialize(materialize)
         .errorHandling(errorHandling)
@@ -309,6 +347,42 @@ public class EtlPipelineConfig {
         .dqRowLimit(dqRowLimit)
         .lookbackPeriods(lookbackPeriods)
         .build();
+  }
+
+  private static List<Map<String, List<String>>> parseExcludeCombinations(Object obj) {
+    if (obj == null) {
+      return null;
+    }
+    if (!(obj instanceof List)) {
+      throw new IllegalArgumentException("excludeCombinations must be a list of maps");
+    }
+    List<Map<String, List<String>>> result = new ArrayList<Map<String, List<String>>>();
+    for (Object entryObj : (List<?>) obj) {
+      Map<String, Object> entry = toMap(entryObj);
+      if (entry == null || entry.isEmpty()) {
+        throw new IllegalArgumentException(
+            "excludeCombinations entry must map dimension names to values: " + entryObj);
+      }
+      Map<String, List<String>> parsed = new LinkedHashMap<String, List<String>>();
+      for (Map.Entry<String, Object> dim : entry.entrySet()) {
+        Object value = dim.getValue();
+        List<String> values = new ArrayList<String>();
+        if (value instanceof List) {
+          for (Object v : (List<?>) value) {
+            values.add(String.valueOf(v));
+          }
+        } else if (value != null) {
+          values.add(String.valueOf(value));
+        }
+        if (values.isEmpty()) {
+          throw new IllegalArgumentException(
+              "excludeCombinations dimension '" + dim.getKey() + "' has no values");
+        }
+        parsed.put(dim.getKey(), values);
+      }
+      result.add(parsed);
+    }
+    return result;
   }
 
   /**
@@ -366,6 +440,8 @@ public class EtlPipelineConfig {
     if (dimensionsMap != null) {
       builder.dimensions(DimensionConfig.fromDimensionsMap(dimensionsMap));
     }
+
+    builder.excludeCombinations(parseExcludeCombinations(map.get("excludeCombinations")));
 
     Object columnsObj = map.get("columns");
     if (columnsObj instanceof List) {
@@ -492,7 +568,60 @@ public class EtlPipelineConfig {
         materializeMap.put("columnComments", columnComments);
       }
     }
-    return materializeMap;
+    return withDeclaredPartitionTypes(tableMap, materializeMap);
+  }
+
+  /**
+   * Returns {@code materializeMap} with its partition columns typed as the table declares them.
+   *
+   * <p>The table's {@code partitions.columnDefinitions} is what readers serve; the writer types a
+   * partition column from {@code materialize.partition.columnDefinitions}, and wrote STRING for
+   * one that names none (govdata's year, declared INTEGER, stored as text). A materialize block
+   * that names no column definitions takes the table's; one that names a column the table also
+   * declares must give it the same type.
+   *
+   * @throws IllegalArgumentException if the two give a column different types
+   */
+  private static Map<String, Object> withDeclaredPartitionTypes(Map<String, Object> tableMap,
+      Map<String, Object> materializeMap) {
+    Map<String, Object> partitions = toMap(tableMap.get("partitions"));
+    Map<String, Object> partition = toMap(materializeMap.get("partition"));
+    if (partitions == null || partition == null
+        || !(partitions.get("columnDefinitions") instanceof List)) {
+      return materializeMap;
+    }
+    List<?> declared = (List<?>) partitions.get("columnDefinitions");
+    Object written = partition.get("columnDefinitions");
+    if (written instanceof List) {
+      Map<String, String> declaredTypes = new LinkedHashMap<>();
+      for (Object definition : declared) {
+        Map<String, Object> d = toMap(definition);
+        if (d != null && d.get("name") instanceof String && d.get("type") instanceof String) {
+          declaredTypes.put(((String) d.get("name")).toLowerCase(Locale.ROOT),
+              ((String) d.get("type")).toUpperCase(Locale.ROOT));
+        }
+      }
+      for (Object definition : (List<?>) written) {
+        Map<String, Object> w = toMap(definition);
+        if (w == null || !(w.get("name") instanceof String) || !(w.get("type") instanceof String)) {
+          continue;
+        }
+        String name = (String) w.get("name");
+        String declaredType = declaredTypes.get(name.toLowerCase(Locale.ROOT));
+        String writtenType = ((String) w.get("type")).toUpperCase(Locale.ROOT);
+        if (declaredType != null && !declaredType.equals(writtenType)) {
+          throw new IllegalArgumentException("Table '" + tableMap.get("name")
+              + "' declares partition column '" + name + "' as " + declaredType
+              + " but its materialize.partition.columnDefinitions writes it as " + writtenType);
+        }
+      }
+      return materializeMap;
+    }
+    Map<String, Object> typedPartition = new LinkedHashMap<>(partition);
+    typedPartition.put("columnDefinitions", declared);
+    Map<String, Object> typed = new LinkedHashMap<>(materializeMap);
+    typed.put("partition", typedPartition);
+    return typed;
   }
 
   /**
@@ -813,6 +942,7 @@ public class EtlPipelineConfig {
     private Map<String, Object> rawSourceConfig;
     private String bulkDownload;
     private Map<String, DimensionConfig> dimensions;
+    private List<Map<String, List<String>>> excludeCombinations;
     private List<ColumnConfig> columns;
     private MaterializeConfig materialize;
     private ErrorHandlingConfig errorHandling;
@@ -856,6 +986,11 @@ public class EtlPipelineConfig {
 
     public Builder dimensions(Map<String, DimensionConfig> dimensions) {
       this.dimensions = dimensions;
+      return this;
+    }
+
+    public Builder excludeCombinations(List<Map<String, List<String>>> excludeCombinations) {
+      this.excludeCombinations = excludeCombinations;
       return this;
     }
 

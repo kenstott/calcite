@@ -16,6 +16,7 @@ import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFile;
 import org.apache.calcite.adapter.file.table.CsvTable;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.file.util.NullEquivalents;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
@@ -99,11 +100,25 @@ public class ParquetConversionUtil {
 
   /**
    * Convert source to Parquet using StorageProviderFile abstraction.
-   * This method supports both local filesystem and S3 storage.
+   * This method supports both local filesystem and S3 storage. A conversion to remote storage
+   * stages the file in a local directory inside {@code workDirectory}, a directory the schema
+   * owns under its base directory (REQ-1992).
    */
   public static StorageProviderFile convertToParquet(Source source, String tableName, Table table,
       StorageProviderFile cacheDirFile, SchemaPlus parentSchema, String schemaName, String casing,
-      StorageProvider storageProvider) throws Exception {
+      StorageProvider storageProvider, File workDirectory) throws Exception {
+    return convertToParquet(source, tableName, table, cacheDirFile, parentSchema, schemaName,
+        casing, storageProvider, workDirectory, false);
+  }
+
+  /**
+   * As the method above, and with {@code force} the Parquet file is rebuilt whatever the
+   * timestamps of source and Parquet file say. A local Parquet file is never removed first:
+   * the rebuilt file replaces it in one move, so a reader always finds a complete file.
+   */
+  public static StorageProviderFile convertToParquet(Source source, String tableName, Table table,
+      StorageProviderFile cacheDirFile, SchemaPlus parentSchema, String schemaName, String casing,
+      StorageProvider storageProvider, File workDirectory, boolean force) throws Exception {
 
     StorageProviderFile sourceFile = StorageProviderFile.create(source.path(), storageProvider);
 
@@ -125,16 +140,12 @@ public class ParquetConversionUtil {
     baseName = org.apache.calcite.adapter.file.converters.ConverterUtils.sanitizeIdentifier(baseName);
 
     // Create target Parquet file path
-    String targetPath = cacheDirFile.getPath();
-    if (!targetPath.endsWith("/")) {
-      targetPath += "/";
-    }
-    targetPath += baseName + ".parquet";
+    String targetPath = LocalPaths.join(cacheDirFile.getPath(), baseName + ".parquet");
 
     StorageProviderFile parquetFile = StorageProviderFile.create(targetPath, storageProvider);
 
     // Check if conversion is needed
-    if (!needsConversion(sourceFile, parquetFile)) {
+    if (!force && !needsConversion(sourceFile, parquetFile)) {
       LOGGER.debug("Parquet file is up to date, skipping conversion: {}", parquetFile.getPath());
       return parquetFile;
     }
@@ -148,11 +159,12 @@ public class ParquetConversionUtil {
       File result =
           ConcurrentParquetCache.convertWithLocking(localSourceFile, localCacheDir, typeInferenceEnabled, schemaName, casing, tempFile -> {
         performConversion(source, tableName, table, tempFile, parentSchema, schemaName);
-      });
+      }, force);
       return StorageProviderFile.create(result.getAbsolutePath(), storageProvider);
     } else {
       // Use S3/remote storage approach
-      performRemoteConversion(source, tableName, table, parquetFile, parentSchema, schemaName);
+      performRemoteConversion(source, tableName, table, parquetFile, parentSchema, schemaName,
+          workDirectory);
       return parquetFile;
     }
   }
@@ -162,13 +174,26 @@ public class ParquetConversionUtil {
    */
   public static File convertToParquet(Source source, String tableName, Table table,
       File cacheDir, SchemaPlus parentSchema, String schemaName, String casing) throws Exception {
+    return convertToParquet(source, tableName, table, cacheDir, parentSchema, schemaName, casing,
+        false);
+  }
+
+  /**
+   * Local-file form of the forced conversion: see
+   * {@link #convertToParquet(Source, String, Table, StorageProviderFile, SchemaPlus, String, String, StorageProvider, File, boolean)}.
+   */
+  public static File convertToParquet(Source source, String tableName, Table table,
+      File cacheDir, SchemaPlus parentSchema, String schemaName, String casing, boolean force)
+      throws Exception {
 
     // Create StorageProviderFile instances for local files
     StorageProviderFile cacheDirFile =
         StorageProviderFile.create(cacheDir.getAbsolutePath(), new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider());
 
     StorageProviderFile result =
-        convertToParquet(source, tableName, table, cacheDirFile, parentSchema, schemaName, casing, new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider());
+        convertToParquet(source, tableName, table, cacheDirFile, parentSchema, schemaName, casing,
+            new org.apache.calcite.adapter.file.storage.LocalFileStorageProvider(), cacheDir,
+            force);
 
     return result.getFile();
   }
@@ -229,13 +254,15 @@ public class ParquetConversionUtil {
    */
   @SuppressWarnings("UnusedVariable")
   private static void performRemoteConversion(Source source, String tableName, Table table,
-      StorageProviderFile targetFile, SchemaPlus parentSchema, String schemaName) throws Exception {
+      StorageProviderFile targetFile, SchemaPlus parentSchema, String schemaName,
+      File workDirectory) throws Exception {
 
     LOGGER.debug("Starting remote Parquet conversion for table: {}", tableName);
 
     // For remote storage, run the exact same local conversion into a local temp file,
     // then upload the finished Parquet file through the StorageProvider (AWS SDK v2).
-    java.io.File tempFile = java.io.File.createTempFile("parquet-conv-", ".parquet");
+    java.io.File tempFile = org.apache.calcite.adapter.file.WorkFiles
+        .newTempFile(workDirectory, "parquet-conv-", ".parquet");
     try {
       // Reuse the local conversion so the Parquet content written is identical to the
       // local path (same performConversion used by convertWithLocking).

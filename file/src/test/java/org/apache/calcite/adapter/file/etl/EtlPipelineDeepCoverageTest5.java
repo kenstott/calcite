@@ -1177,7 +1177,7 @@ public class EtlPipelineDeepCoverageTest5 {
             .output(MaterializeOutputConfig.builder().build()).build())
         .build();
     EtlPipeline pipeline =
-        new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, "/op/dir");
+        new EtlPipeline(config, sp, sp, tempDir.toString(), null, IncrementalTracker.NOOP, null, null);
     Method m =
         EtlPipeline.class.getDeclaredMethod("createDataSource", EtlPipelineConfig.class, boolean.class);
     m.setAccessible(true);
@@ -1606,8 +1606,10 @@ public class EtlPipelineDeepCoverageTest5 {
     assertEquals("/data/table", result.getTableLocation());
     assertEquals(MaterializeConfig.Format.PARQUET, result.getMaterializeFormat());
     assertFalse(result.isSkippedEntirePipeline());
-    assertFalse(result.isFailed());
-    assertNull(result.getFailureMessage());
+    // 2 failed batches: the table is failed (partially) and the message is derived from errors
+    assertTrue(result.isFailed());
+    assertTrue(result.isPartiallyFailed());
+    assertTrue(result.getFailureMessage().contains("error1"));
     assertEquals(13, result.getTotalBatches());
     assertEquals(200.0, result.getRowsPerSecond(), 0.01);
   }

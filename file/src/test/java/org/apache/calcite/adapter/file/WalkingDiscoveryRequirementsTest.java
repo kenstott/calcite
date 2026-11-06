@@ -117,7 +117,7 @@ public class WalkingDiscoveryRequirementsTest {
 
   private static String model(Path dir, boolean recursive, String glob) {
     StringBuilder operand = new StringBuilder();
-    operand.append("      \"directory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n");
+    operand.append("      \"directory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n      \"baseDirectory\": \"").append(dir.toString().replace("\\", "\\\\")).append("\",\n");
     operand.append("      \"ephemeralCache\": true,\n");
     operand.append("      \"executionEngine\": \"linq4j\",\n");
     // Pin casing to LOWER so the path-derived names are a simple, fully-predictable transform

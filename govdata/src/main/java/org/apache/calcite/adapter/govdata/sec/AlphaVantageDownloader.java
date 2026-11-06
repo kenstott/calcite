@@ -17,6 +17,8 @@
 package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.govdata.AbstractGovDataDownloader;
 
@@ -103,7 +105,7 @@ public class AlphaVantageDownloader {
     // rate-limit/API failures) needs its OWN gap tracked — the bulk date can't tell it apart from
     // a ticker that is fully current, which is exactly the "never completely tops up" symptom.
     Map<String, String> perTickerLastDate = queryPerTickerMaxDates(topupDir);
-    Path tmpCsv = Files.createTempFile("av_topup_", ".csv");
+    Path tmpCsv = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("av_topup_", ".csv").toPath();
     int fetched = 0;
     boolean dailyLimitReached = false;
     try {
@@ -279,6 +281,7 @@ public class AlphaVantageDownloader {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(30000);
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
       throw new IOException("HTTP error code: " + responseCode);
@@ -286,7 +289,7 @@ public class AlphaVantageDownloader {
 
     JsonNode root;
     try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+        new BufferedReader(new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
       root = objectMapper.readTree(reader);
     }
 

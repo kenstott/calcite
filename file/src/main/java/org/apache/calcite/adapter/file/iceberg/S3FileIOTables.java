@@ -124,9 +124,22 @@ public final class S3FileIOTables {
    * keys). Shared by the read-only and writable table paths.
    */
   static S3FileIO newIO(Map<String, String> s3Config) {
+    return newIO(s3Config, null);
+  }
+
+  /**
+   * As {@link #newIO(Map)} with an explicit per-read socket timeout, for operations whose single
+   * response is legitimately slow (a prefix LIST over thousands of objects on a loaded MinIO disk).
+   * A null {@code socketTimeoutMs} keeps the default.
+   */
+  static S3FileIO newIO(Map<String, String> s3Config, String socketTimeoutMs) {
     return withAppClassLoader(() -> {
       S3FileIO io = new S3FileIO();
-      io.initialize(toS3Properties(s3Config));
+      Map<String, String> props = toS3Properties(s3Config);
+      if (socketTimeoutMs != null) {
+        props.put("http-client.apache.socket-timeout-ms", socketTimeoutMs);
+      }
+      io.initialize(props);
       return io;
     });
   }
@@ -173,8 +186,33 @@ public final class S3FileIOTables {
       String root = stripTrailingSlash(tablePath);
       S3FileIOTableOperations ops = new S3FileIOTableOperations(root, io);
       ops.refresh();
+      requireLocationUnder(root, ops.current());
       return new BaseTable(ops, tableName(root));
     });
+  }
+
+  /**
+   * Refuses a table whose metadata records a location other than the path it was loaded from.
+   * Iceberg resolves manifests and data files from the absolute paths in its metadata, so metadata
+   * copied from another bucket would make every commit, expiry and compaction act on that other
+   * bucket's files.
+   */
+  static void requireLocationUnder(String tablePath, TableMetadata metadata) {
+    if (metadata == null) {
+      return;
+    }
+    String expected = sameStoreForm(tablePath);
+    String actual = sameStoreForm(metadata.location());
+    if (!expected.equals(actual)) {
+      throw new IllegalStateException("Iceberg table loaded from " + tablePath
+          + " records location " + metadata.location()
+          + " in its metadata; refusing to use a table whose metadata points at another store");
+    }
+  }
+
+  private static String sameStoreForm(String path) {
+    String p = stripTrailingSlash(path);
+    return p.startsWith("s3a://") ? "s3://" + p.substring(6) : p;
   }
 
   /** Bounded retries for {@link #drop}'s post-delete verification — mirrors
@@ -182,6 +220,11 @@ public final class S3FileIOTables {
    * can lag behind a write or delete that already completed). */
   private static final int DROP_VERIFY_MAX_ATTEMPTS = 5;
   private static final long DROP_VERIFY_RETRY_DELAY_MS = 200;
+
+  /** Per-read socket timeout for {@link #drop}: deletePrefix and the verify LIST each wait on one
+   * paginated listing response, which on a MinIO whose disk is saturated takes minutes, far past
+   * the 60s default sized for ordinary metadata reads and commits. */
+  private static final String DROP_SOCKET_TIMEOUT_MS = String.valueOf(15 * 60 * 1000);
 
   /**
    * Deletes every object at or under {@code tablePath} (both {@code metadata/} and {@code data/}),
@@ -201,9 +244,10 @@ public final class S3FileIOTables {
    * @param s3Config the credential map (may be null)
    */
   public static void drop(String tablePath, Map<String, String> s3Config) {
+    org.apache.calcite.adapter.file.duckdb.IcebergMetadataPins.invalidate(tablePath);
     withAppClassLoader(() -> {
       String prefix = stripTrailingSlash(tablePath) + "/";
-      try (S3FileIO io = newIO(s3Config)) {
+      try (S3FileIO io = newIO(s3Config, DROP_SOCKET_TIMEOUT_MS)) {
         dropPrefix(io, prefix);
       }
       return null;

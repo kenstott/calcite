@@ -53,14 +53,16 @@ public final class MaterializationWriterFactory {
    * @param format The output format (ICEBERG or PARQUET)
    * @param storageProvider Storage provider for file operations
    * @param baseDirectory Base directory for output files
+   * @param workDirectory A local directory the schema owns, for temporary files (REQ-1992)
    * @return A format-specific MaterializationWriter
    * @throws IllegalArgumentException if format is null or unsupported
    */
   public static MaterializationWriter create(
       MaterializeConfig.Format format,
       StorageProvider storageProvider,
-      String baseDirectory) {
-    return create(format, storageProvider, baseDirectory, IncrementalTracker.NOOP);
+      String baseDirectory,
+      java.io.File workDirectory) {
+    return create(format, storageProvider, baseDirectory, IncrementalTracker.NOOP, workDirectory);
   }
 
   /**
@@ -70,6 +72,7 @@ public final class MaterializationWriterFactory {
    * @param storageProvider Storage provider for file operations
    * @param baseDirectory Base directory for output files
    * @param incrementalTracker Tracker for incremental processing (Iceberg only)
+   * @param workDirectory A local directory the schema owns, for temporary files (REQ-1992)
    * @return A format-specific MaterializationWriter
    * @throws IllegalArgumentException if format is null or unsupported
    */
@@ -77,7 +80,8 @@ public final class MaterializationWriterFactory {
       MaterializeConfig.Format format,
       StorageProvider storageProvider,
       String baseDirectory,
-      IncrementalTracker incrementalTracker) {
+      IncrementalTracker incrementalTracker,
+      java.io.File workDirectory) {
 
     if (format == null) {
       throw new IllegalArgumentException("Format cannot be null");
@@ -85,9 +89,10 @@ public final class MaterializationWriterFactory {
 
     switch (format) {
       case ICEBERG:
-        return new IcebergMaterializationWriter(storageProvider, baseDirectory, incrementalTracker);
+        return new IcebergMaterializationWriter(storageProvider, baseDirectory, incrementalTracker,
+            workDirectory);
       case PARQUET:
-        return new ParquetMaterializationWriter(storageProvider, baseDirectory);
+        return new ParquetMaterializationWriter(storageProvider, baseDirectory, workDirectory);
       case DELTA:
         throw new UnsupportedOperationException(
             "Delta Lake format not yet implemented. "
@@ -118,13 +123,16 @@ public final class MaterializationWriterFactory {
    * @param config Complete materialization configuration
    * @param storageProvider Storage provider for file operations
    * @param baseDirectory Base directory for output files
+   * @param workDirectory A local directory the schema owns, for temporary files (REQ-1992)
    * @return A configured MaterializationWriter
    */
   public static MaterializationWriter createFromConfig(
       MaterializeConfig config,
       StorageProvider storageProvider,
-      String baseDirectory) {
-    return createFromConfig(config, storageProvider, baseDirectory, IncrementalTracker.NOOP);
+      String baseDirectory,
+      java.io.File workDirectory) {
+    return createFromConfig(config, storageProvider, baseDirectory, IncrementalTracker.NOOP,
+        workDirectory);
   }
 
   /**
@@ -134,13 +142,15 @@ public final class MaterializationWriterFactory {
    * @param storageProvider Storage provider for file operations
    * @param baseDirectory Base directory for output files
    * @param incrementalTracker Tracker for incremental processing
+   * @param workDirectory A local directory the schema owns, for temporary files (REQ-1992)
    * @return A configured MaterializationWriter
    */
   public static MaterializationWriter createFromConfig(
       MaterializeConfig config,
       StorageProvider storageProvider,
       String baseDirectory,
-      IncrementalTracker incrementalTracker) {
+      IncrementalTracker incrementalTracker,
+      java.io.File workDirectory) {
 
     if (config == null) {
       throw new IllegalArgumentException("Config cannot be null");
@@ -160,6 +170,6 @@ public final class MaterializationWriterFactory {
       }
     }
 
-    return create(format, storageProvider, effectiveBaseDir, incrementalTracker);
+    return create(format, storageProvider, effectiveBaseDir, incrementalTracker, workDirectory);
   }
 }

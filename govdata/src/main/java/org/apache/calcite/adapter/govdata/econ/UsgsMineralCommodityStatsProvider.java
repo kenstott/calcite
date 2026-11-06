@@ -11,8 +11,10 @@
 package org.apache.calcite.adapter.govdata.econ;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -358,11 +360,12 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("USGS MCS: HTTP " + code + " for " + url);
     }
-    return conn.getInputStream();
+    return CompleteBody.of(conn);
   }
 
   private static String headerOrDefault(EtlPipelineConfig config, String name, String dflt) {
@@ -383,12 +386,13 @@ public class UsgsMineralCommodityStatsProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(60000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("USGS MCS: HTTP " + code + " for " + url);
     }
     ByteArrayOutputStream buf = new ByteArrayOutputStream();
-    try (InputStream in = conn.getInputStream()) {
+    try (InputStream in = CompleteBody.of(conn)) {
       byte[] chunk = new byte[65536];
       int n;
       while ((n = in.read(chunk)) != -1) {

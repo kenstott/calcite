@@ -105,6 +105,15 @@ public abstract class BaseFileTest {
                 if (!operand.containsKey("ephemeralCache") && !operand.containsKey("ephemeral_cache")) {
                   operand.put("ephemeralCache", true);
                 }
+                // Every file the adapter writes goes under the schema's base directory
+                // (REQ-1992): the test's own data directory is that base directory.
+                Object dir = operand.get("directory");
+                if (dir instanceof String && new java.io.File((String) dir).isAbsolute()
+                    && !((String) dir).contains("://")
+                    && !operand.containsKey("baseDirectory")
+                    && !operand.containsKey("operatingDirectory")) {
+                  operand.put("baseDirectory", dir);
+                }
               }
             }
           }

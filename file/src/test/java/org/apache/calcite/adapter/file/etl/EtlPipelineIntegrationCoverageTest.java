@@ -558,15 +558,6 @@ public class EtlPipelineIntegrationCoverageTest {
     assertNotNull(pipeline);
   }
 
-  @Test void testPipelineConstructorWithOperatingDirectory() {
-    EtlPipelineConfig config = httpConfig("ctor_opdir", rangeDimension("y", 2020, 2020));
-    StorageProvider sp = localStorage();
-    String opDir = tempDir.resolve("opdir").toString();
-    EtlPipeline pipeline =
-        new EtlPipeline(config, sp, null, tempDir.toString(), null, IncrementalTracker.NOOP, null, null, opDir);
-    assertNotNull(pipeline);
-  }
-
   // =========================================================================
   // EtlPipeline.execute() with custom DataProvider + DataWriter
   // =========================================================================
@@ -937,11 +928,11 @@ public class EtlPipelineIntegrationCoverageTest {
         m.invoke(pipeline, new IOException("HTTP 502"), defaults));
 
     // Null message
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP,
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN,
         m.invoke(pipeline, new IOException((String) null), defaults));
 
-    // Generic
-    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.SKIP,
+    // Generic: no HTTP status, so a failed batch rather than a skip (govdata-ops#982)
+    assertEquals(EtlPipelineConfig.ErrorHandlingConfig.ErrorAction.WARN,
         m.invoke(pipeline, new IOException("Timeout"), defaults));
   }
 

@@ -17,6 +17,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:cftc}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 
 # EQUITIES daily files uncompress to ~500 MB each; a full 2024+ ingest (one fetch per
 # asset_class/day) far exceeds the 60-min default worker cap. Read by the pool's
@@ -98,8 +99,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 3
       contiguous: true
-      rowCount: 304830560
-      checkedAt: "2026-10-08T05:53:41Z"
+      rowCount: 409312208
+      checkedAt: "2026-11-05T20:18:49Z"
     # DQ sample cap (GOVDATA_DQ mode only; prod ignores it and loads everything).
     # Fetch-unit here is one daily file per (asset_class, year, month, day) — e.g. a
     # single RATES day is ~23.5k rows. The cap stops each daily fetch-unit at 2000 rows,
@@ -118,6 +119,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
         - name: month
           type: INTEGER
     comment: >
@@ -1078,7 +1080,7 @@ partitionedTables:
         - COMMODITIES
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2024}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         minYear: 2024
         dataLag: 0
@@ -1183,8 +1185,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 21
       contiguous: true
-      rowCount: 185631
-      checkedAt: "2026-10-08T05:53:48Z"
+      rowCount: 186744
+      checkedAt: "2026-11-05T20:18:52Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1192,6 +1194,7 @@ partitionedTables:
           type: VARCHAR
         - name: year
           type: INTEGER
+          storedDigits: 4
     comment: >
       CFTC Commitments of Traders — Disaggregated Futures-Only report. Weekly (Tuesday)
       open interest and long/short/spread positions by trader category — producer/

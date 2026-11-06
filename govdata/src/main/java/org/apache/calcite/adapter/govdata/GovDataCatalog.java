@@ -39,7 +39,7 @@ import java.util.regex.Pattern;
  * server's discovery tools) get complete metadata instantly.
  *
  * <p>Includes {@code partitionedTables}, {@code tables} and {@code views} — unlike
- * {@link GovDataUtils#loadTableDefinitions} which merges only the first two.
+ * {@code GovDataUtils.loadTableDefinitions}, which merges only the first two.
  */
 public final class GovDataCatalog {
 
@@ -244,6 +244,28 @@ public final class GovDataCatalog {
       return;
     }
 
+    // A table whose observation year is not literally named "year" (house_price_index carries
+    // data_year) declares it with a table-level `timeColumn:`. That declaration is the
+    // authority for the time axis; no column-name guessing is done for other names.
+    if (t.hasNonNull("timeColumn")) {
+      String timeColumn = text(t.get("timeColumn"));
+      if (!hasColumn(t, timeColumn)) {
+        throw new IllegalStateException("Table " + text(t.get("name")) + " declares timeColumn '"
+            + timeColumn + "' which is not one of its columns");
+      }
+      ObjectNode cov = MAPPER.createObjectNode();
+      cov.put("column", timeColumn);
+      cov.put("form", "columnOnly");
+      cov.put("time_varying", true);
+      putObserved(cov, observed);
+      cov.put("note", "This table is organized by time through its " + timeColumn + " column "
+          + "(plus any finer period column) and can be filtered/grouped/trended by it, but "
+          + "declares no single ingestion window. Call data_coverage(schema, table) for the "
+          + "actual years present rather than assuming a continuous range.");
+      to.set("coverage", cov);
+      return;
+    }
+
     // Neither a year dimension nor a year partition column is declared, but the table may
     // still carry a plain "year" data column — e.g. a table unioning sub-series with
     // different real ranges (no single window can honestly describe all of them), or a
@@ -304,8 +326,12 @@ public final class GovDataCatalog {
   }
 
   private static boolean hasYearColumn(JsonNode t) {
+    return hasColumn(t, "year");
+  }
+
+  private static boolean hasColumn(JsonNode t, String name) {
     for (JsonNode c : t.path("columns")) {
-      if ("year".equalsIgnoreCase(text(c.get("name")))) {
+      if (name.equalsIgnoreCase(text(c.get("name")))) {
         return true;
       }
     }
@@ -337,6 +363,14 @@ public final class GovDataCatalog {
       cov.put("observed_contiguous", observed.get("contiguous").asBoolean());
     }
     putInt(cov, "observed_row_count", observed.get("rowCount"));
+    // A table that declares a coverageWindow had rows outside it left out of the bounds above;
+    // saying so keeps the observed range from reading as the whole table.
+    putInt(cov, "observed_excluded_rows", observed.get("excludedRows"));
+    JsonNode kept = observed.get("excludedOutsideYears");
+    if (kept != null && kept.isArray() && kept.size() == 2) {
+      putInt(cov, "observed_window_first_year", kept.get(0));
+      putInt(cov, "observed_window_last_year", kept.get(1));
+    }
     putText(cov, "observed_checked_at", observed.get("checkedAt"));
     if (observed.hasNonNull("minYear") || observed.hasNonNull("maxYear")) {
       cov.put("authoritative", "observed");
@@ -414,6 +448,14 @@ public final class GovDataCatalog {
     if (oc.hasNonNull("rowCount")) {
       sb.append(", ").append(String.format(Locale.ROOT, "%,d", oc.get("rowCount").asLong()))
           .append(" rows");
+    }
+    JsonNode kept = oc.get("excludedOutsideYears");
+    if (oc.hasNonNull("excludedRows") && oc.get("excludedRows").asLong() > 0
+        && kept != null && kept.isArray() && kept.size() == 2) {
+      sb.append(", not counting ")
+          .append(String.format(Locale.ROOT, "%,d", oc.get("excludedRows").asLong()))
+          .append(" rows dated outside ").append(kept.get(0).asInt()).append('–')
+          .append(kept.get(1).asInt());
     }
     if (oc.hasNonNull("checkedAt")) {
       String checkedAt = oc.get("checkedAt").asText("");

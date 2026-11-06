@@ -11,7 +11,7 @@
 
 The catalog intercept answered the shape of the DBeaver/DataGrip introspection
 joins but not their content: chained reg-casts collapsed to 0, format_type()
-returned PG's internal type names, pg_class.reltuples was hardcoded 0, and
+returned PG's internal type names, and
 pg_proc / information_schema.routines / .parameters / pg_available_extension_versions
 were created and never filled. These tests pin each surface to what real
 PostgreSQL answers.
@@ -74,9 +74,24 @@ def test_pg_depend_refclassid_join_parses_and_runs(calcite_state):
     )
 
 
-def test_regclass_literal_still_matches_pg_description_classoid(calcite_state):
-    """KEEP: the short-name mapping the removed regex pre-pass used to provide."""
-    assert _scalar(calcite_state, "SELECT 'pg_catalog.pg_class'::regclass") == "pg_class"
+def test_regclass_literal_of_a_system_catalog_is_its_class_oid(calcite_state):
+    """pg_description.classoid holds the class oid, so a catalog regclass literal is that oid."""
+    assert _scalar(calcite_state, "SELECT 'pg_catalog.pg_class'::regclass") == 1259
+
+
+def test_pgjdbc_get_columns_description_join_runs():
+    """PgJDBC's getColumns LEFT JOINs pg_class on `dc.oid = dsc.classoid`; with any description
+    row present a text classoid made DuckDB fail the cast ("Could not convert string 'pg_class'
+    to INT32"), so every table looked column-less to JDBC clients such as Trino."""
+    state = _keyed_state(_JsonBackend())
+    assert _rows(
+        state,
+        "SELECT dsc.description FROM pg_catalog.pg_extension e "
+        "LEFT JOIN pg_catalog.pg_description dsc ON (e.oid = dsc.objoid) "
+        "LEFT JOIN pg_catalog.pg_class dc ON (dc.oid = dsc.classoid AND dc.relname = 'pg_class') "
+        "WHERE e.extname = 'json'",
+    ) == [("JSON operators -> Calcite JSON_VALUE/JSON_QUERY",)]
+    catalog.invalidate_catalog_cache()
 
 
 # --------------------------------------------------------------------------- 2
@@ -155,40 +170,20 @@ def test_obj_description_on_a_schema_qualified_argument(calcite_state):
 
 
 # --------------------------------------------------------------------------- 4
-# Real pg_class.reltuples.
+# pg_class.reltuples is 0 ("never analyzed"): the catalog never counts rows.
 
 
-def test_reltuples_are_real_row_counts(calcite_state):
+def test_reltuples_are_never_counted(calcite_state):
     rows = _rows(
         calcite_state,
         "SELECT lower(relname), reltuples FROM pg_catalog.pg_class "
         "WHERE lower(relname) IN ('emps', 'depts') AND relkind = 'r' ORDER BY 1",
     )
-    assert rows == [("depts", 4.0), ("emps", 10.0)]
+    assert rows == [("depts", 0.0), ("emps", 0.0)]
 
 
-def test_row_count_mode_off_disables_counting(calcite_backend):
-    catalog.set_row_count_mode("off")
-    try:
-        state = launcher.build_state(backend=calcite_backend)
-        populate_state(calcite_backend.connection, state)
-        rows = _rows(
-            state,
-            "SELECT reltuples FROM pg_catalog.pg_class WHERE lower(relname) = 'emps'",
-        )
-        assert rows == [(0.0,)]
-    finally:
-        catalog.set_row_count_mode("count")
-        catalog.invalidate_catalog_cache()
-
-
-def test_row_count_mode_rejects_an_unknown_mode():
-    with pytest.raises(ValueError):
-        catalog.set_row_count_mode("estimate")
-
-
-def test_backend_table_row_count_is_exact(calcite_backend):
-    assert calcite_backend.table_row_count("SALES", "emps") == 10
+def test_backend_has_no_row_counter(calcite_backend):
+    assert not hasattr(calcite_backend, "table_row_count")
 
 
 # --------------------------------------------------------------------------- 5
@@ -341,6 +336,53 @@ def test_no_extensions_declared_means_no_rows():
 # information_schema.referential_constraints populated from the FK metadata.
 
 
+def test_pg_get_constraintdef_writes_each_definition_as_postgres_does():
+    """SQLAlchemy reflects a table's foreign keys by matching FOREIGN KEY (a) REFERENCES t(b);
+    the function answered NULL, so Superset's table metadata failed."""
+    state = _keyed_state(StubBackend())
+    rows = _rows(
+        state,
+        "SELECT contype, pg_get_constraintdef(oid) FROM pg_catalog.pg_constraint "
+        "ORDER BY contype, oid",
+    )
+    by_type = {contype: definition for contype, definition in rows}
+    assert by_type["p"] in ("PRIMARY KEY (deptno)", "PRIMARY KEY (empno)")
+    assert by_type["f"] == 'FOREIGN KEY (deptno) REFERENCES "SALES".depts(deptno)'
+    catalog.invalidate_catalog_cache()
+
+
+def test_a_join_to_a_column_that_is_no_key_is_not_published_as_a_foreign_key():
+    """A PostgreSQL foreign key always references a primary or unique key; a semantic join to
+    any other column would leave referential_constraints with no key to name."""
+    depts = TableMeta(1, "postgres", "SALES", "depts", "SALES.depts")
+    emps = TableMeta(2, "postgres", "SALES", "emps", "SALES.emps")
+    ctx = CompilationContext(
+        tables={depts.type_name: depts, emps.type_name: emps},
+        pk_columns={1: ["deptno"], 2: ["empno"]},
+        joins={
+            ("SALES.emps", "dname"): JoinMeta(
+                source_column="dname",
+                target_column="dname",
+                target=depts,
+                cardinality="many-to-one",
+            )
+        },
+    )
+    column_types = {
+        1: [ColumnMeta("deptno", "INTEGER", False), ColumnMeta("dname", "VARCHAR")],
+        2: [ColumnMeta("empno", "INTEGER", False), ColumnMeta("dname", "VARCHAR")],
+    }
+    state = launcher.build_state(backend=StubBackend())
+    install_catalog(state, ctx, column_types)
+    assert _rows(state, "SELECT count(*) FROM pg_catalog.pg_constraint WHERE contype = 'f'") == [
+        (0,)
+    ]
+    assert _rows(state, "SELECT count(*) FROM information_schema.referential_constraints") == [
+        (0,)
+    ]
+    catalog.invalidate_catalog_cache()
+
+
 def test_referential_constraints_link_each_fk_to_the_referenced_key():
     state = _keyed_state(StubBackend())
     rows = _rows(
@@ -385,3 +427,75 @@ def test_keyless_catalog_reports_no_referential_constraints(calcite_state):
     assert _rows(
         calcite_state, "SELECT count(*) FROM information_schema.referential_constraints"
     ) == [(0,)]
+
+
+# Provisa's foreign-key read (provisa/discovery/fk_introspect.py): the standard constraint views
+# joined to each other, the referenced columns paired by position_in_unique_constraint.
+_FK_PAIRS = """
+FROM information_schema.table_constraints      AS tc
+JOIN information_schema.key_column_usage       AS kcu
+    ON kcu.constraint_schema = tc.constraint_schema
+   AND kcu.constraint_name   = tc.constraint_name
+   AND kcu.table_schema      = tc.table_schema
+   AND kcu.table_name        = tc.table_name
+JOIN information_schema.referential_constraints AS rc
+    ON rc.constraint_schema = tc.constraint_schema
+   AND rc.constraint_name   = tc.constraint_name
+JOIN information_schema.key_column_usage       AS ref
+    ON ref.constraint_schema = rc.unique_constraint_schema
+   AND ref.constraint_name   = rc.unique_constraint_name
+   AND ref.ordinal_position  = kcu.position_in_unique_constraint
+WHERE tc.constraint_type = 'FOREIGN KEY'
+"""
+_FK_OUTBOUND = (
+    "SELECT kcu.column_name AS fk_column, ref.table_name AS ref_table, "
+    "ref.column_name AS ref_column " + _FK_PAIRS + " AND tc.table_schema = 'SALES' "
+    "AND tc.table_name = 'emps' ORDER BY tc.constraint_name, kcu.ordinal_position"
+)
+_FK_INBOUND = (
+    "SELECT kcu.table_name AS fk_table, kcu.column_name AS fk_column, "
+    "ref.column_name AS ref_column " + _FK_PAIRS + " AND ref.table_schema = 'SALES' "
+    "AND ref.table_name = 'depts' ORDER BY tc.constraint_name, kcu.ordinal_position"
+)
+
+
+def test_the_constraint_views_are_answered_by_the_catalog_not_forwarded():
+    """Calcite's own information_schema has no referential_constraints (or table_constraints, or
+    key_column_usage), so a statement that reads one cannot be forwarded to it."""
+    for sql in (_FK_OUTBOUND, _FK_INBOUND):
+        assert catalog.classify(sql) == "INTERCEPT"
+    for view in (
+        "table_constraints",
+        "key_column_usage",
+        "referential_constraints",
+        "constraint_column_usage",
+        "check_constraints",
+    ):
+        assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "INTERCEPT", view
+
+
+def test_the_four_views_calcite_answers_are_still_forwarded():
+    for view in ("schemata", "tables", "columns", "views"):
+        assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "PASS_THROUGH", view
+
+
+def test_provisas_foreign_key_read_pairs_the_declared_keys_both_ways():
+    state = _keyed_state(StubBackend())
+    assert _rows(state, _FK_OUTBOUND) == [("deptno", "depts", "deptno")]
+    assert _rows(state, _FK_INBOUND) == [("emps", "deptno", "deptno")]
+    catalog.invalidate_catalog_cache()
+
+
+def test_a_source_that_declares_no_keys_gets_empty_results_not_an_error():
+    state = launcher.build_state(backend=StubBackend())
+    depts = TableMeta(1, "postgres", "SALES", "depts", "SALES.depts")
+    emps = TableMeta(2, "postgres", "SALES", "emps", "SALES.emps")
+    ctx = CompilationContext(tables={depts.type_name: depts, emps.type_name: emps})
+    install_catalog(
+        state,
+        ctx,
+        {1: [ColumnMeta("deptno", "INTEGER")], 2: [ColumnMeta("empno", "INTEGER")]},
+    )
+    assert _rows(state, _FK_OUTBOUND) == []
+    assert _rows(state, _FK_INBOUND) == []
+    catalog.invalidate_catalog_cache()

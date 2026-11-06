@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +22,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -75,15 +78,23 @@ public class FileJdbcDriverRequirementsTest {
     assertEquals(4096, get(sc, "getBatchSize"), "batch_size");
   }
 
-  @Test @Tag("FILE-146") void defaultsWhenOnlySchemaFile() throws Exception {
-    Object config = parseConfig("jdbc:calcite:;schema=file", new Properties());
+  @Test @Tag("FILE-146") void defaultsWhenOnlySchemaFileAndStoragePath() throws Exception {
+    Object config = parseConfig("jdbc:calcite:;schema=file;storage_path=/s", new Properties());
     Object sc = schemasOf(config).get(0);
     assertEquals("parquet", get(sc, "getEngineType"), "default engine is parquet");
     assertEquals(2048, get(sc, "getBatchSize"), "default batchSize is 2048");
-    assertEquals(System.getProperty("java.io.tmpdir") + "/calcite_file_storage",
-        get(sc, "getStoragePath"), "default storagePath under java.io.tmpdir");
-    assertEquals(System.getProperty("user.dir") + "/data",
+    assertEquals("/s", get(sc, "getStoragePath"), "storagePath as given");
+    assertEquals(LocalPaths.join(System.getProperty("user.dir"), "data"),
         get(sc, "getDataPath"), "default dataPath under user.dir");
+  }
+
+  @Test @Tag("FILE-146") void aFileSchemaWithoutStoragePathIsRefused() {
+    // REQ-1992: the storage path is the schema's base directory; there is no default
+    Exception e = assertThrows(Exception.class,
+        () -> parseConfig("jdbc:calcite:;schema=file", new Properties()));
+    Throwable cause = e instanceof java.lang.reflect.InvocationTargetException ? e.getCause() : e;
+    assertTrue(cause instanceof IllegalArgumentException, String.valueOf(cause));
+    assertTrue(cause.getMessage().contains("storage_path"), cause.getMessage());
   }
 
   @Test @Tag("FILE-146") void acceptsCalciteSchemaFileUrlOnly() throws Exception {

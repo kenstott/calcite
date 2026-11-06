@@ -601,25 +601,23 @@ public class ComparableArrayList<T extends Comparable<T>> extends ArrayList<T> {
 
 ### FileReaderException
 
-Specific exception for file reading errors.
+The HTML reader throws `FileReaderException`, a `SQLException` whose SQLState names the failure mode.
 
 ```java
 public class FileReaderException extends SQLException {
-    public FileReaderException(String message);
-    public FileReaderException(String message, Throwable cause);
-    public FileReaderException(String message, String sqlState);
+    public static final String TABLE_NOT_FOUND = "42S02";
+    public static final String CONFIGURATION = "42000";
+    public static final String FILE_ACCESS = "HY000";
+    public static final String STORAGE_CONNECT = "08001";
 }
 ```
 
-**Common error codes:**
-
-| SQL State | Description |
+| SQL State | Raised when |
 |-----------|-------------|
-| `42000` | Syntax error in configuration |
-| `42S02` | Table not found |
-| `HY000` | General file access error |
-| `08001` | Unable to connect to storage |
-| `22018` | Data type conversion error |
+| `42S02` | The document has no table, or the selector or index matches none |
+| `42000` | The selector matches several elements, or an element that is not a table |
+| `HY000` | The file is missing or cannot be read |
+| `08001` | An S3 or HTTP source has no URL |
 
 ## Performance Metrics
 

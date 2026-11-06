@@ -10,6 +10,8 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
+import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.etl.HttpSource;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.refresh.ConversionFileWatcher;
@@ -70,10 +72,9 @@ public class WatcherRawCacheRequirementsTest {
     // hermetic test; the 60000ms fallback at the scheduling site is asserted indirectly here by
     // exercising the null-interval registration path without error.
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
-    watcher.registerSchemaBaseDirectory("file133_schema", tempDir);
     File excelFile = new File(tempDir, "interval.xlsx");
     Files.write(excelFile.toPath(), new byte[]{0x50, 0x4B});
-    watcher.watchFile("file133_schema", excelFile, (Duration) null);
+    watcher.watchFile("file133_schema", excelFile, (Duration) null, new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
     // No exception == null interval accepted (default 60000ms applied at the scheduling site).
     assertTrue(excelFile.exists());
   }
@@ -83,12 +84,11 @@ public class WatcherRawCacheRequirementsTest {
     // A Markdown source converts cleanly; an mtime increase must trigger conversion AND advance the
     // watcher's stored lastModified so the same change is not re-processed on the next tick.
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
-    watcher.registerSchemaBaseDirectory("file133_md", tempDir);
 
     File mdFile = new File(tempDir, "convert_ok.md");
     Files.write(mdFile.toPath(),
         "| a | b |\n|---|---|\n| 1 | 2 |".getBytes(StandardCharsets.UTF_8));
-    watcher.watchFile("file133_md", mdFile, Duration.ofMinutes(1));
+    watcher.watchFile("file133_md", mdFile, Duration.ofMinutes(1), new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
 
     long stored = readStoredMtime(watcher, "file133_md", mdFile);
 
@@ -111,12 +111,11 @@ public class WatcherRawCacheRequirementsTest {
     // by checkFile's outer try). Because the failure short-circuits before `info.lastModified =
     // currentModified`, the stored mtime must stay put — the next tick will retry.
     ConversionFileWatcher watcher = ConversionFileWatcher.getInstance();
-    watcher.registerSchemaBaseDirectory("file133_xls", tempDir);
 
     File xlsxFile = new File(tempDir, "convert_fail.xlsx");
     Files.write(xlsxFile.toPath(),
         "not-a-real-xlsx".getBytes(StandardCharsets.UTF_8));
-    watcher.watchFile("file133_xls", xlsxFile, Duration.ofMinutes(1));
+    watcher.watchFile("file133_xls", xlsxFile, Duration.ofMinutes(1), new SourceFileConversion(null, null, null, "SMART_CASING", "SMART_CASING", new CrawlerConfiguration()));
 
     long stored = readStoredMtime(watcher, "file133_xls", xlsxFile);
 

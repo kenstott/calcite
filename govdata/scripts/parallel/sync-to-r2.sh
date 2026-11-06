@@ -213,7 +213,10 @@ _apply_pins() {
     # "HTTP GET ... -m1.avro (404)") could still be missing, and would stay missing forever
     # once this cheap check started trusting an unverified match.
     cur=$(rclone cat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
-    if [ "$cur" = "$v" ] && [ "$(cat "$STATE_DIR/.closure-verified-$s-$t" 2>/dev/null || true)" = "$v" ]; then
+    # (tail -n 1: stamps written before the closure function stopped leaking its log lines to
+    # stdout hold log text above the version; each was written only after a successful publish,
+    # so its last line is still the verified version.)
+    if [ "$cur" = "$v" ] && [ "$(tail -n 1 "$STATE_DIR/.closure-verified-$s-$t" 2>/dev/null || true)" = "$v" ]; then
       _same=$(( _same + 1 ))
       continue
     fi
@@ -518,7 +521,14 @@ for s in "${_schemas[@]}"; do
         _rc_ptr=0
       fi
     else
-      log_error "sync-to-r2: [$s] data pass failed (rc=$_rc_data) — skipping pointer pass, R2 pointer left untouched"
+      # A pointer does not depend on the bulk data pass: each is published only after its own
+      # closure (ClosureResolver: exactly the files that snapshot names) is copied and read back.
+      # So a failed or capped slice must not strand every table's pointer behind it — that left R2
+      # days behind for weather. The cost is cheap: two tiny GETs per table, and a closure copy
+      # only for a table whose pointer actually moved.
+      log_error "sync-to-r2: [$s] data pass failed (rc=$_rc_data) — publishing closure-verified pointers anyway"
+      [ -z "$_pins" ] && _pins=$(_capture_pins "$s" || true)
+      _apply_pins "$s" "$_pins"
       _rc_ptr=1
     fi
     set -e

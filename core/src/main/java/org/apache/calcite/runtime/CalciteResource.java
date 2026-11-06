@@ -209,15 +209,19 @@ public interface CalciteResource {
   ExInst<CalciteException> tableNotFound(String tableName);
 
   @BaseMessage("Object ''{0}'' not found")
+  @Property(name = "SQLSTATE", value = "42S02")
   ExInst<SqlValidatorException> objectNotFound(String a0);
 
   @BaseMessage("Object ''{0}'' not found within ''{1}''")
+  @Property(name = "SQLSTATE", value = "42S02")
   ExInst<SqlValidatorException> objectNotFoundWithin(String a0, String a1);
 
   @BaseMessage("Object ''{0}'' not found; did you mean ''{1}''?")
+  @Property(name = "SQLSTATE", value = "42S02")
   ExInst<SqlValidatorException> objectNotFoundDidYouMean(String a0, String a1);
 
   @BaseMessage("Object ''{0}'' not found within ''{1}''; did you mean ''{2}''?")
+  @Property(name = "SQLSTATE", value = "42S02")
   ExInst<SqlValidatorException> objectNotFoundWithinDidYouMean(String a0,
       String a1, String a2);
 

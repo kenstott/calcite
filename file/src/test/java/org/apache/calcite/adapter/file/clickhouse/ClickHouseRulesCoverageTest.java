@@ -248,7 +248,16 @@ class ClickHouseRulesCoverageTest {
         ClickHouseHLLCountDistinctRule.INSTANCE.getOperand().getMatchedClass());
   }
 
-  @Test void testHLLMatchesCountDistinct() {
+  @Test void testHLLMatchesApproxCountDistinct() {
+    assertTrue(hllMatches(true), "Should match APPROX_COUNT_DISTINCT(...)");
+  }
+
+  @Test void testHLLDoesNotMatchExactCountDistinct() {
+    // An exact COUNT(DISTINCT) stays exact (C-18): the sketch answers only an estimate request
+    assertFalse(hllMatches(false), "Should not match an exact COUNT(DISTINCT ...)");
+  }
+
+  private static boolean hllMatches(boolean approximate) {
     RelOptRuleCall call = mock(RelOptRuleCall.class);
     Aggregate aggregate = mock(Aggregate.class);
 
@@ -258,11 +267,11 @@ class ClickHouseRulesCoverageTest {
     AggregateCall countDistinct = mock(AggregateCall.class);
     when(countDistinct.getAggregation()).thenReturn(SqlStdOperatorTable.COUNT);
     when(countDistinct.isDistinct()).thenReturn(true);
+    when(countDistinct.isApproximate()).thenReturn(approximate);
     when(aggregate.getAggCallList())
         .thenReturn(ImmutableList.of(countDistinct));
 
-    boolean matches = ClickHouseHLLCountDistinctRule.INSTANCE.matches(call);
-    assertTrue(matches, "Should match COUNT(DISTINCT ...)");
+    return ClickHouseHLLCountDistinctRule.INSTANCE.matches(call);
   }
 
   @Test void testHLLDoesNotMatchWithGroupBy() {

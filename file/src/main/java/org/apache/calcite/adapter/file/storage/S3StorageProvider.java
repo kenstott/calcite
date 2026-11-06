@@ -20,6 +20,8 @@ import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.awscore.AwsRequestOverrideConfiguration;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.exception.ApiCallAttemptTimeoutException;
+import software.amazon.awssdk.core.exception.ApiCallTimeoutException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
@@ -92,7 +94,13 @@ public class S3StorageProvider implements StorageProvider {
           .apiCallTimeout(Duration.ofSeconds(90))
           .build();
 
+  /** Attempts per LIST page; a timed-out page is requested again from the same continuation token. */
+  private static final int LIST_PAGE_ATTEMPTS = 5;
+
   private final S3Client s3Client;
+
+  /** Base of the exponential wait between attempts at a timed-out LIST page. */
+  long listRetryBackoffMillis = 2000L;
 
   // Persistent cache for restart-survivable caching
   private final PersistentStorageCache persistentCache;
@@ -113,6 +121,11 @@ public class S3StorageProvider implements StorageProvider {
    */
   public S3StorageProvider(java.util.Map<String, Object> config) {
     this(null, config);
+  }
+
+  /** A provider over a caller-supplied client and a config carrying the {@code directory}. */
+  static S3StorageProvider forTesting(S3Client s3Client, java.util.Map<String, Object> config) {
+    return new S3StorageProvider(s3Client, config);
   }
 
   /**
@@ -208,8 +221,9 @@ public class S3StorageProvider implements StorageProvider {
       // Ensure it ends with /
       this.baseS3Path = directory.endsWith("/") ? directory : directory + "/";
 
-      // Ensure bucket exists - create if needed
-      ensureBucketExists(this.baseS3Path);
+      // The bucket is NOT checked here: a HEAD at construction is a network call on every start,
+      // read-only servers included. It is checked once, before the first write (see
+      // ensureBaseBucketBeforeWrite).
     } else {
       this.baseS3Path = null;
     }
@@ -263,12 +277,48 @@ public class S3StorageProvider implements StorageProvider {
     }
   }
 
+  // Whether the base bucket has been checked (and created if absent) by a write on this provider.
+  private volatile boolean baseBucketChecked;
+
+  /**
+   * Number of bucket-exists checks this provider has issued; a provider that only reads issues
+   * none.
+   */
+  private final java.util.concurrent.atomic.AtomicInteger bucketChecks =
+      new java.util.concurrent.atomic.AtomicInteger();
+
+  /** Count of bucket-exists (HEAD) checks issued by this provider so far. */
+  int bucketCheckCount() {
+    return bucketChecks.get();
+  }
+
+  /**
+   * Before the first write into the configured base bucket, confirms the bucket exists and
+   * creates it when absent. Reads never call this: a missing bucket is reported by the read
+   * itself, and a server that only reads makes no bucket call at start.
+   */
+  private void ensureBaseBucketBeforeWrite(String writeBucket) throws IOException {
+    if (baseBucketChecked || baseS3Path == null) {
+      return;
+    }
+    if (!parseS3Uri(baseS3Path).bucket.equals(writeBucket)) {
+      return;
+    }
+    synchronized (this) {
+      if (!baseBucketChecked) {
+        ensureBucketExists(baseS3Path);
+        baseBucketChecked = true;
+      }
+    }
+  }
+
   /**
    * Ensures that the S3 bucket exists, creating it if necessary.
    *
    * @param s3Path Full S3 path (e.g., "s3://bucket-name/prefix/")
    */
   private void ensureBucketExists(String s3Path) {
+    bucketChecks.incrementAndGet();
     try {
       S3Uri s3Uri = parseS3Uri(s3Path);
       String bucketName = s3Uri.bucket;
@@ -315,7 +365,7 @@ public class S3StorageProvider implements StorageProvider {
         if (continuationToken != null) {
           requestBuilder.continuationToken(continuationToken);
         }
-        result = s3Client.listObjectsV2(requestBuilder.build());
+        result = listPageWithRetry(requestBuilder.build(), fullPath, page + 1);
         page++;
 
         for (S3Object summary : result.contents()) {
@@ -359,6 +409,33 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     return entries;
+  }
+
+  /**
+   * Requests one LIST page, requesting it again after a call or attempt timeout. A timeout says the
+   * store was slow, not that the page is empty, so it is retried with exponential backoff and, once
+   * the attempts are spent, thrown to the caller; any other failure is thrown at once.
+   */
+  private ListObjectsV2Response listPageWithRetry(ListObjectsV2Request request, String fullPath,
+      int page) {
+    for (int attempt = 1;; attempt++) {
+      try {
+        return s3Client.listObjectsV2(request);
+      } catch (ApiCallTimeoutException | ApiCallAttemptTimeoutException e) {
+        if (attempt >= LIST_PAGE_ATTEMPTS) {
+          throw e;
+        }
+        long wait = listRetryBackoffMillis << (attempt - 1);
+        LOGGER.warn("S3 LIST {} page {} timed out (attempt {}/{}); retrying in {} ms",
+            fullPath, page, attempt, LIST_PAGE_ATTEMPTS, wait);
+        try {
+          Thread.sleep(wait);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw e;
+        }
+      }
+    }
   }
 
   @Override public FileMetadata getMetadata(String path) throws IOException {
@@ -687,6 +764,7 @@ public class S3StorageProvider implements StorageProvider {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
+    ensureBaseBucketBeforeWrite(s3Uri.bucket);
 
     PutObjectRequest.Builder requestBuilder = PutObjectRequest.builder()
         .bucket(s3Uri.bucket)
@@ -727,6 +805,7 @@ public class S3StorageProvider implements StorageProvider {
   private void streamMultipartUpload(String path, InputStream content) throws IOException {
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
+    ensureBaseBucketBeforeWrite(s3Uri.bucket);
     final int partSize = 16 * 1024 * 1024; // 16 MB parts
 
     String contentType = guessContentType(path);
@@ -884,6 +963,7 @@ public class S3StorageProvider implements StorageProvider {
     }
 
     S3Uri s3Uri = parseS3Uri(fullPath);
+    ensureBaseBucketBeforeWrite(s3Uri.bucket);
 
     try {
       s3Client.putObject(
@@ -1040,8 +1120,8 @@ public class S3StorageProvider implements StorageProvider {
    */
   @Override public String getStagingDirectory(String purpose) throws IOException {
     if (baseS3Path == null || baseS3Path.isEmpty()) {
-      // Fall back to default (system temp directory) if no S3 path configured
-      String tempDir = System.getProperty("java.io.tmpdir");
+      // No S3 path configured: stage in the process's staging directory (REQ-1992)
+      String tempDir = org.apache.calcite.adapter.file.StagingDirectory.get().getPath();
       String stagingPath = tempDir + "/.staging/" + purpose;
       createDirectories(stagingPath);
       return stagingPath;
@@ -1067,6 +1147,7 @@ public class S3StorageProvider implements StorageProvider {
     String fullDest = toFullPath(destination);
     S3Uri sourceUri = parseS3Uri(fullSource);
     S3Uri destUri = parseS3Uri(fullDest);
+    ensureBaseBucketBeforeWrite(destUri.bucket);
 
     try {
       // Check if source exists

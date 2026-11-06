@@ -29,6 +29,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
@@ -1245,11 +1246,22 @@ public class ConversionMetadata {
       Path directory = dataDirectory.toPath().toAbsolutePath().normalize();
       Path file = sourceFile.toPath().toAbsolutePath().normalize();
       if (file.startsWith(directory)) {
-        return dataDirectory.getCanonicalFile().toPath()
+        return Paths.get(linksResolved(dataDirectory))
             .resolve(directory.relativize(file)).toString();
       }
     }
-    return sourceFile.getCanonicalPath();
+    return linksResolved(sourceFile);
+  }
+
+  /**
+   * The canonical path of a file with every link resolved. On Windows before JDK 21
+   * {@link File#getCanonicalPath()} leaves symbolic links in place, so a file that exists
+   * is resolved through {@link Path#toRealPath}; one that does not exist cannot be, and
+   * keeps its canonical path.
+   */
+  private static String linksResolved(File file) throws IOException {
+    File canonical = file.getCanonicalFile();
+    return canonical.exists() ? canonical.toPath().toRealPath().toString() : canonical.getPath();
   }
 
   /**

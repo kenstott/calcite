@@ -98,6 +98,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -118,6 +119,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -145,6 +147,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -166,6 +169,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       // Environment variable substitution can produce String "true"
       operand.put("ephemeralCache", "true");
 
@@ -186,6 +190,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeral_cache", true);
 
       Schema schema =
@@ -205,6 +210,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("batchSize", 4096);
       operand.put("memoryThreshold", 128L * 1024 * 1024);
@@ -226,6 +232,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("tableNameCasing", "SMART_CASING");
       operand.put("columnNameCasing", "SMART_CASING");
@@ -255,6 +262,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("recursive", Boolean.TRUE);
 
@@ -275,6 +283,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("flatten", Boolean.TRUE);
 
@@ -295,6 +304,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("primeCache", Boolean.FALSE);
 
@@ -315,6 +325,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("comment", "Test schema for unit tests");
 
@@ -335,6 +346,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("canonicalSchemaName", "mycanon");
 
@@ -350,7 +362,7 @@ public class FileSchemaFactoryTest {
 
   @Test public void testSanitizeOperandMasksPassword() throws Exception {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/some/path");
+    operand.put("directory",  "/some/path");
     operand.put("password", "secret123");
     operand.put("dbPassword", "mysecret");
 
@@ -379,7 +391,7 @@ public class FileSchemaFactoryTest {
 
   @Test public void testSanitizeOperandHandlesNullValue() throws Exception {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/path");
+    operand.put("directory",  "/path");
     operand.put("nullField", null);
 
     Map<String, Object> sanitized = invokeSanitizeOperand(operand);
@@ -534,7 +546,7 @@ public class FileSchemaFactoryTest {
 
   @Test public void testSanitizeOperandPassesThroughNonSensitiveValues() throws Exception {
     Map<String, Object> operand = new HashMap<>();
-    operand.put("directory", "/data/files");
+    operand.put("directory",  "/data/files");
     operand.put("ephemeralCache", true);
     operand.put("batchSize", 2048);
     operand.put("recursive", false);
@@ -558,7 +570,7 @@ public class FileSchemaFactoryTest {
       System.setProperty("user.dir", tempDir.toString());
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "/some/path");
+      operand.put("directory",  "/some/path");
       operand.put("ephemeralCache", true);
 
       invokeWriteDebugModel("testschema", operand, "root");
@@ -591,7 +603,7 @@ public class FileSchemaFactoryTest {
       System.setProperty("user.dir", tempDir.toString());
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "/data");
+      operand.put("directory",  "/data");
       operand.put("password", "supersecret");
       operand.put("secretKey", "topsecret");
 
@@ -623,7 +635,7 @@ public class FileSchemaFactoryTest {
       System.setProperty("user.dir", tempDir.toString());
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "/path");
+      operand.put("directory",  "/path");
 
       invokeWriteDebugModel("nullparent", operand, null);
 
@@ -646,7 +658,7 @@ public class FileSchemaFactoryTest {
       System.setProperty("user.dir", tempDir.toString());
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "/path");
+      operand.put("directory",  "/path");
 
       invokeWriteDebugModel("MySchema", operand, "root");
 
@@ -675,6 +687,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -695,6 +708,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -721,6 +735,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -753,6 +768,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -779,6 +795,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -800,7 +817,7 @@ public class FileSchemaFactoryTest {
       SchemaPlus rootSchema = calciteConn.getRootSchema();
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "s3://my-bucket/data");
+      operand.put("directory",  "s3://my-bucket/data");
       operand.put("storageType", "s3");
       // No credentials provided
 
@@ -816,6 +833,7 @@ public class FileSchemaFactoryTest {
       SchemaPlus rootSchema = calciteConn.getRootSchema();
 
       Map<String, Object> operand = new HashMap<>();
+      operand.put("baseDirectory", tempDir.toString());
       // No directory, no storageType, no tables
       operand.put("ephemeralCache", true);
 
@@ -836,6 +854,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       // Create first schema
@@ -854,7 +873,7 @@ public class FileSchemaFactoryTest {
       SchemaPlus rootSchema = calciteConn.getRootSchema();
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "s3://bucket/path");
+      operand.put("directory",  "s3://bucket/path");
       // No explicit storageType - should auto-detect
       Map<String, Object> storageConfig = new HashMap<>();
       storageConfig.put("accessKeyId", "AKIA1234");
@@ -884,7 +903,7 @@ public class FileSchemaFactoryTest {
       SchemaPlus rootSchema = calciteConn.getRootSchema();
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "hdfs://namenode:8020/data");
+      operand.put("directory",  "hdfs://namenode:8020/data");
       operand.put("ephemeralCache", true);
 
       // Should auto-detect HDFS storage type; actual creation may fail
@@ -906,7 +925,7 @@ public class FileSchemaFactoryTest {
       SchemaPlus rootSchema = calciteConn.getRootSchema();
 
       Map<String, Object> operand = new HashMap<>();
-      operand.put("directory", "https://example.com/data");
+      operand.put("directory",  "https://example.com/data");
       operand.put("ephemeralCache", true);
 
       try {
@@ -984,6 +1003,7 @@ public class FileSchemaFactoryTest {
       Map<String, Object> operand = new HashMap<>();
       // Use "sourceDirectory" instead of "directory"
       operand.put("sourceDirectory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
 
       Schema schema =
@@ -1031,6 +1051,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("executionEngine", "PARQUET");
 
@@ -1056,6 +1077,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("directoryPattern", "log_*.csv");
 
@@ -1076,6 +1098,7 @@ public class FileSchemaFactoryTest {
 
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("ephemeralCache", true);
       operand.put("glob", "report_*.csv");
 
@@ -1134,12 +1157,12 @@ public class FileSchemaFactoryTest {
   /**
    * Invokes the private static {@code writeDebugModel} method via reflection.
    */
-  private static void invokeWriteDebugModel(String schemaName,
+  private void invokeWriteDebugModel(String schemaName,
       Map<String, Object> operand, String parentSchemaName) throws Exception {
     Method method =
-        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", String.class, Map.class, String.class);
+        FileSchemaFactory.class.getDeclaredMethod("writeDebugModel", File.class, String.class, Map.class, String.class);
     method.setAccessible(true);
-    method.invoke(null, schemaName, operand, parentSchemaName);
+    method.invoke(null, tempDir.toFile(), schemaName, operand, parentSchemaName);
   }
 
   /**

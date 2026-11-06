@@ -13,10 +13,12 @@ package org.apache.calcite.adapter.govdata.law;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 import org.apache.calcite.adapter.file.etl.StorageAwareDataProvider;
 import org.apache.calcite.adapter.file.etl.VariableResolver;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 import org.apache.calcite.adapter.file.storage.StorageProviderFactory;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.govdata.GovDataException;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,7 +31,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -93,6 +94,7 @@ public class LdaApiProvider implements StorageAwareDataProvider {
   static final String ACTIVITIES = "lobbying_activities";
   static final String ACTIVITY_LOBBYISTS = "lobbying_activity_lobbyists";
   static final String ACTIVITY_GOVERNMENT_ENTITIES = "lobbying_activity_government_entities";
+  static final String ACTIVITY_BILLS = "lobbying_activity_bills";
   static final String FOREIGN_ENTITIES = "lobbying_foreign_entities";
   static final String AFFILIATED_ORGANIZATIONS = "lobbying_affiliated_organizations";
   static final String CONVICTION_DISCLOSURES = "lobbying_conviction_disclosures";
@@ -140,6 +142,8 @@ public class LdaApiProvider implements StorageAwareDataProvider {
         LdaApiProvider::activityLobbyists));
     SPECS.put(ACTIVITY_GOVERNMENT_ENTITIES, new Spec("filings", Kind.WINDOWED, "filing_uuid",
         LdaApiProvider::activityGovernmentEntities));
+    SPECS.put(ACTIVITY_BILLS, new Spec("filings", Kind.WINDOWED, "filing_uuid",
+        LdaApiProvider::activityBills));
     SPECS.put(FOREIGN_ENTITIES, new Spec("filings", Kind.WINDOWED, "filing_uuid",
         LdaApiProvider::foreignEntities));
     SPECS.put(AFFILIATED_ORGANIZATIONS, new Spec("filings", Kind.WINDOWED, "filing_uuid",
@@ -378,10 +382,11 @@ public class LdaApiProvider implements StorageAwareDataProvider {
     }
     List<String> stale = new ArrayList<String>();
     for (StorageProvider.FileEntry f : files) {
-      String path = f.getPath();
+      // a local cache on Windows lists its files with "\" between the directories
+      String path = LocalPaths.toSlashes(f.getPath());
       if (!f.isDirectory() && path.contains("/" + window + "__open-")
           && !path.contains("/" + todayKey + "/")) {
-        stale.add(path);
+        stale.add(f.getPath());
       }
     }
     if (!stale.isEmpty()) {
@@ -393,7 +398,7 @@ public class LdaApiProvider implements StorageAwareDataProvider {
 
   private static JsonNode fetchNode(String url, Map<String, String> headers,
       HttpSourceConfig.RateLimitConfig rateLimit) throws IOException {
-    HttpURLConnection conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
+    SharedHttpClient.Response conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
     try (InputStream in = conn.getInputStream()) {
       return MAPPER.readTree(in);
     } finally {
@@ -575,7 +580,7 @@ public class LdaApiProvider implements StorageAwareDataProvider {
         }
       }
       String url = n == 1 ? firstUrl : nextUrl;
-      HttpURLConnection conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
+      SharedHttpClient.Response conn = RetryableHttp.openWithRetry(url, headers, rateLimit, true);
       byte[] body;
       try (InputStream in = conn.getInputStream()) {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
@@ -808,6 +813,27 @@ public class LdaApiProvider implements StorageAwareDataProvider {
         r.put("activity_seq", Integer.valueOf(seq));
         r.put("government_entity_id", integer(g, "id"));
         r.put("government_entity_name", text(g, "name"));
+        out.add(r);
+      }
+    }
+  }
+
+  private static void activityBills(JsonNode f, List<Map<String, Object>> out) {
+    String uuid = requiredText(f, "filing_uuid");
+    String posted = requiredText(f, "dt_posted");
+    LocalDate postedDate = LocalDate.parse(posted.substring(0, 10));
+    int seq = 0;
+    for (JsonNode a : array(f, "lobbying_activities")) {
+      seq++;
+      for (LobbyingBillReferences.Ref ref
+          : LobbyingBillReferences.extract(text(a, "description"), postedDate)) {
+        Map<String, Object> r = row(uuid);
+        r.put("activity_seq", Integer.valueOf(seq));
+        r.put("congress", ref.congress);
+        r.put("bill_type", ref.billType);
+        r.put("bill_number", Integer.valueOf(ref.billNumber));
+        r.put("match_basis", ref.matchBasis);
+        r.put("reference_text", ref.referenceText);
         out.add(r);
       }
     }

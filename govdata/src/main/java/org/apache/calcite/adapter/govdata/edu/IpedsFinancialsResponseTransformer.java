@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.edu;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.CsvRecordReader;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
@@ -234,7 +235,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
   }
 
   static File downloadToTemp(String url) throws IOException {
-    File tmp = File.createTempFile("nces-zip-", ".zip");
+    File tmp = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("nces-zip-", ".zip");
     tmp.deleteOnExit();
     HttpURLConnection conn =
         (HttpURLConnection) URI.create(url).toURL().openConnection();
@@ -246,7 +247,7 @@ public class IpedsFinancialsResponseTransformer implements StreamingResponseTran
       tmp.delete();
       throw new IOException("HTTP " + status + " from " + url);
     }
-    try (InputStream in = conn.getInputStream();
+    try (InputStream in = CompleteBody.of(conn);
          FileOutputStream out = new FileOutputStream(tmp)) {
       byte[] buf = new byte[65536];
       int len;

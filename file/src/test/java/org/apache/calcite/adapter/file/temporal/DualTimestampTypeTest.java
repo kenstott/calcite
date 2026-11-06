@@ -101,6 +101,7 @@ public class DualTimestampTypeTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + parentDir.replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + parentDir.replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
@@ -194,8 +195,9 @@ public class DualTimestampTypeTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + parentDir.replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + parentDir.replace("\\", "\\\\") + "',\n"
         + "        executionEngine: '" + engine + "',\n"
-        + "        parquetCacheDirectory: '" + parentDir + "/test_cache_dual_ts_" + engine.toLowerCase() + "',\n"
+        + "        parquetCacheDirectory: '" + parentDir.replace("\\", "\\\\") + "/test_cache_dual_ts_" + engine.toLowerCase() + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
@@ -319,10 +321,21 @@ public class DualTimestampTypeTest {
     testInvalidAwareTimestamp();
   }
 
+  /**
+   * Returns a fresh directory per call: the schema scans every file in its
+   * directory, so tests running concurrently must not share one.
+   */
+  private static File newTestDir() throws java.io.IOException {
+    final File base = new File("build/test-temp");
+    base.mkdirs();
+    final File dir = java.nio.file.Files.createTempDirectory(base.toPath(), "dual-ts-").toFile();
+    dir.deleteOnExit();
+    return dir;
+  }
+
   private void testInvalidNaiveTimestamp() throws Exception {
     // Create a test directory for CSV files
-    final File testDir = new File("build/test-temp");
-    testDir.mkdirs();
+    final File testDir = newTestDir();
 
     // Create a CSV with timezone info in a TIMESTAMP column
     final File testFile = new File(testDir, "invalid_naive_test.csv");
@@ -347,6 +360,7 @@ public class DualTimestampTypeTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + parentDir.replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + parentDir.replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
@@ -404,8 +418,7 @@ public class DualTimestampTypeTest {
 
   private void testInvalidAwareTimestamp() throws Exception {
     // Create a test directory for CSV files
-    final File testDir = new File("build/test-temp");
-    testDir.mkdirs();
+    final File testDir = newTestDir();
 
     // Create a CSV without timezone info in a TIMESTAMPTZ column
     final File testFile = new File(testDir, "invalid_aware_test.csv");
@@ -430,6 +443,7 @@ public class DualTimestampTypeTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + parentDir.replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + parentDir.replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
@@ -487,8 +501,7 @@ public class DualTimestampTypeTest {
 
   @Test public void testMixedValidTimestamps() throws Exception {
     // Create a test directory for CSV files
-    final File testDir = new File("build/test-temp");
-    testDir.mkdirs();
+    final File testDir = newTestDir();
 
     // Create a CSV with multiple valid timestamp formats
     final File testFile = new File(testDir, "mixed_timestamps_test.csv");
@@ -519,6 +532,7 @@ public class DualTimestampTypeTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + parentDir.replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + parentDir.replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"

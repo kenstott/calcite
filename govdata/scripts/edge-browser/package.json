@@ -1,0 +1,10 @@
+{
+  "name": "edge-browser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Windows-side Edge driven over the DevTools protocol from WSL (Akamai refuses the Linux-side clients)",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}

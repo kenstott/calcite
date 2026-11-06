@@ -183,6 +183,9 @@ public class WatershedDataProvider implements StorageAwareDataProvider {
       String key      = level[1];
       String hucField = level[2];
       List<Map<String, Object>> records = queryHucLevel(gdbDir, layer, hucField);
+      if (records.isEmpty()) {
+        throw new IOException("WBD layer " + layer + " yielded no records from " + gdbDir);
+      }
       result.get(key).addAll(records);
       LOGGER.info("Parsed {} {} records from WBD GDB", records.size(), layer);
     }
@@ -197,8 +200,14 @@ public class WatershedDataProvider implements StorageAwareDataProvider {
     String gdbPath = gdbDir.toAbsolutePath().toString().replace("'", "\\'");
     String outPath = outFile.toAbsolutePath().toString().replace("'", "\\'");
 
+    // The extension loads only into the DuckDB it was built for, and this is the command-line
+    // tool on the PATH, not the bundled JDBC one: ask the tool which release it is.
     String spatialPath = org.apache.calcite.adapter.govdata.DuckDbExtensionInstaller
-        .getLocalExtensionPath("spatial");
+        .getLocalExtensionPath("spatial", cliDuckDbVersion());
+    if (!Files.exists(Path.of(spatialPath))) {
+      throw new IOException("DuckDB spatial extension not installed for the duckdb on the PATH: "
+          + spatialPath + " (run INSTALL spatial with that duckdb)");
+    }
     String sql = String.format(
         "LOAD '%s'; "
         + "COPY (SELECT lower(%s) AS huc_code, name, areasqkm "
@@ -229,13 +238,13 @@ public class WatershedDataProvider implements StorageAwareDataProvider {
     }
 
     if (exitCode != 0) {
-      LOGGER.error("DuckDB failed for layer {} (exit {}): {}", layer, exitCode, procOutput);
-      return new ArrayList<>();
+      throw new IOException("DuckDB failed for layer " + layer + " (exit " + exitCode + "): "
+          + procOutput);
     }
 
     List<Map<String, Object>> records = new ArrayList<>();
     if (!Files.exists(outFile)) {
-      return records;
+      throw new IOException("DuckDB exited 0 for layer " + layer + " but wrote no " + outFile);
     }
 
     try (BufferedReader br = new BufferedReader(
@@ -274,6 +283,37 @@ public class WatershedDataProvider implements StorageAwareDataProvider {
 
     Files.deleteIfExists(outFile);
     return records;
+  }
+
+  /** The release of the {@code duckdb} command-line tool on the PATH, e.g. "1.5.5". */
+  private static String cliDuckDbVersion() throws IOException {
+    ProcessBuilder pb = new ProcessBuilder("duckdb", "-noheader", "-list", "-c",
+        "SELECT library_version FROM pragma_version()");
+    pb.redirectErrorStream(true);
+    Process proc = pb.start();
+    String out;
+    try (BufferedReader br = new BufferedReader(
+        new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
+      out = br.readLine();
+    }
+    try {
+      if (proc.waitFor() != 0) {
+        throw new IOException("duckdb --version query failed: " + out);
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException("Interrupted while asking duckdb for its version", e);
+    }
+    return parseDuckDbVersion(out);
+  }
+
+  /** "v1.5.5" (what pragma_version() prints) to "1.5.5". */
+  static String parseDuckDbVersion(String libraryVersion) {
+    if (libraryVersion == null || !libraryVersion.trim().matches("v?\\d+\\.\\d+\\.\\d+")) {
+      throw new IllegalStateException("Unrecognised DuckDB version: '" + libraryVersion + "'");
+    }
+    String v = libraryVersion.trim();
+    return v.startsWith("v") ? v.substring(1) : v;
   }
 
   private Path findGdbDir(Path dir) throws IOException {

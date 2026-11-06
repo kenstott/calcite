@@ -53,7 +53,6 @@ public class SimpleHLLCountDistinctRule extends RelRule<SimpleHLLCountDistinctRu
   public static final SimpleHLLCountDistinctRule APPROX_ONLY_INSTANCE =
       (SimpleHLLCountDistinctRule) Config.APPROX_ONLY.toRule();
 
-  @SuppressWarnings("UnusedVariable")
   private final boolean approxOnly;
 
   private SimpleHLLCountDistinctRule(Config config) {
@@ -115,8 +114,12 @@ public class SimpleHLLCountDistinctRule extends RelRule<SimpleHLLCountDistinctRu
       return false;
     }
 
-    // For testing: ALWAYS optimize COUNT(DISTINCT) with HLL
-    // This should make COUNT(DISTINCT) instantaneous
+    // An exact COUNT(DISTINCT) stays exact: the approx-only instance rewrites only a call that
+    // asked for an estimate (APPROX_COUNT_DISTINCT) (FILE-124, C-18)
+    if (approxOnly && !aggCall.isApproximate()) {
+      return false;
+    }
+
     LOGGER.debug("[HLL OPTIMIZATION]: Attempting to optimize COUNT(DISTINCT) with HLL sketch");
     return true;
   }

@@ -126,6 +126,8 @@ public class FileClientModule
 
         Map<String, Object> operand = new LinkedHashMap<>();
         operand.put("directory", directory);
+        // REQ-1992: every file the adapter writes for the catalog goes under this directory
+        operand.put("baseDirectory", config.getBaseDirectory());
         if (pattern != null) {
             operand.put("glob", pattern);
         }

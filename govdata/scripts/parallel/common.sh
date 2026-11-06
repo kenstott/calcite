@@ -75,6 +75,31 @@ _resolve_java21() {
 GOVDATA_JAVA_BIN="$(_resolve_java21)"
 export GOVDATA_JAVA_BIN
 
+# ── Worker truststore: the JDK's cacerts plus the extra anchors in certs/ ───────
+# Some sources chain to roots the JDK does not ship yet (www.cbr.washington.edu -> emSign ECC
+# Root CA - G3). Rather than edit the system JDK, build a private copy of its cacerts with the
+# extra anchors and point only the worker JVMs at it. Rebuilt whenever the JDK's cacerts or a
+# cert in certs/ is newer than the truststore.
+_build_worker_truststore() {
+  local jhome certs_dir ts cacerts keytool f
+  jhome="$("$GOVDATA_JAVA_BIN" -XshowSettings:properties -version 2>&1 | sed -n 's/^ *java.home = //p')"
+  [ -n "$jhome" ] && [ -f "$jhome/lib/security/cacerts" ] || return 0
+  certs_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/certs"
+  ls "$certs_dir"/*.pem >/dev/null 2>&1 || return 0
+  cacerts="$jhome/lib/security/cacerts"
+  keytool="$jhome/bin/keytool"
+  ts="$GOVDATA_TMPDIR/worker-truststore.jks"
+  if [ -f "$ts" ] && [ "$ts" -nt "$cacerts" ] && [ -z "$(find "$certs_dir" -name '*.pem' -newer "$ts")" ]; then
+    echo "$ts"; return
+  fi
+  cp -f "$cacerts" "$ts.tmp.$$" && chmod u+w "$ts.tmp.$$" || return 1
+  for f in "$certs_dir"/*.pem; do
+    "$keytool" -importcert -noprompt -trustcacerts -keystore "$ts.tmp.$$" -storepass changeit \
+        -alias "extra-$(basename "$f" .pem)" -file "$f" >/dev/null || { rm -f "$ts.tmp.$$"; return 1; }
+  done
+  mv -f "$ts.tmp.$$" "$ts" && echo "$ts"
+}
+
 # ── rclone on PATH regardless of invocation context ─────────────────────────────
 # sync-to-r2.sh shells out to `rclone` directly (no absolute path, unlike
 # GOVDATA_JAVA_BIN above). That resolves fine from an interactive login shell, but
@@ -99,6 +124,17 @@ GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
 mkdir -p "$GOVDATA_TMPDIR"
 export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
 GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djava.io.tmpdir=$GOVDATA_TMPDIR"
+# Host-wide sec.gov cool-down (marker lives in $GOVDATA_TMPDIR, the java.io.tmpdir above).
+source "$(dirname "${BASH_SOURCE[0]}")/../sec-cooldown.sh"
+sec_cooldown_init
+# The file adapter and the ETL never read java.io.tmpdir for their own temporary files; they
+# stage in the directory this property names, which they require (REQ-1992).
+GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Dcalcite.file.staging.directory=$GOVDATA_TMPDIR"
+GOVDATA_WORKER_TRUSTSTORE="$(_build_worker_truststore)" \
+  || { echo "ERROR: could not build the worker truststore" >&2; return 1 2>/dev/null || exit 1; }
+if [ -n "$GOVDATA_WORKER_TRUSTSTORE" ]; then
+  GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djavax.net.ssl.trustStore=$GOVDATA_WORKER_TRUSTSTORE -Djavax.net.ssl.trustStorePassword=changeit"
+fi
 
 # Load base credentials from govdata/.env.prod, then parallel overrides.
 # Caller-exported variables take precedence: if GOVDATA_START_YEAR or
@@ -171,11 +207,21 @@ load_env() {
   # Source DQ overrides only in an explicit DQ run (GOVDATA_DQ=true). Gating on file
   # existence alone armed the -dq bucket reroute on every prod/preprod run.
   local env_dq="$GOVDATA_ROOT/.env.dq"
-  if [ "${GOVDATA_DQ:-}" = "true" ] && [ -f "$env_dq" ]; then
+  if [ "${GOVDATA_DQ:-}" = "true" ]; then
+    if [ ! -f "$env_dq" ]; then
+      echo "FATAL: GOVDATA_DQ=true but $env_dq does not exist, so the DQ bucket (GOVDATA_DQ_BUCKET) is unknown;" \
+           "refusing to run, since the target would resolve to the production bucket." >&2
+      return 1 2>/dev/null || exit 1
+    fi
     set -a
     # shellcheck disable=SC1090
     source <(tr -d '\r' < "$env_dq")   # CRLF-tolerant (see note above)
     set +a
+    if [ -z "${GOVDATA_DQ_BUCKET:-}" ]; then
+      echo "FATAL: GOVDATA_DQ=true but GOVDATA_DQ_BUCKET is empty after sourcing $env_dq;" \
+           "refusing to run, since the target would resolve to the production bucket." >&2
+      return 1 2>/dev/null || exit 1
+    fi
   fi
 
   local env_override="$SCRIPT_DIR/.env.sh"
@@ -291,9 +337,11 @@ resolve_classpath() {
 }
 
 # Slots (schemas) that are NOT part of the scheduled production rotation: run-pool.sh leaves them out of
-# its daily and historical queues on purpose (sec_secondary: its runs take multiple days). Keep this
-# list equal to those schemas; remove a schema when it is added back to the schedule.
-UNSCHEDULED_SLOTS="sec_secondary"
+# its daily and historical queues on purpose. Keep this list equal to those schemas; remove a schema when
+# it is added to the schedule. Empty today: sec_secondary joined the daily (current year) and historical
+# (2010..current-1) queues, so it is remediated against production like the other SEC slots.
+# GOVDATA_UNSCHEDULED_SLOTS sets the list for a run (and for the guard test).
+UNSCHEDULED_SLOTS="${GOVDATA_UNSCHEDULED_SLOTS:-}"
 
 # is_unscheduled_slot <schema> -- true when the schema is outside the scheduled production rotation.
 is_unscheduled_slot() {
@@ -338,6 +386,132 @@ refuse_bare_sec_remediation() {
   return 1
 }
 
+# target_is_dq_bucket
+# True when the loaded GOVDATA_PARQUET_DIR names a DQ bucket (suffix -dq). An unset dir is production.
+target_is_dq_bucket() {
+  case "${GOVDATA_PARQUET_DIR:-s3://govdata-parquet-v1}" in
+    *-dq|*-dq/*) return 0 ;;
+  esac
+  return 1
+}
+
+# assert_dq_target
+# A GOVDATA_DQ=true run must write to a -dq bucket. Fails (non-zero, message on stderr) when the
+# resolved GOVDATA_PARQUET_DIR does not end in -dq, including when it is unset. Without GOVDATA_DQ=true it
+# fails when the target IS a -dq bucket.
+assert_dq_target() {
+  if [ "${GOVDATA_DQ:-}" != "true" ]; then
+    # Mirror: a run without GOVDATA_DQ must not write to a -dq bucket either.
+    case "${GOVDATA_PARQUET_DIR:-}" in
+      *-dq|*-dq/*)
+        echo "FATAL: GOVDATA_DQ is not true but GOVDATA_PARQUET_DIR='${GOVDATA_PARQUET_DIR}' is a -dq bucket;" \
+             "refusing to start; set GOVDATA_DQ=true for a DQ run or point at the production bucket." >&2
+        return 1 ;;
+    esac
+    return 0
+  fi
+  case "${GOVDATA_PARQUET_DIR:-}" in
+    s3://*-dq|s3://*-dq/) return 0 ;;
+  esac
+  echo "FATAL: GOVDATA_DQ=true but GOVDATA_PARQUET_DIR='${GOVDATA_PARQUET_DIR:-<unset>}' is not a -dq bucket" \
+       "(GOVDATA_DQ_BUCKET='${GOVDATA_DQ_BUCKET:-<unset>}'); refusing to start the ETL against a non-DQ target." >&2
+  return 1
+}
+
+# ── Schema write lock ─────────────────────────────────────────────────────────
+# One owner per schema for writes, enforced where writers START. A remediation pass (fix-sec.sh,
+# force-reprocess.sh) holds <lock_dir>/<schema>.lock for its whole run; run-pool.sh (through
+# check_schema_year_conflict) and worker.sh refuse to start a worker for that schema while the holder is
+# alive. The lock names the holder's pid and a command-line pattern, so a dead holder or a recycled pid is
+# stale and is removed when found. Workers the holder itself launches inherit
+# GOVDATA_SCHEMA_LOCK_OWNER=<holder pid> and pass. Production bucket only: a -dq run shares no tables.
+schema_lock_dir() { echo "${GOVDATA_LOCK_DIR:-$1/../locks}"; }
+
+# schema_lock_holder <lock_dir> <schema> -> prints "<pid> <pattern> <since>" and returns 0 when a live holder
+# other than $GOVDATA_SCHEMA_LOCK_OWNER has the lock; returns 1 otherwise (a stale lock is removed).
+schema_lock_holder() {
+  local dir=$1 schema=$2 f="$1/$2.lock" l_pid="" l_pattern="" l_since=0
+  [ -f "$f" ] || return 1
+  # shellcheck disable=SC1090
+  source "$f" 2>/dev/null
+  if [ -z "$l_pid" ] || ! kill -0 "$l_pid" 2>/dev/null \
+     || ! tr '\0' ' ' < "/proc/$l_pid/cmdline" 2>/dev/null | grep -qF "$l_pattern"; then
+    rm -f "$f"; return 1
+  fi
+  [ "$l_pid" = "${GOVDATA_SCHEMA_LOCK_OWNER:-}" ] && return 1
+  echo "$l_pid $l_pattern $l_since"
+}
+
+# acquire_schema_lock <lock_dir> <owner_pid> <owner_cmd_pattern> <schema>...
+# All-or-nothing across the schemas. Returns 1 naming the holder on stderr.
+acquire_schema_lock() {
+  local dir=$1 owner=$2 pattern=$3 s h rc=0; shift 3
+  mkdir -p "$dir"
+  (
+    flock 9
+    for s in "$@"; do
+      if h=$(schema_lock_holder "$dir" "$s"); then
+        echo "REFUSING: schema '$s' is write-locked by a live remediation pass: pid ${h%% *}" \
+             "($(echo "$h" | cut -d' ' -f2)), held for $(( $(date +%s) - ${h##* } ))s." >&2
+        exit 1
+      fi
+    done
+    for s in "$@"; do
+      printf "l_pid=%s\nl_pattern='%s'\nl_since=%s\n" "$owner" "$pattern" "$(date +%s)" > "$dir/$s.lock"
+    done
+  ) 9>"$dir/.lock" || rc=1
+  return $rc
+}
+
+# release_schema_lock <lock_dir> <owner_pid> <schema>...   (removes only locks this pid owns)
+release_schema_lock() {
+  local dir=$1 owner=$2 s l_pid; shift 2
+  for s in "$@"; do
+    l_pid=$(sed -n 's/^l_pid=//p' "$dir/$s.lock" 2>/dev/null)
+    if [ "$l_pid" = "$owner" ]; then rm -f "$dir/$s.lock"; fi
+  done
+  return 0
+}
+
+# live_sec_workers <pid_dir>
+# Prints the ids of worker-sec* pid files whose process is alive and has not recorded an exit.
+live_sec_workers() {
+  local _pid_dir="$1" _pf _id _wpid _live=""
+  if [ -d "$_pid_dir" ]; then
+    for _pf in "$_pid_dir"/worker-sec*.pid; do
+      [ -e "$_pf" ] || continue
+      _id=$(basename "$_pf" .pid)
+      [ -f "$_pid_dir/${_id}.exit" ] && continue
+      _wpid=$(head -1 "$_pf" 2>/dev/null | tr -d '[:space:]')
+      { [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null; } || continue
+      _live="$_live $_id"
+    done
+  fi
+  printf '%s' "$_live"
+}
+
+# wait_for_sec_workers <pid_dir> <timeout_seconds> <poll_seconds>
+# Waits for every live worker-sec* to exit, logging who is still alive each poll. Never signals a worker.
+# Returns 0 when none is live; on timeout prints the workers still alive (ids and pids) to stderr, returns 1.
+wait_for_sec_workers() {
+  local _pid_dir="$1" _timeout="$2" _poll="$3" _deadline _live _id _detail
+  _deadline=$(( $(date +%s) + _timeout ))
+  while :; do
+    _live=$(live_sec_workers "$_pid_dir")
+    [ -z "$_live" ] && return 0
+    _detail=""
+    for _id in $_live; do
+      _detail="$_detail $_id(pid $(head -1 "$_pid_dir/${_id}.pid" 2>/dev/null | tr -d '[:space:]'))"
+    done
+    if [ "$(date +%s)" -ge "$_deadline" ]; then
+      echo "wait_for_sec_workers: timed out after ${_timeout}s; still alive:${_detail}" >&2
+      return 1
+    fi
+    log_info "waiting for live SEC worker(s):${_detail}"
+    sleep "$_poll"
+  done
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
 # Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
 # single read of version-hint.text, then metadata.json + manifest-list + every manifest +
@@ -373,11 +547,13 @@ sync_iceberg_table_closure() {
   echo "$resolved" | grep -v '^VERSION ' > "$files_list"
   local file_count
   file_count=$(wc -l < "$files_list" | tr -d ' ')
-  log_info "sync-to-r2: [$schema/$table] resolved v$version, $file_count files in closure — verifying/copying"
+  # Everything but the version goes to stderr: the caller captures stdout as the version, and a
+  # log line captured with it was being stamped as the "verified version" (garbage stamps).
+  log_info "sync-to-r2: [$schema/$table] resolved v$version, $file_count files in closure — verifying/copying" >&2
 
   if ! rclone copy "${minio_remote}:${bucket}/${schema}/${table}" "${r2_remote}:${bucket}/${schema}/${table}" \
       --files-from "$files_list" --transfers 16 --checkers 32 2>&1 \
-      | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line"; done; then
+      | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line" >&2; done; then
     log_error "sync-to-r2: [$schema/$table] closure copy FAILED — version-hint.text NOT advanced"
     rm -f "$files_list"
     return 1
@@ -675,6 +851,7 @@ generate_sec_reprocess_model() {
       "directory": "${GOVDATA_PARQUET_DIR}",
       "cacheDirectory": "${GOVDATA_CACHE_DIR}/sec",
       $(tracker_operand_json),
+      $(_sec_bulk_operand_pairs | sed 's/$/,/')
       "s3Config": {
         "accessKeyId": "\${AWS_ACCESS_KEY_ID}",
         "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
@@ -819,6 +996,10 @@ generate_single_schema_model() {
       ;;
     fedregister)
       operand_body="\"dataSource\": \"fedregister\",
+      ${_YEAR_RANGE}"
+      ;;
+    fisheries)
+      operand_body="\"dataSource\": \"fisheries\",
       ${_YEAR_RANGE}"
       ;;
     lands|public_lands)
@@ -1211,6 +1392,7 @@ get_dq_start_year() {
     lands)    echo $(( $(date +%Y) - 3 )) ;;  # forest inventory biennial: ≥2-yr span to guarantee one published cycle
     census)   echo $(( $(date +%Y) - 3 )) ;;  # ACS 5-year: dataLag=2 + releaseMonth=12 → effective end current−3 before December
     patents)  echo $(( $(date +%Y) - 4 )) ;;  # USPTO TRCFECO2 trademark snapshot {year+1} settles slowly; window must reach the last published filing year
+    fisheries) echo $(( $(date +%Y) - 6 )) ;;  # dataLag=2 (FOSS publishes through current-2): current-6 maps to effective_year current-8, giving ~6 landing years incl. the salmon-trend window
     crime)    echo $(( $(date +%Y) - 4 )) ;;  # BJS NCVS publication lag: $where year='{year}' returns 0 rows for current−2; need current−4 so bjs_ncvs_* land a published survey year
     *)        echo $(( $(date +%Y) - 2 )) ;;  # annual/sub-annual: N−2 safe default (covers dataLag≤2)
   esac
@@ -1269,6 +1451,26 @@ get_timeout_config() {
     cyber_threat) echo 240 ;;  # OTX subscribed-pulse cursor pagination, rate-limited
     *)            echo 60  ;;  # default: 1 hour idle
   esac
+}
+
+# Echoes the "key":"value" operand pairs, one per line and without commas, for the SEC bulk-source
+# environment variables that are set: SEC_BULK_13F_DIR (bulk13fDir, SEC Form 13F data sets),
+# SEC_BULK_SUBMISSIONS_ZIP (bulkSubmissionsZip, the nightly submissions.zip) and SEC_FEED_DIR
+# (feedDir, documents unpacked from EDGAR's daily feed). Each is a local copy that lets the ETL
+# skip requests to sec.gov; see the matching fetch-*.sh scripts under govdata/scripts.
+_sec_bulk_operand_pairs() {
+  local pair var key val
+  for pair in "SEC_BULK_13F_DIR:bulk13fDir" "SEC_BULK_SUBMISSIONS_ZIP:bulkSubmissionsZip" \
+      "SEC_FEED_DIR:feedDir"; do
+    var="${pair%%:*}"
+    key="${pair##*:}"
+    val="${!var:-}"
+    [ -z "$val" ] && continue
+    case "$val" in
+      *\"*|*\\*) echo "$var must not contain quotes or backslashes: $val" >&2; return 1 ;;
+    esac
+    printf '"%s":"%s"\n' "$key" "$val"
+  done
 }
 
 # Build an inline Calcite model JSON string for a govdata schema.
@@ -1334,6 +1536,18 @@ build_inline_model() {
     done
     if [ -n "$_frt_json" ]; then
       user_tables_json="${user_tables_json},\"forceReprocessTables\":[${_frt_json%,}]"
+    fi
+  fi
+
+  # Local copies of SEC bulk sources (SEC_BULK_13F_DIR, SEC_BULK_SUBMISSIONS_ZIP, SEC_FEED_DIR), sec
+  # only. The SEC ETL runs inside schema creation, before the schema YAML's own operands are merged
+  # in, so a YAML-only default never reaches it; like forceReprocessTables above, they have to
+  # arrive through the inline model.
+  if [ "$schema_name" = "sec" ]; then
+    local _bulk_pairs
+    _bulk_pairs="$(_sec_bulk_operand_pairs | paste -sd, -)" || return 1
+    if [ -n "$_bulk_pairs" ]; then
+      user_tables_json="${user_tables_json},${_bulk_pairs}"
     fi
   fi
 
@@ -1470,6 +1684,19 @@ filter_enabled_tables() {
   echo "${out%,}"
 }
 
+# A run stopped by the sec.gov cool-down is deferred, not failed: the refusal is the expected
+# state while the marker is active, and the tracker resumes the work in the next window.
+# Usage: etl_exit_status <exit_code> <worker_id> <log_file>; returns the code the worker exits with.
+etl_exit_status() {
+  local exit_code=$1 worker_id=$2 log_file=$3
+  if [ "$exit_code" -ne 0 ] && [ "$(sec_cooldown_remaining)" -gt 0 ] \
+      && grep -q "refused this host with HTTP 403/429" "$log_file"; then
+    echo "[$worker_id] DEFERRED by sec.gov cool-down (exit $SEC_COOLDOWN_EXIT); resumes after the marker expires"
+    return "$SEC_COOLDOWN_EXIT"
+  fi
+  return "$exit_code"
+}
+
 # Run the ETL with a given model file
 # Usage: run_etl <model_file> <worker_id> [extra_args...]
 run_etl() {
@@ -1499,6 +1726,8 @@ run_etl() {
   fi
   echo "[$worker_id] Log: $log_file"
 
+  assert_dq_target || return 1
+
   # Ensure Ctrl-C kills the java process, not just tee
   trap 'kill 0' INT TERM
 
@@ -1517,7 +1746,7 @@ run_etl() {
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
-  return $exit_code
+  etl_exit_status "$exit_code" "$worker_id" "$log_file"
 }
 
 # Usage: run_etl_inline <inline_json> <worker_id> [extra etl args...]
@@ -1548,6 +1777,8 @@ run_etl_inline() {
   fi
   echo "[$worker_id] Log: $log_file"
 
+  assert_dq_target || return 1
+
   trap 'kill 0' INT TERM
 
   "$GOVDATA_JAVA_BIN" \
@@ -1571,7 +1802,7 @@ run_etl_inline() {
   local exit_code=${PIPESTATUS[0]}
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
-  return $exit_code
+  etl_exit_status "$exit_code" "$worker_id" "$log_file"
 }
 
 # Detect schemas with a live ETL writer, from run-pool's pid/exit markers under
@@ -1674,7 +1905,12 @@ _schemas_write_same_tables() {
 check_schema_year_conflict() {
   local _pid_dir=$1 _schema=$2 _new_start=$3 _new_end=$4 _new_mode=${5:-}
   [ -d "$_pid_dir" ] || return 0
-  local _pf _id _id_base _wpid _rest _other_schema _other_mode _o_start _o_end
+  local _pf _id _id_base _wpid _rest _other_schema _other_mode _o_start _o_end _lock_h
+  if ! target_is_dq_bucket && _lock_h=$(schema_lock_holder "$(schema_lock_dir "$_pid_dir")" "$_schema"); then
+    echo "REFUSING: schema '${_schema}' is write-locked by a live remediation pass (pid ${_lock_h%% *}," \
+         "$(echo "$_lock_h" | cut -d' ' -f2)) -- held for the whole pass; retry after it ends." >&2
+    return 1
+  fi
   for _pf in "$_pid_dir"/worker-*.pid; do
     [ -e "$_pf" ] || continue
     # Pure parameter expansion, no fork: this loop visits every pid file ever written (hundreds),

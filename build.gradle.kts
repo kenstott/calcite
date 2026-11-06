@@ -269,7 +269,7 @@ dependencies {
     sqllineClasspath(project(":testkit"))
     sqllineClasspath("sqlline:sqlline")
     sqllineClasspath("org.apache.logging.log4j:log4j-slf4j2-impl:2.23.1")
-    sqllineClasspath("org.duckdb:duckdb_jdbc:1.4.4.0") // Required for DuckDB execution engine
+    sqllineClasspath("org.duckdb:duckdb_jdbc:1.5.6.0") // Required for DuckDB execution engine
     for (p in adaptersForSqlline) {
         sqllineClasspath(project(p))
     }

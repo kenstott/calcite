@@ -110,6 +110,7 @@ public class FileSchemaAdditionalCoverageTest {
   private Map<String, Object> buildOperand() {
     Map<String, Object> operand = new HashMap<String, Object>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("ephemeralCache", true);
     return operand;
   }
@@ -1102,12 +1103,14 @@ public class FileSchemaAdditionalCoverageTest {
 
     Map<String, Object> op1 = new HashMap<String, Object>();
     op1.put("directory", dir1.toString());
+    op1.put("baseDirectory", dir1.toString());
     op1.put("ephemeralCache", true);
     rootSchema.add("s1",
         FileSchemaFactory.INSTANCE.create(rootSchema, "s1", op1));
 
     Map<String, Object> op2 = new HashMap<String, Object>();
     op2.put("directory", dir2.toString());
+    op2.put("baseDirectory", dir2.toString());
     op2.put("ephemeralCache", true);
     rootSchema.add("s2",
         FileSchemaFactory.INSTANCE.create(rootSchema, "s2", op2));

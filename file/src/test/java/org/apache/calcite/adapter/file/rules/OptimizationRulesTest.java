@@ -27,6 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests that verify optimization rules are registered and produce correct results.
  * Uses a 1000-row Parquet test dataset with known statistics.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("integration")
 public class OptimizationRulesTest {
 
@@ -249,6 +251,7 @@ public class OptimizationRulesTest {
 
     Map<String, Object> operand = new LinkedHashMap<>();
     operand.put("directory", tempDir.toString());
+    operand.put("baseDirectory", tempDir.toString());
     operand.put("executionEngine", engine);
     operand.put("ephemeralCache", true);
     operand.put("tableNameCasing", "LOWER");

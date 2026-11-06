@@ -32,16 +32,14 @@ import org.apache.calcite.util.Source;
 
 import org.apache.hadoop.conf.Configuration;
 
-import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SchemaParser;
-import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopTables;
-import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Types;
 
 import org.apache.calcite.adapter.file.metadata.TableConstraints;
+import org.apache.calcite.adapter.file.partition.PartitionedTableConfig;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -223,6 +221,15 @@ public class IcebergTable extends AbstractTable
     Table table = icebergTable();
     resolvedSchema = table.schema();
     IcebergSchemaCache.record(source.path(), resolvedSchema, table.properties(), s3Config());
+    // The table is loaded already, so its row count (snapshot summary) and published NDV cost
+    // nothing more to capture; a runtime must never have to fetch them later.
+    try {
+      cachedRowCount = IcebergSchemaCache.recordSnapshotStatistics(source.path(), table);
+    } catch (IllegalStateException e) {
+      // The schema is still good; the missing row count is reported here by name and, in a seed
+      // build, fails it (IcebergSchemaCache.incompleteTables).
+      LOGGER.warn("Row count not recorded for {}: {}", source.path(), e.getMessage());
+    }
     return resolvedSchema;
   }
 
@@ -238,6 +245,22 @@ public class IcebergTable extends AbstractTable
     this.config = new java.util.HashMap<>();
     this.snapshotId = null;
     this.asOfTimestamp = null;
+  }
+
+  /**
+   * Config key of the partition columns the table's schema declares
+   * ({@code partitions.columnDefinitions}), each with its declared type. The table's own schema
+   * may store one under another type (a year as text); the DuckDB engine serves the declared one.
+   */
+  public static final String DECLARED_PARTITION_COLUMNS = "declaredPartitionColumns";
+
+  /** Returns the partition columns the table's schema declares, or an empty list. */
+  @SuppressWarnings("unchecked")
+  public List<PartitionedTableConfig.ColumnDefinition> declaredPartitionColumns() {
+    Object declared = config.get(DECLARED_PARTITION_COLUMNS);
+    return declared == null
+        ? Collections.emptyList()
+        : (List<PartitionedTableConfig.ColumnDefinition>) declared;
   }
 
   /** Sets PK/FK constraint config from the schema YAML's tableConstraints section. */
@@ -376,28 +399,15 @@ public class IcebergTable extends AbstractTable
       return buildStatistic(cachedRowCount);
     }
 
+    // Not described by the shipped cache (a table added after the seed was built, or a stale
+    // entry). Read the row count from the snapshot summary -- one metadata read -- and never walk
+    // manifests or data files: that walk over the network is what made describe_table take 46s.
     try {
-      Snapshot snapshot = icebergTable().currentSnapshot();
-      if (snapshot == null) {
-        // Empty table - no snapshots yet
-        LOGGER.debug("Iceberg table has no snapshot, returning 0 row count");
-        cachedRowCount = 0.0;
-        IcebergSchemaCache.recordStatistics(source.path(), -1L, 0.0);
-        return buildStatistic(0.0);
-      }
-
-      // Sum record counts from all data files
-      long totalRecords = 0;
-      try (CloseableIterable<FileScanTask> fileScanTasks =
-               icebergTable().newScan().planFiles()) {
-        for (FileScanTask task : fileScanTasks) {
-          totalRecords += task.file().recordCount();
-        }
-      }
-
-      cachedRowCount = (double) totalRecords;
-      IcebergSchemaCache.recordStatistics(source.path(), snapshot.snapshotId(), cachedRowCount);
-      LOGGER.debug("Iceberg table row count from metadata: {}", totalRecords);
+      LOGGER.warn("Iceberg schema cache has no row count for {}: the seed is stale for this "
+          + "table; reading total-records from its snapshot summary and recording it. "
+          + "Rebuild the seed.", source.path());
+      cachedRowCount =
+          IcebergSchemaCache.recordSnapshotStatistics(source.path(), icebergTable());
       return buildStatistic(cachedRowCount);
 
     // fallback-guard: allow Statistics.UNKNOWN is Calcite's documented sentinel for unknown cardinality, handled distinctly by the planner
@@ -467,6 +477,8 @@ public class IcebergTable extends AbstractTable
         publishedNdv = cached;
         return publishedNdv;
       }
+      LOGGER.warn("Iceberg schema cache has no NDV description for {}: the seed is stale for this "
+          + "table; reading its published statistics from table metadata", source.path());
       try {
         publishedNdv =
             org.apache.calcite.adapter.file.statistics.IcebergThetaStatistics.readNdv(

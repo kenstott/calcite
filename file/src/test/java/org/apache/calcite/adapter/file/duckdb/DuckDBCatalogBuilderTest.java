@@ -23,6 +23,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,7 +48,7 @@ public class DuckDBCatalogBuilderTest {
   java.nio.file.Path tempDir;
 
   /**
-   * Runs DuckDBCatalogBuilder.main() while capturing System.out and System.err
+   * Runs DuckDBCatalogBuilder.run() while capturing System.out and System.err
    * through a tee-style approach where output goes to both the capture stream
    * and a secondary stream for debugging.
    * Returns the captured stdout as a String.
@@ -66,7 +67,7 @@ public class DuckDBCatalogBuilderTest {
       System.setOut(capturingOut);
       System.setErr(capturingErr);
 
-      DuckDBCatalogBuilder.main(args);
+      DuckDBCatalogBuilder.run(args);
 
       capturingOut.flush();
       capturingErr.flush();
@@ -190,7 +191,7 @@ public class DuckDBCatalogBuilderTest {
 
     String savedCatalogPath = System.getProperty("duckdb.catalog.path");
     try {
-      DuckDBCatalogBuilder.main(new String[]{
+      DuckDBCatalogBuilder.run(new String[]{
           modelFile.getAbsolutePath(), catalogOutput.getAbsolutePath()});
     } finally {
       if (savedCatalogPath != null) {
@@ -204,6 +205,36 @@ public class DuckDBCatalogBuilderTest {
     // The main thing is the catalog builder ran to completion without error
   }
 
+  /**
+   * A model whose file schema names no base directory is refused (REQ-1992), and run() reports
+   * it as an exception instead of exiting the JVM.
+   */
+  @Test public void testRunReportsARefusedModelAsAnException() throws Exception {
+    File dataDir = new File(tempDir.toFile(), "nobase_data");
+    dataDir.mkdirs();
+    File modelFile = new File(tempDir.toFile(), "nobase_model.json");
+    writeJson(modelFile, buildModelJson("nobase", dataDir)
+        .replaceAll("\\s*\"baseDirectory\": \"[^\"]*\",", ""));
+    File catalogOutput = new File(tempDir.toFile(), "nobase_catalog.duckdb");
+    String savedCatalogPath = System.getProperty("duckdb.catalog.path");
+    try {
+      Exception e = assertThrows(Exception.class, () -> DuckDBCatalogBuilder.run(new String[]{
+          modelFile.getAbsolutePath(), catalogOutput.getAbsolutePath()}));
+      Throwable cause = e;
+      while (cause.getCause() != null && !(cause instanceof IllegalArgumentException)) {
+        cause = cause.getCause();
+      }
+      assertTrue(cause.getMessage().contains("File schema 'nobase' has no baseDirectory"),
+          String.valueOf(cause));
+    } finally {
+      if (savedCatalogPath != null) {
+        System.setProperty("duckdb.catalog.path", savedCatalogPath);
+      } else {
+        System.clearProperty("duckdb.catalog.path");
+      }
+    }
+  }
+
   private String buildModelJson(String schemaName, File dataDir) {
     return "{\n"
         + "  \"version\": \"1.0\",\n"
@@ -215,6 +246,8 @@ public class DuckDBCatalogBuilderTest {
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
         + "        \"directory\": \""
+        + dataDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
+        + "        \"baseDirectory\": \""
         + dataDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
         + "        \"ephemeralCache\": true\n"
         + "      }\n"

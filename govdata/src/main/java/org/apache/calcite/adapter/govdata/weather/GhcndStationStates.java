@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.govdata.weather;
 
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
+import org.apache.calcite.adapter.file.etl.SharedHttpClient;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +20,6 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
@@ -72,7 +72,7 @@ final class GhcndStationStates {
         return stateFipsByStation;
       }
       Map<String, String> map = new HashMap<String, String>();
-      HttpURLConnection conn = RetryableHttp.openWithRetry(STATIONS_URL,
+      SharedHttpClient.Response conn = RetryableHttp.openWithRetry(STATIONS_URL,
           new LinkedHashMap<String, String>(), rateLimit, false);
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {

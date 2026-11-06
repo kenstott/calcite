@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.etl.cache;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +79,7 @@ public class CacheResolver {
    */
   public String resolve(String sourceKey) {
     // Tier 1: local filesystem
-    String localPath = localCacheDir + "/" + sourceKey;
+    String localPath = LocalPaths.join(localCacheDir, sourceKey);
     File localFile = new File(localPath);
     if (localFile.exists() && localFile.length() > 0) {
       return localPath;

@@ -13,7 +13,9 @@ package org.apache.calcite.adapter.govdata.sec;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 
 import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
 import org.apache.calcite.adapter.file.etl.IncompleteFetchException;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.metadata.ConversionMetadata;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
 
@@ -107,6 +109,15 @@ public class XbrlToParquetConverter implements FileConverter {
     this.storageProvider = storageProvider;
     this.enableVectorization = enableVectorization;
     this.enabledTables = enabledTables;
+  }
+
+  /** The local SEC 13F data set to read information tables from, or null to fetch them. */
+  private Sec13fBulkData bulk13f;
+
+  /** Reads 13F information tables from {@code data} when it holds the filing; returns this. */
+  XbrlToParquetConverter withBulk13f(Sec13fBulkData data) {
+    this.bulk13f = data;
+    return this;
   }
 
   /** True when {@code tableName} should be written this run — unrestricted (null/empty
@@ -396,6 +407,15 @@ public class XbrlToParquetConverter implements FileConverter {
           doc = parseWithJsoupFallback(sourceFilePath);
           usedJsoupFallback = true;
         }
+      }
+
+      // A plain-text main document (e.g. r10q-0325.txt from a small filer with no XBRL) fails the strict
+      // XML parse, and JSoup then returns a tree for it anyway. That tree is not "malformed XBRL": it
+      // has no XBRL structure at all, so it is a filing with no XBRL and goes the no-XBRL route, not on
+      // to fail on a CIK/period end date that only an XBRL document carries.
+      if (usedJsoupFallback && doc != null && !hasXbrlStructure(doc)) {
+        LOGGER.info("{} has no XBRL structure (plain-text or non-XBRL document)", fileName);
+        doc = null;
       }
 
       // No XBRL (inline or companion) found — common for DEF 14A and older-style filings.
@@ -2079,11 +2099,17 @@ public class XbrlToParquetConverter implements FileConverter {
       }
     }
 
-    // Scan all elements for ix: prefixed tags with contextRef (most robust)
+    // Scan all elements for ix: prefixed tags with contextRef (most robust). The selectors above
+    // already matched most of them, so add only elements not yet collected (by identity) or every
+    // fact would be emitted twice.
+    java.util.Set<org.jsoup.nodes.Element> collected =
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    collected.addAll(ixElements);
     for (org.jsoup.nodes.Element elem : jsoupDoc.getAllElements()) {
       String tagName = elem.tagName().toLowerCase(Locale.ROOT);
       if (tagName.startsWith("ix:")
-          && (elem.hasAttr("contextRef") || elem.hasAttr("contextref"))) {
+          && (elem.hasAttr("contextRef") || elem.hasAttr("contextref"))
+          && collected.add(elem)) {
         ixElements.add(elem);
       }
     }
@@ -2514,7 +2540,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * Parse inline XBRL from HTML file.
    * Inline XBRL uses ix: namespace tags embedded in HTML.
    */
-  private Document parseInlineXbrl(String htmlPath) {
+  Document parseInlineXbrl(String htmlPath) {
     String fileName = htmlPath.substring(htmlPath.lastIndexOf('/') + 1);
     LOGGER.debug("========== PARSE INLINE XBRL START for: " + fileName + " ==========");
     LOGGER.debug("parseInlineXbrl START for: " + htmlPath);
@@ -2631,6 +2657,10 @@ public class XbrlToParquetConverter implements FileConverter {
           factsSkippedNoName++;
           continue;
         }
+
+        // A concept QName cannot contain whitespace; some filers hard-wrap the name attribute
+        // mid-token (e.g. "us-g\naap:PropertyPlantAnd\nEquipmentGross"), which createElementNS rejects.
+        name = name.replaceAll("\\s+", "");
 
         String value = ixElement.text().trim();
 
@@ -4068,6 +4098,24 @@ public class XbrlToParquetConverter implements FileConverter {
    * @param filePath Path to the file (local or S3)
    * @return W3C DOM Document, or null if parsing fails
    */
+  /**
+   * True when the document carries XBRL structure: an {@code xbrl} root or any {@code context}
+   * element, with or without a namespace prefix. A JSoup tree built from a plain-text filing has
+   * neither.
+   */
+  static boolean hasXbrlStructure(Document doc) {
+    NodeList all = doc.getElementsByTagName("*");
+    for (int i = 0; i < all.getLength(); i++) {
+      String name = all.item(i).getNodeName().toLowerCase(java.util.Locale.ROOT);
+      int colon = name.indexOf(':');
+      String local = colon >= 0 ? name.substring(colon + 1) : name;
+      if (local.equals("xbrl") || local.equals("context")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private Document parseWithJsoupFallback(String filePath) {
     try {
       String content;
@@ -4117,166 +4165,210 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
-   * Streaming filter that replaces HTML named entities (e.g. {@code &nbsp;}) with their numeric
-   * XML equivalents on the fly. Processes the stream with O(1) memory — no full-file buffering.
+   * Streaming filter that makes EDGAR's XML parseable without changing its text: HTML named
+   * entities (e.g. {@code &nbsp;}) become numeric references, and a bare {@code &} that starts
+   * no valid reference becomes {@code &amp;}. O(1) memory, no full-file buffering.
    *
-   * <p>The five predefined XML entities ({@code &amp; &lt; &gt; &quot; &apos;}) pass through
-   * unchanged. Unknown HTML entities have their {@code &} escaped to {@code &amp;}.
-   * Bare {@code &} characters (not followed by a valid entity name and {@code ;}) are also
-   * escaped to {@code &amp;}.
+   * <p>Left exactly as they are:
+   * <ul>
+   *   <li>the five predefined XML entities ({@code &amp; &lt; &gt; &quot; &apos;});
+   *   <li>numeric references to a legal XML character ({@code &#38;}, {@code &#x26;}), which
+   *       the parser then resolves; a reference to an illegal character such as {@code &#0;} is
+   *       escaped like a bare {@code &} so it survives as text instead of failing the parse;
+   *   <li>everything inside a {@code <![CDATA[ ... ]]>} section, where {@code &} is already
+   *       literal text. Escaping there would store {@code LEGGETT &amp; PLATT} for a name the
+   *       filer wrote as {@code LEGGETT & PLATT}.
+   * </ul>
+   *
+   * <p>Decisions are made byte by byte, so they cannot depend on where the caller's read
+   * boundaries fall. An earlier bulk-read fast path dropped the {@code &} of any reference that
+   * began a chunk, leaving {@code amp;} in the text.
    */
-  private static final class HtmlEntityFilterStream extends InputStream {
+  static final class HtmlEntityFilterStream extends InputStream {
     private static final int MAX_ENTITY_NAME = 20;
-    private static final int BUF_SIZE = 8192;
+    private static final int MAX_NUMERIC_DIGITS = 8;
+    private static final byte[] CDATA_OPEN = "![CDATA[".getBytes(StandardCharsets.US_ASCII);
 
-    // BufferedInputStream ensures large reads from source; PushbackInputStream
-    // is only used to push back single bytes (entity name chars on mismatch).
+    // Large enough for the longest lookahead: '&' + '#' + 'x' + digits + ';' or "![CDATA[".
     private final java.io.PushbackInputStream in;
 
-    // Pending output bytes: replacement text waiting to be consumed by read()
-    private final byte[] pending = new byte[MAX_ENTITY_NAME + 8];
+    // Replacement bytes waiting to be returned before the next source byte.
+    private final byte[] pending = new byte[MAX_ENTITY_NAME + 16];
     private int pendingStart = 0;
     private int pendingEnd = 0;
 
-    // Overflow: tail of a bulk-read chunk saved here instead of pushed back to
-    // the inner stream. The pushback buffer (22 bytes) is too small for a full
-    // SAX read chunk (typically 4-8 KB), so we keep excess bytes here.
-    private byte[] overflow = null;
-    private int overflowPos = 0;
-
-    private final byte[] nameBuf = new byte[MAX_ENTITY_NAME];
+    private boolean inCdata = false;
+    // Consecutive ']' just seen inside a CDATA section, capped at 2, to spot "]]>".
+    private int cdataBrackets = 0;
 
     HtmlEntityFilterStream(InputStream source) {
       this.in = new java.io.PushbackInputStream(
-          new java.io.BufferedInputStream(source, BUF_SIZE),
-          MAX_ENTITY_NAME + 2);
+          new java.io.BufferedInputStream(source, 8192), MAX_ENTITY_NAME + 16);
     }
 
     @Override public int read() throws IOException {
-      if (pendingStart < pendingEnd) return pending[pendingStart++] & 0xFF;
+      if (pendingStart < pendingEnd) {
+        return pending[pendingStart++] & 0xFF;
+      }
       pendingStart = pendingEnd = 0;
 
-      int b = nextByte();
-      if (b == -1 || b != '&') return b;
-
-      int nameLen = 0;
-      boolean foundSemi = false;
-      while (nameLen < MAX_ENTITY_NAME) {
-        int c = nextByte();
-        if (c == -1) break;
-        if (c == ';') { foundSemi = true; break; }
-        boolean valid = nameLen == 0
-            ? ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-            : ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'));
-        if (!valid) { pushOneByte((byte) c); break; }
-        nameBuf[nameLen++] = (byte) c;
+      int b = in.read();
+      if (b == -1) {
+        return -1;
       }
-
-      if (nameLen > 0 && foundSemi) {
-        byte[] repl = resolveEntity(new String(nameBuf, 0, nameLen, StandardCharsets.US_ASCII))
-            .getBytes(StandardCharsets.UTF_8);
-        System.arraycopy(repl, 1, pending, 0, repl.length - 1);
-        pendingEnd = repl.length - 1;
-        return repl[0] & 0xFF;
+      if (inCdata) {
+        if (b == ']') {
+          cdataBrackets = Math.min(cdataBrackets + 1, 2);
+        } else {
+          if (b == '>' && cdataBrackets >= 2) {
+            inCdata = false;
+          }
+          cdataBrackets = 0;
+        }
+        return b;
       }
-
-      // Not a complete/known entity — push name bytes back and emit &amp;
-      for (int i = nameLen - 1; i >= 0; i--) pushOneByte(nameBuf[i]);
-      pending[0] = 'a'; pending[1] = 'm'; pending[2] = 'p'; pending[3] = ';';
-      pendingEnd = 4;
-      return '&';
+      if (b == '<' && startsCdata()) {
+        inCdata = true;
+        cdataBrackets = 0;
+        return b;
+      }
+      if (b != '&') {
+        return b;
+      }
+      return readReference();
     }
 
     @Override public int read(byte[] buf, int off, int len) throws IOException {
-      if (len == 0) return 0;
-
-      // Drain pending replacement bytes first
-      if (pendingStart < pendingEnd) {
-        int n = Math.min(pendingEnd - pendingStart, len);
-        System.arraycopy(pending, pendingStart, buf, off, n);
-        pendingStart += n;
-        return n;
+      if (len == 0) {
+        return 0;
       }
-      pendingStart = pendingEnd = 0;
-
-      // Drain overflow from a previous bulk read
-      if (overflow != null) {
-        int avail = overflow.length - overflowPos;
-        // Scan for '&' in the available slice (up to len bytes)
-        int scan = Math.min(avail, len);
-        for (int i = 0; i < scan; i++) {
-          if (overflow[overflowPos + i] == '&') {
-            if (i > 0) {
-              System.arraycopy(overflow, overflowPos, buf, off, i);
-              overflowPos += i;
-              return i;
-            }
-            // '&' at start of overflow — fall through to single-byte path below
-            break;
-          }
-        }
-        if (overflow[overflowPos] != '&') {
-          // No '&' in window — copy and advance
-          System.arraycopy(overflow, overflowPos, buf, off, scan);
-          overflowPos += scan;
-          if (overflowPos >= overflow.length) overflow = null;
-          return scan;
-        }
-        // '&' is at overflow[overflowPos] — handle via single-byte read()
+      int first = read();
+      if (first == -1) {
+        return -1;
+      }
+      buf[off] = (byte) first;
+      int n = 1;
+      while (n < len && (pendingStart < pendingEnd || in.available() > 0)) {
         int b = read();
-        if (b == -1) return -1;
-        buf[off] = (byte) b;
-        return 1;
-      }
-
-      // Fast path: read a chunk from the buffered inner stream
-      int n = in.read(buf, off, len);
-      if (n <= 0) return n;
-
-      for (int i = 0; i < n; i++) {
-        if (buf[off + i] == '&') {
-          if (i > 0) {
-            // Save tail starting at '&' as overflow; return clean prefix
-            overflow = java.util.Arrays.copyOfRange(buf, off + i, off + n);
-            overflowPos = 0;
-            return i;
-          }
-          // '&' at position 0: save everything after it as overflow, process '&'
-          if (n > 1) {
-            overflow = java.util.Arrays.copyOfRange(buf, off + 1, off + n);
-            overflowPos = 0;
-          }
-          int b = read();
-          if (b == -1) return -1;
-          buf[off] = (byte) b;
-          return 1;
+        if (b == -1) {
+          break;
         }
+        buf[off + n++] = (byte) b;
       }
       return n;
     }
 
-    /** Returns next byte from overflow (if any) then from the pushback stream. */
-    private int nextByte() throws IOException {
-      if (overflow != null && overflowPos < overflow.length) {
-        int b = overflow[overflowPos++] & 0xFF;
-        if (overflowPos >= overflow.length) overflow = null;
-        return b;
+    /** True when the bytes after an already-read '&lt;' are {@code ![CDATA[}; consumes nothing. */
+    private boolean startsCdata() throws IOException {
+      byte[] seen = new byte[CDATA_OPEN.length];
+      int got = 0;
+      while (got < seen.length) {
+        int c = in.read();
+        if (c == -1) {
+          break;
+        }
+        seen[got++] = (byte) c;
       }
-      return in.read();
+      boolean match = got == seen.length && java.util.Arrays.equals(seen, CDATA_OPEN);
+      in.unread(seen, 0, got);
+      return match;
     }
 
-    /** Pushes a single byte so it is returned by the next nextByte() call. */
-    private void pushOneByte(byte b) throws IOException {
-      if (overflow != null) {
-        // Prepend to overflow rather than using the small pushback buffer
-        byte[] ext = new byte[overflow.length - overflowPos + 1];
-        ext[0] = b;
-        System.arraycopy(overflow, overflowPos, ext, 1, overflow.length - overflowPos);
-        overflow = ext;
-        overflowPos = 0;
-      } else {
-        in.unread(b); // single byte — always fits in pushback buffer
+    /** Called after a '&' was read: emits it plus whatever must follow, as one decision. */
+    private int readReference() throws IOException {
+      byte[] consumed = new byte[MAX_ENTITY_NAME + 4];
+      int n = 0;
+      int c = in.read();
+      if (c == '#') {
+        consumed[n++] = (byte) c;
+        boolean hex = false;
+        int digits = 0;
+        int code = 0;
+        boolean closed = false;
+        int d = in.read();
+        if (d == 'x' || d == 'X') {
+          consumed[n++] = (byte) d;
+          hex = true;
+          d = in.read();
+        }
+        while (d != -1 && digits < MAX_NUMERIC_DIGITS) {
+          int v = Character.digit(d, hex ? 16 : 10);
+          if (v < 0) {
+            break;
+          }
+          consumed[n++] = (byte) d;
+          code = code * (hex ? 16 : 10) + v;
+          digits++;
+          d = in.read();
+        }
+        if (d == ';' && digits > 0) {
+          consumed[n++] = (byte) d;
+          closed = true;
+        } else if (d != -1) {
+          in.unread(d);
+        }
+        if (closed && isXmlChar(code)) {
+          return emitReference(consumed, n, '&');
+        }
+        return emitBareAmpersand(consumed, n);
       }
+      if (isNameStart(c)) {
+        while (c != -1 && n < MAX_ENTITY_NAME && isNameChar(c)) {
+          consumed[n++] = (byte) c;
+          c = in.read();
+        }
+        if (c == ';' && n > 0) {
+          String repl = resolveEntity(new String(consumed, 0, n, StandardCharsets.US_ASCII));
+          byte[] bytes = repl.getBytes(StandardCharsets.UTF_8);
+          System.arraycopy(bytes, 1, pending, 0, bytes.length - 1);
+          pendingEnd = bytes.length - 1;
+          return bytes[0] & 0xFF;
+        }
+        if (c != -1) {
+          in.unread(c);
+        }
+        return emitBareAmpersand(consumed, n);
+      }
+      if (c != -1) {
+        in.unread(c);
+      }
+      return emitBareAmpersand(consumed, 0);
+    }
+
+    /** Emits '&' followed by the consumed bytes unchanged (a reference left as written). */
+    private int emitReference(byte[] consumed, int n, int first) {
+      System.arraycopy(consumed, 0, pending, 0, n);
+      pendingEnd = n;
+      return first;
+    }
+
+    /** Emits {@code &amp;} and gives the consumed bytes back to be read as ordinary text. */
+    private int emitBareAmpersand(byte[] consumed, int n) throws IOException {
+      if (n > 0) {
+        in.unread(consumed, 0, n);
+      }
+      pending[0] = 'a';
+      pending[1] = 'm';
+      pending[2] = 'p';
+      pending[3] = ';';
+      pendingEnd = 4;
+      return '&';
+    }
+
+    private static boolean isNameStart(int c) {
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+
+    private static boolean isNameChar(int c) {
+      return isNameStart(c) || (c >= '0' && c <= '9');
+    }
+
+    /** XML 1.0 Char production: the only code points a numeric reference may name. */
+    private static boolean isXmlChar(int cp) {
+      return cp == 0x9 || cp == 0xA || cp == 0xD
+          || (cp >= 0x20 && cp <= 0xD7FF)
+          || (cp >= 0xE000 && cp <= 0xFFFD)
+          || (cp >= 0x10000 && cp <= 0x10FFFF);
     }
 
     @Override public void close() throws IOException {
@@ -4322,6 +4414,14 @@ public class XbrlToParquetConverter implements FileConverter {
    * Download file from URL with retry and exponential backoff for transient errors.
    */
   private String downloadFile(String urlString) {
+    // A document unpacked from the daily feed is read locally; anything else is fetched.
+    if (SecFeedStore.knownAbsentUnchecked(urlString)) {
+      return null; // what sec.gov's 404 would return: the filing carries no XBRL
+    }
+    String held = SecFeedStore.textUnchecked(urlString);
+    if (held != null) {
+      return held;
+    }
     // Three attempts one and two seconds apart give a download three seconds to outlast a bad
     // patch. EDGAR's bad patches run for hours: one batch spent its afternoon against a 503ing
     // host and exhausted the budget 25 times, which cost six filings. Five attempts backing off to
@@ -4347,7 +4447,7 @@ public class XbrlToParquetConverter implements FileConverter {
         conn.setReadTimeout(30000);
         // SEC.gov requires proper User-Agent identifying automated tools with contact info
         // Format: "Company Name admin@email.com" - see: https://www.sec.gov/os/accessing-edgar-data
-        String userAgent = "Apache Calcite SEC Adapter apache-calcite@apache.org";
+        String userAgent = EdgarRateLimiter.userAgent();
         conn.setRequestProperty("User-Agent", userAgent);
         conn.setRequestProperty("Accept",
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
@@ -4360,6 +4460,7 @@ public class XbrlToParquetConverter implements FileConverter {
           LOGGER.debug("Attempting XSD download with User-Agent: {}", userAgent);
         }
 
+        NetworkOutageWait.connect(conn);
         int responseCode = conn.getResponseCode();
 
         // Retryable HTTP status codes
@@ -4391,7 +4492,7 @@ public class XbrlToParquetConverter implements FileConverter {
 
         try (BufferedReader reader =
             new BufferedReader(
-                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(CompleteBody.of(conn), StandardCharsets.UTF_8))) {
           StringBuilder content = new StringBuilder();
           String line;
           while ((line = reader.readLine()) != null) {
@@ -7164,7 +7265,10 @@ public class XbrlToParquetConverter implements FileConverter {
       // The primary_doc.xml is just the cover page — the actual holdings are in
       // a separate XML file (typically InformationTableOutput.xml or infotable.xml).
       // We need to download it from EDGAR.
-      Document infoTableDoc = download13FInfoTable(cik, accession);
+      // A filing in the local SEC data set needs no information-table fetch (two of its three
+      // sec.gov requests); one that is not there is fetched exactly as before.
+      List<Sec13fBulkData.Row> bulkRows = bulk13f == null ? null : bulk13f.rows(accession);
+      Document infoTableDoc = bulkRows == null ? download13FInfoTable(cik, accession) : null;
 
       // Extract report period from cover page (primary_doc.xml has it; info table does not)
       String coverReportPeriod = getElementText(primaryDoc, "reportCalendarOrQuarter");
@@ -7200,8 +7304,12 @@ public class XbrlToParquetConverter implements FileConverter {
       coverReportPeriod = normalizeDateToIso(coverReportPeriod);
 
       List<Map<String, Object>> holdings;
-      if (infoTableDoc != null) {
-        holdings = extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year, coverReportPeriod);
+      if (bulkRows != null || infoTableDoc != null) {
+        holdings = bulkRows != null
+            ? holdingsFromBulk(bulkRows, cik, filingType, filingDate, accession, year,
+                coverReportPeriod)
+            : extract13FHoldings(infoTableDoc, cik, filingType, filingDate, accession, year,
+                coverReportPeriod);
         // Extract manager name from primary doc if not in info table
         if (!holdings.isEmpty()) {
           String managerName = getElementText(primaryDoc, "filingManager", "name");
@@ -7464,6 +7572,74 @@ public class XbrlToParquetConverter implements FileConverter {
   }
 
   /**
+   * First descendant of {@code parent} whose local name is {@code localName}, trimmed, or null.
+   *
+   * <p>Matches on local name rather than the qualified name, because filers differ in whether the
+   * information-table elements carry a namespace prefix ({@code <ns1:nameOfIssuer>}) or sit in a
+   * default namespace ({@code <nameOfIssuer>}); {@code getElementsByTagName} only sees the latter.
+   */
+  private static String localText(Element parent, String localName) {
+    NodeList found = parent.getElementsByTagNameNS("*", localName);
+    return found.getLength() > 0 ? found.item(0).getTextContent().trim() : null;
+  }
+
+  /**
+   * Form 13F VALUE is reported in whole dollars on filings made on or after this date, and in
+   * thousands of dollars before it (SEC Form 13F data sets readme, "Market value").
+   */
+  private static final String THIRTEENF_VALUE_IN_DOLLARS_FROM = "2023-01-03";
+
+  /**
+   * One institutional_holdings row. The XML information table and the bulk data set both build
+   * their rows here, so the two sources cannot drift apart in column names, the dollars-to-thousands
+   * rule, or number parsing.
+   */
+  private Map<String, Object> newHolding(String cik, String accession, String filingDate, int year,
+      String filingType, String managerName, String managerCik, String reportPeriod,
+      String issuer, String titleOfClass, String cusip, String valueText, String shares,
+      String sharesType, String discretion, String otherManager, String votingSole,
+      String votingShared, String votingNone, String putCall) {
+    boolean valueInDollars = filingDate.compareTo(THIRTEENF_VALUE_IN_DOLLARS_FROM) >= 0;
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_date", filingDate);
+    data.put("year", year);
+    data.put("filing_type", filingType);
+    data.put("manager_name", managerName);
+    data.put("manager_cik", managerCik);
+    data.put("report_period", reportPeriod);
+    data.put("issuer_name", issuer);
+    data.put("title_of_class", titleOfClass);
+    data.put("cusip", cusip);
+    Double value = parseDoubleOrNull(valueText);
+    data.put("value_thousands",
+        value != null && valueInDollars ? Double.valueOf(value / 1000.0) : value);
+    data.put("shares_or_principal", parseDoubleOrNull(shares));
+    data.put("shares_or_principal_type", sharesType);
+    data.put("investment_discretion", discretion);
+    data.put("other_manager", otherManager);
+    data.put("voting_authority_sole", parseDoubleOrNull(votingSole));
+    data.put("voting_authority_shared", parseDoubleOrNull(votingShared));
+    data.put("voting_authority_none", parseDoubleOrNull(votingNone));
+    data.put("put_call", putCall);
+    return data;
+  }
+
+  /** Holdings of one filing from the local SEC Form 13F data set; see {@link Sec13fBulkData}. */
+  List<Map<String, Object>> holdingsFromBulk(List<Sec13fBulkData.Row> rows, String cik,
+      String filingType, String filingDate, String accession, int year, String reportPeriod) {
+    List<Map<String, Object>> out = new ArrayList<>(rows.size());
+    for (Sec13fBulkData.Row r : rows) {
+      out.add(newHolding(cik, accession, filingDate, year, filingType, null, cik, reportPeriod,
+          r.issuer, r.titleOfClass, r.cusip, r.value, r.sharesOrPrincipal,
+          r.sharesOrPrincipalType, r.investmentDiscretion, r.otherManager, r.votingSole,
+          r.votingShared, r.votingNone, r.putCall));
+    }
+    return out;
+  }
+
+  /**
    * Extract holdings from a 13F-HR XML informationTable.
    *
    * <p>13F XML structure:
@@ -7489,7 +7665,7 @@ public class XbrlToParquetConverter implements FileConverter {
    * </informationTable>
    * }</pre>
    */
-  private List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
+  List<Map<String, Object>> extract13FHoldings(Document doc, String cik,
       String filingType, String filingDate, String accession, int year, String reportPeriod) {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
@@ -7500,59 +7676,25 @@ public class XbrlToParquetConverter implements FileConverter {
     }
     String managerCik = cik;
 
-    // Find infoTable entries (handles both namespaced and non-namespaced)
-    NodeList entries = doc.getElementsByTagName("infoTable");
-    if (entries.getLength() == 0) {
-      entries = doc.getElementsByTagNameNS("*", "infoTable");
-    }
+    boolean valueInDollars = filingDate.compareTo(THIRTEENF_VALUE_IN_DOLLARS_FROM) >= 0;
+
+    NodeList entries = doc.getElementsByTagNameNS("*", "infoTable");
 
     for (int i = 0; i < entries.getLength(); i++) {
       Element entry = (Element) entries.item(i);
 
-      Map<String, Object> data = new HashMap<>();
-      data.put("cik", cik);
-      data.put("accession_number", accession);
-      data.put("filing_date", filingDate);
-      data.put("year", year);
-      data.put("filing_type", filingType);
-      data.put("manager_name", managerName);
-      data.put("manager_cik", managerCik);
-      data.put("report_period", reportPeriod);
-
-      data.put("issuer_name", getElementText(entry, "nameOfIssuer"));
-      data.put("title_of_class", getElementText(entry, "titleOfClass"));
-      data.put("cusip", getElementText(entry, "cusip"));
-
-      String value = getElementText(entry, "value");
-      data.put("value_thousands", parseDoubleOrNull(value));
-
-      // Shares or principal amount
-      data.put("shares_or_principal",
-          parseDoubleOrNull(getElementText(entry, "sshPrnamt")));
-      data.put("shares_or_principal_type",
-          getElementText(entry, "sshPrnamtType"));
-
-      data.put("investment_discretion",
-          getElementText(entry, "investmentDiscretion"));
-
-      // Voting authority
-      NodeList votingAuth = entry.getElementsByTagName("votingAuthority");
-      if (votingAuth.getLength() == 0) {
-        votingAuth = entry.getElementsByTagNameNS("*", "votingAuthority");
-      }
-      if (votingAuth.getLength() > 0) {
-        Element va = (Element) votingAuth.item(0);
-        data.put("voting_authority_sole", parseDoubleOrNull(getElementText(va, "Sole")));
-        data.put("voting_authority_shared", parseDoubleOrNull(getElementText(va, "Shared")));
-        data.put("voting_authority_none", parseDoubleOrNull(getElementText(va, "None")));
-      } else {
-        data.put("voting_authority_sole", null);
-        data.put("voting_authority_shared", null);
-        data.put("voting_authority_none", null);
-      }
-
-      data.put("put_call", getElementText(entry, "putCall"));
-
+      NodeList votingAuth = entry.getElementsByTagNameNS("*", "votingAuthority");
+      Element va = votingAuth.getLength() > 0 ? (Element) votingAuth.item(0) : null;
+      Map<String, Object> data = newHolding(cik, accession, filingDate, year, filingType,
+          managerName, managerCik, reportPeriod,
+          localText(entry, "nameOfIssuer"), localText(entry, "titleOfClass"),
+          localText(entry, "cusip"), localText(entry, "value"),
+          localText(entry, "sshPrnamt"), localText(entry, "sshPrnamtType"),
+          localText(entry, "investmentDiscretion"), localText(entry, "otherManager"),
+          va == null ? null : localText(va, "Sole"),
+          va == null ? null : localText(va, "Shared"),
+          va == null ? null : localText(va, "None"),
+          localText(entry, "putCall"));
       dataList.add(data);
     }
 
@@ -7629,7 +7771,8 @@ public class XbrlToParquetConverter implements FileConverter {
             xmlDoc = builder.parse(is);
           }
         } catch (Exception e) {
-          LOGGER.debug("XML parse failed for 13D/G, using HTML path: {}", e.getMessage());
+          throw new IOException("13D/G primary document " + fileName
+              + " is not parseable XML: " + e.getMessage(), e);
         }
       }
 
@@ -7732,21 +7875,11 @@ public class XbrlToParquetConverter implements FileConverter {
    *
    * @return two-element array, {@code [subjectCik, filerCik]}, either element possibly null
    */
-  private String[] extract13DGPartyCiks(String cik, String accession) {
+  private String[] extract13DGPartyCiks(String header, String accession) {
     String[] parties = new String[] {null, null};
-    if (cik == null || accession == null || accession.isEmpty()) {
-      LOGGER.warn("13D/G header lookup skipped: cik={} accession={}", cik, accession);
+    if (header == null) {
       return parties;
     }
-    String url = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s.hdr.sgml",
-        cik.replaceFirst("^0+", ""), accession.replace("-", ""), accession);
-    String header = downloadFile(url);
-    if (header == null || header.isEmpty()) {
-      LOGGER.warn("13D/G submission header unavailable for accession={} ({}); subject_cik and "
-          + "filer_cik will be null for this filing", accession, url);
-      return parties;
-    }
-
     parties = parseHeaderPartyCiks(header);
 
     if (parties[0] == null || parties[1] == null) {
@@ -7756,6 +7889,46 @@ public class XbrlToParquetConverter implements FileConverter {
           accession, parties[0], parties[1]);
     }
     return parties;
+  }
+
+  /**
+   * Fetches the {@code .hdr.sgml} submission header of a 13D/G filing.
+   *
+   * @return the header text, or null (after a WARN) when it cannot be read
+   */
+  private String fetch13DGHeader(String cik, String accession) {
+    if (cik == null || accession == null || accession.isEmpty()) {
+      LOGGER.warn("13D/G header lookup skipped: cik={} accession={}", cik, accession);
+      return null;
+    }
+    String url = String.format("https://www.sec.gov/Archives/edgar/data/%s/%s/%s.hdr.sgml",
+        cik.replaceFirst("^0+", ""), accession.replace("-", ""), accession);
+    String header = downloadFile(url);
+    if (header == null || header.isEmpty()) {
+      LOGGER.warn("13D/G submission header unavailable for accession={} ({}); subject_cik and "
+          + "filer_cik will be null for this filing", accession, url);
+      return null;
+    }
+    return header;
+  }
+
+  private static final Pattern HEADER_SUBMISSION_TYPE =
+      Pattern.compile("(?m)^<TYPE>\\s*(\\S[^\\r\\n]*)");
+
+  /**
+   * True when the submission is a Schedule TO tender-offer filing that EDGAR also indexes as a
+   * Schedule 13D/G (a combined TO/13D). Its submission {@code <TYPE>} is {@code SC TO-T},
+   * {@code SC TO-I}, {@code SC TO-C} or an amendment of one, while its party blocks carry the
+   * {@code SC 13D} form types. The document is a tender-offer narrative with no 13D cover page.
+   *
+   * <p>Package-private so it can be tested against real header text without a network call.
+   */
+  static boolean isCombinedTenderOffer(String header) {
+    if (header == null) {
+      return false;
+    }
+    Matcher m = HEADER_SUBMISSION_TYPE.matcher(header);
+    return m.find() && m.group(1).trim().toUpperCase().startsWith("SC TO");
   }
 
   /**
@@ -7803,6 +7976,12 @@ public class XbrlToParquetConverter implements FileConverter {
       String cik, String filingType, String filingDate, String accession, int year) {
     List<Map<String, Object>> dataList = new ArrayList<>();
 
+    if (xmlDoc != null) {
+      dataList.add(extract13DGOwnershipFromXml(xmlDoc, cik, filingType, filingDate, accession,
+          year));
+      return dataList;
+    }
+
     // Parse HTML for text extraction
     org.jsoup.nodes.Document htmlDoc = Jsoup.parse(fileContent);
     htmlDoc.select("script, style").remove();
@@ -7816,7 +7995,14 @@ public class XbrlToParquetConverter implements FileConverter {
     // CIK. The cover-page regex above is kept for subject_company because the header's
     // COMPANY CONFORMED NAME and the cover page's "Name of Issuer" are not always the same
     // string, and downstream text matching already depends on the cover-page form.
-    String[] partyCiks = extract13DGPartyCiks(cik, accession);
+    String header = fetch13DGHeader(cik, accession);
+    String[] partyCiks = extract13DGPartyCiks(header, accession);
+    boolean combinedTenderOffer = isCombinedTenderOffer(header);
+    if (combinedTenderOffer) {
+      LOGGER.warn("Accession {} is a combined Schedule TO/13D; the cover-page figures are not "
+          + "in the document, so filer_name, percent, share counts and voting power are null",
+          accession);
+    }
     String subjectCik = partyCiks[0];
     String filerCik = partyCiks[1];
 
@@ -7871,6 +8057,25 @@ public class XbrlToParquetConverter implements FileConverter {
     // Extract purpose of transaction (Item 4)
     String purpose = extract13DGPurposeText(bodyText);
 
+    if (combinedTenderOffer) {
+      // The cover-page patterns above match item numbers and tender-offer narrative in a
+      // Schedule TO document, so none of what they read is a 13D figure.
+      subjectCompany = null;
+      titleOfClass = null;
+      cusip = null;
+      dateOfEvent = null;
+      typeOfReportingPerson = null;
+      sourceOfFunds = null;
+      percentOfClass = null;
+      sharesBeneficiallyOwned = null;
+      soleVoting = null;
+      sharedVoting = null;
+      soleDispositive = null;
+      sharedDispositive = null;
+      filerName = null;
+      purpose = null;
+    }
+
     Map<String, Object> data = new HashMap<>();
     data.put("cik", cik);
     data.put("accession_number", accession);
@@ -7899,6 +8104,126 @@ public class XbrlToParquetConverter implements FileConverter {
 
     dataList.add(data);
     return dataList;
+  }
+
+  /**
+   * Reads a structured Schedule 13D or 13G {@code primary_doc.xml} (EDGAR schema
+   * {@code edgarSubmission}, namespaces {@code schedule13D} / {@code schedule13g}, in use since
+   * December 2024).
+   *
+   * <p>The two schedules name the same facts differently, so each is looked up by its own
+   * element names: 13D carries {@code reportingPersons/reportingPersonInfo} with flat power and
+   * {@code aggregateAmountOwned}/{@code percentOfClass} children; 13G carries repeated
+   * {@code coverPageHeaderReportingPersonDetails} with the four powers nested under
+   * {@code reportingPersonBeneficiallyOwnedNumberOfShares}, and {@code classPercent}.
+   *
+   * <p>The table has one row per filing, so the figures are those of the first reporting person,
+   * who is the lead filer. {@code subject_cik} and {@code filer_cik} come from the document
+   * itself: the issuer CIK, and the first reporting person's CIK (13D) or the submitting
+   * filer's CIK (13G, whose reporting persons carry none).
+   */
+  static Map<String, Object> extract13DGOwnershipFromXml(Document doc, String cik,
+      String filingType, String filingDate, String accession, int year) {
+    Element person = firstElementByLocalName(doc, "reportingPersonInfo");
+    if (person == null) {
+      person = firstElementByLocalName(doc, "coverPageHeaderReportingPersonDetails");
+    }
+    if (person == null) {
+      throw new IllegalStateException("13D/G XML for accession=" + accession
+          + " has no reporting person element");
+    }
+
+    String filerCik = textOf(person, "reportingPersonCIK");
+    if (filerCik == null) {
+      Element headerFiler = firstElementByLocalName(doc, "filerCredentials");
+      filerCik = headerFiler == null ? null : textOf(headerFiler, "cik");
+    }
+
+    String percent = textOf(person, "percentOfClass");
+    if (percent == null) {
+      percent = textOf(person, "classPercent");
+    }
+    String aggregate = textOf(person, "aggregateAmountOwned");
+    if (aggregate == null) {
+      aggregate = textOf(person, "reportingPersonBeneficiallyOwnedAggregateNumberOfShares");
+    }
+    String dateOfEvent = textOf(doc.getDocumentElement(), "dateOfEvent");
+    if (dateOfEvent == null) {
+      dateOfEvent = textOf(doc.getDocumentElement(), "eventDateRequiresFilingThisStatement");
+    }
+    String purpose = textOf(doc.getDocumentElement(), "transactionPurpose");
+    if (purpose != null && purpose.length() > 5000) {
+      purpose = purpose.substring(0, 5000) + "...";
+    }
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("cik", cik);
+    data.put("accession_number", accession);
+    data.put("filing_date", filingDate);
+    data.put("year", year);
+    data.put("filing_type", filingType);
+    data.put("subject_company", textOf(doc.getDocumentElement(), "issuerName"));
+    data.put("subject_cik", paddedCik(textOf(doc.getDocumentElement(), "issuerCik")));
+    data.put("filer_name", textOf(person, "reportingPersonName"));
+    data.put("filer_cik", paddedCik(filerCik));
+    data.put("date_of_event", dateOfEvent);
+    data.put("title_of_class", textOf(doc.getDocumentElement(), "securitiesClassTitle"));
+    // The element is issuerCusipNumber in some filings and issuerCusip in others (the lookup
+    // ignores case, so issuerCUSIP is covered).
+    String cusip = textOf(doc.getDocumentElement(), "issuerCusipNumber");
+    if (cusip == null) {
+      cusip = textOf(doc.getDocumentElement(), "issuerCusip");
+    }
+    data.put("cusip", cusip);
+    data.put("percent_of_class", xmlNumber(percent));
+    data.put("shares_beneficially_owned", xmlNumber(aggregate));
+    data.put("sole_voting_power", xmlNumber(textOf(person, "soleVotingPower")));
+    data.put("shared_voting_power", xmlNumber(textOf(person, "sharedVotingPower")));
+    data.put("sole_dispositive_power", xmlNumber(textOf(person, "soleDispositivePower")));
+    data.put("shared_dispositive_power", xmlNumber(textOf(person, "sharedDispositivePower")));
+    data.put("type_of_reporting_person", textOf(person, "typeOfReportingPerson"));
+    data.put("source_of_funds", textOf(person, "fundType"));
+    data.put("purpose_of_transaction", purpose);
+    return data;
+  }
+
+  /** First descendant (or self) element whose local name matches case-insensitively. */
+  private static Element firstElementByLocalName(Node scope, String localName) {
+    NodeList nodes = scope instanceof Document
+        ? ((Document) scope).getElementsByTagNameNS("*", "*")
+        : ((Element) scope).getElementsByTagNameNS("*", "*");
+    for (int i = 0; i < nodes.getLength(); i++) {
+      Element e = (Element) nodes.item(i);
+      if (localName.equalsIgnoreCase(e.getLocalName())) {
+        return e;
+      }
+    }
+    return null;
+  }
+
+  /** Trimmed text of the first descendant with the given local name; null when absent or blank. */
+  private static String textOf(Element scope, String localName) {
+    Element e = firstElementByLocalName(scope, localName);
+    if (e == null) {
+      return null;
+    }
+    String t = e.getTextContent().trim();
+    return t.isEmpty() ? null : t;
+  }
+
+  private static String paddedCik(String digits) {
+    if (digits == null) {
+      return null;
+    }
+    return digits.length() >= 10 ? digits : String.format("%010d", Long.parseLong(digits));
+  }
+
+  /** Parses an XML numeric value such as {@code 990000.00}, {@code 9.90%} or {@code 990,000}. */
+  private static Double xmlNumber(String value) {
+    if (value == null) {
+      return null;
+    }
+    return Double.valueOf(value.replace(",", "").replace("%", "").trim());
   }
 
   /**

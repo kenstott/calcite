@@ -270,19 +270,19 @@ class ConverterCoverageTest {
 
   @Test void testConvertIfNeededCsvReturnsFalse() {
     File csv = new File(tempDir.toFile(), "data.csv");
-    boolean converted = FileConversionManager.convertIfNeeded(csv, outputDir, "UNCHANGED");
+    boolean converted = FileConversionManager.convertIfNeeded(csv, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(converted);
   }
 
   @Test void testConvertIfNeededParquetReturnsFalse() {
     File parquet = new File(tempDir.toFile(), "data.parquet");
-    boolean converted = FileConversionManager.convertIfNeeded(parquet, outputDir, "UNCHANGED");
+    boolean converted = FileConversionManager.convertIfNeeded(parquet, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(converted);
   }
 
   @Test void testConvertIfNeededTsvReturnsFalse() {
     File tsv = new File(tempDir.toFile(), "data.tsv");
-    boolean converted = FileConversionManager.convertIfNeeded(tsv, outputDir, "UNCHANGED");
+    boolean converted = FileConversionManager.convertIfNeeded(tsv, outputDir, "UNCHANGED", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertFalse(converted);
   }
 
@@ -291,7 +291,7 @@ class ConverterCoverageTest {
     Files.write(jsonFile.toPath(),
         "[{\"a\": 1}]".getBytes(StandardCharsets.UTF_8));
     boolean converted =
-        FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(jsonFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     assertFalse(converted);
   }
 
@@ -300,7 +300,7 @@ class ConverterCoverageTest {
     Files.write(yamlFile.toPath(),
         "key: value\n".getBytes(StandardCharsets.UTF_8));
     boolean converted =
-        FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(yamlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     assertFalse(converted);
   }
 
@@ -309,7 +309,7 @@ class ConverterCoverageTest {
     Files.write(ymlFile.toPath(),
         "key: value\n".getBytes(StandardCharsets.UTF_8));
     boolean converted =
-        FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(ymlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     assertFalse(converted);
   }
 
@@ -323,7 +323,7 @@ class ConverterCoverageTest {
 
     File htmlFile = createTempFile("test.html", html);
     boolean converted =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     assertTrue(converted);
   }
 
@@ -334,7 +334,7 @@ class ConverterCoverageTest {
 
     File htmlFile = createTempFile("two_arg.html", html);
     boolean converted =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "SMART_CASING");
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted);
   }
 
@@ -345,7 +345,7 @@ class ConverterCoverageTest {
 
     File htmlFile = createTempFile("three_arg.html", html);
     boolean converted =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "SMART_CASING", "SMART_CASING");
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "SMART_CASING", "SMART_CASING", null, null, new CrawlerConfiguration());
     assertTrue(converted);
   }
 
@@ -356,7 +356,7 @@ class ConverterCoverageTest {
 
     File htmlFile = createTempFile("null_base.html", html);
     boolean converted =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", null);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", null, null, new CrawlerConfiguration());
     assertTrue(converted);
   }
 
@@ -368,18 +368,18 @@ class ConverterCoverageTest {
     File htmlFile = createTempFile("skip_unchanged.html", html);
 
     boolean first =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     assertTrue(first);
 
     boolean second =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     assertFalse(second);
   }
 
   @Test void testConvertIfNeededNonExistentFileFails() {
     File nonExistent = new File(tempDir.toFile(), "does_not_exist.html");
     boolean converted =
-        FileConversionManager.convertIfNeeded(nonExistent, outputDir, "UNCHANGED", "UNCHANGED", baseDir);
+        FileConversionManager.convertIfNeeded(nonExistent, outputDir, "UNCHANGED", "UNCHANGED", baseDir, null, new CrawlerConfiguration());
     // Non-existent file should fail gracefully
     assertFalse(converted);
   }
@@ -391,8 +391,7 @@ class ConverterCoverageTest {
 
     File htmlFile = createTempFile("rp.html", html);
     boolean converted =
-        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir,
-        "subdir" + File.separator + "rp.html");
+        FileConversionManager.convertIfNeeded(htmlFile, outputDir, "UNCHANGED", "UNCHANGED", baseDir, "subdir" + File.separator + "rp.html", new CrawlerConfiguration());
     assertTrue(converted);
   }
 

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13g" xmlns:com="http://www.sec.gov/edgar/common">
+  <headerData>
+    <submissionType>SCHEDULE 13G/A</submissionType>
+    <previousAccessionNumber>0000092230-22-000091</previousAccessionNumber>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <cik>0000092230</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>2</amendmentNo>
+      <securitiesClassTitle>Exchange Traded Fund</securitiesClassTitle>
+      <eventDateRequiresFilingThisStatement>06/30/2025</eventDateRequiresFilingThisStatement>
+      <issuerInfo>
+        <issuerCik>0001551950</issuerCik>
+        <issuerName>Columbia ETF Trust I</issuerName>
+        <issuerCusip>19761L805</issuerCusip>
+        <issuerPrincipalExecutiveOfficeAddress>
+          <com:street1>290 CONGRESS STREET</com:street1>
+          <com:street2>290 CONGRESS STREET</com:street2>
+          <com:city>BOSTON</com:city>
+          <com:stateOrCountry>MA</com:stateOrCountry>
+          <com:zipCode>02210</com:zipCode>
+        </issuerPrincipalExecutiveOfficeAddress>
+      </issuerInfo>
+      <designateRulesPursuantThisScheduleFiled>
+        <designateRulePursuantThisScheduleFiled>Rule 13d-1(b)</designateRulePursuantThisScheduleFiled>
+      </designateRulesPursuantThisScheduleFiled>
+    </coverPageHeader>
+    <coverPageHeaderReportingPersonDetails>
+
+      <reportingPersonName>TRUIST FINANCIAL CORP</reportingPersonName>
+      <citizenshipOrOrganization>NC</citizenshipOrOrganization>
+      <reportingPersonBeneficiallyOwnedNumberOfShares>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>0.00</sharedVotingPower>
+        <soleDispositivePower>2989.00</soleDispositivePower>
+        <sharedDispositivePower>0.00</sharedDispositivePower>
+      </reportingPersonBeneficiallyOwnedNumberOfShares>
+      <reportingPersonBeneficiallyOwnedAggregateNumberOfShares>2989.00</reportingPersonBeneficiallyOwnedAggregateNumberOfShares>
+      <classPercent>0.1</classPercent>
+      <typeOfReportingPerson>IA</typeOfReportingPerson>
+      <typeOfReportingPerson>HC</typeOfReportingPerson>
+      <comments>Filing completed as part of internal effort to remediate filings not previously submitted. Current ownership is less than 5%. Filing of less than 5% ownership should have been submitted in 2023.
+</comments>
+    </coverPageHeaderReportingPersonDetails>
+    <items>
+      <item1>
+        <issuerName>Columbia ETF Trust I</issuerName>
+        <issuerPrincipalExecutiveOfficeAddress>290 CONGRESS STREET, 290 CONGRESS STREET, BOSTON, MASSACHUSETTS, 02210.</issuerPrincipalExecutiveOfficeAddress>
+      </item1>
+      <item2>
+        <filingPersonName>Truist Financial Corporation as Parent Holding Company for Truist Advisory Services, Inc. an affiliated Registered Investment Advisor</filingPersonName>
+        <principalBusinessOfficeOrResidenceAddress>214 North Tryon Street
+Charlotte, NC 28202
+</principalBusinessOfficeOrResidenceAddress>
+        <citizenship>Truist Financial Corporation is a North Carolina Corporation;
+Truist Advisory Services, Inc. is a Delaware Corporation</citizenship>
+      </item2>
+      <item3>
+        <notApplicableFlag>N</notApplicableFlag>
+        <typeOfPersonFiling>IA</typeOfPersonFiling>
+        <typeOfPersonFiling>HC</typeOfPersonFiling>
+      </item3>
+      <item4>
+        <amountBeneficiallyOwned>2989.0
+</amountBeneficiallyOwned>
+        <classPercent>0.10</classPercent>
+        <numberOfSharesPersonHas>
+          <solePowerOrDirectToVote>0
+</solePowerOrDirectToVote>
+          <sharedPowerOrDirectToVote>0</sharedPowerOrDirectToVote>
+          <solePowerOrDirectToDispose>2989.0
+</solePowerOrDirectToDispose>
+          <sharedPowerOrDirectToDispose>0</sharedPowerOrDirectToDispose>
+        </numberOfSharesPersonHas>
+      </item4>
+      <item5>
+        <classOwnership5PercentOrLess>Y</classOwnership5PercentOrLess>
+      </item5>
+      <item6>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item6>
+      <item7>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item7>
+      <item8>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item8>
+      <item9>
+        <notApplicableFlag>Y</notApplicableFlag>
+      </item9>
+      <item10>
+        <notApplicableFlag>N</notApplicableFlag>
+        <certifications>By signing below I certify that, to the best of my knowledge and belief, the securities referred to above were acquired and are held in the ordinary course of business and were not acquired and are not held for the purpose of or with the effect of changing or influencing the control of the issuer of the securities and were not acquired and are not held in connection with or as a participant in any transaction having that purpose or effect, other than activities solely in connection with a nomination under &amp;#167; 240.14a-11.
+
+</certifications>
+      </item10>
+    </items>
+    <signatureInformation>
+      <reportingPersonName>TRUIST FINANCIAL CORP</reportingPersonName>
+      <signatureDetails>
+        <signature>Edward M. Kwiatkowski</signature>
+        <title>Vice President</title>
+        <date>07/07/2025</date>
+      </signatureDetails>
+    </signatureInformation>
+  </formData>
+</edgarSubmission>

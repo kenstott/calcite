@@ -226,7 +226,7 @@ for entry in "${TABLES[@]}"; do
   # difference from pass 2, where the filtered view WAS the only copy and a failure left
   # nothing to read.
   # shellcheck disable=SC2086
-  java -Xms1g -Xmx"$HEAP" $JVM_PROPS \
+  java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -Xms1g -Xmx"$HEAP" $JVM_PROPS \
     -cp "$JAR" \
     org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
     --warehouse "$WAREHOUSE_BASE/$schema" \

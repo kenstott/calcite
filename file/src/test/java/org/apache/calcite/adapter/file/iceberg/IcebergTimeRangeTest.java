@@ -147,11 +147,12 @@ public class IcebergTimeRangeTest {
         + "      \"type\": \"custom\",\n"
         + "      \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
         + "      \"operand\": {\n"
+        + "        \"baseDirectory\": \"" + json(tempDir.resolve("base")) + "\",\n"
         + "        \"ephemeralCache\": true,\n"
         + "        \"tables\": [\n"
         + "          {\n"
         + "            \"name\": \"orders_timeline\",\n"
-        + "            \"url\": \"" + ordersTablePath + "\",\n"
+        + "            \"url\": \"" + json(ordersTablePath) + "\",\n"
         + "            \"format\": \"iceberg\",\n"
         + "            \"timeRange\": {\n"
         + "              \"start\": \"2024-01-01T00:00:00Z\",\n"
@@ -197,4 +198,8 @@ public class IcebergTimeRangeTest {
     }
   }
 
+  /** A path as the body of a JSON string: Windows separators are escapes there. */
+  private static String json(Object path) {
+    return path.toString().replace("\\", "\\\\");
+  }
 }

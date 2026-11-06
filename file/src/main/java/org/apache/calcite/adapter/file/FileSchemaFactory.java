@@ -16,15 +16,15 @@ import org.apache.calcite.adapter.file.clickhouse.ClickHouseJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.duckdb.DuckDBJdbcSchemaFactory;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.execution.duckdb.DuckDBConfig;
-import org.apache.calcite.adapter.file.metadata.InformationSchema;
+import org.apache.calcite.schema.impl.InformationSchema;
 import org.apache.calcite.adapter.file.metadata.PostgresMetadataSchema;
 import org.apache.calcite.adapter.file.partition.IncrementalTracker;
 import org.apache.calcite.adapter.file.rules.PartitionDistinctRule;
 import org.apache.calcite.adapter.file.storage.StorageProvider;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.materialize.MaterializationService;
-import org.apache.calcite.model.JsonTable;
 import org.apache.calcite.model.ModelHandler;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.runtime.Hook;
@@ -81,9 +81,6 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
   /** Public singleton, per factory contract. */
   public static final FileSchemaFactory INSTANCE = new FileSchemaFactory();
 
-  // Store constraint metadata from model files
-  private Map<String, Map<String, Object>> tableConstraints;
-
   /** Name of the column that is implicitly created in a CSV stream table
    * to hold the data arrival time. */
   public static final String ROWTIME_COLUMN_NAME = "ROWTIME";
@@ -98,20 +95,19 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
    * Writes a debug model file capturing the actual operands passed to Calcite.
    * This is useful for debugging schema configuration issues.
    *
-   * <p>The file is written to .aperio/debug-model-{schemaName}.json with sensitive
-   * information (credentials) sanitized.
+   * <p>The file is written to {@code <baseDirectory>/.aperio/debug-model-{schemaName}.json} with
+   * sensitive information (credentials) sanitized.
    *
+   * @param baseDirectory the schema's base directory, where every file it writes goes (REQ-1992)
    * @param schemaName the schema name
    * @param operand the operand map passed to create()
    * @param parentSchemaName the parent schema name (for context)
    */
   @SuppressWarnings("unchecked")
-  private static void writeDebugModel(String schemaName, Map<String, Object> operand,
-      String parentSchemaName) {
+  private static void writeDebugModel(File baseDirectory, String schemaName,
+      Map<String, Object> operand, String parentSchemaName) {
     try {
-      // Determine .aperio root directory (always working directory)
-      String userDir = System.getProperty("user.dir");
-      File aperioRoot = new File(userDir, "." + BRAND);
+      File aperioRoot = new File(baseDirectory, "." + BRAND);
       if (!aperioRoot.exists()) {
         aperioRoot.mkdirs();
       }
@@ -336,19 +332,30 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // top-level YAML operand (e.g. a table's own config, a schema-level feature flag) would
     // silently read back as absent/default no matter what the YAML or environment said.
     org.apache.calcite.adapter.file.etl.ModelOperand.capture(name, operand);
+    if (operand.get("networkOutageWaitMinutes") != null) {
+      org.apache.calcite.adapter.file.etl.NetworkOutageWait.configureMinutes(
+          org.apache.calcite.adapter.file.etl.ModelOperand.getLong(
+              name + ".networkOutageWaitMinutes", 0L));
+    }
 
     @SuppressWarnings("unchecked") List<Map<String, Object>> tables =
         (List) operand.get("tables");
 
-    // Model file location (automatically set by Calcite's ModelHandler)
-    // This can be null for inline models (model provided as a string)
-    // Convert to string immediately - avoid File object usage
+    // Model file location, which relative paths resolve against: the directory of the model
+    // file Calcite's ModelHandler loaded (its modelUri), or null for an inline model. Not the
+    // baseDirectory operand: ModelHandler fills that key with the model's directory only when
+    // the model does not set it, and a model that sets it names where files are written.
     String modelFileDirPath = null;
-    Object baseDirectoryObj = operand.get(ModelHandler.ExtraOperand.BASE_DIRECTORY.camelName);
-    if (baseDirectoryObj instanceof File) {
-      modelFileDirPath = ((File) baseDirectoryObj).getAbsolutePath();
-    } else if (baseDirectoryObj instanceof String) {
-      modelFileDirPath = new File((String) baseDirectoryObj).getAbsolutePath();
+    Object modelUri = operand.get(ModelHandler.ExtraOperand.MODEL_URI.camelName);
+    if (modelUri instanceof String && !((String) modelUri).startsWith("inline:")) {
+      File modelDir = new File((String) modelUri).getAbsoluteFile().getParentFile();
+      modelFileDirPath = modelDir == null ? null : modelDir.getPath();
+    } else {
+      Object baseDirectoryObj = operand.get(ModelHandler.ExtraOperand.BASE_DIRECTORY.camelName);
+      if (baseDirectoryObj instanceof File) {
+        // A caller building the operand itself (no modelUri) passes the model directory here
+        modelFileDirPath = ((File) baseDirectoryObj).getAbsolutePath();
+      }
     }
 
     // Get ephemeralCache option (default to false for backward compatibility)
@@ -364,47 +371,56 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     File baseConfigDirectory = null;
     File baseDirectory = null;
 
-    if (ephemeralCache) {
-      // Create a temp directory for this test instance
-      try {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        String uniqueId = UUID.randomUUID().toString();
-        baseConfigDirectory = new File(tempDir, uniqueId);
-        baseConfigDirectory.mkdirs();
-        LOGGER.info("Using ephemeral cache directory for schema '{}': {}",
-            name, baseConfigDirectory.getAbsolutePath());
-        // baseDirectory will be computed from baseConfigDirectory later
-      } catch (Exception e) {
-        LOGGER.error("Failed to create ephemeral cache directory", e);
-      }
+    // baseDirectory, or operatingDirectory (set by GovDataSchemaFactory from
+    // govdata.operating.dir.base): the directory every file the adapter writes for the schema goes
+    // under (REQ-1992). A relative path resolves against the model file's directory.
+    // ModelHandler fills baseDirectory with the model file's directory (a File, beside the
+    // modelUri it also adds) when the model does not set it; that is not a configured location
+    // (owner ruling 2026-10-13), so only a value the model or caller actually set counts.
+    Object explicitBase = operand.get("baseDirectory");
+    if (explicitBase instanceof File
+        && operand.containsKey(ModelHandler.ExtraOperand.MODEL_URI.camelName)) {
+      explicitBase = null;
+    }
+    final Object baseDirObj = explicitBase != null
+        ? explicitBase
+        : operand.get("operatingDirectory");
+    final String baseDirConfig;
+    if (baseDirObj instanceof String) {
+      baseDirConfig = (String) baseDirObj;
+    } else if (baseDirObj instanceof File) {
+      baseDirConfig = ((File) baseDirObj).getPath();
     } else {
-      // User-configurable baseDirectory for cache/conversions (optional).
-      // Fall back to operatingDirectory (set by GovDataSchemaFactory from govdata.operating.dir.base)
-      // so the DuckDB catalog lands under the product data dir, not user.dir.
-      final Object baseDirObj = operand.get("baseDirectory") != null
-          ? operand.get("baseDirectory")
-          : operand.get("operatingDirectory");
-      final String baseDirConfig;
-      if (baseDirObj instanceof String) {
-        baseDirConfig = (String) baseDirObj;
-      } else if (baseDirObj instanceof File) {
-        baseDirConfig = ((File) baseDirObj).getPath();
-      } else {
-        baseDirConfig = null;
+      baseDirConfig = null;
+    }
+    if (baseDirConfig == null || baseDirConfig.isEmpty()) {
+      // There is no default: the working directory or the JVM temp directory would be shared by
+      // every schema in the process
+      throw new IllegalArgumentException("File schema '" + name + "' has no baseDirectory "
+          + "(or operatingDirectory) operand. Every file the adapter writes for the schema goes "
+          + "under that directory; set it to the directory the schema may write to.");
+    }
+    File configuredBase = new File(baseDirConfig);
+    if (!configuredBase.isAbsolute() && modelFileDirPath != null) {
+      configuredBase = new File(modelFileDirPath, baseDirConfig);
+    }
+    configuredBase = configuredBase.getAbsoluteFile();
+    if (ephemeralCache) {
+      // A fresh directory for this schema instance, still under the base directory
+      baseConfigDirectory = new File(configuredBase, "ephemeral-" + UUID.randomUUID());
+      // createDirectories: the shared parent may be made concurrently by another schema
+      try {
+        java.nio.file.Files.createDirectories(baseConfigDirectory.toPath());
+      } catch (java.io.IOException e) {
+        throw new IllegalStateException("Cannot create the ephemeral cache directory "
+            + baseConfigDirectory + " for file schema '" + name + "'", e);
       }
-
-      if (baseDirConfig != null && !baseDirConfig.isEmpty()) {
-        // User explicitly configured baseDirectory - respect their choice
-        baseConfigDirectory = new File(baseDirConfig);
-        if (!baseConfigDirectory.isAbsolute() && modelFileDirPath != null) {
-          // If relative path, resolve against model.json location
-          baseConfigDirectory = new File(modelFileDirPath, baseDirConfig);
-        }
-        baseConfigDirectory = baseConfigDirectory.getAbsoluteFile();
-        LOGGER.info("Using user-configured baseConfigDirectory: {}", baseConfigDirectory.getAbsolutePath());
-      }
-      // If no explicit config and not ephemeral, baseConfigDirectory remains null
-      // and FileSchema will use its default (working directory)
+      LOGGER.info("Using ephemeral cache directory for schema '{}': {}",
+          name, baseConfigDirectory.getAbsolutePath());
+    } else {
+      baseConfigDirectory = configuredBase;
+      LOGGER.info("Using configured baseConfigDirectory: {}",
+          baseConfigDirectory.getAbsolutePath());
     }
 
     // Compute the full baseDirectory path (with .aperio/<schema>) if baseConfigDirectory is set
@@ -469,7 +485,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
         new ExecutionEngineConfig(executionEngine, batchSize, memoryThreshold, null, duckdbConfig, parquetCacheDirectory);
 
     // Get recursive parameter (default to false for backward compatibility)
-    final boolean recursive = operand.get("recursive") == Boolean.TRUE;
+    // recursive defaults to true and accepts the string "true" as a model or JDBC URL gives it
+    // (FILE-110, C-01, #532)
+    final Boolean recursiveOperand = parseBooleanValue(operand.get("recursive"));
+    final boolean recursive = recursiveOperand == null || recursiveOperand;
 
     // Get directory pattern for glob-based file discovery
     // Support both "directoryPattern" and "glob" for backward compatibility
@@ -588,9 +607,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Auto-detect storage type from baseDirectory path for cache/parquet locations
-    final Object baseDirObj = operand.get("baseDirectory");
-    if (storageType == null && baseDirObj instanceof String) {
-      String baseDirStr = (String) baseDirObj;
+    final Object baseDirectoryOperand = operand.get("baseDirectory");
+    if (storageType == null && baseDirectoryOperand instanceof String) {
+      String baseDirStr = (String) baseDirectoryOperand;
       if (baseDirStr.startsWith("s3://")) {
         storageType = "s3";
         LOGGER.info("Auto-detected S3 storage from baseDirectory path: {}", baseDirStr);
@@ -650,6 +669,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     // This is set by GovDataSchemaFactory to ensure paths like .aperio/econ are used
     // regardless of the user-assigned schema name (e.g., "ECON", "Econ")
     final String canonicalSchemaName = (String) operand.get("canonicalSchemaName");
+    // How the schema's own HTML files are read: their content's lists as tables (REQ-2186).
+    final org.apache.calcite.adapter.file.converters.CrawlerConfiguration pages =
+        org.apache.calcite.adapter.file.converters.CrawlerConfiguration.pagesOf(operand);
 
     // All paths are strings - StorageProvider handles both local and cloud storage
     String directoryPath = null;
@@ -681,11 +703,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       boolean isAbsolute = directory.startsWith("/") || directory.matches("^[a-zA-Z]:[\\\\/].*"); // Unix or Windows absolute
       if ("local".equals(storageType) && modelFileDirPath != null && !isAbsolute) {
         // Relative path - resolve against model file directory
-        directoryPath = modelFileDirPath + (modelFileDirPath.endsWith("/") ? "" : "/") + directory;
+        directoryPath = new File(modelFileDirPath, directory).getPath();
         LOGGER.info("Resolved relative path against model directory: {} -> {}", directory, directoryPath);
       } else {
-        // Absolute path or cloud URI - use as-is
-        directoryPath = directory;
+        // Absolute path or cloud URI - used as given, but for a local path on Windows
+        // written with both separators, which is given one
+        directoryPath = LocalPaths.normalize(directory);
         LOGGER.info("Using directory path: {}", directoryPath);
       }
     } else if (modelFileDirPath != null) {
@@ -706,7 +729,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     if (crawl != null) {
       try {
         org.apache.calcite.adapter.file.converters.HtmlCrawlStage.run(name, crawl, directoryPath,
-            storageType, columnNameCasing);
+            storageType, columnNameCasing, baseConfigDirectory);
       } catch (java.io.IOException e) {
         throw new IllegalStateException("The crawl of schema '" + name + "' failed", e);
       }
@@ -716,17 +739,12 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     LOGGER.debug("FileSchemaFactory: Checking DuckDB conditions for schema '{}': engineConfig.getEngineType()={}, directoryPath={}, storageType={}",
                 name, engineConfig.getEngineType(), directoryPath, storageType);
 
-    // Prepare constraint metadata - used for both DuckDB and regular FileSchema
-    // Support both instance field (from setTableConstraints) and operand
-    Map<String, Map<String, Object>> constraintsToPass = this.tableConstraints;
-    LOGGER.info("FileSchemaFactory: instance tableConstraints = {}",
-        this.tableConstraints != null ? this.tableConstraints.size() + " tables" : "null");
+    // Constraint metadata, used for both DuckDB and regular FileSchema, comes from the operand
+    // alone: ModelHandler puts a model's table constraints there. INSTANCE is shared by every
+    // schema, so constraints kept on it could reach a schema created alongside or after.
+    Map<String, Map<String, Object>> constraintsToPass = operandTableConstraints;
     LOGGER.info("FileSchemaFactory: operand tableConstraints = {}",
         operandTableConstraints != null ? operandTableConstraints.size() + " tables" : "null");
-    if (operandTableConstraints != null && !operandTableConstraints.isEmpty()) {
-      // Operand constraints take precedence
-      constraintsToPass = operandTableConstraints;
-    }
 
     // Rewrite FK schema names if declaredSchemaName differs from actual schema name
     // Uses the literal schema name from YAML; by convention YAML uses lowercase.
@@ -768,10 +786,10 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       // SQL views from the YAML are registered directly in DuckDB via DuckDBPendingViews,
       // not as ViewTable entries in FileSchema (ViewTable has null protoRowType → NPE).
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, null,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
           storageType, storageConfig, flatten, csvTypeInference, isPrimeCacheEnabled(operand, true), comment,
-          canonicalSchemaName);
+          canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -878,7 +896,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       addMetadataSchemas(parentSchema);
 
       // Write debug model for troubleshooting
-      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+      writeDebugModel(baseConfigDirectory, name, operand, parentSchema != null ? parentSchema.getName() : null);
 
       return schemaToRegister;
     }
@@ -898,9 +916,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("ClickHouse: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -976,7 +994,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
                   schemaToRegister.getClass().getSimpleName(), name);
 
       addMetadataSchemas(parentSchema);
-      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+      writeDebugModel(baseConfigDirectory, name, operand, parentSchema != null ? parentSchema.getName() : null);
 
       return schemaToRegister;
     }
@@ -996,9 +1014,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Trino: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1074,7 +1092,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
                   schemaToRegister.getClass().getSimpleName(), name);
 
       addMetadataSchemas(parentSchema);
-      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+      writeDebugModel(baseConfigDirectory, name, operand, parentSchema != null ? parentSchema.getName() : null);
 
       return schemaToRegister;
     }
@@ -1094,9 +1112,9 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
       LOGGER.info("Spark: Creating internal Parquet FileSchema with baseConfigDirectory: {}", baseConfigDirectory);
 
       FileSchema fileSchema =
-          new FileSchema(parentSchema, name, null, baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
+          new FileSchema(parentSchema, name, engineSourceDirectory(directoryPath), baseConfigDirectory, directoryPath, directoryPattern, tables, conversionConfig, recursive, materializations, views,
           partitionedTables, refreshInterval, tableNameCasing, columnNameCasing,
-          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+          storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
       if (materializeConfig != null) {
         fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1172,7 +1190,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
                   schemaToRegister.getClass().getSimpleName(), name);
 
       addMetadataSchemas(parentSchema);
-      writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+      writeDebugModel(baseConfigDirectory, name, operand, parentSchema != null ? parentSchema.getName() : null);
 
       return schemaToRegister;
     }
@@ -1189,7 +1207,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     FileSchema fileSchema =
         new FileSchema(parentSchema, name, resolvedSourceDir, baseDirectory, directoryPath, directoryPattern, tables, engineConfig, recursive,
         materializations, views, partitionedTables, refreshInterval, tableNameCasing,
-        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName);
+        columnNameCasing, storageType, storageConfig, flatten, csvTypeInference, primeCache, comment, canonicalSchemaName, pages);
 
     if (materializeConfig != null) {
       fileSchema.setMaterializeConfig(materializeConfig, materializeWritable);
@@ -1344,7 +1362,7 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     }
 
     // Write debug model for troubleshooting
-    writeDebugModel(name, operand, parentSchema != null ? parentSchema.getName() : null);
+    writeDebugModel(baseConfigDirectory, name, operand, parentSchema != null ? parentSchema.getName() : null);
 
     return fileSchema;
   }
@@ -1507,12 +1525,6 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     return true;
   }
 
-  @Override public void setTableConstraints(Map<String, Map<String, Object>> tableConstraints,
-      List<JsonTable> tableDefinitions) {
-    this.tableConstraints = tableConstraints;
-    LOGGER.debug("Received constraint metadata for {} tables",
-        tableConstraints != null ? tableConstraints.size() : 0);
-  }
 
   /**
    * Registers SQL views as Calcite ViewTableMacro objects in the schema.
@@ -1702,4 +1714,13 @@ public class FileSchemaFactory implements ConstraintCapableSchemaFactory {
     return rewritten;
   }
 
+  /**
+   * The source directory of the Parquet FileSchema an engine (DuckDB, ClickHouse, Trino, Spark)
+   * builds internally: the schema's own directory. It was passed as null, so the FileSchema fell
+   * back to the working directory and its JSON flattening walked that tree (seen once recursion
+   * became the default, #532).
+   */
+  private static File engineSourceDirectory(String directoryPath) {
+    return new File(directoryPath);
+  }
 }

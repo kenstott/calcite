@@ -1353,6 +1353,7 @@ Fine-tune which HTML tables are extracted:
     "crawlConfig": {
       // Control HTML table extraction
       "generateTablesFromHtml": true,    // Enable/disable HTML table extraction
+      "generateTablesFromHtmlLists": false, // Read content lists (ul/ol, 3+ items) as tables
       "htmlTableMinRows": 2,              // Minimum rows (filters out headers-only)
       "htmlTableMaxRows": 10000           // Maximum rows (prevents huge tables)
     }

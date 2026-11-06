@@ -12,6 +12,8 @@ package org.apache.calcite.adapter.file.storage;
 // storage-provider-guard:allow-scheme - storage-dispatch layer: inspecting a URI scheme here is the legitimate job (provider dispatch / S3 path handling / endpoint SSL config), not a consumer branching local-vs-remote.
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.util.LocalPaths;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -100,8 +102,10 @@ public interface StorageProvider {
       }
       // justification (storage-provider-guard): this stages the response to a genuinely-local temp
       // file — decoupling the read from slow consumption is the point — and deletes it on close.
-      final java.nio.file.Path temp =
-          java.nio.file.Files.createTempFile("storage-openstream-", ".tmp");
+      // A provider is shared by every schema reading through it, so the file goes to the
+      // process's staging directory, not a schema's (REQ-1992).
+      final java.nio.file.Path temp = org.apache.calcite.adapter.file.StagingDirectory
+          .newTempFile("storage-openstream-", ".tmp").toPath();
       try {
         java.nio.file.Files.copy(in, temp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
       } catch (IOException e) {
@@ -281,9 +285,9 @@ public interface StorageProvider {
    * @throws IOException If an I/O error occurs
    */
   default String getStagingDirectory(String purpose) throws IOException {
-    // Default implementation uses system temp directory
-    String tempDir = System.getProperty("java.io.tmpdir");
-    String stagingPath = tempDir + "/.staging/" + purpose;
+    // The process's staging directory (REQ-1992), never the JVM temp directory
+    String tempDir = org.apache.calcite.adapter.file.StagingDirectory.get().getPath();
+    String stagingPath = LocalPaths.join(tempDir, ".staging/" + purpose);
     createDirectories(stagingPath);
     return stagingPath;
   }
@@ -579,7 +583,8 @@ public interface StorageProvider {
 
     // Create temporary file for writing with more unique name - use a UUID for maximum uniqueness
     String uniqueId = java.util.UUID.randomUUID().toString();
-    java.io.File tempFile = java.io.File.createTempFile(recordType.toLowerCase() + "_" + uniqueId + "_", ".parquet");
+    java.io.File tempFile = org.apache.calcite.adapter.file.StagingDirectory.newTempFile(
+        recordType.toLowerCase(java.util.Locale.ROOT) + "_" + uniqueId + "_", ".parquet");
     // Delete the temp file immediately so ParquetWriter can create it fresh
     tempFile.delete();
     try {
@@ -615,7 +620,8 @@ public interface StorageProvider {
     }
 
     // Clean up macOS metadata files after writing
-    String parentDir = java.nio.file.Paths.get(path).getParent().toString();
+    // By string: the path may be a URI, which is not a path Windows accepts
+    String parentDir = LocalPaths.parent(path);
     cleanupMacosMetadata(parentDir);
   }
 
@@ -632,7 +638,8 @@ public interface StorageProvider {
     java.util.List<java.util.Map<String, Object>> records = new java.util.ArrayList<>();
 
     // Download to temp file first if remote storage
-    java.io.File tempFile = java.io.File.createTempFile("read_parquet_", ".parquet");
+    java.io.File tempFile =
+        org.apache.calcite.adapter.file.StagingDirectory.newTempFile("read_parquet_", ".parquet");
     try {
       // Copy file content to temp location
       try (java.io.InputStream in = openInputStream(path);

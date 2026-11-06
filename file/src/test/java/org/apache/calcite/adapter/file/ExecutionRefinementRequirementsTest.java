@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -93,6 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @Tag("integration")
 @SuppressWarnings("deprecation")
+@ResourceLock("calcite.file.statistics")
 public class ExecutionRefinementRequirementsTest {
 
   // Flat multi-file Parquet table (FILE-076 / FILE-077 / FILE-078 operators).
@@ -526,6 +528,7 @@ public class ExecutionRefinementRequirementsTest {
 
     Map<String, Object> flatOperand = new LinkedHashMap<>();
     flatOperand.put("directory", flatDir.toString());
+    flatOperand.put("baseDirectory", flatDir.toString());
     flatOperand.put("executionEngine", "parquet");
     flatOperand.put("ephemeralCache", true);
     flatOperand.put("partitionedTables", flatPartitionedTables);
@@ -547,6 +550,7 @@ public class ExecutionRefinementRequirementsTest {
 
     Map<String, Object> hiveOperand = new LinkedHashMap<>();
     hiveOperand.put("directory", hiveDir.toString());
+    hiveOperand.put("baseDirectory", hiveDir.toString());
     hiveOperand.put("executionEngine", "parquet");
     hiveOperand.put("ephemeralCache", true);
     hiveOperand.put("partitionedTables", partitionedTables);

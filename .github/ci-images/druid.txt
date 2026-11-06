@@ -1,0 +1,15 @@
+# Images of the Druid test stack (the "Druid Tests" job in main.yml), mirrored from Docker Hub
+# to ghcr.io/kenstott/calcite so the job does not depend on Docker Hub's anonymous pull quota.
+#
+#   <name>  <upstream image, pinned by digest>
+#
+# The mirror is ghcr.io/kenstott/calcite/ci-<name>@<the same digest>: mirror-ci-images.yml
+# copies each image with its digest preserved. To move to a newer upstream image, change the
+# digest here and start that workflow; the Druid job then pulls the new digest.
+#
+# postgres  was postgres:latest   as pushed 2026-10-07 (multi-platform index)
+# zookeeper was zookeeper:3.5     as pushed 2023-02-01 (multi-platform index)
+# druid     was apache/druid:0.17.1 as pushed 2020-03-31 (linux/amd64 manifest)
+postgres  docker.io/library/postgres@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+zookeeper docker.io/library/zookeeper@sha256:abf67ca6ebb02a8ba0a81683a13210d18eebc6282c1d8b1c686bf3397e01bb57
+druid     docker.io/apache/druid@sha256:c1c10c36d1753035d639b1cd5b7f241fab49033db800c57706bfe79eb7e1cd62

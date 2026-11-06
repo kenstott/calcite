@@ -66,7 +66,7 @@ RUNNER="org.apache.calcite.adapter.govdata.etl.GovDataModelVerificationRunner"
 # resources; SchemaListDriftTest fails the build when they diverge. This list silently omitted
 # fiscal from the day that schema was added, so fiscal was never verified and never made it into
 # the JAR-bundled seed — leaving it to rebuild every view on a user's first query.
-ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregister law officials cyber_vuln cyber_threat health energy edu patents lands cftc disasters housing ag transport environment research fiscal banking"
+ALL_SCHEMAS="sec geo econ econ_reference census crime weather ref fec fedregister law officials cyber_vuln cyber_threat health energy edu patents lands cftc disasters housing ag transport environment research fiscal banking fisheries"
 
 SOURCE=""
 LIMIT="1"
@@ -89,6 +89,8 @@ while [[ $# -gt 0 ]]; do
         # meaningful with --single-connection: the enumeration is what fills the cache, and a
         # per-schema loop would publish 24 partial caches over the top of each other.
         --publish-schema-cache) PUBLISH_ARGS+=(--publish-schema-cache); shift ;;
+        # Read every declared base table so the schema cache holds all of them (seed generation).
+        --read-all-tables) PUBLISH_ARGS+=(--read-all-tables); shift ;;
         --dup-threshold)  DUP_ARGS+=(--dup-threshold "$2"); shift 2 ;;
         --mode)
             MODE="$2"
@@ -208,6 +210,11 @@ JVM_OPTS="${JVM_OPTS:--Xmx2g -Xms512m -Dduckdb.cache_httpfs.disable=true -Dcalci
 case " $JVM_OPTS " in
     *" -Djava.io.tmpdir="*) : ;;                                   # caller already set it — leave it
     *) JVM_OPTS="$JVM_OPTS -Djava.io.tmpdir=$VERIFY_SPILL_DIR" ;;
+esac
+# The adapter's own temporary files go where this property says (REQ-1992); same spill directory
+case " $JVM_OPTS " in
+    *" -Dcalcite.file.staging.directory="*) : ;;
+    *) JVM_OPTS="$JVM_OPTS -Dcalcite.file.staging.directory=$VERIFY_SPILL_DIR" ;;
 esac
 LIBS="$GOVDATA_HOME/build/libs"
 if [[ -n "${MODEL_VERIFY_JAR:-}" ]]; then

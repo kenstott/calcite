@@ -14,6 +14,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:econ_reference}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
 comment: >
@@ -94,6 +95,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   # --- Standard Hive Partition Set ---
 
@@ -697,7 +699,7 @@ partitionedTables:
       response:
         format: json
         dataPath: "BEAAPI.Results.ParamValue"
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       tableNamesList:
         - "SAINC1"
         - "SAINC30"
@@ -777,7 +779,7 @@ partitionedTables:
         format: json
         # Note: dataPath removed because responseTransformer already extracts the data.
         # BeaResponseTransformer returns the ParamValue array directly.
-        errorPath: "BEAAPI.Results.Error"
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
       rateLimit:
         requestsPerSecond: 1.5
         retryOn: [429, 503]

@@ -732,8 +732,11 @@ public class IcebergTableWriterCoverageTest {
 
     Map<String, String> partVals = new HashMap<String, String>();
     partVals.put("year", "not_a_number");
-    DataFile df = writer.writeRecords(records, partVals);
-    assertNotNull(df);
+    // A partition value that is not its column's type fails the write, naming column and value.
+    IllegalStateException e =
+        assertThrows(IllegalStateException.class, () -> writer.writeRecords(records, partVals));
+    assertTrue(e.getMessage().contains("'year'") && e.getMessage().contains("'not_a_number'"),
+        e.getMessage());
   }
 
   // ---- Float and double partition types ----

@@ -11,6 +11,8 @@
 package org.apache.calcite.adapter.govdata.ag;
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.CompleteBody;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 
@@ -156,7 +158,7 @@ public class ErsCommodityCostsReturnsProvider implements CachingDataProvider {
     HttpURLConnection conn = open(landingUrl, userAgent);
     String html;
     ByteArrayOutputStream buf = new ByteArrayOutputStream();
-    try (InputStream in = conn.getInputStream()) {
+    try (InputStream in = CompleteBody.of(conn)) {
       byte[] chunk = new byte[8192];
       int n;
       while ((n = in.read(chunk)) != -1) {
@@ -233,6 +235,7 @@ public class ErsCommodityCostsReturnsProvider implements CachingDataProvider {
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setInstanceFollowRedirects(true);
+    NetworkOutageWait.connect(conn);
     int code = conn.getResponseCode();
     if (code < 200 || code >= 300) {
       throw new IOException("ERS CCR: HTTP " + code + " for " + url);

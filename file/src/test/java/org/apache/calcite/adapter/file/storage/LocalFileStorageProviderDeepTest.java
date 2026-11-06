@@ -22,6 +22,7 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -98,8 +99,8 @@ class LocalFileStorageProviderDeepTest {
   @Test void testResolvePathRelative() {
     Path baseDir = tempDir.resolve("base");
     String result = provider.resolvePath(baseDir.toString(), "sub/file.csv");
-    assertTrue(result.endsWith("sub/file.csv"));
-    assertTrue(result.contains("base"));
+    // A local path comes back in the platform's own form
+    assertEquals(baseDir.resolve("sub").resolve("file.csv"), Paths.get(result));
   }
 
   @Test void testResolvePathAbsolute() {

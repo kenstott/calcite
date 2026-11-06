@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.weather;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
 import org.apache.calcite.adapter.file.etl.CachingDataProvider;
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RawCache;
 import org.apache.calcite.adapter.file.etl.EtlPipelineConfig;
 import org.apache.calcite.adapter.govdata.geo.TigerShapefileParser;
@@ -220,7 +221,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
 
       Path tempDir = null;
       try {
-        tempDir = Files.createTempDirectory("hms_smoke_");
+        tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("hms_smoke_");
         File zipFile = new File(tempDir.toFile(), "hms_smoke.zip");
 
         if (!downloadFile(zipUrl, zipFile, rawCache)) {
@@ -377,7 +378,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
 
     Path tempDir = null;
     try {
-      tempDir = Files.createTempDirectory("tiger_counties_");
+      tempDir = org.apache.calcite.adapter.file.StagingDirectory.newTempDirectory("tiger_counties_");
       File zipFile = new File(tempDir.toFile(), "counties.zip");
 
       if (!downloadFile(url, zipFile, rawCache)) {
@@ -559,6 +560,7 @@ public class HmsSmokeSpatialJoinProvider implements CachingDataProvider {
     conn.setReadTimeout(60000);
     conn.setRequestProperty("User-Agent", "CalciteGovDataAdapter/1.0");
 
+    NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode == HttpURLConnection.HTTP_NOT_FOUND
         || responseCode == HttpURLConnection.HTTP_GONE) {

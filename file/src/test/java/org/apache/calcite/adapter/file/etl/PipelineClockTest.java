@@ -18,6 +18,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,7 +50,7 @@ public class PipelineClockTest {
 
   @Test void withNoOverrideTracksTheRealClock() {
     assertFalse(PipelineClock.isOverridden(), "no override should be set by default");
-    LocalDate now = LocalDate.now();
+    LocalDate now = LocalDate.now(ZoneOffset.UTC);
     assertEquals(now.getYear(), PipelineClock.currentYear());
     assertEquals(now.getMonthValue(), PipelineClock.currentMonth());
   }
@@ -91,13 +92,13 @@ public class PipelineClockTest {
     assertEquals(1999, PipelineClock.currentYear());
     PipelineClock.clearOverride();
     assertFalse(PipelineClock.isOverridden());
-    assertEquals(LocalDate.now().getYear(), PipelineClock.currentYear());
+    assertEquals(LocalDate.now(ZoneOffset.UTC).getYear(), PipelineClock.currentYear());
   }
 
   @Test void setOverrideWithNullClears() {
     PipelineClock.setOverrideForTest(LocalDate.of(1999, 7, 4));
     PipelineClock.setOverride(null);
     assertFalse(PipelineClock.isOverridden());
-    assertEquals(LocalDate.now().getYear(), PipelineClock.currentYear());
+    assertEquals(LocalDate.now(ZoneOffset.UTC).getYear(), PipelineClock.currentYear());
   }
 }

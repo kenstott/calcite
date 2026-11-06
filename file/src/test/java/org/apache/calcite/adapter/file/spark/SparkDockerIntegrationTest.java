@@ -546,6 +546,7 @@ class SparkDockerIntegrationTest {
           + "    \"type\": \"custom\",\n"
           + "    \"factory\": \"org.apache.calcite.adapter.file.FileSchemaFactory\",\n"
           + "    \"operand\": {\n"
+          + "      \"baseDirectory\": \"" + fsDataDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
           + "      \"directory\": \"" + fsDataDir.getAbsolutePath().replace("\\", "\\\\") + "\",\n"
           + "      \"executionEngine\": \"spark\",\n"
           + "      \"ephemeralCache\": true,\n"

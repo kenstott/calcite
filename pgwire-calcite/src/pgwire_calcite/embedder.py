@@ -15,15 +15,19 @@ server) shares exactly ONE loaded embedding model, not one per process — the s
 reasoning that put the DuckDB catalog itself behind this shared server
 (kenstott/calcite#364).
 
-Uses fastembed (onnxruntime-backed, no torch) rather than the sentence-transformers
-pipeline askamerica-engine's embed.py uses for ETL-time embedding, because torch is
-not something every client machine should need to have installed just to ask a
-natural-language question. Both use the same model
-(snowflake/snowflake-arctic-embed-xs, 384-d, mean-pooled, L2-normalized) so query
-vectors and the stored corpus vectors live in the same space; fastembed's own ONNX
-export of that model is not guaranteed to numerically match sentence-transformers'
-(see askamerica-engine's embed.py), so this is only exact if the corpus is
-(re)built with fastembed's export too — tracked as a follow-up, not resolved here.
+What this embedder serves, and what it does not: only ``EMBED('literal')`` in SQL, which
+transforms.py rewrites to a vector before the statement reaches Calcite. ``SEMANTIC_SEARCH``
+and the Java ``EMBED`` function embed inside this server's JVM, through the file adapter's
+OnnxClsEmbedder (CLS pooling, L2-normalized, the int8 model carried in the file adapter's
+jar), which was built to reproduce the corpus vector space. The AskAmerica engine carries no
+embedder of its own: it sends both to this server as SQL.
+
+The corpus vectors are produced by govdata/scripts/vss-local.py with sentence-transformers
+(snowflake/snowflake-arctic-embed-xs, 384-d, L2-normalized); govdata/scripts/embed.py uses the
+same pipeline. This module uses fastembed (onnxruntime-backed, no torch) with the same
+model, because torch is not something every client machine should have to install.
+fastembed runs its own ONNX export of that model with its own pooling defaults and is not
+guaranteed to numerically match the corpus pipeline; that agreement has not been measured.
 
 Fully offline at runtime: ``local_files_only=True`` makes fastembed refuse to touch
 the network at all, using only what is already present in EMBED_MODEL_CACHE_DIR

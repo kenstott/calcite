@@ -53,5 +53,5 @@ fi
 echo "Starting ETL Verifier..."
 echo ""
 
-exec java $JVM_OPTS -cp "$CLASSPATH" \
+exec java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" $JVM_OPTS -cp "$CLASSPATH" \
     org.apache.calcite.adapter.govdata.etl.EtlVerifier "$@"

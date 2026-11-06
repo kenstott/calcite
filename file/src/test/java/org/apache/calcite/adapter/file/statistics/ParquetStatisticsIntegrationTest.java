@@ -30,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Integration tests for statistics generation and HLL functionality with actual Parquet files.
  * These tests demonstrate that HLL is enabled by default and provides query optimization benefits.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("integration")public class ParquetStatisticsIntegrationTest {
 
   @TempDir
@@ -260,6 +262,8 @@ import static org.junit.jupiter.api.Assertions.*;
   +
         "      \"operand\": {\n"
   +
+        "        \"baseDirectory\": \"%s\",\n"
+  +
         "        \"directory\": \"%s\",\n"
   +
         "        \"ephemeralCache\": true\n"
@@ -270,7 +274,8 @@ import static org.junit.jupiter.api.Assertions.*;
   +
         "  ]\n"
   +
-        "}", testParquet.getParentFile().getAbsolutePath());
+        "}", testParquet.getParentFile().getAbsolutePath(),
+        testParquet.getParentFile().getAbsolutePath());
 
     try (Connection conn = DriverManager.getConnection("jdbc:calcite:inline:" + modelJson);
          Statement stmt = conn.createStatement()) {

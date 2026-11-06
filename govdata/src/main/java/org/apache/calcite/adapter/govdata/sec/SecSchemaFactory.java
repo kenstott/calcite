@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
 import org.apache.calcite.adapter.file.etl.FilingIndexProvider;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
@@ -194,6 +195,11 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
   @Override public void configureSchemaHooks(FileSchemaBuilder builder, Map<String, Object> operand) {
     LOGGER.debug("Configuring hooks for SEC schema");
+
+    // SEC's nightly submissions.zip answers the per-filer submissions JSON fetches. Read from the
+    // factory's own operand: it arrives through the inline model, which is all the ETL sees.
+    installSubmissionsBulk(operand);
+    installFeedStore(operand);
 
     // Initialize storage provider from operand if available
     StorageProvider sp = (StorageProvider) operand.get("_storageProvider");
@@ -1052,9 +1058,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               int chunkEnd = Math.min(chunkStart + commitInterval, total);
               List<DocumentETLProcessor.AccessionRef> chunk =
                   activeAccessions.subList(chunkStart, chunkEnd);
-              DocumentETLProcessor.DocumentETLResult chunkResult = threads > 1
-                  ? processor.processAccessionsParallel(chunk, threads)
-                  : processor.processAccessions(chunk);
+              DocumentETLProcessor.DocumentETLResult chunkResult;
+              try {
+                chunkResult = threads > 1
+                    ? processor.processAccessionsParallel(chunk, threads)
+                    : processor.processAccessions(chunk);
+              } catch (CrossProcessRateLimiter.HostCooldownException e) {
+                // The accessions finished before the refusal are already marked processed, so
+                // their staged output is committed before the run stops; the rest stay unmarked.
+                stagingProvider.flushAll();
+                materializeStagingFilesToIceberg(operand, secParquetDir,
+                    stagingProvider.drainUploadedPaths());
+                throw e;
+              }
               totalProcessed += chunkResult.getDocumentsProcessed();
               totalSkipped += chunkResult.getDocumentsSkipped();
               totalFailed += chunkResult.getDocumentsFailed();
@@ -1239,10 +1255,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Get the job's filing types from the operand for table filtering
     List<String> jobFilingTypes = getScopedFilingTypes(operand);
+    // A run scoped by enabledTables owns only those tables. Without this, a table with no
+    // filing_type dimension (stock_prices) passed the filing-type filter for every scoped run and
+    // its whole staged backlog was absorbed as a side effect (kenstott/govdata-ops#1081).
+    Set<String> enabledTables = readEnabledTables(operand);
 
     // Process each table configured for Iceberg materialization
     for (Map<String, Object> tableConfig : partitionedTables) {
       String tableName = (String) tableConfig.get("name");
+
+      if (enabledTables != null && !enabledTables.contains(tableName)) {
+        LOGGER.info("Skipping table '{}' - not in enabledTables {}", tableName, enabledTables);
+        continue;
+      }
 
       // Check table-level enabled flag (supports env var interpolation)
       if (!isTableEnabled(tableConfig)) {
@@ -1302,17 +1327,24 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           LOGGER.info("Table '{}': {} staged source files claimed for absorption ({} uploaded by this pass)",
               icebergTableName, pendingSourceFiles.size(), stagedSourceFiles.size());
           Set<String> forced = parseForceAccessions(operand);
-          if (isForceReprocessed(operand, tableName) && !pendingSourceFiles.isEmpty()) {
-            // A table-level force re-stages accessions the table already holds. Delete exactly
-            // those accessions' rows, in every year partition, before the replacements are
-            // appended: an accession is one filing, and a forced reprocess replaces it, it does
-            // not add a second copy.
+          boolean tableForced = isForceReprocessed(operand, tableName);
+          if ((tableForced || !forced.isEmpty()) && !pendingSourceFiles.isEmpty()) {
+            // A forced accession's rows are deleted before its replacement is appended: an
+            // accession is one filing, and a forced reprocess replaces it, it does not add a
+            // second copy. Only accessions whose replacement is in the files this process
+            // claimed may be deleted. A concurrent worker can claim and absorb a staged file
+            // the pass uploaded first; deleting that accession here would remove the rows the
+            // other worker just wrote, with no replacement left to append.
             Set<String> restaged = materializer.distinctValuesInFiles(pendingSourceFiles,
                 config.getAccessionColumn());
-            LOGGER.info("Table '{}' is force-reprocessed: replacing {} accession(s) from {} staged "
-                + "file(s)", icebergTableName, restaged.size(), pendingSourceFiles.size());
-            forced = new HashSet<String>(forced);
-            forced.addAll(restaged);
+            if (tableForced) {
+              LOGGER.info("Table '{}' is force-reprocessed: replacing {} accession(s) from {} "
+                  + "staged file(s)", icebergTableName, restaged.size(),
+                  pendingSourceFiles.size());
+            }
+            forced = forcedWithClaimedReplacement(forced, restaged, tableForced);
+          } else {
+            forced = Collections.<String>emptySet();
           }
           config = buildMaterializationConfig(tableName, icebergTableName, secParquetDir, pattern,
               tableConfig, operand, warehousePath, pendingSourceFiles, null, forced);
@@ -1705,9 +1737,23 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         .dedupIgnoreColumns(dedupIgnoreColumns)
         .filePassthrough(Boolean.TRUE.equals(materializeConfig.get("filePassthrough")))
         .fixedPartitionValues(fixedPartitionValues)
-        .forceAccessions(forceAccessions)
+        .forceAccessions(forceAccessionsFor(tableColumns, forceAccessions))
         .description(tableName)
         .build();
+  }
+
+  /**
+   * Forced accessions delete rows by {@code accession_number}; a table with no such column
+   * (stock_prices) has nothing to force, and handing it the set fails its materialization.
+   */
+  static Set<String> forceAccessionsFor(List<IcebergCatalogManager.ColumnDef> tableColumns,
+      Set<String> forceAccessions) {
+    for (IcebergCatalogManager.ColumnDef col : tableColumns) {
+      if ("accession_number".equals(col.getName())) {
+        return forceAccessions;
+      }
+    }
+    return Collections.<String>emptySet();
   }
 
   /**
@@ -1730,6 +1776,21 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
       }
     }
     return forceAccessions;
+  }
+
+  /**
+   * The accessions whose existing rows may be deleted before this process appends its claimed
+   * files: those named by the operand that have a replacement in the claimed files, plus every
+   * accession in the claimed files when the whole table is force-reprocessed. An operand accession
+   * with no replacement in the claim keeps its rows.
+   */
+  static Set<String> forcedWithClaimedReplacement(Set<String> operandForced,
+      Set<String> inClaimedFiles, boolean tableForced) {
+    Set<String> result = new HashSet<String>(inClaimedFiles);
+    if (!tableForced) {
+      result.retainAll(operandForced);
+    }
+    return result;
   }
 
   /**
@@ -2140,7 +2201,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
 
     // Create headers
     Map<String, String> headers = new HashMap<String, String>();
-    headers.put("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
+    headers.put("User-Agent", EdgarRateLimiter.userAgent());
     headers.put("Accept-Encoding", "gzip, deflate");
 
     // Build HttpSourceConfig
@@ -2302,6 +2363,15 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
   }
 
   private FileConverter getOrCreateXbrlConverter(Map<String, Object> operand,
+      StorageProvider converterStorageProvider) {
+    FileConverter converter = createXbrlConverter(operand, converterStorageProvider);
+    if (converter instanceof XbrlToParquetConverter) {
+      ((XbrlToParquetConverter) converter).withBulk13f(bulk13fData(operand));
+    }
+    return converter;
+  }
+
+  private FileConverter createXbrlConverter(Map<String, Object> operand,
       StorageProvider converterStorageProvider) {
     try {
       Class<?> clazz = Class.forName(
@@ -2531,7 +2601,7 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
           conn.setConnectTimeout(30000);
           conn.setReadTimeout(60000);
           conn.setRequestMethod("GET");
-          conn.setRequestProperty("User-Agent", "Apache Calcite SEC Adapter (apache-calcite@apache.org)");
+          conn.setRequestProperty("User-Agent", EdgarRateLimiter.userAgent());
           conn.setRequestProperty("Accept", "application/json");
 
           // Add conditional GET header if we have cached metadata
@@ -3589,7 +3659,9 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
             // Always false: SEC no longer generates its own vectorized chunks.
             boolean enableVectorization = false;
 
-            XbrlToParquetConverter converter = new XbrlToParquetConverter(this.storageProvider, enableVectorization);
+            XbrlToParquetConverter converter =
+                new XbrlToParquetConverter(this.storageProvider, enableVectorization)
+                    .withBulk13f(bulk13fData(currentOperand));
 
             if (LOGGER.isDebugEnabled()) {
               LOGGER.debug("INLINE CONVERSION: About to convert fileToConvert={} secParquetDirPath={} enableVectorization={}",
@@ -4504,6 +4576,61 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
         "S-3", "S3",             // Registration statements
         "S-4", "S4",             // Business combination registration
         "S-8", "S8");              // Employee benefit plan registration
+  }
+
+  private boolean feedStoreInstalled;
+
+  /** The unpacked EDGAR daily feed named by the {@code feedDir} operand, if one is set. */
+  private synchronized void installFeedStore(Map<String, Object> operand) {
+    if (feedStoreInstalled) {
+      return;
+    }
+    Object v = operand != null ? operand.get("feedDir") : null;
+    // The schema YAML's own feedDir is merged into the operand only after the hooks run, so a model
+    // that does not name one gets the YAML's value here.
+    String dir = v == null
+        ? GovDataUtils.loadSchemaSetting(getClass(), getSchemaResourceName(), "feedDir")
+        : String.valueOf(v);
+    if (dir != null && dir.contains("${")) {
+      dir = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(dir);
+    }
+    SecFeedStore.install(dir);
+    feedStoreInstalled = true;
+  }
+
+  private boolean submissionsBulkInstalled;
+
+  private synchronized void installSubmissionsBulk(Map<String, Object> operand) {
+    if (submissionsBulkInstalled) {
+      return;
+    }
+    Object v = operand != null ? operand.get("bulkSubmissionsZip") : null;
+    String path = v == null ? null : String.valueOf(v);
+    if (path != null && path.contains("${")) {
+      path = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(path);
+    }
+    SecSubmissionsBulk.install(path);
+    submissionsBulkInstalled = true;
+  }
+
+  private Sec13fBulkData bulk13f;
+  private boolean bulk13fResolved;
+
+  /**
+   * The local SEC Form 13F data set named by the {@code bulk13fDir} operand (schema YAML:
+   * ${SEC_BULK_13F_DIR:}), opened once per run; null when none is configured.
+   */
+  private synchronized Sec13fBulkData bulk13fData(Map<String, Object> operand) {
+    if (!bulk13fResolved) {
+      Object v = operand != null ? operand.get("bulk13fDir") : null;
+      String dir = v == null ? null : String.valueOf(v);
+      if (dir != null && dir.contains("${")) {
+        dir = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(dir);
+      }
+      bulk13f = Sec13fBulkData.forDirectory(dir);
+      bulk13fResolved = true;
+    }
+    return bulk13f;
   }
 
   /**

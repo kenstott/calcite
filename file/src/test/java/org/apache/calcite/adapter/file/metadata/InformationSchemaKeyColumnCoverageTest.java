@@ -29,6 +29,7 @@ import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
+import org.apache.calcite.schema.impl.InformationSchema;
 
 import com.google.common.collect.ImmutableList;
 
@@ -45,6 +46,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.calcite.schema.lookup.LikePattern;
 
 /**
  * Deep coverage tests for {@code InformationSchema$KeyColumnUsageTable}.
@@ -243,7 +245,7 @@ public class InformationSchemaKeyColumnCoverageTest {
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
 
     // Access the KEY_COLUMN_USAGE table via the table map
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
     Table keyColumnUsageTable = tableMap.get("KEY_COLUMN_USAGE");
     assertNotNull(keyColumnUsageTable, "KEY_COLUMN_USAGE table should exist");
 
@@ -266,7 +268,7 @@ public class InformationSchemaKeyColumnCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
 
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
     // Should be accessible via lower case
     assertNotNull(tableMap.get("key_column_usage"));
     // And upper case
@@ -277,7 +279,7 @@ public class InformationSchemaKeyColumnCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
 
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
     Table keyColumnUsageTable = tableMap.get("KEY_COLUMN_USAGE");
     assertNotNull(keyColumnUsageTable);
     assertEquals(Statistics.UNKNOWN, keyColumnUsageTable.getStatistic());
@@ -287,7 +289,7 @@ public class InformationSchemaKeyColumnCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
 
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
     ScannableTable keyColumnUsageTable = (ScannableTable) tableMap.get("KEY_COLUMN_USAGE");
     assertNotNull(keyColumnUsageTable);
 
@@ -307,7 +309,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -336,7 +338,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -364,7 +366,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -391,7 +393,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -422,7 +424,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -446,7 +448,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -479,7 +481,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -496,7 +498,7 @@ public class InformationSchemaKeyColumnCoverageTest {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
 
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
 
     // Should have title case variation
     assertNotNull(tableMap.get("Key_column_usage"));
@@ -509,7 +511,7 @@ public class InformationSchemaKeyColumnCoverageTest {
   @Test void testAllInformationSchemaTables() {
     SchemaPlus rootSchema = CalciteSchema.createRootSchema(false).plus();
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
-    Map<String, Table> tableMap = infoSchema.getTableMap();
+    Map<String, Table> tableMap = tableMap(infoSchema);
 
     // Verify all expected tables are present
     assertNotNull(tableMap.get("SCHEMATA"));
@@ -534,7 +536,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -551,7 +553,7 @@ public class InformationSchemaKeyColumnCoverageTest {
 
     InformationSchema infoSchema = new InformationSchema(rootSchema, "test_catalog");
     ScannableTable keyColumnUsageTable =
-        (ScannableTable) infoSchema.getTableMap().get("KEY_COLUMN_USAGE");
+        (ScannableTable) tableMap(infoSchema).get("KEY_COLUMN_USAGE");
 
     Enumerable<Object[]> result = keyColumnUsageTable.scan(mockDataContext);
     List<Object[]> rows = result.toList();
@@ -565,5 +567,14 @@ public class InformationSchemaKeyColumnCoverageTest {
               || constraintName.startsWith("FK_"),
           "Unexpected constraint name format: " + constraintName);
     }
+  }
+
+  /** The schema's tables by name; {@code getTableMap} is protected in its package. */
+  private static Map<String, Table> tableMap(InformationSchema schema) {
+    Map<String, Table> tables = new HashMap<>();
+    for (String name : schema.tables().getNames(LikePattern.any())) {
+      tables.put(name, schema.tables().get(name));
+    }
+    return tables;
   }
 }

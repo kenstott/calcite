@@ -4,7 +4,7 @@
     runners-dashboard.py              print once
     runners-dashboard.py --watch 30   redraw every 30 seconds (Ctrl-C to stop)
 
-Sources: the runner daemon (systemd + journal), the live `claude -p` agents, the
+Sources: the runner daemon (process table + its own log), the live `claude -p` agents, the
 kenstott/govdata-ops issues (gh), the fix branches and merged commits (git), the ETL pool
 and scheduled-window logs, and /proc/meminfo. A source that cannot be read is shown as an
 error in its own section, never left out.
@@ -110,9 +110,16 @@ def issues(ttl):
             _gh_cache["data"] = json.load(f)
         _gh_cache["at"] = os.path.getmtime(_GH_CACHE_FILE)
     if _gh_cache["data"] is None or time.time() - _gh_cache["at"] > ttl:
-        out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "all", "--limit", "400",
-                   "--json", "number,title,state,labels,updatedAt,closedAt"], timeout=60)
-        _gh_cache["data"] = json.loads(out)
+        # Open issues are fetched on their own: one "--state all --limit 400" list is newest-first, so
+        # once the repo outgrows it the oldest open issues drop out and their counts and labels vanish.
+        fields = "number,title,state,labels,updatedAt,closedAt,body"
+        open_out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "open", "--limit", "1000",
+                        "--json", fields], timeout=60)
+        closed_out = run(["gh", "issue", "list", "-R", OPS_REPO, "--state", "closed", "--limit", "100",
+                          "--json", fields], timeout=60)
+        merged = json.loads(open_out) + json.loads(closed_out)
+        out = json.dumps(merged)
+        _gh_cache["data"] = merged
         _gh_cache["at"] = time.time()
         tmp = _GH_CACHE_FILE + ".tmp"
         with open(tmp, "w") as f:
@@ -124,12 +131,18 @@ def issues(ttl):
 
 
 def daemon():
-    show = run(["systemctl", "show", "govdata-runner", "-p", "ActiveState,MainPID"])
-    kv = dict(line.split("=", 1) for line in show.splitlines() if "=" in line)
-    up = None
-    if kv.get("MainPID", "0") != "0":
-        up = int(run(["ps", "-o", "etimes=", "-p", kv["MainPID"]]).strip())
-    return kv["ActiveState"], kv["MainPID"], up
+    """(state, pid, uptime seconds) of the runner daemon, found in the process table so it is right
+    however it was started (service, shell, wrapper script)."""
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open("/proc/%s/cmdline" % pid, "rb") as f:
+                argv = f.read().decode(errors="replace").split("\0")
+        except OSError:
+            continue  # the process exited while we scanned
+        if len(argv) > 1 and os.path.basename(argv[0]).startswith("python") and \
+                any(a.endswith("runner-daemon.py") for a in argv[1:3]):
+            return "active", pid, int(run(["ps", "-o", "etimes=", "-p", pid]).strip())
+    return "stopped", "0", None
 
 
 def agents():
@@ -149,6 +162,23 @@ def agents():
     return found
 
 
+def unmerged_commits(ref):
+    """Commits of `ref` with no patch-equivalent on main.  The lead's merge rebases, so a merged branch
+    is not an ancestor of main (and its PR stays OPEN on GitHub) but has none of these."""
+    out = run(["git", "cherry", "main", ref], cwd=REPO)
+    return sum(1 for l in out.splitlines() if l.startswith("+"))
+
+
+def rebase_conflict(oid):
+    """The files the merge gate (lead-merge.sh) refuses on: changed by main since the branch point and also
+    changed by the branch.  Schema YAMLs under govdata/src/main/resources are ignored, as the gate does."""
+    base = run(["git", "merge-base", "main", oid], cwd=REPO).strip()
+    mine = set(run(["git", "diff", "--name-only", base, oid], cwd=REPO).split())
+    other = {f for f in run(["git", "diff", "--name-only", base, "main"], cwd=REPO).split()
+             if not re.match(r"govdata/src/main/resources/.*\.ya?ml$", f)}
+    return sorted(mine & other)
+
+
 def branches():
     rows = []
     git_dir = run(["git", "rev-parse", "--git-common-dir"], cwd=REPO).strip()
@@ -156,10 +186,223 @@ def branches():
         git_dir = os.path.join(REPO, git_dir)
     for br in run(["git", "branch", "--list", "fix/*", "--format=%(refname:short)"], cwd=REPO).split():
         slug = br[len("fix/"):]
-        ahead = int(run(["git", "rev-list", "--count", "main.." + br], cwd=REPO).strip())
+        ahead = unmerged_commits(br)
         rows.append({"slug": slug, "ahead": ahead,
                      "dq": os.path.exists(os.path.join(git_dir, "fix-branch-dq", slug))})
     return rows
+
+
+CODE_REPO = "kenstott/calcite"
+_BRANCH_ISSUE = re.compile(r"(?:defect|sourcing|remediation)-(\d+)$")
+_DQ_PATH = re.compile(r"calcite-fixes/(?:defect|sourcing)-(\d+)")
+_DQ_JAR = re.compile(r"sih-govdata-(?:defect|sourcing)-(\d+)\.jar")
+
+
+def pull_requests():
+    """PRs of the code repo by head branch, with the CI tally of each open PR's tip commit."""
+    out = run(["gh", "pr", "list", "-R", CODE_REPO, "--state", "all", "--limit", "100", "--json",
+               "number,headRefName,headRefOid,state,title,body"], timeout=60)
+    prs = {}
+    for pr in json.loads(out):
+        if pr["headRefName"] not in prs:          # newest first: keep the latest PR per branch
+            prs[pr["headRefName"]] = pr
+    for pr in prs.values():
+        if pr["state"] == "OPEN" and unmerged_commits(pr["headRefOid"]) == 0:
+            pr["state"] = "MERGED"                # already on main by rebase: GitHub still says OPEN
+        if pr["state"] == "OPEN":
+            lines = run(["gh", "api", "repos/%s/commits/%s/check-runs" % (CODE_REPO, pr["headRefOid"]),
+                         "--paginate", "--jq", '.check_runs[] | .status + " " + (.conclusion // "")'],
+                        timeout=60).splitlines()
+            ok = failed = pending = 0
+            for l in lines:
+                status, _, concl = l.partition(" ")
+                if status != "completed":
+                    pending += 1
+                elif concl in ("failure", "cancelled", "timed_out", "action_required"):
+                    failed += 1
+                else:
+                    ok += 1
+            pr["ci"] = (ok, pending, failed)
+            pr["conflicts"] = rebase_conflict(pr["headRefOid"])
+    return prs
+
+
+def rehearsals():
+    """DQ rehearsals: processes running against the -dq bucket, mapped to the issue whose worktree
+    (calcite-fixes/defect-<n>) or jar (sih-govdata-defect-<n>.jar) they run.  One entry per issue."""
+    found = {}
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open("/proc/%s/environ" % pid, "rb") as f:
+                env = f.read().decode(errors="replace")
+            if not re.search(r"(?:^|\0)GOVDATA_PARQUET_DIR=[^\0]*-dq(?:[/\0]|$)", env):
+                continue
+            with open("/proc/%s/cmdline" % pid, "rb") as f:
+                cmd = f.read().decode(errors="replace").replace("\0", " ")
+            m = _DQ_JAR.search(cmd) or _DQ_PATH.search(cmd) or _DQ_PATH.search(os.readlink("/proc/%s/cwd" % pid))
+            if not m:
+                continue
+            etimes = int(run(["ps", "-o", "etimes=", "-p", pid]).strip())
+        except (OSError, RuntimeError):
+            continue                      # the process exited while we scanned
+        n = int(m.group(1))
+        if n not in found or etimes > found[n]["age"]:
+            found[n] = {"pid": pid, "age": etimes, "issue": n, "cmd": cmd}
+    return found
+
+
+_JOB_KINDS = (
+    (re.compile(r"heavy\.sh|force-reprocess\.sh|fix-sec\.sh"), "remediation"),
+    (re.compile(r"idle-snapshot-expiry\.sh|IcebergMaintenanceRunner"), "production"),
+    (re.compile(r"run-scheduled\.sh"), "production"),
+)
+
+
+def job_label(args):
+    """The scheduled window's script is named by what it is, not by its path."""
+    first, _, rest = args.partition(" ")
+    if os.path.basename(first) == "run-scheduled.sh":
+        return "scheduled daily/historical window" + (" " + rest if rest else "")
+    return args
+
+
+def other_jobs(dq_runs):
+    """Jobs outside run-pool.sh: remediation (heavy/force-reprocess/fix-sec), snapshot-expiry passes and
+    the daily window (run-scheduled).  Kind is dq when the process runs a DQ rehearsal, else the script's
+    kind; the issue comes from the worktree path or jar name when one maps."""
+    found = []
+    dq_pids = {r["pid"] for r in (dq_runs or {}).values()}
+    for line in run(["ps", "-eo", "pid,etimes,args"]).splitlines():
+        m = re.match(r"\s*(\d+)\s+(\d+)\s+(?:bash |/bin/bash |sh |java )?(.*)$", line)
+        if not m or "runners-dashboard" in line:
+            continue
+        kind = next((k for rx, k in _JOB_KINDS if rx.search(m.group(3).split(" -", 1)[0]) or
+                     (rx.pattern.startswith("idle") and rx.search(m.group(3)))), None)
+        if kind is None:
+            continue
+        pid = m.group(1)
+        im = _DQ_JAR.search(m.group(3)) or _DQ_PATH.search(m.group(3))
+        found.append({"pid": pid, "age": int(m.group(2)), "args": m.group(3),
+                      "kind": "dq" if pid in dq_pids else kind,
+                      "issue": int(im.group(1)) if im else None})
+    pids = {j["pid"] for j in found}
+    return [j for j in found if not (set(ancestors(j["pid"])[1:]) & pids)]   # topmost process of each job
+
+
+def ancestors(pid):
+    """The pid and its parent chain, as strings."""
+    chain = []
+    while pid not in ("0", "1") and pid not in chain:
+        chain.append(pid)
+        try:
+            with open("/proc/%s/stat" % pid) as f:
+                pid = f.read().rsplit(")", 1)[1].split()[1]
+        except OSError:
+            break
+    return chain
+
+
+_COMMENT_CACHE_FILE = os.path.join(tempfile.gettempdir(), "runners-dashboard-comments-%d.json" % os.getuid())
+
+
+def comments_of(issue):
+    """[{author, createdAt, body}] of an issue, fetched once per updatedAt (a new comment bumps it) and
+    kept on disk so a fresh process per redraw does not call gh for every blocked issue again."""
+    cache = {}
+    if os.path.exists(_COMMENT_CACHE_FILE):
+        with open(_COMMENT_CACHE_FILE) as f:
+            cache = json.load(f)
+    key = str(issue["number"])
+    if key not in cache or cache[key]["at"] != issue["updatedAt"]:
+        out = run(["gh", "issue", "view", key, "-R", OPS_REPO, "--json", "comments"], timeout=60)
+        cache[key] = {"at": issue["updatedAt"],
+                      "comments": [{"author": c["author"]["login"], "createdAt": c["createdAt"], "body": c["body"]}
+                                   for c in json.loads(out)["comments"]]}
+        tmp = _COMMENT_CACHE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(cache, f)
+        os.replace(tmp, _COMMENT_CACHE_FILE)
+    return cache[key]["comments"]
+
+
+def blocker(issue):
+    """The issue a blocked issue names: the first other #N in its body, else in its last lead comment."""
+    texts = [issue.get("body") or ""]
+    lead = [c for c in comments_of(issue) if c["body"].lstrip("*_ ").startswith("Lead")]
+    if lead:
+        texts.append(lead[-1]["body"])
+    for t in texts:
+        for m in re.finditer(r"#(\d+)", t):
+            if int(m.group(1)) != issue["number"]:
+                return int(m.group(1))
+    return None
+
+
+_WAITS = (
+    (re.compile(r"quota|10,000/day|rate.?limit|daily cap", re.I), "quota"),
+    (re.compile(r"maintainer|needs:approval|approval|decision", re.I), "maintainer"),
+    (re.compile(r"another issue|depends on|after the .* (?:issue|job|run)", re.I), "another issue"),
+)
+
+
+def waits_on(issue):
+    """Blocked issue with no #N named: the last comment's date and author, and what it waits on, read from
+    that comment's wording ('unstated' when it does not say)."""
+    cs = comments_of(issue)
+    if not cs:
+        return "no comments, waits on: %s" % ("maintainer" if "needs:approval" in issue["labelset"] else "unstated")
+    last = cs[-1]
+    who = next((w for rx, w in _WAITS if rx.search(last["body"])), "unstated")
+    return "last comment %s ago by %s, waits on: %s" % (age(iso_age(last["createdAt"])), last["author"], who)
+
+
+def in_flight(ag, iss, prs, dq_runs, dq_marks):
+    """{issue number: [stage text, ...]} for every open issue with work under way."""
+    stages = {}
+
+    def add(n, text):
+        stages.setdefault(n, []).append(text)
+
+    for a in ag or []:
+        add(a["issue"], "agent %s running %s" % (a["skill"].replace("-runner", "").replace("-register", ""), age(a["age"])))
+    for n, r in (dq_runs or {}).items():
+        add(n, "DQ rehearsal running %s (pid %s)" % (age(r["age"]), r["pid"]))
+    for br, pr in (prs or {}).items():
+        if pr["state"] != "OPEN":
+            continue
+        m = _BRANCH_ISSUE.search(br) or re.search(r"govdata-ops#(\d+)", pr["title"] + (pr["body"] or ""))
+        n = int(m.group(1)) if m else None
+        if n is None:
+            continue
+        ok, pending, failed = pr["ci"]
+        tally = "%d ok/%d pending/%d failed" % (ok, pending, failed)
+        issue = next((i for i in iss or [] if i["number"] == n), None)
+        if issue and issue["state"] != "OPEN":
+            continue
+        labels = by_label(iss, n)
+        if pr["conflicts"]:
+            add(n, "PR #%d needs rebase onto main (main changed %s)" % (pr["number"], ", ".join(
+                os.path.basename(f) for f in pr["conflicts"][:2])))
+        elif failed:
+            add(n, "PR #%d CI failed (%s)" % (pr["number"], tally))
+        elif pending:
+            add(n, "PR #%d CI pending (%s)" % (pr["number"], tally))
+        elif br[len("fix/"):] in dq_marks or "dq-passed" in labels:
+            add(n, "PR #%d CI green, DQ passed: waits for the lead's merge" % pr["number"])
+        else:
+            add(n, "PR #%d CI green: waits for DQ" % pr["number"])
+    for i in iss or []:
+        if i["state"] == "OPEN" and "status:blocked" in i["labelset"]:
+            b = blocker(i)
+            add(i["number"], "blocked on #%d" % b if b else "blocked: " + waits_on(i))
+    return stages
+
+
+def by_label(iss, n):
+    for i in iss or []:
+        if i["number"] == n:
+            return i["labelset"]
+    return set()
 
 
 def merged_commits(hours=24):
@@ -194,6 +437,7 @@ def pool():
         m = re.match(r"\s*(\d+)\s+(\d+)\s+bash \S*run-pool\.sh\s+(.*)$", line)
         if m:
             managers.append({"pid": m.group(1), "age": int(m.group(2)), "args": m.group(3)})
+    dq_runs = rehearsals()
     info = []
     for mg in managers:
         log, last = None, None
@@ -210,6 +454,7 @@ def pool():
                 lines = [l for l in f.read().splitlines()[-400:] if "Running:" in l]
             last = lines[-1] if lines else None
         mg["log"], mg["last"] = log, last
+        mg["dq_issue"] = next((n for n, r in dq_runs.items() if mg["pid"] in ancestors(r["pid"]) or r["pid"] in ancestors(mg["pid"])), None)
         info.append(mg)
     return info
 
@@ -239,10 +484,26 @@ def resources():
     return mem["MemAvailable"], mem["MemTotal"], swap_used, mem["SwapTotal"]
 
 
+DAEMON_LOG = os.environ.get("RUNNER_DAEMON_LOG", os.path.expanduser("~/.govdata-runner-logs/daemon.log"))
+
+
 def journal():
-    out = run(["journalctl", "-u", "govdata-runner", "--since", JOURNAL_WINDOW, "--no-pager",
-               "-o", "short-iso"], timeout=30)
-    return out.splitlines()
+    """[(epoch, message)] from the daemon's log within JOURNAL_WINDOW. The daemon stamps every line
+    "YYYY-MM-DD HH:MM:SS message"; unstamped (older) lines carry no time and are skipped."""
+    hours = int(JOURNAL_WINDOW.strip("-h"))
+    cutoff = time.time() - hours * 3600
+    with open(DAEMON_LOG, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        f.seek(max(0, f.tell() - 2000000))
+        lines = f.read().decode(errors="replace").splitlines()
+    out = []
+    for l in lines:
+        m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) (.*)$", l)
+        if m:
+            ts = datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+            if ts >= cutoff:
+                out.append((ts, m.group(2)))
+    return out
 
 
 # ── rendering ──
@@ -273,6 +534,21 @@ def type_of(issue):
     return "other"
 
 
+def is_stale_running(issue, live_issues):
+    """A status:running label with no agent process behind it, for any issue type.  Unknowable when
+    the agent scan failed (live_issues is None)."""
+    return live_issues is not None and issue["state"] == "OPEN" and "status:running" in issue["labelset"] \
+        and issue["number"] not in live_issues
+
+
+def is_stale_investigating(issue, active_issues):
+    """status:investigating or status:running for over 2 hours with no agent, pool/worker process or PR
+    in CI behind it.  A label is a status, never activity."""
+    return issue["state"] == "OPEN" and \
+        bool({"status:investigating", "status:running"} & issue["labelset"]) and \
+        issue["number"] not in active_issues and iso_age(issue["updatedAt"]) > 2 * 3600
+
+
 def render(ttl):
     width = min(shutil.get_terminal_size((120, 40)).columns, 140)
     out = []
@@ -282,6 +558,7 @@ def render(ttl):
     ag, ag_err = guarded(agents)
     iss, iss_err = guarded(issues, ttl)
     by_num = {i["number"]: i for i in iss} if iss else {}
+    live_issues = {a["issue"] for a in ag} if ag is not None else None  # None: scan failed, shown in header
 
     # header
     if dm:
@@ -321,9 +598,19 @@ def render(ttl):
         out.append(yellow("  no pool running"))
     else:
         for mg in pl:
-            out.append("  %-8s %-6s %s" % ("pid " + mg["pid"], age(mg["age"]), clip(mg["args"], 40)))
+            serves = "  (#%d)" % mg["dq_issue"] if mg.get("dq_issue") else ""
+            out.append("  %-8s %-6s %-11s %s%s" % ("pid " + mg["pid"], age(mg["age"]),
+                                                 "dq" if mg.get("dq_issue") else "production",
+                                                 clip(mg["args"], 50), serves))
             if mg["last"]:
                 out.append(dim("    " + clip(re.sub(r"^\[[^]]*\]\s*", "", mg["last"]), width - 4)))
+    jobs, jobs_err = guarded(lambda: other_jobs(rehearsals()))
+    for jb in jobs or []:
+        out.append("  %-8s %-6s %-11s %s%s" % ("pid " + jb["pid"], age(jb["age"]), jb["kind"],
+                                             clip(job_label(jb["args"]), 50),
+                                             "  (#%d)" % jb["issue"] if jb["issue"] else ""))
+    if jobs_err:
+        out.append(red("  " + jobs_err))
     wn, wn_err = guarded(window)
     if wn:
         head, pre, errs = wn
@@ -333,6 +620,24 @@ def render(ttl):
             out.append(dim("  " + clip(l, width - 2)))
     elif wn_err:
         out.append(red("  window log: " + wn_err))
+
+    # in flight
+    out.append(section("IN FLIGHT", width))
+    pr_map, pr_err = guarded(pull_requests)
+    dq_runs, dq_err = guarded(rehearsals)
+    br, br_err = guarded(branches)
+    for err in (pr_err, dq_err):
+        if err:
+            out.append(red("  " + err))
+    flight = {}
+    if not iss_err and not ag_err:
+        flight = in_flight(ag, iss, pr_map, dq_runs, {b["slug"] for b in br or [] if b["dq"]})
+        for n in sorted(flight):
+            title = by_num.get(n, {}).get("title", "?")
+            out.append("  #%-4d %s" % (n, clip(title, 44)))
+            out.append("        " + "; ".join(flight[n]))
+        if not flight:
+            out.append(yellow("  nothing in flight"))
 
     # agents
     out.append(section("AGENTS (current work)", width))
@@ -346,14 +651,15 @@ def render(ttl):
             skill = a["skill"].replace("-runner", "").replace("-register", "").replace("remediation-ledger", "remediation")
             out.append("  %-12s #%-4d %-6s %s" % (skill, a["issue"], age(a["age"]),
                                                    clip(title, width - 32)))
-    br, br_err = guarded(branches)
     if br_err:
         out.append(red("  branches: " + br_err))
     for b in br or []:
-        if not (b["ahead"] or b["dq"] or re.match(r"(defect|sourcing)-", b["slug"])):
-            continue
-        state = green("DQ passed") if b["dq"] else ("commits, no DQ yet" if b["ahead"] else "no commits yet")
-        out.append(dim("  branch fix/%-22s %d commit(s) ahead  %s" % (b["slug"], b["ahead"], state)))
+        pr = (pr_map or {}).get("fix/" + b["slug"])
+        if not b["ahead"] or (pr and pr["state"] == "MERGED"):
+            continue                      # merged or empty: nothing to show
+        state = green("DQ passed") if b["dq"] else "commits, no DQ yet"
+        out.append(dim("  branch fix/%-22s %-8s %d commit(s) ahead  %s" %
+                       (b["slug"], "PR #%d" % pr["number"] if pr else "no PR", b["ahead"], state)))
 
     # queue
     out.append(section("QUEUE (open issues)", width))
@@ -364,7 +670,8 @@ def render(ttl):
             counts = {}
             for i in iss:
                 if i["state"] == "OPEN" and type_of(i) == t:
-                    counts[status_of(i)] = counts.get(status_of(i), 0) + 1
+                    k = "stale-running" if is_stale_running(i, live_issues) else status_of(i)
+                    counts[k] = counts.get(k, 0) + 1
             cells = ["%s %d" % (k, counts[k]) for k in sorted(counts, key=lambda k: -counts[k])]
             out.append("  %-12s %s" % (t, " · ".join(cells) if cells else dim("none")))
 
@@ -394,7 +701,6 @@ def render(ttl):
 
     # attention: blockers, stale running, failures, repeated retries
     out.append(section("BLOCKERS & ATTENTION (age = time since last update)", width))
-    live_issues = {a["issue"] for a in ag or []}
     if iss:
         blocked = [i for i in iss if i["state"] == "OPEN" and
                    ({"status:blocked", "status:waiting-resources"} & i["labelset"])]
@@ -402,13 +708,22 @@ def render(ttl):
         for i in blocked[:8]:
             out.append("  %-21s #%-4d %-6s %s" % (status_of(i), i["number"],
                                                   age(iso_age(i["updatedAt"])), clip(i["title"], width - 42)))
-        stale = [i for i in iss if i["state"] == "OPEN" and "status:running" in i["labelset"]
-                 and type_of(i) == "remediation" and i["number"] not in live_issues]
+        stale = [i for i in iss if is_stale_running(i, live_issues)]
+        stale_inv = []
         for i in sorted(stale, key=lambda i: i["number"]):
             out.append("  %s #%-4d %-6s %s" % (red("STALE running   "), i["number"],
                                                age(iso_age(i["updatedAt"])),
                                                clip(i["title"] + "  (no live agent)", width - 34)))
-        if not blocked and not stale:
+        if not ag_err and not pr_err and not dq_err:
+            active = {a["issue"] for a in ag} | set(dq_runs or {}) | set(flight)
+            for i in sorted(iss, key=lambda i: i["number"]):
+                if is_stale_investigating(i, active) and i not in stale:
+                    stale_inv.append(i)
+        for i in stale_inv:
+            out.append("  %s #%-4d %-6s %s" % (red("STALE investigating"), i["number"],
+                                               age(iso_age(i["updatedAt"])),
+                                               clip(i["title"] + "  (no agent, process or CI)", width - 36)))
+        if not blocked and not stale and not stale_inv:
             out.append(green("  none"))
     if pl:
         for mg in pl:
@@ -425,15 +740,10 @@ def render(ttl):
     else:
         recent = time.time() - 600
         resumes = {}
-        for l in jl:
-            m = re.match(r"(\S+)\s+\S+\s+\S+\[\d+\]:\s+\[[!+]\] Resuming (?:stale status:running |waiting-resources: )?(\w+#\d+)", l)
-            if m:
-                try:
-                    ts = datetime.fromisoformat(m.group(1)).timestamp()
-                except ValueError:
-                    continue
-                if ts > recent:
-                    resumes[m.group(2)] = resumes.get(m.group(2), 0) + 1
+        for ts, msg in jl:
+            m = re.match(r"\[[!+]\] Resuming (?:stale status:running |waiting-resources: )?(\w+#\d+)", msg)
+            if m and ts > recent:
+                resumes[m.group(1)] = resumes.get(m.group(1), 0) + 1
         repeated = {k: v for k, v in resumes.items() if v >= 5}
         if repeated:
             out.append(yellow("  daemon retried %s in the last 10 min without an agent to show for it" %
@@ -441,13 +751,11 @@ def render(ttl):
 
         # daemon activity
         out.append(section("DAEMON ACTIVITY (spawns, last 6h)", width))
-        spawns = [l for l in jl if "Spawning agent" in l or "Orphan found" in l
-                  or "Orphan reaped" in l or "Unreaped orphan" in l][-8:]
-        for l in spawns:
-            m = re.match(r"(\S+)\s+\S+\s+\S+\[\d+\]:\s+(.*)$", l)
-            if m:
-                ts = datetime.fromisoformat(m.group(1)).astimezone().strftime("%H:%M")
-                out.append("  %s  %s" % (ts, clip(re.sub(r"^\[[^]]\]\s*", "", m.group(2)), width - 9)))
+        spawns = [(ts, msg) for ts, msg in jl if "Spawning agent" in msg or "Orphan found" in msg
+                  or "Orphan reaped" in msg or "Unreaped orphan" in msg][-8:]
+        for ts, msg in spawns:
+            out.append("  %s  %s" % (datetime.fromtimestamp(ts).strftime("%H:%M"),
+                                     clip(re.sub(r"^\[[^]]\]\s*", "", msg), width - 9)))
         if not spawns:
             out.append(dim("  none"))
 
@@ -460,7 +768,7 @@ def main():
                     help="redraw every SECONDS (15 when given without a value; minimum 5)")
     args = ap.parse_args()
     if args.watch is not None and args.watch < 5:
-        ap.error("--watch must be at least 5 seconds: each redraw forks git, ps, systemctl and journalctl")
+        ap.error("--watch must be at least 5 seconds: each redraw forks git and ps and reads the daemon log")
     if not args.watch:
         print(render(ttl=GH_TTL))
         return 0

@@ -140,7 +140,7 @@ for entry in "${TABLES[@]}"; do
 
   set +e
   # shellcheck disable=SC2086
-  java -Xms256m -Xmx2g \
+  java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -Xms256m -Xmx2g \
     -cp "$JAR" \
     org.apache.calcite.adapter.govdata.etl.IcebergSortVerifier \
     --warehouse "$WAREHOUSE_BASE/$schema" \

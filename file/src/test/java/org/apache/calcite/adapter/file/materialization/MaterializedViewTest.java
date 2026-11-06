@@ -147,6 +147,8 @@ public class MaterializedViewTest {
     sb.append("    \"operand\": {\n");
     sb.append("      \"directory\": \"")
         .append(directory.replace("\\", "\\\\")).append("\",\n");
+    sb.append("      \"baseDirectory\": \"")
+        .append(directory.replace("\\", "\\\\")).append("\",\n");
     sb.append("      \"executionEngine\": \"parquet\",\n");
     sb.append("      \"ephemeralCache\": true,\n");
     sb.append("      \"materializations\": ").append(materializationsJson)
@@ -268,6 +270,7 @@ public class MaterializedViewTest {
       // Schema operand
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("executionEngine", "parquet");
       operand.put("materializations", materializations);
       operand.put("primeCache", false);
@@ -366,6 +369,7 @@ public class MaterializedViewTest {
       // Schema operand
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", tempDir.toString());
+      operand.put("baseDirectory", tempDir.toString());
       operand.put("executionEngine", "parquet");
       operand.put("ephemeralCache", true);
       operand.put("materializations", materializations);

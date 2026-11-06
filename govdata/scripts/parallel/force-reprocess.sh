@@ -326,6 +326,11 @@ fi
 export GOVDATA_FORCE_REPROCESS_TABLES="$TABLES"
 export GOVDATA_TABLES="$TABLES"
 RUN_POOL="$SCRIPT_DIR/run-pool.sh"
+# A pool that exits non-zero means a worker failed (EtlRunner exits non-zero when any table had a
+# failed period). Record it instead of letting `set -e` abort here, so the validation below can
+# name the failed tables/periods and refuse to say "confirmed reprocessed".
+POOL_RC=0
+RUN_START_MARK="$(mktemp)"
 
 # ── One remediation run per (target bucket, schema, years) ──
 # check_schema_year_conflict (common.sh) refuses a second WORKER on the same schema+years, but a run that
@@ -343,7 +348,14 @@ if ! $DRY_RUN && ! { $SKIP_HISTORICAL && $SKIP_DAILY; }; then
         "$SCHEMA" "$_claim_start" "$_claim_end" "$TABLES"; then
     exit 3
   fi
-  trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT
+  if ! target_is_dq_bucket; then
+    # Whole-run write lock: run-pool.sh and worker.sh refuse to start this schema's workers meanwhile (#1064).
+    acquire_schema_lock "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$$" force-reprocess.sh "$SCHEMA" || exit 3
+    trap 'release_schema_years_claim "$CLAIM_DIR" "$$"; release_schema_lock "$(schema_lock_dir "$SCRIPT_DIR/runs/pids")" "$$" "$SCHEMA"' EXIT
+    export GOVDATA_SCHEMA_LOCK_OWNER=$$
+  else
+    trap 'release_schema_years_claim "$CLAIM_DIR" "$$"' EXIT
+  fi
 fi
 
 if ! $SKIP_HISTORICAL; then
@@ -360,7 +372,7 @@ if ! $SKIP_HISTORICAL; then
       if $DRY_RUN; then
         echo "  [DRY RUN] Would run: $RUN_POOL ${SLOTS[*]}"
       else
-        bash "$RUN_POOL" "${SLOTS[@]}"
+        bash "$RUN_POOL" "${SLOTS[@]}" || POOL_RC=$?
       fi
       ;;
     *)
@@ -369,7 +381,7 @@ if ! $SKIP_HISTORICAL; then
       if $DRY_RUN; then
         echo "  [DRY RUN] Would run: $RUN_POOL $SLOT"
       else
-        bash "$RUN_POOL" "$SLOT"
+        bash "$RUN_POOL" "$SLOT" || POOL_RC=$?
       fi
       ;;
   esac
@@ -382,7 +394,7 @@ if ! $SKIP_DAILY; then
   if $DRY_RUN; then
     echo "  [DRY RUN] Would run: $RUN_POOL $SLOT"
   else
-    bash "$RUN_POOL" "$SLOT"
+    bash "$RUN_POOL" "$SLOT" || POOL_RC=$?
   fi
   echo ""
 fi
@@ -394,15 +406,31 @@ echo "Validation"
 echo "=================================================="
 if $DRY_RUN; then
   echo "(skipped — dry run)"
+  rm -f "$RUN_START_MARK"
   exit 0
 fi
 
 ERRORS=0
+if [[ "$POOL_RC" -ne 0 ]]; then
+  echo "ERROR: the pool exited $POOL_RC — at least one worker failed, so this reprocess is NOT complete."
+  echo "       Failed tables/periods reported by EtlRunner during this run (ETL_FAILED lines):"
+  _failed_lines=$(find "$SCRIPT_DIR/runs" -name 'etl_*.log' -newer "$RUN_START_MARK" -print0 2>/dev/null \
+    | xargs -0 grep -h 'ETL_FAILED:' 2>/dev/null | sort -u || true)
+  if [[ -n "$_failed_lines" ]]; then
+    echo "$_failed_lines" | sed 's/^/         /'
+  else
+    echo "         (none found under $SCRIPT_DIR/runs — see the worker logs and launch.log)"
+  fi
+  ERRORS=$((ERRORS+1))
+fi
+rm -f "$RUN_START_MARK"
 for tbl in "${TABLE_ARR[@]}"; do
   after=$(pg_tracker_exec "SELECT COALESCE(MAX(as_of),0) FROM \"${PG_NS}\".pipeline_tracker WHERE table_name = '${tbl}' AND phase = 'incremental' AND state = 'complete';" 2>/dev/null | tr -d '[:space:]')
   after="${after:-0}"
   before="${BEFORE_AS_OF[$tbl]:-0}"
-  if [[ "$after" -gt "$before" ]]; then
+  if [[ "$POOL_RC" -ne 0 ]]; then
+    echo "  NOT CONFIRMED: ${tbl} — as_of ${before} -> ${after}, but the pool failed (a committed period advances as_of even when other periods failed)"
+  elif [[ "$after" -gt "$before" ]]; then
     echo "  OK: ${tbl} — as_of advanced ($before -> $after)"
   else
     echo "  WARNING: ${tbl} — as_of did NOT advance (before=$before after=$after)."

@@ -66,6 +66,6 @@ public class DuckDBFilterRule extends ConverterRule {
         org.apache.calcite.plan.RelOptRule.convert(
             filter.getInput(),
             filter.getInput().getTraitSet().replace(out)),
-        filter.getCondition());
+        StoredTextPartitionFilter.condition(filter));
   }
 }

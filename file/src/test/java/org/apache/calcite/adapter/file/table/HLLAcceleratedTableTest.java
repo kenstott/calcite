@@ -30,6 +30,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * distinct counts are within tolerance of exact counts, and that
  * caching behavior works on repeated calls.
  */
+@ResourceLock("calcite.file.statistics")
 @Tag("integration")
 public class HLLAcceleratedTableTest {
 

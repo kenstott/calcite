@@ -23,6 +23,7 @@
       "type": "custom",
       "factory": "org.apache.calcite.adapter.file.FileSchemaFactory",
       "operand": {
+        "baseDirectory": ".",
         "directory": "bug",
         "executionEngine": "linq4j",
         "caseSensitive": false,

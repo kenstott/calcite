@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.govdata.health;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.NetworkOutageWait;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
@@ -97,7 +98,7 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     // Stream the (often large) partition ZIP to a temp file rather than buffering it in a byte[],
     // then stream the single JSON entry's results[] through the parser. Only the flattened output
     // is held in memory (bounded by the responseTransformer's String return contract).
-    File tempZip = File.createTempFile("openfda-", ".zip");
+    File tempZip = org.apache.calcite.adapter.file.StagingDirectory.newTempFile("openfda-", ".zip");
     try {
       downloadToFile(url, tempZip);
       ArrayNode out = MAPPER.createArrayNode();
@@ -163,6 +164,7 @@ abstract class AbstractOpenFdaResponseTransformer implements ResponseTransformer
     conn.setConnectTimeout(30000);
     conn.setReadTimeout(300000);
     conn.setRequestProperty("User-Agent", "GovData/1.0");
+    NetworkOutageWait.connect(conn);
     int status = conn.getResponseCode();
     if (status != 200) {
       throw new IOException("HTTP " + status + " from " + url);

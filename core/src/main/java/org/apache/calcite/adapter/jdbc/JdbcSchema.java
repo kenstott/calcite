@@ -59,6 +59,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -446,8 +447,22 @@ public class JdbcSchema implements Schema, Wrapper {
     return RelDataTypeImpl.proto(fieldInfo.build());
   }
 
+  /** Exact integer types wider than BIGINT that DuckDB reports as {@link Types#OTHER}, by the
+   * decimal digits of their largest value (DuckDB reports a HUGEINT's size in bits, 128, and the
+   * others' as 0). A SUM of BIGINT is a HUGEINT. Each is read as DECIMAL of that precision, which
+   * the type system caps at its own maximum, rather than ANY: an ANY column reaches a JDBC client
+   * as JAVA_OBJECT, which Arrow-reading clients refuse ("Unmapped JDBC type: 2000"). */
+  private static final Map<String, Integer> WIDE_INTEGER_DIGITS =
+      ImmutableMap.of("HUGEINT", 39, "UHUGEINT", 39, "UBIGINT", 20);
+
   private static RelDataType sqlType(RelDataTypeFactory typeFactory, int dataType,
       int precision, int scale, @Nullable String typeString) {
+    final Integer wideDigits = dataType == Types.OTHER && typeString != null
+        ? WIDE_INTEGER_DIGITS.get(typeString.toUpperCase(Locale.ROOT))
+        : null;
+    if (wideDigits != null) {
+      return typeFactory.createSqlType(SqlTypeName.DECIMAL, wideDigits, 0);
+    }
     // Fall back to ANY if type is unknown
     final SqlTypeName sqlTypeName =
         Util.first(typeString != null && typeString.toUpperCase(Locale.ROOT).contains("UNSIGNED")

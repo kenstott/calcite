@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file.format.json;
 
 import org.apache.calcite.adapter.file.table.JsonScannableTable;
 import org.apache.calcite.adapter.file.table.JsonTable;
+import org.apache.calcite.adapter.file.util.LocalPaths;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.Source;
 
@@ -283,8 +284,7 @@ public class JsonMultiTableFactory {
     }
 
     if (filePath != null) {
-      int lastSlash = filePath.lastIndexOf('/');
-      String name = lastSlash >= 0 ? filePath.substring(lastSlash + 1) : filePath;
+      String name = LocalPaths.fileName(filePath);
       int lastDot = name.lastIndexOf('.');
       fileName = lastDot >= 0 ? name.substring(0, lastDot) : name;
     }

@@ -80,6 +80,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + nonExistentDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
@@ -105,6 +106,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
         + "    }\n"
@@ -313,6 +315,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        glob: '[invalid\\\\pattern',\n" // Invalid glob
         + "        ephemeralCache: true\n"
         + "      }\n"
@@ -338,6 +341,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'invalid_engine',\n"
         + "        ephemeralCache: true\n"
         + "      }\n"
@@ -366,6 +370,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: 'http://192.0.2.1:9999/timeout',\n" // Non-routable IP
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        connectTimeout: 1000,\n" // 1 second timeout
         + "        readTimeout: 1000,\n"
         + "        ephemeralCache: true\n"
@@ -409,6 +414,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        recursive: true,\n"
         + "        glob: '**/*.csv',\n"
         + "        ephemeralCache: true\n"
@@ -444,6 +450,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + tempDir.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        executionEngine: 'linq4j',\n" // In-memory engine
         + "        maxMemoryBytes: 1024,\n" // Very small memory limit
         + "        tableNameCasing: 'LOWER',\n"
@@ -507,6 +514,7 @@ public class ErrorHandlingTest {
         + "      factory: 'org.apache.calcite.adapter.file.FileSchemaFactory',\n"
         + "      operand: {\n"
         + "        directory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
+        + "        baseDirectory: '" + directory.getAbsolutePath().replace("\\", "\\\\") + "',\n"
         + "        tableNameCasing: 'LOWER',\n"
         + "        columnNameCasing: 'LOWER',\n"
         + "        ephemeralCache: true\n"

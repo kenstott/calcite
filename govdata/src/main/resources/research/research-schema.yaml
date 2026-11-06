@@ -35,6 +35,7 @@
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:research}"
+networkOutageWaitMinutes: "${NETWORK_OUTAGE_WAIT_MINUTES:25}"
 dataLagYears: 0
 materializeDirectory: "${GOVDATA_PARQUET_DIR}"
 
@@ -60,6 +61,7 @@ column_templates:
   partition_year: &partition_year
     name: year
     type: INTEGER
+    storedDigits: 4
 
   standard_partitions: &standard_partitions
     style: hive
@@ -180,7 +182,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 707
-      checkedAt: "2026-10-08T06:16:38Z"
+      checkedAt: "2026-11-05T20:27:03Z"
     partitions: *standard_partitions
     freshness:
       type: last_modified
@@ -264,7 +266,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 721
-      checkedAt: "2026-10-08T06:16:39Z"
+      checkedAt: "2026-11-05T20:27:04Z"
     partitions: *standard_partitions
     freshness:
       type: last_modified
@@ -568,8 +570,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 17
       contiguous: true
-      rowCount: 1236084
-      checkedAt: "2026-10-08T06:16:45Z"
+      rowCount: 1237090
+      checkedAt: "2026-11-05T20:27:06Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -736,7 +738,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 201273
-      checkedAt: "2026-10-08T06:16:49Z"
+      checkedAt: "2026-11-05T20:27:07Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -908,8 +910,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 5
       contiguous: true
-      rowCount: 1008494
-      checkedAt: "2026-10-08T06:16:51Z"
+      rowCount: 2082597
+      checkedAt: "2026-11-05T20:27:07Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -964,7 +966,7 @@ partitionedTables:
         - nih_publications
       year:
         type: yearRange
-        start: "${GOVDATA_START_YEAR:2022}"
+        start: "${GOVDATA_START_YEAR:2010}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         minYear: 2022
         dataLag: 0
@@ -1009,12 +1011,23 @@ partitionedTables:
         comment: Full project number, stable across a project's renewal years
       - name: pmid
         type: long
-        nullable: false
-        comment: PubMed ID of the linked publication
+        nullable: true
+        comment: PubMed ID of the linked publication; null only on a record_status=invalid_source_record row
       - name: pub_year
         type: integer
         nullable: true
         comment: Calendar year the paper was published, from NIH iCite; null when iCite does not index the pmid
+      - name: record_status
+        type: string
+        nullable: false
+        comment: >
+          valid for a normal appl_id/pmid link; invalid_source_record when RePORTER's publications
+          API kept returning HTTP 5xx for this appl_id alone (that row carries pmid NULL and the
+          appl_id's publications are unknown, not zero)
+      - name: record_issue
+        type: string
+        nullable: true
+        comment: Why the row is invalid, e.g. the HTTP status and attempt count; null when record_status is valid
 
     source:
       type: http
@@ -1022,6 +1035,18 @@ partitionedTables:
       method: POST
       # Pages (both the internal appl_id-collection pages and the publications pages) are read
       # through the raw cache, one entry per (year, IC, phase, offset) — see the provider.
+      # An appl_id whose publications request still returns HTTP 5xx when asked alone, after
+      # maxRetries retries, is an invalid source record: it is emitted as one row with pmid NULL
+      # and record_status=invalid_source_record rather than dropped. More invalid ids in one
+      # (year, agency_ic) slice than maxInvalidRecordsPerSlice means an API outage, not bad
+      # records: the run fails. 25 was too low: 2026 NCI and NIA each had 26+ intramural
+      # ids the API answers without honouring the appl_id filter. Both are read by the
+      # provider from this block.
+      maxRetries: 3
+      maxInvalidRecordsPerSlice: 100
+      # RePORTER admits 200 calls per minute per client and answers 429 beyond that; slices run
+      # concurrently, so the provider spaces uncached calls to stay under this together.
+      requestsPerMinute: 150
       rawCache:
         enabled: true
     hooks:
@@ -1061,7 +1086,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2792337
-      checkedAt: "2026-10-08T06:16:55Z"
+      checkedAt: "2026-11-05T20:27:08Z"
     partitions: *standard_partitions
     comment: >
       NSF NCSES Higher Education R&D (HERD) survey — R&D expenditure by academic

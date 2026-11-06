@@ -436,6 +436,8 @@ public class SharePointLiveIntegrationTest {
       // First try: Point directly to nested Shared Documents
       Map<String, Object> operand = new HashMap<>();
       operand.put("directory", "/Shared Documents/Shared Documents");
+      operand.put("baseDirectory", java.nio.file.Files.createTempDirectory("base").toString());
+      operand.put("directory", "/Shared Documents/Shared Documents");
       operand.put("storageType", "sharepoint");
       operand.put("recursive", true);  // Enable recursive traversal
       operand.put("executionEngine", "linq4j");  // Use LINQ4J for CSV processing
@@ -545,6 +547,8 @@ public class SharePointLiveIntegrationTest {
           System.out.println("\nTrying alternative: /Shared Documents with recursive=true");
           Map<String, Object> operand2 = new HashMap<>(operand);
           operand2.put("directory", "/Shared Documents");
+          operand2.put("baseDirectory", java.nio.file.Files.createTempDirectory("base").toString());
+          operand2.put("directory", "/Shared Documents");
           operand2.put("recursive", true);
           // Ensure storageConfig is copied with useGraphApi
           Map<String, Object> storageConfig2 = new HashMap<>((Map<String, Object>) operand.get("storageConfig"));
@@ -570,6 +574,8 @@ public class SharePointLiveIntegrationTest {
           // Try alternative: Use just Shared Documents/Shared Documents without leading slash
           System.out.println("\nTrying alternative: Shared Documents/Shared Documents");
           Map<String, Object> operand3 = new HashMap<>(operand);
+          operand3.put("directory", "Shared Documents/Shared Documents");
+          operand3.put("baseDirectory", java.nio.file.Files.createTempDirectory("base").toString());
           operand3.put("directory", "Shared Documents/Shared Documents");
           operand3.put("recursive", true);
           // Ensure storageConfig is copied with useGraphApi

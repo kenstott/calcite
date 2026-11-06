@@ -24,10 +24,12 @@ import org.apache.parquet.avro.AvroParquetWriter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @SuppressWarnings("deprecation")
 @Tag("unit")
+@ResourceLock("parquet.vectorized.property")
 public class ParquetEnumerableFactoryCoverageTest {
 
   @TempDir
@@ -55,9 +58,21 @@ public class ParquetEnumerableFactoryCoverageTest {
   private File timestampParquetFile;
   private File mixedTypesParquetFile;
 
+  private String origVectorized;
+
+  @AfterEach
+  void restoreVectorizedProperty() {
+    if (origVectorized != null) {
+      System.setProperty("parquet.enable.vectorized.reader", origVectorized);
+    } else {
+      System.clearProperty("parquet.enable.vectorized.reader");
+    }
+  }
+
   @BeforeEach
   void setUp() throws IOException {
     // Ensure vectorized reader is disabled for these tests
+    origVectorized = System.getProperty("parquet.enable.vectorized.reader");
     System.setProperty("parquet.enable.vectorized.reader", "false");
     parquetFile = createSimpleParquetFile();
     timestampParquetFile = createTimestampParquetFile();

@@ -1,0 +1,384 @@
+# AskAmerica — requirements ledger. Schema: README.md.
+#
+# Unit of work = a capability of AskAmerica as it is distributed: the engine
+# (askamerica-engine) and the pg-wire server bundle it installs and starts (pgwire-govdata,
+# built by .github/workflows/pgwire-adapters-release.yml). The source is the owner's decisions.
+#
+#   accepted = an owner decision with no implementation, or a design the owner has confirmed
+#              that is not yet proven by a test cited in `tests:`.
+#   proposed = a possible future feature; no decision to build it.
+#
+# ASKAM-002 and ASKAM-004 confirm the existing design. They are not new decisions. Where the
+# code departs from that design, the departure is listed in `source:` as a defect against it.
+
+# ===================================== platforms ===============================================
+
+- id: ASKAM-001
+  module: askamerica
+  status: accepted
+  group: platforms
+  category: NixOS
+  priority: MUST
+  type: infrastructure
+  description: >
+    AskAmerica is supported on NixOS: its engine and its pg-wire server install and start on a
+    NixOS host and serve as they do on other Linux hosts, with what the host must provide
+    stated. The host provides nix-ld with the libraries the bundle's runtimes link against, and
+    a PATH carrying bash, coreutils and tar for the process that starts the server; that list
+    is published as a ready-made NixOS configuration snippet. The bundle brings its own Java
+    and Python runtimes and needs neither a JDK nor JAVA_HOME from the host. Nothing is written
+    into the install tree while the server runs: run-time files go to a state directory that
+    can be set per server process by environment. On a NixOS host without nix-ld the server is
+    not started; the engine fails before the spawn and prints the snippet. A release is not
+    published unless a NixOS guest configured with only that snippet unpacks the linux-x86_64
+    bundle, starts the server and answers a query.
+  source: >
+    owner decisions 2026-10-09. State on main at 06ae0654b0, read from the code: installs go
+    under the user's home and change nothing on the host (PgwireGovDataInstaller,
+    EngineInstaller); the launcher is a bash script with an env shebang
+    (pgwire-adapters-release.yml, "Stage adapter model + launcher"); the query-engine JVM is
+    started with no JVM path, so the host's JAVA_HOME is used although the bundle carries a JRE
+    (calcite_backend.py _start_jvm); jars.classpath is rewritten in the bundle at every start
+    and the catalog cache is written beside model.json (catalog_populate.py
+    catalog_cache_path); the port probe runs lsof (PgwireGovDataConnector.portListenerPid); no
+    certificate bundle is configured for the Python side; the engine's native installer for
+    Linux is a .deb only; only linux-x86_64 is published for Linux. Whether lsof and the
+    certificate bundle are removed from the host's list or added to it is settled in the
+    implementation and then stated here.
+  tests: []
+
+# ===================================== catalog seed ============================================
+
+- id: ASKAM-002
+  module: askamerica
+  status: accepted
+  group: catalog seed
+  category: Official seed
+  priority: MUST
+  type: constraint
+  description: >
+    At run time AskAmerica never builds its catalog by discovery: not on a first start, not
+    when the installed catalog is missing, and not when it differs from the model. The seed
+    packaged in the jar is the official one. On start the jar's seed is put in place, and doing
+    so again when nothing changed is a no-op; an installed catalog that differs from the jar's
+    seed is replaced by it, never repaired or rebuilt. Whether two seeds differ, and whether a
+    seed covers the model, is measured by schema only: the schemas, their tables, and the
+    columns and types the seed declares. Recorded row counts, statistics, timestamps, version
+    strings and file bytes do not make a seed different. A jar that carries no seed, or a seed
+    that does not declare a schema of the model, is an error that names what is
+    missing and stops the start; there is no fallback to building one. Statistics in the seed
+    may be out of date; that is accepted and is never a reason to build, recount or refresh at
+    run time. A newer official seed reaches an install only with a newer jar. Building a seed
+    stays possible and belongs to the release path (govdata/scripts/build-seed.sh), which is
+    how the official seed is made. The standalone pg-wire server puts its own jar's seed in
+    place on every start, into its state directory, without its caller naming a catalog.
+    Each server process has its own copy of the catalog, because DuckDB locks a catalog file
+    against other processes even when it is opened read-only; the copies are an artifact of
+    that lock, every one comes from the jar's seed, and none is built, merged or reconciled
+    with another: "different" is always measured against the jar, never between copies. The
+    pg-wire server's own catalog cache (the pickle file shipped beside the model) is under
+    the same rule: the shipped one is official, is judged by schema and never by the model
+    file's bytes, is never rebuilt by a live walk at run time, and a missing one or one that
+    does not cover the model is an error by name; building it is a release step.
+  source: >
+    The existing design, confirmed by the owner 2026-10-09 ("these are not changes - this is
+    just confirming the design requirement"). Defects against it on main at 6e664777a4, read
+    from the code: (a) the standalone pg-wire server never puts a seed in place:
+    GovDataSeedInstaller.ensureSeeded is called only from GovDataDriver.connect, while the
+    bundle's model names GovDataSchemaFactory directly with database_filename
+    ${GOVDATA_DUCKDB_CATALOG:govdata-catalog.duckdb}, so with that variable unset an empty
+    catalog is created (DuckDBJdbcSchemaFactory "Creating new DuckDB database") and filled by
+    discovery; (b) a jar without a seed and a failed extraction both continue into discovery
+    instead of stopping (GovDataSeedInstaller, "pure accelerator"); (c) an installed catalog
+    is compared with the seed by a SHA-256 of the seed zip's bytes kept in
+    .duckdb/govdata.duckdb.version, not by schema; (d) a catalog file newer than the jar is
+    kept even when it differs; (e) ?rebuildCatalog=true and -Dgovdata.rebuild.catalog delete
+    the catalog so that it is rebuilt by discovery (GovDataDriver); (f) a seeded catalog copy
+    that cannot be opened is replaced by an empty catalog whose views are rebuilt
+    (DuckDBJdbcSchemaFactory, lock-fallback loop), which is left as it is; (g) the pickle
+    cache is named by a SHA-256 of model.json's bytes and rebuilt by a live walk when absent
+    or unreadable (catalog_populate.py populate_state_cached); (h)
+    DuckDBCatalogMaintenance.rebuildPendingViews rebuilds views at run time and has no
+    caller. Already as designed: a process that meets the catalog's lock takes a numbered
+    copy seeded from the jar's seed (see ASKAM-004). That a read-only open is locked too is
+    the owner's statement; no comment in the code says so.
+    Owner 2026-10-10, on whether the running server should also refuse a table or column the
+    seed lacks and whether the build should check the seed against the schema models: "the
+    daily release for calcite - 1) doesn't execute if there are no changes 2) the seed is
+    only rebuilt if the schema changes. It seems to me that additional runtime checks are not
+    needed. a release with a bad seed can only happen in a manual release. which is on the
+    person who did it." So: no run-time refusal for a table or column missing from the
+    seed, no build-time coverage check, no gate on the release script. What the server does
+    is put its jar's seed in place at start (a no-op when the installed catalog's schema
+    matches) and stop by name when the jar has no seed.
+    His reason, the same day: "that's also possible if table has never gone through ETL,
+    which is why its better to NOT check." A table or column the model declares and the seed
+    lacks is a normal state - declared, not yet ingested - not a defect, so nothing compares
+    the seed's coverage with the model, at build time or at run time.
+  tests: []
+
+# ===================================== updates =================================================
+
+- id: ASKAM-003
+  module: askamerica
+  status: proposed
+  group: updates
+  category: Agreed update
+  priority: MAY
+  type: behavioral
+  description: >
+    The user agrees before the engine replaces its jar with a newer release. A future
+    feature, not a decision to build. Open questions a design must answer: where the
+    agreement is asked when the engine runs as a headless server; a setting that turns
+    updates off; and what not taking an update means for an install whose seed then lags.
+  source: >
+    owner remark 2026-10-09 ("we'll just add that as a future feature"). Baseline on main at
+    6e664777a4, read from EngineInstaller: on every restart the engine compares its jar's
+    stamped version with the latest release and downloads only when they differ; an
+    unstamped jar counts as differing and an unreachable release lookup counts as not
+    differing. In server mode the running jar serves and the new one is downloaded beside it
+    for the next launch. A jar named by ASKAMERICA_ENGINE_JAR, or placed beside the launcher,
+    is a pin and is never replaced, which is how updates are declined today. Why the check
+    runs so often and why agreement is hard to ask: the thin launcher is started by an MCP host
+    (Claude Desktop passes --mcp, McpServerLauncher) each time that host starts the server, so
+    "every restart" is every launch by the host, and in that mode the process is a stdio MCP
+    server with nobody at a prompt. Its standard output is the protocol; the launcher and the
+    installer report on standard error, which the host captures (EngineInstaller.report). How
+    often a host relaunches is the host's behaviour and is not stated in this repository.
+  tests: []
+
+# ===================================== concurrency =============================================
+
+- id: ASKAM-004
+  module: askamerica
+  status: accepted
+  group: concurrency
+  category: Concurrent engine processes
+  priority: MUST
+  type: constraint
+  description: >
+    Several AskAmerica engine processes run concurrently on one host, as an MCP host starts
+    them, and each has the catalog available at once. DuckDB locks a catalog file against
+    other processes, so a process that finds the catalog held takes a copy of its own; the
+    copies exist only because of that lock. A copy left by a process that has ended is
+    reused or removed by a later process, so copies do not accumulate without bound. The
+    large object cache is shared by all processes and stays shared; only the catalog copy,
+    the pid and the log are per process.
+  source: >
+    The existing design, confirmed by the owner 2026-10-09 ("they need to be concurrent, and
+    this drives the sharing of the catalog"; "I think it already works anyway"). Met in
+    file/src/main/java/org/apache/calcite/adapter/file/duckdb/DuckDBJdbcSchemaFactory.java
+    on main at 6e664777a4: isCatalogLockConflict recognises the lock; the fallback loop opens
+    {name}_N.duckdb for N up to MAX_CATALOG_LOCK_FALLBACKS (16), taking the lowest free one,
+    each seeded from the jar's bundled seed (seedCatalogCopy*); cleanupStaleNumberedCopies,
+    once per JVM, deletes a numbered copy that is old enough and that this process can open
+    itself, and leaves one another process holds. The standalone pg-wire server opens its
+    catalog through the same factory. No test is cited yet.
+  tests: []
+
+# ===================================== installer ========================================
+
+- id: ASKAM-005
+  module: askamerica
+  status: accepted
+  group: installer
+  category: Small installer
+  priority: MUST
+  type: constraint
+  description: >
+    The installer is small and has a step to download its assets. No installer (.msi, .deb,
+    .pkg) carries the engine jar or the pg-wire server bundle; the installed launcher
+    downloads each on first use and verifies it. The installer build fails when an installer
+    exceeds 100 MB.
+    The download is a step the user sees: the setup wizard fetches this version's pg-wire
+    server bundle (which carries the embedder model) with progress and the sizes stated,
+    verified by checksum and resumable, before it offers to configure and relaunch Claude.
+    On every path that reaches a data call without the bundle (a pip install, a cleared
+    cache, a release whose bundle is not attached yet, an update) the call answers at once
+    with a named status - "the data server is being installed (N of M MB)" or "this
+    version's data server is not published yet" - never a silent wait, and the download
+    continues in the background outside the query lock.
+    The standard the .msi and the .deb are validated against is the macOS package: a small
+    installer; the server bundle downloaded under the user's own directory and kept at the
+    engine's version; Claude given a launcher path with no spaces; no server inside the
+    install directory. The .msi and the .deb are correct when they behave the same.
+  source: >
+    owner rule 2026-10-10 ("the installer is small and has a step to download its assets").
+    History, from the release assets and git: through engine-v0.90.1 the installers were
+    54 MB (.msi), 37 MB (.deb) and 33 MB (.pkg). Commit 79c476a075 (0.91.0) put the
+    pgwire-govdata bundle into all three (about 905 MB, 1,127 MB and 1,007 MB); dd4c66c3b1
+    took it out of the .pkg only, because notarization rejected it; the .msi and the .deb
+    shipped at about 920 MB and 1,220 MB through engine-v0.109.1. Enforced by the "Installer
+    stays small" step of .github/workflows/askamerica-engine.yml; no test is cited.
+    The visible download step and the at-once status were added to this entry's acceptance
+    by the owner's lead on 2026-10-10, after reading showed that without them the ~900 MB
+    bundle arrives silently inside the first query (PgwireGovDataInstaller), so that "small"
+    and "says what it is downloading" are not separated again. Neither is built yet.
+    The macOS standard: owner 2026-10-10, after installing the 0.109.2 .pkg ("just downloaded
+    and tested it. it works. It seems that it is the standard to validate the msi and deb
+    against."). Where Windows differs from it today: the server inside Program Files, a
+    launcher path with spaces handed to Claude, the server started by a .bat through cmd.exe.
+  tests: []
+
+- id: ASKAM-006
+  module: askamerica
+  status: accepted
+  group: semantic-search
+  category: Semantic search
+  priority: MUST
+  type: behavioral
+  description: >
+    Semantic search must work. On a fresh install on Windows, macOS and Linux, with nothing
+    set by the user, the semantic_search tool and SQL SEMANTIC_SEARCH / EMBED return results.
+  source: >
+    owner 2026-10-10 ("semantic search must work."), on an installed Windows product whose
+    log said "embedder: none found - semantic_search/SEMANTIC_SEARCH will report 'no
+    embedder configured'". Read from the code the same day: in the default (pg-wire) mode
+    semantic search is served by the pgwire-govdata server: the semantic_search tool runs
+    SEMANTIC_SEARCH through that server, where the file adapter's in-JVM embedder
+    (OnnxClsEmbedder: snowflake-arctic-embed-xs, CLS pooling, L2-normalized) embeds the
+    query, and McpServer.embedderConfigured() offers the tool on that basis. The stored
+    vectors are produced by govdata/scripts/vss-local.py with sentence-transformers, same
+    model, normalized, then quantized. The quoted log line comes from
+    McpServer.configureQueryEmbedder, which looks for an embedder of the MCP process's own
+    without asking which mode is on, and is false in the default mode. On that machine the
+    server never became reachable, which is why no data call, semantic search included,
+    worked. Not established: that each platform's bundle contains the model; and that the
+    server's second embedder (Python fastembed, used only for a literal EMBED('...')) pools
+    the way the stored vectors were made.
+    No test is cited.
+  tests: []
+
+- id: ASKAM-010
+  module: askamerica
+  status: accepted
+  group: data-server
+  category: Key sign-in
+  priority: MUST
+  type: constraint
+  description: >
+    Every connection to the pgwire-govdata server passes its AskAmerica API key as the
+    PostgreSQL password, and that connection is metered under that key: quota is checked
+    and usage reported per connection, never from the server's own environment. A
+    connection with no key, an empty one, or a key the key service refuses is refused at
+    sign-in (SQLSTATE 28P01). When the key service cannot be asked, sign-in is refused
+    (SQLSTATE 08006): it fails closed. A key out of quota signs in and its statements are
+    refused (SQLSTATE 53400). FREE_ASKAMERICA_KEY wins over ASKAMERICA_API_KEY when both
+    are set, in every client. Sign-in is on by default in the govdata launcher; only an
+    explicit launcher argument turns it off, and no environment variable does. No log line,
+    error or test output shows a key or a part of one.
+  source: >
+    owner 2026-10-10: "we need every connection to the pgwire-server to include its
+    ASKAMERICA_API_KEY."; "every connection to the pgwire-govdata server must pass the
+    askamerica_api_key as the password. That instance of the connection must pass that key
+    for use in metering."; on whose store credentials read the data: "for reading the data
+    its irrelevant - all credentials unwrap the r2 creds for reading." Chosen by the owner
+    from options: refuse when the key service is unreachable; FREE_ASKAMERICA_KEY first; on
+    by default in the launcher. The exchange is the cleartext password message because the
+    server must hold the key itself to meter under it. Store credentials stay process-wide,
+    fetched and rotated with the key of whoever started the server, which is never anyone's
+    metering identity. Known limit, not built: if the starter's key is revoked, rotation
+    fails and every reader loses the store when the credentials lapse, though their own
+    keys are valid.
+  tests:
+    - pgwire-calcite/tests/unit/test_key_sign_in.py
+    - askamerica-engine/src/test/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnectorSignInTest.java
+
+- id: ASKAM-011
+  module: askamerica
+  status: complete
+  group: data-server
+  category: Key sign-in
+  priority: MUST
+  type: behavioral
+  description: >
+    With no API key, the engine neither connects to nor starts a data server: the caller is
+    told at once that no key is set, and how to supply one - the AskAmerica MCP application's
+    setup window, which writes it into Claude Desktop's configuration, or the
+    ASKAMERICA_API_KEY environment variable - and where a free key is obtained, the address
+    the setup window links to.
+  source: >
+    askamerica-engine/src/main/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnector.java
+    (connect, requireApiKey, noApiKeyMessage)
+  tests:
+    - askamerica-engine/src/test/java/org/apache/calcite/adapter/askamerica/PgwireGovDataConnectorSignInTest.java
+  notes: "Owner decision 2026-10-11 (issue 510). Before it, a keyless call was answered
+    correctly but a data server was still started, to stop at the object store for want of
+    credentials."
+  since: 2026-10
+- id: ASKAM-007
+  module: askamerica
+  status: accepted
+  group: installer
+  category: Thin engine jar
+  priority: MUST
+  type: constraint
+  description: >
+    The engine jar carries no embedder: no ONNX Runtime and no embedding model. Semantic
+    search (the semantic_search tool, SQL SEMANTIC_SEARCH and EMBED) is served by the data
+    server, to which the engine sends it as SQL. The build of the engine jar fails when the
+    jar contains ai/onnxruntime, the snowflake-arctic-embed-xs model or any .onnx file.
+  source: >
+    owner 2026-10-10 ("remove onnx from the engine jar"; "if the server can create
+    embeddings in SQL - why not just use that"; "everything uses the snowflake model").
+    Measured in the 0.109.1 engine jar (436 MB): ONNX Runtime, every platform's native
+    library, 84 MB in the jar and 370 MB unpacked; the model 16 MB. Read from the code: in
+    pg-wire mode, the mode every install runs in, the MCP process embeds nothing;
+    SEMANTIC_SEARCH is evaluated in the server's JVM by the file adapter's OnnxClsEmbedder
+    (CLS pooling, the reference for the stored vectors), from the unshaded jars the server
+    bundle carries, and a literal EMBED('...') by the server's Python embedder. Enforced by
+    the shadowJar task of askamerica-engine/build.gradle.kts and the "Slimming guards" step
+    of .github/workflows/askamerica-engine.yml; no test is cited. With pg-wire mode switched
+    off the engine has no embedder unless an operator names one (calcite.embed.*).
+  tests: []
+
+- id: ASKAM-008
+  module: askamerica
+  status: accepted
+  group: engine
+  category: One mode
+  priority: MUST
+  type: constraint
+  description: >
+    The engine has one mode: it serves data through the data server. There is no in-process
+    query mode. No code path in the engine opens Calcite, govdata or DuckDB on the store. A
+    data server that is not reachable is transient - a bounded wait - or an error by name;
+    never a fall-back to in-process. An ASKAMERICA_PGWIRE_MODE setting left in an environment
+    is ignored and said so in one log line.
+  source: >
+    owner 2026-10-10, on being told a non-pgwire mode (ASKAMERICA_PGWIRE_MODE=0) still
+    existed: "there is NO such mode. If this is the case its an error, or is transient and
+    should retry and then error." With it go the in-process JDBC driver (jdbc:askamerica:,
+    AskAmericaDriver) and the Python wheel's embedded engine: asked whether they stay as a
+    product, the owner chose "They go" - anything wanting SQL connects to the data server
+    over pg-wire. No stub driver is left behind ("No stub, class gone"). The set_memory_limit
+    tool, which already refused in pg-wire mode, is removed with the mode. No test is cited.
+  tests: []
+
+- id: ASKAM-009
+  module: askamerica
+  status: accepted
+  group: installer
+  category: Thin engine jar
+  priority: MUST
+  type: constraint
+  description: >
+    The engine jar is thin: the MCP protocol, the tools, a pg-wire client and the setup
+    wizard. It contains no govdata, no file adapter, no hadoop, iceberg, aws, parquet or
+    arrow; everything that touches data lives in the server download. Calcite is present for
+    its SQL parser only. The build of the engine jar fails when any of these is inside.
+  source: >
+    owner 2026-10-10 ("remove govdata from the engine jar too"; "remove hadoop, iceberg, aws
+    from the engine jar too"; on Calcite's parser: "Keep the parser"; on OpenBLAS: "Leave it
+    for now"). Read from the code: the engine's direct use of govdata and the file adapter
+    was six classes - the in-process driver and connection (deleted with the mode,
+    ASKAM-008), the store-credential provider, the catalog reader with its YAML helper and
+    a variable resolver. The last four have no heavy dependency and are compiled into the
+    engine from their one copy in the source tree, with the schema YAMLs the catalog tools
+    read, so search_catalog still answers without a server. Enforced by the shadowJar task of
+    askamerica-engine/build.gradle.kts and the "Slimming guards" step of
+    .github/workflows/askamerica-engine.yml; no test is cited. Still in the jar by the
+    engine's own use: OpenBLAS (statistics tools), DuckDB's driver (the browser extension's
+    local reports file), POI, PDFBox and jsoup (web_fetch), charts, the PostgreSQL driver.
+  tests: []
+
