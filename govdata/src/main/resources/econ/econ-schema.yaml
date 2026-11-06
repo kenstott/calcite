@@ -5213,7 +5213,8 @@ partitionedTables:
       2026-03-06 and carries releases only through January 2026 (see observedCoverage and
       max(release_period)). Releases after the archive's last one are not available from this
       product; first prints of later months are not in this table. The ETag freshness gate
-      picks up a refreshed archive on the next daily run.
+      picks up a refreshed archive on the next daily run. For later releases use
+      ces_revision_vintages_alfred.
 
     dimensions:
       type:
@@ -5311,6 +5312,119 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # --- CES REVISION VINTAGES, ALFRED (FRED real-time periods; continues past the BLS ZIP) ---
+  - name: ces_revision_vintages_alfred
+    timeColumn: date  # observation time; this table has no column named 'year'
+    pattern: "type=ces_revision_vintages_alfred/series=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: series
+          type: VARCHAR
+    # The whole real-time history of a series is one request and revises every month, so the
+    # hash check skips the write on days nothing new was published.
+    freshness:
+      type: hash
+    comment: >
+      Payroll vintages from ALFRED (the St. Louis Fed's archive of FRED real-time periods) for
+      six CES series: PAYEMS total nonfarm SA, PAYNSA total nonfarm NSA, USPRIV total private SA,
+      CEU0500000001 total private NSA, USGOOD goods-producing SA, SRVPRD service-providing SA
+      (thousands of employees). Exists because ces_revision_vintages stops at BLS's last
+      cesvinall.zip refresh (the 2026-03 release); this table carries the same revision history
+      through the latest Employment Situation release. One row per (series, date, realtime_start):
+      value is what ALFRED shows for the reference month `date` from the Employment Situation
+      release dated realtime_start until the day before realtime_end (realtime_end 9999-12-31
+      means still current). Only releases that changed the value get a row, so the FIRST PRINT of
+      a month is the row with the smallest realtime_start for that date, the second print is the
+      next realtime_start, and the current value is the row with realtime_end 9999-12-31; a
+      February benchmark revision shows as new rows for the prior year's months. How far back the
+      vintages go differs by series (earliest realtime_start): PAYEMS 1955, USPRIV / USGOOD /
+      SRVPRD 1971, PAYNSA 2008-09, CEU0500000001 2011-03; months older than a series' first
+      vintage appear with that first vintage as their only row. Differs from ces_revision_vintages in grain and labelling:
+      releases are identified by the date ALFRED saw them (realtime_start), not by the
+      release_year/release_month of the covered month, and series_id is the FRED id, not the BLS
+      CES/CEU code. Only the four CES industry aggregates above are loaded; deeper industry
+      detail is not. Check the first-print arithmetic before quoting: the change for a month is
+      its value minus the PRIOR month's value as of the same realtime_start, not as of the
+      current vintage.
+    dimensions:
+      type:
+        - ces_revision_vintages_alfred
+      series:
+        - PAYEMS
+        - PAYNSA
+        - USPRIV
+        - CEU0500000001
+        - USGOOD
+        - SRVPRD
+
+    columns:
+      - name: series
+        type: string
+        nullable: false
+        comment: >
+          FRED series id (partition column). PAYEMS / PAYNSA total nonfarm SA / NSA, USPRIV /
+          CEU0500000001 total private SA / NSA, USGOOD goods-producing SA, SRVPRD
+          service-providing SA. Always filter on series.
+      - name: realtime_start
+        type: date
+        nullable: false
+        comment: First day this value was the published value for `date` (the Employment Situation release date, or the day ALFRED first recorded it)
+      - name: realtime_end
+        type: date
+        nullable: false
+        comment: Last day this value was the published value; 9999-12-31 means it is still the current value
+      - *date_column
+      - name: value
+        type: double
+        nullable: true
+        comment: Employment level (thousands of employees) for the reference month `date` as published from realtime_start to realtime_end
+
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series/observations"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        series_id: "{series}"
+        # output_type=1 = observations by real-time period: one row per (date, value interval);
+        # the whole vintage history of a series (<= 12k rows here) fits one page.
+        output_type: "1"
+        realtime_start: "1776-07-04"
+        realtime_end: "9999-12-31"
+        limit: "100000"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 502, 503, 504]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=ces_revision_vintages_alfred/series=*/"
+      partition:
+        columns: [type, series]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: ces_revision_vintages_alfred
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
         runCompaction: true
         compactionTargetFileSizeBytes: 67108864
         compactionMinFiles: 3
@@ -9841,6 +9955,13 @@ constraints:
       - release_month
       - reference_year
       - reference_month
+
+  # ALFRED payroll vintages; FRED ids, no cross-table FK.
+  ces_revision_vintages_alfred:
+    primaryKey:
+      - series
+      - date
+      - realtime_start
 
   inflation_metrics:
     primaryKey:

@@ -1874,3 +1874,70 @@ SELECT
     ELSE 'PASS'
   END                                                             AS schema_result
 FROM dq_results;
+
+-- ============================================================================
+-- ces_revision_vintages_alfred (FRED/ALFRED real-time payroll vintages)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true) LIMIT 1));
+
+-- 6 series; PAYEMS alone has ~3-4k vintage rows, the six together ~40k.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'row_count',
+  CASE WHEN n >= 30000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '30000',
+  CASE WHEN n >= 30000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');  -- single-table-type partition: type is expected constant
+
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 6 scoped FRED payroll series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true)
+      WHERE series NOT IN ('PAYEMS','PAYNSA','USPRIV','CEU0500000001','USGOOD','SRVPRD'));
+
+-- Employment levels are positive thousands; a non-positive value is a parse defect.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where value is NULL or not positive'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true)
+      WHERE value IS NULL OR value <= 0);
+
+-- Coverage must reach past the stale BLS ZIP (2026-03 release): the reason this table exists.
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'expected_values',
+  CASE WHEN mx >= DATE '2026-04-01' THEN 'pass' ELSE 'fail' END,
+  CAST(mx AS VARCHAR), '>= 2026-04-01',
+  'latest realtime_start for PAYEMS must be after the last BLS cesvinall.zip release'
+FROM (SELECT MAX(realtime_start) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true) WHERE series = 'PAYEMS');
+
+-- PK shape: (series, date, realtime_start)
+INSERT INTO dq_results
+SELECT 'econ', 'ces_revision_vintages_alfred', 'pk_duplicates',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(dups AS VARCHAR), '0',
+  'duplicate (series, date, realtime_start) keys'
+FROM (SELECT COUNT(*) AS dups FROM (
+        SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true)
+        GROUP BY 1,2,3 HAVING COUNT(*) > 1));
