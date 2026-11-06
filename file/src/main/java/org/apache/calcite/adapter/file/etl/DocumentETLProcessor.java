@@ -37,6 +37,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Orchestrates document-based ETL processing for SEC filings and similar sources.
@@ -71,6 +72,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @see HttpSourceConfig.DocumentSourceConfig
  */
 public class DocumentETLProcessor {
+  /** Most identical per-task failures logged individually in one parallel run. */
+  private static final int MAX_LOGGED_TASK_ERRORS = 5;
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DocumentETLProcessor.class);
 
@@ -597,8 +600,14 @@ public class DocumentETLProcessor {
     int count = 0;
     int total = accessions.size();
     for (AccessionRef ref : accessions) {
-      DocumentETLResult result =
-          processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+      DocumentETLResult result;
+      try {
+        result = processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+      } catch (CrossProcessRateLimiter.HostCooldownException e) {
+        LOGGER.error("Host cool-down: stopping after {} of {} accessions, {} not attempted: {}",
+            count, total, total - count, e.getMessage());
+        throw e;
+      }
       totalProcessed += result.getDocumentsProcessed();
       totalSkipped += result.getDocumentsSkipped();
       totalFailed += result.getDocumentsFailed();
@@ -635,6 +644,11 @@ public class DocumentETLProcessor {
     final List<String> allErrors =
         Collections.synchronizedList(new ArrayList<String>());
 
+    // A host cool-down is a run-level condition: the first task that meets it stops the run, the
+    // tasks not yet started return without touching the tracker, and one line reports the count.
+    final AtomicReference<CrossProcessRateLimiter.HostCooldownException> cooldown =
+        new AtomicReference<CrossProcessRateLimiter.HostCooldownException>();
+    final AtomicInteger notAttempted = new AtomicInteger();
     ExecutorService executor = Executors.newFixedThreadPool(threadCount);
     List<Future<?>> futures = new ArrayList<Future<?>>();
 
@@ -642,8 +656,18 @@ public class DocumentETLProcessor {
       futures.add(
           executor.submit(new Callable<Void>() {
         @Override public Void call() {
-          DocumentETLResult result =
-              processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+          if (cooldown.get() != null) {
+            notAttempted.incrementAndGet();
+            return null;
+          }
+          DocumentETLResult result;
+          try {
+            result = processAccession(ref.cik, ref.accession, ref.formType, ref.filingDate);
+          } catch (CrossProcessRateLimiter.HostCooldownException e) {
+            cooldown.compareAndSet(null, e);
+            notAttempted.incrementAndGet();
+            return null;
+          }
           totalProcessed.addAndGet(result.getDocumentsProcessed());
           totalSkipped.addAndGet(result.getDocumentsSkipped());
           totalFailed.addAndGet(result.getDocumentsFailed());
@@ -658,14 +682,28 @@ public class DocumentETLProcessor {
       }));
     }
 
+    int unexpected = 0;
     for (Future<?> f : futures) {
       try {
         f.get();
       } catch (Exception e) {
-        LOGGER.error("Unexpected error waiting for accession task: {}", e.getMessage());
+        // Repeats of the same failure are counted, not logged one by one.
+        if (++unexpected <= MAX_LOGGED_TASK_ERRORS) {
+          LOGGER.error("Unexpected error waiting for accession task: {}", e.getMessage());
+        }
       }
     }
     executor.shutdown();
+    if (unexpected > MAX_LOGGED_TASK_ERRORS) {
+      LOGGER.error("{} accession tasks failed unexpectedly; the first {} are logged above",
+          unexpected, MAX_LOGGED_TASK_ERRORS);
+    }
+    CrossProcessRateLimiter.HostCooldownException stopped = cooldown.get();
+    if (stopped != null) {
+      LOGGER.error("Host cool-down: stopped with {} of {} accessions not attempted: {}",
+          notAttempted.get(), total, stopped.getMessage());
+      throw stopped;
+    }
 
     return new DocumentETLResult(totalProcessed.get(), totalSkipped.get(), totalFailed.get(),
         allOutputFiles, allErrors, System.currentTimeMillis() - startTime);

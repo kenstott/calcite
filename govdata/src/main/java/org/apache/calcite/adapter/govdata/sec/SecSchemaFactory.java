@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.FileSchemaBuilder;
 import org.apache.calcite.adapter.file.converters.FileConverter;
+import org.apache.calcite.adapter.file.etl.CrossProcessRateLimiter;
 import org.apache.calcite.adapter.file.etl.DocumentETLProcessor;
 import org.apache.calcite.adapter.file.etl.FilingIndexProvider;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
@@ -1057,9 +1058,19 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
               int chunkEnd = Math.min(chunkStart + commitInterval, total);
               List<DocumentETLProcessor.AccessionRef> chunk =
                   activeAccessions.subList(chunkStart, chunkEnd);
-              DocumentETLProcessor.DocumentETLResult chunkResult = threads > 1
-                  ? processor.processAccessionsParallel(chunk, threads)
-                  : processor.processAccessions(chunk);
+              DocumentETLProcessor.DocumentETLResult chunkResult;
+              try {
+                chunkResult = threads > 1
+                    ? processor.processAccessionsParallel(chunk, threads)
+                    : processor.processAccessions(chunk);
+              } catch (CrossProcessRateLimiter.HostCooldownException e) {
+                // The accessions finished before the refusal are already marked processed, so
+                // their staged output is committed before the run stops; the rest stay unmarked.
+                stagingProvider.flushAll();
+                materializeStagingFilesToIceberg(operand, secParquetDir,
+                    stagingProvider.drainUploadedPaths());
+                throw e;
+              }
               totalProcessed += chunkResult.getDocumentsProcessed();
               totalSkipped += chunkResult.getDocumentsSkipped();
               totalFailed += chunkResult.getDocumentsFailed();
