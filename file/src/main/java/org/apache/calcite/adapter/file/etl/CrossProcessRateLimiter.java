@@ -98,8 +98,19 @@ public final class CrossProcessRateLimiter {
   public static void checkNotBlocked(String key) {
     long until = blockedUntil(key);
     if (until > System.currentTimeMillis()) {
-      throw new IllegalStateException(key + " refused this host with HTTP 403/429; no requests "
+      throw new HostCooldownException(key + " refused this host with HTTP 403/429; no requests "
           + "until " + java.time.Instant.ofEpochMilli(until));
+    }
+  }
+
+  /**
+   * A host-wide cool-down is in force. It is a run-level condition: callers stop the run instead
+   * of treating it as one failed request.
+   */
+  public static class HostCooldownException extends IllegalStateException {
+    /** @param message names the key and the time requests may resume */
+    public HostCooldownException(String message) {
+      super(message);
     }
   }
 
