@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,11 +53,6 @@ public class SenateFinancialDisclosureProvider implements DataProvider {
 
   private static final Logger LOGGER =
       LoggerFactory.getLogger(SenateFinancialDisclosureProvider.class);
-
-  private static final List<String> STATES = Arrays.asList("AL", "AK", "AZ", "AR", "CA", "CO", "CT",
-      "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN",
-      "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
-      "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY");
 
   private static final Pattern MDY = Pattern.compile("^(\\d{2})/(\\d{2})/(\\d{4})$");
   private static final Pattern DOLLARS = Pattern.compile("\\$([\\d,]+(?:\\.\\d+)?)");
@@ -126,7 +120,7 @@ public class SenateFinancialDisclosureProvider implements DataProvider {
   }
 
   private static YearData read(int year) throws IOException {
-    List<SenateEfdListing.Filing> listing = SenateEfdListing.forYear(SESSION, year, STATES);
+    List<SenateEfdListing.Filing> listing = SenateEfdListing.forYear(SESSION, year);
     YearData data = new YearData();
     int unavailable = 0;
     for (SenateEfdListing.Filing f : listing) {
@@ -253,9 +247,6 @@ public class SenateFinancialDisclosureProvider implements DataProvider {
     Map<String, Object> row = base(f);
     row.remove("calendar_year");
     row.put("filer_type", l.filerType);
-    if (l.state != null) {
-      row.put("state", l.state);
-    }
     row.put("report_kind", l.kind.startsWith("extension-notice") ? "extension_notice" : l.kind);
     row.put("report_type", reportType(l.title));
     Matcher cy = CY.matcher(l.title);
