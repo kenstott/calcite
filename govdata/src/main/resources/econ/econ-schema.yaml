@@ -5212,9 +5212,8 @@ partitionedTables:
       product page (cesvininfo.htm) links no other file; the archive was last modified
       2026-03-06 and carries releases only through January 2026 (see observedCoverage and
       max(release_period)). Releases after the archive's last one are not available from this
-      product, so for the first print of a recent month use employment_statistics, which
-      carries only the current value. The ETag freshness gate picks up a refreshed archive on
-      the next daily run.
+      product; first prints of later months are not in this table. The ETag freshness gate
+      picks up a refreshed archive on the next daily run.
 
     dimensions:
       type:
