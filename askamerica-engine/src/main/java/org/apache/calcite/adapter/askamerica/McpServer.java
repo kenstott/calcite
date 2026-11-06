@@ -856,7 +856,9 @@ public class McpServer {
             + "3. The article's own sources are comparison points, not the test. Fetch the "
             + "study or release the article cites (web_fetch; python for a PDF table) to "
             + "record its figure, unit, period and population beside yours, and note where "
-            + "the article's number diverges from its own source.\n"
+            + "the article's number diverges from its own source. A primary source web_fetch "
+            + "cannot reach (HTTP 401/403/429/451) must be retried with the client's own "
+            + "fetch tool before it is graded 'not checkable here'.\n"
             + "4. Quantitative evidence from outside this corpus is DATA, not prose: when a "
             + "cited study or an official release gives a rate, a series or a table, bring the "
             + "figures in and compute the comparison against your warehouse result — "
@@ -13456,6 +13458,14 @@ public class McpServer {
             }
             int code = c.getResponseCode();
             if (code < 200 || code >= 300) {
+                if (isAccessBlockStatus(code)) {
+                    throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code
+                        + "). The server refused this engine's fetch (access control, bot"
+                        + " protection or rate limit); that says nothing about the page's"
+                        + " content. Retry the SAME URL with your own client-side web fetch"
+                        + " tool (WebFetch/Fetch) before grading anything 'not checkable here'"
+                        + " or falling back to a secondary source.");
+                }
                 throw new FetchException("Could not fetch " + urlStr + " (HTTP " + code + ").");
             }
             String contentType = c.getContentType();
@@ -13483,6 +13493,11 @@ public class McpServer {
                 c.disconnect();
             }
         }
+    }
+
+    /** True for statuses a primary source returns to refuse an automated fetch. */
+    private static boolean isAccessBlockStatus(int code) {
+        return code == 401 || code == 403 || code == 429 || code == 451;
     }
 
     /** Caller-facing fetch failure for the fetch_*_as_{json,text} tools — its message is
