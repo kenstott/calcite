@@ -4,7 +4,13 @@
 #  2. a real failure is still counted Failed and still makes the pool exit 2
 #  3. a run that dies on the sec.gov refusal after the marker appears mid-run maps to 75 in BOTH
 #     run_etl and run_etl_inline (a fake java stands in for EtlRunner and writes the marker itself)
-#  4. the same refusal with no active marker, or any other failure, is not mapped
+#  4. the refusal in the run's own log maps to 75 even when the marker has expired by exit time
+#     (a worker that kept running other tables); a failure with no refusal in the log stays itself,
+#     marker active or not
+#  5. 3 and 4 hold when the caller runs under `set -euo pipefail` like worker.sh (java's non-zero
+#     exit must not end the script before etl_exit_status maps it); the sec_secondary
+#     submissions.json shape ("Failed to fetch submissions.json ...: sec.gov refused this host ...")
+#     is covered by the same log match
 # Usage: test-pool-sec-cooldown-deferred.sh
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -57,8 +63,8 @@ exit 1
 JAVA
 chmod +x "$T/fake-java"
 
-drive() { # runner mode -> exit status of the runner, run in a clean shell with stubs
-  ( set -u
+drive() { # runner mode arg -> exit status of the runner, run in a clean shell with stubs
+  ( set -u; [ "${ERREXIT:-0}" = 1 ] && set -eo pipefail
     source "$HERE/../sec-cooldown.sh"; sec_cooldown_init
     SCRIPT_DIR="$T/scripts"; mkdir -p "$SCRIPT_DIR"
     eval "$(awk -v fn=etl_exit_status '$0 ~ "^"fn"\\(\\) \\{" {p=1} p {print} p && /^}/ {exit}' "$HERE/common.sh")"
@@ -68,20 +74,30 @@ drive() { # runner mode -> exit status of the runner, run in a clean shell with 
     assert_dq_target() { return 0; }
     GOVDATA_JAVA_BIN="$T/fake-java"; GOVDATA_JAVA_OPTS=""
     export FAKE_MODE="$2" FAKE_MARKER="$MARKER" FAKE_REFUSAL="$REFUSAL"
-    "$1" "$3" "worker-sec_secondary-test" >/dev/null 2>&1
-    echo $? )
+    "$1" "$3" "worker-sec_secondary-test" >/dev/null 2>&1 || { echo $?; exit 0; }
+    echo 0 )
 }
+for ERREXIT in 0 1; do
+export ERREXIT
 for runner in run_etl run_etl_inline; do
   arg='{"inline":"model"}'; [ "$runner" = run_etl ] && { echo '{}' > "$T/model.json"; arg="$T/model.json"; }
+  tag="$runner errexit=$ERREXIT"
   rm -f "$MARKER"
   [ "$(drive "$runner" refuse-and-mark "$arg")" = 75 ] \
-    && ok "$runner: marker appears mid-run, refusal -> exit 75" || bad "$runner: marker appears mid-run"
+    && ok "$tag: marker appears mid-run, refusal -> exit 75" || bad "$tag: marker appears mid-run"
   rm -f "$MARKER"
-  [ "$(drive "$runner" refuse-only "$arg")" = 1 ] \
-    && ok "$runner: refusal with no active marker stays a failure (1)" || bad "$runner: refusal without marker"
+  [ "$(drive "$runner" refuse-only "$arg")" = 75 ] \
+    && ok "$tag: refusal in the log with an expired/absent marker -> exit 75" || bad "$tag: refusal without marker"
+  rm -f "$MARKER"
+  [ "$(FAKE_REFUSAL="Failed to fetch submissions.json for CIK 0001688126: sec.gov refused this host with HTTP 403/429; no requests until x" \
+       drive "$runner" refuse-only "$arg")" = 75 ] \
+    && ok "$tag: submissions.json refusal shape -> exit 75" || bad "$tag: submissions.json shape"
   printf '%s' $(( ($(date +%s) + 600) * 1000 )) > "$MARKER"
   [ "$(drive "$runner" crash "$arg")" = 1 ] \
-    && ok "$runner: unrelated crash during an active marker stays a failure (1)" || bad "$runner: crash with marker"
+    && ok "$tag: no refusal in the log, marker active -> stays a failure (1)" || bad "$tag: crash with marker"
   rm -f "$MARKER"
+  [ "$(drive "$runner" crash "$arg")" = 1 ] \
+    && ok "$tag: no refusal, no marker -> stays a failure (1)" || bad "$tag: crash"
+done
 done
 exit $fail

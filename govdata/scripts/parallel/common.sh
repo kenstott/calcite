@@ -1685,12 +1685,13 @@ filter_enabled_tables() {
 }
 
 # A run stopped by the sec.gov cool-down is deferred, not failed: the refusal is the expected
-# state while the marker is active, and the tracker resumes the work in the next window.
+# state, and the tracker resumes the work in the next window. The decision rests on the run's own
+# log (HostCooldownException message), not on the marker still being active at exit: a worker that
+# keeps running other tables after the refusal exits after the marker has expired.
 # Usage: etl_exit_status <exit_code> <worker_id> <log_file>; returns the code the worker exits with.
 etl_exit_status() {
   local exit_code=$1 worker_id=$2 log_file=$3
-  if [ "$exit_code" -ne 0 ] && [ "$(sec_cooldown_remaining)" -gt 0 ] \
-      && grep -q "refused this host with HTTP 403/429" "$log_file"; then
+  if [ "$exit_code" -ne 0 ] && grep -q "refused this host with HTTP 403/429" "$log_file"; then
     echo "[$worker_id] DEFERRED by sec.gov cool-down (exit $SEC_COOLDOWN_EXIT); resumes after the marker expires"
     return "$SEC_COOLDOWN_EXIT"
   fi
@@ -1728,6 +1729,12 @@ run_etl() {
 
   assert_dq_target || return 1
 
+  # worker.sh runs under errexit: a failing java would end the script at the pipeline below, before the
+  # exit status is read and mapped (etl_exit_status). Suspend it for the pipeline only.
+  local _had_errexit=false
+  case $- in *e*) _had_errexit=true ;; esac
+  set +e
+
   # Ensure Ctrl-C kills the java process, not just tee
   trap 'kill 0' INT TERM
 
@@ -1744,6 +1751,7 @@ run_etl() {
     2>&1 | tee "$log_file"
 
   local exit_code=${PIPESTATUS[0]}
+  $_had_errexit && set -e
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
   etl_exit_status "$exit_code" "$worker_id" "$log_file"
@@ -1779,6 +1787,12 @@ run_etl_inline() {
 
   assert_dq_target || return 1
 
+  # worker.sh runs under errexit: a failing java would end the script at the pipeline below, before the
+  # exit status is read and mapped (etl_exit_status). Suspend it for the pipeline only.
+  local _had_errexit=false
+  case $- in *e*) _had_errexit=true ;; esac
+  set +e
+
   trap 'kill 0' INT TERM
 
   "$GOVDATA_JAVA_BIN" \
@@ -1800,6 +1814,7 @@ run_etl_inline() {
     2>&1 | tee "$log_file"
 
   local exit_code=${PIPESTATUS[0]}
+  $_had_errexit && set -e
   trap - INT TERM
   echo "[$worker_id] ETL finished with exit code: $exit_code"
   etl_exit_status "$exit_code" "$worker_id" "$log_file"
