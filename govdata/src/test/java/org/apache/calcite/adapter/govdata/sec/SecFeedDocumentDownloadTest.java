@@ -8,6 +8,7 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
+package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.DocumentSource;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
