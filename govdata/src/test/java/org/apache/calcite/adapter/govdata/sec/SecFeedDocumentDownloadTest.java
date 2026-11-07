@@ -8,13 +8,6 @@
  * machine learning models is strictly prohibited without explicit written
  * permission from the copyright holder.
  */
-package org.apache.calcite.adapter.govdata.sec;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-package org.apache.calcite.adapter.govdata.sec;
 
 import org.apache.calcite.adapter.file.etl.DocumentSource;
 import org.apache.calcite.adapter.file.etl.HttpSourceConfig;
