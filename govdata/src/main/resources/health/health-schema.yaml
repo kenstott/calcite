@@ -7903,6 +7903,152 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: aca_qhp_county_premiums
+    # One static workbook per plan year, published Aug-Oct of the prior calendar year;
+    # Last-Modified gates re-fetch/re-materialize when CMS reposts a corrected file.
+    freshness:
+      type: last_modified
+    pattern: "type=aca_qhp_county_premiums/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+    comment: >
+      ACA Health Insurance Marketplace premiums and insurer participation by county — CMS "QHP
+      Landscape, Individual Market Medical" (data.healthcare.gov), aggregated from CMS's
+      plan-by-county listing to one row per plan year, state, county and rating area. The
+      headline column is **benchmark_silver_premium_age21** (and _age40): the second-lowest-cost
+      Silver plan premium for the county, the benchmark that sets the premium tax credit.
+      Also carries the lowest Silver, Bronze (including Expanded Bronze) and Gold premiums for a
+      21-year-old, and the number of plans and distinct issuers (all metals, and Silver only)
+      offered in the county — so a year-over-year drop in issuer_count is an insurer exit.
+      Premiums are monthly dollars before any tax credit.
+
+      **Coverage**: plan years 2022-2027 (PY2027 published 2026-10-30). Only states whose
+      marketplace runs on HealthCare.gov are in the landscape file — state-based marketplaces
+      (CA, NY, WA, ...) publish separately and are absent, so this is not a national total.
+      Medical individual market only: no dental, no SHOP. The CMS files for 2014-2021 use
+      other layouts (csv and per-year workbooks) and are not loaded.
+
+      **Benchmark rule**: Silver plans are distinct plan ids; two Silver plans tied at the
+      lowest premium make the benchmark equal to that premium; a county with fewer than two
+      Silver plans has a NULL benchmark. Child-only listings have no adult premium and are
+      skipped. Premiums are as filed for the plan year, so PY2027 figures are proposed-to-final
+      filings, not enrollment-weighted averages.
+
+      Not in this table: plan selections by county, effectuated (paid) enrollment, and rate
+      review filings — separate CMS releases with different keys.
+
+    dimensions:
+      type:
+        - aca_qhp_county_premiums
+      year:
+        type: yearRange
+        # yearRange is the RAW dimension value; {effective_year} in the URL and the plan_year
+        # column resolve from effective_year = year - dataLag. dataLag -1 makes the plan year
+        # one ahead of the calendar year, because CMS posts plan year N in Aug-Oct of N-1.
+        # A plan year not yet posted returns 404 and the batch is skipped.
+        start: "${GOVDATA_START_YEAR:2021}"
+        minYear: 2021
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: -1
+
+    columns:
+      - name: plan_year
+        type: integer
+        nullable: false
+        comment: Marketplace plan year (coverage year the premiums apply to)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter USPS state code (FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: 5-digit county FIPS (FK to geo.counties)
+      - name: county_name
+        type: string
+        nullable: false
+        comment: County name as CMS prints it
+      - name: rating_area
+        type: string
+        nullable: false
+        comment: Insurance rating area label, e.g. "Rating Area 2"; premiums are set per rating area
+      - name: benchmark_silver_premium_age21
+        type: double
+        nullable: true
+        comment: Second-lowest-cost Silver plan monthly premium for a 21-year-old, dollars; NULL with fewer than two Silver plans
+      - name: benchmark_silver_premium_age40
+        type: double
+        nullable: true
+        comment: Second-lowest-cost Silver plan monthly premium for a 40-year-old, dollars; NULL with fewer than two Silver plans
+      - name: lowest_silver_premium_age21
+        type: double
+        nullable: true
+        comment: Lowest Silver plan monthly premium for a 21-year-old, dollars
+      - name: lowest_bronze_premium_age21
+        type: double
+        nullable: true
+        comment: Lowest Bronze or Expanded Bronze plan monthly premium for a 21-year-old, dollars
+      - name: lowest_gold_premium_age21
+        type: double
+        nullable: true
+        comment: Lowest Gold plan monthly premium for a 21-year-old, dollars
+      - name: plan_count
+        type: integer
+        nullable: false
+        comment: Distinct plans offered in the county, all metal levels
+      - name: silver_plan_count
+        type: integer
+        nullable: false
+        comment: Distinct Silver plans offered in the county
+      - name: issuer_count
+        type: integer
+        nullable: false
+        comment: Distinct insurers (HIOS issuer ids) offering any plan in the county
+      - name: silver_issuer_count
+        type: integer
+        nullable: false
+        comment: Distinct insurers offering a Silver plan in the county
+
+    source:
+      type: http
+      url: "https://data.healthcare.gov/datafile/py{effective_year}/individual_market_medical.zip"
+      method: GET
+      response:
+        format: TEXT   # AcaQhpLandscapeTransformer streams the zip and workbook itself
+      rateLimit:
+        requestsPerSecond: 0.2
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.AcaQhpLandscapeTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=aca_qhp_county_premiums/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: aca_qhp_county_premiums
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
   - name: medicare_geographic_variation
     timeColumn: data_year  # observation year; this table has no column named 'year'
     # CMS publishes one combined CSV covering all years (2014-2024, currently) rather than a

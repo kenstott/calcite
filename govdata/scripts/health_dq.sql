@@ -2802,6 +2802,91 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/c
       WHERE geo_level = 'county' AND premature_death_rate IS NOT NULL
         AND (premature_death_rate <= 0 OR premature_death_rate > 100000));
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: aca_qhp_county_premiums (new 7 Nov 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true));
+
+-- T2: row_count — one plan year covers ~1,500 HealthCare.gov-state county/rating-area rows
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'At least 1000 county rows for the DQ-scoped plan year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL plan_year, state_abbr, county_fips or rating_area rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true)
+      WHERE plan_year IS NULL OR state_abbr IS NULL OR county_fips IS NULL OR rating_area IS NULL);
+
+-- T6: pk_dupes
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (plan_year, state_abbr, county_fips, rating_area) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT plan_year, state_abbr, county_fips, rating_area, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true)
+  GROUP BY plan_year, state_abbr, county_fips, rating_area HAVING COUNT(*) > 1
+));
+
+-- T7: benchmark premium is a plausible monthly dollar figure for a 21-year-old
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T7_benchmark_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'benchmark_silver_premium_age21 outside $100-$2500 per month'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true)
+      WHERE benchmark_silver_premium_age21 IS NOT NULL
+        AND (benchmark_silver_premium_age21 < 100 OR benchmark_silver_premium_age21 > 2500));
+
+-- T7: benchmark is never below the lowest Silver premium, and a benchmark exists
+-- exactly when the county has two or more Silver plans with a premium
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T7_benchmark_consistent',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows where benchmark < lowest silver, or benchmark NULL with >=2 silver plans and a lowest silver'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true)
+      WHERE benchmark_silver_premium_age21 < lowest_silver_premium_age21
+         OR (benchmark_silver_premium_age21 IS NULL AND silver_plan_count >= 2
+             AND lowest_silver_premium_age21 IS NOT NULL));
+
+-- T7: counts are coherent (issuers cannot outnumber plans; silver is a subset of all plans)
+INSERT INTO dq_results
+SELECT 'health', 'aca_qhp_county_premiums', 'T7_counts_coherent',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows where issuer_count > plan_count, silver_plan_count > plan_count, or silver_issuer_count > issuer_count'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_qhp_county_premiums', allow_moved_paths := true)
+      WHERE issuer_count > plan_count OR silver_plan_count > plan_count
+         OR silver_issuer_count > issuer_count OR plan_count < 1);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
