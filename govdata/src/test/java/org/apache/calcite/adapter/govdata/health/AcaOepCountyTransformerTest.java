@@ -10,13 +10,20 @@
  */
 package org.apache.calcite.adapter.govdata.health;
 
+import org.apache.calcite.adapter.file.etl.RequestContext;
+import org.apache.calcite.adapter.file.etl.SkippedBatchException;
+
+import com.sun.net.httpserver.HttpServer;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.InetSocketAddress;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -90,5 +97,24 @@ class AcaOepCountyTransformerTest {
 
   @Test void badFipsFails() {
     assertThrows(IllegalStateException.class, () -> parse(row("AL", "1001", "3", "5")));
+  }
+
+  @Test void unpostedYearIsSkippedNotFailed() throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", ex -> {
+      ex.sendResponseHeaders(404, -1);
+      ex.close();
+    });
+    server.start();
+    try {
+      String url = "http://127.0.0.1:" + server.getAddress().getPort()
+          + "/files/zip/2099-oep-county-level-public-use-file.zip";
+      RequestContext ctx = RequestContext.builder().url(url)
+          .dimensionValues(Collections.singletonMap("year", "2099")).build();
+      assertThrows(SkippedBatchException.class,
+          () -> new AcaOepCountyTransformer().fetchAndTransform(ctx));
+    } finally {
+      server.stop(0);
+    }
   }
 }
