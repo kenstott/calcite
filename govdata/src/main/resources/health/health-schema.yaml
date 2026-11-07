@@ -8049,6 +8049,147 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: aca_rate_review_products
+    # One public use file (zip) per plan year, posted Oct-Nov of the prior calendar year; the
+    # zip names are irregular, so AcaRateReviewTransformer maps plan year to file.
+    # A hash of the response gates re-materialize when CMS reposts a corrected file.
+    freshness:
+      type: hash
+    pattern: "type=aca_rate_review_products/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+    comment: >
+      ACA individual-market premium rate filings — CMS Uniform Rate Review public use file
+      (cms.gov "Rate Review Data", worksheet 2), aggregated from the plan-level worksheet to one
+      row per plan year, state, issuer submission and product. The headline column is
+      **rate_change_product_pct**: the cumulative premium change the insurer filed for the product
+      versus its current rates, in percent (23.73 = a 23.73 percent increase; negative = a
+      decrease). **rate_change_submission_pct** is the same measure across the insurer's whole
+      state submission. Also carries the product's plan count, current enrollment (members), and
+      CMS's review **determination** ("Not Unreasonable" or "Unreasonable"; NULL when the filing
+      is not subject to the review threshold or is undetermined).
+
+      **Coverage**: plan years 2022-2027, all 50 states and DC (state-based marketplaces
+      included, unlike aca_qhp_county_premiums). Individual market only: the small-group rows in
+      the same file are skipped. Rates are the filed/proposed changes for the plan year as CMS
+      posted them (PY2027 file dated 2026-10-26), not the final premiums consumers paid; join to
+      aca_qhp_county_premiums for final benchmark premiums. The 2017-2021 files use an older layout
+      and are not loaded.
+
+      **Reading it**: rate_change_product_pct is per product, so an insurer-wide or state-wide
+      average must weight by enrollment (sum of enrollment * pct over sum of enrollment); a
+      simple mean over products overweights small products. enrollment is 0 for products with no
+      current members (new or terminated products).
+
+    dimensions:
+      type:
+        - aca_rate_review_products
+      year:
+        type: yearRange
+        # yearRange is the RAW dimension value; effective_year = year - dataLag is the plan year.
+        # dataLag -1 makes the plan year one ahead of the calendar year (CMS posts plan year N in
+        # Oct-Nov of N-1). A plan year with no registered file is skipped by the transformer.
+        start: "${GOVDATA_START_YEAR:2021}"
+        minYear: 2021
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: -1
+
+    columns:
+      - name: plan_year
+        type: integer
+        nullable: false
+        comment: Marketplace plan year the rates apply to
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter USPS state code (FK to geo.state_ref)
+      - name: issuer_id
+        type: string
+        nullable: false
+        comment: 5-digit HIOS issuer id of the filing insurer (same id as in aca_qhp_county_premiums issuers)
+      - name: issuer_name
+        type: string
+        nullable: false
+        comment: Insurer legal name as filed
+      - name: submission_id
+        type: string
+        nullable: false
+        comment: CMS/SERFF submission tracking number (SUB_TRK_NUM), the filing the product belongs to
+      - name: product_id
+        type: string
+        nullable: false
+        comment: 10-character HIOS product id
+      - name: product_name
+        type: string
+        nullable: true
+        comment: Product name as filed
+      - name: effective_date
+        type: string
+        nullable: false
+        comment: Date the filed rates take effect, ISO yyyy-MM-dd
+      - name: rate_change_product_pct
+        type: double
+        nullable: true
+        comment: Cumulative filed premium change for the product vs current rates, percent (23.73 = +23.73 percent)
+      - name: rate_change_submission_pct
+        type: double
+        nullable: true
+        comment: Cumulative filed premium change across the insurer's whole submission (state and market), percent
+      - name: plan_count
+        type: integer
+        nullable: false
+        comment: Distinct plans under the product in the filing
+      - name: enrollment
+        type: long
+        nullable: false
+        comment: Current enrollment (members) across the product's plans; 0 for new or terminated products
+      - name: determination
+        type: string
+        nullable: true
+        comment: CMS review determination, "Not Unreasonable" or "Unreasonable"; NULL when not determined
+
+    source:
+      type: http
+      # The transformer picks the CMS zip for the plan year; this URL is only the dataset's home page
+      # with the plan year appended so each year is a distinct request.
+      url: "https://www.cms.gov/marketplace/resources/data/rate-review-data?py={effective_year}"
+      method: GET
+      response:
+        format: TEXT   # AcaRateReviewTransformer downloads and unzips the file itself
+      rateLimit:
+        requestsPerSecond: 0.2
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.AcaRateReviewTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=aca_rate_review_products/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: aca_rate_review_products
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
   - name: medicare_geographic_variation
     timeColumn: data_year  # observation year; this table has no column named 'year'
     # CMS publishes one combined CSV covering all years (2014-2024, currently) rather than a

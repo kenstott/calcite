@@ -2887,6 +2887,89 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
       WHERE issuer_count > plan_count OR silver_plan_count > plan_count
          OR silver_issuer_count > issuer_count OR plan_count < 1);
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: aca_rate_review_products (new 7 Nov 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true));
+
+-- T2: row_count — one plan year has ~1,100 individual-market products (PY2027: 1,146)
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T2_row_count',
+  CASE WHEN n >= 800 THEN 'pass' ELSE 'fail' END,
+  n, 800, 'At least 800 product rows for the DQ-scoped plan year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL plan_year, state_abbr, submission_id or product_id rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true)
+      WHERE plan_year IS NULL OR state_abbr IS NULL OR submission_id IS NULL OR product_id IS NULL);
+
+-- T6: pk_dupes
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (plan_year, submission_id, product_id) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT plan_year, submission_id, product_id, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true)
+  GROUP BY plan_year, submission_id, product_id HAVING COUNT(*) > 1
+));
+
+-- T7: filed changes are plausible percents (PY2027 spans -6.2 to +93.4; a fraction read as a
+-- percent would put every row inside +/-2)
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T7_rate_change_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'rate_change_product_pct outside -60..300 percent'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true)
+      WHERE rate_change_product_pct IS NOT NULL
+        AND (rate_change_product_pct < -60 OR rate_change_product_pct > 300));
+
+-- T7: unit guard — the enrollment-weighted mean change is several percent, not a fraction
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T7_rate_change_scale',
+  CASE WHEN m BETWEEN 2 AND 40 THEN 'pass' ELSE 'fail' END,
+  m, 2, 'Enrollment-weighted mean rate_change_product_pct should be 2..40 percent'
+FROM (SELECT SUM(enrollment * rate_change_product_pct) / NULLIF(SUM(enrollment), 0) AS m
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true) WHERE rate_change_product_pct IS NOT NULL);
+
+-- T7: only the two CMS determinations (or NULL), and a 2-letter state
+INSERT INTO dq_results
+SELECT 'health', 'aca_rate_review_products', 'T7_domain_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'determination not in (Not Unreasonable, Unreasonable) or state_abbr not 2 letters or negative enrollment/plan_count < 1'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true)
+      WHERE (determination IS NOT NULL AND determination NOT IN ('Not Unreasonable', 'Unreasonable'))
+         OR LENGTH(state_abbr) <> 2 OR enrollment < 0 OR plan_count < 1);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

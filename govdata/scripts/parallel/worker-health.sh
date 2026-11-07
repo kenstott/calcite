@@ -167,7 +167,7 @@ YEAR_MODE_GROUPS=(
   "health-ssa|ssa_oasdi_county"
   # CMS QHP Landscape (data.healthcare.gov) — one workbook per plan year; own group since it is a
   # distinct source from every group above and the workbooks are 55-115 MB each.
-  "health-aca|aca_qhp_county_premiums"
+  "health-aca|aca_qhp_county_premiums,aca_rate_review_products"
 )
 
 ONCE_MODE_GROUPS=(
