@@ -856,7 +856,12 @@ public class McpServer {
             + "3. The article's own sources are comparison points, not the test. Fetch the "
             + "study or release the article cites (web_fetch; python for a PDF table) to "
             + "record its figure, unit, period and population beside yours, and note where "
-            + "the article's number diverges from its own source. A primary source web_fetch "
+            + "the article's number diverges from its own source. You MUST web_fetch every "
+            + "source the article links before publishing; preview_report refuses the report "
+            + "and names each linked source not yet fetched. Check a claim against a long "
+            + "source with web_fetch `find`, searching the figures and phrases the claim rests "
+            + "on across every page; never grade from the first pages alone. A primary source "
+            + "web_fetch "
             + "cannot reach (HTTP 401/403/429/451) must be retried with the client's own "
             + "fetch tool before it is graded 'not checkable here'.\n"
             + "4. Quantitative evidence from outside this corpus is DATA, not prose: when a "
@@ -2896,7 +2901,7 @@ public class McpServer {
             "For an article or claim validation: one object per assertion, as "
             + "[{assertion, group, speaker, kind, central, rests_on, support, source_finding, errs, verdict, "
             + "article_value, warehouse_value, independent_value, "
-            + "sources, table, article_vintage, warehouse_vintage, reason, sql, "
+            + "sources, searched, table, article_vintage, warehouse_vintage, reason, sql, "
             + "score_claim_ref, score_claim_override_reason}]. `assertion` "
             + "is the article's sentence VERBATIM (the claim, not its attribution — 'officials "
             + "say X' is graded on X). `group` is REQUIRED on every claim when there are two or "
@@ -2930,7 +2935,11 @@ public class McpServer {
             + "produced it. `independent_value` is the figure from primary sources the article "
             + "did not supply, and `sources` (array of {title, url}) names them — every claim "
             + "needs at least one, except an `unsupported` claim, whose `reason` names what "
-            + "was searched. A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. Use 'unsupported' when the piece asserts it as fact with no "
+            + "was searched. A claim with no warehouse_value or sql MUST show an outside check was "
+            + "attempted, whatever it found: a `sources` URL you fetched with web_fetch this "
+            + "session (a 403 or timeout counts; the article itself does not), or `searched`, the "
+            + "list of web search queries you ran for it. A claim with neither is refused. "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. Use 'unsupported' when the piece asserts it as fact with no "
             + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
@@ -3566,6 +3575,15 @@ public class McpServer {
             + "max_pages can be read section by section instead of only ever seeing the "
             + "start. Check `table_of_contents` in a prior response on this URL (or its "
             + "`total_pages`) before picking one."));
+        webFetchProps.set(
+            "find", prop("array",
+            "Search the WHOLE document, every page, for these terms (literal, case-insensitive; "
+            + "line breaks inside the document are ignored) and return each match with its page "
+            + "and surrounding text instead of the content. Any type: PDF, HTML, Word, Excel, "
+            + "PowerPoint, text. MUST be used to check a claim against a long document: search "
+            + "the figures and phrases the claim rests on (\"63%\", \"1,487\", \"tenant "
+            + "possession\"). Never conclude a figure is absent from a document you read only "
+            + "part of. Served from cache after the first fetch."));
         webFetchProps.set(
             "max_sheets", prop("integer",
             "Excel only: max worksheets to extract when sheet_names is not given (default 5)."));
@@ -4696,6 +4714,10 @@ public class McpServer {
                     if (claims.isArray() && claims.size() > 0) {
                         addIfPresent(gateProblems, enforceSourceUrlPresent(args));
                         addIfPresent(gateProblems, enforceClaimShape(claims));
+                        addIfPresent(gateProblems, enforceExternalCheckAttempted(claims,
+                            args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceReferencedSourcesRead(
+                            args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         addIfPresent(gateProblems, ClaimScoring.enforce(claims));
@@ -6785,7 +6807,10 @@ public class McpServer {
                 }
                 String v = f.getValue().isValueNode() ? f.getValue().asText()
                     : f.getValue().toString();
-                summary.put(f.getKey(), v.length() > 200 ? v.substring(0, 200) + "…" : v);
+                // A fetched url is kept whole: enforceExternalCheckAttempted matches it against
+                // the claims' cited sources, and a truncated url matches nothing.
+                summary.put(f.getKey(), v.length() > 200 && !"url".equals(f.getKey())
+                    ? v.substring(0, 200) + "…" : v);
             }
             if (summary.size() > 0) {
                 e.set("args", summary);
@@ -7124,6 +7149,239 @@ public class McpServer {
             return null;
         }
         return "validation refused: " + String.join(" ALSO: ", problems);
+    }
+
+    /**
+     * Every claim not tested against the warehouse must show an outside check was ATTEMPTED.
+     * Finding nothing is fine; not looking is not. A claim with no {@code sql} and no
+     * {@code warehouse_value} passes when one of its {@code sources} URLs was fetched with
+     * {@code web_fetch} in this session (any outcome, a 403 or timeout included), or when it lists
+     * the web searches it ran in {@code searched}. The article under test ({@code source_url})
+     * does not count: reading the piece is not checking it. A personal attack ({@code kind:
+     * attack}) is exempt, as it is graded unsupported by rule.
+     *
+     * <p>Measured live 2026-11-07 (daily eval q3, The 51st's D.C. evictions piece): four of seven
+     * claims were graded 'not checkable here' with no sources, zero web searches, and no fetch
+     * beyond the article itself, although the article linked the reports behind every one. The
+     * research-depth gate stays silent once any query returns rows, so the hybrid report passed.
+     *
+     * <p>{@code searched} cannot be verified here: web search is the client's own tool and
+     * never passes through this server. A fetched URL can be, so it is the stronger evidence.
+     */
+    private static String enforceExternalCheckAttempted(JsonNode claims, String articleUrl) {
+        java.util.Set<String> fetched = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText(""))) {
+                String url = e.path("args").path("url").asText("");
+                if (!url.isEmpty()) {
+                    fetched.add(normalizeUrlForMatch(url));
+                }
+            }
+        }
+        String article = articleUrl == null ? null : normalizeUrlForMatch(articleUrl);
+        java.util.List<String> unchecked = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            if (nonBlank(c, "sql") || nonBlank(c, "warehouse_value")) {
+                continue;
+            }
+            if ("attack".equals(c.path("kind").asText("").trim().toLowerCase(java.util.Locale.ROOT))) {
+                continue;
+            }
+            boolean attempted = false;
+            for (JsonNode s : c.path("sources")) {
+                String url = s.path("url").asText("");
+                if (url.isEmpty()) {
+                    continue;
+                }
+                String norm = normalizeUrlForMatch(url);
+                if (!norm.equals(article) && fetched.contains(norm)) {
+                    attempted = true;
+                }
+            }
+            for (JsonNode q : c.path("searched")) {
+                if (!q.asText("").trim().isEmpty()) {
+                    attempted = true;
+                }
+            }
+            if (!attempted) {
+                unchecked.add("\"" + c.path("assertion").asText("").trim() + "\"");
+            }
+        }
+        if (unchecked.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + unchecked.size() + " claim(s) have no warehouse figure and "
+            + "no sign an outside check was attempted: " + String.join("; ", unchecked) + ". "
+            + "Finding nothing is acceptable; not looking is not. For each one, web_fetch the "
+            + "report, release or dataset the article cites or that would carry the figure (any "
+            + "outcome counts, a 403 or timeout included) and list that URL in the claim's "
+            + "`sources`, or run web searches for it and list the queries in `searched`. Fetching "
+            + "the article itself does not count. Then grade on what the check found.";
+    }
+
+    /** Each fetched HTML page's referenced links (see {@link #referencedLinks}), keyed by the
+     *  page's normalized URL. Filled by every web_fetch of an HTML page. */
+    static final java.util.Map<String, java.util.List<String>> REFERENCED_LINKS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Hosts whose links are sharing buttons or profiles, never a source an article cites. */
+    private static final java.util.Set<String> SHARE_HOSTS = java.util.Set.of(
+        "twitter.com", "x.com", "facebook.com", "linkedin.com", "bsky.app", "reddit.com",
+        "instagram.com", "threads.net", "tiktok.com", "youtube.com", "pinterest.com",
+        "whatsapp.com", "wa.me", "t.me", "flipboard.com", "news.google.com");
+
+    /** Paths on the article's own site that are site furniture, not cited reporting. */
+    private static final java.util.regex.Pattern SITE_FURNITURE_PATH = java.util.regex.Pattern
+        .compile("(?i)^/?(?:$|(?:tags?|authors?|category|categories|topics?|section|newsletters?"
+            + "|donate|subscribe|support|membership|about|contact|privacy|terms|search|login"
+            + "|account|feed|rss)(?:/|$))");
+
+    /**
+     * The links an article references: anchors in its {@code <article>} (else {@code <main>},
+     * else the body) after nav, header and footer are removed, made absolute, de-duplicated in
+     * page order. Dropped: non-http links, the page itself, sharing/social hosts, and the
+     * outlet's own site furniture (tag, author, donate, subscribe pages). The outlet's own
+     * earlier reporting stays: it is a referenced article.
+     */
+    static java.util.List<String> referencedLinks(org.jsoup.nodes.Document doc, String pageUrl) {
+        // The story body is the element whose own paragraphs carry the most text. A first
+        // <article> is often a related-story card (51st.news's Ghost theme puts them first).
+        org.jsoup.nodes.Element root = null;
+        int best = 0;
+        for (org.jsoup.nodes.Element el : doc.getAllElements()) {
+            int text = 0;
+            for (org.jsoup.nodes.Element child : el.children()) {
+                if ("p".equals(child.normalName())) {
+                    text += child.text().length();
+                }
+            }
+            if (text > best) {
+                best = text;
+                root = el;
+            }
+        }
+        if (root == null) {
+            root = doc.body();
+        }
+        java.util.LinkedHashMap<String, String> out = new java.util.LinkedHashMap<>();
+        if (root == null) {
+            return new java.util.ArrayList<>();
+        }
+        String page = normalizeUrlForMatch(pageUrl);
+        String pageHost = hostOf(page);
+        for (org.jsoup.nodes.Element a : root.select("a[href]")) {
+            String abs = a.absUrl("href");
+            if (!abs.regionMatches(true, 0, "http://", 0, 7)
+                    && !abs.regionMatches(true, 0, "https://", 0, 8)) {
+                continue;
+            }
+            String norm = normalizeUrlForMatch(abs);
+            if (norm.equals(page)) {
+                continue;
+            }
+            String host = hostOf(norm);
+            boolean share = false;
+            for (String h : SHARE_HOSTS) {
+                if (host.equals(h) || host.endsWith("." + h)) {
+                    share = true;
+                }
+            }
+            if (share) {
+                continue;
+            }
+            if (host.equals(pageHost)
+                    && SITE_FURNITURE_PATH.matcher(norm.substring(host.length())).find()) {
+                continue;
+            }
+            int hash = abs.indexOf('#');
+            out.putIfAbsent(norm, hash >= 0 ? abs.substring(0, hash) : abs);
+        }
+        return new java.util.ArrayList<>(out.values());
+    }
+
+    private static String hostOf(String normalizedUrl) {
+        int slash = normalizedUrl.indexOf('/');
+        return slash < 0 ? normalizedUrl : normalizedUrl.substring(0, slash);
+    }
+
+    /**
+     * A validation is refused until every source the article under test links has been
+     * fetched with web_fetch in this session (any outcome: a 403 or timeout counts as read as
+     * far as it could be). The article itself must have been fetched with web_fetch, or its
+     * links are unknown. When that fetch did not yield an HTML page (a block, a PDF), there are
+     * no recorded links and this passes.
+     *
+     * <p>Measured live 2026-11-07 (daily eval q3, The 51st's D.C. evictions piece): two runs
+     * published without opening the CLCPP report the article links for its legal-aid figures;
+     * an unaided persona that did open it found the article mis-dated those figures.
+     */
+    private static String enforceReferencedSourcesRead(String articleUrl) {
+        if (articleUrl == null || articleUrl.trim().isEmpty()) {
+            return null;
+        }
+        String article = normalizeUrlForMatch(articleUrl);
+        java.util.Set<String> fetched = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText(""))) {
+                String url = e.path("args").path("url").asText("");
+                if (!url.isEmpty()) {
+                    fetched.add(normalizeUrlForMatch(url));
+                }
+            }
+        }
+        if (!fetched.contains(article)) {
+            return "validation refused: the article " + articleUrl + " was not fetched with "
+                + "web_fetch in this session, so the sources it links are unknown. web_fetch it, "
+                + "then web_fetch every source it links, then publish again.";
+        }
+        java.util.List<String> links = REFERENCED_LINKS.get(article);
+        if (links == null) {
+            return null;
+        }
+        java.util.List<String> unread = new java.util.ArrayList<>();
+        for (String link : links) {
+            if (!fetched.contains(normalizeUrlForMatch(link))) {
+                unread.add(link);
+            }
+        }
+        if (unread.isEmpty()) {
+            return null;
+        }
+        return "validation refused: the article links " + links.size() + " source(s) and "
+            + unread.size() + " were never fetched: " + String.join(" , ", unread) + " . "
+            + "web_fetch each one (a 403, 404 or timeout counts as fetched), check the claims "
+            + "that rest on it against what it actually says, then publish again.";
+    }
+
+    /** A URL reduced to what identifies the page: no scheme, no leading www., no fragment, no
+     *  utm_ or ref= tracking parameters, no trailing slash, host lower-cased. Two spellings of
+     *  one page compare equal. */
+    static String normalizeUrlForMatch(String url) {
+        String u = url.trim();
+        int hash = u.indexOf('#');
+        if (hash >= 0) {
+            u = u.substring(0, hash);
+        }
+        int q = u.indexOf('?');
+        if (q >= 0) {
+            StringBuilder kept = new StringBuilder();
+            for (String p : u.substring(q + 1).split("&")) {
+                String lp = p.toLowerCase(java.util.Locale.ROOT);
+                if (!p.isEmpty() && !lp.startsWith("utm_") && !lp.startsWith("ref=")) {
+                    kept.append(kept.length() == 0 ? "?" : "&").append(p);
+                }
+            }
+            u = u.substring(0, q) + kept;
+        }
+        u = u.replaceFirst("(?i)^https?://", "");
+        u = u.replaceFirst("(?i)^www\\.", "");
+        int slash = u.indexOf('/');
+        String host = slash < 0 ? u : u.substring(0, slash);
+        String path = slash < 0 ? "" : u.substring(slash);
+        while (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return host.toLowerCase(java.util.Locale.ROOT) + path;
     }
 
     private static boolean nonBlank(JsonNode c, String key) {
@@ -13709,6 +13967,9 @@ public class McpServer {
                         "No text extracted — this is likely a scanned/image-only PDF with no "
                         + "embedded text layer, which this tool cannot read.");
                 } else if (end < totalPages) {
+                    out.put("find_hint", "This document has " + totalPages + " pages. To check "
+                        + "a figure or phrase, call web_fetch on this URL with `find` — it "
+                        + "searches every page.");
                     out.put("warning", (toc != null && toc.size() > 0)
                         ? "Not all pages were extracted. Use table_of_contents above to pick "
                             + "the section you need and call web_fetch again on this same URL "
@@ -13977,6 +14238,8 @@ public class McpServer {
                 org.jsoup.Jsoup.parse(new ByteArrayInputStream(bytes), null, urlStr);
             doc.select("script, style, nav, footer, header, noscript, iframe, svg, form")
                 .remove();
+            java.util.List<String> referenced = referencedLinks(doc, urlStr);
+            REFERENCED_LINKS.put(normalizeUrlForMatch(urlStr), referenced);
             org.jsoup.nodes.Element body = doc.body();
             StringBuilder md = new StringBuilder();
             htmlNodeToMarkdown(body, md);
@@ -13992,10 +14255,19 @@ public class McpServer {
                 markdown = markdown.substring(0, maxChars);
                 out.put("warning",
                     "Truncated at " + maxChars + " chars. Call web_fetch again with a higher "
-                    + "max_chars to read the rest.");
+                    + "max_chars to read the rest, or with `find` to search the whole page "
+                    + "for a figure or phrase.");
             }
             out.put("markdown", markdown);
             out.put("truncated", truncated);
+            if (!referenced.isEmpty()) {
+                ArrayNode refs = out.putArray("referenced_links");
+                for (String r : referenced) {
+                    refs.add(r);
+                }
+                out.put("referenced_links_note", "The sources this page links. Validating this "
+                    + "page, you MUST web_fetch every one before preview_report.");
+            }
             return out.toString();
         // fallback-guard: allow -- error text is the answer, same pattern as the xlsx parser
         } catch (Exception e) {
@@ -14018,6 +14290,109 @@ public class McpServer {
      * then fetches (or reuses a cached fetch of) the URL and dispatches to the matching parser
      * by sniffing the actual bytes.
      */
+    /** Most matches returned per search term. */
+    static final int FIND_MAX_MATCHES = 25;
+    /** Characters of context kept on each side of a match. */
+    static final int FIND_CONTEXT = 160;
+
+    /**
+     * {@code web_fetch}'s {@code find}: searches the WHOLE document, every page, for each term
+     * (literal, case-insensitive, whitespace-insensitive so a phrase broken across PDF lines
+     * still matches) and returns each match with its page and surrounding text, in place of the
+     * document's content. A long report is checked by searching for the figures a claim rests
+     * on, not by reading whichever pages come first.
+     */
+    private static String findInDocument(String kind, String urlStr, byte[] bytes,
+            java.util.List<String> terms) {
+        java.util.List<String> pages = new java.util.ArrayList<>();
+        try {
+            switch (kind) {
+            case "pdf":
+                try (org.apache.pdfbox.pdmodel.PDDocument doc =
+                         org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
+                    org.apache.pdfbox.text.PDFTextStripper stripper =
+                        new org.apache.pdfbox.text.PDFTextStripper();
+                    for (int p = 1; p <= doc.getNumberOfPages(); p++) {
+                        stripper.setStartPage(p);
+                        stripper.setEndPage(p);
+                        pages.add(stripper.getText(doc));
+                    }
+                }
+                break;
+            case "html":
+                pages.add(MAPPER.readTree(parseHtmlBytes(urlStr, bytes, Integer.MAX_VALUE))
+                    .path("markdown").asText(""));
+                break;
+            case "docx":
+                pages.add(MAPPER.readTree(parseDocxBytes(urlStr, bytes, Integer.MAX_VALUE, 0))
+                    .path("text").asText(""));
+                break;
+            case "xlsx":
+                pages.add(parseXlsxBytes(urlStr, bytes, 20, 5000, null));
+                break;
+            case "pptx":
+                pages.add(parsePptxBytes(urlStr, bytes, 300, null));
+                break;
+            case "text":
+                pages.add(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
+                break;
+            default:
+                return "Could not search " + urlStr + ": content type '" + kind
+                    + "' has no text to search.";
+            }
+        // fallback-guard: allow -- error text is the answer, same pattern as the parsers
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] web_fetch find error: " + e.getMessage());
+            return "Could not search " + urlStr + " (" + kind + "): " + e.getMessage();
+        }
+        return findMatches(urlStr, pages, terms).toString();
+    }
+
+    /** The search behind {@link #findInDocument}, over already-extracted page texts. */
+    static ObjectNode findMatches(String urlStr, java.util.List<String> pages,
+            java.util.List<String> terms) {
+        ObjectNode out = MAPPER.createObjectNode();
+        out.put("source_url", urlStr);
+        out.put("total_pages", pages.size());
+        out.put("searched", "every page of the document");
+        ArrayNode results = out.putArray("find");
+        java.util.List<String> flat = new java.util.ArrayList<>();
+        for (String p : pages) {
+            flat.add(p == null ? "" : p.replaceAll("\\s+", " "));
+        }
+        for (String term : terms) {
+            String needle = term.replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+            ObjectNode r = results.addObject();
+            r.put("term", term);
+            ArrayNode matches = r.putArray("matches");
+            int total = 0;
+            for (int p = 0; p < flat.size(); p++) {
+                String text = flat.get(p);
+                String lower = text.toLowerCase(java.util.Locale.ROOT);
+                int from = 0;
+                int at;
+                while ((at = lower.indexOf(needle, from)) >= 0) {
+                    total++;
+                    if (matches.size() < FIND_MAX_MATCHES) {
+                        ObjectNode m = matches.addObject();
+                        m.put("page", p + 1);
+                        int s = Math.max(0, at - FIND_CONTEXT);
+                        int e = Math.min(text.length(), at + needle.length() + FIND_CONTEXT);
+                        m.put("context", (s > 0 ? "…" : "") + text.substring(s, e)
+                            + (e < text.length() ? "…" : ""));
+                    }
+                    from = at + Math.max(1, needle.length());
+                }
+            }
+            r.put("total_matches", total);
+            if (total > FIND_MAX_MATCHES) {
+                r.put("note", "Only the first " + FIND_MAX_MATCHES + " of " + total
+                    + " matches are shown. Search a longer, more specific phrase.");
+            }
+        }
+        return out;
+    }
+
     private static String webFetch(JsonNode args) {
         String urlStr = args.path("url").asText();
         int maxPages = args.has("max_pages")
@@ -14109,6 +14484,17 @@ public class McpServer {
         String kind = sniffContentKind(bytes, contentType);
         log.println("[askamerica-mcp] web_fetch url=" + urlStr + " content-type="
             + contentType + " detected=" + kind);
+        if (args.path("find").isArray() && args.path("find").size() > 0) {
+            java.util.List<String> terms = new java.util.ArrayList<>();
+            for (JsonNode t : args.path("find")) {
+                if (!t.asText("").trim().isEmpty()) {
+                    terms.add(t.asText().trim());
+                }
+            }
+            if (!terms.isEmpty()) {
+                return findInDocument(kind, urlStr, bytes, terms);
+            }
+        }
         switch (kind) {
         case "pdf":
             return parsePdfBytes(urlStr, bytes, maxPages, startPage);
