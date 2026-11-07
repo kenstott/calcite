@@ -555,7 +555,23 @@ for ys in $YEARS; do
     n=$(wc -l < "$bf")
     log_info "fix-sec: reprocessing batch $batches ($n accessions, year $year)"
     # No --force-download: the raw cache is intact and is what makes this cheap.
-    if ! "$SCRIPT_DIR/worker-sec-reprocess.sh" --schema "$slot" $(tr '\n' ' ' < "$bf"); then
+    _stamp=$(mktemp "$WORK_DIR/batch-stamp.XXXXXX")
+    "$SCRIPT_DIR/worker-sec-reprocess.sh" --schema "$slot" $(tr '\n' ' ' < "$bf")
+    _wrc=$?
+    # Only a log written by this round counts; an older one must not stop a healthy run.
+    _wlog=$(find "$SCRIPT_DIR/runs/worker-sec-reprocess" -name 'etl_*.log' -newer "$_stamp" 2>/dev/null | sort | tail -1)
+    rm -f "$_stamp"
+    # A host cool-down ends the run: another batch would start another worker that contacts
+    # SEC the moment the marker expires. The batch list is kept; re-run after the cool-down.
+    if fix_sec_cooldown_ended "$_wrc" "$_wlog"; then
+      failed=$((failed + 1))
+      log_info "fix-sec: sec.gov host cool-down ended batch $batches (worker exit $_wrc) —" \
+               "stopping; no further batch or worker. Re-run after the cool-down marker expires."
+      log_info "  worker log: $_wlog"
+      log_info "  list kept at $bf"
+      exit 3
+    fi
+    if [ "$_wrc" -ne 0 ]; then
       failed=$((failed + 1))
       log_info "fix-sec: batch $batches FAILED (year $year) — list kept at $bf"
       continue

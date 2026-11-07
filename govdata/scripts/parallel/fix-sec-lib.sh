@@ -17,3 +17,14 @@ fix_sec_outcome() {
   _offered=$(sort -u "$1" | wc -l | tr -d ' ')
   echo "$((_offered - _still)) $_still"
 }
+
+# fix_sec_cooldown_ended <worker_exit_code> <worker_log>
+# Returns 0 when a worker round ended on the sec.gov host cool-down: the worker deferred (exit 75,
+# #1084), or its log carries the cool-down text ("Host cool-down", "no sec.gov requests from this
+# host until"). The cool-down message reads "HTTP 403/429" and never the bare "HTTP 429", so the
+# rate-limit grep alone does not see it (#1113).
+fix_sec_cooldown_ended() {
+  [ "${1:-0}" -eq 75 ] && return 0
+  [ -n "${2:-}" ] && [ -f "$2" ] \
+    && grep -aqE "Host cool-down|no sec\.gov requests from this host until" "$2"
+}
