@@ -3039,6 +3039,76 @@ SELECT 'health', 'aca_oep_county_plan_selections', 'T7_premium_range',
   bad, 0, 'avg_premium outside $100-$2500 per month'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true) WHERE avg_premium IS NOT NULL AND (avg_premium < 100 OR avg_premium > 2500));
 
+-- TABLE: aca_effectuated_enrollment_monthly / _annual (new 7 Nov 2026)
+
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_monthly', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_monthly', 'T2_row_count', CASE WHEN n >= 6000 THEN 'pass' ELSE 'fail' END, n, 6000, 'CMS dataset had 6000+ rows at build time'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true) LIMIT 3;
+
+-- T6: PK nulls
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_monthly', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null geo_level/platform/benefit_year/enrollment'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true) WHERE geo_level IS NULL OR platform IS NULL OR benefit_year IS NULL OR effectuated_enrollment IS NULL);
+
+-- T8: PK duplicates
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_monthly', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (state, platform, year, month) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT COALESCE(state_abbr,'US'), platform, benefit_year, month_num FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- T7: All = HealthCare.gov + SBE for the national total
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_monthly', 'T7_platform_sum', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'National rows where All differs from HealthCare.gov + SBE by more than 1%'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT benefit_year, month_num,
+         MAX(CASE WHEN platform='All' THEN effectuated_enrollment END) a,
+         SUM(CASE WHEN platform<>'All' THEN effectuated_enrollment END) b
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true) WHERE geo_level='National' GROUP BY ALL) WHERE ABS(a-b) > 0.01*a);
+
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_annual', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_annual', 'T2_row_count', CASE WHEN n >= 500 THEN 'pass' ELSE 'fail' END, n, 500, 'CMS dataset had 500+ rows at build time'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true) LIMIT 3;
+
+-- T6: PK nulls
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_annual', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null geo_level/platform/benefit_year/enrollment'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true) WHERE geo_level IS NULL OR platform IS NULL OR benefit_year IS NULL OR effectuated_enrollment IS NULL);
+
+-- T8: PK duplicates
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_annual', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (state, platform, year) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT COALESCE(state_abbr,'US'), platform, benefit_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- T7: All = HealthCare.gov + SBE for the national total
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_annual', 'T7_platform_sum', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'National rows where All differs from HealthCare.gov + SBE by more than 1%'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT benefit_year,
+         MAX(CASE WHEN platform='All' THEN effectuated_enrollment END) a,
+         SUM(CASE WHEN platform<>'All' THEN effectuated_enrollment END) b
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true) WHERE geo_level='National' GROUP BY ALL) WHERE ABS(a-b) > 0.01*a);
+
+-- T7: independent headline check — Feb 2026 national effectuated enrollment ~19.2M (CMS early-2026 snapshot)
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_monthly', 'T7_feb2026_headline', CASE WHEN n BETWEEN 19000000 AND 19400000 THEN 'pass' ELSE 'fail' END, n, 19200000, 'National All Feb 2026 effectuated enrollment'
+FROM (SELECT COALESCE(MAX(effectuated_enrollment),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_monthly', allow_moved_paths := true) WHERE geo_level='National' AND platform='All' AND benefit_year=2026 AND month_num=2);
+
+-- T7: APTC share is a fraction
+INSERT INTO dq_results
+SELECT 'health', 'aca_effectuated_enrollment_annual', 'T7_pct_range', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'pct_aptc/pct_csr outside 0-1'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true) WHERE pct_aptc NOT BETWEEN 0 AND 1 OR pct_csr NOT BETWEEN 0 AND 1);
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

@@ -177,6 +177,9 @@ ONCE_MODE_GROUPS=(
   "health-cms-medicaid|cms_hospital_quality,cms_open_payments,cms_pos_facilities,cms_nursing_home,cms_nursing_home_deficiencies,cms_pos_termination_history,hospital_cost_report_financials"
   "health-rxnorm|rxnorm_drugs"
   "health-hrsa|ahrf_physician_supply"
+  # CMS effectuated enrollment (data.cms.gov data-api) — hash-gated snapshots with no year
+  # dimension, so they belong here, not in a per-year group.
+  "health-aca-once|aca_effectuated_enrollment_monthly,aca_effectuated_enrollment_annual"
 )
 
 run_year_health_tables() {

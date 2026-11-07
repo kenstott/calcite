@@ -8427,6 +8427,231 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: aca_effectuated_enrollment_monthly
+    timeColumn: benefit_year  # observation year; this table has no column named 'year'
+    # data-api dataset has no Last-Modified; hash the response body so an unchanged CMS
+    # file is skipped and a new snapshot (CMS appends rows in place) re-materializes.
+    freshness:
+      type: hash
+    pattern: "type=aca_effectuated_enrollment_monthly"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS "Health Insurance Exchanges Monthly Effectuated Enrollment" (data.cms.gov) — people with
+      ACA marketplace coverage in force (premium paid), one row per benefit year, month,
+      geography (National or state) and platform, 2016 to the latest month CMS has posted
+      (February 2026 at last check; the number CMS quotes as the "early snapshot", e.g. ~19.2M
+      for early 2026 vs ~22.4M in the 2025 average). Effectuated enrollment is not plan
+      selections: selections count sign-ups, this counts those who paid.
+
+      **Do not double count**: National rows (geo_level) are the all-states total, and platform
+      "All" equals HealthCare.gov + SBE. Filter geo_level and platform before summing.
+      Not in this table: county, metal level, age or subsidy detail (see
+      aca_effectuated_enrollment_annual for subsidy and premium averages by state and year).
+      CMS appends new months in place; there is no per-release file, so the whole dataset is
+      re-read each run.
+
+    columns:
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: 'CASE WHEN src."State" = ''Total'' THEN ''National'' ELSE ''State'' END'
+        comment: National (the CMS "Total" row) or State; never sum National with State rows
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."State", ''Total'')'
+        comment: 2-letter state code (FK to geo.state_ref); NULL on National rows
+      - name: platform
+        type: string
+        nullable: false
+        expression: 'src."Platform"'
+        comment: All = every marketplace; HealthCare.gov = federal platform states; SBE = state-based marketplaces. All = HealthCare.gov + SBE, so filter to one value before summing
+      - name: benefit_year
+        type: integer
+        nullable: false
+        expression: 'CAST(src."Year" AS INTEGER)'
+        comment: Benefit (coverage) year
+      - name: month_num
+        type: integer
+        nullable: false
+        expression: 'CASE src."Month" WHEN ''January'' THEN 1 WHEN ''February'' THEN 2 WHEN ''March'' THEN 3 WHEN ''April'' THEN 4 WHEN ''May'' THEN 5 WHEN ''June'' THEN 6 WHEN ''July'' THEN 7 WHEN ''August'' THEN 8 WHEN ''September'' THEN 9 WHEN ''October'' THEN 10 WHEN ''November'' THEN 11 WHEN ''December'' THEN 12 END'
+        comment: Calendar month 1-12
+      - name: effectuated_enrollment
+        type: bigint
+        nullable: false
+        expression: 'CAST(src."Effectuated_Enr" AS BIGINT)'
+        comment: People with paid coverage in force that month
+
+    source:
+      type: http
+      url: "https://data.cms.gov/data-api/v1/dataset/1829fdb3-a6f9-4036-856a-3af1f7828c8c/data"
+      method: GET
+      parameters:
+        size: "5000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "size"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - aca_effectuated_enrollment_monthly
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: aca_effectuated_enrollment_annual
+    timeColumn: benefit_year  # observation year; this table has no column named 'year'
+    # data-api dataset has no Last-Modified; hash the response body so an unchanged CMS
+    # file is skipped and a new snapshot (CMS appends rows in place) re-materializes.
+    freshness:
+      type: hash
+    pattern: "type=aca_effectuated_enrollment_annual"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS "Health Insurance Exchanges Annual Effectuated Enrollment" (data.cms.gov) — average
+      monthly effectuated ACA marketplace enrollment for the benefit year with the share on
+      advance premium tax credits (APTC) and cost-sharing reductions (CSR) and average monthly
+      premium, APTC and premium after APTC, by state and platform, 2016-2025 (full-year
+      averages, published the summer after the benefit year). Pair with
+      aca_effectuated_enrollment_monthly for the month-by-month count.
+
+      **Do not double count**: National rows are the all-states total and platform "All" equals
+      HealthCare.gov + SBE; filter geo_level and platform before summing. Premium dollars are
+      per enrollee per month. pct_aptc and pct_csr are fractions (0.93 = 93%).
+
+    columns:
+      - name: geo_level
+        type: string
+        nullable: false
+        expression: 'CASE WHEN src."State" = ''Total'' THEN ''National'' ELSE ''State'' END'
+        comment: National (the CMS "Total" row) or State; never sum National with State rows
+      - name: state_abbr
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."State", ''Total'')'
+        comment: 2-letter state code (FK to geo.state_ref); NULL on National rows
+      - name: platform
+        type: string
+        nullable: false
+        expression: 'src."Platform"'
+        comment: All = every marketplace; HealthCare.gov = federal platform states; SBE = state-based marketplaces. All = HealthCare.gov + SBE, so filter to one value before summing
+      - name: benefit_year
+        type: integer
+        nullable: false
+        expression: 'CAST(src."Year" AS INTEGER)'
+        comment: Benefit (coverage) year
+      - name: effectuated_enrollment
+        type: bigint
+        nullable: false
+        expression: 'CAST(src."Effectuated_Enr" AS BIGINT)'
+        comment: Average monthly effectuated enrollment for the year
+      - name: aptc_enrollment
+        type: bigint
+        nullable: true
+        expression: 'CAST(src."APTC_Enr" AS BIGINT)'
+        comment: Average monthly enrollees receiving advance premium tax credits
+      - name: pct_aptc
+        type: double
+        nullable: true
+        expression: 'CAST(src."Pct_APTC_Enr" AS DOUBLE)'
+        comment: Share of enrollees on APTC, fraction 0-1 (CMS rounds to 2 places)
+      - name: csr_enrollment
+        type: bigint
+        nullable: true
+        expression: 'CAST(src."CSR_Enr" AS BIGINT)'
+        comment: Average monthly enrollees receiving cost-sharing reductions
+      - name: pct_csr
+        type: double
+        nullable: true
+        expression: 'CAST(src."Pct_CSR_Enr" AS DOUBLE)'
+        comment: Share of enrollees on CSR, fraction 0-1
+      - name: avg_premium
+        type: double
+        nullable: true
+        expression: 'CAST(src."Avg_Prm" AS DOUBLE)'
+        comment: Average monthly premium per enrollee before APTC, dollars
+      - name: avg_aptc
+        type: double
+        nullable: true
+        expression: 'CAST(src."Avg_APTC" AS DOUBLE)'
+        comment: Average monthly APTC per enrollee, dollars
+      - name: avg_premium_after_aptc
+        type: double
+        nullable: true
+        expression: 'CAST(src."Avg_Prm_Aft_APTC" AS DOUBLE)'
+        comment: Average monthly premium after APTC, dollars
+
+    source:
+      type: http
+      url: "https://data.cms.gov/data-api/v1/dataset/05979174-881c-4504-8d9b-a2edf61d5a47/data"
+      method: GET
+      parameters:
+        size: "5000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 5000
+          limitParam: "size"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - aca_effectuated_enrollment_annual
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   - name: medicare_geographic_variation
     timeColumn: data_year  # observation year; this table has no column named 'year'
     # CMS publishes one combined CSV covering all years (2014-2024, currently) rather than a
