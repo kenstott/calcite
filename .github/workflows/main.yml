@@ -158,6 +158,17 @@ jobs:
         job-id: jdk${{ matrix.jdk }}
         remote-build-cache-proxy-enabled: false
         arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build javadoc
+    - name: 'Upload test JVM diagnostics'
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: file-test-diagnostics-${{ github.job }}
+        # heap dumps and JVM crash logs the :file:test JVM writes (see file/build.gradle.kts)
+        path: |
+          file/build/heapdumps/**
+          file/build/hs_err_pid*.log
+        if-no-files-found: ignore
+        retention-days: 7
     - name: 'sqlline and sqllsh'
       shell: cmd
       run: |
@@ -205,6 +216,17 @@ jobs:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build
+      - name: 'Upload test JVM diagnostics'
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: file-test-diagnostics-${{ github.job }}
+          # heap dumps and JVM crash logs the :file:test JVM writes (see file/build.gradle.kts)
+          path: |
+            file/build/heapdumps/**
+            file/build/hs_err_pid*.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: 'sqlline and sqllsh'
         shell: cmd
         run: |
@@ -252,6 +274,17 @@ jobs:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 ${{ needs.changes.outputs.tasks }}
+      - name: 'Upload test JVM diagnostics'
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: file-test-diagnostics-${{ github.job }}
+          # heap dumps and JVM crash logs the :file:test JVM writes (see file/build.gradle.kts)
+          path: |
+            file/build/heapdumps/**
+            file/build/hs_err_pid*.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: 'sqlline and sqllsh'
         shell: cmd
         run: |
