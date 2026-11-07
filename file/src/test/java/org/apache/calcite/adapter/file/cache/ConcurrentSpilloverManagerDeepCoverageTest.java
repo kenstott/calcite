@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.cache;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the {@code cleanupOldDirectories} method and its lambda branches.
  */
 @Tag("unit")
+@ResourceLock("spillover-base")
 public class ConcurrentSpilloverManagerDeepCoverageTest {
 
   private final List<String> connectionIds =
