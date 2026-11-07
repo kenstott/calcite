@@ -213,6 +213,19 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private Map<String, String> partitionValueSource = Collections.emptyMap();
   private boolean overwritePartitions = false;
 
+  /**
+   * Under {@code overwritePartitions}, true while {@link #writeBatch} is inside one fetch unit.
+   * A partition's first commit replaces the table's copy of it, so nothing a unit has written may
+   * be committed until the unit has delivered every row: a commit part-way through would swap in
+   * a prefix of the partition and leave it truncated if the run then ends.
+   */
+  private boolean unitInFlight = false;
+  /** Partitions the in-flight unit has buffered rows for. */
+  private final Set<String> unitPartitionKeys = new LinkedHashSet<String>();
+  /** Data files the in-flight unit has flushed; withheld from every commit until it completes. */
+  private final List<org.apache.iceberg.DataFile> unitFiles =
+      new ArrayList<org.apache.iceberg.DataFile>();
+
   /** True once commit() has completed — suppresses the SIGTERM emergency-commit hook. */
   private final AtomicBoolean committedSuccessfully = new AtomicBoolean(false);
 
@@ -933,21 +946,34 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     int chunkNumber = 0;
     List<Map<String, Object>> chunk = new ArrayList<Map<String, Object>>(batchSize);
 
-    while (data.hasNext()) {
-      chunk.add(data.next());
+    unitInFlight = overwritePartitions;
+    try {
+      while (data.hasNext()) {
+        chunk.add(data.next());
 
-      // When chunk is full, process it
-      if (chunk.size() >= batchSize) {
+        // When chunk is full, process it
+        if (chunk.size() >= batchSize) {
+          chunkNumber++;
+          totalRows += processChunk(chunk, partitionVariables, chunkNumber);
+          chunk = new ArrayList<Map<String, Object>>(batchSize);
+        }
+      }
+
+      // Process remaining rows
+      if (!chunk.isEmpty()) {
         chunkNumber++;
         totalRows += processChunk(chunk, partitionVariables, chunkNumber);
-        chunk = new ArrayList<Map<String, Object>>(batchSize);
       }
-    }
-
-    // Process remaining rows
-    if (!chunk.isEmpty()) {
-      chunkNumber++;
-      totalRows += processChunk(chunk, partitionVariables, chunkNumber);
+      if (overwritePartitions) {
+        completeUnit();
+      }
+    } catch (IOException | RuntimeException e) {
+      if (overwritePartitions) {
+        abandonUnit();
+      }
+      throw e;
+    } finally {
+      unitInFlight = false;
     }
 
     if (chunkNumber > 1) {
@@ -977,11 +1003,69 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     totalRowsWritten += rows.size();
     totalFilesWritten++;
 
-    if (commitPerPartition) {
+    if (commitPerPartition && !overwritePartitions) {
       commitCompletedPartition(partitionVariables);
     }
 
     return rows.size();
+  }
+
+  /**
+   * The in-flight unit delivered all its rows: flush its partitions so every row is in a file,
+   * release the withheld files to the commit paths, and publish per partition or at the file
+   * threshold.
+   */
+  private void completeUnit() throws IOException {
+    List<String> keys = new ArrayList<String>(unitPartitionKeys);
+    for (String key : keys) {
+      flushPartition(key);
+    }
+    synchronized (pendingDataFiles) {
+      unitFiles.clear();
+      unitPartitionKeys.clear();
+    }
+    unitInFlight = false;
+    if (commitPerPartition) {
+      for (String key : keys) {
+        List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(key);
+        if (forPartition != null && !forPartition.isEmpty()) {
+          commitInChunks(new ArrayList<org.apache.iceberg.DataFile>(forPartition));
+          pendingDataFiles.removeAll(forPartition);
+        }
+      }
+    } else if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD) {
+      intermediateCommit();
+    }
+  }
+
+  /**
+   * The in-flight unit failed part-way: drop its buffered rows and flushed files so no later
+   * commit can replace a partition with the rows it got before failing. The table keeps the
+   * partition's previous contents.
+   */
+  private void abandonUnit() {
+    synchronized (pendingDataFiles) {
+      for (String key : unitPartitionKeys) {
+        List<Map<String, Object>> buffered = partitionBuffers.remove(key);
+        if (buffered != null) {
+          bufferedRowCount -= buffered.size();
+        }
+        partitionVarsMap.remove(key);
+        List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(key);
+        if (forPartition != null) {
+          forPartition.removeAll(unitFiles);
+          if (forPartition.isEmpty()) {
+            filesByPartition.remove(key);
+          }
+        }
+      }
+      pendingDataFiles.removeAll(unitFiles);
+      LOGGER.warn("Abandoned the failed fetch unit: dropped {} flushed file(s) and its buffered "
+          + "rows for {} partition(s); the table keeps their previous contents",
+          unitFiles.size(), unitPartitionKeys.size());
+      unitFiles.clear();
+      unitPartitionKeys.clear();
+    }
   }
 
   /**
@@ -1220,6 +1304,10 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       }
     }
 
+    if (unitInFlight) {
+      unitPartitionKeys.add(partitionKey);
+    }
+
     // Append transformed rows to partition buffer
     List<Map<String, Object>> buffer = partitionBuffers.get(partitionKey);
     if (buffer == null) {
@@ -1300,6 +1388,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     org.apache.iceberg.DataFile dataFile = tableWriter.writeRecords(rows, partVars);
     if (dataFile != null) {
       pendingDataFiles.add(dataFile);
+      if (unitInFlight) {
+        unitFiles.add(dataFile);
+      }
       if (commitPerPartition || overwritePartitions) {
         // Remember every file written for this partition, not just the newest. A partition is
         // committed with replacePartitions, which swaps in exactly the files handed to it — so
@@ -1327,7 +1418,7 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     partitionVarsMap.remove(partitionKey);
 
     // Intermediate commit to bound memory: commit pending data files when threshold exceeded
-    if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD) {
+    if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD && !unitInFlight) {
       intermediateCommit();
     }
   }
@@ -3021,6 +3112,12 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
         return;
       }
       snapshot = new ArrayList<org.apache.iceberg.DataFile>(pendingDataFiles);
+      snapshot.removeAll(unitFiles);
+    }
+    if (snapshot.isEmpty()) {
+      LOGGER.warn("SIGTERM: only the unfinished fetch unit's files are staged — not committing "
+          + "them, the table keeps its previous partition contents");
+      return;
     }
     LOGGER.warn("SIGTERM: emergency-committing {} staged files to Iceberg ({} in-memory rows not saved — "
         + "will be re-fetched on next rebuild)",
