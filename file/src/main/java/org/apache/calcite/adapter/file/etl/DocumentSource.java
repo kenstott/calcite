@@ -159,6 +159,16 @@ public class DocumentSource {
       }
     }
 
+    LocalContentResolver resolver = localResolverFor(url);
+    if (resolver != null) {
+      byte[] local = resolver.resolveBytes(url);
+      if (local != null) {
+        storageProvider.writeFile(cachePath, local);
+        LOGGER.debug("Document answered locally, {} bytes to {}", local.length, cachePath);
+        return cachePath;
+      }
+    }
+
     LOGGER.debug("Downloading document from: {}", url);
     downloadToPath(url, cachePath);
 
@@ -559,6 +569,15 @@ public class DocumentSource {
    */
   public interface LocalContentResolver {
     String resolve(String url) throws IOException;
+
+    /**
+     * The held bytes for {@code url}, or null when the copy does not hold it. For a document
+     * written to the cache unchanged; the default encodes {@link #resolve} as UTF-8.
+     */
+    default byte[] resolveBytes(String url) throws IOException {
+      String text = resolve(url);
+      return text == null ? null : text.getBytes(StandardCharsets.UTF_8);
+    }
   }
 
   private static final Map<String, LocalContentResolver> LOCAL_RESOLVERS =
