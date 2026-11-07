@@ -8072,8 +8072,9 @@ partitionedTables:
       versus its current rates, in percent (23.73 = a 23.73 percent increase; negative = a
       decrease). **rate_change_submission_pct** is the same measure across the insurer's whole
       state submission. Also carries the product's plan count, current enrollment (members), and
-      CMS's review **determination** ("Not Unreasonable" or "Unreasonable"; NULL when the filing
-      is not subject to the review threshold or is undetermined).
+      CMS's review **determination** ("Not Unreasonable", "Not Unreasonable (Modified)", or
+      "Unreasonable"; NULL when the filing is not
+      subject to the review threshold or is undetermined).
 
       **Coverage**: plan years 2022-2027, all 50 states and DC (state-based marketplaces
       included, unlike aca_qhp_county_premiums). Individual market only: the small-group rows in
@@ -8152,7 +8153,7 @@ partitionedTables:
       - name: determination
         type: string
         nullable: true
-        comment: CMS review determination, "Not Unreasonable" or "Unreasonable"; NULL when not determined
+        comment: CMS review determination - "Not Unreasonable", "Not Unreasonable (Modified)" or "Unreasonable"; NULL when not determined
 
     source:
       type: http

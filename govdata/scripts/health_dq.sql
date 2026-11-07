@@ -2961,13 +2961,13 @@ SELECT 'health', 'aca_rate_review_products', 'T7_rate_change_scale',
 FROM (SELECT SUM(enrollment * rate_change_product_pct) / NULLIF(SUM(enrollment), 0) AS m
       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true) WHERE rate_change_product_pct IS NOT NULL);
 
--- T7: only the two CMS determinations (or NULL), and a 2-letter state
+-- T7: only the CMS determinations seen in the file (or NULL), and a 2-letter state
 INSERT INTO dq_results
 SELECT 'health', 'aca_rate_review_products', 'T7_domain_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
-  bad, 0, 'determination not in (Not Unreasonable, Unreasonable) or state_abbr not 2 letters or negative enrollment/plan_count < 1'
+  bad, 0, 'determination not in (Not Unreasonable, Not Unreasonable (Modified), Unreasonable) or state_abbr not 2 letters or negative enrollment/plan_count < 1'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_rate_review_products', allow_moved_paths := true)
-      WHERE (determination IS NOT NULL AND determination NOT IN ('Not Unreasonable', 'Unreasonable'))
+      WHERE (determination IS NOT NULL AND determination NOT IN ('Not Unreasonable', 'Not Unreasonable (Modified)', 'Unreasonable'))
          OR LENGTH(state_abbr) <> 2 OR enrollment < 0 OR plan_count < 1);
 
 SELECT schema, tbl, test, status, value, threshold, detail
