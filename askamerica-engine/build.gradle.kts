@@ -790,4 +790,4 @@ tasks.register<Exec>("jpackage") {
         }
     }
 }
-# ci-scope verification (throwaway)
+// ci-scope verification (throwaway)
