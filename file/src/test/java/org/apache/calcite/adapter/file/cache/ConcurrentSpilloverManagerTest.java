@@ -14,6 +14,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Uses unique connection IDs to avoid interference between tests.
  */
 @Tag("unit")
+@ResourceLock("spillover-base")
 public class ConcurrentSpilloverManagerTest {
 
   private static final Logger LOGGER =

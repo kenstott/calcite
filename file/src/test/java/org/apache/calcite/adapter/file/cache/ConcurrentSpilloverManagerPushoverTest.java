@@ -13,6 +13,7 @@ package org.apache.calcite.adapter.file.cache;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * to push cache package coverage past 75%.
  */
 @Tag("unit")
+@ResourceLock("spillover-base")
 public class ConcurrentSpilloverManagerPushoverTest {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(ConcurrentSpilloverManagerPushoverTest.class);
