@@ -2970,6 +2970,75 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
       WHERE (determination IS NOT NULL AND determination NOT IN ('Not Unreasonable', 'Not Unreasonable (Modified)', 'Unreasonable'))
          OR LENGTH(state_abbr) <> 2 OR enrollment < 0 OR plan_count < 1);
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: aca_oep_county_plan_selections (new 7 Nov 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true));
+
+-- T2: row_count — one plan year covers ~2,000 HealthCare.gov-state counties
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T2_row_count',
+  CASE WHEN n >= 1500 THEN 'pass' ELSE 'fail' END,
+  n, 1500, 'At least 1500 county rows for the DQ-scoped plan year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL plan_year, state_abbr or county_fips rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true) WHERE plan_year IS NULL OR state_abbr IS NULL OR county_fips IS NULL);
+
+-- T6: pk_dupes
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (plan_year, state_abbr, county_fips) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT plan_year, state_abbr, county_fips FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true) GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
+
+-- T7: parts cannot exceed the whole (new + returning = selections; metal bands never above selections)
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T7_parts_vs_total',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows where new+returning != selections, or any metal band or the APTC count exceeds selections'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true)
+      WHERE (plan_selections IS NOT NULL AND new_consumers IS NOT NULL AND returning_consumers IS NOT NULL
+             AND new_consumers + returning_consumers <> plan_selections)
+         OR metal_bronze > plan_selections OR metal_silver > plan_selections
+         OR metal_gold > plan_selections OR aptc_consumers > plan_selections);
+
+-- T7: average premium is a plausible monthly dollar figure
+INSERT INTO dq_results
+SELECT 'health', 'aca_oep_county_plan_selections', 'T7_premium_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'avg_premium outside $100-$2500 per month'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_oep_county_plan_selections', allow_moved_paths := true) WHERE avg_premium IS NOT NULL AND (avg_premium < 100 OR avg_premium > 2500));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

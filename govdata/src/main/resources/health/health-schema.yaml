@@ -8191,6 +8191,242 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: aca_oep_county_plan_selections
+    # One static zip per plan year, posted in March of that year after open enrollment closes;
+    # Last-Modified gates re-fetch/re-materialize when CMS reposts a corrected file.
+    freshness:
+      type: last_modified
+    pattern: "type=aca_oep_county_plan_selections/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+    comment: >
+      ACA Health Insurance Marketplace open enrollment plan selections by county — CMS
+      "Marketplace Open Enrollment Period Public Use Files", county-level file, one row per plan
+      year, state and county. **plan_selections** is the number of people who chose a plan during
+      open enrollment (selections, not paid effectuated enrollment). Splits the total by new vs
+      returning consumers, age band, sex, metal level (catastrophic to platinum), household income
+      as a percent of the federal poverty level, and carries the tax-credit (APTC) and
+      cost-sharing-reduction recipient counts, the average premium before and after the credit,
+      and stand-alone dental selections. Premiums are monthly whole dollars.
+
+      **Coverage**: plan years 2022-2026 loaded (PY2026 posted 2026-03-27, covering open
+      enrollment 2025-11-01 to 2026-01-15). Only states on HealthCare.gov are in the county file
+      (33 states in 2022-2023, then 32, 31 and 30 as Virginia (2024), Georgia (2025) and
+      Illinois (2026) moved to state-based marketplaces) — state-based marketplaces such as
+      CA and NY are absent, so this is not a national total; the file's own HealthCare.gov total
+      row is dropped. The PY2014-2021 files use other layouts and are not loaded.
+
+      **Suppression**: CMS prints * for a small cell and + for a cell hidden to protect one, so
+      those load as NULL; summing a column over counties undercounts by the suppressed cells,
+      and the sum of age or metal bands can fall short of plan_selections for the same reason.
+      fpl_100_138 is a subset of fpl_100_150.
+
+      Not in this table: ZIP-level and state-level selections, race and ethnicity columns,
+      weekly enrollment, the 2026 alternative-benefit columns, premiums by plan (see
+      aca_qhp_county_premiums) and effectuated enrollment — separate releases or deliberately
+      left out.
+
+    dimensions:
+      type:
+        - aca_oep_county_plan_selections
+      year:
+        type: yearRange
+        # The plan year equals the open-enrollment year and is posted in March of that year, so
+        # the batch for the current year returns 404 until then and is skipped.
+        start: "${GOVDATA_START_YEAR:2022}"
+        minYear: 2022
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    columns:
+      - name: plan_year
+        type: integer
+        nullable: false
+        comment: Marketplace plan year (the open enrollment that selects coverage for this year)
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: 2-letter USPS state code (FK to geo.state_ref)
+      - name: county_fips
+        type: string
+        nullable: false
+        comment: 5-digit county FIPS (FK to geo.counties)
+      - name: plan_selections
+        type: integer
+        nullable: true
+        comment: Consumers who selected a marketplace plan in open enrollment (the headline count); NULL when CMS suppressed a small cell
+      - name: new_consumers
+        type: integer
+        nullable: true
+        comment: Selections by consumers new to the marketplace
+      - name: returning_consumers
+        type: integer
+        nullable: true
+        comment: Selections by consumers returning from the prior year (active plus auto re-enrolled)
+      - name: active_reenrolled
+        type: integer
+        nullable: true
+        comment: Returning consumers who actively picked a plan
+      - name: auto_reenrolled
+        type: integer
+        nullable: true
+        comment: Returning consumers automatically re-enrolled
+      - name: aptc_consumers
+        type: integer
+        nullable: true
+        comment: Consumers receiving the advance premium tax credit
+      - name: csr_consumers
+        type: integer
+        nullable: true
+        comment: Consumers receiving cost-sharing reductions
+      - name: age_0_17
+        type: integer
+        nullable: true
+        comment: Selections by consumers aged 0-17
+      - name: age_18_25
+        type: integer
+        nullable: true
+        comment: Selections aged 18-25
+      - name: age_26_34
+        type: integer
+        nullable: true
+        comment: Selections aged 26-34
+      - name: age_35_44
+        type: integer
+        nullable: true
+        comment: Selections aged 35-44
+      - name: age_45_54
+        type: integer
+        nullable: true
+        comment: Selections aged 45-54
+      - name: age_55_64
+        type: integer
+        nullable: true
+        comment: Selections aged 55-64
+      - name: age_65_plus
+        type: integer
+        nullable: true
+        comment: Selections aged 65 and over
+      - name: male
+        type: integer
+        nullable: true
+        comment: Selections by male consumers
+      - name: female
+        type: integer
+        nullable: true
+        comment: Selections by female consumers
+      - name: metal_catastrophic
+        type: integer
+        nullable: true
+        comment: Selections of catastrophic plans
+      - name: metal_bronze
+        type: integer
+        nullable: true
+        comment: Selections of Bronze plans
+      - name: metal_silver
+        type: integer
+        nullable: true
+        comment: Selections of Silver plans
+      - name: metal_gold
+        type: integer
+        nullable: true
+        comment: Selections of Gold plans
+      - name: metal_platinum
+        type: integer
+        nullable: true
+        comment: Selections of Platinum plans
+      - name: fpl_lt100
+        type: integer
+        nullable: true
+        comment: Selections with household income under 100% of the federal poverty level
+      - name: fpl_100_138
+        type: integer
+        nullable: true
+        comment: Selections at 100-138% FPL (a subset of fpl_100_150; do not add the two)
+      - name: fpl_100_150
+        type: integer
+        nullable: true
+        comment: Selections at 100-150% FPL
+      - name: fpl_150_200
+        type: integer
+        nullable: true
+        comment: Selections at 150-200% FPL
+      - name: fpl_200_250
+        type: integer
+        nullable: true
+        comment: Selections at 200-250% FPL
+      - name: fpl_250_300
+        type: integer
+        nullable: true
+        comment: Selections at 250-300% FPL
+      - name: fpl_300_400
+        type: integer
+        nullable: true
+        comment: Selections at 300-400% FPL
+      - name: fpl_gt400
+        type: integer
+        nullable: true
+        comment: Selections above 400% FPL
+      - name: fpl_other
+        type: integer
+        nullable: true
+        comment: Selections with unknown household income
+      - name: dental_selections
+        type: integer
+        nullable: true
+        comment: Consumers who also selected a stand-alone dental plan
+      - name: avg_premium
+        type: double
+        nullable: true
+        comment: Average monthly premium before tax credit, whole dollars
+      - name: avg_premium_after_aptc
+        type: double
+        nullable: true
+        comment: Average monthly premium after the advance premium tax credit, whole dollars
+      - name: avg_aptc
+        type: double
+        nullable: true
+        comment: Average monthly advance premium tax credit among APTC recipients, whole dollars
+
+    source:
+      type: http
+      url: "https://www.cms.gov/files/zip/{year}-oep-county-level-public-use-file.zip"
+      method: GET
+      response:
+        format: TEXT   # AcaOepCountyTransformer streams the zip and csv itself
+      rateLimit:
+        requestsPerSecond: 0.2
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.AcaOepCountyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=aca_oep_county_plan_selections/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: aca_oep_county_plan_selections
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
   - name: medicare_geographic_variation
     timeColumn: data_year  # observation year; this table has no column named 'year'
     # CMS publishes one combined CSV covering all years (2014-2024, currently) rather than a
