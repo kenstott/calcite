@@ -169,6 +169,8 @@ dependencies {
     // GenericContainer covers all images; these tests are @Tag("integration") and require a Docker daemon.
     testImplementation("org.testcontainers:testcontainers:1.20.4")
     testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    // TestExecutionListener for the slow-test thread dump (SlowTestDumpListener, #1112)
+    testImplementation("org.junit.platform:junit-platform-launcher")
     // Testcontainers 1.20.4 ships docker-java zerodep 3.4.0, whose unix-socket transport
     // gets HTTP 400 from the Docker Desktop (WSL2) proxy on /info. The 3.5.x zerodep
     // transport fixes the request framing the Desktop proxy requires. Test-scoped override.
@@ -290,6 +292,8 @@ tasks.test {
         }
     }
     maxHeapSize = "2g"
+    // -PslowTestDumpMinutes=N changes when SlowTestDumpListener dumps threads (default 5)
+    project.findProperty("slowTestDumpMinutes")?.let { systemProperty("file.test.slowDumpMinutes", it.toString()) }
     // Forward Testcontainers/Docker connection env to the forked test JVM. Gradle does not
     // propagate the launching environment to test workers by default, so Testcontainers
     // integration tests cannot otherwise see a custom DOCKER_HOST (needed on Docker Desktop
@@ -324,7 +328,12 @@ tasks.test {
         // Mockito 5.x on Java 21 requires byte-buddy agent attachment
         "-XX:+EnableDynamicAgentLoading",
         "-Djdk.attach.allowAttachSelf=true",
-        "-Djava.util.concurrent.ForkJoinPool.common.maximumSpares=256"
+        "-Djava.util.concurrent.ForkJoinPool.common.maximumSpares=256",
+        // An OOM must be a visible failure with a heap dump, not a silent worker exit (#1112)
+        "-XX:+ExitOnOutOfMemoryError",
+        "-XX:+HeapDumpOnOutOfMemoryError",
+        "-XX:HeapDumpPath=" + layout.buildDirectory.dir("heapdumps").get().asFile.absolutePath,
+        "-XX:ErrorFile=" + layout.buildDirectory.file("hs_err_pid%p.log").get().asFile.absolutePath
     )
     // The module first ships in JDK 16, and a JVM told to add a module it does not have
     // exits before running a test. The SIMD classes that need it are compiled only on 16+.
