@@ -165,6 +165,9 @@ YEAR_MODE_GROUPS=(
   # every group above, and its (state x year) dimension cross-product (50 states x ~21 years)
   # is worth isolating for failure/rate-limit reasons the way CDC WONDER is above.
   "health-ssa|ssa_oasdi_county"
+  # CMS QHP Landscape (data.healthcare.gov) — one workbook per plan year; own group since it is a
+  # distinct source from every group above and the workbooks are 55-115 MB each.
+  "health-aca|aca_qhp_county_premiums"
 )
 
 ONCE_MODE_GROUPS=(
