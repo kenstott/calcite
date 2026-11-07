@@ -391,6 +391,7 @@ dimension_values:
                       # BLS CES0000000001/LNS14000000 dropped — PAYEMS/UNRATE are the FRED equivalents.
     - "ICSA"
     - "CCSA"
+    - "IURSA"         # Insured unemployment rate (weekly, from 1971)
     - "AWHMAN"
     # Inflation
     - "CPIAUCSL"
@@ -5699,6 +5700,7 @@ partitionedTables:
         - "CIVPART"      # Labor force participation rate (FRED id; was BLS LNS11300000 — invalid in FRED)
         - "ICSA"         # Initial jobless claims (weekly)
         - "CCSA"         # Continuing jobless claims
+        - "IURSA"        # Insured unemployment rate (weekly, from 1971)
         - "AWHMAN"       # Average weekly hours: manufacturing
         # Inflation
         - "CPIAUCSL"     # CPI all items (seasonally adjusted)
@@ -5806,7 +5808,8 @@ partitionedTables:
         # widening past any one series' floor costs a wasted request, not a failure. Deeper
         # floors for individual series (many reach the 1950s-60s) are a follow-up, not
         # audited exhaustively here across all 60.
-        start: "{env:GOVDATA_START_YEAR:1986}"
+        # 1967 = ICSA/CCSA first observation (weekly jobless claims; needed to check "lowest since 1969"-type claims). IURSA starts 1971; earlier years return empty arrays.
+        start: "{env:GOVDATA_START_YEAR:1967}"
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # FRED data typically available within days
