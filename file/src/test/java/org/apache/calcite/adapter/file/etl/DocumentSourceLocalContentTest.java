@@ -66,6 +66,37 @@ class DocumentSourceLocalContentTest {
     assertEquals("{\"local\":true}", source().fetchUrlContent(PREFIX + "CIK0000000001.json"));
   }
 
+  private static Map<String, String> docVars(String accession) {
+    Map<String, String> v = new HashMap<String, String>();
+    v.put("cik", "1");
+    v.put("accession", accession);
+    v.put("document", "doc.xml");
+    return v;
+  }
+
+  @Test void aDocumentTheLocalCopyHoldsIsCachedWithoutAFetch() throws IOException {
+    final byte[] held = new byte[] {'<', 'x', '/', '>', (byte) 0xE9};
+    DocumentSource.registerLocalContentResolver("https://bulk-test.invalid/Archives/",
+        new DocumentSource.LocalContentResolver() {
+          @Override public String resolve(String url) {
+            throw new AssertionError("bytes expected");
+          }
+
+          @Override public byte[] resolveBytes(String url) {
+            return url.endsWith("/A1") ? held : null;
+          }
+        });
+    String path = source().downloadDocument(docVars("A1"));
+    assertTrue(java.util.Arrays.equals(held, java.nio.file.Files.readAllBytes(
+        java.nio.file.Paths.get(path))));
+  }
+
+  @Test void aDocumentTheLocalCopyLacksIsFetched() {
+    DocumentSource.registerLocalContentResolver("https://bulk-test.invalid/Archives/",
+        url -> null);
+    assertThrows(IOException.class, () -> source().downloadDocument(docVars("A2")));
+  }
+
   @Test void aUrlTheLocalCopyLacksIsFetched() {
     DocumentSource.registerLocalContentResolver(PREFIX, url -> null);
     assertThrows(IOException.class, () -> source().fetchUrlContent(PREFIX + "CIK0000000002.json"));

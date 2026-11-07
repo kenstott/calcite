@@ -89,6 +89,10 @@ final class SecFeedStore {
       @Override public String resolve(String url) throws IOException {
         return text(url);
       }
+
+      @Override public byte[] resolveBytes(String url) throws IOException {
+        return bytes(url);
+      }
     };
     DocumentSource.registerLocalContentResolver(ARCHIVE_PREFIX, resolver);
     Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
