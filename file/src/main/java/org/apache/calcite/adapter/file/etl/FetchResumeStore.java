@@ -102,7 +102,8 @@ public final class FetchResumeStore {
 
   /** Removes every entry of this store. */
   public void clear() throws IOException {
-    if (!storage.exists(basePath)) {
+    // exists() is an exact-key check on object stores, where a directory has no object of its own
+    if (!storage.isDirectory(basePath)) {
       return;
     }
     List<String> paths = new ArrayList<String>();
@@ -113,6 +114,10 @@ public final class FetchResumeStore {
     }
     // the completion marker goes first so a clear cut short never leaves a marker over a missing body
     Collections.sort(paths, Collections.reverseOrder());
-    storage.deleteBatch(paths);
+    int deleted = storage.deleteBatch(paths);
+    if (deleted != paths.size()) {
+      throw new IOException("Resume store " + basePath + " cleared " + deleted + " of "
+          + paths.size() + " entries");
+    }
   }
 }
