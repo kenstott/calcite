@@ -213,6 +213,40 @@ run_x_schema_if_needed() {
   fi
 }
 
+# Continuous embedding. "Historical is complete" is the conclusion of the historical fill mode below:
+# an unscoped historical run-pool that drained its whole queue (exit 0) inside a historical window.
+# Only then does embedding run back to back (vss-local.sh --deadline) until the next window, which is
+# the daily window, is about to start; it is never started inside a daily window, and the deadline is
+# window_end minus a margin so the daily pre-release and workers get the box. Pure: prints
+# "run <seconds>" or "skip <reason>", so the decision is unit-testable.
+embed_continuous_decision() {
+  local mode="$1" current="$2" pool_exit="$3" now="$4" window_end="$5" margin="$6"
+  if [ "$mode" != "historical" ] || [ "$current" != "historical" ]; then
+    echo "skip not a historical window (mode=$mode current=$current): embedding stays with the daily x-schema step"
+  elif [ "$pool_exit" != "0" ]; then
+    echo "skip historical not complete (pool exit $pool_exit): historical work comes first"
+  elif [ $(( window_end - now - margin )) -le 0 ]; then
+    echo "skip the daily window starts in $(( window_end - now ))s, inside the ${margin}s yield margin"
+  else
+    echo "run $(( window_end - now - margin ))"
+  fi
+}
+
+run_continuous_embedding_if_historical_done() {
+  local window_log="$1" mode="$2" current="$3" pool_exit="$4" window_end="$5"
+  local margin="${EMBED_YIELD_MARGIN_SECS:-600}" decision secs
+  decision=$(embed_continuous_decision "$mode" "$current" "$pool_exit" "$(date +%s)" "$window_end" "$margin")
+  echo "[$(ts)] continuous embedding decision: $decision" >> "$window_log"
+  case "$decision" in
+    run\ *)
+      secs="${decision#run }"
+      echo "[$(ts)] historical complete (historical pool exit 0): embedding until $(fmt_epoch $(( $(date +%s) + secs )))" | tee -a "$window_log"
+      bash "$SCRIPT_DIR/../vss-local.sh" backlog --deadline $(( $(date +%s) + secs )) >> "$window_log" 2>&1 \
+        || log_error "WARNING: continuous vss-local.sh backlog failed - see $window_log"
+      ;;
+  esac
+}
+
 # SEC's nightly submissions.zip answers the per-filer submissions JSON fetches (the ones that draw
 # the HTTP 429s). Historical windows only: it lags live by up to a day, and a daily run needs
 # yesterday's and today's filings. A backfill does not need the latest filings, so a zip already
@@ -355,6 +389,7 @@ run_window() {
         current="$fill_mode"
         continue
       fi
+      run_continuous_embedding_if_historical_done "$window_log" "$mode" "$current" "$EXIT_CODE" "$window_end"
       break
     elif [ "$EXIT_CODE" -eq 124 ] || [ "$EXIT_CODE" -eq 143 ]; then
       # The allotted window/attempt time elapsed. GNU/uutils timeout(1) reports

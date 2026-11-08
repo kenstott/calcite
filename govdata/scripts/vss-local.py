@@ -822,7 +822,7 @@ def cmd_backlog(max_rows, max_seconds):
     if fetched == 0:
         print("[backlog] nothing to do — fully caught up", flush=True)
         con.close()
-        return
+        return "drained"
     if total == 0:
         # Every row this batch returned was already coded. The watermark still has to clear the
         # batch, or the next run fetches and discards exactly these rows again and never moves.
@@ -830,7 +830,7 @@ def cmd_backlog(max_rows, max_seconds):
         print(f"[backlog] whole batch already coded — watermark advanced past {batch_end[1]}",
               flush=True)
         con.close()
-        return
+        return "more" if fetched >= max_rows else "drained"
     done, last_pos, touched = _embed_and_write(con, todo, _run_label("backlog"),
                                                max_seconds=max_seconds)
     # A batch carried to completion clears to its own end, not to the last row embedded: rows the
@@ -844,6 +844,25 @@ def cmd_backlog(max_rows, max_seconds):
     for schema in touched:
         cmd_compact(con, dataset=codes_dataset_for(schema), source_schema=schema)
     con.close()
+    if done < total:
+        return "time"
+    return "more" if fetched >= max_rows else "drained"
+
+
+def cmd_backlog_until(max_rows, deadline):
+    """Back-to-back batches, each resuming from the watermark the previous one saved, until the
+    queue drains or `deadline` (epoch seconds) is reached. A batch's time budget is the time left,
+    so it stops at an embed-batch boundary with its codes flushed and the watermark saved to the
+    last chunk written; the next batch (or the next run) resumes from there."""
+    while True:
+        left = int(deadline - time.time())
+        if left <= 0:
+            print("[backlog] deadline reached - yielding", flush=True)
+            return
+        outcome = cmd_backlog(max_rows, left)
+        if outcome != "more":
+            print(f"[backlog] stopping: {outcome}", flush=True)
+            return
 
 
 def cmd_dedup(source_schema):
@@ -979,6 +998,9 @@ def main():
     p_bk.add_argument("--max-rows", type=int,
                       default=int(os.environ.get("VSS_MAX_ROWS", "1000000")))
     p_bk.add_argument("--max-seconds", type=int, default=_default_max_seconds())
+    p_bk.add_argument("--deadline", type=int, default=None,
+                      help="epoch seconds: run batch after batch until then (or until drained); "
+                           "overrides --max-seconds")
     sub.add_parser("stats")
     p_compact = sub.add_parser("compact")
     p_compact.add_argument("--source-schema", default="sec",
@@ -993,7 +1015,9 @@ def main():
     p_ivf.add_argument("--iters", type=int, default=IVF_TRAIN_ITERS)
     args = ap.parse_args()
 
-    if args.cmd == "backlog":
+    if args.cmd == "backlog" and args.deadline is not None:
+        cmd_backlog_until(args.max_rows, args.deadline)
+    elif args.cmd == "backlog":
         cmd_backlog(args.max_rows, args.max_seconds)
     elif args.cmd == "stats":
         cmd_stats()

@@ -52,6 +52,8 @@ Usage: $0 <command> [args...]
                            source together), time-boxed (~2h). Appends quantized codes
                            to the lake, resuming from the one chunk_id watermark. Daily.
   backlog [maxRows]        Same as daily (with an explicit per-run row cap)
+  backlog --deadline EPOCH Batch after batch (each resuming from the watermark) until EPOCH or the
+                           queue drains; run-scheduled.sh uses it once historical is complete
   stats                    Per-(source_schema, year) counts across every codes dataset
   dedup [--source-schema S]
                            Force-compact + dedup a codes dataset by chunk_id, regardless of
