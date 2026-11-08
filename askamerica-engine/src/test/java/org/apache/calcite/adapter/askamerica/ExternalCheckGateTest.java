@@ -40,6 +40,12 @@ class ExternalCheckGateTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String ARTICLE = "https://51st.news/dc-record-evictions-housing-crisis";
 
+    @org.junit.jupiter.api.BeforeEach void quietLog() {
+        if (McpServer.log == null) {
+            McpServer.log = new java.io.PrintStream(new java.io.ByteArrayOutputStream());
+        }
+    }
+
     @AfterEach void clearCallLog() throws Exception {
         callLog().clear();
     }
@@ -290,5 +296,42 @@ class ExternalCheckGateTest {
         } finally {
             McpServer.FETCHED_TEXT.clear();
         }
+    }
+
+    private static String measureGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceMeasureSearched", JsonNode.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson));
+    }
+
+    @Test void unconfirmableClaimWithoutAMeasureIsRefused() throws Exception {
+        String problem = measureGate("[{\"assertion\":\"prices were 4.1% higher\","
+            + "\"verdict\":\"not checkable here\",\"reason\":\"BLS returned 403\"}]");
+        assertNotNull(problem);
+        assertTrue(problem.contains("no `measure`"), problem);
+    }
+
+    private static void searched(String query) throws Exception {
+        ObjectNode a = MAPPER.createObjectNode();
+        a.put("query", query);
+        recordCall("search_catalog", a, -1, null);
+    }
+
+    @Test void measureMustBeASearchThisSessionRan() throws Exception {
+        String claim = "[{\"assertion\":\"prices were 4.1% higher\",\"verdict\":\"not checkable here\","
+            + "\"reason\":\"BLS 403\",\"measure\":\"Washington metro CPI\"}]";
+        String problem = measureGate(claim);
+        assertNotNull(problem);
+        assertTrue(problem.contains("never called with that query"), problem);
+        searched("  washington   METRO cpi ");
+        assertNull(measureGate(claim));
+    }
+
+    @Test void measureCheckLeavesWarehouseAndPositiveClaimsAlone() throws Exception {
+        assertNull(measureGate("[{\"assertion\":\"a\",\"verdict\":\"not checkable here\","
+            + "\"reason\":\"x\",\"warehouse_value\":\"4.12%\"},"
+            + "{\"assertion\":\"b\",\"verdict\":\"true\"},"
+            + "{\"assertion\":\"He is a liar\",\"kind\":\"attack\",\"verdict\":\"unsupported\","
+            + "\"reason\":\"insult\"}]"));
     }
 }

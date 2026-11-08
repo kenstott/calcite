@@ -2952,6 +2952,11 @@ public class McpServer {
             + "attempted, whatever it found: a `sources` URL you fetched with web_fetch this "
             + "session (a 403 or timeout counts; the article itself does not), or `searched`, the "
             + "list of web search queries you ran for it. A claim with neither is refused. "
+            + "`measure`: the exact search_catalog query you ran for the statistic the claim "
+            + "rests on, with its place ('Washington metro CPI', 'D.C. monthly unemployment "
+            + "rate', 'D.C. eviction filings'); REQUIRED on every claim graded 'not checkable "
+            + "here' or 'unsupported' that has no warehouse_value, and refused unless that query "
+            + "was run this session. "
             + "`why_not`: when preview_report refuses a claim because one of its figures appears "
             + "in a fetched source, either act on that evidence or say here why it does not "
             + "change the grade; the reason is printed on the report. "
@@ -4739,6 +4744,7 @@ public class McpServer {
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceFiguresAccountedFor(claims,
                             args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceMeasureSearched(claims));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         addIfPresent(gateProblems, ClaimScoring.enforce(claims));
@@ -7643,6 +7649,56 @@ public class McpServer {
             }
         }
         return problems.isEmpty() ? null : "validation refused: " + String.join(" ALSO: ", problems);
+    }
+
+    /**
+     * A claim graded 'not checkable here' or 'unsupported' with no warehouse figure must show the
+     * warehouse was searched for it: {@code measure} names the search_catalog query run for the
+     * claim's statistic, and that query must be in this session's call log. Searching is
+     * required, finding is not.
+     *
+     * <p>Measured miss this targets: q3 run 7 (2026-11-07) graded D.C.-area CPI 'not checkable
+     * here' after a BLS 403 without ever searching the catalog for CPI; econ.metro_cpi carries
+     * it. A similarity threshold on the search result was tried first and calibrated on 17
+     * measures: present and absent measures overlapped (0.79-0.91 against 0.75-0.82), so the
+     * check proves the search happened instead of judging what it returned.
+     */
+    private static String enforceMeasureSearched(JsonNode claims) {
+        java.util.Set<String> searched = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("search_catalog".equals(e.path("tool").asText(""))) {
+                String q = e.path("args").path("query").asText("");
+                if (!q.trim().isEmpty()) {
+                    searched.add(normalizeQuery(q));
+                }
+            }
+        }
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (!("not checkable here".equals(verdict)
+                    || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict))
+                    || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
+                    || "attack".equals(c.path("kind").asText(""))) {
+                continue;
+            }
+            String assertion = c.path("assertion").asText("").trim();
+            if (!nonBlank(c, "measure")) {
+                problems.add("the assertion \"" + assertion + "\" is graded '" + verdict
+                    + "' with no warehouse figure and no `measure`. search_catalog for the "
+                    + "statistic it rests on, with its place, and put that query in `measure`.");
+            } else if (!searched.contains(normalizeQuery(c.path("measure").asText()))) {
+                problems.add("the assertion \"" + assertion + "\" names the measure \""
+                    + c.path("measure").asText().trim() + "\", but search_catalog was never "
+                    + "called with that query this session. Run it, look at what it returns, "
+                    + "and grade on that.");
+            }
+        }
+        return problems.isEmpty() ? null : "validation refused: " + String.join(" ALSO: ", problems);
+    }
+
+    private static String normalizeQuery(String q) {
+        return q.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
 
     /** A URL reduced to what identifies the page: no scheme, no leading www., no fragment, no
