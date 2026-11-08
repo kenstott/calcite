@@ -46,7 +46,7 @@ import java.util.zip.ZipInputStream;
  * DataProvider for {@code snap_benefits_by_geography} — SNAP persons/households
  * participating and total/average monthly benefits, by state x year x month.
  *
- * <p>USDA FNA publishes one ZIP ({@link #ZIP_URL}) covering FY1989-present (a
+ * <p>USDA FNA publishes one ZIP ({@link #LANDING_URL} links it) covering FY1989-present (a
  * separate national-only file covers FY1969-88, not loaded here — it has no
  * state breakdown; confirmed live 2026-08-24). The ZIP contains one workbook
  * per fiscal year, named {@code FY<2-digit-year>.xls[x]} — 89-99 is 1900s, 00-..
@@ -86,8 +86,19 @@ public class SnapBenefitsProvider implements DataProvider {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SnapBenefitsProvider.class);
 
-  private static final String ZIP_URL =
-      "https://www.fna.usda.gov/sites/default/files/resource-files/snap-zip-fy69tocurrent-8.zip";
+  /** Landing page that links the current FY1969-present zip. */
+  static final String LANDING_URL =
+      "https://www.fna.usda.gov/pd/supplemental-nutrition-assistance-program-snap";
+
+  private static final String ZIP_DIR =
+      "https://www.fna.usda.gov/sites/default/files/resource-files/";
+
+  /**
+   * The zip's file name carries a release number that USDA raises with every monthly
+   * publication, so the current name is read from the landing page.
+   */
+  private static final Pattern ZIP_LINK =
+      Pattern.compile("snap-zip-fy69tocurrent-(\\d+)\\.zip");
 
   /** Matches a per-fiscal-year workbook entry inside the zip, e.g. {@code FY24.xlsx}. */
   private static final Pattern FY_ENTRY = Pattern.compile("^FY(\\d{2})\\.xlsx?$");
@@ -115,8 +126,10 @@ public class SnapBenefitsProvider implements DataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
-    LOGGER.info("snap_benefits_by_geography: fetching {}", ZIP_URL);
-    byte[] zipBytes = readBytes(FiscalHttp.openGetWithRetry(ZIP_URL).getInputStream());
+    String zipUrl = currentZipUrl(
+        FiscalHttp.readAll(FiscalHttp.openGetWithRetry(LANDING_URL).getInputStream()));
+    LOGGER.info("snap_benefits_by_geography: fetching {}", zipUrl);
+    byte[] zipBytes = readBytes(FiscalHttp.openGetWithRetry(zipUrl).getInputStream());
 
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     Set<String> unknownNames = new HashSet<String>();
@@ -198,7 +211,10 @@ public class SnapBenefitsProvider implements DataProvider {
       } else if (!"Total".equals(col0)) {
         continue; // not a data row for the current state block
       }
-      rows.add(buildRow(currentState, fiscalYear, month, row, newLayout));
+      Map<String, Object> built = buildRow(currentState, fiscalYear, month, row, newLayout);
+      if (built != null) {
+        rows.add(built);
+      }
     }
   }
 
@@ -220,6 +236,10 @@ public class SnapBenefitsProvider implements DataProvider {
       perHousehold = toDouble(cell(row, 3));
       perPerson = toDouble(cell(row, 4));
       cost = toDouble(cell(row, 5));
+    }
+    if (household == null && persons == null && cost == null && perHousehold == null
+        && perPerson == null) {
+      return null; // not-yet-reported month ('--' in every cell): no data to store
     }
     String key = state.toUpperCase(Locale.ROOT);
     Map<String, Object> m = new LinkedHashMap<String, Object>();
@@ -258,6 +278,19 @@ public class SnapBenefitsProvider implements DataProvider {
   private static Long toLong(Cell cell) {
     Double v = toDouble(cell);
     return v == null ? null : Long.valueOf(v.longValue());
+  }
+
+  /** URL of the highest-numbered zip linked from the landing page's HTML. */
+  static String currentZipUrl(String landingHtml) throws IOException {
+    Matcher m = ZIP_LINK.matcher(landingHtml);
+    int best = -1;
+    while (m.find()) {
+      best = Math.max(best, Integer.parseInt(m.group(1)));
+    }
+    if (best < 0) {
+      throw new IOException("No snap-zip-fy69tocurrent-N.zip link on " + LANDING_URL);
+    }
+    return ZIP_DIR + "snap-zip-fy69tocurrent-" + best + ".zip";
   }
 
   /** Numeric value of a cell; blank or the "--" not-yet-reported sentinel becomes null. */

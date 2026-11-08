@@ -4813,7 +4813,7 @@ partitionedTables:
   #     not file extension — confirmed by reading raw FY14/FY15/FY19/FY20 cells
   #     directly (only these 2 layouts were observed across FY89-FY26).
   #   - Not-yet-reported months in the current FY are the literal string '--' in
-  #     every numeric cell, not blank/null — parsed to SQL NULL.
+  #     every numeric cell, not blank/null — such rows are skipped.
   - name: snap_benefits_by_geography
     # Freshness gate: landing/index page, same pattern as ssa_benefits_by_geography —
     # a Last-Modified probe skips re-download/re-materialize on unchanged runs.
@@ -4832,7 +4832,9 @@ partitionedTables:
       SNAP (Supplemental Nutrition Assistance Program) persons/households participating
       and total/average monthly benefits, by state x year x month — the nutrition-
       assistance counterpart to ssa_benefits_by_geography's income-benefits data, both
-      geo-keyed and comparable against usaspending_by_state. USDA FNA publishes one zip
+      geo-keyed and comparable against usaspending_by_state. year is the federal fiscal
+      year (Oct-Sep): FY2026 months 10-12 are Oct-Dec 2025. Months USDA has not yet
+      reported in the current fiscal year have no row. USDA FNA publishes one zip
       covering FY1989-present (one workbook per fiscal year inside), not a per-year URL,
       so this table has no year fetch dimension — the provider parses the full history
       from one download and materialize partitions by the year column found in each row,
@@ -4860,11 +4862,15 @@ partitionedTables:
       - name: year
         type: integer
         nullable: false
-        comment: Federal fiscal year (Oct-Sep)
+        comment: >
+          Federal fiscal year (Oct-Sep), not calendar year: FY2026 months 10-12 are
+          Oct-Dec 2025, so year*100+month does not read as calendar time
       - name: month
         type: integer
         nullable: true
-        comment: Calendar month (1-12); null for the per-state fiscal-year Total row
+        comment: >
+          Calendar month number (1-12) within the fiscal year in year; null for the
+          per-state fiscal-year Total row
       - name: persons_participating
         type: long
         nullable: true
@@ -4888,11 +4894,13 @@ partitionedTables:
 
     source:
       type: http
-      # Nominal source — like ssa_benefits_by_geography's SsaBenefitsProvider, the
-      # actual zip/xls/xlsx fetch and parse happens entirely in the custom
-      # dataProvider below; there is no generic response.format for a zip of
+      # Nominal source — the landing page that links the current zip, so the
+      # Last-Modified freshness gate probes the page whose change signals a new
+      # release (the zip's own file name carries a release number that rises monthly).
+      # Like ssa_benefits_by_geography's SsaBenefitsProvider, the actual zip/xls/xlsx
+      # fetch and parse happens entirely in the custom dataProvider below; there is no generic response.format for a zip of
       # mixed-vintage Excel workbooks with per-state block layouts.
-      url: "https://www.fna.usda.gov/sites/default/files/resource-files/snap-zip-fy69tocurrent-8.zip"
+      url: "https://www.fna.usda.gov/pd/supplemental-nutrition-assistance-program-snap"
       method: GET
       headers:
         # fna.usda.gov hangs (no 403, just 0 bytes) on a non-browser UA for GET —
