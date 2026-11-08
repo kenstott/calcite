@@ -5625,7 +5625,9 @@ partitionedTables:
           CIVPART = labor force participation rate, monthly, percent, seasonally adjusted; ICSA =
           initial jobless claims (initial unemployment insurance claims, new layoffs), weekly,
           seasonally adjusted; CCSA = continuing jobless claims (insured unemployment, people still
-          collecting benefits), weekly, seasonally adjusted; AWHMAN = average weekly hours of
+          collecting benefits), weekly, seasonally adjusted; IURSA = insured unemployment rate
+          (continuing claims as a share of covered employment), weekly, percent, seasonally
+          adjusted, from 1971; AWHMAN = average weekly hours of
           production workers in manufacturing, monthly; CPIAUCSL = consumer price index all items
           (headline CPI inflation), monthly, index 1982-84=100, seasonally adjusted; CPIAUCNS =
           consumer price index all items, monthly, index 1982-84=100, not seasonally adjusted;
