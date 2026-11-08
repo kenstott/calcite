@@ -52,4 +52,36 @@ class CatalogSearchTest {
     assertTrue(hits.size() == 0,
         "a bare stopword should not incidentally match dozens of unrelated tables: " + hits);
   }
+
+  /** Index of the first hit on schema.table, or -1. */
+  private static int rankOf(ArrayNode hits, String schemaTable) {
+    for (int i = 0; i < hits.size(); i++) {
+      if ((hits.get(i).path("schema").asText() + "." + hits.get(i).path("table").asText())
+          .equals(schemaTable)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** BM25: a table whose description matches every word of the query ranks near the top even
+   *  when other tables carry one of the words in their NAME. The substring scorer this
+   *  replaced never surfaced econ.regional_employment for this query. */
+  @Test void descriptionMatchingTheWholeQueryRanksHigh() {
+    int r = rankOf(Catalog.search("unemployment rate state monthly", 50),
+        "econ.regional_employment");
+    assertTrue(r >= 0 && r < 10, "econ.regional_employment ranked " + r);
+  }
+
+  /** IDF: a word found all over the catalog cannot outweigh a rare one. */
+  @Test void rareWordOutweighsCommonWords() {
+    int r = rankOf(Catalog.search("rent burden rate", 50), "census.acs_congressional_district");
+    assertTrue(r >= 0 && r < 10, "census.acs_congressional_district ranked " + r);
+  }
+
+  @Test void tokensStemPluralsAndDropStopwords() {
+    org.junit.jupiter.api.Assertions.assertEquals(
+        java.util.Arrays.asList("county", "rate", "renter", "household", "census"),
+        Catalog.tokens("Counties rates of the renters_households census"));
+  }
 }

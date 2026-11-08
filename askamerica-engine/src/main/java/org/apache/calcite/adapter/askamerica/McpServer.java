@@ -5883,8 +5883,9 @@ public class McpServer {
             tableNode.put(table, t);
         }
         if (!isColumn) {
-            if (hit.has("score") && hit.path("score").asInt() > t.path("score").asInt(0)) {
-                t.put("score", hit.path("score").asInt());
+            if (hit.has("score")
+                    && hit.path("score").asDouble() > t.path("score").asDouble(0)) {
+                t.put("score", hit.path("score").asDouble());
             }
             if (hit.has("similarity") && !t.has("similarity")) {
                 t.set("similarity", hit.get("similarity"));

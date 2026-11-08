@@ -554,46 +554,26 @@ final class Catalog {
 
     /** {@link #search} without the cap: every hit, best first. */
     static ArrayNode searchAll(String query) {
-        List<String> toks = new ArrayList<>();
-        for (String tk : query.toLowerCase(Locale.ROOT).split("\\s+")) {
-            if (!tk.isEmpty() && !STOPWORDS.contains(tk)) {
-                toks.add(tk);
-            }
-        }
+        Bm25Index idx = bm25();
+        List<String> toks = new ArrayList<>(new java.util.LinkedHashSet<>(tokens(query)));
         List<ObjectNode> hits = new ArrayList<>();
-        for (JsonNode sc : root()) {
-            String schema = txt(sc.get("schema"));
-            String sComment = txt(sc.get("comment"));
-            int ss = score(toks, schema, sComment, NAME_WEIGHT);
-            if (ss > 0) {
-                hits.add(match("schema", schema, null, null, null, sComment, ss));
+        for (Bm25Doc d : idx.docs) {
+            double sc = 0;
+            for (String t : toks) {
+                Double w = d.tf.get(t);
+                if (w == null) {
+                    continue;
+                }
+                double norm = BM25_K1 * (1 - BM25_B + BM25_B * d.length / idx.avgLength);
+                sc += idx.idf(t) * w * (BM25_K1 + 1) / (w + norm);
             }
-            for (JsonNode tb : sc.path("tables")) {
-                String table = txt(tb.get("name"));
-                String tType = tb.path("type").asText("table");
-                String tComment = txt(tb.get("comment"));
-                int ts = score(toks, schema + " " + table, tComment, NAME_WEIGHT);
-                if (ts > 0) {
-                    hits.add(match("table", schema, table, tType, null, tComment, ts));
-                }
-                for (JsonNode c : tb.path("columns")) {
-                    String col = txt(c.get("name"));
-                    String cComment = txt(c.get("comment"));
-                    // Score column on its own name + comment only, so a query token that
-                    // matches the table name doesn't drag in all of its columns. Weighted
-                    // lower than a schema/table match (see COLUMN_NAME_WEIGHT): a column
-                    // literally named "state" exists on dozens of unrelated tables across
-                    // this catalog, so its bare name matching one query token is much
-                    // weaker evidence of topical relevance than the table's own name or
-                    // comment actually describing the query's subject.
-                    int cs = score(toks, col, cComment, COLUMN_NAME_WEIGHT);
-                    if (cs > 0) {
-                        hits.add(match("column", schema, table, txt(c.get("type")), col, cComment, cs));
-                    }
-                }
+            if (sc > 0) {
+                ObjectNode h = match(d.kind, d.schema, d.table, d.type, d.column, d.comment, 0);
+                h.put("score", Math.round(sc * d.weight * 100) / 100.0);
+                hits.add(h);
             }
         }
-        hits.sort((a, b) -> Integer.compare(b.path("score").asInt(), a.path("score").asInt()));
+        hits.sort((x, y) -> Double.compare(y.path("score").asDouble(), x.path("score").asDouble()));
         ArrayNode arr = MAPPER.createArrayNode();
         for (ObjectNode h : hits) {
             arr.add(h);
@@ -601,38 +581,129 @@ final class Catalog {
         return arr;
     }
 
-    /** Full weight for a schema/table name match. */
-    private static final int NAME_WEIGHT = 10;
-
     /**
-     * Weight for a column name match — well below {@link #NAME_WEIGHT}. A bare column
-     * name is reused verbatim across dozens of unrelated tables in this catalog (e.g.
-     * "state", "year", "value"), so its exact match is far weaker evidence that a table
-     * is genuinely about the query's topic than the table's own name or comment saying
-     * so; scoring it the same let single-token column hits outrank a table whose
-     * name/comment actually described the query (search_catalog("campaign contributions
-     * by state") never surfacing any fec.* table).
+     * BM25 over the catalog: one document per schema, table and column, with a name field
+     * (boosted by {@link #NAME_BOOST}) and a description field. IDF makes a word that appears
+     * all over the catalog ("rate", "state", "year") count for little and a rare one
+     * ("unemployment", "eviction") for much; length normalization stops a long description
+     * winning on sheer size. The substring scorer this replaced weighted every word alike and
+     * ranked any table whose NAME held a word above a table whose description matched the
+     * whole query (measured 2026-11-07: "unemployment rate state monthly" never surfaced
+     * econ.regional_employment, whose description opens "Monthly state-level unemployment
+     * rate").
      */
-    private static final int COLUMN_NAME_WEIGHT = 3;
+    static final double BM25_K1 = 1.2;
+    static final double BM25_B = 0.75;
+    /** A name token counts this many times a description token. */
+    static final double NAME_BOOST = 3.0;
+    /**
+     * Column documents score at this fraction: a bare column name ("state", "year", "value")
+     * recurs across dozens of unrelated tables, so a column hit is weaker evidence that a table
+     * is about the query than the table's own name or description.
+     */
+    static final double COLUMN_DOC_WEIGHT = 0.5;
 
-    private static int score(List<String> toks, String name, String comment, int nameWeight) {
-        String n = name.toLowerCase(Locale.ROOT);
-        String c = comment.toLowerCase(Locale.ROOT);
-        int s = 0;
-        for (String tk : toks) {
-            if (tk.isEmpty()) {
-                continue;
+    private static final class Bm25Doc {
+        final String kind;
+        final String schema;
+        final String table;
+        final String column;
+        final String type;
+        final String comment;
+        final double weight;
+        final java.util.Map<String, Double> tf = new java.util.HashMap<>();
+        double length;
+
+        Bm25Doc(String kind, String schema, String table, String column, String type,
+                String name, String comment, double weight) {
+            this.kind = kind;
+            this.schema = schema;
+            this.table = table;
+            this.column = column;
+            this.type = type;
+            this.comment = comment;
+            this.weight = weight;
+            for (String t : tokens(name)) {
+                tf.merge(t, NAME_BOOST, Double::sum);
+                length += NAME_BOOST;
             }
-            if (n.equals(tk)) {
-                s += nameWeight;
-            } else if (n.contains(tk)) {
-                s += nameWeight / 2;
-            }
-            if (c.contains(tk)) {
-                s += 1;
+            for (String t : tokens(comment)) {
+                tf.merge(t, 1.0, Double::sum);
+                length += 1;
             }
         }
-        return s;
+    }
+
+    private static final class Bm25Index {
+        final List<Bm25Doc> docs = new ArrayList<>();
+        final java.util.Map<String, Integer> df = new java.util.HashMap<>();
+        double avgLength;
+
+        double idf(String t) {
+            int n = df.getOrDefault(t, 0);
+            return Math.log(1 + (docs.size() - n + 0.5) / (n + 0.5));
+        }
+    }
+
+    private static volatile Bm25Index bm25;
+
+    private static Bm25Index bm25() {
+        Bm25Index idx = bm25;
+        if (idx != null) {
+            return idx;
+        }
+        synchronized (Catalog.class) {
+            if (bm25 != null) {
+                return bm25;
+            }
+            idx = new Bm25Index();
+            for (JsonNode sc : root()) {
+                String schema = txt(sc.get("schema"));
+                idx.docs.add(new Bm25Doc("schema", schema, null, null, null, schema,
+                    txt(sc.get("comment")), 1.0));
+                for (JsonNode tb : sc.path("tables")) {
+                    String table = txt(tb.get("name"));
+                    idx.docs.add(new Bm25Doc("table", schema, table, null,
+                        tb.path("type").asText("table"), schema + " " + table,
+                        txt(tb.get("comment")), 1.0));
+                    for (JsonNode c : tb.path("columns")) {
+                        String col = txt(c.get("name"));
+                        idx.docs.add(new Bm25Doc("column", schema, table, col,
+                            txt(c.get("type")), col, txt(c.get("comment")), COLUMN_DOC_WEIGHT));
+                    }
+                }
+            }
+            double total = 0;
+            for (Bm25Doc d : idx.docs) {
+                total += d.length;
+                for (String t : d.tf.keySet()) {
+                    idx.df.merge(t, 1, Integer::sum);
+                }
+            }
+            idx.avgLength = idx.docs.isEmpty() ? 1 : total / idx.docs.size();
+            bm25 = idx;
+            return idx;
+        }
+    }
+
+    /** Lower-cased word tokens with stopwords dropped and plurals stemmed ("rates" -> "rate",
+     *  "counties" -> "county"); identifiers split at underscores. */
+    static List<String> tokens(String text) {
+        List<String> out = new ArrayList<>();
+        for (String raw : text.toLowerCase(Locale.ROOT).split("[^a-z0-9]+")) {
+            if (raw.isEmpty() || STOPWORDS.contains(raw)) {
+                continue;
+            }
+            String t = raw;
+            if (t.length() > 4 && t.endsWith("ies")) {
+                t = t.substring(0, t.length() - 3) + "y";
+            } else if (t.length() > 3 && t.endsWith("s") && !t.endsWith("ss")
+                    && !t.endsWith("us") && !t.endsWith("is")) {
+                t = t.substring(0, t.length() - 1);
+            }
+            out.add(t);
+        }
+        return out;
     }
 
     /** The table-kind result for {@code schema.table}, as keyword search would return it with a
