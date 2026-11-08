@@ -207,9 +207,31 @@ run_x_schema_if_needed() {
     # Embeddings follow the chunk sweep, as they do on run-pool.sh's own trigger. Without this the
     # explicit path ran the sweep and then skipped embeddings entirely. vss-local.sh bounds itself
     # (2h on weekdays, 20h on weekends; VSS_MAX_SECONDS overrides) and claims the box on its own.
-    echo "[$(ts)] running vss-local.sh backlog (embeddings, time-boxed)" | tee -a "$window_log"
-    bash "$SCRIPT_DIR/../vss-local.sh" backlog >> "$window_log" 2>&1 \
-      || log_error "WARNING: vss-local.sh backlog (end of daily window) failed — see $window_log"
+    if historical_is_complete; then
+      echo "[$(ts)] historical is complete: the time-boxed embed is replaced by continuous embedding at the end of the window" >> "$window_log"
+    else
+      echo "[$(ts)] running vss-local.sh backlog (embeddings, time-boxed)" | tee -a "$window_log"
+      bash "$SCRIPT_DIR/../vss-local.sh" backlog >> "$window_log" 2>&1 \
+        || log_error "WARNING: vss-local.sh backlog (end of daily window) failed — see $window_log"
+    fi
+  fi
+}
+
+# The conclusion of the latest historical pool, kept so a daily window (which does not run
+# historical itself) can read it: present = the last unscoped historical pool drained its queue
+# (exit 0); removed when a later historical pool ends any other way.
+HISTORICAL_COMPLETE_FILE="${HISTORICAL_COMPLETE_FILE:-$LOG_DIR/historical-complete}"
+
+historical_is_complete() { [ -f "$HISTORICAL_COMPLETE_FILE" ]; }
+
+record_historical_conclusion() {
+  local window_log="$1" pool_exit="$2"
+  if [ "$pool_exit" = "0" ]; then
+    date '+%Y-%m-%dT%H:%M:%S%z' > "$HISTORICAL_COMPLETE_FILE"
+    echo "[$(ts)] historical conclusion: complete (pool exit 0)" >> "$window_log"
+  else
+    rm -f "$HISTORICAL_COMPLETE_FILE"
+    echo "[$(ts)] historical conclusion: not complete (pool exit $pool_exit)" >> "$window_log"
   fi
 }
 
@@ -230,6 +252,35 @@ embed_continuous_decision() {
   else
     echo "run $(( window_end - now - margin ))"
   fi
+}
+
+# Daily window, after daily's pool, fill and x-schema have all finished: with historical complete,
+# embedding runs to the end of the window minus the yield margin. Same pure "run <s>"/"skip <why>" output.
+embed_daily_window_decision() {
+  local historical_complete="$1" now="$2" window_end="$3" margin="$4"
+  if [ "$historical_complete" != "true" ]; then
+    echo "skip historical not complete: the time-boxed embed after x-schema applies"
+  elif [ $(( window_end - now - margin )) -le 0 ]; then
+    echo "skip the window ends in $(( window_end - now ))s, inside the ${margin}s yield margin"
+  else
+    echo "run $(( window_end - now - margin ))"
+  fi
+}
+
+run_daily_window_embedding() {
+  local window_log="$1" window_end="$2"
+  local margin="${EMBED_YIELD_MARGIN_SECS:-600}" complete=false decision secs
+  historical_is_complete && complete=true
+  decision=$(embed_daily_window_decision "$complete" "$(date +%s)" "$window_end" "$margin")
+  echo "[$(ts)] continuous embedding decision (daily window): $decision" >> "$window_log"
+  case "$decision" in
+    run\ *)
+      secs="${decision#run }"
+      echo "[$(ts)] daily work finished, historical complete: embedding until $(fmt_epoch $(( $(date +%s) + secs )))" | tee -a "$window_log"
+      bash "$SCRIPT_DIR/../vss-local.sh" backlog --deadline $(( $(date +%s) + secs )) >> "$window_log" 2>&1 \
+        || log_error "WARNING: continuous vss-local.sh backlog (daily window) failed - see $window_log"
+      ;;
+  esac
 }
 
 run_continuous_embedding_if_historical_done() {
@@ -366,6 +417,8 @@ run_window() {
     ACTIVE_POOL_PID=""
     set -e
 
+    [ "$current" = "historical" ] && record_historical_conclusion "$window_log" "$EXIT_CODE"
+
     if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 2 ]; then
       # The pool drained its entire queue before the window elapsed. exit 0 = all
       # schemas OK; exit 2 = queue completed but some workers failed (run-pool.sh).
@@ -440,7 +493,10 @@ run_window() {
   # pool with 2 failed workers exited 2 and silently skipped x-schema, ~19h after its last real
   # run and climbing — the same trajectory as a 2026-09-15 incident (5+ days stale) that used to
   # be attributed only to window timeouts.
-  [ "$mode" = "daily" ] && run_x_schema_if_needed "$window_log"
+  if [ "$mode" = "daily" ]; then
+    run_x_schema_if_needed "$window_log"
+    run_daily_window_embedding "$window_log" "$window_end"
+  fi
 
   echo "[$(ts)] === $mode window complete ===" | tee -a "$window_log"
 }

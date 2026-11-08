@@ -29,6 +29,18 @@ VENV="${VSS_EMBED_VENV:-$GOVDATA_HOME/build/.venv-embed}"
 if [ -f "$GOVDATA_HOME/.env.prod" ]; then
   set -a; source "$GOVDATA_HOME/.env.prod"; set +a
 fi
+# GOVDATA_DQ=true overlays .env.dq (same as common.sh) and requires the target to be a -dq bucket;
+# the tracker namespace is derived from that bucket name, so a DQ run never touches production state.
+if [ "${GOVDATA_DQ:-}" = "true" ]; then
+  [ -f "$GOVDATA_HOME/.env.dq" ] || { echo "[vss-local] GOVDATA_DQ=true but $GOVDATA_HOME/.env.dq is missing" >&2; exit 1; }
+  set -a; source <(tr -d '\r' < "$GOVDATA_HOME/.env.dq"); set +a
+  [ -n "${GOVDATA_DQ_BUCKET:-}" ] || { echo "[vss-local] GOVDATA_DQ=true but GOVDATA_DQ_BUCKET is empty" >&2; exit 1; }
+  export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
+  case "$GOVDATA_PARQUET_DIR" in
+    s3://*-dq) ;;
+    *) echo "[vss-local] GOVDATA_DQ=true but target '$GOVDATA_PARQUET_DIR' does not end in -dq" >&2; exit 1 ;;
+  esac
+fi
 export GOVDATA_HOME
 
 # Ensure the embed venv exists AND carries its packages (idempotent). Testing for
@@ -78,20 +90,26 @@ POOL_BUDGET_FILE="$GOVDATA_HOME/scripts/parallel/runs/pool-budget.conf"
 # killed long-running remediation pools (the #911 sec_primary workers, 2026-10-09) that
 # nothing restarts.
 
+# VSS_NO_BUDGET_CLAIM=1 skips the claim and leaves pool-budget.conf untouched. It is for a run
+# against the DQ bucket while the production pool is running; the default claims the box.
 _vss_claim_exclusive_budget() {
-  _vss_prior_budget=""
-  [ -f "$POOL_BUDGET_FILE" ] && _vss_prior_budget=$(cat "$POOL_BUDGET_FILE")
-  _vss_restore_budget() {
-    if [ -n "$_vss_prior_budget" ]; then
-      echo "$_vss_prior_budget" > "$POOL_BUDGET_FILE"
-    else
-      rm -f "$POOL_BUDGET_FILE"
-    fi
-  }
-  trap _vss_restore_budget EXIT
-  _vss_total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
-  { echo "RESERVE_MB=$((_vss_total_mem_mb - 2000 - 5000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
-  echo "[vss-local] claimed pool budget (MAX_WORKERS=1, minimal ETL kept) — restored on exit"
+  if [ "${VSS_NO_BUDGET_CLAIM:-0}" = "1" ]; then
+    echo "[vss-local] VSS_NO_BUDGET_CLAIM=1 — pool budget not claimed, $POOL_BUDGET_FILE untouched"
+  else
+    _vss_prior_budget=""
+    [ -f "$POOL_BUDGET_FILE" ] && _vss_prior_budget=$(cat "$POOL_BUDGET_FILE")
+    _vss_restore_budget() {
+      if [ -n "$_vss_prior_budget" ]; then
+        echo "$_vss_prior_budget" > "$POOL_BUDGET_FILE"
+      else
+        rm -f "$POOL_BUDGET_FILE"
+      fi
+    }
+    trap _vss_restore_budget EXIT
+    _vss_total_mem_mb=$(free -m | awk '/^Mem:/{print $2}')
+    { echo "RESERVE_MB=$((_vss_total_mem_mb - 2000 - 5000))"; echo "MAX_WORKERS=1"; } > "$POOL_BUDGET_FILE"
+    echo "[vss-local] claimed pool budget (MAX_WORKERS=1, minimal ETL kept) — restored on exit"
+  fi
 
   # The unified backlog query needs real headroom and the right number depends on what the pool
   # is holding right now, so derive it from memory actually available at launch (after the claim,

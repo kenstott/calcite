@@ -16,6 +16,8 @@ fake() { # name exit-code
 ts() { echo "T"; }
 log_error() { echo "ERROR: $*" >> "$tmp/errors"; }
 SCRIPT_DIR="$tmp/scripts/parallel"
+HISTORICAL_COMPLETE_FILE="$tmp/historical-complete"
+eval "$(sed -n '/^historical_is_complete() /p' "$HERE/run-scheduled.sh")"
 eval "$(sed -n '/^run_x_schema_if_needed() {/,/^}/p' "$HERE/run-scheduled.sh")"
 
 : > "$tmp/calls"; fake x-schema 0; fake vss-local 0; : > "$tmp/w.log"
