@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.govdata.econ;
 
+import org.apache.calcite.adapter.file.etl.FetchResumeStore;
 import org.apache.calcite.adapter.file.etl.RequestContext;
 import org.apache.calcite.adapter.file.etl.RetryableHttp;
 import org.apache.calcite.adapter.file.etl.SharedHttpClient;
@@ -29,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -227,6 +229,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
           continue;
         }
         if (fetch.count >= cap) {
+          fetch.storeCapMarker();
           fetch.closeQuietly();
           if (all && reporter != null) {
             CAPPED_REPORTERS.add(reporter);
@@ -245,6 +248,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
           pending.push(new int[] {lo, mid});
           continue;
         }
+        fetch.store();
         current = new RecordIterator(fetch);
       }
     }
@@ -292,10 +296,17 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
     /** The response's {@code count}: records returned, which equals the cap when cut off. */
     long count = -1;
     private Path spool;
+    /** Where a forced reprocess keeps responses already fetched; null outside one. */
+    private final FetchResumeStore resume;
+    private final String resumeKey;
+    /** True when the open body came from {@link #resume} rather than from the source. */
+    private boolean fromResume;
 
     Fetch(RequestContext context, String url) {
       this.context = context;
       this.url = url;
+      this.resume = context.getResumeStore();
+      this.resumeKey = resume == null ? null : FetchResumeStore.keyFor(url);
       this.safeUrl = SecretRedaction.redact(url);
       this.reqHeaders = new LinkedHashMap<String, String>(context.getHeaders());
       this.reqHeaders.put("Accept", "application/json");
@@ -372,18 +383,52 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
       }
     }
 
-    private boolean openOnce() throws IOException {
+    /**
+     * Records the response just opened so a later run of the same forced reprocess replays it
+     * without calling the source. A response that was itself replayed is already stored.
+     */
+    void store() throws IOException {
+      if (resume != null && !fromResume && spool != null) {
+        resume.put(resumeKey, spool);
+      }
+    }
+
+    /**
+     * Records a cut-off response as a body that carries only its {@code count}: replaying it
+     * reports the cap again, so the split is repeated without downloading the discarded records
+     * a second time or keeping them in storage.
+     */
+    void storeCapMarker() throws IOException {
+      if (resume != null && !fromResume) {
+        resume.put(resumeKey,
+            ("{\"count\":" + count + ",\"data\":[]}").getBytes(StandardCharsets.UTF_8));
+      }
+    }
+
+    private void spoolBody() throws IOException {
+      spool = Files.createTempFile("comtrade-", ".json");
+      if (resume != null && resume.has(resumeKey)) {
+        fromResume = true;
+        try (InputStream in = resume.open(resumeKey)) {
+          Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return;
+      }
+      fromResume = false;
       CALLS.incrementAndGet();
       SharedHttpClient.Response conn =
           RetryableHttp.openWithRetry(url, reqHeaders, context.getRateLimit(), false);
       try {
-        spool = Files.createTempFile("comtrade-", ".json");
         try (InputStream in = conn.getInputStream()) {
           Files.copy(in, spool, StandardCopyOption.REPLACE_EXISTING);
         }
       } finally {
         conn.disconnect();
       }
+    }
+
+    private boolean openOnce() throws IOException {
+      spoolBody();
       parser = JSON_FACTORY.createParser(Files.newInputStream(spool));
       if (parser.nextToken() != JsonToken.START_OBJECT) {
         closeQuietly();
@@ -409,6 +454,7 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
           }
           // data present but null/empty object — no rows.
           if (arr == JsonToken.VALUE_NULL) {
+            store();
             closeQuietly();
             return false;
           }
@@ -428,6 +474,9 @@ public class ComtradeTransformer implements StreamingResponseTransformer {
             parser.skipChildren();
           }
         }
+      }
+      if (errorMessage == null) {
+        store();
       }
       closeQuietly();
       String dims = context.getDimensionValues().isEmpty()

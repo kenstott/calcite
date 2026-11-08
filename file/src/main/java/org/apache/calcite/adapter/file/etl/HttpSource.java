@@ -462,6 +462,7 @@ public class HttpSource implements DataSource {
           .headers(config.getHeaders())
           .dimensionValues(variables)
           .rateLimit(config.getRateLimit())
+          .resumeStore(resumeStore())
           .build();
       return ((StreamingResponseTransformer) responseTransformer).fetchAndTransform(ctx);
     }
@@ -3883,6 +3884,26 @@ public class HttpSource implements DataSource {
   }
 
   // --- Raw Response Caching (StorageProvider-based, with local filesystem optimization) ---
+
+  /**
+   * The store of already-fetched responses for a forced reprocess: present only when raw cache is
+   * enabled (it supplies the durable location) and the run discards committed state, which is when
+   * a stopped run would otherwise restart from its first request.
+   */
+  FetchResumeStore resumeStore() {
+    if (!bypassRawCache || !isRawCacheEnabled()) {
+      return null;
+    }
+    return new FetchResumeStore(storageProvider, rawCachePath + "/.resume");
+  }
+
+  /** Drops the stored responses of the forced run that has just committed. */
+  public void clearResumeStore() throws IOException {
+    FetchResumeStore store = resumeStore();
+    if (store != null) {
+      store.clear();
+    }
+  }
 
   /**
    * Checks if raw cache is enabled and available.
