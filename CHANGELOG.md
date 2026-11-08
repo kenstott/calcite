@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.126.0](https://github.com/kenstott/calcite/compare/engine-v0.125.0...engine-v0.126.0) (2026-11-08)
+
+
+### Features
+
+* **askamerica-engine:** a check of something not supplied asks for its text or an address ([47f30b0](https://github.com/kenstott/calcite/commit/47f30b0812875029c563a0388ea605443885d84b))
+* **askamerica-engine:** fact-check wording marks a validation; nothing to check gets "I don't see any claims" ([ea9774c](https://github.com/kenstott/calcite/commit/ea9774cd2664e83e3352acd31d72390f8a191743))
+* **govdata:** daily-window embedding runs continuously once historical is complete; DQ-safe vss-local.sh ([ee57557](https://github.com/kenstott/calcite/commit/ee575571ff86d862dc240ec2e2f194232a141f64))
+* **govdata:** embed continuously in the historical window once historical is complete ([5b31b71](https://github.com/kenstott/calcite/commit/5b31b71bb82d7211139ffa7aa44f66a95e8f5e5b))
+
+
+### Bug Fixes
+
+* **file/etl:** a forced Comtrade reprocess resumes across the daily quota from stored responses ([4de463e](https://github.com/kenstott/calcite/commit/4de463e375423031157d73dbb1969acfadcf7cf8))
+* **file/etl:** clear the forced-run response store on object storage ([076de37](https://github.com/kenstott/calcite/commit/076de377d55dc32897bbc63a7a1aaedd9cde748d))
+* **govdata:** list IURSA in fred_indicators' series Codes section ([129e9db](https://github.com/kenstott/calcite/commit/129e9db61a671ad0bd35726e1671a00d0bcfb131))
+* **govdata:** snap_benefits_by_geography reads the current USDA zip from the landing page ([72cdeaf](https://github.com/kenstott/calcite/commit/72cdeaf6968ae6324d082b748a3b1814a981c7a1))
+* **pgwire-calcite:** resolve fun tokens by fun name so BigQuery no longer breaks describe_table ([5db73b4](https://github.com/kenstott/calcite/commit/5db73b4e941cfc404fb7f36c51fe0af9907dcd62))
+* **pgwire-govdata:** regenerate the catalog cache with the 11 tables the release check found missing ([b061fc6](https://github.com/kenstott/calcite/commit/b061fc6f2f3da50fb2cfe7acdd5058797b084055))
+
 ## [0.125.0](https://github.com/kenstott/calcite/compare/engine-v0.124.0...engine-v0.125.0) (2026-11-08)
 
 
