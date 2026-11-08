@@ -94,7 +94,7 @@ jobs:
           adapters = json.load(open("pgwire-calcite/packaging/adapters.json"))
           platforms = [
               {"runner": "ubuntu-latest", "variant": "linux-x86_64"},
-              {"runner": "macos-14", "variant": "macos-arm64"},
+              {"runner": "macos-15", "variant": "macos-arm64"},
               {"runner": "windows-latest", "variant": "windows-x86_64"},
           ]
           if scope == "linux-file-govdata":
