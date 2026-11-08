@@ -4589,6 +4589,8 @@ public class McpServer {
                     // rendering of a report that passed every preview_report gate, never a way
                     // around them.
                     boolean asArtifact = "create_report_artifact".equals(name);
+                    // A new attempt supersedes any earlier pass until it passes too.
+                    REPORT_PASSED_QC = false;
                     String rTitle = args.path("title").asText(null);
                     String rSub = args.has("subtitle") && !args.get("subtitle").isNull()
                         ? args.get("subtitle").asText() : null;
@@ -4810,6 +4812,7 @@ public class McpServer {
                         }
                         throw new IllegalArgumentException(combined.toString());
                     }
+                    REPORT_PASSED_QC = true;
                     MARKETS.resetSearch();
                     MARKET_VIEW.reset();
                     ReportPage.Section appendix = queryAppendix();
@@ -6820,7 +6823,20 @@ public class McpServer {
         return dir;
     }
 
+    /** True once the latest preview_report / create_report_artifact attempt passed every gate.
+     *  deliver_report records an eval answer only then, so the eval never scores a draft the
+     *  product itself would refuse to publish. Measured 2026-11-08 (q6): deliver_report ran one
+     *  second after a refused preview, no preview ever passed, and the judged agent.md was the
+     *  pre-QC draft. */
+    static volatile boolean REPORT_PASSED_QC = false;
+
     private static String deliverReport(String runSubpath, String markdown) throws Exception {
+        if (!REPORT_PASSED_QC) {
+            throw new IllegalArgumentException("deliver_report refused: the latest preview_report "
+                + "or create_report_artifact has not passed QC. Fix every issue it listed, call "
+                + "preview_report again until it passes, then call deliver_report with the "
+                + "verdict that passed.");
+        }
         java.io.File dir = resolveEvalRunDir(runSubpath);
         java.io.File agentMd = new java.io.File(dir, "agent.md");
         java.nio.file.Files.write(agentMd.toPath(),
