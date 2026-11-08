@@ -1194,6 +1194,16 @@ FROM (SELECT COUNT(*) AS bad FROM (
         SELECT year, COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
         GROUP BY year HAVING COUNT(*) < 150));
 
+-- fred_indicators: PK (series, date) must be unique
+INSERT INTO dq_results
+SELECT 'econ', 'fred_indicators', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (series, date) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT series, date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true)
+        GROUP BY series, date HAVING COUNT(*) > 1));
+
 -- PK (series, year) must be unique
 INSERT INTO dq_results
 SELECT 'econ', 'state_occupation_employment', 'pk_duplicates',
