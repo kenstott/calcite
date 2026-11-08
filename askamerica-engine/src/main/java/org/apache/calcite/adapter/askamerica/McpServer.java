@@ -810,6 +810,12 @@ public class McpServer {
             // get_help tool's description instead (see QuestionGuidance.HELP_TEXT).
 
             + "## VALIDATING AN ARTICLE OR A CLAIM\n\n"
+            + "**A request to check something with nothing checkable in it gets no research and "
+            + "no report.** When the user asks you to verify, validate, check, confirm, "
+            + "fact-check, debunk or prove something but gives no factual assertion to test — "
+            + "'validate my feelings', 'verify the book' with no claim from it quoted or named — "
+            + "reply \"I don't see any claims to <verb>.\" using their verb (\"I don't see any "
+            + "claims to verify.\"), and ask which assertion they want checked.\n\n"
             + "When the user hands you a URL, a pasted article, or a quoted passage and asks "
             + "whether it holds up — 'validate this', 'fact-check this', 'is this true', 'is this "
             + "accurate', 'verify this', 'check this article', 'debunk this', 'true or false', "
@@ -7983,6 +7989,22 @@ public class McpServer {
         }
     }
 
+    /** Wording that marks a report as a validation of an article or release even when no URL
+     *  is given. */
+    private static final java.util.regex.Pattern VALIDATION_WORDING =
+        java.util.regex.Pattern.compile(
+            "(?i)\\b(?:fact[- ]?check\\w*|pinocchio\\w*|debunk\\w*|validat(?:e|es|ed|ing|ion))\\b");
+    /** The base verb of a validation word, for the "nothing to check" answer. */
+    static String checkVerb(String word) {
+        String w = word.toLowerCase(java.util.Locale.ROOT);
+        if (w.startsWith("fact")) {
+            return "fact-check";
+        }
+        if (w.startsWith("debunk")) {
+            return "debunk";
+        }
+        return "validate";
+    }
     private static final java.util.regex.Pattern QUESTION_URL =
         java.util.regex.Pattern.compile("https?://\\S+");
 
@@ -7990,27 +8012,43 @@ public class McpServer {
      *  without a non-empty {@code claims} array has no claims table and no engine-computed
      *  honesty or bias scores. The article is named by {@code source_url} or, when the caller
      *  left that out, by a URL in the restated question ({@code question_coverage.question}),
-     *  so omitting {@code source_url} cannot sidestep the requirement. Refuse with the
-     *  required shape. */
+     *  so omitting {@code source_url} cannot sidestep the requirement. Validation wording
+     *  (fact-check, Pinocchio, debunk, validate) in the question or title also marks one, since
+     *  a caller that drops both the URL and {@code source_url} would otherwise publish an
+     *  ungraded fact-check past every claim gate. Refuse with the required shape. */
     private static String enforceValidationHasClaims(JsonNode args) {
         String srcUrl = args.path("source_url").asText(null);
         boolean hasSourceUrl = srcUrl != null && !srcUrl.trim().isEmpty();
         String question = args.path("question_coverage").path("question").asText("");
         boolean questionNamesUrl = QUESTION_URL.matcher(question).find();
-        if (!hasSourceUrl && !questionNamesUrl) {
+        String title = args.path("title").asText("");
+        java.util.regex.Matcher wording = VALIDATION_WORDING.matcher(question);
+        String wordingIn = "question";
+        if (!wording.find()) {
+            wording = VALIDATION_WORDING.matcher(title);
+            wordingIn = wording.find() ? "title" : null;
+        }
+        if (!hasSourceUrl && !questionNamesUrl && wordingIn == null) {
             return null;
         }
         String named = hasSourceUrl
             ? "`source_url` names an article under review"
-            : "the question names a URL, so this is an article validation, and `source_url` "
-                + "(the article's exact URL) is also missing";
+            : questionNamesUrl
+                ? "the question names a URL, so this is an article validation, and `source_url` "
+                    + "(the article's exact URL) is also missing"
+                : "the " + wordingIn + " says \"" + wording.group() + "\", so this is an article "
+                    + "validation, and `source_url` (the article's exact URL) is also missing";
         return "validation refused: " + named + " but `claims` is "
             + "missing or empty. Put every graded assertion in the structured `claims` array "
             + "(not only in report sections): each claim needs `group` (`fidelity`, "
             + "`author_claims` or `subject_claims`), `speaker` on every `subject_claims` entry, "
             + "and `rests_on` (1-based claim numbers offered as evidence, [] when none). The "
             + "engine computes the honesty and bias scores from these fields. Call again with "
-            + "the `claims` array" + (hasSourceUrl ? "." : " and `source_url`.");
+            + "the `claims` array" + (hasSourceUrl ? "." : " and `source_url`.")
+            + (hasSourceUrl || questionNamesUrl ? "" : " If the request names no article and "
+                + "makes no checkable factual claim (e.g. \"validate my feelings\"), there is "
+                + "nothing to check: do not publish, and tell the user \"I don't see any "
+                + "claims to " + checkVerb(wording.group()) + ".\"");
     }
 
     /** A validation with no {@code source_url} publishes a report the browser extension can

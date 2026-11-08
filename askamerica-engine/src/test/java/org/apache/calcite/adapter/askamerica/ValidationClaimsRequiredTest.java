@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,6 +48,72 @@ class ValidationClaimsRequiredTest {
         String msg = enforce(args);
         assertNotNull(msg);
         assertTrue(msg.contains("source_url") && msg.contains("rests_on"));
+    }
+
+    @Test void factCheckWordingInQuestionWithoutUrlIsRefused() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.putObject("question_coverage")
+            .put("question", "Fact-check the White House release on manufacturing jobs");
+        String msg = enforce(args);
+        assertNotNull(msg);
+        assertTrue(msg.contains("Fact-check") && msg.contains("source_url")
+            && msg.contains("claims"));
+    }
+
+    @Test void pinocchioTitleWithoutUrlIsRefused() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("title", "Overdose deaths: 1 Pinocchio");
+        args.putObject("question_coverage").put("question", "Are overdose deaths rising?");
+        String msg = enforce(args);
+        assertNotNull(msg);
+        assertTrue(msg.contains("title") && msg.contains("Pinocchio")
+            && msg.contains("source_url"));
+    }
+
+    @Test void validateAndDebunkWordingIsRefused() throws Exception {
+        for (String q : new String[] {"Validate this claim about rents",
+            "Debunk the viral post on tariffs", "Is this a validation of the jobs story?"}) {
+            ObjectNode args = MAPPER.createObjectNode();
+            args.putObject("question_coverage").put("question", q);
+            assertNotNull(enforce(args), q);
+        }
+    }
+
+    @Test void validationWithNothingToCheckIsToldThereAreNoClaims() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.putObject("question_coverage").put("question", "Validate my feelings");
+        String msg = enforce(args);
+        assertNotNull(msg);
+        assertTrue(msg.contains("I don't see any claims to validate."));
+    }
+
+    @Test void noClaimsAnswerUsesTheUsersVerb() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.putObject("question_coverage").put("question", "Debunk my horoscope");
+        assertTrue(enforce(args).contains("I don't see any claims to debunk."));
+        args.putObject("question_coverage").put("question", "Fact-checking my diary please");
+        assertTrue(enforce(args).contains("I don't see any claims to fact-check."));
+    }
+
+    @Test void instructionsTellTheModelToSayThereIsNothingToCheck() throws Exception {
+        String text = McpServer.handleInitialize(null).toString();
+        assertTrue(text.contains("verify the book")
+            && text.contains("I don't see any claims to verify."));
+    }
+
+    @Test void articleValidationIsNotOfferedTheNoClaimsAnswer() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("source_url", "https://example.com/article");
+        args.putObject("question_coverage").put("question", "Fact-check this article");
+        assertFalse(enforce(args).contains("I don't see any claims"));
+    }
+
+    @Test void ordinaryQuestionAndTitlePass() throws Exception {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("title", "Rent burden by state, 2024");
+        args.putObject("question_coverage")
+            .put("question", "Which states have the highest rent burden? Check the trend.");
+        assertNull(enforce(args));
     }
 
     @Test void generalReportWithoutSourceUrlPasses() throws Exception {
