@@ -267,4 +267,35 @@ class FredResponseTransformerTest {
     assertTrue(result.contains("2024-01-01"));
     assertTrue(result.contains("2024-04-01"));
   }
+
+  private static RequestContext monthContext(String year, String month) {
+    Map<String, String> dims = new HashMap<>();
+    dims.put("effective_year", year);
+    dims.put("month", month);
+    return RequestContext.builder()
+        .url("https://api.stlouisfed.org/fred/series/observations")
+        .dimensionValues(dims)
+        .variables(dims)
+        .build();
+  }
+
+  @Test void testMonthBatchKeepsOnlyObservationsDatedInThatMonth() {
+    // FRED returns the quarterly observation dated 2019-01-01 for a February window too.
+    String response = "{\"observations\": [{\"date\": \"2019-01-01\", \"value\": \"21001.6\"}]}";
+
+    assertEquals("[]", transformer.transform(response, monthContext("2019", "02")));
+    assertEquals("[]", transformer.transform(response, monthContext("2019", "03")));
+    String january = transformer.transform(response, monthContext("2019", "01"));
+    assertTrue(january.contains("2019-01-01"));
+  }
+
+  @Test void testMonthBatchKeepsAllObservationsOfAWeeklySeries() {
+    String response = "{\"observations\": ["
+        + "{\"date\": \"2024-03-02\", \"value\": \"1\"},"
+        + "{\"date\": \"2024-03-09\", \"value\": \"2\"}]}";
+
+    String result = transformer.transform(response, monthContext("2024", "03"));
+    assertTrue(result.contains("2024-03-02"));
+    assertTrue(result.contains("2024-03-09"));
+  }
 }

@@ -15,6 +15,7 @@ import org.apache.calcite.adapter.file.etl.ResponseTransformer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -202,6 +203,9 @@ public class FredResponseTransformer implements ResponseTransformer {
           LOGGER.debug("FRED: Empty {} array for {}", field, context.getUrl());
           return "[]";
         }
+        if ("observations".equals(field)) {
+          data = restrictToRequestedMonth(data, context);
+        }
         LOGGER.debug("FRED: Extracted {} {} records", data.size(), field);
         return data.toString();
       }
@@ -227,6 +231,32 @@ public class FredResponseTransformer implements ResponseTransformer {
 
     // Return the whole response as-is for caller to handle
     return response(root);
+  }
+
+  /**
+   * Keeps only the observations dated inside the requested (year, month) partition.
+   *
+   * <p>FRED filters {@code observation_start}/{@code observation_end} by observation period,
+   * not by date: a quarterly or annual observation is returned for every window that falls
+   * inside the period it covers (a February window returns the observation dated January 1 of
+   * a quarterly series). Each (series, year, month) batch owns exactly one month partition, so
+   * an observation dated outside that month belongs to another batch and is not written here.
+   * Requests that carry no month dimension are returned unchanged.
+   */
+  private static JsonNode restrictToRequestedMonth(JsonNode observations, RequestContext context) {
+    String month = context.getDimensionValues().get("month");
+    String year = context.getDimensionValues().get("effective_year");
+    if (month == null || year == null) {
+      return observations;
+    }
+    String prefix = year + "-" + month + "-";
+    ArrayNode kept = MAPPER.createArrayNode();
+    for (JsonNode obs : observations) {
+      if (obs.path("date").asText("").startsWith(prefix)) {
+        kept.add(obs);
+      }
+    }
+    return kept;
   }
 
   /**
