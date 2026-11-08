@@ -79,33 +79,32 @@ class ValidationClaimsRequiredTest {
         }
     }
 
-    @Test void validationWithNothingToCheckIsToldThereAreNoClaims() throws Exception {
+    @Test void feelingsAreAskedForAsTextOrAnAddress() throws Exception {
         ObjectNode args = MAPPER.createObjectNode();
         args.putObject("question_coverage").put("question", "Validate my feelings");
-        String msg = enforce(args);
-        assertNotNull(msg);
-        assertTrue(msg.contains("I don't see any claims to validate."));
+        assertTrue(enforce(args).contains("Provide me the text of your <thing>, or an address I can download it from."));
     }
 
-    @Test void noClaimsAnswerUsesTheUsersVerb() throws Exception {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.putObject("question_coverage").put("question", "Debunk my horoscope");
-        assertTrue(enforce(args).contains("I don't see any claims to debunk."));
-        args.putObject("question_coverage").put("question", "Fact-checking my diary please");
-        assertTrue(enforce(args).contains("I don't see any claims to fact-check."));
+    @Test void unreachableDocumentIsAskedForAsTextOrAnAddress() throws Exception {
+        for (String q : new String[] {"Debunk my horoscope", "Fact-checking my diary please"}) {
+            ObjectNode args = MAPPER.createObjectNode();
+            args.putObject("question_coverage").put("question", q);
+            assertTrue(enforce(args).contains("Provide me the text of your <thing>, or an address I can download it from."), q);
+        }
     }
 
-    @Test void instructionsTellTheModelToSayThereIsNothingToCheck() throws Exception {
+    @Test void instructionsAskForTheTextOrAnAddress() throws Exception {
         String text = McpServer.handleInitialize(null).toString();
-        assertTrue(text.contains("verify the book")
-            && text.contains("I don't see any claims to verify."));
+        assertTrue(text.contains("debunk my horoscope") && text.contains("validate my feelings")
+            && text.contains("Provide me the text of your <thing>, or an address I can download it from."));
     }
 
-    @Test void articleValidationIsNotOfferedTheNoClaimsAnswer() throws Exception {
+    @Test void articleValidationIsNotAskedForTheText() throws Exception {
         ObjectNode args = MAPPER.createObjectNode();
         args.put("source_url", "https://example.com/article");
         args.putObject("question_coverage").put("question", "Fact-check this article");
-        assertFalse(enforce(args).contains("I don't see any claims"));
+        String msg = enforce(args);
+        assertFalse(msg.contains("Provide me the text"));
     }
 
     @Test void ordinaryQuestionAndTitlePass() throws Exception {

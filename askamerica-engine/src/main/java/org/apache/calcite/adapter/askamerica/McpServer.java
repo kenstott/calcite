@@ -810,12 +810,13 @@ public class McpServer {
             // get_help tool's description instead (see QuestionGuidance.HELP_TEXT).
 
             + "## VALIDATING AN ARTICLE OR A CLAIM\n\n"
-            + "**A request to check something with nothing checkable in it gets no research and "
-            + "no report.** When the user asks you to verify, validate, check, confirm, "
-            + "fact-check, debunk or prove something but gives no factual assertion to test — "
-            + "'validate my feelings', 'verify the book' with no claim from it quoted or named — "
-            + "reply \"I don't see any claims to <verb>.\" using their verb (\"I don't see any "
-            + "claims to verify.\"), and ask which assertion they want checked.\n\n"
+            + "**A request to check something that is not in front of you gets no research and "
+            + "no report until you have it.** When the user asks you to verify, validate, check, "
+            + "confirm, fact-check, debunk or prove something — a book, a horoscope, a post, a "
+            + "speech, their feelings — and does not include it: open it when you can reach it (a "
+            + "link, or a public document you can find with web_search and read with web_fetch). "
+            + "When you cannot ('debunk my horoscope', 'validate my feelings'), reply \"Provide "
+            + "me the text of your <thing>, or an address I can download it from.\"\n\n"
             + "When the user hands you a URL, a pasted article, or a quoted passage and asks "
             + "whether it holds up — 'validate this', 'fact-check this', 'is this true', 'is this "
             + "accurate', 'verify this', 'check this article', 'debunk this', 'true or false', "
@@ -7994,17 +7995,6 @@ public class McpServer {
     private static final java.util.regex.Pattern VALIDATION_WORDING =
         java.util.regex.Pattern.compile(
             "(?i)\\b(?:fact[- ]?check\\w*|pinocchio\\w*|debunk\\w*|validat(?:e|es|ed|ing|ion))\\b");
-    /** The base verb of a validation word, for the "nothing to check" answer. */
-    static String checkVerb(String word) {
-        String w = word.toLowerCase(java.util.Locale.ROOT);
-        if (w.startsWith("fact")) {
-            return "fact-check";
-        }
-        if (w.startsWith("debunk")) {
-            return "debunk";
-        }
-        return "validate";
-    }
     private static final java.util.regex.Pattern QUESTION_URL =
         java.util.regex.Pattern.compile("https?://\\S+");
 
@@ -8045,10 +8035,10 @@ public class McpServer {
             + "and `rests_on` (1-based claim numbers offered as evidence, [] when none). The "
             + "engine computes the honesty and bias scores from these fields. Call again with "
             + "the `claims` array" + (hasSourceUrl ? "." : " and `source_url`.")
-            + (hasSourceUrl || questionNamesUrl ? "" : " If the request names no article and "
-                + "makes no checkable factual claim (e.g. \"validate my feelings\"), there is "
-                + "nothing to check: do not publish, and tell the user \"I don't see any "
-                + "claims to " + checkVerb(wording.group()) + ".\"");
+            + (hasSourceUrl || questionNamesUrl ? "" : " If what the user asked you to check "
+                + "is not in front of you and you cannot reach it (e.g. \"debunk my horoscope\", "
+                + "\"validate my feelings\"), do not publish: tell the user \"Provide me the text "
+                + "of your <thing>, or an address I can download it from.\"");
     }
 
     /** A validation with no {@code source_url} publishes a report the browser extension can
