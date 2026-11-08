@@ -447,6 +447,113 @@ final class Catalog {
 
     /** Keyword search across schema/table/column names + descriptions; ranked, capped. */
     static ArrayNode search(String query, int limit) {
+        ArrayNode all = searchAll(query);
+        ArrayNode arr = MAPPER.createArrayNode();
+        for (int i = 0; i < all.size() && i < limit; i++) {
+            arr.add(all.get(i));
+        }
+        return arr;
+    }
+
+    /**
+     * Every table and every commented column, as {@code {kind, schema, table, column, type,
+     * comment, text, piece}} in catalog order, where {@code text} is what gets embedded: the
+     * table (and column) name in words, then the description. A long table description is
+     * split into several entries, {@code piece} "" for the first and "#1", "#2" ... after. Uncommented columns are left out: a
+     * bare name like "state" or "year" says nothing a similarity search could use.
+     */
+    static List<String[]> embeddableEntries() {
+        List<String[]> out = new ArrayList<>();
+        for (JsonNode sc : root()) {
+            String schema = txt(sc.get("schema"));
+            for (JsonNode tb : sc.path("tables")) {
+                String table = txt(tb.get("name"));
+                String tComment = txt(tb.get("comment"));
+                List<String> chunks = chunk(tComment, CHUNK_CHARS);
+                for (int ci = 0; ci < chunks.size(); ci++) {
+                    out.add(new String[]{"table", schema, table, "",
+                        tb.path("type").asText("table"), tComment,
+                        words(table) + ": " + chunks.get(ci), ci == 0 ? "" : "#" + ci});
+                }
+                for (JsonNode c : tb.path("columns")) {
+                    String cComment = txt(c.get("comment"));
+                    if (cComment.trim().isEmpty()) {
+                        continue;
+                    }
+                    String col = txt(c.get("name"));
+                    out.add(new String[]{"column", schema, table, col, txt(c.get("type")),
+                        cComment, words(table) + " " + words(col) + ": " + cComment, ""});
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Target size of one embedded piece of a long table description. */
+    static final int CHUNK_CHARS = 600;
+
+    /**
+     * A description split at sentence ends into pieces of about {@code size} characters. A long
+     * description that covers dozens of series embeds as an average of all of them and matches
+     * none well (econ.fred_indicators lists ~60 series); its pieces each stay specific.
+     */
+    static List<String> chunk(String text, int size) {
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        for (String sentence : text.split("(?<=[.;:])\\s+")) {
+            if (cur.length() > 0 && cur.length() + sentence.length() + 1 > size) {
+                out.add(cur.toString());
+                cur.setLength(0);
+            }
+            if (cur.length() > 0) {
+                cur.append(' ');
+            }
+            cur.append(sentence);
+        }
+        if (cur.length() > 0 || out.isEmpty()) {
+            out.add(cur.toString());
+        }
+        return out;
+    }
+
+    private static String words(String identifier) {
+        return identifier.replace('_', ' ');
+    }
+
+    /**
+     * Up to {@code max} catalog places ({@code schema.table} or {@code schema.table.column})
+     * whose name or description contains {@code term}, lower-cased. Empty means nothing in the
+     * whole catalog carries the word.
+     */
+    static List<String> locate(String term, int max) {
+        String t = term.toLowerCase(Locale.ROOT);
+        List<String> out = new ArrayList<>();
+        for (JsonNode sc : root()) {
+            String schema = txt(sc.get("schema"));
+            for (JsonNode tb : sc.path("tables")) {
+                String table = txt(tb.get("name"));
+                if ((table + " " + txt(tb.get("comment"))).toLowerCase(Locale.ROOT).contains(t)) {
+                    out.add(schema + "." + table);
+                } else {
+                    for (JsonNode c : tb.path("columns")) {
+                        String col = txt(c.get("name"));
+                        if ((col + " " + txt(c.get("comment"))).toLowerCase(Locale.ROOT)
+                                .contains(t)) {
+                            out.add(schema + "." + table + "." + col);
+                            break;
+                        }
+                    }
+                }
+                if (out.size() >= max) {
+                    return out;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** {@link #search} without the cap: every hit, best first. */
+    static ArrayNode searchAll(String query) {
         List<String> toks = new ArrayList<>();
         for (String tk : query.toLowerCase(Locale.ROOT).split("\\s+")) {
             if (!tk.isEmpty() && !STOPWORDS.contains(tk)) {
@@ -488,11 +595,7 @@ final class Catalog {
         }
         hits.sort((a, b) -> Integer.compare(b.path("score").asInt(), a.path("score").asInt()));
         ArrayNode arr = MAPPER.createArrayNode();
-        int n = 0;
         for (ObjectNode h : hits) {
-            if (n++ >= limit) {
-                break;
-            }
             arr.add(h);
         }
         return arr;
@@ -532,7 +635,22 @@ final class Catalog {
         return s;
     }
 
-    private static ObjectNode match(String kind, String schema, String table,
+    /** The table-kind result for {@code schema.table}, as keyword search would return it with a
+     *  score of 0; when the catalog has no such table, a bare node naming it. */
+    static ObjectNode tableMatch(String schema, String table) {
+        JsonNode sc = schemaNode(schema);
+        if (sc != null) {
+            for (JsonNode tb : sc.path("tables")) {
+                if (table.equalsIgnoreCase(txt(tb.get("name")))) {
+                    return match("table", txt(sc.get("schema")), txt(tb.get("name")),
+                        tb.path("type").asText("table"), null, txt(tb.get("comment")), 0);
+                }
+            }
+        }
+        return match("table", schema, table, null, null, null, 0);
+    }
+
+    static ObjectNode match(String kind, String schema, String table,
             String type, String column, String comment, int score) {
         ObjectNode o = MAPPER.createObjectNode();
         o.put("kind", kind);

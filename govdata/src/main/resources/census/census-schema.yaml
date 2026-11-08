@@ -4671,12 +4671,15 @@ partitionedTables:
       district, one row per vintage year x district: total population, median household
       income, per capita income, median age, unemployment rate, poverty rate, share aged 65
       and over, bachelor's degree or higher, foreign-born share, home ownership, median rent
-      and home value, and housing cost burden (renters and mortgaged owners paying 30 percent
-      or more of income on housing). Counts come with derived percentages (the _pct columns;
+      and home value, and housing cost burden: rent burden (rent-burdened or cost-burdened renter
+      households paying 30 percent or more of income on gross rent, ACS B25070 gross rent as a
+      percentage of household income) and mortgaged owners paying 30 percent or more of income
+      on housing. Counts come with derived percentages (the _pct columns;
       NULL when the denominator is zero). It is a survey, so every figure is a sample estimate
       (margins of error are not loaded) and medians are NULL where the Census suppresses
       them. Covers the 435 voting districts plus the non-voting delegates (district 98:
-      District of Columbia and Puerto Rico) for each vintage from 2012; the placeholder rows
+      District of Columbia and Puerto Rico; the D.C. row is the whole District, so it gives
+      citywide figures for Washington, D.C.) for each vintage from 2012; the placeholder rows
       the API returns for states whose districts are not defined in a vintage (Connecticut,
       Illinois, Michigan and New Hampshire in some years) are not stored. year is the last year of the
       5-year ACS window (year 2022 = ACS 2018-2022). District lines change at redistricting,
@@ -4854,17 +4857,26 @@ partitionedTables:
         type: long
         nullable: true
         expression: 'COALESCE(TRY_CAST(src."B25070_007E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_008E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_009E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_010E" AS BIGINT),0)'
-        comment: Renter households paying 30 percent or more of income on gross rent (B25070_007-010)
+        comment: >
+          Rent-burdened (cost-burdened) renter households: those paying 30 percent or more
+          of household income on gross rent, from ACS table B25070 Gross Rent as a Percentage
+          of Household Income in the Past 12 Months (GRAPI), lines 007-010
       - name: renters_severely_burdened
         type: long
         nullable: true
         expression: 'TRY_CAST(src."B25070_010E" AS BIGINT)'
-        comment: Renter households paying 50 percent or more of income on gross rent (B25070_010)
+        comment: >
+          Severely rent-burdened renter households: those paying 50 percent or more of
+          household income on gross rent (ACS B25070 GRAPI, line 010)
       - name: renter_cost_burden_pct
         type: double
         nullable: true
         expression: 'CASE WHEN (TRY_CAST(src."B25070_001E" AS BIGINT) - COALESCE(TRY_CAST(src."B25070_011E" AS BIGINT),0)) > 0 THEN 100.0 * (COALESCE(TRY_CAST(src."B25070_007E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_008E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_009E" AS BIGINT),0)+COALESCE(TRY_CAST(src."B25070_010E" AS BIGINT),0)) / (TRY_CAST(src."B25070_001E" AS BIGINT) - COALESCE(TRY_CAST(src."B25070_011E" AS BIGINT),0)) END'
-        comment: Renters paying 30 percent or more of income on rent, as a percent of renter households with a computed burden (excludes B25070_011 not computed)
+        comment: >
+          Rent burden rate: the percent of renter households that are rent-burdened, paying
+          30 percent or more of household income on gross rent (ACS B25070 GRAPI), out of renter
+          households whose burden is computed (B25070_011, not computed, is excluded). For
+          the District of Columbia the delegate district (district 98) is the whole city.
       - name: mortgaged_owner_households
         type: long
         nullable: true

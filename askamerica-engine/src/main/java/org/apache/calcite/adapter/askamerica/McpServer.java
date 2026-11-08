@@ -436,6 +436,7 @@ public class McpServer {
                 log.println("[askamerica-mcp] All schemas mounted in "
                     + (System.currentTimeMillis() - t0) + "ms via shared pgwire-govdata ("
                     + PgwireGovDataConnector.describeTarget() + ")");
+                startCatalogVectors();
             } catch (Throwable e) {
                 log.println("[askamerica-mcp] Schema warm-up failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -5752,6 +5753,154 @@ public class McpServer {
      * The first case is now rejected before reaching here; the second says so; and a genuine
      * miss names the fallback that does work.
      */
+    /** Where the catalog's description vectors are cached between runs. */
+    static java.io.File catalogVectorsFile() {
+        return new java.io.File(new java.io.File(System.getProperty("user.home"), ".askamerica"),
+            "catalog-vectors.bin");
+    }
+
+    /** Starts (or resumes, after a failure) building the catalog similarity index. */
+    private static void startCatalogVectors() {
+        CatalogVectors.start((sql, limit) -> runSqlRows(sql, limit), catalogVectorsFile(), log);
+    }
+
+    /** Reciprocal-rank-fusion constant: how much a top rank in one list outweighs the other. */
+    static final int FUSION_K = 60;
+    /** Similarity hits considered per search. */
+    static final int SIMILARITY_DEPTH = 50;
+
+    /**
+     * Merges the keyword ranking with the similarity ranking by reciprocal rank fusion: each
+     * entry scores 1/(FUSION_K + rank) in each list it appears in. An entry both searches put
+     * near the top beats one only a keyword happened to hit (a table named *_renters for a
+     * rent-burden question). Each result keeps its keyword {@code score}; similarity hits also
+     * carry {@code similarity}, the cosine.
+     */
+    static ArrayNode fuse(ArrayNode keyword, java.util.List<CatalogVectors.Hit> similar,
+            int limit) {
+        // Each entry (a table, a piece of a long table description, a column, a schema)
+        // scores 1/(FUSION_K + rank) in each list it is in, summed. A table's score is its best
+        // entry plus decayed credit for its next two (GROUP_DECAY): corroboration from more of
+        // its descriptions helps, but a wide table cannot win on the sheer number of loosely
+        // matching columns. Results are tables, with their matching columns attached, so one
+        // table's columns cannot fill several slots.
+        java.util.Map<String, Double> entryScore = new java.util.HashMap<>();
+        java.util.Map<String, ObjectNode> entryNode = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Double> entryCosine = new java.util.HashMap<>();
+        for (int i = 0; i < keyword.size(); i++) {
+            ObjectNode n = (ObjectNode) keyword.get(i);
+            String k = groupOf(n) + "|" + n.path("column").asText("");
+            entryNode.putIfAbsent(k, n);
+            entryScore.merge(k, 1.0 / (FUSION_K + i + 1), Double::sum);
+        }
+        for (int i = 0; i < similar.size(); i++) {
+            String[] e = similar.get(i).entry;
+            ObjectNode n = Catalog.match(e[0], e[1], e[2], e[4], e[3].isEmpty() ? null : e[3],
+                e[5], 0);
+            String k = groupOf(n) + "|" + e[3] + (e.length > 7 ? e[7] : "");
+            entryNode.putIfAbsent(k, n);
+            entryCosine.merge(k, similar.get(i).cosine, Math::max);
+            entryScore.merge(k, 1.0 / (FUSION_K + i + 1), Double::sum);
+        }
+        java.util.List<String> byScore = new java.util.ArrayList<>(entryNode.keySet());
+        byScore.sort((x, y) -> Double.compare(entryScore.get(y), entryScore.get(x)));
+        java.util.Map<String, Double> groupScore = new java.util.HashMap<>();
+        java.util.Map<String, Integer> groupCount = new java.util.HashMap<>();
+        java.util.Map<String, ObjectNode> tableNode = new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.util.LinkedHashMap<String, ObjectNode>> cols =
+            new java.util.HashMap<>();
+        for (String k : byScore) {
+            ObjectNode n = entryNode.get(k);
+            String g = groupOf(n);
+            int seen = groupCount.merge(g, 1, Integer::sum);
+            if (seen <= GROUP_DECAY.length) {
+                groupScore.merge(g, entryScore.get(k) * GROUP_DECAY[seen - 1], Double::sum);
+            }
+            if (n.hasNonNull("table")) {
+                noteFusedHit(g, n, entryCosine.get(k), tableNode, cols);
+            } else {
+                tableNode.putIfAbsent(g, n);
+            }
+        }
+        java.util.List<String> order = new java.util.ArrayList<>(tableNode.keySet());
+        order.sort((x, y) -> Double.compare(groupScore.get(y), groupScore.get(x)));
+        ArrayNode out = MAPPER.createArrayNode();
+        for (String g : order) {
+            if (out.size() >= limit) {
+                break;
+            }
+            ObjectNode n = tableNode.get(g);
+            java.util.LinkedHashMap<String, ObjectNode> c = cols.get(g);
+            if (c != null && !c.isEmpty()) {
+                ArrayNode mc = n.putArray("matching_columns");
+                int k = 0;
+                for (ObjectNode col : c.values()) {
+                    if (k++ >= 5) {
+                        break;
+                    }
+                    ObjectNode o = mc.addObject();
+                    o.put("column", col.path("column").asText());
+                    if (col.hasNonNull("type")) {
+                        o.put("type", col.path("type").asText());
+                    }
+                    if (col.hasNonNull("description")) {
+                        o.put("description", col.path("description").asText());
+                    }
+                    if (col.has("similarity")) {
+                        o.set("similarity", col.get("similarity"));
+                    }
+                }
+            }
+            out.add(n);
+        }
+        return out;
+    }
+
+    private static String groupOf(JsonNode n) {
+        return n.hasNonNull("table")
+            ? n.path("schema").asText() + "." + n.path("table").asText()
+            : "schema:" + n.path("schema").asText();
+    }
+
+    /** Weight of a table's best, second and third entries in its fused score. */
+    static final double[] GROUP_DECAY = {1.0, 0.5, 0.25};
+
+
+    /** Records one ranked hit under its table: the table node (made from the table's own
+     *  catalog entry when the hit is a column) and, for a column hit, the column. */
+    private static void noteFusedHit(String table, ObjectNode hit, Double cosine,
+            java.util.Map<String, ObjectNode> tableNode,
+            java.util.Map<String, java.util.LinkedHashMap<String, ObjectNode>> cols) {
+        if (cosine != null) {
+            hit.put("similarity", Math.round(cosine * 1000) / 1000.0);
+        }
+        boolean isColumn = hit.hasNonNull("column");
+        ObjectNode t = tableNode.get(table);
+        if (t == null) {
+            t = isColumn ? Catalog.tableMatch(hit.path("schema").asText(),
+                hit.path("table").asText()) : hit.deepCopy();
+            t.remove("column");
+            tableNode.put(table, t);
+        }
+        if (!isColumn) {
+            if (hit.has("score") && hit.path("score").asInt() > t.path("score").asInt(0)) {
+                t.put("score", hit.path("score").asInt());
+            }
+            if (hit.has("similarity") && !t.has("similarity")) {
+                t.set("similarity", hit.get("similarity"));
+            }
+            return;
+        }
+        java.util.LinkedHashMap<String, ObjectNode> c =
+            cols.computeIfAbsent(table, k -> new java.util.LinkedHashMap<>());
+        ObjectNode prev = c.get(hit.path("column").asText());
+        if (prev == null) {
+            c.put(hit.path("column").asText(), hit);
+        } else if (hit.has("similarity") && !prev.has("similarity")) {
+            prev.set("similarity", hit.get("similarity"));
+        }
+    }
+
     private static String searchCatalog(String query, int limit) {
         if (query == null || query.trim().isEmpty()) {
             throw new IllegalArgumentException(
@@ -5763,7 +5912,33 @@ public class McpServer {
                 + "state problem, not an empty result — use list_schemas and list_tables, "
                 + "which read the live connection instead.");
         }
-        ArrayNode hits = Catalog.search(query.trim(), limit);
+        ArrayNode hits;
+        String ranking;
+        if (CatalogVectors.ready()) {
+            float[] q = null;
+            String embedError = null;
+            try {
+                q = CatalogVectors.embed((sql, lim) -> runSqlRows(sql, lim), query.trim());
+            // fallback-guard: allow -- the response says the similarity half is missing and why
+            } catch (Exception e) {
+                embedError = e.getMessage();
+            }
+            if (q != null) {
+                hits = fuse(Catalog.searchAll(query.trim()),
+                    CatalogVectors.rank(q, SIMILARITY_DEPTH), limit);
+                ranking = "keyword and similarity (descriptions embedded locally), fused";
+            } else {
+                hits = Catalog.search(query.trim(), limit);
+                ranking = "keyword only: the query could not be embedded (" + embedError
+                    + "), so this ranking has no similarity half";
+            }
+        } else {
+            startCatalogVectors();
+            hits = Catalog.search(query.trim(), limit);
+            ranking = "keyword only: the similarity index is not ready ("
+                + CatalogVectors.status() + "). Words that are not in a description will not "
+                + "match; try synonyms, or search again shortly.";
+        }
         ArrayNode extSources = ExternalSources.matchesFor(query.trim(), 5);
         String opener = searchCatalogSessionOpener();
         if (hits.size() == 0) {
@@ -5773,6 +5948,7 @@ public class McpServer {
             }
             empty.put("matches", 0);
             empty.put("query", query.trim());
+            empty.put("ranking", ranking);
             empty.put("hint",
                 "No catalog entry matched. The catalog was searched and is loaded, so this is a "
                 + "real miss: try fewer or more general words (one noun beats a phrase), or "
@@ -5788,6 +5964,7 @@ public class McpServer {
         if (opener != null) {
             out.put("before_you_start", opener);
         }
+        out.put("ranking", ranking);
         out.set("matches", hits);
         addUnmatchedTerms(out, query.trim(), hits);
         if (extSources.size() > 0) {
@@ -5820,6 +5997,7 @@ public class McpServer {
         }
         String haystack = hay.toString().toLowerCase(java.util.Locale.ROOT);
         ArrayNode unmatched = MAPPER.createArrayNode();
+        ObjectNode elsewhere = MAPPER.createObjectNode();
         for (String raw : query.toLowerCase(java.util.Locale.ROOT).split("[^a-z0-9]+")) {
             if (raw.length() < 4 || SEARCH_STOPWORDS.contains(raw)) {
                 continue;
@@ -5827,13 +6005,30 @@ public class McpServer {
             String stem = raw.endsWith("ies") ? raw.substring(0, raw.length() - 3) + "y"
                 : (raw.endsWith("s") ? raw.substring(0, raw.length() - 1) : raw);
             if (!haystack.contains(stem)) {
-                unmatched.add(raw);
+                // Not in these results is not the same as not in the catalog: a table ranked
+                // below the cut still carries it, and saying "the corpus may not carry it"
+                // then sends the caller to the web for data that is here.
+                java.util.List<String> where = Catalog.locate(stem, 8);
+                if (where.isEmpty()) {
+                    unmatched.add(raw);
+                } else {
+                    ArrayNode w = elsewhere.putArray(raw);
+                    for (String p : where) {
+                        w.add(p);
+                    }
+                }
             }
+        }
+        if (elsewhere.size() > 0) {
+            out.set("terms_found_beyond_these_results", elsewhere);
+            out.put("terms_found_beyond_these_results_note", "These words are not in the "
+                + "results above but ARE in the catalog, at the places listed. Check those "
+                + "tables with describe_table before concluding the data is absent.");
         }
         if (unmatched.size() > 0) {
             out.set("unmatched_terms", unmatched);
-            out.put("unmatched_terms_note", "No returned table, column or description "
-                + "contains these words. If a figure the question needs is named by one of "
+            out.put("unmatched_terms_note", "No table, column or description anywhere in "
+                + "the catalog contains these words. If a figure the question needs is named by one of "
                 + "them, the corpus may not carry it directly: say so in the answer, and if "
                 + "you build a proxy from what IS here, name it as a proxy and say what it "
                 + "includes that the missing measure would not.");
