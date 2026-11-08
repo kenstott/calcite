@@ -222,8 +222,10 @@ final class CatalogVectors {
         return hits.subList(0, Math.min(k, hits.size()));
     }
 
+    /** {@code schema.table}, {@code schema.table#n} (a description piece),
+     *  {@code schema.table.column}, or {@code schema.table.column=CODE} (a listed code). */
     static String keyOf(String[] e) {
-        return e[3].isEmpty() ? e[1] + "." + e[2] + e[7] : e[1] + "." + e[2] + "." + e[3];
+        return e[1] + "." + e[2] + (e[3].isEmpty() ? "" : "." + e[3]) + e[7];
     }
 
     private static String textOf(String[] e) {

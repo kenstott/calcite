@@ -84,4 +84,28 @@ class CatalogSearchTest {
         java.util.Arrays.asList("county", "rate", "renter", "household", "census"),
         Catalog.tokens("Counties rates of the renters_households census"));
   }
+
+  /** A code listed in a column comment ("Codes: ICSA = initial jobless claims ...") is found
+   *  by its meaning and named with the filter that selects it. */
+  @Test void listedCodeIsFoundByMeaning() {
+    ArrayNode hits = Catalog.search("initial jobless claims", 20);
+    boolean icsa = false;
+    for (int i = 0; i < Math.min(3, hits.size()); i++) {
+      if ("ICSA".equals(hits.get(i).path("code").asText())
+          && "fred_indicators".equals(hits.get(i).path("table").asText())) {
+        icsa = true;
+      }
+    }
+    assertTrue(icsa, "fred_indicators series code ICSA not in the top 3: " + hits);
+  }
+
+  @Test void codesSectionParses() {
+    java.util.List<String[]> codes = Catalog.codesIn(
+        "Series id. Codes: ICSA = initial jobless claims, weekly; UNRATE = unemployment rate.");
+    org.junit.jupiter.api.Assertions.assertEquals(2, codes.size());
+    org.junit.jupiter.api.Assertions.assertEquals("ICSA", codes.get(0)[0]);
+    org.junit.jupiter.api.Assertions.assertEquals("unemployment rate", codes.get(1)[1]);
+    org.junit.jupiter.api.Assertions.assertEquals("Series id.",
+        Catalog.withoutCodes("Series id. Codes: ICSA = x"));
+  }
 }

@@ -459,7 +459,9 @@ final class Catalog {
      * Every table and every commented column, as {@code {kind, schema, table, column, type,
      * comment, text, piece}} in catalog order, where {@code text} is what gets embedded: the
      * table (and column) name in words, then the description. A long table description is
-     * split into several entries, {@code piece} "" for the first and "#1", "#2" ... after. Uncommented columns are left out: a
+     * split into several entries, {@code piece} "" for the first and "#1", "#2" ... after. A
+     * column comment's listed codes ({@link #codesIn}) are one {@code code} entry each,
+     * {@code piece} "=" + the code; the column's own entry embeds its description without them. Uncommented columns are left out: a
      * bare name like "state" or "year" says nothing a similarity search could use.
      */
     static List<String[]> embeddableEntries() {
@@ -482,11 +484,58 @@ final class Catalog {
                     }
                     String col = txt(c.get("name"));
                     out.add(new String[]{"column", schema, table, col, txt(c.get("type")),
-                        cComment, words(table) + " " + words(col) + ": " + cComment, ""});
+                        cComment, words(table) + " " + words(col) + ": " + withoutCodes(cComment),
+                        ""});
+                    for (String[] code : codesIn(cComment)) {
+                        out.add(new String[]{"code", schema, table, col, txt(c.get("type")),
+                            code[1], words(table) + " " + words(col) + " " + code[0] + ": "
+                                + code[1], "=" + code[0]});
+                    }
                 }
             }
         }
         return out;
+    }
+
+    /** Marks where a column comment's code list begins (see {@link #codesIn}). */
+    static final String CODES_MARKER = "Codes:";
+
+    /**
+     * The codes a column comment lists, as {@code [code, meaning]} pairs. Convention, in the
+     * schema YAML: the comment ends with a section {@code Codes: A = meaning; B = meaning; ...}
+     * (entries separated by ";", each "CODE = meaning"). The comment stays the one source: SQL
+     * users read it as the column comment, and any text index can split it into one entry per
+     * code. A semicolon separator survives YAML's folded {@code >} blocks, which a newline does
+     * not. Entries without " = " are skipped; ColumnCodesConventionTest (govdata) fails on any.
+     */
+    static List<String[]> codesIn(String comment) {
+        List<String[]> out = new ArrayList<>();
+        int at = comment.indexOf(CODES_MARKER);
+        if (at < 0) {
+            return out;
+        }
+        String list = comment.substring(at + CODES_MARKER.length()).trim();
+        if (list.endsWith(".")) {
+            list = list.substring(0, list.length() - 1);
+        }
+        for (String entry : list.split(";")) {
+            int eq = entry.indexOf(" = ");
+            if (eq <= 0) {
+                continue;
+            }
+            String code = entry.substring(0, eq).trim();
+            String meaning = entry.substring(eq + 3).trim();
+            if (!code.isEmpty() && !meaning.isEmpty()) {
+                out.add(new String[]{code, meaning});
+            }
+        }
+        return out;
+    }
+
+    /** A column comment without its {@code Codes:} section: the column's own description. */
+    static String withoutCodes(String comment) {
+        int at = comment.indexOf(CODES_MARKER);
+        return at < 0 ? comment : comment.substring(0, at).trim();
     }
 
     /** Target size of one embedded piece of a long table description. */
@@ -569,6 +618,9 @@ final class Catalog {
             }
             if (sc > 0) {
                 ObjectNode h = match(d.kind, d.schema, d.table, d.type, d.column, d.comment, 0);
+                if (d.code != null) {
+                    h.put("code", d.code);
+                }
                 h.put("score", Math.round(sc * d.weight * 100) / 100.0);
                 hits.add(h);
             }
@@ -611,6 +663,8 @@ final class Catalog {
         final String type;
         final String comment;
         final double weight;
+        /** For a {@code code} document, the code it describes (a FRED series id). */
+        String code;
         final java.util.Map<String, Double> tf = new java.util.HashMap<>();
         double length;
 
@@ -668,8 +722,17 @@ final class Catalog {
                         txt(tb.get("comment")), 1.0));
                     for (JsonNode c : tb.path("columns")) {
                         String col = txt(c.get("name"));
+                        String cComment = txt(c.get("comment"));
                         idx.docs.add(new Bm25Doc("column", schema, table, col,
-                            txt(c.get("type")), col, txt(c.get("comment")), COLUMN_DOC_WEIGHT));
+                            txt(c.get("type")), col, withoutCodes(cComment), COLUMN_DOC_WEIGHT));
+                        // Each listed code is its own document: inside a 60-code comment one
+                        // code's words are diluted by length normalization; alone they are not.
+                        for (String[] code : codesIn(cComment)) {
+                            Bm25Doc cd = new Bm25Doc("code", schema, table, col,
+                                txt(c.get("type")), code[0], code[1], 1.0);
+                            cd.code = code[0];
+                            idx.docs.add(cd);
+                        }
                     }
                 }
             }

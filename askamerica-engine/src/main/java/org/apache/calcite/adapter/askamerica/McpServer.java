@@ -1446,6 +1446,14 @@ public class McpServer {
             + "compares across places, compares across years, averages or trends a rate, "
             + "computes a share/ratio/index, ranks anything, or attributes a trend to a "
             + "cause.** Call it before you decide you already know the method.\n\n"
+            + "**Narrow, code-keyed tables** hold many measures in one table, one row per code "
+            + "per date (econ.fred_indicators: series, date, value). Find the CODE first: a "
+            + "column comment's 'Codes:' section lists every code the table holds as 'CODE = "
+            + "meaning', and this search returns a matching code with the filter that selects "
+            + "it (series = 'ICSA'). Filter on that code in every query against the table. "
+            + "Public standard code systems (NAICS, FIPS, ISO country, HS) are described, not "
+            + "listed: map the concept to the code yourself or look it up in the reference "
+            + "table the column comment names.\n\n"
             + "**When the task is checking a claim — 'validate this', 'fact-check this', 'is "
             + "this true', a pasted article, or any question that is really asking whether some "
             + "assertion holds up — call this BEFORE web_search/web_fetch, not after.** External "
@@ -5789,7 +5797,8 @@ public class McpServer {
         java.util.Map<String, Double> entryCosine = new java.util.HashMap<>();
         for (int i = 0; i < keyword.size(); i++) {
             ObjectNode n = (ObjectNode) keyword.get(i);
-            String k = groupOf(n) + "|" + n.path("column").asText("");
+            String k = groupOf(n) + "|" + n.path("column").asText("")
+                + (n.hasNonNull("code") ? "=" + n.path("code").asText() : "");
             entryNode.putIfAbsent(k, n);
             entryScore.merge(k, 1.0 / (FUSION_K + i + 1), Double::sum);
         }
@@ -5797,6 +5806,11 @@ public class McpServer {
             String[] e = similar.get(i).entry;
             ObjectNode n = Catalog.match(e[0], e[1], e[2], e[4], e[3].isEmpty() ? null : e[3],
                 e[5], 0);
+            if ("code".equals(e[0])) {
+                n.put("code", e[7].substring(1));
+            }
+            // e[7] is "" for a table or column, "#n" for a description piece, "=CODE" for a
+            // listed code: the same key the keyword entry for it carries.
             String k = groupOf(n) + "|" + e[3] + (e.length > 7 ? e[7] : "");
             entryNode.putIfAbsent(k, n);
             entryCosine.merge(k, similar.get(i).cosine, Math::max);
@@ -5840,6 +5854,12 @@ public class McpServer {
                     }
                     ObjectNode o = mc.addObject();
                     o.put("column", col.path("column").asText());
+                    if (col.hasNonNull("code")) {
+                        // A listed code: the filter that selects it from this narrow table.
+                        o.put("code", col.path("code").asText());
+                        o.put("filter", col.path("column").asText() + " = '"
+                            + col.path("code").asText().replace("'", "''") + "'");
+                    }
                     if (col.hasNonNull("type")) {
                         o.put("type", col.path("type").asText());
                     }
@@ -5894,9 +5914,11 @@ public class McpServer {
         }
         java.util.LinkedHashMap<String, ObjectNode> c =
             cols.computeIfAbsent(table, k -> new java.util.LinkedHashMap<>());
-        ObjectNode prev = c.get(hit.path("column").asText());
+        String colKey = hit.path("column").asText()
+            + (hit.hasNonNull("code") ? "=" + hit.path("code").asText() : "");
+        ObjectNode prev = c.get(colKey);
         if (prev == null) {
-            c.put(hit.path("column").asText(), hit);
+            c.put(colKey, hit);
         } else if (hit.has("similarity") && !prev.has("similarity")) {
             prev.set("similarity", hit.get("similarity"));
         }

@@ -5599,44 +5599,74 @@ partitionedTables:
         type: string
         nullable: true
         comment: >
-          FRED series identifier (foreign key to reference_fred_series, which carries the title,
-          units, frequency, and seasonal adjustment for each). This table is long-format:
-          one row per (series, date), so ALWAYS filter on series — units differ per series
-          (percent, index, billions of dollars, thousands of units). The 60 curated series are:
-          rates and monetary policy — DFF effective federal funds rate, FEDFUNDS federal funds
-          target rate, DGS3MO / DGS2 / DGS5 / DGS10 / DGS30 Treasury yields at those maturities,
-          T10Y2Y 10Y-2Y yield spread, T10YIE 10-year breakeven inflation,
-          BAMLC0A0CM investment-grade corporate bond spread;
-          money and Fed balance sheet — M1SL M1, M2SL M2, BOGMBASE monetary base,
-          WALCL Fed total assets;
-          national accounts — GDP nominal GDP, GDPC1 real GDP (chained 2017 dollars);
-          labor — UNRATE unemployment rate, U6RATE U-6 underutilization, PAYEMS nonfarm payrolls,
-          CIVPART labor force participation rate, ICSA initial jobless claims (weekly),
-          CCSA continuing claims, AWHMAN average weekly hours in manufacturing;
-          inflation — CPIAUCSL CPI all items SA, CPIAUCNS CPI all items NSA,
-          CPILFESL core CPI ex food and energy SA, WPUFD49207 PPI finished goods,
-          PCEPI PCE price index, PCEPILFE core PCE price index (the Fed's primary target);
-          consumer — PCE personal consumption expenditures, PI personal income,
-          PSAVERT personal saving rate, MEHOINUSA672N real median household income of the
-          United States (annual, one observation per year dated January 1, in constant
-          C-CPI-U dollars of the latest vintage year — compare across years directly, no
-          further inflation adjustment; Census CPS ASEC via FRED);
-          production and credit — INDPRO industrial production, TCU capacity utilization,
-          RSXFS advance retail sales, TOTBKCR total bank credit,
-          DRTSCILM senior loan officer survey lending standards;
-          retail trade — RETAILIMSA retailers inventories SA (Census MTIS via FRED, a different
-          quantity from RSXFS sales), RETAILIRSA retailers inventories-to-sales ratio SA;
-          housing — HOUST housing starts, HOUST1F single-family starts, PERMIT building permits,
-          EXHOSLUSM495S existing home sales, CSUSHPISA Case-Shiller national home price index,
-          MSPUS median sales price of houses sold, RRVRUSQ156N rental vacancy rate,
-          MORTGAGE30US 30-year fixed mortgage rate, HSN1F new one-family houses sold (SAAR,
-          the Census/HUD New Residential Sales headline number), HSN1FNE / HSN1FMW / HSN1FS /
-          HSN1FW the same series by Northeast/Midwest/South/West Census region (SAAR),
-          MSPNHSUS median sales price of new houses sold, ASPNHSUS average sales price of new
-          houses sold, MSACSR monthly supply of new houses;
-          commodities and FX — DCOILWTICO WTI crude oil price,
-          DTWEXBGS broad trade-weighted dollar index;
-          business cycle — USREC NBER recession indicator (1=recession, 0=expansion).
+          FRED series identifier (foreign key to econ_reference.fred_series, which carries the title,
+          units, frequency and seasonal adjustment for each). This table is long-format: one row per
+          (series, date), so ALWAYS filter on series, because units differ per series (percent, index,
+          billions of dollars, thousands of units). The list below is every series this table ingests
+          (fred_series_list), one 'CODE = meaning' entry each.
+          Codes: DFF = effective federal funds rate (Fed policy interest rate), daily, percent;
+          FEDFUNDS = federal funds effective rate, monthly average, percent; DGS3MO = 3-month Treasury
+          bill yield, daily, percent; DGS2 = 2-year Treasury yield, daily, percent; DGS5 = 5-year
+          Treasury yield, daily, percent; DGS10 = 10-year Treasury yield (long-term interest rate),
+          daily, percent; DGS30 = 30-year Treasury yield, daily, percent; T10Y2Y = 10-year minus
+          2-year Treasury yield spread (yield curve inversion), daily, percentage points; T10YIE =
+          10-year breakeven inflation rate (market inflation expectations), daily, percent; BAMLC0A0CM
+          = investment-grade corporate bond spread, daily, percent; M1SL = M1 money supply, monthly,
+          billions of dollars, seasonally adjusted; M2SL = M2 money supply, monthly, billions of
+          dollars, seasonally adjusted; BOGMBASE = monetary base, monthly, millions of dollars; WALCL
+          = Federal Reserve balance sheet total assets, weekly, millions of dollars; GDP = nominal
+          gross domestic product, quarterly, billions of dollars, seasonally adjusted annual rate;
+          GDPC1 = real GDP (economic growth), quarterly, billions of chained 2017 dollars, seasonally
+          adjusted annual rate; UNRATE = national unemployment rate (U-3), monthly, percent,
+          seasonally adjusted; U6RATE = U-6 unemployment rate including marginally attached and
+          part-time for economic reasons (underemployment), monthly, percent; PAYEMS = total nonfarm
+          payroll employment (jobs report, jobs added), monthly, thousands, seasonally adjusted;
+          CIVPART = labor force participation rate, monthly, percent, seasonally adjusted; ICSA =
+          initial jobless claims (initial unemployment insurance claims, new layoffs), weekly,
+          seasonally adjusted; CCSA = continuing jobless claims (insured unemployment, people still
+          collecting benefits), weekly, seasonally adjusted; AWHMAN = average weekly hours of
+          production workers in manufacturing, monthly; CPIAUCSL = consumer price index all items
+          (headline CPI inflation), monthly, index 1982-84=100, seasonally adjusted; CPIAUCNS =
+          consumer price index all items, monthly, index 1982-84=100, not seasonally adjusted;
+          CPILFESL = core CPI less food and energy (core inflation), monthly, index, seasonally
+          adjusted; WPUFD49207 = producer price index for finished goods (wholesale inflation),
+          monthly, index 1982=100; PCEPI = PCE price index (headline PCE inflation), monthly, index
+          2017=100; PCEPILFE = core PCE price index excluding food and energy (the Fed's primary
+          inflation target), monthly, index 2017=100; PCE = personal consumption expenditures
+          (consumer spending), monthly, billions of dollars, seasonally adjusted annual rate; PI =
+          personal income, monthly, billions of dollars, seasonally adjusted annual rate; PSAVERT =
+          personal saving rate, monthly, percent of disposable income; MEHOINUSA672N = real median
+          household income of the United States, annual, one observation per year dated January 1, in
+          constant C-CPI-U dollars of the latest vintage year, compare across years directly with no
+          further inflation adjustment (Census CPS ASEC via FRED); INDPRO = industrial production
+          index (manufacturing, mining and utilities output), monthly, index 2017=100; TCU = capacity
+          utilization, total industry, monthly, percent; RSXFS = advance retail sales excluding food
+          services (retail spending), monthly, millions of dollars; TOTBKCR = total bank credit at
+          commercial banks (bank lending), weekly, billions of dollars; DRTSCILM = senior loan officer
+          survey, net percent of banks tightening lending standards for commercial and industrial
+          loans, quarterly; RETAILIMSA = retailers' inventories, monthly, millions of dollars,
+          seasonally adjusted (Census MTIS, a different quantity from RSXFS sales); RETAILIRSA =
+          retailers' inventories-to-sales ratio, monthly, seasonally adjusted; HOUST = housing starts,
+          total, monthly, thousands of units, seasonally adjusted annual rate; HOUST1F = single-family
+          housing starts, monthly, thousands of units, seasonally adjusted annual rate; PERMIT =
+          building permits for new housing units, monthly, thousands, seasonally adjusted annual rate;
+          EXHOSLUSM495S = existing home sales, monthly, units, seasonally adjusted annual rate;
+          CSUSHPISA = S&P CoreLogic Case-Shiller U.S. national home price index (house prices),
+          monthly, index Jan 2000=100; MSPUS = median sales price of houses sold in the United States
+          (home prices), quarterly, dollars; RRVRUSQ156N = rental vacancy rate, quarterly, percent;
+          MORTGAGE30US = 30-year fixed mortgage rate, weekly, percent; HSN1F = new one-family houses
+          sold (new home sales, the Census/HUD New Residential Sales headline number), monthly,
+          thousands, SAAR; HSN1FNE = new one-family houses sold in the Northeast Census region,
+          monthly, thousands, SAAR; HSN1FMW = new one-family houses sold in the Midwest Census region,
+          monthly, thousands, SAAR; HSN1FS = new one-family houses sold in the South Census region,
+          monthly, thousands, SAAR; HSN1FW = new one-family houses sold in the West Census region,
+          monthly, thousands, SAAR; MSPNHSUS = median sales price of new houses sold (new home
+          prices), monthly, dollars; ASPNHSUS = average sales price of new houses sold, monthly,
+          dollars; MSACSR = monthly supply of new houses (months of inventory), monthly; UMCSENT =
+          University of Michigan consumer sentiment index, monthly, index 1966:Q1=100; DCOILWTICO =
+          WTI crude oil spot price (oil prices), daily, dollars per barrel; DTWEXBGS = broad
+          trade-weighted U.S. dollar index (dollar exchange rate), daily, index Jan 2006=100; USREC =
+          NBER recession indicator, monthly, 1 for recession and 0 for expansion.
       - *date_column
       - name: value
         type: double
