@@ -71,4 +71,37 @@ class EtagRetryViewColumnDriftTest {
       assertNull(EtagRetryConnection.transientRaceTarget(e), e.getMessage());
     }
   }
+
+  /** DuckDB's message for a view whose source renamed a column, as the 0.118.0 data-server
+   *  bundle reported it for econ.employment_statistics after periodName became period_name
+   *  (govdata-ops #1104, 2026-11-08). */
+  private static final String RENAMED_COLUMN_MESSAGE = "Binder Error: Contents of view were "
+      + "altered: names don't match! Expected [series, year, period, periodName, value], but "
+      + "found [series, year, period, period_name, value] instead";
+
+  @Test void aRenamedColumnMessageIsViewDrift() {
+    assertEquals("", EtagRetryConnection.transientRaceTarget(
+        new SQLException(RENAMED_COLUMN_MESSAGE)),
+        "recognized as view drift, which recreates the view and retries");
+  }
+
+  /** What the current DuckDB does when a view's source renames a column: the read either works
+   *  or fails with a message the retry recognizes, so the view is recreated. */
+  @Test void aViewOverASourceThatRenamedAColumnReadsOrIsRecognized() throws Exception {
+    Path file = tempDir.resolve("r.parquet");
+    try (Connection duck = DriverManager.getConnection("jdbc:duckdb:");
+         Statement s = duck.createStatement()) {
+      s.execute("COPY (SELECT 1 AS a, 'Jan' AS periodName) TO '" + file + "' (FORMAT PARQUET)");
+      s.execute("CREATE VIEW v AS SELECT * FROM read_parquet('" + file + "')");
+      s.execute("COPY (SELECT 1 AS a, 'Jan' AS period_name) TO '" + file + "' (FORMAT PARQUET)");
+      try (ResultSet rs = s.executeQuery("SELECT a FROM v")) {
+        assertTrue(rs.next());
+        assertEquals(1, rs.getInt(1));
+      } catch (SQLException e) {
+        assertEquals("", EtagRetryConnection.transientRaceTarget(e),
+            "a rename the current DuckDB rejects must be recognized as view drift: "
+                + e.getMessage());
+      }
+    }
+  }
 }

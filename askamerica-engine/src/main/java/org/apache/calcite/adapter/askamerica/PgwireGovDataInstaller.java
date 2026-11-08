@@ -136,6 +136,49 @@ final class PgwireGovDataInstaller {
         return launcher.isFile() ? launcher : null;
     }
 
+    /**
+     * The launcher a spawn should use, keeping the bundle in step with this engine without ever
+     * downloading on the caller's thread: a newer release already downloaded beside the bundle is
+     * swapped in (a rename), and otherwise the release is fetched on a background thread, resuming
+     * any partial download, for the next spawn. The installed bundle is used meanwhile. Null when
+     * no bundle is installed; a local (unstamped) engine, or an unstamped bundle, is used as is.
+     *
+     * <p>The engine jar auto-updates but the bundle did not: 2026-11-07/08 a 0.124.x engine ran
+     * against the 0.118.0 bundle for days, and that bundle's DuckDB 1.4 view over
+     * econ.employment_statistics failed every read once the data renamed periodName to
+     * period_name (govdata-ops #1104). The server still never waits on a download (commit
+     * 224039c645): a killed process leaves a partial file the next attempt resumes.
+     */
+    static File launcherForSpawn() {
+        return launcherForSpawn(cacheDir(), ownEngineVersion(), PgwireGovDataInstaller::startOnce);
+    }
+
+    static File launcherForSpawn(Path dir, String own, Executor background) {
+        File existing = launcherPath(dir);
+        if (!existing.isFile()) {
+            return null;
+        }
+        if (own == null || decide(true, readMarker(dir), own) != Action.UPDATE) {
+            return existing;
+        }
+        File adopted = adoptPrepared(dir, own);
+        if (adopted != null) {
+            return adopted;
+        }
+        background.execute(() -> updateInBackground(dir, own));
+        return existing;
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean BACKGROUND_UPDATE_STARTED =
+        new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Starts the background update at most once per process. */
+    private static void startOnce(Runnable task) {
+        if (BACKGROUND_UPDATE_STARTED.compareAndSet(false, true)) {
+            startDaemon(task);
+        }
+    }
+
     /** {@link #outOfDateNotice(Path, String)} for the shared bundle and this engine's release. */
     static String outOfDateNotice() {
         return outOfDateNotice(cacheDir(), ownEngineVersion());
@@ -147,16 +190,21 @@ final class PgwireGovDataInstaller {
      * installs and is out of date by definition. A local build has no release of its own, so
      * there is nothing to compare against.
      */
+    /** What an out-of-date data server means for the results, and what happens next. */
+    static final String OUT_OF_DATE_EFFECT = " Its data server can fail on tables changed since "
+        + "it was built (errors ending 'on JDBC sub-schema'). The current release downloads in "
+        + "the background and takes over the next time the data server starts.";
+
     static String outOfDateNotice(Path dir, String own) {
         if (own == null || !launcherPath(dir).isFile()) {
             return null;
         }
         String installed = readMarker(dir);
         if (installed == null) {
-            return "AskAmerica (installed version unknown) is out of date.";
+            return "AskAmerica (installed version unknown) is out of date." + OUT_OF_DATE_EFFECT;
         }
         return compareVersions(installed, own) < 0
-            ? "AskAmerica " + installed + " is out of date." : null;
+            ? "AskAmerica " + installed + " is out of date." + OUT_OF_DATE_EFFECT : null;
     }
 
     /**

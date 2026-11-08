@@ -32,6 +32,12 @@ PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
 #                          to the worker log so true peak heap is extractable
 #                          post-run, to right-size per-schema -Xmx from evidence.
 export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
+# The EDGAR daily-feed tree (fetch-edgar-feed.sh) the SEC worker reads filing documents from.
+# Set here, for the worker only: sec-schema.yaml defaults feedDir to empty, because the schema
+# also ships in the pgwire-govdata bundle, where this Linux path does not exist and a configured
+# but missing feedDir fails the sec schema and with it the whole data server (release 0.124.5,
+# 2026-11-08). Set SEC_FEED_DIR to empty to run the worker without the feed.
+export SEC_FEED_DIR="${SEC_FEED_DIR-/mnt/wsltmp/govdata/edgar-feed}"
 # Column statistics are ON for ETL runs. The adapter default is off, because publishing costs
 # a full scan the first time a table is seen and no library caller should pay that
 # unasked — but the ETL is exactly the place where it is worth paying: the run already

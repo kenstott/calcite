@@ -140,7 +140,9 @@ final class EtagRetryConnection {
    * Matches DuckDB's view drift messages (see class javadoc, mode 2). No file path is embedded,
    * so recovery purges the whole cache_httpfs cache rather than one path.
    *
-   * <p>A same-count type change reads "Contents of view were altered: types don't match". A
+   * <p>A same-count type change reads "Contents of view were altered: types don't match"; a
+   * renamed column reads "... names don't match" (DuckDB 1.4: econ.employment_statistics after
+   * periodName became period_name, govdata-ops #1104; DuckDB 1.5 rebinds such a view itself). A
    * column-count change reads, on DuckDB 1.4, {@code Binder Error: table "unnamed_subquery" has
    * 12 columns available but 13 columns specified}: a view keeps the column names it was bound
    * with, so once the live table has fewer columns than that view was created over, every read of
@@ -148,7 +150,7 @@ final class EtagRetryConnection {
    * 12-column live table). The same heal applies: recreate the view over the live table.
    */
   private static final Pattern VIEW_TYPE_DRIFT = Pattern.compile(
-      "Contents of view were altered: types don't match"
+      "Contents of view were altered: (?:types|names) don't match"
           + "|table \"unnamed_subquery\" has \\d+ columns available but \\d+ columns specified");
 
   /**

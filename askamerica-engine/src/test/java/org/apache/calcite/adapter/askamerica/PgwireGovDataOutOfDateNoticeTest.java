@@ -42,13 +42,14 @@ class PgwireGovDataOutOfDateNoticeTest {
 
   @Test void olderBundleNamesItsVersion(@TempDir Path dir) throws Exception {
     install(dir, "0.102.0");
-    assertEquals("AskAmerica 0.102.0 is out of date.",
+    assertEquals("AskAmerica 0.102.0 is out of date." + PgwireGovDataInstaller.OUT_OF_DATE_EFFECT,
         PgwireGovDataInstaller.outOfDateNotice(dir, "0.110.1"));
   }
 
   @Test void unstampedBundleIsOutOfDate(@TempDir Path dir) throws Exception {
     install(dir, null);
-    assertEquals("AskAmerica (installed version unknown) is out of date.",
+    assertEquals("AskAmerica (installed version unknown) is out of date."
+        + PgwireGovDataInstaller.OUT_OF_DATE_EFFECT,
         PgwireGovDataInstaller.outOfDateNotice(dir, "0.110.1"));
   }
 

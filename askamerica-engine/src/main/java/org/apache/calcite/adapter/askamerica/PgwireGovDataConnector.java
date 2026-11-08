@@ -783,10 +783,11 @@ final class PgwireGovDataConnector {
     File launcher = resolveLauncher();
     if (launcher == null) {
       // No operator override and no installer-bundled copy: use the installed bundle in the
-      // shared cache. The server never downloads it (about a gigabyte inside a tool call that
-      // has seconds); an older bundle still runs and results carry an "out of date" notice
-      // (PgwireGovDataInstaller.outOfDateNotice, added by McpServer).
-      launcher = PgwireGovDataInstaller.installedLauncher();
+      // shared cache. The server never waits on a download (about a gigabyte inside a tool call
+      // that has seconds): an older bundle still runs, results carry an "out of date" notice
+      // (PgwireGovDataInstaller.outOfDateNotice, added by McpServer), and the engine's release
+      // is fetched in the background and swapped in at a later spawn.
+      launcher = PgwireGovDataInstaller.launcherForSpawn();
     }
     if (launcher == null) {
       throw new IllegalStateException("pgwire-govdata, the data server, is not installed. "

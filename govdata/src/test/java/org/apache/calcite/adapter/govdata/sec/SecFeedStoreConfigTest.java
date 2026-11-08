@@ -58,9 +58,23 @@ class SecFeedStoreConfigTest {
     assertNull(SecFeedStore.bytes(URL));
   }
 
-  @Test void theSchemaYamlNamesTheOnDiskFeedAsTheDefault() {
-    assertEquals("${SEC_FEED_DIR:/mnt/wsltmp/govdata/edgar-feed}",
+  /** The schema ships in the pgwire-govdata bundle too, where a worker-only default path made
+   *  the sec schema, and the whole data server, fail to start (release 0.124.5). */
+  @Test void theSchemaYamlConfiguresNoFeedByDefault() {
+    assertEquals("${SEC_FEED_DIR:}",
         org.apache.calcite.adapter.govdata.GovDataUtils.loadSchemaSetting(
             SecSchemaFactory.class, "/sec/sec-schema.yaml", "feedDir"));
+  }
+
+  /** The ETL worker still reads the on-disk feed: its launch scripts set SEC_FEED_DIR. */
+  @Test void theWorkerScriptsPointAtTheOnDiskFeed() throws Exception {
+    java.nio.file.Path common = java.nio.file.Paths.get(
+        SecFeedStoreConfigTest.class.getResource("/sec/sec-schema.yaml").toURI())
+        .getParent().getParent().getParent().getParent().getParent()
+        .resolve("scripts/parallel/common.sh");
+    String text = new String(java.nio.file.Files.readAllBytes(common),
+        java.nio.charset.StandardCharsets.UTF_8);
+    assertTrue(text.contains(
+        "export SEC_FEED_DIR=\"${SEC_FEED_DIR-/mnt/wsltmp/govdata/edgar-feed}\""), common.toString());
   }
 }
