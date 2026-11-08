@@ -43,6 +43,7 @@ public class RequestContext {
   private final Map<String, String> dimensionValues;
   private final Map<String, String> variables;
   private final HttpSourceConfig.RateLimitConfig rateLimit;
+  private final FetchResumeStore resumeStore;
 
   private RequestContext(Builder builder) {
     this.url = builder.url;
@@ -59,6 +60,19 @@ public class RequestContext {
         ? Collections.unmodifiableMap(new LinkedHashMap<String, String>(builder.variables))
         : Collections.<String, String>emptyMap();
     this.rateLimit = builder.rateLimit;
+    this.resumeStore = builder.resumeStore;
+  }
+
+  /**
+   * Returns the durable store of already-fetched responses for this forced reprocess, or
+   * {@code null} when the run is not a forced reprocess or the source has no raw cache. A
+   * {@link StreamingResponseTransformer} with a request budget smaller than one run replays
+   * finished requests from it instead of calling the source again.
+   *
+   * @return The resume store, or null
+   */
+  public FetchResumeStore getResumeStore() {
+    return resumeStore;
   }
 
   /**
@@ -156,6 +170,18 @@ public class RequestContext {
     private Map<String, String> dimensionValues;
     private Map<String, String> variables;
     private HttpSourceConfig.RateLimitConfig rateLimit;
+    private FetchResumeStore resumeStore;
+
+    /**
+     * Sets the resume store.
+     *
+     * @param resumeStore The store, or null
+     * @return This builder
+     */
+    public Builder resumeStore(FetchResumeStore resumeStore) {
+      this.resumeStore = resumeStore;
+      return this;
+    }
 
     /**
      * Sets the request URL.

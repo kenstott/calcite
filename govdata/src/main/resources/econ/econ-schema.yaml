@@ -9230,9 +9230,12 @@ partitionedTables:
       method: GET
       headers:
         Ocp-Apim-Subscription-Key: "${COMTRADE_API_KEY}"
-      # StreamingResponseTransformer opens the URL itself; dataPath/rawCache do not
-      # apply. Completed (reporter, flow, year) partitions are skipped by completion
-      # markers on re-run, so no raw cache is needed for idempotency.
+      # StreamingResponseTransformer opens the URL itself; dataPath does not apply. Completed
+      # (reporter, flow, year) partitions are skipped by completion markers on an ordinary re-run.
+      # A forced reprocess ignores those markers and commits nothing until every batch is fetched,
+      # so it spans several daily call quotas: the rawCache location below holds each response it
+      # fetched under .resume/, a re-run replays those with no call, and the store is cleared once
+      # the commit succeeds.
       response:
         format: json
       rateLimit:

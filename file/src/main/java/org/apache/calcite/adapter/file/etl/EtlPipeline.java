@@ -1810,6 +1810,12 @@ public class EtlPipeline {
       MaterializeConfig.Format writerFormat = writer.getFormat();
       LOGGER.info("Materialization complete: format={}, location={}", writerFormat, tableLocation);
 
+      // The forced run's stored responses served their purpose once the commit succeeded; a
+      // run with failed batches keeps them so the retry replays the fetches that did succeed.
+      if (dataSource instanceof HttpSource && failedBatches == 0) {
+        ((HttpSource) dataSource).clearResumeStore();
+      }
+
       // Close resources
       if (dataSource != null) {
         dataSource.close();
