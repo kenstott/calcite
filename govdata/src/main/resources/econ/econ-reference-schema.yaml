@@ -1020,6 +1020,184 @@ partitionedTables:
         snapshotRetentionDays: 7
 
 
+  # --- REFERENCE FRED CURATED SERIES ---
+  - name: fred_curated_series
+    freshness:
+      type: hash
+    pattern: "type=*/series=*/reference_fred_curated_series.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: series
+          type: VARCHAR
+    comment: >
+      FRED metadata for exactly the series that econ.fred_indicators ingests (the curated
+      fred_series_list in econ-schema.yaml): series id (the series partition column), title,
+      observation date range (observation_start/observation_end), frequency, units, seasonal
+      adjustment, last-updated timestamp, popularity and notes - one row per curated series,
+      fetched by id from the FRED /fred/series endpoint. econ.fred_indicators_enriched joins
+      to this table. For FRED series outside the curated set, use fred_series (a partial
+      category-crawl catalog).
+    columns:
+      - name: title
+        type: string
+        nullable: true
+        comment: Full descriptive title of the economic data series
+      - name: observation_start
+        type: string
+        nullable: true
+        comment: Date of first available observation (ISO 8601 format)
+      - name: observation_end
+        type: string
+        nullable: true
+        comment: Date of most recent observation (ISO 8601 format)
+      - name: frequency
+        type: string
+        nullable: true
+        comment: Data frequency (e.g., 'Daily', 'Monthly', 'Quarterly', 'Annual')
+      - name: frequency_short
+        type: string
+        nullable: true
+        comment: Abbreviated frequency code (e.g., 'D', 'M', 'Q', 'A')
+      - name: units
+        type: string
+        nullable: true
+        comment: Units of measurement (e.g., 'Percent', 'Billions of Dollars')
+      - name: units_short
+        type: string
+        nullable: true
+        comment: Abbreviated units code
+      - name: seasonal_adjustment
+        type: string
+        nullable: true
+        comment: Seasonal adjustment status (e.g., 'Seasonally Adjusted', 'Not Seasonally Adjusted')
+      - name: seasonal_adjustment_short
+        type: string
+        nullable: true
+        comment: Abbreviated seasonal adjustment code (e.g., 'SA', 'NSA')
+      - name: last_updated
+        type: string
+        nullable: true
+        comment: Timestamp of last data update (ISO 8601 format)
+      - name: popularity
+        type: int
+        nullable: true
+        comment: FRED popularity score indicating usage/interest level
+      - name: notes
+        type: string
+        nullable: true
+        comment: Detailed description, methodology, and source information
+
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        series_id: "{series}"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    # Must list the same ids as fred_series_list in econ-schema.yaml
+    # (FredCuratedSeriesListTest enforces this).
+    dimensions:
+      type:
+        - fred_curated_series
+      series:
+        - "DFF"
+        - "FEDFUNDS"
+        - "DGS2"
+        - "DGS5"
+        - "DGS10"
+        - "DGS30"
+        - "DGS3MO"
+        - "T10Y2Y"
+        - "T10YIE"
+        - "BAMLC0A0CM"
+        - "M1SL"
+        - "M2SL"
+        - "BOGMBASE"
+        - "WALCL"
+        - "GDP"
+        - "GDPC1"
+        - "UNRATE"
+        - "U6RATE"
+        - "PAYEMS"
+        - "CIVPART"
+        - "ICSA"
+        - "CCSA"
+        - "AWHMAN"
+        - "CPIAUCSL"
+        - "CPIAUCNS"
+        - "CPILFESL"
+        - "WPUFD49207"
+        - "PCEPI"
+        - "PCEPILFE"
+        - "PCE"
+        - "PI"
+        - "PSAVERT"
+        - "MEHOINUSA672N"
+        - "INDPRO"
+        - "TCU"
+        - "RSXFS"
+        - "TOTBKCR"
+        - "DRTSCILM"
+        - "RETAILIMSA"
+        - "RETAILIRSA"
+        - "HOUST"
+        - "HOUST1F"
+        - "PERMIT"
+        - "EXHOSLUSM495S"
+        - "CSUSHPISA"
+        - "MSPUS"
+        - "RRVRUSQ156N"
+        - "MORTGAGE30US"
+        - "HSN1F"
+        - "HSN1FNE"
+        - "HSN1FMW"
+        - "HSN1FS"
+        - "HSN1FW"
+        - "MSPNHSUS"
+        - "ASPNHSUS"
+        - "MSACSR"
+        - "UMCSENT"
+        - "DCOILWTICO"
+        - "DTWEXBGS"
+        - "USREC"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "series=*/"
+      partition:
+        columns: [series]
+        columnDefinitions:
+          - name: series
+            type: VARCHAR
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        batchPartitionColumns: [series]
+        incrementalKeys: [series]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1091,6 +1269,10 @@ constraints:
       - tablename
       - LineCode
     comment: Reference dimension table for BEA Regional table LineCode classifications and descriptions. Composite key includes partition columns (type, tablename) and LineCode data column.
+
+  fred_curated_series:
+    primaryKey:
+      - series
 
   fred_series:
     primaryKey:

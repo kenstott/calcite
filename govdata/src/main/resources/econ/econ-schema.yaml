@@ -5733,13 +5733,13 @@ partitionedTables:
         - name: month
           type: VARCHAR
     comment: >
-      Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with reference_fred_series or use fred_indicators_enriched view.
+      Federal Reserve Economic Data (FRED) time series raw observations. For metadata (series name, units, frequency, etc.), JOIN with reference_fred_curated_series or use fred_indicators_enriched view.
     columns:
       - name: series
         type: string
         nullable: true
         comment: >
-          FRED series identifier (foreign key to econ_reference.fred_series, which carries the title,
+          FRED series identifier (foreign key to econ_reference.fred_curated_series, which carries the title,
           units, frequency and seasonal adjustment for each). This table is long-format: one row per
           (series, date), so ALWAYS filter on series, because units differ per series (percent, index,
           billions of dollars, thousands of units). The list below is every series this table ingests
@@ -10455,7 +10455,7 @@ constraints:
       - columns:
           - series
         targetSchema: "${ECON_REFERENCE_SCHEMA_NAME:econ_reference}"
-        targetTable: fred_series
+        targetTable: fred_curated_series
         targetColumns:
           - series
 
@@ -10664,12 +10664,12 @@ constraints:
 tables:
   - name: fred_indicators_enriched
     type: view
-    sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators i JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.fred_series c ON i.series = c.series"
+    sql: "SELECT i.series, i.date, i.value, c.title AS series_name, c.units, c.frequency, c.seasonal_adjustment, c.last_updated, c.observation_start, c.observation_end, c.popularity FROM ${ECON_SCHEMA_NAME:econ}.fred_indicators i JOIN ${ECON_REFERENCE_SCHEMA_NAME:econ_reference}.fred_curated_series c ON i.series = c.series"
     comment: >
       FRED time series observations (series, date, value) enriched with series metadata:
       series_name (title), units, frequency, seasonal_adjustment, last_updated,
       observation_start/observation_end coverage window, and popularity — joins fred_indicators
-      to econ_reference.fred_series so callers don't need a manual lookup.
+      to econ_reference.fred_curated_series so callers don't need a manual lookup.
 
   - name: national_accounts_enriched
     type: view
