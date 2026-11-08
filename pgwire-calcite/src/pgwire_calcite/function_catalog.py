@@ -107,26 +107,24 @@ def harvest_operators(fun: str = "standard") -> List[FunctionEntry]:
 def _extra_libraries(fun: str):
     """``SqlOperatorTable`` per non-standard ``fun`` token, in declaration order.
 
-    A token that does not name a ``SqlLibrary`` is a connection-configuration
-    error — ``CalciteBackend`` would already have failed to resolve it — so the
-    ``valueOf`` lookup is left to raise rather than skipping the library and
-    silently under-reporting the catalog.
+    ``SqlLibrary.parse`` resolves each token by its fun name (``bigquery`` is
+    ``BIG_QUERY``, ``postgresql`` is ``POSTGRESQL``). A token that does not name a
+    ``SqlLibrary`` is a connection-configuration error — ``CalciteBackend`` would
+    already have failed to resolve it — so ``parse`` is left to raise rather than
+    skipping the library and silently under-reporting the catalog.
     """
     import jpype
 
     JClass = jpype.JClass
-    tokens = [t.strip().upper() for t in (fun or "").split(",") if t.strip()]
-    tokens = [t for t in tokens if t != "STANDARD"]
+    tokens = ",".join(t.strip().lower() for t in (fun or "").split(",")
+                      if t.strip() and t.strip().lower() != "standard")
     if not tokens:
         return []
     sql_library = JClass("org.apache.calcite.sql.fun.SqlLibrary")
     factory = JClass("org.apache.calcite.sql.fun.SqlLibraryOperatorTableFactory").INSTANCE
     enum_set = JClass("java.util.EnumSet")
-    tables = []
-    for token in tokens:
-        libs = enum_set.of(sql_library.valueOf(token))
-        tables.append(factory.getOperatorTable(libs))
-    return tables
+    return [factory.getOperatorTable(enum_set.of(library))
+            for library in sql_library.parse(tokens)]
 
 
 def populate_functions(db, entries: List[FunctionEntry], database_name: str) -> None:
