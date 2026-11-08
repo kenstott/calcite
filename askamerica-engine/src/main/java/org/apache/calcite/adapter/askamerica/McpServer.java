@@ -2981,6 +2981,11 @@ public class McpServer {
             + "rest on your own warehouse analysis (any warehouse_value or sql) MUST also carry a "
             + "`dashboard` or follow a render_chart/compose_dashboard call; it is refused "
             + "otherwise. Claims graded purely from publications need no chart."));
+        pubProps.set("unclaimed", prop("array",
+            "For a validation: article figures that are not factual claims, as [{figure, why}] "
+            + "(a date, an address, a page count). Every distinctive figure in the article "
+            + "(comma-grouped numbers, percentages, dollar amounts) must appear in a claim or "
+            + "here; the publish is refused otherwise. Listed on the report."));
         pubProps.set("source_url", prop("string",
             "REQUIRED for a validation (any publish whose claims array is non-empty): the "
             + "exact URL of the article or page the claims were extracted from. The browser "
@@ -4745,6 +4750,8 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceFiguresAccountedFor(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceMeasureSearched(claims));
+                        addIfPresent(gateProblems, enforceArticleFiguresClaimed(claims,
+                            args.path("source_url").asText(null), args.path("unclaimed")));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
                         addIfPresent(gateProblems, ClaimScoring.enforce(claims));
@@ -4757,6 +4764,20 @@ public class McpServer {
                             // Directly under the summary, where a reader looks first.
                             secs.add(Math.min(1, secs.size()), claimsSec);
                             renderedClaims = claimsSec;
+                        }
+                        JsonNode unclaimedFigs = args.path("unclaimed");
+                        if (unclaimedFigs.isArray() && unclaimedFigs.size() > 0) {
+                            StringBuilder ul = new StringBuilder("<ul>");
+                            for (JsonNode u : unclaimedFigs) {
+                                ul.append("<li><strong>")
+                                    .append(ReportPage.esc(u.path("figure").asText("")))
+                                    .append("</strong> &mdash; ")
+                                    .append(ReportPage.esc(u.path("why").asText("")))
+                                    .append("</li>");
+                            }
+                            ul.append("</ul>");
+                            secs.add(Math.min(2, secs.size()), new ReportPage.Section(
+                                "Figures in the article not graded as claims", ul.toString()));
                         }
                     } else {
                         addIfPresent(gateProblems, enforceValidationHasClaims(args));
@@ -7480,25 +7501,7 @@ public class McpServer {
      * earlier reporting stays: it is a referenced article.
      */
     static java.util.List<String> referencedLinks(org.jsoup.nodes.Document doc, String pageUrl) {
-        // The story body is the element whose own paragraphs carry the most text. A first
-        // <article> is often a related-story card (51st.news's Ghost theme puts them first).
-        org.jsoup.nodes.Element root = null;
-        int best = 0;
-        for (org.jsoup.nodes.Element el : doc.getAllElements()) {
-            int text = 0;
-            for (org.jsoup.nodes.Element child : el.children()) {
-                if ("p".equals(child.normalName())) {
-                    text += child.text().length();
-                }
-            }
-            if (text > best) {
-                best = text;
-                root = el;
-            }
-        }
-        if (root == null) {
-            root = doc.body();
-        }
+        org.jsoup.nodes.Element root = storyRoot(doc);
         java.util.LinkedHashMap<String, String> out = new java.util.LinkedHashMap<>();
         if (root == null) {
             return new java.util.ArrayList<>();
@@ -7534,6 +7537,32 @@ public class McpServer {
         }
         return new java.util.ArrayList<>(out.values());
     }
+
+    /** The story body: the element whose own paragraphs carry the most text (a first
+     *  {@code <article>} is often a related-story card; 51st.news's Ghost theme puts them first),
+     *  else the body. */
+    static org.jsoup.nodes.Element storyRoot(org.jsoup.nodes.Document doc) {
+        org.jsoup.nodes.Element root = null;
+        int best = 0;
+        for (org.jsoup.nodes.Element el : doc.getAllElements()) {
+            int text = 0;
+            for (org.jsoup.nodes.Element child : el.children()) {
+                if ("p".equals(child.normalName())) {
+                    text += child.text().length();
+                }
+            }
+            if (text > best) {
+                best = text;
+                root = el;
+            }
+        }
+        return root == null ? doc.body() : root;
+    }
+
+    /** Each fetched HTML page's story text ({@link #storyRoot}), keyed by normalized URL: what
+     *  the claims-coverage gate reads the article's figures from. */
+    static final java.util.Map<String, String> STORY_TEXT =
+        new java.util.concurrent.ConcurrentHashMap<>();
 
     private static String hostOf(String normalizedUrl) {
         int slash = normalizedUrl.indexOf('/');
@@ -7596,7 +7625,26 @@ public class McpServer {
     /** Figures distinctive enough to search for: comma-grouped numbers (13,051), percentages
      *  (63%, 4.1%) and dollar amounts ($21.5). Bare small integers and years match everywhere. */
     private static final java.util.regex.Pattern DISTINCTIVE_FIGURE = java.util.regex.Pattern
-        .compile("\\$\\d[\\d,]*(?:\\.\\d+)?|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?%?|\\d+(?:\\.\\d+)?%");
+        .compile("\\$\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\$\\d+(?:\\.\\d+)?"
+            + "|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?%?|\\d+(?:\\.\\d+)?%");
+
+    /** The claim's content words: lower-cased, five letters or more, minus common words. Used
+     *  to tell a figure's real source passage from the same number in an unrelated table. */
+    static java.util.Set<String> claimWords(String assertion) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (String w : assertion.toLowerCase(java.util.Locale.ROOT).split("[^a-z]+")) {
+            if (w.length() >= 5 && !CLAIM_STOPWORDS.contains(w)) {
+                out.add(w);
+            }
+        }
+        return out;
+    }
+
+    private static final java.util.Set<String> CLAIM_STOPWORDS = java.util.Set.of(
+        "about", "above", "after", "again", "almost", "among", "before", "being", "below",
+        "between", "could", "every", "first", "from", "higher", "lower", "major", "might",
+        "nearly", "other", "since", "their", "there", "these", "those", "three", "through",
+        "under", "until", "where", "which", "while", "would", "years", "percent");
 
     static java.util.List<String> distinctiveFigures(String text) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
@@ -7629,15 +7677,33 @@ public class McpServer {
             if (figures.isEmpty()) {
                 continue;
             }
+            java.util.Set<String> words = claimWords(c.path("assertion").asText(""));
             ObjectNode found = findAcrossFetched(figures, articleUrl);
             JsonNode first = null;
             String term = null;
             for (JsonNode src : found.path("sources_with_matches")) {
                 for (JsonNode t : src.path("find")) {
-                    if (first == null && t.path("total_matches").asInt() > 0) {
+                    if (first != null) {
+                        break;
+                    }
+                    // A short figure ("5.9%", "63%") turns up in unrelated tables; count a
+                    // match only when its passage also carries one of the claim's own words.
+                    JsonNode m = null;
+                    for (JsonNode cand : t.path("matches")) {
+                        String ctx = cand.path("context").asText("").toLowerCase(java.util.Locale.ROOT);
+                        for (String w : words) {
+                            if (ctx.contains(w)) {
+                                m = cand;
+                                break;
+                            }
+                        }
+                        if (m != null) {
+                            break;
+                        }
+                    }
+                    if (m != null) {
                         first = src;
                         term = t.path("term").asText();
-                        JsonNode m = t.path("matches").get(0);
                         problems.add("the assertion \"" + c.path("assertion").asText("").trim()
                             + "\" is graded '" + verdict + "', but its figure '" + term
                             + "' appears in a source you fetched: " + src.path("source_url").asText()
@@ -7699,6 +7765,59 @@ public class McpServer {
 
     private static String normalizeQuery(String q) {
         return q.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Most article figures named in one coverage refusal. */
+    static final int COVERAGE_MAX_LISTED = 40;
+
+    /**
+     * Every distinctive figure in the article's story text ({@link #distinctiveFigures}) must
+     * appear in some claim's assertion or article_value, or be listed in {@code unclaimed} with
+     * why it is not a factual claim (a date, a phone number, a quote's page count). Findings in
+     * prose alone are invisible to every other gate.
+     *
+     * <p>Measured live 2026-11-08 (daily eval q3, run 9): the claims array held 5 of the
+     * article's ~20 checkable claims; the CLCPP figures (63%, 1,487, 93%) appeared only in prose,
+     * as "could not be retrieved", though the run had fetched the report holding them.
+     */
+    private static String enforceArticleFiguresClaimed(JsonNode claims, String articleUrl,
+            JsonNode unclaimed) {
+        if (articleUrl == null || articleUrl.trim().isEmpty()) {
+            return null;
+        }
+        String story = STORY_TEXT.get(normalizeUrlForMatch(articleUrl));
+        if (story == null) {
+            return null;
+        }
+        StringBuilder claimed = new StringBuilder();
+        for (JsonNode c : claims) {
+            claimed.append(' ').append(c.path("assertion").asText("")).append(' ')
+                .append(c.path("article_value").asText(""));
+        }
+        java.util.Set<String> excused = new java.util.HashSet<>();
+        for (JsonNode u : unclaimed) {
+            if (u.hasNonNull("figure") && nonBlank(u, "why")) {
+                excused.add(u.path("figure").asText().trim());
+            }
+        }
+        String claimedText = claimed.toString();
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        for (String f : distinctiveFigures(story)) {
+            if (!claimedText.contains(f) && !excused.contains(f)) {
+                missing.add(f);
+            }
+        }
+        if (missing.isEmpty()) {
+            return null;
+        }
+        java.util.List<String> shown = missing.subList(0, Math.min(COVERAGE_MAX_LISTED,
+            missing.size()));
+        return "validation refused: the article states " + missing.size() + " figure(s) that no "
+            + "claim covers: " + String.join(", ", shown)
+            + (missing.size() > shown.size() ? ", ..." : "") + ". Put each in a graded claim "
+            + "(one claim may cover several figures, in its assertion or article_value), or list "
+            + "it in `unclaimed` as {figure, why} when it is not a factual claim (a date, an "
+            + "address, a count of pages).";
     }
 
     /** A URL reduced to what identifies the page: no scheme, no leading www., no fragment, no
@@ -8753,6 +8872,16 @@ public class McpServer {
             appendDetailRow(details, "Evidence support", supportText(support));
             appendDetailRow(details, "Errs", errsText(c.path("errs").asText("")));
             appendDetailRow(details, "Why", c.path("reason").asText(""));
+            appendDetailRow(details, "Evidence found and set aside because",
+                c.path("why_not").asText(""));
+            appendDetailRow(details, "Warehouse searched for", c.path("measure").asText(""));
+            if (c.path("searched").isArray() && c.path("searched").size() > 0) {
+                java.util.List<String> qs = new java.util.ArrayList<>();
+                for (JsonNode q : c.path("searched")) {
+                    qs.add(q.asText());
+                }
+                appendDetailRow(details, "Web searches run", String.join("; ", qs));
+            }
             appendDetailRow(details, "Overrode Jev's score because",
                 c.path("score_claim_override_reason").asText(""));
             details.append("</dl>\n");
@@ -14588,6 +14717,10 @@ public class McpServer {
                 .remove();
             java.util.List<String> referenced = referencedLinks(doc, urlStr);
             REFERENCED_LINKS.put(normalizeUrlForMatch(urlStr), referenced);
+            org.jsoup.nodes.Element story = storyRoot(doc);
+            if (story != null) {
+                STORY_TEXT.put(normalizeUrlForMatch(urlStr), story.text());
+            }
             org.jsoup.nodes.Element body = doc.body();
             StringBuilder md = new StringBuilder();
             htmlNodeToMarkdown(body, md);

@@ -242,8 +242,9 @@ class ExternalCheckGateTest {
     }
 
     @Test void distinctiveFiguresSkipsYearsAndSmallIntegers() {
-        assertEquals(List.of("63%", "1,487", "$21.5", "4.1%"),
-            McpServer.distinctiveFigures("In 2026, 63% of 1,487 cases; $21.5 million; 4.1% and 12 days"));
+        assertEquals(List.of("63%", "1,487", "$21.5", "4.1%", "$25,000", "$50,000"),
+            McpServer.distinctiveFigures("In 2026, 63% of 1,487 cases; $21.5 million; 4.1% and 12 days; "
+                + "\"$25,000 or $50,000,\" he said"));
     }
 
     @Test void findAcrossFetchedSearchesEverySourceExceptTheArticle() throws Exception {
@@ -263,7 +264,8 @@ class ExternalCheckGateTest {
     @Test void negativeVerdictOnAFigureFoundInAFetchedSourceIsRefused() throws Exception {
         try {
             fetchedTwoReports();
-            String problem = figuresGate("[{\"assertion\":\"stayed home fell from 77% to 63%\","
+            String problem = figuresGate("[{\"assertion\":\"among tenants represented by a CLCPP "
+                + "attorney, the share who stayed home fell from 77% to 63%\","
                 + "\"verdict\":\"partially false\",\"article_value\":\"63%\"}]");
             assertNotNull(problem);
             assertTrue(problem.contains("clcpp-jan-jun-2026.pdf page 2"), problem);
@@ -333,5 +335,58 @@ class ExternalCheckGateTest {
             + "{\"assertion\":\"b\",\"verdict\":\"true\"},"
             + "{\"assertion\":\"He is a liar\",\"kind\":\"attack\",\"verdict\":\"unsupported\","
             + "\"reason\":\"insult\"}]"));
+    }
+
+    /** Run 9's false alarm: "5.9%" in an unrelated court caseload table is not the source of an
+     *  unemployment claim. */
+    @Test void aFigureInAnUnrelatedPassageIsNotEvidence() throws Exception {
+        try {
+            fetch(ARTICLE, null);
+            String courts = "https://www.dccourts.gov/summary.pdf";
+            fetch(courts, null);
+            McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(courts),
+                List.of("Tax Division Civil 622 636 773 -25.8% Criminal 5.9% Total 624"));
+            assertNull(figuresGate("[{\"assertion\":\"the District's unemployment rate rose to "
+                + "5.9% in August\",\"verdict\":\"partially false\",\"article_value\":\"5.9%\"}]"));
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    private static String coverageGate(String claimsJson, String unclaimedJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceArticleFiguresClaimed",
+            JsonNode.class, String.class, JsonNode.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE,
+            MAPPER.readTree(unclaimedJson));
+    }
+
+    @Test void everyArticleFigureMustBeClaimedOrExcused() throws Exception {
+        try {
+            McpServer.STORY_TEXT.put(McpServer.normalizeUrlForMatch(ARTICLE),
+                "Prices rose 4.1% and 2,420 households were evicted; share fell to 63% across "
+                + "1,487 cases. Call 202-555-0100 for help (since 2019).");
+            String problem = coverageGate("[{\"assertion\":\"prices rose 4.1%\",\"verdict\":\"true\"},"
+                + "{\"assertion\":\"2,420 households were evicted\",\"verdict\":\"unsupported\"}]",
+                "[]");
+            assertNotNull(problem);
+            assertTrue(problem.contains("2 figure(s)") && problem.contains("63%")
+                && problem.contains("1,487"), problem);
+            assertNull(coverageGate("[{\"assertion\":\"prices rose 4.1%\",\"verdict\":\"true\"},"
+                + "{\"assertion\":\"2,420 households were evicted\",\"verdict\":\"unsupported\"},"
+                + "{\"assertion\":\"share fell to 63%\",\"verdict\":\"true\","
+                + "\"article_value\":\"63% of 1,487 cases\"}]", "[]"));
+            assertNull(coverageGate("[{\"assertion\":\"prices rose 4.1%\",\"verdict\":\"true\"},"
+                + "{\"assertion\":\"2,420 households were evicted\",\"verdict\":\"unsupported\"}]",
+                "[{\"figure\":\"63%\",\"why\":\"a quote's aside\"},"
+                + "{\"figure\":\"1,487\",\"why\":\"page count\"}]"));
+        } finally {
+            McpServer.STORY_TEXT.clear();
+        }
+    }
+
+    @Test void coverageGateNeedsTheArticleText() throws Exception {
+        McpServer.STORY_TEXT.clear();
+        assertNull(coverageGate("[]", "[]"));
     }
 }
