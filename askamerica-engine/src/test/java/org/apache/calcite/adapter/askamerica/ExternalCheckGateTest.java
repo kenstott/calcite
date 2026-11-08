@@ -211,4 +211,84 @@ class ExternalCheckGateTest {
         assertEquals("newamerica.org/insights/dc-evictions",
             McpServer.normalizeUrlForMatch("http://www.NewAmerica.org/insights/dc-evictions/#top"));
     }
+
+    private static String figuresGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceFiguresAccountedFor",
+            JsonNode.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE);
+    }
+
+    private static final String NEW_REPORT = "https://example.org/clcpp-jan-jun-2026.pdf";
+    private static final String OLD_REPORT = "https://example.org/clcpp-jul-dec-2025.pdf";
+
+    private void fetchedTwoReports() throws Exception {
+        fetch(ARTICLE, null);
+        fetch(OLD_REPORT, null);
+        fetch(NEW_REPORT, null);
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(ARTICLE),
+            List.of("The share fell from 77% to 63% across 1,487 cases."));
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(OLD_REPORT),
+            List.of("possession fell from 77% to 66% in the current period"));
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(NEW_REPORT),
+            List.of("intro page", "tenants retained possession in 319 cases (63%) and ...",
+                "served with a complaint in 1,487 (86%)"));
+    }
+
+    @Test void distinctiveFiguresSkipsYearsAndSmallIntegers() {
+        assertEquals(List.of("63%", "1,487", "$21.5", "4.1%"),
+            McpServer.distinctiveFigures("In 2026, 63% of 1,487 cases; $21.5 million; 4.1% and 12 days"));
+    }
+
+    @Test void findAcrossFetchedSearchesEverySourceExceptTheArticle() throws Exception {
+        try {
+            fetchedTwoReports();
+            JsonNode r = McpServer.findAcrossFetched(List.of("63%"), ARTICLE);
+            assertEquals(2, r.path("sources_searched").asInt());
+            assertEquals(1, r.path("sources_with_matches").size());
+            JsonNode src = r.path("sources_with_matches").get(0);
+            assertEquals(NEW_REPORT, src.path("source_url").asText());
+            assertEquals(2, src.path("find").get(0).path("matches").get(0).path("page").asInt());
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    @Test void negativeVerdictOnAFigureFoundInAFetchedSourceIsRefused() throws Exception {
+        try {
+            fetchedTwoReports();
+            String problem = figuresGate("[{\"assertion\":\"stayed home fell from 77% to 63%\","
+                + "\"verdict\":\"partially false\",\"article_value\":\"63%\"}]");
+            assertNotNull(problem);
+            assertTrue(problem.contains("clcpp-jan-jun-2026.pdf page 2"), problem);
+            assertTrue(problem.contains("319 cases (63%)"), problem);
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    @Test void whyNotOrAPositiveVerdictPasses() throws Exception {
+        try {
+            fetchedTwoReports();
+            assertNull(figuresGate("[{\"assertion\":\"fell to 63%\",\"verdict\":\"false\","
+                + "\"article_value\":\"63%\",\"why_not\":\"that 63% covers all service levels, "
+                + "not fully represented tenants\"}]"));
+            assertNull(figuresGate("[{\"assertion\":\"fell to 63%\",\"verdict\":\"true\","
+                + "\"article_value\":\"63%\"}]"));
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    @Test void aFigureOnlyInTheArticleItselfPasses() throws Exception {
+        try {
+            fetchedTwoReports();
+            McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(ARTICLE),
+                List.of("2,420 households were evicted in fiscal year 2025."));
+            assertNull(figuresGate("[{\"assertion\":\"2,420 households were evicted\","
+                + "\"verdict\":\"unsupported\",\"reason\":\"x\",\"article_value\":\"2,420\"}]"));
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
 }

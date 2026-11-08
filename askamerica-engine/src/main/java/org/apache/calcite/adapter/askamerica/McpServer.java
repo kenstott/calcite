@@ -861,7 +861,11 @@ public class McpServer {
             + "source the article links before publishing; preview_report refuses the report "
             + "and names each linked source not yet fetched. Check a claim against a long "
             + "source with web_fetch `find`, searching the figures and phrases the claim rests "
-            + "on across every page; never grade from the first pages alone. A primary source "
+            + "on across every page; never grade from the first pages alone. Before grading "
+            + "ANY claim, call web_fetch with find and NO url, searching the claim's distinctive "
+            + "figures and phrases (\"319 cases\", \"1,487\", \"63%\") across ALL fetched "
+            + "sources, and grade on what it returns: a figure that appears in any fetched "
+            + "source must be accounted for. A primary source "
             + "web_fetch "
             + "cannot reach (HTTP 401/403/429/451) must be retried with the client's own "
             + "fetch tool before it is graded 'not checkable here'.\n"
@@ -2948,6 +2952,9 @@ public class McpServer {
             + "attempted, whatever it found: a `sources` URL you fetched with web_fetch this "
             + "session (a 403 or timeout counts; the article itself does not), or `searched`, the "
             + "list of web search queries you ran for it. A claim with neither is refused. "
+            + "`why_not`: when preview_report refuses a claim because one of its figures appears "
+            + "in a fetched source, either act on that evidence or say here why it does not "
+            + "change the grade; the reason is printed on the report. "
             + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. Use 'unsupported' when the piece asserts it as fact with no "
             + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
@@ -3575,7 +3582,8 @@ public class McpServer {
         ObjectNode webFetchProps = MAPPER.createObjectNode();
         webFetchProps.set(
             "url", prop("string",
-            "Direct HTTP(S) URL. Must be a genuine, already-known link, not a guess."));
+            "Direct HTTP(S) URL. Must be a genuine, already-known link, not a guess. Omit it "
+            + "only together with find, to search every document fetched this session."));
         webFetchProps.set(
             "max_pages", prop("integer", "PDF only: max pages to extract per call (default 40)."));
         webFetchProps.set(
@@ -3592,7 +3600,9 @@ public class McpServer {
             + "PowerPoint, text. MUST be used to check a claim against a long document: search "
             + "the figures and phrases the claim rests on (\"63%\", \"1,487\", \"tenant "
             + "possession\"). Never conclude a figure is absent from a document you read only "
-            + "part of. Served from cache after the first fetch."));
+            + "part of. Served from cache after the first fetch. With no url, searches EVERY "
+            + "document fetched with web_fetch this session and returns the matches grouped by "
+            + "source: one call finds where a figure appears in anything you have read."));
         webFetchProps.set(
             "max_sheets", prop("integer",
             "Excel only: max worksheets to extract when sheet_names is not given (default 5)."));
@@ -3676,7 +3686,7 @@ public class McpServer {
             + "just re-parses them, it does not hit the network again. `prompt` is accepted (a "
             + "habit from other fetch-tool conventions) but does NOTHING — there is no "
             + "extraction/summarization mode here; use the structural navigation above instead.",
-            schema(webFetchProps, new String[]{"url"})));
+            schema(webFetchProps, new String[]{})));
         // (score_query / score_aliases are declared on webFetchProps above the tool.)
 
         ObjectNode telemetryProps = MAPPER.createObjectNode();
@@ -4726,6 +4736,8 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceExternalCheckAttempted(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceReferencedSourcesRead(
+                            args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceFiguresAccountedFor(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
@@ -7569,6 +7581,68 @@ public class McpServer {
             + unread.size() + " were never fetched: " + String.join(" , ", unread) + " . "
             + "web_fetch each one (a 403, 404 or timeout counts as fetched), check the claims "
             + "that rest on it against what it actually says, then publish again.";
+    }
+
+    /** Verdicts that say the claim is wrong or could not be confirmed. */
+    private static final java.util.Set<String> NEGATIVE_VERDICTS = java.util.Set.of(
+        "partially false", "mostly false", "false", "unsupported", "not checkable here");
+
+    /** Figures distinctive enough to search for: comma-grouped numbers (13,051), percentages
+     *  (63%, 4.1%) and dollar amounts ($21.5). Bare small integers and years match everywhere. */
+    private static final java.util.regex.Pattern DISTINCTIVE_FIGURE = java.util.regex.Pattern
+        .compile("\\$\\d[\\d,]*(?:\\.\\d+)?|\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?%?|\\d+(?:\\.\\d+)?%");
+
+    static java.util.List<String> distinctiveFigures(String text) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher m = DISTINCTIVE_FIGURE.matcher(text);
+        while (m.find()) {
+            out.add(m.group());
+        }
+        return new java.util.ArrayList<>(out);
+    }
+
+    /**
+     * A claim graded wrong or unconfirmable is refused when one of its figures appears in a
+     * source the session fetched (other than the article itself), quoting where, unless the
+     * claim says in {@code why_not} why that passage does not change the grade.
+     *
+     * <p>Measured live 2026-11-07 (daily eval q3, run 7): the agent fetched both CLCPP reports
+     * the article links, searched the older one for "63%" and "1,487", and reported a mismatch;
+     * both figures are on pages 6-15 of the newer one it had already fetched.
+     */
+    private static String enforceFiguresAccountedFor(JsonNode claims, String articleUrl) {
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (!NEGATIVE_VERDICTS.contains(verdict) || nonBlank(c, "why_not")) {
+                continue;
+            }
+            String basis = nonBlank(c, "article_value") ? c.path("article_value").asText()
+                : c.path("assertion").asText("");
+            java.util.List<String> figures = distinctiveFigures(basis);
+            if (figures.isEmpty()) {
+                continue;
+            }
+            ObjectNode found = findAcrossFetched(figures, articleUrl);
+            JsonNode first = null;
+            String term = null;
+            for (JsonNode src : found.path("sources_with_matches")) {
+                for (JsonNode t : src.path("find")) {
+                    if (first == null && t.path("total_matches").asInt() > 0) {
+                        first = src;
+                        term = t.path("term").asText();
+                        JsonNode m = t.path("matches").get(0);
+                        problems.add("the assertion \"" + c.path("assertion").asText("").trim()
+                            + "\" is graded '" + verdict + "', but its figure '" + term
+                            + "' appears in a source you fetched: " + src.path("source_url").asText()
+                            + " page " + m.path("page").asInt() + ": \"" + m.path("context").asText()
+                            + "\". Re-check the claim against that source, or say in why_not "
+                            + "why that passage does not change the grade.");
+                    }
+                }
+            }
+        }
+        return problems.isEmpty() ? null : "validation refused: " + String.join(" ALSO: ", problems);
     }
 
     /** A URL reduced to what identifies the page: no scheme, no leading www., no fragment, no
@@ -14520,44 +14594,52 @@ public class McpServer {
      * document's content. A long report is checked by searching for the figures a claim rests
      * on, not by reading whichever pages come first.
      */
+    /** One document's text, page by page (one page for formats without pages). Throws on an
+     *  unreadable document; the caller reports it. */
+    static java.util.List<String> extractPages(String kind, String urlStr, byte[] bytes)
+            throws Exception {
+        java.util.List<String> pages = new java.util.ArrayList<>();
+        switch (kind) {
+        case "pdf":
+            try (org.apache.pdfbox.pdmodel.PDDocument doc =
+                     org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
+                org.apache.pdfbox.text.PDFTextStripper stripper =
+                    new org.apache.pdfbox.text.PDFTextStripper();
+                for (int p = 1; p <= doc.getNumberOfPages(); p++) {
+                    stripper.setStartPage(p);
+                    stripper.setEndPage(p);
+                    pages.add(stripper.getText(doc));
+                }
+            }
+            break;
+        case "html":
+            pages.add(MAPPER.readTree(parseHtmlBytes(urlStr, bytes, Integer.MAX_VALUE))
+                .path("markdown").asText(""));
+            break;
+        case "docx":
+            pages.add(MAPPER.readTree(parseDocxBytes(urlStr, bytes, Integer.MAX_VALUE, 0))
+                .path("text").asText(""));
+            break;
+        case "xlsx":
+            pages.add(parseXlsxBytes(urlStr, bytes, 20, 5000, null));
+            break;
+        case "pptx":
+            pages.add(parsePptxBytes(urlStr, bytes, 300, null));
+            break;
+        case "text":
+            pages.add(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
+            break;
+        default:
+            throw new IllegalArgumentException("content type '" + kind + "' has no text");
+        }
+        return pages;
+    }
+
     private static String findInDocument(String kind, String urlStr, byte[] bytes,
             java.util.List<String> terms) {
-        java.util.List<String> pages = new java.util.ArrayList<>();
+        java.util.List<String> pages;
         try {
-            switch (kind) {
-            case "pdf":
-                try (org.apache.pdfbox.pdmodel.PDDocument doc =
-                         org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
-                    org.apache.pdfbox.text.PDFTextStripper stripper =
-                        new org.apache.pdfbox.text.PDFTextStripper();
-                    for (int p = 1; p <= doc.getNumberOfPages(); p++) {
-                        stripper.setStartPage(p);
-                        stripper.setEndPage(p);
-                        pages.add(stripper.getText(doc));
-                    }
-                }
-                break;
-            case "html":
-                pages.add(MAPPER.readTree(parseHtmlBytes(urlStr, bytes, Integer.MAX_VALUE))
-                    .path("markdown").asText(""));
-                break;
-            case "docx":
-                pages.add(MAPPER.readTree(parseDocxBytes(urlStr, bytes, Integer.MAX_VALUE, 0))
-                    .path("text").asText(""));
-                break;
-            case "xlsx":
-                pages.add(parseXlsxBytes(urlStr, bytes, 20, 5000, null));
-                break;
-            case "pptx":
-                pages.add(parsePptxBytes(urlStr, bytes, 300, null));
-                break;
-            case "text":
-                pages.add(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
-                break;
-            default:
-                return "Could not search " + urlStr + ": content type '" + kind
-                    + "' has no text to search.";
-            }
+            pages = extractPages(kind, urlStr, bytes);
         // fallback-guard: allow -- error text is the answer, same pattern as the parsers
         } catch (Exception e) {
             log.println("[askamerica-mcp] web_fetch find error: " + e.getMessage());
@@ -14566,9 +14648,98 @@ public class McpServer {
         return findMatches(urlStr, pages, terms).toString();
     }
 
+    /**
+     * The text of every document fetched with web_fetch, keyed by normalized URL, so one call
+     * can search everything the session has read ({@link #findAcrossFetched}). The byte cache
+     * keeps only {@link #WEB_FETCH_CACHE_MAX_ENTRIES} documents; a validation reads dozens.
+     */
+    private static final int FETCHED_TEXT_MAX_ENTRIES = 400;
+    static final java.util.Map<String, java.util.List<String>> FETCHED_TEXT =
+        java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<String, java.util.List<String>>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(
+                        java.util.Map.Entry<String, java.util.List<String>> eldest) {
+                    return size() > FETCHED_TEXT_MAX_ENTRIES;
+                }
+            });
+
+    private static void recordFetchedText(String urlStr, String kind, byte[] bytes) {
+        String key = normalizeUrlForMatch(urlStr);
+        if (FETCHED_TEXT.containsKey(key)) {
+            return;
+        }
+        try {
+            FETCHED_TEXT.put(key, extractPages(kind, urlStr, bytes));
+        // fallback-guard: allow -- the fetch itself still reports the parse error; this only
+        // leaves the document out of the cross-source index, and findAcrossFetched lists it
+        } catch (Exception e) {
+            log.println("[askamerica-mcp] fetched-text index skipped " + urlStr + ": "
+                + e.getMessage());
+        }
+    }
+
+    /** Matches shown per term per source in a cross-source search. */
+    static final int FIND_ACROSS_MAX_PER_SOURCE = 5;
+
+    /**
+     * web_fetch {@code find} with no url: searches every document fetched with web_fetch in
+     * this session, from its stored text, and returns the matches grouped by source. One call
+     * answers "where does this figure appear in anything I have read".
+     */
+    static ObjectNode findAcrossFetched(java.util.List<String> terms, String excludeUrl) {
+        String exclude = excludeUrl == null ? null : normalizeUrlForMatch(excludeUrl);
+        java.util.LinkedHashMap<String, String> urls = new java.util.LinkedHashMap<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText(""))) {
+                String u = e.path("args").path("url").asText("");
+                if (!u.isEmpty()) {
+                    urls.putIfAbsent(normalizeUrlForMatch(u), u);
+                }
+            }
+        }
+        ObjectNode out = MAPPER.createObjectNode();
+        ArrayNode results = out.putArray("sources_with_matches");
+        ArrayNode noText = MAPPER.createArrayNode();
+        int searched = 0;
+        for (java.util.Map.Entry<String, String> u : urls.entrySet()) {
+            if (u.getKey().equals(exclude)) {
+                continue;
+            }
+            java.util.List<String> pages = FETCHED_TEXT.get(u.getKey());
+            if (pages == null) {
+                noText.add(u.getValue());
+                continue;
+            }
+            searched++;
+            ObjectNode r = findMatches(u.getValue(), pages, terms, FIND_ACROSS_MAX_PER_SOURCE);
+            boolean any = false;
+            for (JsonNode t : r.path("find")) {
+                if (t.path("total_matches").asInt() > 0) {
+                    any = true;
+                }
+            }
+            if (any) {
+                results.add(r);
+            }
+        }
+        out.put("sources_searched", searched);
+        if (noText.size() > 0) {
+            out.set("fetched_without_text", noText);
+            out.put("fetched_without_text_note", "These were fetched but have no searchable "
+                + "text (blocked, failed, or unparseable), so they were not searched.");
+        }
+        return out;
+    }
+
     /** The search behind {@link #findInDocument}, over already-extracted page texts. */
     static ObjectNode findMatches(String urlStr, java.util.List<String> pages,
             java.util.List<String> terms) {
+        return findMatches(urlStr, pages, terms, FIND_MAX_MATCHES);
+    }
+
+    static ObjectNode findMatches(String urlStr, java.util.List<String> pages,
+            java.util.List<String> terms, int maxMatches) {
         ObjectNode out = MAPPER.createObjectNode();
         out.put("source_url", urlStr);
         out.put("total_pages", pages.size());
@@ -14591,7 +14762,7 @@ public class McpServer {
                 int at;
                 while ((at = lower.indexOf(needle, from)) >= 0) {
                     total++;
-                    if (matches.size() < FIND_MAX_MATCHES) {
+                    if (matches.size() < maxMatches) {
                         ObjectNode m = matches.addObject();
                         m.put("page", p + 1);
                         int s = Math.max(0, at - FIND_CONTEXT);
@@ -14603,8 +14774,8 @@ public class McpServer {
                 }
             }
             r.put("total_matches", total);
-            if (total > FIND_MAX_MATCHES) {
-                r.put("note", "Only the first " + FIND_MAX_MATCHES + " of " + total
+            if (total > maxMatches) {
+                r.put("note", "Only the first " + maxMatches + " of " + total
                     + " matches are shown. Search a longer, more specific phrase.");
             }
         }
@@ -14612,7 +14783,20 @@ public class McpServer {
     }
 
     private static String webFetch(JsonNode args) {
-        String urlStr = args.path("url").asText();
+        String urlStr = args.path("url").asText("");
+        if (urlStr.trim().isEmpty()) {
+            java.util.List<String> terms = new java.util.ArrayList<>();
+            for (JsonNode t : args.path("find")) {
+                if (!t.asText("").trim().isEmpty()) {
+                    terms.add(t.asText().trim());
+                }
+            }
+            if (terms.isEmpty()) {
+                throw new IllegalArgumentException("web_fetch needs a url, or find with no url "
+                    + "to search every document fetched this session.");
+            }
+            return findAcrossFetched(terms, null).toString();
+        }
         int maxPages = args.has("max_pages")
             ? Math.min(Math.max(1, args.get("max_pages").asInt()), 200) : 40;
         int maxSheets = args.has("max_sheets")
@@ -14702,6 +14886,7 @@ public class McpServer {
         String kind = sniffContentKind(bytes, contentType);
         log.println("[askamerica-mcp] web_fetch url=" + urlStr + " content-type="
             + contentType + " detected=" + kind);
+        recordFetchedText(urlStr, kind, bytes);
         if (args.path("find").isArray() && args.path("find").size() > 0) {
             java.util.List<String> terms = new java.util.ArrayList<>();
             for (JsonNode t : args.path("find")) {
