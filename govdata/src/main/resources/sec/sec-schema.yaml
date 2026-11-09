@@ -57,6 +57,10 @@ bulk13fDir: "${SEC_BULK_13F_DIR:}"
 # data.sec.gov/submissions/CIK*.json fetches. It lags live by up to a day, so a lookup that misses
 # in it is rechecked live. Empty = off. Passed through the inline model like bulk13fDir.
 bulkSubmissionsZip: "${SEC_BULK_SUBMISSIONS_ZIP:}"
+# true = the zip is the only source: a filer or accession it lacks is reported missing and never
+# fetched from data.sec.gov. For repair runs that must make no per-filer requests; the daily run
+# leaves it false so filings newer than the nightly zip are rechecked live.
+bulkSubmissionsAuthoritative: "${SEC_BULK_SUBMISSIONS_AUTHORITATIVE:false}"
 # A tree of filing documents unpacked from EDGAR's daily feed (govdata/scripts/fetch-edgar-feed.sh).
 # A document request it can answer is read locally instead of fetched from sec.gov; anything it
 # lacks is fetched as before. The tree is durable and takes days to rebuild: never delete it. A

@@ -4609,7 +4609,12 @@ public class SecSchemaFactory implements GovDataSubSchemaFactory {
     if (path != null && path.contains("${")) {
       path = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(path);
     }
-    SecSubmissionsBulk.install(path);
+    Object auth = operand != null ? operand.get("bulkSubmissionsAuthoritative") : null;
+    String authText = auth == null ? "false" : String.valueOf(auth);
+    if (authText.contains("${")) {
+      authText = org.apache.calcite.adapter.file.etl.VariableResolver.resolveEnvVars(authText);
+    }
+    SecSubmissionsBulk.install(path, Boolean.parseBoolean(authText.trim()));
     submissionsBulkInstalled = true;
   }
 

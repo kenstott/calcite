@@ -535,8 +535,21 @@ public class DocumentSource {
       if (local != null) {
         return local;
       }
+      if (resolver.authoritative()) {
+        throw new IOException("not in the local copy, and that copy is authoritative so it is "
+            + "not fetched live: " + url);
+      }
     }
     return fetchUrl(url);
+  }
+
+  /**
+   * True when a registered {@link LocalContentResolver} covers {@code url} and its miss is final:
+   * the URL is not fetched from the network and a recheck against the live source is not made.
+   */
+  public boolean isLocalContentAuthoritative(String url) {
+    LocalContentResolver resolver = localResolverFor(url);
+    return resolver != null && resolver.authoritative();
   }
 
   /**
@@ -574,6 +587,14 @@ public class DocumentSource {
      * The held bytes for {@code url}, or null when the copy does not hold it. For a document
      * written to the cache unchanged; the default encodes {@link #resolve} as UTF-8.
      */
+    /**
+     * True when a URL this copy does not hold is reported as missing rather than fetched live.
+     * For a run that must make no requests to the source host.
+     */
+    default boolean authoritative() {
+      return false;
+    }
+
     default byte[] resolveBytes(String url) throws IOException {
       String text = resolve(url);
       return text == null ? null : text.getBytes(StandardCharsets.UTF_8);

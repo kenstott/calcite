@@ -752,7 +752,8 @@ public class DocumentETLProcessor {
     }
 
     String result = lookupAccession(documentSource, cik, submissions, accession);
-    if (result == null && submissions.local) {
+    if (result == null && submissions.local
+        && !documentSource.isLocalContentAuthoritative(submissionsUrl)) {
       // The local copy is a nightly snapshot: an accession filed since is not in it. Only a miss
       // against the live source is a real absence, so look once more, live, and keep that answer
       // for this CIK from then on.

@@ -198,6 +198,20 @@ export ETL_PARALLEL_THREADS="$THREADS"
 export ETL_HEAP_MIN="$((HEAP_GB / 2))g"
 export ETL_HEAP_MAX="${HEAP_GB}g"
 
+# The per-filer submissions JSON comes from SEC's nightly submissions.zip, never from data.sec.gov:
+# a repair asks for tens of thousands of accessions and sec.gov blocks this host within minutes of
+# per-CIK requests (#1054). A zip already on disk is reused with no network call; otherwise one
+# conditional GET fetches it (honouring the host cool-down). A filer or accession the zip lacks is
+# reported missing, not fetched live (SEC_BULK_SUBMISSIONS_AUTHORITATIVE).
+SUBMISSIONS_BULK_DIR="${SEC_SUBMISSIONS_BULK_DIR:-/var/tmp/govdata/bulk-submissions}"
+if [ ! -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
+  "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" \
+    || { echo "fix-sec: no submissions.zip in $SUBMISSIONS_BULK_DIR and it could not be fetched; refusing to fall back to per-CIK requests" >&2; exit 1; }
+fi
+export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
+export SEC_BULK_SUBMISSIONS_AUTHORITATIVE=true
+log_info "fix-sec: submissions from $SEC_BULK_SUBMISSIONS_ZIP (authoritative, no live per-CIK requests)"
+
 ARG_MAX="$(getconf ARG_MAX 2>/dev/null || echo 2097152)"
 MAX_BATCH=$(( (ARG_MAX / 2) / 21 ))
 if [ "$BATCH_SIZE" -gt "$MAX_BATCH" ]; then

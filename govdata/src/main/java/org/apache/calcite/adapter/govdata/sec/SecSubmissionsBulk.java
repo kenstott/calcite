@@ -49,11 +49,17 @@ final class SecSubmissionsBulk implements DocumentSource.LocalContentResolver, A
   private static final long LOG_EVERY = 5000;
 
   private final ZipFile zip;
+  private final boolean authoritative;
   private final AtomicLong hits = new AtomicLong();
   private final AtomicLong misses = new AtomicLong();
 
-  private SecSubmissionsBulk(ZipFile zip) {
+  private SecSubmissionsBulk(ZipFile zip, boolean authoritative) {
     this.zip = zip;
+    this.authoritative = authoritative;
+  }
+
+  @Override public boolean authoritative() {
+    return authoritative;
   }
 
   /**
@@ -61,7 +67,7 @@ final class SecSubmissionsBulk implements DocumentSource.LocalContentResolver, A
    * A configured path that is missing or unreadable is an error, not a reason to quietly fetch
    * every filer from sec.gov.
    */
-  static void install(String zipPath) {
+  static void install(String zipPath, boolean authoritative) {
     if (zipPath == null || zipPath.trim().isEmpty()) {
       LOGGER.info("submissions bulk file: not configured (bulkSubmissionsZip empty): every "
           + "filer's submissions JSON is fetched from data.sec.gov");
@@ -70,16 +76,17 @@ final class SecSubmissionsBulk implements DocumentSource.LocalContentResolver, A
     try {
       // justification: transient local download of SEC's nightly file, read in place
       File file = new File(zipPath.trim());
-      SecSubmissionsBulk bulk = new SecSubmissionsBulk(new ZipFile(file));
+      SecSubmissionsBulk bulk = new SecSubmissionsBulk(new ZipFile(file), authoritative);
       DocumentSource.registerLocalContentResolver(URL_PREFIX, bulk);
       Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
         @Override public void run() {
           LOGGER.info("submissions bulk file: run finished, {} answered locally, {} not in the "
-              + "file (fetched live)", bulk.hits(), bulk.misses());
+              + "file ({})", bulk.hits(), bulk.misses(),
+              authoritative ? "reported missing, none fetched live" : "fetched live");
         }
       }, "submissions-bulk-summary"));
-      LOGGER.info("submissions bulk file: using {} ({} bytes, last modified {})", file,
-          file.length(), Instant.ofEpochMilli(file.lastModified()));
+      LOGGER.info("submissions bulk file: using {} ({} bytes, last modified {}), authoritative={}",
+          file, file.length(), Instant.ofEpochMilli(file.lastModified()), authoritative);
     } catch (IOException e) {
       throw new IllegalStateException(
           "bulkSubmissionsZip " + zipPath + " is configured but could not be opened", e);
@@ -88,7 +95,12 @@ final class SecSubmissionsBulk implements DocumentSource.LocalContentResolver, A
 
   /** Opens {@code file}; for tests and callers that manage the resolver themselves. */
   static SecSubmissionsBulk open(File file) throws IOException {
-    return new SecSubmissionsBulk(new ZipFile(file)); // justification: transient local download
+    return open(file, false);
+  }
+
+  static SecSubmissionsBulk open(File file, boolean authoritative) throws IOException {
+    // justification: transient local download
+    return new SecSubmissionsBulk(new ZipFile(file), authoritative);
   }
 
   @Override public String resolve(String url) throws IOException {

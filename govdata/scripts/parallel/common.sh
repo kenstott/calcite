@@ -1467,7 +1467,7 @@ get_timeout_config() {
 _sec_bulk_operand_pairs() {
   local pair var key val
   for pair in "SEC_BULK_13F_DIR:bulk13fDir" "SEC_BULK_SUBMISSIONS_ZIP:bulkSubmissionsZip" \
-      "SEC_FEED_DIR:feedDir"; do
+      "SEC_BULK_SUBMISSIONS_AUTHORITATIVE:bulkSubmissionsAuthoritative" "SEC_FEED_DIR:feedDir"; do
     var="${pair%%:*}"
     key="${pair##*:}"
     val="${!var:-}"

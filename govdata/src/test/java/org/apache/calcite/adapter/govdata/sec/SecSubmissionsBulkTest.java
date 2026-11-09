@@ -21,8 +21,10 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The nightly submissions.zip answers the per-filer submissions URLs, and only those. */
 @Tag("unit")
@@ -76,6 +78,35 @@ class SecSubmissionsBulkTest {
     }
   }
 
+  @Test void anAuthoritativeFileReportsAMissInsteadOfFetchingLive(@TempDir File dir)
+      throws Exception {
+    org.apache.calcite.adapter.file.etl.DocumentSource.clearLocalContentResolvers();
+    try (SecSubmissionsBulk bulk = SecSubmissionsBulk.open(zip(dir), true)) {
+      org.apache.calcite.adapter.file.etl.DocumentSource.registerLocalContentResolver(
+          SecSubmissionsBulk.URL_PREFIX, bulk);
+      String held = "https://data.sec.gov/submissions/CIK0000019617.json";
+      String absent = "https://data.sec.gov/submissions/CIK0000000002.json";
+      org.apache.calcite.adapter.file.etl.DocumentSource source =
+          new org.apache.calcite.adapter.file.etl.DocumentSource(
+              org.apache.calcite.adapter.file.etl.HttpSourceConfig.builder().url(held).build(),
+              null, dir.getPath());
+      assertTrue(source.isLocalContentAuthoritative(held));
+      assertEquals("{\"name\":\"JPMORGAN CHASE & CO\",\"filings\":{}}",
+          source.fetchUrlContent(held));
+      long before = EdgarRateLimiter.acquired();
+      assertThrows(java.io.IOException.class, () -> source.fetchUrlContent(absent));
+      assertEquals(before, EdgarRateLimiter.acquired());
+    } finally {
+      org.apache.calcite.adapter.file.etl.DocumentSource.clearLocalContentResolvers();
+    }
+  }
+
+  @Test void aNonAuthoritativeFileIsNotAuthoritative(@TempDir File dir) throws Exception {
+    try (SecSubmissionsBulk bulk = SecSubmissionsBulk.open(zip(dir))) {
+      assertFalse(bulk.authoritative());
+    }
+  }
+
   @Test void otherUrlsAndOtherEntriesAreNeverServed(@TempDir File dir) throws Exception {
     try (SecSubmissionsBulk bulk = SecSubmissionsBulk.open(zip(dir))) {
       assertNull(bulk.resolve("https://www.sec.gov/Archives/edgar/data/19617/x.json"));
@@ -87,6 +118,6 @@ class SecSubmissionsBulkTest {
 
   @Test void aConfiguredFileThatIsMissingIsAnError(@TempDir File dir) {
     assertThrows(IllegalStateException.class,
-        () -> SecSubmissionsBulk.install(new File(dir, "absent.zip").getAbsolutePath()));
+        () -> SecSubmissionsBulk.install(new File(dir, "absent.zip").getAbsolutePath(), false));
   }
 }
