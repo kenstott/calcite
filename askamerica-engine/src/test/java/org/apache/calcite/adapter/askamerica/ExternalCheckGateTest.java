@@ -451,4 +451,92 @@ class ExternalCheckGateTest {
             + "{\"assertion\":\"The mayor is a crook\",\"verdict\":\"unsupported\","
             + "\"kind\":\"attack\"}]"));
     }
+
+    private static String namedGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceNamedSubjectRead",
+            JsonNode.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE);
+    }
+
+    private static final String DON = "You have Don Jr. getting hundreds of thousands from an oligarch";
+    private static final String STORY = "https://www.propublica.org/article/wedding";
+
+    private static String donClaim(String extra) {
+        return "[{\"assertion\":\"" + DON + "\",\"verdict\":\"unsupported\"" + extra + "}]";
+    }
+
+    /** The q6 shape: a named subject, listed searches, no page opened. */
+    @Test void namedSubjectUnsupportedFromSearchesAloneIsRefused() throws Exception {
+        String problem = namedGate(donClaim(",\"searched\":[\"Don Jr wedding oligarch\"]"));
+        assertNotNull(problem);
+        assertTrue(problem.contains("Don Jr."), problem);
+        assertTrue(problem.contains("'not checkable here'"), problem);
+    }
+
+    @Test void namedSubjectWithAPageReadPasses() throws Exception {
+        fetch(STORY, null);
+        assertNull(namedGate(donClaim(sourceField(STORY))));
+    }
+
+    @Test void namedSubjectPageThatFailedDoesNotCount() throws Exception {
+        fetch(STORY, "HTTP 403");
+        assertNotNull(namedGate(donClaim(sourceField(STORY))));
+    }
+
+    @Test void theArticleItselfDoesNotCountForANamedSubject() throws Exception {
+        fetch(ARTICLE, null);
+        assertNotNull(namedGate(donClaim(sourceField(ARTICLE))));
+    }
+
+    @Test void namedSubjectNotCheckableIsAllowed() throws Exception {
+        assertNull(namedGate("[{\"assertion\":\"" + DON + "\",\"verdict\":\"not checkable here\"}]"));
+    }
+
+    @Test void unnamedAppealsAndAttacksPassTheNamedCheck() throws Exception {
+        assertNull(namedGate("[{\"assertion\":\"Everyone knows prices are out of control\","
+            + "\"verdict\":\"unsupported\"}]"));
+        assertNull(namedGate("[{\"assertion\":\"Many Americans think taxes are high\","
+            + "\"verdict\":\"unsupported\"}]"));
+        assertNull(namedGate("[{\"assertion\":\"He said John is a crook\",\"verdict\":\"unsupported\","
+            + "\"kind\":\"attack\"}]"));
+    }
+
+    @Test void governmentClaimsAreLeftToTheOfficeGate() throws Exception {
+        assertNull(namedGate(officeClaim("unsupported", "")));
+    }
+
+    @Test void namesASubjectSeesNamesAndAcronyms() {
+        assertTrue(McpServer.namesASubject("He paid Kremlev back"));
+        assertTrue(McpServer.namesASubject("DOJ dropped it"));
+        assertTrue(!McpServer.namesASubject("Prices are high"));
+    }
+
+    private static String coverageGate(String unclaimedJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceArticleFiguresClaimed",
+            JsonNode.class, String.class, JsonNode.class);
+        m.setAccessible(true);
+        String key = McpServer.normalizeUrlForMatch(ARTICLE);
+        McpServer.STORY_TEXT.put(key, "Premiums reached $2,700 a month for some families.");
+        try {
+            return (String) m.invoke(null, MAPPER.readTree("[]"), ARTICLE,
+                MAPPER.readTree(unclaimedJson));
+        } finally {
+            McpServer.STORY_TEXT.remove(key);
+        }
+    }
+
+    /** The q6 shape: a real claim parked with an admission it was not checked. */
+    @Test void anUncheckedExcuseDoesNotExcuseAFigure() throws Exception {
+        for (String why : new String[] {"later segment, not graded", "not checked", "unverified here",
+            "out of scope", "skipped"}) {
+            String problem = coverageGate("[{\"figure\":\"$2,700\",\"why\":\"" + why + "\"}]");
+            assertNotNull(problem, why);
+            assertTrue(problem.contains("$2,700"), problem);
+        }
+    }
+
+    @Test void aRealNonClaimStillExcusesAFigure() throws Exception {
+        assertNull(coverageGate("[{\"figure\":\"$2,700\",\"why\":\"a sidebar headline, not in the story\"}]"));
+    }
 }
