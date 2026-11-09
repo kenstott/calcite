@@ -33,6 +33,8 @@ import logging
 import re
 from typing import List, NamedTuple, Set
 
+from pgwire_calcite.bulk_insert import insert_rows
+
 log = logging.getLogger(__name__)
 
 #: pg_catalog namespace oid — where PostgreSQL keeps its built-in functions.
@@ -187,13 +189,13 @@ def populate_functions(db, entries: List[FunctionEntry], database_name: str) -> 
         oid += 1
 
     if proc_rows:
-        db.executemany(f"INSERT INTO _pg_proc VALUES ({','.join(['?'] * 30)})", proc_rows)
+        insert_rows(db, f"INSERT INTO _pg_proc VALUES ({','.join(['?'] * 30)})", proc_rows)
     if routine_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_routines VALUES ({','.join(['?'] * 82)})", routine_rows
         )
     if parameter_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_parameters VALUES ({','.join(['?'] * 32)})", parameter_rows
         )
 

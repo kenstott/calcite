@@ -25,6 +25,8 @@ import re
 import threading
 from datetime import datetime, timezone
 
+from pgwire_calcite.bulk_insert import insert_rows
+
 log = logging.getLogger(__name__)
 
 # Captured once per process (≈ server start). pg_postmaster_start_time() and
@@ -1810,7 +1812,7 @@ def _populate_is_schemata(db, idx: CatalogIndex) -> None:
         default_character_set_name VARCHAR, sql_path VARCHAR)""")
     seen_schemas: set[tuple] = {(c, s) for c, s, *_ in idx.tables}
     if seen_schemas:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_schemata VALUES (?,?,'{_DATABASE_NAME}',NULL,NULL,NULL,NULL)",
             list(seen_schemas),
         )
@@ -1824,7 +1826,7 @@ def _populate_is_tables(db, idx: CatalogIndex) -> None:
         user_defined_type_name VARCHAR, is_insertable_into VARCHAR,
         is_typed VARCHAR, commit_action VARCHAR)""")
     if idx.tables:
-        db.executemany(
+        insert_rows(db, 
             "INSERT INTO _is_tables VALUES (?,?,?,'BASE TABLE',NULL,NULL,NULL,NULL,NULL,'YES','NO',NULL)",
             [(row[0], row[1], row[2]) for row in idx.tables],
         )
@@ -1902,14 +1904,14 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
             )
         )
     if col_rows:
-        db.executemany(f"INSERT INTO _is_columns VALUES ({','.join(['?'] * 44)})", col_rows)
+        insert_rows(db, f"INSERT INTO _is_columns VALUES ({','.join(['?'] * 44)})", col_rows)
 
 
 def _populate_pg_namespace(db, idx: CatalogIndex) -> None:
     db.execute("""CREATE TABLE _pg_namespace (
         oid INTEGER, nspname VARCHAR, nspowner INTEGER, nspacl VARCHAR)""")
     ns_rows = [(oid, name, 10, None) for name, oid in idx.ns_map.items()]
-    db.executemany("INSERT INTO _pg_namespace VALUES (?,?,?,?)", ns_rows)
+    insert_rows(db, "INSERT INTO _pg_namespace VALUES (?,?,?,?)", ns_rows)
 
 
 def _populate_pg_class(db, idx: CatalogIndex) -> None:
@@ -2051,7 +2053,7 @@ def _populate_pg_class(db, idx: CatalogIndex) -> None:
             )
         )
     if pg_class_rows:
-        db.executemany(f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", pg_class_rows)
+        insert_rows(db, f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", pg_class_rows)
 
 
 def _populate_pg_description(
@@ -2102,11 +2104,11 @@ def _populate_pg_description(
                 desc_rows.append((toid, _CATALOG_CLASS_OIDS["pg_class"], attnum, cdesc_val))
 
     if desc_rows:
-        db.executemany("INSERT INTO _pg_description VALUES (?,?,?,?)", desc_rows)
+        insert_rows(db, "INSERT INTO _pg_description VALUES (?,?,?,?)", desc_rows)
 
 
 # Rows are written in the order below and reordered to the table's (PostgreSQL's) column order on
-# insert; a column-named INSERT is an order of magnitude slower in DuckDB's executemany.
+# insert.
 #   0 attrelid, 1 attname, 2 atttypid, 3 attstattarget, 4 attlen, 5 attnum, 6 attndims,
 #   7 attcacheoff, 8 atttypmod, 9 attbyval, 10 attalign, 11 attstorage, 12 attnotnull,
 #   13 atthasdef, 14 atthasmissing, 15 attidentity, 16 attgenerated, 17 attisdropped,
@@ -2173,7 +2175,7 @@ def _populate_pg_attribute(db, idx: CatalogIndex, pk_notnull_cols: set = None) -
             )
         )
     if attr_rows:
-        db.executemany(_PG_ATTRIBUTE_INSERT, [_pg_attribute_table_row(r) for r in attr_rows])
+        insert_rows(db, _PG_ATTRIBUTE_INSERT, [_pg_attribute_table_row(r) for r in attr_rows])
 
 
 def _populate_system_attributes(db) -> None:
@@ -2266,7 +2268,7 @@ def _populate_system_attributes(db) -> None:
                 )
             )
     if attr_rows:
-        db.executemany(_PG_ATTRIBUTE_INSERT, [_pg_attribute_table_row(r) for r in attr_rows])
+        insert_rows(db, _PG_ATTRIBUTE_INSERT, [_pg_attribute_table_row(r) for r in attr_rows])
 
 
 _PG_TYPE_INSERT = "INSERT INTO _pg_type VALUES (" + ",".join(["?"] * 32) + ")"
@@ -2283,7 +2285,7 @@ def _populate_pg_type(db) -> None:
         typalign VARCHAR, typstorage VARCHAR, typnotnull BOOLEAN,
         typbasetype INTEGER, typtypmod INTEGER, typndims INTEGER, typcollation INTEGER,
         typdefaultbin VARCHAR, typdefault VARCHAR, typacl VARCHAR)""")
-    db.executemany(
+    insert_rows(db, 
         _PG_TYPE_INSERT,
         [
             (
@@ -2601,7 +2603,7 @@ def _populate_pg_roles_and_database(db, role_id: str, state=None) -> None:
             )
             seen_names.add(name)
 
-    db.executemany(
+    insert_rows(db, 
         "INSERT INTO _pg_roles (oid, rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, "
         "rolcanlogin, rolreplication, rolconnlimit, rolpassword, rolvaliduntil, rolbypassrls, "
         "rolconfig) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -2825,7 +2827,7 @@ def _populate_pg_settings(db) -> None:
         vartype VARCHAR, source VARCHAR, min_val VARCHAR, max_val VARCHAR,
         enumvals VARCHAR, boot_val VARCHAR, reset_val VARCHAR,
         sourcefile VARCHAR, sourceline INTEGER, pending_restart BOOLEAN)""")
-    db.executemany(
+    insert_rows(db, 
         f"INSERT INTO _pg_settings VALUES ({','.join(['?'] * 17)})",
         _PG_SETTINGS_ROWS,
     )
@@ -2837,13 +2839,13 @@ def _populate_pg_tables_and_am(db, idx: CatalogIndex) -> None:
         tablespace VARCHAR, hasindexes BOOLEAN, hasrules BOOLEAN,
         hastriggers BOOLEAN, rowsecurity BOOLEAN)""")
     if idx.tables:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _pg_tables VALUES (?,?,'{_DATABASE_NAME}',NULL,FALSE,FALSE,FALSE,FALSE)",
             [(row[1], row[2]) for row in idx.tables],
         )
     db.execute("""CREATE TABLE _pg_am (
         oid INTEGER, amname VARCHAR, amhandler VARCHAR, amtype VARCHAR)""")
-    db.executemany(
+    insert_rows(db, 
         "INSERT INTO _pg_am VALUES (?,?,?,?)",
         [
             (2, "heap", "heap_tableam_handler", "t"),
@@ -3182,7 +3184,7 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
                 linked_rows[i] = tuple(r)
     constraint_rows = linked_rows
     if constraint_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _pg_constraint VALUES ({','.join(['?'] * 25)})",
             constraint_rows,
         )
@@ -3190,13 +3192,13 @@ def _populate_pg_constraint(db, ctx, idx: CatalogIndex) -> list[tuple]:
     # definition as PostgreSQL writes it.
     db.execute("CREATE TABLE _pg_constraintdef (conoid INTEGER, definition VARCHAR)")
     if constraint_rows:
-        db.executemany(
+        insert_rows(db, 
             "INSERT INTO _pg_constraintdef VALUES (?, ?)",
             [(r[0], _constraint_definition(r, idx)) for r in constraint_rows],
         )
     if index_rows:
-        db.executemany(f"INSERT INTO _pg_index VALUES ({','.join(['?'] * 20)})", index_rows)
-        db.executemany(f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", index_class_rows)
+        insert_rows(db, f"INSERT INTO _pg_index VALUES ({','.join(['?'] * 20)})", index_rows)
+        insert_rows(db, f"INSERT INTO _pg_class VALUES ({','.join(['?'] * 33)})", index_class_rows)
     return constraint_rows
 
 
@@ -3215,7 +3217,7 @@ def _populate_pg_indexes(db, idx: CatalogIndex) -> None:
                f"{schema}.{table_name} USING btree ({cols})")
         out.append((schema, table_name, index_name, None, ddl))
     if out:
-        db.executemany("INSERT INTO _pg_indexes VALUES (?,?,?,?,?)", out)
+        insert_rows(db, "INSERT INTO _pg_indexes VALUES (?,?,?,?,?)", out)
 
 
 def _populate_extra_relations(db, idx: CatalogIndex, role_id: str, state) -> None:
@@ -3237,10 +3239,10 @@ def _populate_extra_relations(db, idx: CatalogIndex, role_id: str, state) -> Non
         column_grants.append((role_id, role_id, cat, sch, name, col_name, "SELECT", "NO"))
     for table in ("_is_table_privileges", "_is_role_table_grants"):
         if table_grants:
-            db.executemany(f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)", table_grants)
+            insert_rows(db, f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)", table_grants)
     for table in ("_is_column_privileges", "_is_role_column_grants"):
         if column_grants:
-            db.executemany(f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)", column_grants)
+            insert_rows(db, f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?)", column_grants)
     db.execute("INSERT INTO _is_information_schema_catalog_name VALUES (?)", [db_name])
     db.execute(
         "INSERT INTO _pg_group SELECT rolname, oid, NULL FROM _pg_roles WHERE NOT rolcanlogin"
@@ -3392,27 +3394,27 @@ def _populate_is_constraints(db, constraint_rows: list[tuple], idx: CatalogIndex
                     )
                 )
     if is_tc_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_table_constraints VALUES ({','.join(['?'] * 11)})",
             is_tc_rows,
         )
     if is_kcu_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_key_column_usage VALUES ({','.join(['?'] * 9)})",
             is_kcu_rows,
         )
     if is_rc_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_referential_constraints VALUES ({','.join(['?'] * 9)})",
             is_rc_rows,
         )
     if is_ccu_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_constraint_column_usage VALUES ({','.join(['?'] * 7)})",
             is_ccu_rows,
         )
     if is_ctu_rows:
-        db.executemany(
+        insert_rows(db, 
             f"INSERT INTO _is_constraint_table_usage VALUES ({','.join(['?'] * 6)})",
             is_ctu_rows,
         )
@@ -3432,13 +3434,13 @@ def _populate_pg_extension(db, state) -> None:
     rows = pg_extension_rows(set(enabled))
     if not rows:
         return
-    db.executemany(
+    insert_rows(db, 
         "INSERT INTO _pg_extension VALUES (?, ?, 10, ?, ?, ?, NULL, NULL)",
         [(oid, name, _PUBLIC_NS_OID, False, version) for oid, name, version, _c in rows],
     )
     # PG keeps an extension's description in pg_description, not in pg_extension; that is
     # where obj_description(oid, 'pg_extension') and DataGrip's extension node read it.
-    db.executemany(
+    insert_rows(db, 
         "INSERT INTO _pg_description VALUES (?, ?, 0, ?)",
         [(oid, _CATALOG_CLASS_OIDS["pg_extension"], comment) for oid, _n, _v, comment in rows],
     )
