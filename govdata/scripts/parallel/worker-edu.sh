@@ -107,7 +107,7 @@ run_edu_model() {
       "enabledTables": [${enabled_tables}],
       "s3Config": {
         "accessKeyId": "${AWS_ACCESS_KEY_ID:-}",
-        "secretAccessKey": "${AWS_SECRET_ACCESS_KEY:-}",
+        "secretAccessKey": "\${AWS_SECRET_ACCESS_KEY}",
         "endpoint": "${AWS_ENDPOINT_OVERRIDE:-}",
         "region": "${AWS_REGION:-us-east-1}"
       }

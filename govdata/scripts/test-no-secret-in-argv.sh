@@ -26,7 +26,7 @@ if [[ -f "$WORK/argv.txt" ]]; then
 else
   echo "FAIL: stub java/duckdb were never invoked"; fail=1
 fi
-hits="$(cd "$HERE" && grep -rnE --include='*.sh' -- "--s3-secret-key|--s3-secret-access-key|s3_secret_access_key *= *'\\$\\{|SECRET '\\$\\{AWS_SECRET" . | grep -v "test-no-secret-in-argv.sh")"
+hits="$(cd "$HERE" && grep -rnE --include='*.sh' -- "--s3-secret-key|--s3-secret-access-key|s3_secret_access_key *= *'\\$\\{|SECRET '\\$\\{AWS_SECRET|-DAWS_SECRET_ACCESS_KEY|\"secretAccessKey\": +\"\\$\\{AWS_SECRET|\"\\$\\{AWS_SECRET_ACCESS_KEY:-\}\" *(<<|\\\\)" . | grep -v "test-no-secret-in-argv.sh")"
 if [[ -n "$hits" ]]; then echo "FAIL: secret expanded into an argument or SQL text:"; echo "$hits"; fail=1; fi
 [[ $fail -eq 0 ]] && echo "PASS: no secret in argv or bash -x trace"
 exit $fail

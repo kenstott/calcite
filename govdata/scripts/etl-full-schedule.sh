@@ -340,7 +340,7 @@ while IFS='|' read -r job_num schema source type year cik_group filing_types; do
     if [[ "$GOVDATA_PARQUET_DIR" == s3://* ]]; then
         s3_config='"s3Config": {'
         [[ -n "$AWS_ACCESS_KEY_ID" ]] && s3_config+="\"accessKeyId\": \"$AWS_ACCESS_KEY_ID\","
-        [[ -n "$AWS_SECRET_ACCESS_KEY" ]] && s3_config+="\"secretAccessKey\": \"$AWS_SECRET_ACCESS_KEY\","
+        [[ -n "$AWS_SECRET_ACCESS_KEY" ]] && s3_config+="\"secretAccessKey\": \"\${AWS_SECRET_ACCESS_KEY}\","
         [[ -n "$AWS_ENDPOINT_OVERRIDE" ]] && s3_config+="\"endpoint\": \"$AWS_ENDPOINT_OVERRIDE\","
         [[ -n "$AWS_REGION" ]] && s3_config+="\"region\": \"$AWS_REGION\","
         # Remove trailing comma and close
