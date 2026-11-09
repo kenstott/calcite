@@ -24,14 +24,11 @@ import java.util.Set;
  */
 public class HudPitStateCountsProvider extends AbstractHudPitCountsDataProvider {
 
-  private static final String URL =
-      "https://www.huduser.gov/portal/sites/default/files/xls/2007-2024-PIT-Counts-by-State.xlsb";
-
   private static final Set<String> ID_COLUMNS = new HashSet<String>(Arrays.asList(
       "State", "Number of CoCs"));
 
-  @Override protected String workbookUrl() {
-    return URL;
+  @Override protected String workbookSuffix() {
+    return "PIT-Counts-by-State.xlsb";
   }
 
   @Override protected Set<String> idColumnNames() {

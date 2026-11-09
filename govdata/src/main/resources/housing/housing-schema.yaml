@@ -2134,7 +2134,7 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
-  # HUD POINT-IN-TIME (PIT) HOMELESS COUNTS — CoC grain, long format (xlsb, 2007-2024+)
+  # HUD POINT-IN-TIME (PIT) HOMELESS COUNTS — CoC grain, long format (xlsb, 2007-2025+)
   # ---------------------------------------------------------------------------
   - name: hud_pit_counts_by_coc
     # Freshness gate: one workbook re-published roughly annually with the whole file (not a
@@ -2158,7 +2158,7 @@ partitionedTables:
       here as one combined CoC row; the companion by-state file splits its counts between
       MO and KS, so per-state rollups from this table will not exactly match
       hud_pit_counts_by_state for those two states. Source: huduser.gov/portal/sites/
-      default/files/xls/2007-2024-PIT-Counts-by-CoC.xlsb (annual PIT count cycle).
+      default/files/xls/2007-2025-PIT-Counts-by-CoC.xlsb (annual PIT count cycle).
 
     dimensions:
       type:
@@ -2200,7 +2200,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2024-PIT-Counts-by-CoC.xlsb"
+      # Informational: the dataProvider resolves the newest published 2007-<year> workbook at fetch time.
+      url: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2025-PIT-Counts-by-CoC.xlsb"
       method: GET
       response:
         format: json
@@ -2234,7 +2235,7 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
-  # HUD POINT-IN-TIME (PIT) HOMELESS COUNTS — state grain, long format (xlsb, 2007-2024+)
+  # HUD POINT-IN-TIME (PIT) HOMELESS COUNTS — state grain, long format (xlsb, 2007-2025+)
   # ---------------------------------------------------------------------------
   - name: hud_pit_counts_by_state
     # Freshness gate: same whole-workbook hash gate as hud_pit_counts_by_coc.
@@ -2248,7 +2249,7 @@ partitionedTables:
       same wide-to-long melt for the same reason (1,300+ source columns by 2024). Includes
       a national total row (state_abbr = 'Total'). A blank/suppressed source cell is
       omitted rather than written as a null count row. Source: huduser.gov/portal/sites/
-      default/files/xls/2007-2024-PIT-Counts-by-State.xlsb (annual PIT count cycle).
+      default/files/xls/2007-2025-PIT-Counts-by-State.xlsb (annual PIT count cycle).
 
     dimensions:
       type:
@@ -2278,7 +2279,8 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2024-PIT-Counts-by-State.xlsb"
+      # Informational: the dataProvider resolves the newest published 2007-<year> workbook at fetch time.
+      url: "https://www.huduser.gov/portal/sites/default/files/xls/2007-2025-PIT-Counts-by-State.xlsb"
       method: GET
       response:
         format: json

@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -78,8 +79,18 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
   private static final int READ_TIMEOUT_MS = 180_000;
   private static final int MAX_RETRIES = 3;
 
-  /** Direct download URL for this table's workbook. */
-  protected abstract String workbookUrl();
+  private static final String WORKBOOK_BASE_URL =
+      "https://www.huduser.gov/portal/sites/default/files/xls/";
+  /** End year of the first cumulative workbook (2007-2025) that carries the 2025 count. */
+  private static final int FIRST_KNOWN_END_YEAR = 2025;
+
+  /**
+   * File name of this table's workbook minus the {@code 2007-<endYear>-} prefix, e.g.
+   * {@code PIT-Counts-by-State.xlsb}. HUD re-publishes one cumulative workbook per count year and
+   * renames it ({@code 2007-2024-...}, {@code 2007-2025-...}), so the end year is resolved at
+   * fetch time rather than pinned.
+   */
+  protected abstract String workbookSuffix();
 
   /** Header text of columns that identify the row (CoC/state) rather than a metric value. */
   protected abstract Set<String> idColumnNames();
@@ -90,9 +101,24 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
-    String url = workbookUrl();
-    LOGGER.info("{}: fetching {}", getClass().getSimpleName(), url);
-    byte[] body = download(url);
+    String url = null;
+    byte[] body = null;
+    // Newest first: the first workbook HUD has published wins. Only a 404 means "not published
+    // yet"; every other failure is thrown by download().
+    for (int endYear = Year.now().getValue(); endYear >= FIRST_KNOWN_END_YEAR; endYear--) {
+      String candidate = WORKBOOK_BASE_URL + "2007-" + endYear + "-" + workbookSuffix();
+      LOGGER.info("{}: fetching {}", getClass().getSimpleName(), candidate);
+      body = download(candidate);
+      if (body != null) {
+        url = candidate;
+        break;
+      }
+      LOGGER.info("{}: {} not published (HTTP 404)", getClass().getSimpleName(), candidate);
+    }
+    if (body == null) {
+      throw new IOException("No HUD PIT workbook published for " + workbookSuffix()
+          + " from 2007-" + Year.now().getValue() + " down to 2007-" + FIRST_KNOWN_END_YEAR);
+    }
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(body))) {
       XSSFBReader reader = new XSSFBReader(pkg);
@@ -191,7 +217,10 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
     }
   }
 
-  /** Downloads bytes with a browser UA + Referer (HUD's WAF rejects a bot-like client). */
+  /**
+   * Downloads bytes with a browser UA + Referer (HUD's WAF rejects a bot-like client). Returns
+   * null on HTTP 404 (file not published); throws on any other non-success status.
+   */
   private static byte[] download(String url) throws IOException {
     IOException last = null;
     for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -208,6 +237,9 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
           try (InputStream in = conn.getInputStream()) {
             return readAll(in);
           }
+        }
+        if (status == HttpURLConnection.HTTP_NOT_FOUND) {
+          return null;
         }
         if (status != 429 && status != HttpURLConnection.HTTP_ACCEPTED && status < 500) {
           throw new IOException("HTTP " + status + " from " + url);

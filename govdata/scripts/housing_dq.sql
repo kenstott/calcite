@@ -186,7 +186,7 @@ SELECT 'housing', 'hud_pit_counts_by_coc', 'T1_existence',
   CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hud_pit_counts_by_coc', allow_moved_paths := true));
 
--- Long-format melt of ~390 CoCs x up to ~1,300 metric columns across 18 years (2007-2024);
+-- Long-format melt of ~390 CoCs x up to ~1,300 metric columns across 19 years (2007-2025);
 -- 2,000,000 leaves headroom below the ~2.6M full estimate for a dqRowLimit-style partial fetch.
 INSERT INTO dq_results
 SELECT 'housing', 'hud_pit_counts_by_coc', 'T2_row_count',
