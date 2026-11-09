@@ -75,7 +75,7 @@ final class FecHouseResultsParser {
       new HashSet<String>(Arrays.asList("AS", "DC", "GU", "MP", "PR", "VI"));
 
   /** Postal, FIPS, name. */
-  private static final String[][] STATES = {
+  static final String[][] STATES = {
       {"AL", "01", "Alabama"}, {"AK", "02", "Alaska"}, {"AZ", "04", "Arizona"},
       {"AR", "05", "Arkansas"}, {"CA", "06", "California"}, {"CO", "08", "Colorado"},
       {"CT", "09", "Connecticut"}, {"DE", "10", "Delaware"}, {"FL", "12", "Florida"},

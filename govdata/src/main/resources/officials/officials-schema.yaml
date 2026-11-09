@@ -18,14 +18,17 @@
 #     an automated, near-continuous cadence and is the de facto standard this data
 #     is sourced from across the open-government tooling ecosystem.
 #   - MIT Election Data + Science Lab (CC0) — U.S. House (1976-2018, from the Lab's GitHub
-#     repository MEDSL/constituency-returns) and U.S. Senate (1976-2024, Harvard Dataverse
+#     repository MEDSL/constituency-returns, 1976-2018) and U.S. Senate (1976-2024, Harvard Dataverse
 #     doi:10.7910/DVN/PEJ5QU) election returns by district/state and candidate. The Lab's
 #     House release through 2024 (doi:10.7910/DVN/IG0UN2) is behind a Dataverse guestbook
 #     (name, e-mail, institution, position) and cannot be fetched by an automated job.
 #   - Federal Election Commission official results workbooks "Federal Elections 2020" and
 #     "Federal Elections 2022" (fec.gov, public domain) — U.S. House general-election results
 #     for 2020 and 2022, appended to house_election_results (source = 'FEC'). The FEC has not
-#     published a 2024 House results workbook (only a candidate list), so 2024 is missing.
+#     published a 2024 House results workbook (only a candidate list).
+#   - Clerk of the House "Statistics of the Presidential and Congressional Election of November
+#     5, 2024" (clerk.house.gov, public domain PDF published 2025-03-10) — U.S. House general-
+#     election results for 2024, appended to house_election_results (source = 'CLERK').
 #
 # Explicitly out of scope for this schema:
 #   - Direct Bioguide scrape (bioguide.congress.gov blocks non-browser clients via
@@ -58,7 +61,7 @@ comment: >
   government system of record directly, because no official source exposes committee
   membership or jurisdiction in structured form; see the header comment above.
   `house_election_results` (1976-2018 from the MIT Election Data + Science Lab, 2020 and 2022
-  from the FEC; 2024 missing) and `senate_election_results` (1976-2024, MIT) hold
+  from the FEC, 2024 from the Clerk of the House) and `senate_election_results` (1976-2024, MIT) hold
   candidate-level election returns, with the views
   `house_race_results`, `senate_race_results` and `election_seats_won` giving winner, two-party
   margin and seats won per cycle.
@@ -1138,7 +1141,7 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ---------------------------------------------------------------------------
-  # HOUSE_ELECTION_RESULTS — district-level U.S. House returns, MIT Election Lab 1976-2018 + FEC 2020, 2022
+  # HOUSE_ELECTION_RESULTS — district-level U.S. House returns, MIT Election Lab 1976-2018 + FEC 2020, 2022 + Clerk of the House 2024
   # ---------------------------------------------------------------------------
   - name: house_election_results
     # One snapshot of the whole series (year is a column, not a partition): the Lab publishes the
@@ -1151,15 +1154,17 @@ partitionedTables:
     pattern: "type=house_election_results/*.parquet"
     partitions: *type_partition
     comment: >
-      U.S. House general-election returns by district and candidate for 24 cycles: 1976 to 2018
+      U.S. House general-election returns by district and candidate for 25 cycles: 1976 to 2018
       from the MIT Election Data + Science Lab (CC0), as the Lab's GitHub repository
-      MEDSL/constituency-returns publishes them (release dated 2019, commit cca36bc159), and
+      MEDSL/constituency-returns publishes them (release dated 2019, commit cca36bc159),
       2020 and 2022 from the Federal Election Commission's official results workbooks (source
-      'FEC' against 'MEDSL' in the source column). 2024 IS MISSING: the Lab's 1976-2024 release
-      (Harvard Dataverse doi:10.7910/DVN/IG0UN2) sits behind a Dataverse guestbook that requires
-      a name, e-mail, institution and position, so an automated job cannot fetch it, and the FEC
-      has not published a 2024 House results workbook (fec.gov lists only the 2024 candidate
-      list and presidential results); 2024 is to be added when the FEC publishes it. One row
+      'FEC' against 'MEDSL' in the source column), and 2024 from the Clerk of the House's
+      "Statistics of the Presidential and Congressional Election of November 5, 2024" (source
+      'CLERK'; see CLERK ROWS below). The Lab's 1976-2024 release (Harvard Dataverse
+      doi:10.7910/DVN/IG0UN2) sits behind a Dataverse guestbook that requires a name, e-mail,
+      institution and position, so an automated job cannot fetch it, and the FEC has published
+      no 2024 House results workbook (fec.gov lists only the 2024 candidate list and presidential
+      results). One row
       per candidate per party line per district election round: year, state, district, whether
       it is a special election or a runoff, the stage (gen general election, pri primary, null
       when the Lab gave none), the candidate, the party label as published and a normalised
@@ -1224,9 +1229,36 @@ partitionedTables:
       rows are last-round counts, unflagged). A candidate who appears in two districts (a
       redistricted incumbent) is two unrelated rows; nothing is merged across districts or
       years, and the FEC file carries no stable candidate key that the table keeps. total_votes
-      is, in both sources, the sum of every row of the round including write-ins. DISCONTINUITY
+      is, in the Lab and FEC sources, the sum of every row of the round including write-ins.
+      CLERK ROWS (2024), read from the PDF's 'FOR UNITED STATES REPRESENTATIVE' sections with
+      strict parsing (an unknown line shape or party label fails the fetch; every state must have
+      districts 1 to N for its 2020-census seat count, 435 districts in all, and the leaders must
+      split 220 Republican and 215 Democratic districts, the 2024 result): the 50 states only, stage
+      gen, special and runoff false. Each party line of a candidate is its own row with its own
+      votes (New York, Connecticut, Oregon, South Carolina and other fusion states print the
+      candidate once and the further lines as party-only lines); a combined label (New York 5
+      'Conservative, Common Sense') is one row whose party_published keeps the label. party_published is
+      the volume's own label lower-cased ('democrat', 'democratic-farmer-labor', 'working
+      families'); party_major D covers Democrat, Democratic-Farmer-Labor and
+      Democratic-Nonpartisan League, R covers Republican, everything else OTHER. Write-ins: lines
+      'Write-in', 'Write-in (x)', 'Scattering', 'All Others', 'Other Write-ins' and
+      'Miscellaneous' are write-in aggregates (candidate null, writein true); a named write-in
+      ('Name, Write-in (Unaffiliated)') is a candidate row with writein true, party_published the
+      label and party_major OTHER. Blank, void, over-vote and under-vote lines are vote buckets,
+      not votes for anyone, and are not loaded, so total_votes is the sum of the rows loaded.
+      Unopposed races whose votes the state does not count (Florida 20 and Oklahoma 3, where the
+      volume prints '(1)' and a no-opposition footnote) carry the Lab's marker, candidate_votes 1
+      and total_votes 1 (uncontested true). Ranked-choice: Maine 2 prints the final-round counts
+      with the continuing and exhausted ballot lines, so candidate_votes are last-round counts and
+      total_votes the continuing ballots (ranked_choice true, first_choice_votes null); Alaska at
+      large prints FIRST-CHOICE counts only (the volume has no tabulation rounds; Begich 159,550,
+      Peltola 156,245, the final round was won by Begich), so ranked_choice is true and
+      candidate_votes equals first_choice_votes there. version_date is null (the volume is dated
+      March 10, 2025, named in source_release); unofficial is false. 2024 uses the same
+      2020-census district maps as 2022. DISCONTINUITY
       at 2018/2020: party_published vocabulary changes (the Lab's 'democrat' to the FEC's
-      'democratic'; use party_major across the boundary); candidate names are the FEC's
+      'democratic'; the Clerk's 2024 'democrat' is the Lab's; use party_major across the
+      boundaries); candidate names are the FEC's
       first and last name columns joined as 'first last' (a suffix the FEC puts in the first-name
       column stays there: 'Martin, Jr. Lemelle'), not the Lab's spellings, so names do not join
       across the boundary; version_date is null on FEC rows (the workbooks carry only a month, October
@@ -1252,7 +1284,7 @@ partitionedTables:
       - name: year
         type: integer
         nullable: false
-        comment: 'Election year (even years 1976 to 2018 from MIT, 2020 and 2022 from the FEC; 2024 missing); PK component'
+        comment: 'Election year (even years 1976 to 2018 from MIT, 2020 and 2022 from the FEC, 2024 from the Clerk of the House); PK component'
       - name: state_fips
         type: string
         nullable: false
@@ -1336,15 +1368,15 @@ partitionedTables:
       - name: source_release
         type: string
         nullable: false
-        comment: 'Dataset, repository and commit (MIT rows) or workbook, publication month and URL (FEC rows) the row was read from'
+        comment: 'Dataset, repository and commit (MIT rows) or workbook, publication month and URL (FEC rows) or volume, publication date and URL (Clerk rows) the row was read from'
       - name: source
         type: string
         nullable: false
-        comment: "'MEDSL' for MIT Election Data + Science Lab rows (1976-2018), 'FEC' for Federal Election Commission rows (2020, 2022); tells the two series apart across the 2018/2020 boundary"
+        comment: "'MEDSL' for MIT Election Data + Science Lab rows (1976-2018), 'FEC' for Federal Election Commission rows (2020, 2022), 'CLERK' for Clerk of the House rows (2024); tells the series apart across the 2018/2020 and 2022/2024 boundaries"
       - name: ranked_choice
         type: boolean
         nullable: true
-        comment: 'True on FEC rows of a ranked-choice contest (Maine 2 and Alaska at-large, 2022), where candidate_votes and total_votes are the last-round counts; false on other FEC rows; null on MIT rows (the Lab does not flag it; Maine 2 in 2018 is a last-round count)'
+        comment: 'True on FEC and Clerk rows of a ranked-choice contest (Maine 2 and Alaska at-large, 2022; Maine 2 and Alaska at-large, 2024), where candidate_votes and total_votes are the last-round counts (Alaska 2024: the first-choice counts, the volume has no rounds); false on other FEC rows; null on MIT rows (the Lab does not flag it; Maine 2 in 2018 is a last-round count)'
       - name: first_choice_votes
         type: long
         nullable: true
@@ -1827,7 +1859,7 @@ views:
       election published without a stage, then a special election published as a primary (Texas
       1996, where the court-ordered redistricting elections are published as special primaries
       with runoffs in districts 8, 9 and 25); this gives exactly one decisive round for each of
-      the 435 districts in every cycle 1976 to 2022 and puts the Texas 2006 redistricting
+      the 435 districts in every cycle 1976 to 2024 and puts the Texas 2006 redistricting
       special elections (published with a null stage) in the decisive round for the four
       districts that have no regular general round. Rounds that are not decisive (a first round
       that went to a runoff, a special election held beside the regular one) are kept with
@@ -1999,7 +2031,7 @@ views:
       Seats won per cycle by party: for each chamber, cycle year and special-election flag, the
       count of decisive election rounds won by the Democratic candidate (D), the Republican (R),
       another party (OTHER) or a candidate whose party the Lab left blank (null). House rows are
-      one per district: 435 seats with special=false in every cycle 1976 to 2022 (the Texas 1996
+      one per district: 435 seats with special=false in every cycle 1976 to 2024 (the Texas 1996
       and 2006 redistricting special elections that decide a district are counted there as
       special=true rows, 10 and 4 seats). Senate rows are the 33 or 34 regular seats of the
       class up that year (with the gaps documented on senate_race_results) plus special
