@@ -843,6 +843,60 @@ SELECT 'fiscal', 'snap_benefits_by_geography', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_benefits_by_geography', allow_moved_paths := true) WHERE state_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: snap_participants_by_age (USDA FNS SNAP QC public-use files; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T2_row_count',
+  CASE WHEN n >= 250 THEN 'pass' ELSE 'fail' END, n, 250, 'Expected >=250 state-year rows (FY2020-2024 x 53 geographies)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_fips or year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true) WHERE state_fips IS NULL OR year IS NULL);
+
+-- T7: age groups must sum to persons, children to the sum of their bands, and a state's
+-- national child share must be plausible (25-60%) for states with a real sample
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T7_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows where age bands do not sum to persons (+-3) or child share outside 25-60%'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true)
+  WHERE ABS(children_under_5 + children_5_to_17 + adults_18_to_59 + adults_60_plus + age_unknown - persons_participating) > 3
+     OR children_under_18 <> children_under_5 + children_5_to_17
+     OR (qc_sample_households >= 100 AND (children_under_18 * 1.0 / persons_participating < 0.25 OR children_under_18 * 1.0 / persons_participating > 0.60)));
+
+-- T8: one row per state x year
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_participants_by_age', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (state_fips, year) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT state_fips, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: ssa_benefits_by_geography_acs (Census ACS derived; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

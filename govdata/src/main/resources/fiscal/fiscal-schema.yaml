@@ -4938,6 +4938,132 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # SNAP PARTICIPANTS BY AGE — USDA FNS SNAP Quality Control public-use files
+  # ---------------------------------------------------------------------------
+  - name: snap_participants_by_age
+    freshness:
+      type: last_modified
+    pattern: "type=snap_participants_by_age/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      SNAP participants by age group (children under 5, 5-17, adults 18-59, 60+) by state x
+      federal fiscal year, estimated from the USDA FNS SNAP Quality Control (QC) public-use
+      files hosted at snapqcdata.net (FY2020-latest; the file for fiscal year N is published
+      about 1.5 years later). Answers "how many children were on SNAP in state X in fiscal
+      year Y"; use snap_benefits_by_geography for the monthly administrative total of persons
+      and benefits, which is the authoritative headcount. year is the federal fiscal year
+      (Oct-Sep). These are survey estimates from a sample of reviewed households weighted
+      to the fiscal-year caseload (qc_sample_households is the sample size behind each row;
+      small states have wide margins), counting SNAP unit members of cases with QC status
+      eligible (FNS's "Characteristics of SNAP Households" universe). Totals run a few percent
+      below administrative counts. FY2020 and FY2021 are affected by pandemic QC waivers:
+      FY2021 covers only Jul-Sep 2021 (qc_first_month/qc_last_month, YYYYMM, show the months
+      sampled), FY2020 stops at Sep 2020 with reduced reviews after March 2020. Guam and
+      the Virgin Islands are included; Puerto Rico and the other territories are not in the
+      QC files.
+
+    dimensions:
+      type:
+        - snap_participants_by_age
+
+    columns:
+      - <<: *state_fips_column
+        nullable: false
+      - <<: *state_abbr_column
+      - name: state_name
+        type: string
+        nullable: true
+        comment: State name as published in the QC file's STATENAME column
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (Oct-Sep), not calendar year
+      - name: persons_participating
+        type: long
+        nullable: true
+        comment: Weighted estimate of SNAP participants (all ages), average over the sampled months
+      - name: households_participating
+        type: long
+        nullable: true
+        comment: Weighted estimate of SNAP households, average over the sampled months
+      - name: children_under_18
+        type: long
+        nullable: true
+        comment: Weighted estimate of participants aged 0-17 (children_under_5 + children_5_to_17)
+      - name: children_under_5
+        type: long
+        nullable: true
+        comment: Weighted estimate of participants aged 0-4
+      - name: children_5_to_17
+        type: long
+        nullable: true
+        comment: Weighted estimate of participants aged 5-17
+      - name: adults_18_to_59
+        type: long
+        nullable: true
+        comment: Weighted estimate of participants aged 18-59
+      - name: adults_60_plus
+        type: long
+        nullable: true
+        comment: Weighted estimate of participants aged 60 and over
+      - name: age_unknown
+        type: long
+        nullable: true
+        comment: Weighted estimate of participants with no recorded age
+      - name: qc_sample_households
+        type: long
+        nullable: true
+        comment: Number of QC-sampled SNAP households behind the state-year estimate
+      - name: qc_first_month
+        type: integer
+        nullable: true
+        comment: Earliest calendar month (YYYYMM) of the QC sample for the state-year
+      - name: qc_last_month
+        type: integer
+        nullable: true
+        comment: Latest calendar month (YYYYMM) of the QC sample for the state-year
+
+    source:
+      type: http
+      # Nominal source: the landing page that lists the per-year zips, so the Last-Modified
+      # gate probes the page that changes when a new fiscal year is released. The zip
+      # download and household-level aggregation happen in the custom dataProvider below.
+      url: "https://snapqcdata.net/datafiles"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SnapParticipantsByAgeProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=snap_participants_by_age/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: snap_participants_by_age
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # OMB APPORTIONMENTS — apportionment-public.max.gov (one JSON per account iteration)
   # ---------------------------------------------------------------------------
   - name: omb_apportionments

@@ -121,8 +121,8 @@ public class SnapBenefitsProvider implements DataProvider {
 
   private static final Map<String, Integer> MONTH_NUM = buildMonthMap();
 
-  private static final Map<String, String> STATE_FIPS = buildStateFips();
-  private static final Map<String, String> STATE_ABBR = buildStateAbbr();
+  static final Map<String, String> STATE_FIPS = buildStateFips();
+  static final Map<String, String> STATE_ABBR = buildStateAbbr();
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
