@@ -901,7 +901,7 @@ public class McpServer {
             + "exists but that no table here carries. A personal attack on a person or group "
             + "MUST also carry `kind`: `attack`; any factual assertion inside it ('was "
             + "convicted of fraud') MUST be split out and graded as its own claim. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. "
             + "'Partially false' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
@@ -2964,10 +2964,15 @@ public class McpServer {
             + "rate', 'D.C. eviction filings'); REQUIRED on every claim graded 'not checkable "
             + "here' or 'unsupported' that has no warehouse_value, and refused unless that query "
             + "was run this session. "
+            + "`windows_tested`: array of {window, value}, at least two different windows, REQUIRED on "
+            + "a claim of a change in a figure graded 'partially false', 'mostly false' or 'false' "
+            + "when the claim names no year, month, quarter or fiscal year; a report without it is "
+            + "refused. `why_single_window`: use it instead only when the data holds a single "
+            + "usable window, saying why. "
             + "`why_not`: when preview_report refuses a claim because one of its figures appears "
             + "in a fetched source, either act on that evidence or say here why it does not "
             + "change the grade; the reason is printed on the report. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. Use 'unsupported' when the piece asserts it as fact with no "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. Use 'unsupported' when the piece asserts it as fact with no "
             + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
@@ -4761,6 +4766,7 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceFiguresAccountedFor(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceMeasureSearched(claims));
+                        addIfPresent(gateProblems, enforceWindowsTested(claims));
                         addIfPresent(gateProblems, enforceArticleFiguresClaimed(claims,
                             args.path("source_url").asText(null), args.path("unclaimed")));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
@@ -7859,6 +7865,67 @@ public class McpServer {
         return problems.isEmpty() ? null : "validation refused: " + String.join(" ALSO: ", problems);
     }
 
+    private static final java.util.Set<String> CONTRARY_VERDICTS = java.util.Set.of(
+        "partially false", "mostly false", "false");
+
+    /** A year, month, quarter, fiscal year or year-to-date: an endpoint a window can hang on. */
+    private static final java.util.regex.Pattern ANCHORED_WINDOW = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:(?:19|20)\\d{2}|january|february|march|april|may|june|july|august|september"
+            + "|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept?|oct|nov|dec"
+            + "|q[1-4]|quarter|fiscal|fy\\s?\\d+|year[- ]to[- ]date|ytd)\\b");
+
+    /** Wording of a change over time. */
+    private static final java.util.regex.Pattern CHANGE_WORDING = java.util.regex.Pattern.compile(
+        "(?i)\\b(?:increas\\w*|decreas\\w*|ris\\w*|rose|fell|fallen|drop\\w*|declin\\w*"
+            + "|gr[eo]w\\w*|climb\\w*|jump\\w*|doubl\\w*|tripl\\w*|up|down|higher|lower)\\b");
+
+    /**
+     * A claimed change graded contrary, with no year, month, quarter or fiscal year in its
+     * wording, must show at least two windows tested ({@code windows_tested}), or say in
+     * {@code why_single_window} why the data holds only one.
+     *
+     * <p>Measured live 2026-11-09 (daily eval q4, Click2Houston): "about 40% over the past five
+     * years" was graded partially false on 2020 to 2025 alone (+32.1%), while 2020 to 2026
+     * year-to-date is +37.3% and 2021 to the April 2026 peak +40.4%.
+     *
+     * <p>The windows are self-reported and printed on the report; the call log keeps only a
+     * truncated sql, and one query can cover many windows, so they cannot be verified here. The
+     * wording tests are lexical: a change phrased without these words is not caught.
+     */
+    private static String enforceWindowsTested(JsonNode claims) {
+        java.util.List<String> single = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            String assertion = c.path("assertion").asText("").trim();
+            String kind = c.path("kind").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (!CONTRARY_VERDICTS.contains(verdict) || "causal".equals(kind) || "attack".equals(kind)
+                    || !assertion.matches("(?s).*\\d.*")
+                    || !CHANGE_WORDING.matcher(assertion).find()
+                    || ANCHORED_WINDOW.matcher(assertion).find()
+                    || nonBlank(c, "why_single_window")) {
+                continue;
+            }
+            java.util.Set<String> windows = new java.util.HashSet<>();
+            for (JsonNode w : c.path("windows_tested")) {
+                if (nonBlank(w, "window") && nonBlank(w, "value")) {
+                    windows.add(normalizeQuery(w.path("window").asText()));
+                }
+            }
+            if (windows.size() < 2) {
+                single.add("\"" + assertion + "\"");
+            }
+        }
+        if (single.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + single.size() + " claim(s) of a change name no year, month, "
+            + "quarter or fiscal year and are graded contrary on fewer than two windows: "
+            + String.join("; ", single) + ". Compute the change over each plausible window, the "
+            + "latest data included, and list them in `windows_tested` as {window, value}, then "
+            + "grade on the range. If the data holds a single usable window, say why in "
+            + "`why_single_window`.";
+    }
+
     private static String normalizeQuery(String q) {
         return q.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
@@ -8991,6 +9058,15 @@ public class McpServer {
             appendDetailRow(details, "Why", c.path("reason").asText(""));
             appendDetailRow(details, "Evidence found and set aside because",
                 c.path("why_not").asText(""));
+            if (c.path("windows_tested").isArray() && c.path("windows_tested").size() > 0) {
+                java.util.List<String> ws = new java.util.ArrayList<>();
+                for (JsonNode w : c.path("windows_tested")) {
+                    ws.add(w.path("window").asText("") + ": " + w.path("value").asText(""));
+                }
+                appendDetailRow(details, "Windows tested", String.join("; ", ws));
+            }
+            appendDetailRow(details, "Only one window because",
+                c.path("why_single_window").asText(""));
             appendDetailRow(details, "Warehouse searched for", c.path("measure").asText(""));
             if (c.path("searched").isArray() && c.path("searched").size() > 0) {
                 java.util.List<String> qs = new java.util.ArrayList<>();
