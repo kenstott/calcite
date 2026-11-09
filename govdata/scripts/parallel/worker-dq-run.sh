@@ -349,9 +349,11 @@ if $REBUILD; then
       local flag=""; [ -n "$ep" ] && flag="--endpoint-url $ep"
       aws $flag s3 mb "s3://$bucket" 2>/dev/null || true
     elif command -v python3 >/dev/null 2>&1; then
-      python3 - "$bucket" "$ep" "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" <<'PYEOF'
+      python3 - "$bucket" "$ep" <<'PYEOF'
 import sys, urllib.request, hmac, hashlib, datetime
-bucket, ep, kid, secret = sys.argv[1:]
+bucket, ep = sys.argv[1:]
+import os
+kid, secret = os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY']
 if not ep: sys.exit(0)
 host = ep.replace('http://','').replace('https://','')
 now = datetime.datetime.now(datetime.timezone.utc)
@@ -392,10 +394,12 @@ PYEOF
     # This prevents the ETL fast-path from reusing stale data written by
     # an older engine (e.g. null expression: columns from pre-DuckDB evaluator).
     log_info "$WORKER_ID: --rebuild: full data purge for schema=${SCHEMA} in ${GOVDATA_DQ_BUCKET} (MinIO)"
-    python3 - "${AWS_ENDPOINT_OVERRIDE}" "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" \
+    python3 - "${AWS_ENDPOINT_OVERRIDE}" \
         "${GOVDATA_DQ_BUCKET}" "${SCHEMA}" <<'PYEOF'
 import sys, urllib.request, urllib.parse, hmac, hashlib, datetime, xml.etree.ElementTree as ET
-ep, kid, secret, bucket, schema = sys.argv[1:]
+ep, bucket, schema = sys.argv[1:]
+import os
+kid, secret = os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY']
 if not ep: sys.exit(0)
 host = ep.replace('http://','').replace('https://','')
 ns = {'s':'http://s3.amazonaws.com/doc/2006-03-01/'}
@@ -652,10 +656,11 @@ else
       _flag=""; [ -n "$_ep" ] && _flag="--endpoint-url $_ep"
       aws $_flag s3 cp "$RESULT_LOCAL" "s3://${GOVDATA_DQ_TRACKER_BUCKET}/${_s3_key}" 2>/dev/null && { _upload_ok=true; break; }
     elif command -v python3 >/dev/null 2>&1 && [ -n "$_ep" ]; then
-      python3 - "$RESULT_LOCAL" "$_ep" "$_s3_key" "${GOVDATA_DQ_TRACKER_BUCKET}" \
-        "${AWS_ACCESS_KEY_ID:-}" "${AWS_SECRET_ACCESS_KEY:-}" <<'PYEOF' 2>/dev/null && { _upload_ok=true; break; }
+      python3 - "$RESULT_LOCAL" "$_ep" "$_s3_key" "${GOVDATA_DQ_TRACKER_BUCKET}" <<'PYEOF' 2>/dev/null && { _upload_ok=true; break; }
 import sys, urllib.request, urllib.parse, hmac, hashlib, datetime
-local_file, ep, key, bucket, kid, secret = sys.argv[1:]
+local_file, ep, key, bucket = sys.argv[1:]
+import os
+kid, secret = os.environ['AWS_ACCESS_KEY_ID'], os.environ['AWS_SECRET_ACCESS_KEY']
 with open(local_file,'rb') as f: body = f.read()
 host = ep.replace('http://','').replace('https://','')
 now = datetime.datetime.now(datetime.timezone.utc)
