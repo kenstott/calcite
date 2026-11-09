@@ -35,6 +35,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.time.Year;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -105,7 +106,7 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
     byte[] body = null;
     // Newest first: the first workbook HUD has published wins. Only a 404 means "not published
     // yet"; every other failure is thrown by download().
-    for (int endYear = Year.now().getValue(); endYear >= FIRST_KNOWN_END_YEAR; endYear--) {
+    for (int endYear = Year.now(ZoneOffset.UTC).getValue(); endYear >= FIRST_KNOWN_END_YEAR; endYear--) {
       String candidate = WORKBOOK_BASE_URL + "2007-" + endYear + "-" + workbookSuffix();
       LOGGER.info("{}: fetching {}", getClass().getSimpleName(), candidate);
       body = download(candidate);
@@ -117,7 +118,7 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
     }
     if (body == null) {
       throw new IOException("No HUD PIT workbook published for " + workbookSuffix()
-          + " from 2007-" + Year.now().getValue() + " down to 2007-" + FIRST_KNOWN_END_YEAR);
+          + " from 2007-" + Year.now(ZoneOffset.UTC).getValue() + " down to 2007-" + FIRST_KNOWN_END_YEAR);
     }
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(body))) {
