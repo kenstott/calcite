@@ -389,4 +389,66 @@ class ExternalCheckGateTest {
         McpServer.STORY_TEXT.clear();
         assertNull(coverageGate("[]", "[]"));
     }
+
+    private static String officeGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceOfficeClaimRead",
+            JsonNode.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE);
+    }
+
+    private static final String RELEASE = "https://www.atg.wa.gov/news/news-releases/medicaid";
+
+    private static String officeClaim(String verdict, String extra) {
+        return "[{\"assertion\":\"The attorney general's office filed a lawsuit Thursday\","
+            + "\"verdict\":\"" + verdict + "\",\"reason\":\"none found\"" + extra + "}]";
+    }
+
+    private static String sourceField(String url) {
+        return ",\"sources\":[{\"title\":\"s\",\"url\":\"" + url + "\"}]";
+    }
+
+    /** The q2 shape: searches listed, the office's own release never opened. */
+    @Test void officeActionUnsupportedFromSearchesAloneIsRefused() throws Exception {
+        String problem = officeGate(officeClaim("unsupported", ",\"searched\":[\"AG lawsuit\"]"));
+        assertNotNull(problem);
+        assertTrue(problem.contains("filed a lawsuit Thursday"), problem);
+        assertTrue(problem.contains("'not checkable here'"), problem);
+    }
+
+    @Test void officePageReadAllowsUnsupported() throws Exception {
+        fetch(RELEASE, null);
+        assertNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
+    }
+
+    @Test void officePageThatFailedToOpenDoesNotCount() throws Exception {
+        fetch(RELEASE, "HTTP 403");
+        assertNotNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
+    }
+
+    @Test void nonGovernmentPageDoesNotCount() throws Exception {
+        String news = "https://www.kiro7.com/news/ag-lawsuit";
+        fetch(news, null);
+        assertNotNull(officeGate(officeClaim("unsupported", sourceField(news))));
+    }
+
+    @Test void citedButNeverFetchedDoesNotCount() throws Exception {
+        assertNotNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
+    }
+
+    @Test void notCheckableHereIsTheAllowedOutcome() throws Exception {
+        assertNull(officeGate(officeClaim("not checkable here", "")));
+    }
+
+    @Test void appealsToUnnamedPeopleStayUnsupported() throws Exception {
+        assertNull(officeGate("[{\"assertion\":\"Everyone knows prices are out of control\","
+            + "\"verdict\":\"unsupported\",\"reason\":\"no poll offered\"}]"));
+    }
+
+    @Test void warehouseClaimsAndAttacksAreExemptFromTheOfficeCheck() throws Exception {
+        assertNull(officeGate("[{\"assertion\":\"The governor's budget grew 4%\","
+            + "\"verdict\":\"unsupported\",\"warehouse_value\":\"3.9%\"},"
+            + "{\"assertion\":\"The mayor is a crook\",\"verdict\":\"unsupported\","
+            + "\"kind\":\"attack\"}]"));
+    }
 }

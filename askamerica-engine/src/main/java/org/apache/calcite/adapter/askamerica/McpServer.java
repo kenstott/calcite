@@ -901,7 +901,7 @@ public class McpServer {
             + "exists but that no table here carries. A personal attack on a person or group "
             + "MUST also carry `kind`: `attack`; any factual assertion inside it ('was "
             + "convicted of fraud') MUST be split out and graded as its own claim. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. "
             + "'Partially false' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
@@ -2967,7 +2967,7 @@ public class McpServer {
             + "`why_not`: when preview_report refuses a claim because one of its figures appears "
             + "in a fetched source, either act on that evidence or say here why it does not "
             + "change the grade; the reason is printed on the report. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. Use 'unsupported' when the piece asserts it as fact with no "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. Use 'unsupported' when the piece asserts it as fact with no "
             + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
@@ -4753,6 +4753,8 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceSourceUrlPresent(args));
                         addIfPresent(gateProblems, enforceClaimShape(claims));
                         addIfPresent(gateProblems, enforceExternalCheckAttempted(claims,
+                            args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceOfficeClaimRead(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceReferencedSourcesRead(
                             args.path("source_url").asText(null)));
@@ -7497,6 +7499,77 @@ public class McpServer {
             + "outcome counts, a 403 or timeout included) and list that URL in the claim's "
             + "`sources`, or run web searches for it and list the queries in `searched`. Fetching "
             + "the article itself does not count. Then grade on what the check found.";
+    }
+
+    /** An assertion about what a government office or official did or said. */
+    private static final java.util.regex.Pattern GOVERNMENT_ACTOR = java.util.regex.Pattern
+        .compile("(?i)\\b(?:attorneys? general|inspector general|governor|mayor|treasurer"
+            + "|comptroller|sheriff|senator|secretary of|department of|white house|legislature"
+            + "|city council|county commission|(?:district|circuit|supreme|appeals) court"
+            + "|court of appeals|health care authority|agency)\\b|['\u2019]s office\\b");
+
+    /**
+     * A government office's action or figure graded 'unsupported' must rest on that office's own
+     * page, read successfully this session and cited in the claim's {@code sources}. Without one
+     * the claim is 'not checkable here': searches that found nothing say nothing about whether
+     * the office acted.
+     *
+     * <p>Measured live 2026-11-09 (daily eval q2, Spokesman-Review on Washington Medicaid): a suit
+     * the Attorney General filed on Nov. 5 was graded 'unsupported' from search results alone,
+     * with the office's release one fetch away. {@link #enforceExternalCheckAttempted} accepted
+     * the listed searches.
+     *
+     * <p>The actor match and the host test are lexical. A claim naming the office in other words
+     * is not caught, and any government page satisfies the check, not only the named office's.
+     */
+    private static String enforceOfficeClaimRead(JsonNode claims, String articleUrl) {
+        java.util.Set<String> read = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText("")) && !e.hasNonNull("error")) {
+                String url = e.path("args").path("url").asText("");
+                if (!url.isEmpty()) {
+                    read.add(normalizeUrlForMatch(url));
+                }
+            }
+        }
+        String article = articleUrl == null ? null : normalizeUrlForMatch(articleUrl);
+        java.util.List<String> unread = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            String assertion = c.path("assertion").asText("").trim();
+            if (!ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict)
+                    || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
+                    || "attack".equals(c.path("kind").asText("").trim()
+                        .toLowerCase(java.util.Locale.ROOT))
+                    || !GOVERNMENT_ACTOR.matcher(assertion).find()) {
+                continue;
+            }
+            boolean officeRead = false;
+            for (JsonNode s : c.path("sources")) {
+                String norm = normalizeUrlForMatch(s.path("url").asText(""));
+                if (!norm.equals(article) && read.contains(norm) && isGovernmentHost(norm)) {
+                    officeRead = true;
+                }
+            }
+            if (!officeRead) {
+                unread.add("\"" + assertion + "\"");
+            }
+        }
+        if (unread.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + unread.size() + " claim(s) about a government office are "
+            + "graded 'unsupported' without that office's own page being read: "
+            + String.join("; ", unread) + ". web_fetch the office's release or record and list "
+            + "that URL in the claim's `sources`, then grade on what it says. If the page cannot "
+            + "be found or opened, the verdict MUST be 'not checkable here'.";
+    }
+
+    /** True when a {@link #normalizeUrlForMatch normalized} URL is on a .gov, .mil or .us host. */
+    private static boolean isGovernmentHost(String normalizedUrl) {
+        int slash = normalizedUrl.indexOf('/');
+        String host = slash < 0 ? normalizedUrl : normalizedUrl.substring(0, slash);
+        return host.endsWith(".gov") || host.endsWith(".mil") || host.endsWith(".us");
     }
 
     /** Each fetched HTML page's referenced links (see {@link #referencedLinks}), keyed by the
