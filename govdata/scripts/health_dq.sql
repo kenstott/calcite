@@ -3112,3 +3112,29 @@ FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ============================================================================
+-- TABLE: medicaid_chip_enrollment_monthly (new 9 Nov 2026) — issue #1135
+-- ============================================================================
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true));
+
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T2_row_count', CASE WHEN n >= 11000 THEN 'pass' ELSE 'fail' END, n, 11000, 'PI file had 11220 rows at build time'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) LIMIT 3;
+
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null state/period/status'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) WHERE state_abbr IS NULL OR reporting_period IS NULL OR report_status IS NULL);
+
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (state, period, status) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT state_abbr, reporting_period, report_status FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T7_states', CASE WHEN n BETWEEN 51 AND 52 THEN 'pass' ELSE 'fail' END, n, 51, '50 states + DC'
+FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true));
+
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T7_wa_apr2026', CASE WHEN n BETWEEN 1700000 AND 1900000 THEN 'pass' ELSE 'fail' END, n, 1790000, 'WA total Medicaid+CHIP enrollment Apr 2026 (published 1,788,884 P / 1,794,120 U)'
+FROM (SELECT COALESCE(MAX(total_medicaid_chip_enrollment),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) WHERE state_abbr='WA' AND reporting_period='202604');
+
+SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T7_parts_sum', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where Medicaid + CHIP differs from combined total by more than 2%'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) WHERE total_medicaid_enrollment IS NOT NULL AND total_chip_enrollment IS NOT NULL AND total_medicaid_chip_enrollment > 0 AND ABS(total_medicaid_enrollment + total_chip_enrollment - total_medicaid_chip_enrollment) > 0.02 * total_medicaid_chip_enrollment);

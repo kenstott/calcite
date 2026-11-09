@@ -8857,6 +8857,171 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         overwritePartitions: true
 
+  # --------------------------------------------------------------------------
+  # Medicaid and CHIP enrollment by state and month — CMS Performance Indicator data,
+  # data.medicaid.gov dataset 6165f45b-ca93-5bb5-9d06-db29c692a360 (DKAN datastore, JSON).
+  # NOT medicaid_spend_by_state_geo / medicaid_drug_utilization, which are drug reimbursement only.
+  # --------------------------------------------------------------------------
+  - name: medicaid_chip_enrollment_monthly
+    timeColumn: report_year  # observation year; this table has no column named 'year'
+    # The datastore has no Last-Modified; hash the response so an unchanged monthly release is
+    # skipped and a new one (CMS republishes the whole file each month) re-materializes.
+    freshness:
+      type: hash
+    pattern: "type=medicaid_chip_enrollment_monthly"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS "State Medicaid and CHIP Applications, Eligibility Determinations, and Enrollment Data"
+      (Performance Indicator file) — people enrolled in Medicaid and CHIP, one row per state (50
+      plus DC), month and report_status, July 2013 to about three months before today (the October
+      2026 release ends July 2026). The number that answers "how many people are covered by
+      Medicaid/CHIP in state X in month Y" (total_medicaid_chip_enrollment, with child_enrollment
+      for children and total_medicaid_enrollment / total_chip_enrollment where the state splits
+      them), plus application and eligibility-determination counts and call-center volume.
+
+      **Do not double count**: most months have two rows, report_status P (preliminary) and U
+      (updated); take U where present, else P. Counts are people enrolled in the month, not
+      spending — this table has no dollars (CMS-64 expenditure data is not in the warehouse).
+      Not in this table: county or age detail beyond children/adults, managed-care enrollment, or
+      ACA marketplace plans (see aca_effectuated_enrollment_monthly).
+
+    columns:
+      - name: state_abbr
+        type: string
+        nullable: false
+        expression: 'src."state_abbreviation"'
+        comment: 2-letter state code (FK to geo.state_ref); 50 states plus DC
+      - name: state_name
+        type: string
+        nullable: true
+        expression: 'src."state_name"'
+        comment: State name
+      - name: reporting_period
+        type: string
+        nullable: false
+        expression: 'src."reporting_period"'
+        comment: Month the counts describe, YYYYMM (e.g. 202604 = April 2026)
+      - name: report_year
+        type: integer
+        nullable: false
+        expression: 'CAST(SUBSTR(src."reporting_period", 1, 4) AS INTEGER)'
+        comment: Calendar year of reporting_period
+      - name: report_month
+        type: integer
+        nullable: false
+        expression: 'CAST(SUBSTR(src."reporting_period", 5, 2) AS INTEGER)'
+        comment: Calendar month 1-12 of reporting_period
+      - name: report_status
+        type: string
+        nullable: false
+        expression: 'src."preliminary_or_updated"'
+        comment: "P" = preliminary count first reported for the month, "U" = updated count after the state revised it. A month can carry both rows (P and U); filter to U where present, else P, before summing or comparing months
+      - name: state_expanded_medicaid
+        type: string
+        nullable: true
+        expression: 'src."state_expanded_medicaid"'
+        comment: Y if the state had adopted the ACA Medicaid expansion for that month
+      - name: final_report
+        type: string
+        nullable: true
+        expression: 'src."final_report"'
+        comment: Y when CMS marks the month final
+      - name: total_medicaid_chip_enrollment
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."total_medicaid_and_chip_enrollment" AS BIGINT)'
+        comment: Everyone enrolled in comprehensive Medicaid or CHIP that month — the headline figure CMS publishes (Apple Health in Washington)
+      - name: total_medicaid_enrollment
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."total_medicaid_enrollment" AS BIGINT)'
+        comment: Medicaid-only enrollment; NULL for early months and states that report only the combined total
+      - name: total_chip_enrollment
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."total_chip_enrollment" AS BIGINT)'
+        comment: Separate-CHIP enrollment; NULL for early months and states that report only the combined total
+      - name: child_enrollment
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."medicaid_and_chip_child_enrollment" AS BIGINT)'
+        comment: Children (under 19) enrolled in Medicaid or CHIP; divide by the state child population (census.acs_*) for the share of children covered
+      - name: adult_medicaid_enrollment
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."total_adult_medicaid_enrollment" AS BIGINT)'
+        comment: Adults enrolled in Medicaid (Medicaid only, no CHIP)
+      - name: new_applications
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."new_applications_submitted_to_medicaid_and_chip_agencies" AS BIGINT)'
+        comment: New applications submitted to the state Medicaid/CHIP agency in the month
+      - name: determinations_eligible_medicaid
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."individuals_determined_eligible_for_medicaid_at_application" AS BIGINT)'
+        comment: Individuals found eligible for Medicaid at application in the month
+      - name: determinations_eligible_chip
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."individuals_determined_eligible_for_chip_at_application" AS BIGINT)'
+        comment: Individuals found eligible for CHIP at application in the month
+      - name: total_determinations
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."total_medicaid_and_chip_determinations" AS BIGINT)'
+        comment: Total Medicaid and CHIP eligibility determinations in the month
+      - name: call_center_volume
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(src."total_call_center_volume_number_of_calls" AS BIGINT)'
+        comment: Calls received by the state Medicaid/CHIP call center
+
+    source:
+      type: http
+      url: "https://data.medicaid.gov/api/1/datastore/query/6165f45b-ca93-5bb5-9d06-db29c692a360/0"
+      method: GET
+      parameters:
+        limit: "2000"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 2000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - medicaid_chip_enrollment_monthly
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
 # ============================================================================
 # Views
 # ============================================================================
