@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 set -e
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -23,7 +25,7 @@ VSS_DB="${VSS_DB:-$GOVDATA_HOME/build/.aperio/vss/chunks_vss.duckdb}"
 
 # Load environment
 if [[ -f "$GOVDATA_HOME/.env.prod" ]]; then
-    source "$GOVDATA_HOME/.env.prod"
+    source_env_file "$GOVDATA_HOME/.env.prod"
 fi
 
 if [[ -z "$AWS_ACCESS_KEY_ID" ]]; then

@@ -80,6 +80,7 @@ if [ -z "${GOVDATA_JAR:-}" ]; then
   elif [ -n "$SIH_JAR" ]; then export GOVDATA_JAR="$SIH_JAR"; fi
 fi
 
+private_dir "$LOG_DIR"
 mkdir -p "$LOG_DIR/pids"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -358,6 +359,7 @@ run_window() {
   local mode="$1"
   local fill_mode="${2:-}"   # when the primary mode finishes early, spend the rest of the window on this mode
   local window_log="$LOG_DIR/scheduled-${mode}-$(date '+%Y%m%d-%H%M%S').log"
+  private_log "$window_log"
   # Weekends get a longer window so the extended (~20h) weekend VSS embed can run to completion
   # instead of being cut short by the window timeout. date +%u: 6=Sat, 7=Sun.
   local win_secs="$WINDOW_SECS"

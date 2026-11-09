@@ -13,6 +13,8 @@
 # Usage: report-unavailable.sh [--env dq|prod]   (default: dq)
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -30,7 +32,7 @@ done
 # Load the matching env (tracker database connection).
 ENV_FILE="$ROOT/.env.${ENV_NAME}"
 [ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE not found" >&2; exit 1; }
-set -a; source "$ENV_FILE"; set +a
+source_env_file "$ENV_FILE"
 
 # Postgres is the canonical ETL state store. Its tracker tables live in a schema derived from the
 # parquet bucket (PGPipelineTracker.sanitizeNamespace), which is what keeps dq and prod separate.

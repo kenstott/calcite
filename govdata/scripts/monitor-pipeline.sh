@@ -16,12 +16,14 @@
 # limitations under the License.
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env.prod"
 
 if [[ -f "$ENV_FILE" ]]; then
-  set -a; source "$ENV_FILE"; set +a
+  source_env_file "$ENV_FILE"
 fi
 
 : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID not set}"

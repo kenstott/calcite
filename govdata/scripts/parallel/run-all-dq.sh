@@ -21,12 +21,14 @@
 # and restarts.
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/../env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 load_env
 _env_dq="$SCRIPT_DIR/../../.env.dq"
-if [ -f "$_env_dq" ]; then set -a; source "$_env_dq"; set +a; fi
+if [ -f "$_env_dq" ]; then source_env_file "$_env_dq"; fi
 
 # ── argument parsing ──────────────────────────────────────────────────────────
 SCHEMA_FILTER=""

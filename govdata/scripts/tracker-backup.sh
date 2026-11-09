@@ -21,6 +21,8 @@
 #     -n govdata_parquet_v1 <backup file>
 
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 # cron invokes this with a minimal PATH (/usr/bin:/bin) that omits ~/.local/bin, where rclone is
 # actually installed here -- confirmed live 2026-08-31: every night's upload step was silently
@@ -51,10 +53,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/../.env.prod" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "$SCRIPT_DIR/../.env.prod"
-  set +a
+  source_env_file "$SCRIPT_DIR/../.env.prod"
 fi
 
 URL="${GOVDATA_TRACKER_PG_URL:-${CALCITE_TRACKER_PG_URL:-}}"

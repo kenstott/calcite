@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/../.env.prod"
@@ -25,7 +27,7 @@ ENV_FILE="${SCRIPT_DIR}/../.env.prod"
 # ---------------------------------------------------------------------------
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
-  set -a; source "$ENV_FILE"; set +a
+  source_env_file "$ENV_FILE"
 fi
 
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID not set (add to .env.prod)}"

@@ -16,6 +16,8 @@
 #   --limit    the maxRecords in econ-schema.yaml (default 100000)
 #   --attempts runs per year before giving up (default 6)
 set -u
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/../env-source.sh"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FROM=2025; TO=2008; LIMIT=100000; ATTEMPTS=6
@@ -31,7 +33,7 @@ done
 : "${GOVDATA_JAR:?set GOVDATA_JAR to a private jar that contains the partner split}"
 [ -f "$GOVDATA_JAR" ] || { echo "no such jar: $GOVDATA_JAR" >&2; exit 2; }
 
-set -a; . "$HERE/../../.env.prod"; set +a
+source_env_file "$HERE/../../.env.prod"
 LOG="$HERE/runs/reload-comtrade-capped-$(date +%Y%m%d-%H%M).log"
 log() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 

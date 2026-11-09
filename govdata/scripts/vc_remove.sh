@@ -42,6 +42,8 @@
 # given (explicit acknowledgement of a full-schema removal).
 
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -90,14 +92,14 @@ fi
 
 # ── Load environment (same convention as data_purge.sh) ──────────────────────
 if [[ -f "$GOVDATA_HOME/.env.prod" ]]; then
-  set -a; source "$GOVDATA_HOME/.env.prod"; set +a
+  source_env_file "$GOVDATA_HOME/.env.prod"
 fi
 if [[ "$ENV_NAME" == "dq" ]]; then
   if [[ ! -f "$GOVDATA_HOME/.env.dq" ]]; then
     echo "Error: --env dq requested but $GOVDATA_HOME/.env.dq not found" >&2
     exit 1
   fi
-  set -a; source "$GOVDATA_HOME/.env.dq"; set +a
+  source_env_file "$GOVDATA_HOME/.env.dq"
 fi
 
 if [[ "$ENV_NAME" == "dq" ]]; then

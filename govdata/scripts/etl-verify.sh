@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 set -e
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 # Determine script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,14 +27,10 @@ GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
 if [[ -f "$GOVDATA_HOME/$ENV_FILE" ]]; then
     echo "Loading environment from $ENV_FILE"
-    set -a
-    source "$GOVDATA_HOME/$ENV_FILE"
-    set +a
+    source_env_file "$GOVDATA_HOME/$ENV_FILE"
 elif [[ -f "$ENV_FILE" ]]; then
     echo "Loading environment from $ENV_FILE"
-    set -a
-    source "$ENV_FILE"
-    set +a
+    source_env_file "$ENV_FILE"
 fi
 
 # JVM options (smaller heap than ETL runner - verification is lighter)

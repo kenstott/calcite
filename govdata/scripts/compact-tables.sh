@@ -16,15 +16,17 @@
 # limitations under the License.
 #
 set -uo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GOVDATA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Load environment
 if [ -f "$GOVDATA_DIR/.env.prod" ]; then
-  source "$GOVDATA_DIR/.env.prod"
+  source_env_file "$GOVDATA_DIR/.env.prod"
 elif [ -f "$GOVDATA_DIR/.env.sh" ]; then
-  source "$GOVDATA_DIR/.env.sh"
+  source_env_file "$GOVDATA_DIR/.env.sh"
 fi
 
 # The shadow jar is sih-govdata*.jar; the previous *-all.jar glob matched nothing the build

@@ -54,6 +54,8 @@
 #                                                  # where 'local' dies with "No route to host"
 #
 set -e
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -124,7 +126,7 @@ if [[ ! -f "$ENV_PROD" ]]; then
     exit 1
 fi
 # shellcheck disable=SC1090
-set -a; source "$ENV_PROD"; set +a
+source_env_file "$ENV_PROD"
 
 if [[ "${GOVDATA_PARQUET_DIR:-}" != s3://* ]]; then
     echo "ERROR: GOVDATA_PARQUET_DIR is '${GOVDATA_PARQUET_DIR:-<unset>}', not an s3:// URI." >&2

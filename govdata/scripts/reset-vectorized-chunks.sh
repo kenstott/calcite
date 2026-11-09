@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -24,9 +26,7 @@ GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
 for env_file in .env.prod .env.test; do
     if [[ -f "$GOVDATA_HOME/$env_file" ]]; then
         echo "Loading $env_file"
-        set -a
-        source "$GOVDATA_HOME/$env_file"
-        set +a
+        source_env_file "$GOVDATA_HOME/$env_file"
         break
     fi
 done
