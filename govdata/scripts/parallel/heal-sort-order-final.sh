@@ -157,7 +157,7 @@ WAREHOUSE_BASE="${GOVDATA_PARQUET_DIR/#s3:\/\//s3a://}"
 
 S3_ARGS=""
 if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
-  S3_ARGS="--s3-access-key $AWS_ACCESS_KEY_ID --s3-secret-key $AWS_SECRET_ACCESS_KEY"
+  S3_ARGS="--s3-credentials-from-env"
   if [ -n "${AWS_ENDPOINT_OVERRIDE:-}" ]; then
     S3_ARGS="$S3_ARGS --s3-endpoint $AWS_ENDPOINT_OVERRIDE"
   fi

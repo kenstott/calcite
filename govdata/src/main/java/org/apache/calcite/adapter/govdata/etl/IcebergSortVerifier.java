@@ -82,8 +82,11 @@ public final class IcebergSortVerifier {
       case "--warehouse": warehouse = args[++i]; break;
       case "--table": tableName = args[++i]; break;
       case "--sort-column": sortColumn = args[++i]; break;
-      case "--s3-access-key": accessKey = args[++i]; break;
-      case "--s3-secret-key": secretKey = args[++i]; break;
+      case S3EnvCredentials.FLAG:
+        S3EnvCredentials creds = S3EnvCredentials.read();
+        accessKey = creds.accessKey;
+        secretKey = creds.secretKey;
+        break;
       case "--s3-endpoint": endpoint = args[++i]; break;
       default:
         System.err.println("Unknown argument: " + args[i]);
@@ -335,8 +338,7 @@ public final class IcebergSortVerifier {
     System.err.println("  --table NAME         Table name");
     System.err.println("  --sort-column COL    Leading sort column (default: from"
         + " aperio.sorted-by)");
-    System.err.println("  --s3-access-key KEY  S3/MinIO access key");
-    System.err.println("  --s3-secret-key KEY  S3/MinIO secret key");
+    System.err.println("  --s3-credentials-from-env  read AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY");
     System.err.println("  --s3-endpoint URL    S3/MinIO endpoint");
     System.err.println();
     System.err.println("Exit: 0 pass, 1 verification failed, 2 error");

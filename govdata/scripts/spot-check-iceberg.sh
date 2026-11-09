@@ -43,8 +43,8 @@ INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs; LOAD httpfs;
 CREATE OR REPLACE SECRET r2 (
   TYPE S3,
-  KEY_ID '${AWS_ACCESS_KEY_ID}',
-  SECRET '${AWS_SECRET_ACCESS_KEY}',
+  PROVIDER credential_chain,
+  CHAIN 'env',
   ENDPOINT '${ENDPOINT}',
   REGION 'auto',
   USE_SSL true

@@ -466,12 +466,7 @@ try:
     conn = duckdb.connect()
     conn.execute('INSTALL iceberg; LOAD iceberg')
     conn.execute('INSTALL httpfs; LOAD httpfs')
-    conn.execute(\"SET s3_region = 'us-east-1'\")
-    conn.execute(\"SET s3_access_key_id = '${AWS_ACCESS_KEY_ID}'\")
-    conn.execute(\"SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}'\")
-    conn.execute(\"SET s3_endpoint = '${s3_endpoint}'\")
-    conn.execute('SET s3_use_ssl = true')
-    conn.execute(\"SET s3_url_style = 'path'\")
+    conn.execute(\"CREATE OR REPLACE SECRET s3env (TYPE S3, PROVIDER credential_chain, CHAIN 'env', REGION 'us-east-1', ENDPOINT '${s3_endpoint}', URL_STYLE 'path', USE_SSL true)\")
     conn.execute('SET unsafe_enable_version_guessing = true')
     # Materialize to temp table to avoid filter pushdown bug on list columns
     conn.execute(\"CREATE TEMP TABLE _t AS SELECT embedding FROM iceberg_scan('${iceberg_chunks}') LIMIT 10000\")

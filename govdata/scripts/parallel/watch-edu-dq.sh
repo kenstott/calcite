@@ -32,11 +32,7 @@ run_dq() {
   duckdb << SQL 2>&1 | tee -a "$DQ_OUT"
 INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs; LOAD httpfs;
-SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
-SET s3_endpoint='21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com';
-SET s3_region='auto';
-SET s3_url_style='path';
+CREATE OR REPLACE SECRET s3env (TYPE S3, PROVIDER credential_chain, CHAIN 'env', REGION 'auto', ENDPOINT '21cd637936a05913431a608f3f6d73bb.r2.cloudflarestorage.com', URL_STYLE 'path');
 SELECT COUNT(*) AS row_count, MIN(year) AS min_year, MAX(year) AS max_year
 FROM iceberg_scan('s3://govdata-parquet-v1/edu/${table}', allow_moved_paths=true);
 SQL

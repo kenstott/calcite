@@ -48,10 +48,7 @@ echo "Querying Iceberg for available years..."
 YEARS=$(duckdb -csv -noheader << EOSQL 2>/dev/null | grep -E '^[0-9]+$' | sort -rn
 INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-east-1';
-SET s3_access_key_id = '${AWS_ACCESS_KEY_ID}';
-SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}';
-SET s3_endpoint = '${AWS_ENDPOINT_OVERRIDE}';
+CREATE OR REPLACE SECRET s3env (TYPE S3, PROVIDER credential_chain, CHAIN 'env', REGION 'us-east-1', ENDPOINT '${AWS_ENDPOINT_OVERRIDE}');
 SET unsafe_enable_version_guessing = true;
 
 SELECT DISTINCT "year"
@@ -95,10 +92,7 @@ for YEAR in $YEARS; do
     duckdb :memory: << EOSQL
 INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs; LOAD httpfs;
-SET s3_region = 'us-east-1';
-SET s3_access_key_id = '${AWS_ACCESS_KEY_ID}';
-SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}';
-SET s3_endpoint = '${AWS_ENDPOINT_OVERRIDE}';
+CREATE OR REPLACE SECRET s3env (TYPE S3, PROVIDER credential_chain, CHAIN 'env', REGION 'us-east-1', ENDPOINT '${AWS_ENDPOINT_OVERRIDE}');
 SET unsafe_enable_version_guessing = true;
 
 CREATE TEMP TABLE keys AS

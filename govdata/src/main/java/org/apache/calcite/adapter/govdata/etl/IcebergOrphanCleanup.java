@@ -58,7 +58,7 @@ import java.util.concurrent.TimeUnit;
  * schemas).
  *
  * <p>Usage: {@code IcebergOrphanCleanup --schema-resource econ/econ-schema.yaml [...]
- * [--s3-access-key K --s3-secret-key S --s3-endpoint URL] [--min-age-days N] [--delete]}. Exit code
+ * [--s3-credentials-from-env --s3-endpoint URL] [--min-age-days N] [--delete]}. Exit code
  * 0 when every table was handled, 1 when any table failed. A final summary names the failed
  * tables and, when the run is stopped early, the tables not reached.
  */
@@ -305,11 +305,10 @@ public final class IcebergOrphanCleanup {
       case "--schema-resource":
         resources.add(args[++i]);
         break;
-      case "--s3-access-key":
-        accessKey = args[++i];
-        break;
-      case "--s3-secret-key":
-        secretKey = args[++i];
+      case S3EnvCredentials.FLAG:
+        S3EnvCredentials creds = S3EnvCredentials.read();
+        accessKey = creds.accessKey;
+        secretKey = creds.secretKey;
         break;
       case "--s3-endpoint":
         endpoint = args[++i];
