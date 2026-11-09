@@ -111,12 +111,33 @@ class _DatabaseMetaData:
         return _ResultSet(["PKTABLE_SCHEM"], [])
 
 
+class _Statement:
+    """Answers the one statement the walk runs: information_schema.schemata's names and
+    comments, from the metadata's schemas."""
+
+    def __init__(self, md):
+        self._md = md
+
+    def executeQuery(self, sql):
+        assert sql == "SELECT schema_name, remarks FROM information_schema.schemata", sql
+        return _ResultSet(
+            ["SCHEMA_NAME", "REMARKS"],
+            [{"SCHEMA_NAME": s, "REMARKS": f"{s} comment"} for s in self._md._tables],
+        )
+
+    def close(self):
+        pass
+
+
 class _Connection:
     def __init__(self, md):
         self._md = md
 
     def getMetaData(self):
         return self._md
+
+    def createStatement(self):
+        return _Statement(self._md)
 
     def unwrap(self, _cls):
         raise RuntimeError("not a CalciteConnection")
@@ -129,6 +150,31 @@ def _model(tmp_path):
     path = tmp_path / "model.json"
     path.write_text('{"version": "1.0"}')
     return str(path)
+
+
+def test_the_cache_keeps_table_types_and_schema_comments(tmp_path):
+    model_path = _model(tmp_path)
+    md = _DatabaseMetaData(_TABLES)
+    md._table_rows = lambda schemas: [
+        {"TABLE_SCHEM": s, "TABLE_NAME": t, "TABLE_TYPE": "VIEW" if t == "cpi" else "TABLE"}
+        for s in schemas
+        for t in md._tables[s]
+    ]
+    catalog_populate.build_and_cache_context(_Connection(md), model_path)
+
+    class _State:
+        pass
+
+    state = _State()
+    state.authz_grants = None
+    catalog_populate.populate_state_cached(None, state, model_path)
+    ctx = state.contexts.get("")
+    assert {tn: tm.table_type for tn, tm in ctx.tables.items()} == {
+        "econ.gdp": "BASE TABLE",
+        "econ.cpi": "VIEW",
+        "law.bills": "BASE TABLE",
+    }
+    assert ctx.schema_comments == {"econ": "econ comment", "law": "law comment"}
 
 
 def test_complete_walk_is_cached(tmp_path):

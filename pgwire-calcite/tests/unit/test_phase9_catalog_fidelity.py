@@ -474,9 +474,11 @@ def test_the_constraint_views_are_answered_by_the_catalog_not_forwarded():
         assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "INTERCEPT", view
 
 
-def test_the_four_views_calcite_answers_are_still_forwarded():
+def test_the_four_views_calcite_also_has_are_answered_from_the_catalog():
+    # Calcite's InformationSchema resolves every table it lists (an object-store round trip per
+    # Iceberg table); these are answered from the catalog cache instead.
     for view in ("schemata", "tables", "columns", "views"):
-        assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "PASS_THROUGH", view
+        assert catalog.classify(f"SELECT 1 FROM information_schema.{view}") == "INTERCEPT", view
 
 
 def test_provisas_foreign_key_read_pairs_the_declared_keys_both_ways():

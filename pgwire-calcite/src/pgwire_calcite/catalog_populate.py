@@ -141,6 +141,7 @@ def build_context_reporting_gaps(conn) -> tuple:
             table_name=name,
             type_name=f"{schema}.{name}",
             comment=r.get("REMARKS") or None,
+            table_type="VIEW" if ttype == "VIEW" else "BASE TABLE",
         )
         ctx.tables[tm.type_name] = tm
         by_qualified[(schema, name)] = tm
@@ -169,6 +170,23 @@ def build_context_reporting_gaps(conn) -> tuple:
                 continue
             for r in rows:
                 _add_table_row(r)
+
+    # Schemas and their comments, for information_schema.schemata. Calcite's SchemataTable reads
+    # each schema's comment without resolving any table.
+    try:
+        stmt = conn.createStatement()
+        try:
+            for r in _rows(stmt.executeQuery(
+                    "SELECT schema_name, remarks FROM information_schema.schemata")):
+                schema_name = r.get("SCHEMA_NAME") or ""
+                if schema_name.lower() in _SYSTEM_SCHEMAS:
+                    continue
+                ctx.schema_comments[schema_name] = r.get("REMARKS") or None
+        finally:
+            stmt.close()
+    except Exception as e:
+        log.warning("information_schema.schemata could not be read (%s: %s)", type(e).__name__, e)
+        gaps.append("schemata")
 
     # Columns per table.
     for schema, name, tm in table_keys:
@@ -417,6 +435,7 @@ def serialize_catalog(ctx: CompilationContext, column_types) -> dict:
             "type_name": t.type_name,
             "domain_id": t.domain_id,
             "comment": t.comment,
+            "table_type": t.table_type,
         }
 
     def cm(c):
@@ -443,6 +462,7 @@ def serialize_catalog(ctx: CompilationContext, column_types) -> dict:
             for k, j in ctx.joins.items()
         ],
         "column_types": {str(tid): [cm(c) for c in cols] for tid, cols in column_types.items()},
+        "schema_comments": dict(ctx.schema_comments),
     }
 
 
@@ -462,7 +482,13 @@ def deserialize_catalog(d: dict):
             target=target,
             cardinality=j["cardinality"],
         )
-    ctx = CompilationContext(tables=tables, pk_columns=pk, unique_columns=uniq, joins=joins)
+    ctx = CompilationContext(
+        tables=tables,
+        pk_columns=pk,
+        unique_columns=uniq,
+        joins=joins,
+        schema_comments=d["schema_comments"],
+    )
     column_types = {
         int(tid): [ColumnMeta(**c) for c in cols] for tid, cols in d["column_types"].items()
     }
@@ -472,7 +498,8 @@ def deserialize_catalog(d: dict):
 # --- Disk-backed catalog cache (a fresh server launch otherwise re-walks every -----
 # --- table's live Iceberg metadata via JDBC on every cold start) ------------------
 
-_CACHE_FORMAT_VERSION = 1
+#: 2: TableMeta.table_type and CompilationContext.schema_comments, which information_schema reads.
+_CACHE_FORMAT_VERSION = 2
 
 #: Prefix of the one-line start-up progress markers this server logs, which the AskAmerica
 #: engine tail-parses to tell a caller what a start is doing (``STAGE <name> [key=value ...]``).

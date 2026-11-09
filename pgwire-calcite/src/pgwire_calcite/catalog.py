@@ -154,14 +154,10 @@ _SCALAR_FN_RE = re.compile(
 )
 
 _INTERCEPT_SCHEMAS = frozenset({"pg_catalog"})
-#: The information_schema views Calcite's own InformationSchema answers, which info_schema.py
-#: scopes to the role. Every other information_schema relation this module serves (the constraint
-#: views, the grants, routines, ...) does not exist there, so a statement that reads one is
-#: answered here: forwarded, it fails with "Object 'referential_constraints' not found".
-CALCITE_INFORMATION_SCHEMA_VIEWS = frozenset({"schemata", "tables", "views", "columns"})
-# information_schema was intercepted here too until 2026-09-18. It is standard SQL that
-# Calcite's own InformationSchema.java answers directly, filter-pushed-down, so PASS_THROUGH
-# sends it to the real Calcite connection instead of this module's memoized DuckDB catalog.
+# Every information_schema relation in _TABLE_MAP is answered here as well, from the role's
+# catalog cache. Calcite's InformationSchema resolves each table it lists, which for an Iceberg
+# table is a discovery round trip to the object store: a listing the filter could not narrow to
+# one table walked the whole corpus over the network and timed out.
 
 _TABLE_MAP: dict[tuple[str, str], str] = {
     ("information_schema", "schemata"): "_is_schemata",
@@ -1684,11 +1680,7 @@ def classify(sql: str) -> str:  # REQ-127, REQ-128, REQ-363
             tname = tbl.name.lower() if tbl.name else ""
             if db in _INTERCEPT_SCHEMAS:
                 return "INTERCEPT"
-            if (
-                db == "information_schema"
-                and tname not in CALCITE_INFORMATION_SCHEMA_VIEWS
-                and (db, tname) in _TABLE_MAP
-            ):
+            if db == "information_schema" and (db, tname) in _TABLE_MAP:
                 return "INTERCEPT"
             if not db and tname in _CATALOG_TABLE_NAMES:
                 return "INTERCEPT"
@@ -1737,6 +1729,10 @@ class CatalogIndex:  # REQ-532
         "col_attnum",
         "attnum_to_col",
         "ns_map",
+        "table_type",
+        "table_comment",
+        "col_comment",
+        "schema_comment",
     )
 
     def __init__(self) -> None:
@@ -1747,6 +1743,11 @@ class CatalogIndex:  # REQ-532
         self.col_attnum: dict[tuple[int, str], int] = {}
         self.attnum_to_col: dict[tuple[int, int], str] = {}
         self.ns_map: dict[str, int] = {"pg_catalog": 11, "information_schema": 12, "public": 2200}
+        self.table_type: dict[int, str] = {}
+        self.table_comment: dict[int, str | None] = {}
+        self.col_comment: dict[tuple[int, str], str | None] = {}
+        #: every listed schema (SQL name) -> its comment or None, for information_schema.schemata
+        self.schema_comment: dict[str, str | None] = {}
 
 
 def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-363
@@ -1770,6 +1771,9 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
         idx.ns_map[sch] = _ns_extra
         _ns_extra += 1
 
+    for raw_schema, comment in ctx.schema_comments.items():
+        idx.schema_comment[domain_to_sql_name(raw_schema)] = comment
+
     seen_table_ids: set[int] = set()
 
     for tm in ctx.tables.values():
@@ -1783,6 +1787,8 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
         toid = 16384 + tm.table_id
 
         idx.tables.append((cat, sch, tname, tm.table_id, toid))
+        idx.table_type[toid] = tm.table_type
+        idx.table_comment[toid] = tm.comment
         idx.table_id_to_oid[tm.table_id] = toid
         idx.toid_to_table[toid] = (cat, sch, tname)
 
@@ -1793,12 +1799,14 @@ def _build_catalog_index(ctx, col_types: dict) -> CatalogIndex:  # REQ-128, REQ-
             phys = col.column_name
             exposed = _p2s.get((tm.table_id, phys)) or apply_sql_name(phys)
             idx.all_cols.append((toid, exposed, col.data_type, col.is_nullable, i))
+            idx.col_comment[(toid, exposed)] = col.comment
             idx.col_attnum[(toid, exposed)] = i
             idx.attnum_to_col[(toid, i)] = exposed
 
         virtual = getattr(ctx, "virtual_columns", {}).get(tm.table_id, {})
         for j, vcol in enumerate(virtual, len(real_cols) + 1):
             idx.all_cols.append((toid, vcol, "varchar", True, j))
+            idx.col_comment[(toid, vcol)] = None
             idx.col_attnum[(toid, vcol)] = j
             idx.attnum_to_col[(toid, j)] = vcol
 
@@ -1809,26 +1817,31 @@ def _populate_is_schemata(db, idx: CatalogIndex) -> None:
     db.execute("""CREATE TABLE _is_schemata (
         catalog_name VARCHAR, schema_name VARCHAR, schema_owner VARCHAR,
         default_character_set_catalog VARCHAR, default_character_set_schema VARCHAR,
-        default_character_set_name VARCHAR, sql_path VARCHAR)""")
-    seen_schemas: set[tuple] = {(c, s) for c, s, *_ in idx.tables}
-    if seen_schemas:
-        insert_rows(db, 
-            f"INSERT INTO _is_schemata VALUES (?,?,'{_DATABASE_NAME}',NULL,NULL,NULL,NULL)",
-            list(seen_schemas),
-        )
+        default_character_set_name VARCHAR, sql_path VARCHAR, remarks VARCHAR)""")
+    # Every schema the catalog walk listed, plus any a table names; REMARKS is the schema's
+    # comment. Sorted, so the listing's order is the same on every build.
+    schemas = set(idx.schema_comment) | {s for _c, s, *_ in idx.tables}
+    insert_rows(
+        db,
+        f"INSERT INTO _is_schemata VALUES ('{_DATABASE_NAME}',?,'{_DATABASE_NAME}',NULL,NULL,NULL,NULL,?)",
+        [(s, idx.schema_comment.get(s)) for s in sorted(schemas)],
+    )
 
 
 def _populate_is_tables(db, idx: CatalogIndex) -> None:
     db.execute("""CREATE TABLE _is_tables (
         table_catalog VARCHAR, table_schema VARCHAR, table_name VARCHAR, table_type VARCHAR,
-        self_referencing_column_name VARCHAR, reference_generation VARCHAR,
+        remarks VARCHAR, self_referencing_column_name VARCHAR, reference_generation VARCHAR,
         user_defined_type_catalog VARCHAR, user_defined_type_schema VARCHAR,
         user_defined_type_name VARCHAR, is_insertable_into VARCHAR,
         is_typed VARCHAR, commit_action VARCHAR)""")
     if idx.tables:
         insert_rows(db, 
-            "INSERT INTO _is_tables VALUES (?,?,?,'BASE TABLE',NULL,NULL,NULL,NULL,NULL,'YES','NO',NULL)",
-            [(row[0], row[1], row[2]) for row in idx.tables],
+            "INSERT INTO _is_tables VALUES (?,?,?,?,?,NULL,NULL,NULL,NULL,NULL,'YES','NO',NULL)",
+            [
+                (c, s, t, idx.table_type[toid], idx.table_comment[toid])
+                for c, s, t, _tid, toid in idx.tables
+            ],
         )
 
 
@@ -1849,7 +1862,7 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
         is_self_referencing VARCHAR, is_identity VARCHAR, identity_generation VARCHAR,
         identity_start VARCHAR, identity_increment VARCHAR, identity_maximum VARCHAR,
         identity_minimum VARCHAR, identity_cycle VARCHAR, is_generated VARCHAR,
-        generation_expression VARCHAR, is_updatable VARCHAR)""")
+        generation_expression VARCHAR, is_updatable VARCHAR, remarks VARCHAR)""")
     col_rows = []
     for toid, col_name, col_type, is_nullable, ordinal in idx.all_cols:
         c, s, t = idx.toid_to_table.get(toid, (_DATABASE_NAME, "public", ""))
@@ -1901,10 +1914,11 @@ def _populate_is_columns(db, idx: CatalogIndex) -> None:
                 "NEVER",
                 None,
                 "YES",
+                idx.col_comment[(toid, col_name)],
             )
         )
     if col_rows:
-        insert_rows(db, f"INSERT INTO _is_columns VALUES ({','.join(['?'] * 44)})", col_rows)
+        insert_rows(db, f"INSERT INTO _is_columns VALUES ({','.join(['?'] * 45)})", col_rows)
 
 
 def _populate_pg_namespace(db, idx: CatalogIndex) -> None:

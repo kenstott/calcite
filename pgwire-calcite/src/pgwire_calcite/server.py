@@ -684,24 +684,13 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
                 )
                 return self._track(CalciteQueryResult(result, stripped))
 
-        # information_schema is answered by Calcite, scoped to the role's catalog and reported
-        # in PG's type names (info_schema.py): its views are rewritten into derived tables
-        # before execution, so authorization below admits them as catalog reads.
-        _info_views: frozenset = frozenset()
-        if getattr(_state, "catalog_enabled", False):
-            from pgwire_calcite import info_schema
-
-            if info_schema.references(stripped):
-                stripped = self._rewrite_information_schema(_state, stripped)
-                _info_views = frozenset((info_schema.SCHEMA, v) for v in info_schema.VIEWS)
-
         # Per-role authorization (PGW-045): reject out-of-grant relations before
         # execution — enforced on the same grants that filter discovery.
         _grants = getattr(_state, "authz_grants", None)
         if _grants is not None:
             from pgwire_calcite.authz import enforce_query
 
-            enforce_query(_grants, self.role_id or "", stripped, catalog_reads=_info_views)
+            enforce_query(_grants, self.role_id or "", stripped)
 
         # Usage quota, under THIS connection's key; a no-op for a connection that carries
         # none. Checked per query; cheap thanks to metering.py's 60s cache. Raises
@@ -912,17 +901,12 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         if _state is None or _TXN_TAG_RE.match(stripped) or _dml_statement_kind(stripped):
             return None
         if getattr(_state, "catalog_enabled", False):
-            from pgwire_calcite import info_schema
             from pgwire_calcite.catalog import classify
 
             if classify(stripped) == "INTERCEPT":
                 from pgwire_calcite.catalog import parameter_types
 
                 return parameter_types(stripped, self.role_id or "", _state)
-            if info_schema.references(stripped):
-                # The engine answers information_schema, as the statement it is rewritten
-                # into, so it types that statement's parameters like any other's.
-                stripped = self._rewrite_information_schema(_state, stripped)
         ask = getattr(_state.backend, "parameter_types", None)
         if ask is None:  # a backend with no engine behind it (the stub)
             return None
@@ -964,30 +948,6 @@ class CalciteSession(Session):  # PGW-002, PGW-003, PGW-004
         return self.execute_sql(
             returning.select_sql(plan.select_list, plan.table_sql, "1 = 0")
         )
-
-    def _rewrite_information_schema(self, state, pg_sql: str) -> str:
-        """``pg_sql`` with its information_schema views scoped to this role's catalog."""
-        from pgwire_calcite import info_schema
-
-        ctx = state.contexts.get(self.role_id or "")
-        visible = [(tm.schema_name, tm.table_name) for tm in ctx.tables.values()]
-
-        def columns_of() -> list[str]:
-            # Calcite's own information_schema.columns column list, asked once per process: the
-            # derived table names every column so it can restate data_type in PG's names.
-            cached = getattr(state, "information_schema_columns", None)
-            if cached is None:
-                probe = state.backend.execute_sql(  # type: ignore[attr-defined]
-                    f"SELECT * FROM {info_schema.SCHEMA}.columns WHERE 1 = 0",
-                    self.role_id,
-                )
-                cached = list(probe.column_names)
-                state.information_schema_columns = cached
-            return cached
-
-        rewritten = info_schema.rewrite(pg_sql, visible, columns_of)
-        assert rewritten is not None  # references() said it reads one of the views
-        return rewritten
 
 
 class CalciteConnection(Connection):

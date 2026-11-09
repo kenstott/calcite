@@ -91,6 +91,11 @@ def _filter_ctx(base: CompilationContext, grants: RoleGrants, role: str) -> Comp
         },
         physical_to_sql=base.physical_to_sql,
         virtual_columns=base.virtual_columns,
+        schema_comments={
+            s: c
+            for s, c in base.schema_comments.items()
+            if s in {tm.schema_name for tm in kept.values()}
+        },
     )
 
 
@@ -119,22 +124,15 @@ def enforce_query(
     grants: RoleGrants,
     role: str,
     pg_sql: str,
-    catalog_reads: frozenset = frozenset(),
 ) -> None:
     """Raise PermissionError if the query references any out-of-grant table, or if its
-    tables cannot be determined at all — fail closed, never open (Phase 3 hardening).
-
-    ``catalog_reads`` are (schema, view) pairs the caller has already scoped to the role
-    (info_schema.rewrite's derived tables): reading them is discovery, not access to a granted
-    relation, and their rows are the role's own objects only."""
+    tables cannot be determined at all — fail closed, never open (Phase 3 hardening)."""
     try:
         refs = referenced_tables(pg_sql)
     except ValueError as exc:
         raise PermissionError(f"permission denied: {exc}") from exc
     for schema, table in refs:
         if not table:
-            continue
-        if (schema.lower(), table.lower()) in catalog_reads:
             continue
         if not grants.allows(role, schema, table):
             raise PermissionError(f'permission denied for relation "{table}"')

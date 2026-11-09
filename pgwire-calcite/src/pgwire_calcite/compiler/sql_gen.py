@@ -41,6 +41,8 @@ class TableMeta:
     type_name: str
     domain_id: Optional[str] = None
     comment: Optional[str] = None  # table REMARKS -> pg_description / obj_description
+    #: information_schema.tables.table_type: "VIEW" for a view, "BASE TABLE" for anything else
+    table_type: str = "BASE TABLE"
 
 
 @dataclass
@@ -73,6 +75,9 @@ class CompilationContext:
     foreign_keys: List[Tuple[str, "TableMeta", List[Tuple[str, str]]]] = field(default_factory=list)
     physical_to_sql: Dict[Tuple[int, str], str] = field(default_factory=dict)
     virtual_columns: Dict[int, dict] = field(default_factory=dict)
+    #: Every schema the catalog walk listed (Calcite's name) -> its comment, or None when it has
+    #: none. information_schema.schemata lists these, with the comment as REMARKS.
+    schema_comments: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
 def semantic_table_name(tm: TableMeta) -> str:

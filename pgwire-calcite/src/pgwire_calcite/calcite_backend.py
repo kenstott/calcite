@@ -600,9 +600,9 @@ class CalciteBackend:
     @staticmethod
     def _ensure_information_schema(JClass, conn) -> None:
         """Give the connection's root an ``information_schema`` when the model's schema factory
-        did not register one (#518). info_schema.py rewrites PG clients' information_schema
-        reads over it; without it every such read fails with "Object 'INFORMATION_SCHEMA' not
-        found". A factory that registers its own (file, govdata, splunk, sharepoint, cloud-ops)
+        did not register one (#518). The catalog walk reads information_schema.schemata over it
+        for each schema's comment; without it that read fails with "Object 'INFORMATION_SCHEMA'
+        not found". A factory that registers its own (file, govdata, splunk, sharepoint, cloud-ops)
         keeps it."""
         calcite = conn.unwrap(JClass("org.apache.calcite.jdbc.CalciteConnection"))
         root = calcite.getRootSchema()

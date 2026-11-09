@@ -289,7 +289,23 @@
    "reason": "Added in PostgreSQL 15 or 16; the server declares PostgreSQL 14."
   }
  ],
- "extra": [],
+ "extra": [
+  {
+   "match": "information_schema.columns.remarks",
+   "status": "accepted",
+   "reason": "Calcite's information_schema carries each object's comment as REMARKS (the JDBC name), and clients of this server read it there, so the catalog keeps the column; PostgreSQL has comments only in pg_description, which this server also fills."
+  },
+  {
+   "match": "information_schema.schemata.remarks",
+   "status": "accepted",
+   "reason": "Calcite's information_schema carries each object's comment as REMARKS (the JDBC name), and clients of this server read it there, so the catalog keeps the column; PostgreSQL has comments only in pg_description, which this server also fills."
+  },
+  {
+   "match": "information_schema.tables.remarks",
+   "status": "accepted",
+   "reason": "Calcite's information_schema carries each object's comment as REMARKS (the JDBC name), and clients of this server read it there, so the catalog keeps the column; PostgreSQL has comments only in pg_description, which this server also fills."
+  }
+ ],
  "order": [],
  "type": [
   {
