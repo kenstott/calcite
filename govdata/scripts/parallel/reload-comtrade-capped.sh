@@ -42,8 +42,7 @@ capped_in_year() {
   local year="$1" endpoint="${AWS_ENDPOINT_OVERRIDE#http://}"
   duckdb -noheader -list -c "
     INSTALL httpfs; LOAD httpfs; INSTALL iceberg; LOAD iceberg;
-    SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
-    SET s3_region='us-east-1'; SET s3_endpoint='${endpoint}'; SET s3_url_style='path'; SET s3_use_ssl=false;
+    CREATE OR REPLACE SECRET s3env (TYPE S3, PROVIDER credential_chain, CHAIN 'env', REGION 'us-east-1', ENDPOINT '${endpoint}', URL_STYLE 'path', USE_SSL false);
     SELECT count(*) FROM (SELECT reporter, flow FROM iceberg_scan('s3://govdata-parquet-v1/econ/comtrade_flows', allow_moved_paths=true)
       WHERE year='${year}' GROUP BY reporter, flow HAVING count(*) = ${LIMIT});" 2>/dev/null | tail -1
 }

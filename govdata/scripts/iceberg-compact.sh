@@ -77,7 +77,8 @@ fi
 
 # Validate environment
 : "${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}"
-: "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}"
+# length test: xtrace prints the length, never the secret
+[ "${#AWS_SECRET_ACCESS_KEY}" -gt 0 ] || { echo "Set AWS_SECRET_ACCESS_KEY" >&2; exit 1; }
 : "${AWS_ENDPOINT_OVERRIDE:?Set AWS_ENDPOINT_OVERRIDE}"
 
 S3_ENDPOINT="${AWS_ENDPOINT_OVERRIDE}"
@@ -103,8 +104,7 @@ for TABLE in "${SELECTED_TABLES[@]}"; do
     org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
     --warehouse "s3a://govdata-parquet-v1/sec" \
     --table "$TABLE" \
-    --s3-access-key "$AWS_ACCESS_KEY_ID" \
-    --s3-secret-key "$AWS_SECRET_ACCESS_KEY" \
+    --s3-credentials-from-env \
     --s3-endpoint "$S3_ENDPOINT" \
     "${PASSTHROUGH_ARGS[@]+"${PASSTHROUGH_ARGS[@]}"}"; then
     SUCCEEDED_TABLES+=("$TABLE")

@@ -111,12 +111,7 @@ duckdb <<SQL
 INSTALL httpfs; LOAD httpfs;
 INSTALL iceberg; LOAD iceberg;
 
-SET s3_access_key_id     = '${AWS_ACCESS_KEY_ID}';
-SET s3_secret_access_key = '${AWS_SECRET_ACCESS_KEY}';
-SET s3_endpoint          = '${S3_ENDPOINT_HOST}';
-SET s3_url_style         = 'path';
-SET s3_use_ssl           = ${S3_USE_SSL};
-SET s3_region            = '${S3_REGION}';
+CREATE OR REPLACE SECRET s3env (TYPE S3, PROVIDER credential_chain, CHAIN 'env', REGION '${S3_REGION}', ENDPOINT '${S3_ENDPOINT_HOST}', URL_STYLE 'path', USE_SSL ${S3_USE_SSL});
 SET memory_limit         = '${DUCKDB_MEMORY_LIMIT:-2GB}';
 SET temp_directory       = '/tmp/duckdb-dqreport';
 

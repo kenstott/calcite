@@ -16,7 +16,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 source "$SCRIPT_DIR/parallel/common.sh"
 
 : "${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}"
-: "${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}"
+# length test: xtrace prints the length, never the secret
+[ "${#AWS_SECRET_ACCESS_KEY}" -gt 0 ] || { echo "Set AWS_SECRET_ACCESS_KEY" >&2; exit 1; }
 : "${AWS_ENDPOINT_OVERRIDE:?Set AWS_ENDPOINT_OVERRIDE}"
 : "${GOVDATA_PARQUET_DIR:?Set GOVDATA_PARQUET_DIR}"
 
@@ -38,7 +39,6 @@ done
 exec java -Xmx2g -cp "$JAR" \
   org.apache.calcite.adapter.govdata.etl.IcebergOrphanCleanup \
   "${SCHEMA_ARGS[@]}" \
-  --s3-access-key "$AWS_ACCESS_KEY_ID" \
-  --s3-secret-key "$AWS_SECRET_ACCESS_KEY" \
+  --s3-credentials-from-env \
   --s3-endpoint "$AWS_ENDPOINT_OVERRIDE" \
   "$@"

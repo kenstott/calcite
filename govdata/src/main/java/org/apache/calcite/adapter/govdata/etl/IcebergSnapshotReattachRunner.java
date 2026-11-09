@@ -55,7 +55,7 @@ import java.util.Set;
  * java -cp build/libs/sih-govdata.jar \
  *   org.apache.calcite.adapter.govdata.etl.IcebergSnapshotReattachRunner \
  *   --warehouse s3a://govdata-parquet-v1/sec --table insider_transactions \
- *   --s3-access-key $AWS_ACCESS_KEY_ID --s3-secret-key $AWS_SECRET_ACCESS_KEY \
+ *   --s3-credentials-from-env \
  *   --s3-endpoint $AWS_ENDPOINT_OVERRIDE [--dry-run]
  * </pre>
  *
@@ -234,7 +234,7 @@ public class IcebergSnapshotReattachRunner {
 
   private static void printUsage() {
     System.err.println("Usage: IcebergSnapshotReattachRunner --warehouse PATH --table NAME");
-    System.err.println("  [--s3-access-key KEY --s3-secret-key KEY --s3-endpoint URL]");
+    System.err.println("  [--s3-credentials-from-env --s3-endpoint URL]");
     System.err.println("  [--timestamp-ms MS] [--dry-run]");
   }
 
@@ -257,11 +257,10 @@ public class IcebergSnapshotReattachRunner {
         case "--table":
           config.tableName = args[++i];
           break;
-        case "--s3-access-key":
-          config.s3AccessKey = args[++i];
-          break;
-        case "--s3-secret-key":
-          config.s3SecretKey = args[++i];
+        case S3EnvCredentials.FLAG:
+          S3EnvCredentials creds = S3EnvCredentials.read();
+          config.s3AccessKey = creds.accessKey;
+          config.s3SecretKey = creds.secretKey;
           break;
         case "--s3-endpoint":
           config.s3Endpoint = args[++i];

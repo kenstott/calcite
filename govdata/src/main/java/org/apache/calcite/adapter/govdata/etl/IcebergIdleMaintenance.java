@@ -51,7 +51,7 @@ import java.util.Map;
  * writer expires at the end of its run.
  *
  * <p>Usage: {@code IcebergIdleMaintenance --schema-resource econ/econ-schema.yaml [...]
- * [--s3-access-key K --s3-secret-key S --s3-endpoint URL] [--dry-run]}. Exit code 0 when every
+ * [--s3-credentials-from-env --s3-endpoint URL] [--dry-run]}. Exit code 0 when every
  * visited table was handled, 1 when any table failed.
  */
 public final class IcebergIdleMaintenance {
@@ -217,11 +217,10 @@ public final class IcebergIdleMaintenance {
       case "--schema-resource":
         resources.add(args[++i]);
         break;
-      case "--s3-access-key":
-        accessKey = args[++i];
-        break;
-      case "--s3-secret-key":
-        secretKey = args[++i];
+      case S3EnvCredentials.FLAG:
+        S3EnvCredentials creds = S3EnvCredentials.read();
+        accessKey = creds.accessKey;
+        secretKey = creds.secretKey;
         break;
       case "--s3-endpoint":
         endpoint = args[++i];

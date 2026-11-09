@@ -557,8 +557,8 @@ SET http_timeout = 60000;
 SET http_retries = 1;
 CREATE OR REPLACE SECRET r2 (
     TYPE s3,
-    KEY_ID '${AWS_ACCESS_KEY_ID}',
-    SECRET '${AWS_SECRET_ACCESS_KEY}',
+    PROVIDER credential_chain,
+    CHAIN 'env',
     ENDPOINT '${_r2_endpoint}',
     REGION '${_region}',
     URL_STYLE 'path',

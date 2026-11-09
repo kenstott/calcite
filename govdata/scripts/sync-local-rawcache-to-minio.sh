@@ -72,7 +72,8 @@ fi
 source_env_file "$ENV_DQ"
 
 : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID not set in $ENV_DQ}"
-: "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY not set in $ENV_DQ}"
+# length test: xtrace prints the length, never the secret
+[ "${#AWS_SECRET_ACCESS_KEY}" -gt 0 ] || { echo "AWS_SECRET_ACCESS_KEY not set in $ENV_DQ" >&2; exit 1; }
 : "${AWS_ENDPOINT_OVERRIDE:?AWS_ENDPOINT_OVERRIDE not set in $ENV_DQ}"
 : "${AWS_REGION:=us-east-1}"
 
@@ -103,11 +104,12 @@ echo "Bucket : $BUCKET"
 $DRY_RUN && echo "Mode   : DRY RUN"
 echo ""
 
+# rclone reads the credentials from these variables; keeps them off the command line
+export RCLONE_S3_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+export RCLONE_S3_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
 RCLONE_FLAGS=(
   --s3-provider=Other
   --s3-endpoint="$AWS_ENDPOINT_OVERRIDE"
-  --s3-access-key-id="$AWS_ACCESS_KEY_ID"
-  --s3-secret-access-key="$AWS_SECRET_ACCESS_KEY"
   --s3-region="$AWS_REGION"
   --transfers="$TRANSFERS"
   --checksum
