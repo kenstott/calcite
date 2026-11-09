@@ -901,7 +901,7 @@ public class McpServer {
             + "exists but that no table here carries. A personal attack on a person or group "
             + "MUST also carry `kind`: `attack`; any factual assertion inside it ('was "
             + "convicted of fraud') MUST be split out and graded as its own claim. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. A figure the article attributes to a person, office or organization MUST NOT be graded 'not checkable here' until a page off the article's own site has been read and is listed in the claim's `sources`; if no such page loads, `why_no_page` MUST name what was tried. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. "
             + "'Partially false' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
@@ -2969,10 +2969,12 @@ public class McpServer {
             + "when the claim names no year, month, quarter or fiscal year; a report without it is "
             + "refused. `why_single_window`: use it instead only when the data holds a single "
             + "usable window, saying why. "
+            + "`why_no_page`: on a 'not checkable here' claim of an attributed figure, when no page "
+            + "off the article's site loaded; name what was tried. "
             + "`why_not`: when preview_report refuses a claim because one of its figures appears "
             + "in a fetched source, either act on that evidence or say here why it does not "
             + "change the grade; the reason is printed on the report. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. Use 'unsupported' when the piece asserts it as fact with no "
+            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. A figure the article attributes to a person, office or organization MUST NOT be graded 'not checkable here' until a page off the article's own site has been read and is listed in the claim's `sources`; if no such page loads, `why_no_page` MUST name what was tried. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. Use 'unsupported' when the piece asserts it as fact with no "
             + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
@@ -4770,6 +4772,8 @@ public class McpServer {
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceMeasureSearched(claims));
                         addIfPresent(gateProblems, enforceWindowsTested(claims));
+                        addIfPresent(gateProblems, enforceNotCheckableAttempted(claims,
+                            args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceArticleFiguresClaimed(claims,
                             args.path("source_url").asText(null), args.path("unclaimed")));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
@@ -7566,6 +7570,91 @@ public class McpServer {
             + "be found or opened, the verdict MUST be 'not checkable here'.";
     }
 
+    /** Below this much extracted text a fetched page counts as not having loaded. */
+    private static final int MIN_LOADED_PAGE_CHARS = 200;
+    /** Document viewers whose pages carry only the viewer's chrome, never the document. */
+    private static final java.util.Set<String> VIEWER_SHELL_HOSTS = java.util.Set.of(
+        "drive.google.com", "docs.google.com");
+
+    /** True when the session holds real text for this normalized URL, not a viewer shell. */
+    private static boolean pageLoaded(String normalizedUrl) {
+        if (VIEWER_SHELL_HOSTS.contains(hostOf(normalizedUrl))) {
+            return false;
+        }
+        java.util.List<String> pages = FETCHED_TEXT.get(normalizedUrl);
+        if (pages == null) {
+            return false;
+        }
+        int chars = 0;
+        for (String page : pages) {
+            chars += page.length();
+        }
+        return chars >= MIN_LOADED_PAGE_CHARS;
+    }
+
+    /**
+     * A figure the article attributes to someone, graded 'not checkable here', must rest on a page
+     * off the article's own site that actually loaded. When none loads, {@code why_no_page} may
+     * say so, provided an off-site page was tried and is cited.
+     *
+     * <p>Measured live 2026-11-09 (daily eval q8, Colorado Sun): six central budget figures were
+     * bundled into one 'not checkable here' claim after fetching only the Sun's own pages and a
+     * Google Drive link that returned "Loading...", though Denver7 and others carried them.
+     * {@link #enforceExternalCheckAttempted} accepted the Drive link.
+     *
+     * <p>Attribution and the figure test are lexical, and which page loaded is not judged.
+     */
+    private static String enforceNotCheckableAttempted(JsonNode claims, String articleUrl) {
+        java.util.Set<String> read = pagesReadThisSession();
+        java.util.Set<String> tried = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText(""))) {
+                String url = e.path("args").path("url").asText("");
+                if (!url.isEmpty()) {
+                    tried.add(normalizeUrlForMatch(url));
+                }
+            }
+        }
+        String articleHost = articleUrl == null ? "" : hostOf(normalizeUrlForMatch(articleUrl));
+        java.util.List<String> unchecked = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            String assertion = c.path("assertion").asText("").trim();
+            String group = c.path("group").asText("");
+            boolean attributed = nonBlank(c, "speaker") || "fidelity".equals(group)
+                || "subject_claims".equals(group) || namesASubject(assertion);
+            if (!"not checkable here".equals(verdict)
+                    || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
+                    || "attack".equals(c.path("kind").asText("").trim()
+                        .toLowerCase(java.util.Locale.ROOT))
+                    || !assertion.matches("(?s).*\\d.*") || !attributed) {
+                continue;
+            }
+            boolean loaded = false;
+            boolean attempted = false;
+            for (JsonNode s : c.path("sources")) {
+                String norm = normalizeUrlForMatch(s.path("url").asText(""));
+                if (hostOf(norm).equals(articleHost)) {
+                    continue;
+                }
+                loaded |= read.contains(norm) && pageLoaded(norm);
+                attempted |= tried.contains(norm);
+            }
+            if (!loaded && !(attempted && nonBlank(c, "why_no_page"))) {
+                unchecked.add("\"" + assertion + "\"");
+            }
+        }
+        if (unchecked.isEmpty()) {
+            return null;
+        }
+        return "validation refused: " + unchecked.size() + " claim(s) of an attributed figure are "
+            + "graded 'not checkable here' with no page read off the article's own site: "
+            + String.join("; ", unchecked) + ". Search for other reporting or the primary record, "
+            + "web_fetch a page that loads and list it in `sources`, then grade on what it says. "
+            + "A Google Drive or Docs viewer page does not count. Grade each figure as its own "
+            + "claim. If no page loads, cite the off-site pages tried and say why in `why_no_page`.";
+    }
+
     /** Normalized URLs that web_fetch opened without error in this session. */
     private static java.util.Set<String> pagesReadThisSession() {
         java.util.Set<String> read = new java.util.HashSet<>();
@@ -9157,6 +9246,8 @@ public class McpServer {
                 }
                 appendDetailRow(details, "Windows tested", String.join("; ", ws));
             }
+            appendDetailRow(details, "No page loaded because",
+                c.path("why_no_page").asText(""));
             appendDetailRow(details, "Only one window because",
                 c.path("why_single_window").asText(""));
             appendDetailRow(details, "Warehouse searched for", c.path("measure").asText(""));

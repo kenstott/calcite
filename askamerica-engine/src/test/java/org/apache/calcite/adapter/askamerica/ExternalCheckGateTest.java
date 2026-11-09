@@ -539,4 +539,84 @@ class ExternalCheckGateTest {
     @Test void aRealNonClaimStillExcusesAFigure() throws Exception {
         assertNull(coverageGate("[{\"figure\":\"$2,700\",\"why\":\"a sidebar headline, not in the story\"}]"));
     }
+
+    private static String notCheckableGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceNotCheckableAttempted",
+            JsonNode.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE);
+    }
+
+    private static final String DENVER = "https://www.denver7.com/news/polis-budget";
+    private static final String DRIVE = "https://drive.google.com/drive/folders/abc";
+    private static final String SAME_SITE = "https://51st.news/other-story";
+
+    private static void loadedPage(String url, int chars) throws Exception {
+        fetch(url, null);
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(url),
+            java.util.List.of(new String(new char[chars]).replace('\0', 'x')));
+    }
+
+    private static String budgetClaim(String extra) {
+        return "[{\"assertion\":\"The budget from Polis adds $250 million\","
+            + "\"verdict\":\"not checkable here\",\"group\":\"author_claims\"" + extra + "}]";
+    }
+
+    /** The q8 shape: only the article's own site and a Drive shell. */
+    @Test void notCheckableOnSameSiteAndDriveIsRefused() throws Exception {
+        try {
+            loadedPage(SAME_SITE, 5000);
+            loadedPage(DRIVE, 3700);
+            String problem = notCheckableGate(budgetClaim(",\"sources\":[{\"url\":\"" + SAME_SITE
+                + "\"},{\"url\":\"" + DRIVE + "\"}]"));
+            assertNotNull(problem);
+            assertTrue(problem.contains("$250 million"), problem);
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    @Test void anOffSitePageThatLoadedPasses() throws Exception {
+        try {
+            loadedPage(DENVER, 5000);
+            assertNull(notCheckableGate(budgetClaim(sourceField(DENVER))));
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    @Test void aNearlyEmptyPageDoesNotCount() throws Exception {
+        try {
+            loadedPage(DENVER, 20);
+            assertNotNull(notCheckableGate(budgetClaim(sourceField(DENVER))));
+        } finally {
+            McpServer.FETCHED_TEXT.clear();
+        }
+    }
+
+    @Test void searchesAloneDoNotPassTheOffSiteCheck() throws Exception {
+        assertNotNull(notCheckableGate(budgetClaim(",\"searched\":[\"Polis budget\"]")));
+    }
+
+    @Test void aFailedOffSiteFetchPassesOnlyWithAReason() throws Exception {
+        fetch(DENVER, "HTTP 403");
+        assertNotNull(notCheckableGate(budgetClaim(sourceField(DENVER))));
+        assertNull(notCheckableGate(budgetClaim(sourceField(DENVER)
+            + ",\"why_no_page\":\"Denver7 returned 403; no other coverage found\"")));
+    }
+
+    @Test void aReasonWithoutAnOffSiteAttemptDoesNotPass() throws Exception {
+        assertNotNull(notCheckableGate(budgetClaim(",\"why_no_page\":\"nothing found\"")));
+    }
+
+    @Test void claimsOutsideTheOffSiteCheckPass() throws Exception {
+        assertNull(notCheckableGate("[{\"assertion\":\"The budget adds $250 million\","
+            + "\"verdict\":\"true\",\"speaker\":\"X\"}]"));
+        assertNull(notCheckableGate("[{\"assertion\":\"Prices are rising fast\","
+            + "\"verdict\":\"not checkable here\",\"speaker\":\"X\"}]"));
+        assertNull(notCheckableGate("[{\"assertion\":\"Some 4 in 10 think so\","
+            + "\"verdict\":\"not checkable here\",\"group\":\"author_claims\"}]"));
+        assertNull(notCheckableGate("[{\"assertion\":\"Polis cut $250 million\","
+            + "\"verdict\":\"not checkable here\",\"speaker\":\"X\",\"warehouse_value\":\"none\"}]"));
+    }
 }
