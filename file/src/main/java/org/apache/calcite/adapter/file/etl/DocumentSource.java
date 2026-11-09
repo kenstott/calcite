@@ -127,7 +127,7 @@ public class DocumentSource {
     }
 
     String url = substituteVariables(documentConfig.getMetadataUrl(), variables);
-    LOGGER.debug("Fetching metadata from: {}", url);
+    LOGGER.debug("Fetching metadata from: {}", SecretRedaction.redact(url));
 
     return fetchUrl(url);
   }
@@ -169,7 +169,7 @@ public class DocumentSource {
       }
     }
 
-    LOGGER.debug("Downloading document from: {}", url);
+    LOGGER.debug("Downloading document from: {}", SecretRedaction.redact(url));
     downloadToPath(url, cachePath);
 
     return cachePath;
@@ -264,23 +264,23 @@ public class DocumentSource {
 
         if (responseCode == 403) {
           refusalDelay(responseCode, conn, urlStr);
-          throw new IOException("HTTP 403 from " + urlStr + "; host-wide cool-down started");
+          throw new IOException("HTTP 403 from " + SecretRedaction.redact(urlStr) + "; host-wide cool-down started");
         }
         if (isRetryableHttpStatus(responseCode)) {
           if (attempt < MAX_RETRIES - 1) {
             long delay = responseCode == 429
                 ? refusalDelay(responseCode, conn, urlStr) : retryDelay(attempt);
             LOGGER.warn("HTTP {} from {} - retrying in {}ms (attempt {}/{})",
-                responseCode, urlStr, delay, attempt + 1, MAX_RETRIES);
+                responseCode, SecretRedaction.redact(urlStr), delay, attempt + 1, MAX_RETRIES);
             sleepQuietly(delay);
             continue;
           }
-          throw new IOException("HTTP " + responseCode + " from " + urlStr
+          throw new IOException("HTTP " + responseCode + " from " + SecretRedaction.redact(urlStr)
               + " after " + MAX_RETRIES + " attempts");
         }
 
         if (responseCode != 200) {
-          throw new IOException("HTTP " + responseCode + " from " + urlStr);
+          throw new IOException("HTTP " + responseCode + " from " + SecretRedaction.redact(urlStr));
         }
 
         // Handle gzip encoding
@@ -306,7 +306,8 @@ public class DocumentSource {
         if (attempt < MAX_RETRIES - 1 && isRetryableException(e)) {
           long delay = retryDelay(attempt);
           LOGGER.warn("Request to {} failed: {} - retrying in {}ms (attempt {}/{})",
-              urlStr, e.getMessage(), delay, attempt + 1, MAX_RETRIES);
+              SecretRedaction.redact(urlStr),
+              SecretRedaction.redact(e.getMessage()), delay, attempt + 1, MAX_RETRIES);
           sleepQuietly(delay);
         } else {
           throw e;
@@ -317,7 +318,7 @@ public class DocumentSource {
         }
       }
     }
-    throw new IOException("Failed to fetch " + urlStr + " after " + MAX_RETRIES + " attempts");
+    throw new IOException("Failed to fetch " + SecretRedaction.redact(urlStr) + " after " + MAX_RETRIES + " attempts");
   }
 
   /**
@@ -345,28 +346,28 @@ public class DocumentSource {
         int responseCode = conn.getResponseCode();
 
         if (responseCode == 404) {
-          throw new IOException("File not found: " + urlStr);
+          throw new IOException("File not found: " + SecretRedaction.redact(urlStr));
         }
 
         if (responseCode == 403) {
           refusalDelay(responseCode, conn, urlStr);
-          throw new IOException("HTTP 403 from " + urlStr + "; host-wide cool-down started");
+          throw new IOException("HTTP 403 from " + SecretRedaction.redact(urlStr) + "; host-wide cool-down started");
         }
         if (isRetryableHttpStatus(responseCode)) {
           if (attempt < MAX_RETRIES - 1) {
             long delay = responseCode == 429
                 ? refusalDelay(responseCode, conn, urlStr) : retryDelay(attempt);
             LOGGER.warn("HTTP {} downloading {} - retrying in {}ms (attempt {}/{})",
-                responseCode, urlStr, delay, attempt + 1, MAX_RETRIES);
+                responseCode, SecretRedaction.redact(urlStr), delay, attempt + 1, MAX_RETRIES);
             sleepQuietly(delay);
             continue;
           }
-          throw new IOException("HTTP " + responseCode + " from " + urlStr
+          throw new IOException("HTTP " + responseCode + " from " + SecretRedaction.redact(urlStr)
               + " after " + MAX_RETRIES + " attempts");
         }
 
         if (responseCode != 200) {
-          throw new IOException("HTTP " + responseCode + " from " + urlStr);
+          throw new IOException("HTTP " + responseCode + " from " + SecretRedaction.redact(urlStr));
         }
 
         // Handle gzip encoding
@@ -395,7 +396,8 @@ public class DocumentSource {
         if (attempt < MAX_RETRIES - 1 && isRetryableException(e)) {
           long delay = retryDelay(attempt);
           LOGGER.warn("Download of {} failed: {} - retrying in {}ms (attempt {}/{})",
-              urlStr, e.getMessage(), delay, attempt + 1, MAX_RETRIES);
+              SecretRedaction.redact(urlStr),
+              SecretRedaction.redact(e.getMessage()), delay, attempt + 1, MAX_RETRIES);
           sleepQuietly(delay);
         } else {
           throw e;
@@ -407,7 +409,7 @@ public class DocumentSource {
       }
     }
     throw new IOException(
-        "Failed to download " + urlStr + " after " + MAX_RETRIES + " attempts");
+        "Failed to download " + SecretRedaction.redact(urlStr) + " after " + MAX_RETRIES + " attempts");
   }
 
   /**
@@ -462,7 +464,7 @@ public class DocumentSource {
     if (status == 403) {
       long until = CrossProcessRateLimiter.block(rateLimitKey(urlStr),
           CrossProcessRateLimiter.DEFAULT_COOLDOWN_MS);
-      LOGGER.error("HTTP 403 from {}: no requests to {} from this host until {}", urlStr,
+      LOGGER.error("HTTP 403 from {}: no requests to {} from this host until {}", SecretRedaction.redact(urlStr),
           rateLimitKey(urlStr), java.time.Instant.ofEpochMilli(until));
       return -1L;
     }
@@ -472,7 +474,7 @@ public class DocumentSource {
       try {
         retryAfter = Long.parseLong(v.trim()) * 1000L;
       } catch (NumberFormatException e) {
-        throw new IllegalStateException("Unsupported Retry-After '" + v + "' from " + urlStr, e);
+        throw new IllegalStateException("Unsupported Retry-After '" + v + "' from " + SecretRedaction.redact(urlStr), e);
       }
     }
     return Math.max(ModelOperand.getLong("http.rateLimitRetryFloorMs", RATE_LIMIT_RETRY_FLOOR_MS),
@@ -537,7 +539,7 @@ public class DocumentSource {
       }
       if (resolver.authoritative()) {
         throw new IOException("not in the local copy, and that copy is authoritative so it is "
-            + "not fetched live: " + url);
+            + "not fetched live: " + SecretRedaction.redact(url));
       }
     }
     return fetchUrl(url);

@@ -25,7 +25,10 @@
          protocol channel one class-load away from breaking. Diagnostics belong on stderr in every
          mode; the ETL and CLI paths read it just as well. -->
     <Console name="Console" target="SYSTEM_ERR">
-      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+      <!-- Credentials never reach a log: %replace runs over the message AND the stack trace, because
+           JDK exceptions build their message from the request URL (api_key=... included). The
+           parameter list mirrors SecretRedaction.CREDENTIAL_PARAMS, which a test keeps in step. -->
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %replace{%msg%xEx}{(?i)([?&amp;](?:api[_-]?key|apikey|key|token|access[_-]?token|auth|secret|password|passwd|pwd|signature|sig)=)[^&amp;#\s&quot;']*}{$1&lt;redacted&gt;}%n"/>
     </Console>
   </Appenders>
   <Loggers>

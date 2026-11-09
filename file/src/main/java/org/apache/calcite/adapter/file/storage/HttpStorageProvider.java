@@ -11,6 +11,7 @@
 package org.apache.calcite.adapter.file.storage;
 // storage-provider-guard:ignore-file - audited: all filesystem operations here target genuinely-local paths (temp / local cache / spill / local config), not object-store URIs.
 
+import org.apache.calcite.adapter.file.etl.SecretRedaction;
 import org.apache.calcite.adapter.file.storage.cache.PersistentStorageCache;
 import org.apache.calcite.adapter.file.storage.cache.StorageCacheManager;
 
@@ -176,7 +177,7 @@ public class HttpStorageProvider implements StorageProvider {
     try {
       url = new URI(path).toURL();
     } catch (URISyntaxException e) {
-      throw new IOException("Invalid URL: " + path, e);
+      throw new IOException("Invalid URL: " + SecretRedaction.redact(path), e);
     }
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     conn.setRequestMethod("HEAD");
@@ -188,7 +189,7 @@ public class HttpStorageProvider implements StorageProvider {
     try {
       int responseCode = conn.getResponseCode();
       if (responseCode != HttpURLConnection.HTTP_OK) {
-        throw new IOException("HTTP error code: " + responseCode + " for URL: " + path);
+        throw new IOException("HTTP error code: " + responseCode + " for URL: " + SecretRedaction.redact(path));
       }
 
       long contentLength = conn.getContentLengthLong();
@@ -366,7 +367,7 @@ public class HttpStorageProvider implements StorageProvider {
     try {
       url = new URI(path).toURL();
     } catch (URISyntaxException e) {
-      throw new IOException("Invalid URL: " + path, e);
+      throw new IOException("Invalid URL: " + SecretRedaction.redact(path), e);
     }
 
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -505,7 +506,7 @@ public class HttpStorageProvider implements StorageProvider {
         responseCode != HttpURLConnection.HTTP_CREATED &&
         responseCode != HttpURLConnection.HTTP_NOT_MODIFIED) {
       conn.disconnect();
-      throw new IOException("HTTP error code: " + responseCode + " for URL: " + conn.getURL());
+      throw new IOException("HTTP error code: " + responseCode + " for URL: " + SecretRedaction.redact(String.valueOf(conn.getURL())));
     }
   }
 

@@ -276,7 +276,7 @@ public class SchemaLifecycleProcessor {
           }
 
         } catch (Exception e) {
-          LOGGER.error("Table '{}' failed: {}", tableName, e.getMessage(), e);
+          LOGGER.error("Table '{}' failed: {}", tableName, SecretRedaction.redact(e.getMessage()), e);
 
           // Let table listener decide whether to continue
           boolean continueProcessing = tableListener.onTableError(tableContext, e);
@@ -326,7 +326,7 @@ public class SchemaLifecycleProcessor {
       return result;
 
     } catch (Exception e) {
-      LOGGER.error("Schema '{}' processing failed: {}", schemaName, e.getMessage(), e);
+      LOGGER.error("Schema '{}' processing failed: {}", schemaName, SecretRedaction.redact(e.getMessage()), e);
       schemaListener.onSchemaError(schemaContext, e);
 
       long elapsed = System.currentTimeMillis() - startTime;
@@ -430,7 +430,7 @@ public class SchemaLifecycleProcessor {
         }
       } catch (Exception e) {
         LOGGER.error("Failed to instantiate DataProvider class '{}': {}",
-            className, e.getMessage());
+            className, SecretRedaction.redact(e.getMessage()));
       }
     }
 
@@ -488,7 +488,7 @@ public class SchemaLifecycleProcessor {
     try {
       BundleArchiver.archive(localCacheDir, source, schemaName, bundleId);
     } catch (Exception e) {
-      LOGGER.warn("Raw cache archive failed (non-fatal): {}", e.getMessage());
+      LOGGER.warn("Raw cache archive failed (non-fatal): {}", SecretRedaction.redact(e.getMessage()));
     }
   }
 
@@ -575,7 +575,7 @@ public class SchemaLifecycleProcessor {
         }
       } catch (PostProcessExecutor.PostProcessException e) {
         // If onFailure=ERROR, the exception is thrown
-        LOGGER.error("Post-process '{}' failed with error: {}", name, e.getMessage());
+        LOGGER.error("Post-process '{}' failed with error: {}", name, SecretRedaction.redact(e.getMessage()));
         throw new RuntimeException("Schema post-processing failed: " + name, e);
       }
     }
@@ -668,7 +668,7 @@ public class SchemaLifecycleProcessor {
           LOGGER.info("Table '{}' post-process '{}' completed successfully", tableName, name);
         }
       } catch (PostProcessExecutor.PostProcessException e) {
-        LOGGER.error("Table '{}' post-process '{}' failed: {}", tableName, name, e.getMessage());
+        LOGGER.error("Table '{}' post-process '{}' failed: {}", tableName, name, SecretRedaction.redact(e.getMessage()));
         // Re-throw if onFailure=ERROR (the execute method throws in that case)
         throw new RuntimeException("Table post-processing failed: " + tableName + "/" + name, e);
       }
@@ -785,7 +785,7 @@ public class SchemaLifecycleProcessor {
     if (url.contains("{") || cachePath.contains("{")) {
       LOGGER.warn("Skipping bulk download '{}' - unresolved placeholders in URL or cache path. "
           + "URL: {}, cachePath: {}, variables: {}",
-          name, url, cachePath, variables);
+          name, SecretRedaction.redact(url), cachePath, variables);
       return;
     }
 
@@ -807,12 +807,12 @@ public class SchemaLifecycleProcessor {
         return;
       }
     } catch (IOException e) {
-      LOGGER.debug("Could not check if bulk download exists: {}", e.getMessage());
+      LOGGER.debug("Could not check if bulk download exists: {}", SecretRedaction.redact(e.getMessage()));
       // Continue to download
     }
 
     // Download the file - try custom hook first, then fallback to HTTP
-    LOGGER.info("Downloading bulk file '{}' [{}]: {} -> {}", name, variableKey, url, fullCachePath);
+    LOGGER.info("Downloading bulk file '{}' [{}]: {} -> {}", name, variableKey, SecretRedaction.redact(url), fullCachePath);
     try {
       // Try custom download hook (for SharePoint, S3, FTP, etc.)
       String customPath = schemaListener.downloadBulkFile(schemaContext, bulkConfig, variables, fullCachePath);
@@ -827,7 +827,7 @@ public class SchemaLifecycleProcessor {
       schemaContext.setBulkDownloadPath(name, variableKey, fullCachePath);
       LOGGER.info("Bulk download '{}' [{}] complete: {}", name, variableKey, fullCachePath);
     } catch (Exception e) {
-      LOGGER.error("Failed to download bulk file '{}' [{}]: {}", name, variableKey, e.getMessage());
+      LOGGER.error("Failed to download bulk file '{}' [{}]: {}", name, variableKey, SecretRedaction.redact(e.getMessage()));
       // Continue with other downloads - don't fail the whole schema
     }
   }
@@ -870,12 +870,12 @@ public class SchemaLifecycleProcessor {
             Thread.sleep(backoffMs);
           } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            throw new IOException("Interrupted during bulk download retry backoff for " + url, ie);
+            throw new IOException("Interrupted during bulk download retry backoff for " + SecretRedaction.redact(url), ie);
           }
         }
       }
     }
-    throw new IOException("Bulk download failed after " + maxAttempts + " attempts for " + url, last);
+    throw new IOException("Bulk download failed after " + maxAttempts + " attempts for " + SecretRedaction.redact(url), last);
   }
 
   /** Single bulk-download attempt — see {@link #downloadBulkFile} for the retrying wrapper. */
@@ -896,7 +896,7 @@ public class SchemaLifecycleProcessor {
     NetworkOutageWait.connect(conn);
     int responseCode = conn.getResponseCode();
     if (responseCode != 200) {
-      throw new IOException("HTTP " + responseCode + " for " + url);
+      throw new IOException("HTTP " + responseCode + " for " + SecretRedaction.redact(url));
     }
 
     // Use storage provider to write file (works for local, S3, etc.)
