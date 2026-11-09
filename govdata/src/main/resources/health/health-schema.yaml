@@ -8919,7 +8919,7 @@ partitionedTables:
         type: string
         nullable: false
         expression: 'src."preliminary_or_updated"'
-        comment: "P" = preliminary count first reported for the month, "U" = updated count after the state revised it. A month can carry both rows (P and U); filter to U where present, else P, before summing or comparing months
+        comment: 'P = preliminary count first reported for the month, U = updated count after the state revised it. A month can carry both rows (P and U); filter to U where present, else P, before summing or comparing months'
       - name: state_expanded_medicaid
         type: string
         nullable: true
