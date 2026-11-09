@@ -9022,6 +9022,172 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  # --------------------------------------------------------------------------
+  # Medicaid medical-assistance spending by state and quarter — CMS-64 (MBES) quarterly
+  # expenditures, data.medicaid.gov dataset 00505e90-f8ac-5921-b12f-5e23ba7ffcf3
+  # ("Medicaid CMS-64 New Adult Group Expenditures"; DKAN datastore, JSON). Issue #1137.
+  # --------------------------------------------------------------------------
+  - name: medicaid_expenditures_by_state_quarter
+    timeColumn: fiscal_year  # observation time; this table has no column named 'year'
+    # The datastore has no Last-Modified; hash the response so an unchanged release is skipped
+    # and a new quarter / revised figures re-materialize (CMS republishes the whole file).
+    freshness:
+      type: hash
+    pattern: "type=medicaid_expenditures_by_state_quarter"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS-64 Medicaid medical-assistance (benefit) spending by state and quarter, March 2014 to
+      the latest quarter CMS has published (the file loaded in Feb 2026 ends June 2025, so the lag
+      is about 8 months). The table that answers "how much did Medicaid spend in state X, and
+      how much of it was federal money". One row per state or territory (50 states, DC, PR, VI,
+      Guam, American Samoa, N. Mariana Islands) and quarter; total_computable is all-funds
+      spending (state plus federal share) and total_federal_share is the federal part.
+
+      **Federal fiscal year**: fiscal_year is the federal fiscal year (October to September,
+      named for the year it ends — the #1128 convention), derived from quarter_end_date; the
+      quarter ending 2023-12-31 is FY2024 Q1. A fiscal-year total is SUM over the four quarters
+      with that fiscal_year; FY2025 has only three quarters until CMS publishes the September 2025
+      quarter, so check quarters (COUNT per state) before comparing years. Checked: Washington
+      FY2024 sums to $21.95B total and $13.94B federal.
+
+      **Adjustments**: CMS reports prior-period adjustments as-is, so a quarter can be negative
+      (California quarter ending 2017-06-30 is -$32.5B total, -$13.8B federal) and, in one
+      Guam quarter (2019-03-31), the federal share is $398 above the total. These are source
+      values, not parse errors; they net out in fiscal-year sums.
+
+      **Scope — what this is not**: medical-assistance benefit spending only. It excludes
+      state Medicaid administration and all CHIP spending (separate CMS-64 / CMS-21 lines not in
+      this dataset), so it understates "Medicaid and CHIP" cost and is not a state's whole
+      Medicaid budget. Rows with state_name 'National Totals' (state_abbr 'US') are the sum of
+      the others — exclude them before summing across states. Figures are as CMS last received
+      them (states revise prior quarters; updated_year/updated_month give each row's vintage).
+      Enrollment (people, not dollars) is medicaid_chip_enrollment_monthly; drug reimbursement
+      only is medicaid_spend_by_state_geo.
+
+    columns:
+      - name: state_name
+        type: string
+        nullable: false
+        expression: 'src."state"'
+        comment: Jurisdiction name as CMS prints it (e.g. "Dist. Of Col.", "Amer. Samoa", "N. Mariana Islands"); 'National Totals' is the all-state sum
+      - name: state_abbr
+        type: string
+        nullable: false
+        expression: >-
+          CASE src."state"
+            WHEN 'Alabama' THEN 'AL' WHEN 'Alaska' THEN 'AK' WHEN 'Amer. Samoa' THEN 'AS' WHEN 'Arizona' THEN 'AZ'
+            WHEN 'Arkansas' THEN 'AR' WHEN 'California' THEN 'CA' WHEN 'Colorado' THEN 'CO' WHEN 'Connecticut' THEN 'CT'
+            WHEN 'Delaware' THEN 'DE' WHEN 'Dist. Of Col.' THEN 'DC' WHEN 'Florida' THEN 'FL' WHEN 'Georgia' THEN 'GA'
+            WHEN 'Guam' THEN 'GU' WHEN 'Hawaii' THEN 'HI' WHEN 'Idaho' THEN 'ID' WHEN 'Illinois' THEN 'IL'
+            WHEN 'Indiana' THEN 'IN' WHEN 'Iowa' THEN 'IA' WHEN 'Kansas' THEN 'KS' WHEN 'Kentucky' THEN 'KY'
+            WHEN 'Louisiana' THEN 'LA' WHEN 'Maine' THEN 'ME' WHEN 'Maryland' THEN 'MD' WHEN 'Massachusetts' THEN 'MA'
+            WHEN 'Michigan' THEN 'MI' WHEN 'Minnesota' THEN 'MN' WHEN 'Mississippi' THEN 'MS' WHEN 'Missouri' THEN 'MO'
+            WHEN 'Montana' THEN 'MT' WHEN 'N. Mariana Islands' THEN 'MP' WHEN 'National Totals' THEN 'US'
+            WHEN 'Nebraska' THEN 'NE' WHEN 'Nevada' THEN 'NV' WHEN 'New Hampshire' THEN 'NH' WHEN 'New Jersey' THEN 'NJ'
+            WHEN 'New Mexico' THEN 'NM' WHEN 'New York' THEN 'NY' WHEN 'North Carolina' THEN 'NC' WHEN 'North Dakota' THEN 'ND'
+            WHEN 'Ohio' THEN 'OH' WHEN 'Oklahoma' THEN 'OK' WHEN 'Oregon' THEN 'OR' WHEN 'Pennsylvania' THEN 'PA'
+            WHEN 'Puerto Rico' THEN 'PR' WHEN 'Rhode Island' THEN 'RI' WHEN 'South Carolina' THEN 'SC' WHEN 'South Dakota' THEN 'SD'
+            WHEN 'Tennessee' THEN 'TN' WHEN 'Texas' THEN 'TX' WHEN 'Utah' THEN 'UT' WHEN 'Vermont' THEN 'VT'
+            WHEN 'Virgin Islands' THEN 'VI' WHEN 'Virginia' THEN 'VA' WHEN 'Washington' THEN 'WA' WHEN 'West Virginia' THEN 'WV'
+            WHEN 'Wisconsin' THEN 'WI' WHEN 'Wyoming' THEN 'WY'
+          END
+        comment: 2-letter code (FK to geo.state_ref.state_abbr; 'US' for the National Totals row, territories GU/AS/MP/VI/PR also appear)
+      - name: quarter_end_date
+        type: date
+        nullable: false
+        expression: 'CAST(src."quarter_end_date" AS DATE)'
+        comment: Last day of the federal-fiscal-year quarter the spending was reported for (03-31, 06-30, 09-30 or 12-31)
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        expression: 'CAST(SUBSTR(src."quarter_end_date", 1, 4) AS INTEGER) + CASE WHEN CAST(SUBSTR(src."quarter_end_date", 6, 2) AS INTEGER) >= 10 THEN 1 ELSE 0 END'
+        comment: Federal fiscal year (Oct-Sep, named for the year it ends); quarter ending 2023-12-31 is FY2024
+      - name: fiscal_quarter
+        type: integer
+        nullable: false
+        expression: '((CAST(SUBSTR(src."quarter_end_date", 6, 2) AS INTEGER) + 2) % 12) / 3 + 1'
+        comment: Quarter 1-4 of the federal fiscal year (1 = Oct-Dec, 2 = Jan-Mar, 3 = Apr-Jun, 4 = Jul-Sep)
+      - name: total_computable
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(TRIM(src."total_computable_all_medical_assistance_expenditures"), '','', '''') AS BIGINT)'
+        comment: Total computable (state plus federal) medical-assistance expenditures for the quarter, in dollars
+      - name: total_federal_share
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(TRIM(src."total_federal_share_all_medical_assistance_expenditures"), '','', '''') AS BIGINT)'
+        comment: Federal share of those expenditures, in dollars; total_computable minus this is the state share
+      - name: new_adult_group_total_computable
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(TRIM(src."total_computable_viii_group_expenditures"), '','', '''') AS BIGINT)'
+        comment: Total computable spending on the ACA expansion ("VIII") adult group, dollars; NULL where CMS prints N/A (state had not expanded)
+      - name: new_adult_group_federal_share
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(TRIM(src."total_federal_share_viii_group_expenditures"), '','', '''') AS BIGINT)'
+        comment: Federal share of the expansion-adult-group spending, dollars; NULL where CMS prints N/A
+      - name: data_updated_year
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."updated_year" AS INTEGER)'
+        comment: Calendar year CMS last refreshed this row (rows carry different vintages)
+      - name: data_updated_month
+        type: integer
+        nullable: true
+        expression: 'TRY_CAST(src."updated_month" AS INTEGER)'
+        comment: Calendar month 1-12 CMS last refreshed this row
+      - name: notes
+        type: string
+        nullable: true
+        expression: 'src."notes"'
+        comment: CMS footnote, mostly the date a state adopted the ACA expansion group
+
+    source:
+      type: http
+      url: "https://data.medicaid.gov/api/1/datastore/query/00505e90-f8ac-5921-b12f-5e23ba7ffcf3/0"
+      method: GET
+      parameters:
+        limit: "2000"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 2000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - medicaid_expenditures_by_state_quarter
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
 # ============================================================================
 # Views
 # ============================================================================

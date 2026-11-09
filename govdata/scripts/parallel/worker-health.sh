@@ -181,7 +181,7 @@ ONCE_MODE_GROUPS=(
   # dimension, so they belong here, not in a per-year group.
   "health-aca-once|aca_effectuated_enrollment_monthly,aca_effectuated_enrollment_annual"
   # CMS Medicaid/CHIP Performance Indicator enrollment (data.medicaid.gov datastore) — hash-gated, no year dimension.
-  "health-medicaid-enrollment-once|medicaid_chip_enrollment_monthly"
+  "health-medicaid-enrollment-once|medicaid_chip_enrollment_monthly,medicaid_expenditures_by_state_quarter"
 )
 
 run_year_health_tables() {

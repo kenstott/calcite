@@ -3109,32 +3109,84 @@ INSERT INTO dq_results
 SELECT 'health', 'aca_effectuated_enrollment_annual', 'T7_pct_range', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'pct_aptc/pct_csr outside 0-1'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/aca_effectuated_enrollment_annual', allow_moved_paths := true) WHERE pct_aptc NOT BETWEEN 0 AND 1 OR pct_csr NOT BETWEEN 0 AND 1);
 
-SELECT schema, tbl, test, status, value, threshold, detail
-FROM dq_results
-ORDER BY schema, tbl, test;
-
 -- ============================================================================
 -- TABLE: medicaid_chip_enrollment_monthly (new 9 Nov 2026) — issue #1135
 -- ============================================================================
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true));
 
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T2_row_count', CASE WHEN n >= 11000 THEN 'pass' ELSE 'fail' END, n, 11000, 'PI file had 11220 rows at build time'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true));
 
-SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) LIMIT 3;
-
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null state/period/status'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) WHERE state_abbr IS NULL OR reporting_period IS NULL OR report_status IS NULL);
 
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (state, period, status) keys'
 FROM (SELECT COUNT(*) AS d FROM (SELECT state_abbr, reporting_period, report_status FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
 
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T7_states', CASE WHEN n BETWEEN 51 AND 52 THEN 'pass' ELSE 'fail' END, n, 51, '50 states + DC'
 FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true));
 
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T7_wa_apr2026', CASE WHEN n BETWEEN 1700000 AND 1900000 THEN 'pass' ELSE 'fail' END, n, 1790000, 'WA total Medicaid+CHIP enrollment Apr 2026 (published 1,788,884 P / 1,794,120 U)'
 FROM (SELECT COALESCE(MAX(total_medicaid_chip_enrollment),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) WHERE state_abbr='WA' AND reporting_period='202604');
 
+INSERT INTO dq_results
 SELECT 'health', 'medicaid_chip_enrollment_monthly', 'T7_parts_sum', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where Medicaid + CHIP differs from combined total by more than 2%'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_chip_enrollment_monthly', allow_moved_paths := true) WHERE total_medicaid_enrollment IS NOT NULL AND total_chip_enrollment IS NOT NULL AND total_medicaid_chip_enrollment > 0 AND ABS(total_medicaid_enrollment + total_chip_enrollment - total_medicaid_chip_enrollment) > 0.02 * total_medicaid_chip_enrollment);
+
+-- ============================================================================
+-- TABLE: medicaid_expenditures_by_state_quarter (new 9 Nov 2026) — issue #1137
+-- ============================================================================
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T2_row_count', CASE WHEN n >= 2600 THEN 'pass' ELSE 'fail' END, n, 2600, 'Source had 2622 rows (57 jurisdictions x 46 quarters) at build time'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null state/quarter/fiscal_year'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE state_abbr IS NULL OR quarter_end_date IS NULL OR fiscal_year IS NULL OR fiscal_quarter IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (state, quarter) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT state_abbr, quarter_end_date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_jurisdictions', CASE WHEN n = 57 THEN 'pass' ELSE 'fail' END, n, 57, '50 states + DC + 5 territories + National Totals'
+FROM (SELECT COUNT(DISTINCT state_abbr) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_unmapped_state', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows whose CMS state name has no state_abbr mapping'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE state_abbr IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_totals_numeric', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows where total_computable or total_federal_share failed to parse (comma/space format)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE total_computable IS NULL OR total_federal_share IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_federal_le_total', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Rows with non-negative total where federal share exceeds total by over 0.1 percent (negative adjustment quarters, e.g. CA 2017-06-30, and Guam 2019-03-31 off by $398 are source values)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE total_computable >= 0 AND total_federal_share > total_computable * 1.001);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_wa_fy2024', CASE WHEN n BETWEEN 21500000000 AND 22400000000 THEN 'pass' ELSE 'fail' END, n, 21954309742, 'WA FY2024 total computable (Dec23-Sep24 quarters) summed 21,954,309,742 at build time'
+FROM (SELECT COALESCE(SUM(total_computable),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE state_abbr='WA' AND fiscal_year=2024);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_wa_fy2024_federal', CASE WHEN n BETWEEN 13500000000 AND 14400000000 THEN 'pass' ELSE 'fail' END, n, 13937763409, 'WA FY2024 federal share summed 13,937,763,409 at build time'
+FROM (SELECT COALESCE(SUM(total_federal_share),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE state_abbr='WA' AND fiscal_year=2024);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_fiscal_year_quarters', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'quarter_end_date months inconsistent with fiscal_quarter (Dec=1, Mar=2, Jun=3, Sep=4)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE fiscal_quarter <> CASE MONTH(quarter_end_date) WHEN 12 THEN 1 WHEN 3 THEN 2 WHEN 6 THEN 3 WHEN 9 THEN 4 END OR fiscal_quarter IS NULL);
+
+SELECT schema, tbl, test, status, value, threshold, detail
+FROM dq_results
+ORDER BY schema, tbl, test;
