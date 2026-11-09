@@ -382,7 +382,11 @@ run_window() {
   # stage the jar. A failure leaves the previously staged jar in place, and says so.
   if [ "$mode" = "daily" ]; then
     echo "[$(ts)] pre-daily release: push, release, build" | tee -a "$window_log"
-    if ! "$SCRIPT_DIR/pre-daily-release.sh" >> "$window_log" 2>&1; then
+    "$SCRIPT_DIR/pre-daily-release.sh" >> "$window_log" 2>&1; local pdr_rc=$?
+    if [ "$pdr_rc" -eq 3 ]; then
+      log_error "ERROR: pre-daily-release CI gate refused (exit 3): the shared jar is STALE; see $window_log"
+    fi
+    if [ "$pdr_rc" -ne 0 ]; then
       log_error "ERROR: pre-daily-release failed — the daily window continues on the jar already staged; see $window_log"
       echo "[$(ts)] ERROR: pre-daily-release failed; continuing on the jar already staged" >> "$window_log"
     fi

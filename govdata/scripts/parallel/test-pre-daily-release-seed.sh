@@ -154,4 +154,30 @@ setup; stub_seed 10 0; echo '[]' > "$tmp/gh-runs.json"
 (cd "$tmp/w" && PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh --dry-run) > "$tmp/out.log" 2>&1
 grep -q "would not release or stage a new jar (CI gate)" "$tmp/out.log" && [ ! -e "$tmp/w/govdata/build/libs/sih-govdata.jar" ] \
   && ok "--dry-run: gate decision printed" || bad "--dry-run: $(tail -3 "$tmp/out.log")"
+
+# generated commit created after the push (the coverage daemon, mid-run), above a pushed green code
+# commit: the gate judges the pushed commit and passes
+setup; stub_seed 10 0
+pushed=$(git -C "$tmp/w" rev-parse HEAD)
+cat > "$tmp/bin/gh" <<G
+#!/usr/bin/env bash
+echo "\$*" >> "$tmp/gh.log"
+if [ "\${1:-} \${2:-}" = "run list" ]; then
+  if [ ! -e "$tmp/chore-made" ]; then
+    touch "$tmp/chore-made"
+    (cd "$tmp/w" && echo x > cov.txt && git add cov.txt && git commit -qm "chore(govdata): refresh observed-coverage metadata for weather")
+  fi
+  cat "$tmp/gh-runs.json"
+fi
+G
+rm -f "$tmp/chore-made"
+run
+local_head=$(git -C "$tmp/w" rev-parse HEAD)
+[ "$local_head" != "$pushed" ] && grep -q -- "--commit $pushed" "$tmp/gh.log" && ! grep -q -- "--commit $local_head" "$tmp/gh.log" && grep -q "CI gate: CI green for $pushed" "$tmp/out.log" \
+  && ok "unpushed chore above pushed green code commit: gate passes on the pushed commit" || bad "unpushed chore: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# gate refusal: distinct exit status and a stale-jar message
+setup; stub_seed 10 0; echo '[{"status":"completed","conclusion":"failure","url":"http://ci/f","createdAt":"2026-10-31T00:00:00Z"}]' > "$tmp/gh-runs.json"
+run
+[ "$(cat "$tmp/rc")" -eq 3 ] && grep -q "shared jar is STALE" "$tmp/out.log" && ok "gate refusal: exit 3 and stale-jar message" || bad "refusal: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
 exit $fail

@@ -14,13 +14,16 @@
 #               release continues on the committed seed.
 #   2c. CI gate the release and the staged jar ship only code whose CI is green. Commits above the
 #               newest non-generated (code) commit are auto-generated seed or coverage-metadata
-#               commits that change no code, so the gate judges HEAD: its newest "CI" workflow run
+#               commits that change no code, so the gate judges origin/main (what was pushed; a
+#               generated commit made locally after the push has no run and is never waited for,
+#               and a code commit not on origin/main is refused): its newest "CI" workflow run
 #               (main.yml) on kenstott/calcite must be completed with conclusion success. A run
 #               still queued or in progress is waited for (CI_WAIT_SECS, default 90 min; a head with
 #               no run yet gets CI_NONE_GRACE_SECS, default 5 min). A cancelled, failed or missing
 #               run, a timeout, or a run that cannot be read, is not green: nothing is released or
 #               staged, the reason (sha, run state, URL) is logged and the script exits 1, so the
-#               window continues on the jar already staged. The seed rebuild and its push above
+#               window continues on the jar already staged. The log then says the shared jar is
+#               stale and by how many code commits, and the exit status is 3. The seed rebuild and its push above
 #               are not gated. --dry-run prints the decision and never waits.
 #   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag
 #               AND we're about to build a fresh jar for this head_sha (step 4's own gate) —
@@ -187,6 +190,8 @@ fi
 
 # ── 2c. CI gate ──────────────────────────────────────────────────────────────
 CI_WORKFLOW="main.yml"
+# Exit status when the CI gate refuses; the scheduler alerts on it (1 stays the generic failure).
+EXIT_CI_GATE=3
 # Subjects of commits that carry no code and get no CI run of their own.
 CI_WAIT_SECS="${CI_WAIT_SECS:-5400}"
 CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-300}"
@@ -227,7 +232,12 @@ ci_gate() {
   if [ -z "$code_sha" ]; then
     ci_reason="no code commit among the last 50 commits on main"; return 1
   fi
-  head="$(git rev-parse main)"
+  # Judge what was pushed: a generated commit made locally after the push has no run and never
+  # will. The code commit itself must be on origin/main, else it has not been pushed.
+  if ! git merge-base --is-ancestor "$code_sha" origin/main; then
+    ci_reason="code commit $code_sha is not on origin/main (not pushed), so no CI run can cover it"; return 1
+  fi
+  head="$(git rev-parse origin/main)"
   if $DRY_RUN; then limit=0; grace=0; fi
   while :; do
     if ! state="$(ci_query "$head")"; then ci_reason="$state"; return 1; fi
@@ -262,6 +272,17 @@ else
   ci_ok=false
   release_ok=false
   log "ERROR: CI gate: $ci_reason; not releasing and not staging a new jar"
+  staged_sha=""
+  [ -f "$STAGE_DIR/sih-govdata.jar.commit" ] && staged_sha="$(cat "$STAGE_DIR/sih-govdata.jar.commit")"
+  if [ -n "$staged_sha" ] && git cat-file -e "$staged_sha^{commit}" 2>/dev/null; then
+    stale=0
+    while IFS=$'\t' read -r _ subj; do
+      grep -qE "$GENERATED_SUBJECTS" <<<"$subj" || stale=$((stale + 1))
+    done < <(git log --format='%H%x09%s' "$staged_sha..main")
+    log "ERROR: the shared jar is STALE: built from $staged_sha, $stale code commit(s) behind main"
+  else
+    log "ERROR: the shared jar is STALE: its build commit is unknown (stamp: ${staged_sha:-none})"
+  fi
 fi
 
 # ── 3. release ───────────────────────────────────────────────────────────────
@@ -338,7 +359,7 @@ if ! $ci_ok; then
     log "would not release or stage a new jar (CI gate)"
     exit 0
   fi
-  exit 1
+  exit "$EXIT_CI_GATE"
 fi
 if ! $will_build; then
   log "the staged jar is already built from $head_sha"
