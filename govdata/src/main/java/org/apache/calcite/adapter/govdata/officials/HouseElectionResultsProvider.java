@@ -37,7 +37,8 @@ import java.util.Map;
 /**
  * DataProvider for {@code officials.house_election_results}: the MIT Election Data + Science Lab
  * U.S. House returns 1976-2018 (CC0) plus the FEC official results for 2020 and 2022 (see
- * {@link FecHouseResultsParser}; 2024 is not yet published by the FEC), one row per candidate (or write-in / residual bucket) per
+ * {@link FecHouseResultsParser}) and the Clerk of the House's 2024 statistics volume (see
+ * {@link ClerkHouseResultsParser}; the FEC has published no 2024 House workbook), one row per candidate (or write-in / residual bucket) per
  * party line per district election round.
  *
  * <p>The Lab's current House release (1976-2024, Harvard Dataverse doi:10.7910/DVN/IG0UN2) sits
@@ -80,6 +81,13 @@ public class HouseElectionResultsProvider implements CachingDataProvider {
       LOGGER.info("house_election_results: {} FEC {} rows from {}", Integer.valueOf(fec.size()),
           Integer.valueOf(rel.year), rel.url);
       rows.addAll(fec);
+    }
+    for (ClerkHouseResultsParser.Release rel : ClerkHouseResultsParser.RELEASES) {
+      byte[] pdf = download(rawCache, rel.url, "Clerk of the House " + rel.year + " statistics");
+      List<Map<String, Object>> clerk = ClerkHouseResultsParser.parsePdf(pdf, rel);
+      LOGGER.info("house_election_results: {} Clerk {} rows from {}",
+          Integer.valueOf(clerk.size()), Integer.valueOf(rel.year), rel.url);
+      rows.addAll(clerk);
     }
     return rows.iterator();
   }

@@ -709,8 +709,8 @@ SELECT 'officials', 'house_election_results', 'T1_existence',
   n, 1, 'Row count from iceberg_scan'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/house_election_results', allow_moved_paths := true));
 
--- T2: row_count (the Lab's file is frozen, so its count is exact; the FEC workbooks are pinned and
--- parsed with strict subtotal checks, so their per-cycle counts are exact too)
+-- T2: row_count (the Lab's file is frozen, so its count is exact; the FEC workbooks and the Clerk's
+-- PDF are pinned and parsed with strict checks, so their per-cycle counts are exact too)
 INSERT INTO dq_results
 SELECT 'officials', 'house_election_results', 'T2_row_count_medsl',
   CASE WHEN n = 29636 THEN 'pass' ELSE 'fail' END,
@@ -730,10 +730,16 @@ SELECT 'officials', 'house_election_results', 'T2_row_count_fec_2022',
 FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'FEC' AND year = 2022);
 
 INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T2_row_count_clerk_2024',
+  CASE WHEN n = 1279 THEN 'pass' ELSE 'fail' END,
+  n, 1279, 'Clerk of the House 2024 rows (1279)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'CLERK' AND year = 2024);
+
+INSERT INTO dq_results
 SELECT 'officials', 'house_election_results', 'T7_source_values_and_years',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
-  n, NULL, 'Rows whose source is not MEDSL for 1976-2018 or FEC for 2020-2022 (expect 0; 2024 is missing until the FEC publishes it)'
-FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE NOT ((source = 'MEDSL' AND year <= 2018) OR (source = 'FEC' AND year IN (2020, 2022))));
+  n, NULL, 'Rows whose source is not MEDSL for 1976-2018, FEC for 2020-2022 or CLERK for 2024 (expect 0)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE NOT ((source = 'MEDSL' AND year <= 2018) OR (source = 'FEC' AND year IN (2020, 2022)) OR (source = 'CLERK' AND year = 2024)));
 
 -- T3: sample
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/house_election_results', allow_moved_paths := true) LIMIT 3;
@@ -981,12 +987,48 @@ SELECT 'officials', 'house_election_results', 'T7_spot_bacon_ne2_2016',
   n, NULL, 'NE-2 2016: Bacon (R) 141,066 vs Ashford (D) 137,602'
 FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2016 AND state_postal = 'NE' AND district = 2 AND d_votes = 137602 AND r_votes = 141066);
 
--- FEC cycles 2020 and 2022 (2024 is missing until the FEC publishes it)
+-- FEC cycles 2020 and 2022, Clerk cycle 2024
 INSERT INTO dq_results
-SELECT 'officials', 'house_election_results', 'T7_cycles_1976_2022',
-  CASE WHEN n = 24 THEN 'pass' ELSE 'fail' END,
-  n, NULL, 'Distinct election years in the table (24 even years 1976 to 2022; 2024 missing)'
-FROM (SELECT COUNT(DISTINCT year) AS n FROM house_election_results WHERE year BETWEEN 1976 AND 2022 AND year % 2 = 0);
+SELECT 'officials', 'house_election_results', 'T7_cycles_1976_2024',
+  CASE WHEN n = 25 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'Distinct election years in the table (25 even years 1976 to 2024)'
+FROM (SELECT COUNT(DISTINCT year) AS n FROM house_election_results WHERE year BETWEEN 1976 AND 2024 AND year % 2 = 0);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_seats_2024_R',
+  CASE WHEN n = 220 THEN 'pass' ELSE 'fail' END,
+  n, 220, '2024 House seats won by R (220 at the election)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2024 AND leader_party_major = 'R');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_seats_2024_D',
+  CASE WHEN n = 215 THEN 'pass' ELSE 'fail' END,
+  n, 215, '2024 House seats won by D (215 at the election)'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2024 AND leader_party_major = 'D');
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_districts_2024_435',
+  CASE WHEN n = 435 THEN 'pass' ELSE 'fail' END,
+  n, 435, 'Decisive 2024 districts (435), none tied'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2024 AND NOT tied);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_clerk_uncontested_two',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Clerk rows marked uncontested: FL-20 and OK-3 (the volume prints (1) and a no-opposition footnote)'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE source = 'CLERK' AND uncontested);
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_spot_begich_ak_2024',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'AK-AL 2024 first-choice counts as the Clerk prints them: Begich (R) 159,550 vs Peltola (D) 156,245'
+FROM (SELECT COUNT(*) AS n FROM house_election_results WHERE year = 2024 AND state_postal = 'AK' AND ranked_choice AND first_choice_votes = candidate_votes AND ((candidate = 'Nick Begich' AND candidate_votes = 159550) OR (candidate = 'Mary Sattler Peltola' AND candidate_votes = 156245)));
+
+INSERT INTO dq_results
+SELECT 'officials', 'house_election_results', 'T7_spot_golden_me2_2024',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, NULL, 'ME-2 2024 final instant-runoff round: Golden (D) 197,151 vs Theriault (R) 194,445, total 391,596'
+FROM (SELECT COUNT(*) AS n FROM house_race_results WHERE is_decisive AND year = 2024 AND state_postal = 'ME' AND district = 2 AND d_votes = 197151 AND r_votes = 194445 AND total_votes = 391596);
 
 INSERT INTO dq_results
 SELECT 'officials', 'house_election_results', 'T7_seats_2020_D',
