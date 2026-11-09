@@ -24,8 +24,9 @@ load_env
 
 # Tee all output to a timestamped log file while preserving terminal output
 POOL_LOG_DIR="$SCRIPT_DIR/runs"
-mkdir -p "$POOL_LOG_DIR"
+private_dir "$POOL_LOG_DIR"
 POOL_LOG="$POOL_LOG_DIR/pool-$(date '+%Y%m%d-%H%M%S').log"
+private_log "$POOL_LOG"
 exec > >(tee -a "$POOL_LOG") 2>&1
 echo "Pool log: $POOL_LOG"
 
@@ -712,6 +713,8 @@ launch_worker() {
   local launch_ts
   launch_ts=$(date +%Y%m%d_%H%M%S)
   local log_file="$log_dir/launch_${launch_ts}.log"
+  private_dir "$log_dir"
+  private_log "$log_file"
   local pid_file="$PID_DIR/${id}.${POOL_RUN_ID}.pid"
   local exit_file="$PID_DIR/${id}.${POOL_RUN_ID}.exit"
   local mb_file="$PID_DIR/${id}.${POOL_RUN_ID}.mb"

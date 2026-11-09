@@ -56,6 +56,8 @@
 # Exit code: 0 if every schema passed; 1 if any schema reported ERROR / probe failure / duplicate PK.
 #
 set -e
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -126,7 +128,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
     exit 2
 fi
 echo "Loading environment from $ENV_FILE"
-set -a; source "$ENV_FILE"; set +a
+source_env_file "$ENV_FILE"
 # Full-schema validation against the prod bucket: strip any inherited smoke-test flag so a
 # leaked value can't silently retarget reads at the truncated sample bucket.
 unset GOVDATA_DQ

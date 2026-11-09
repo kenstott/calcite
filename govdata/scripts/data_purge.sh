@@ -57,6 +57,8 @@
 #                       AWS_ENDPOINT_OVERRIDE at localhost).
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -118,15 +120,9 @@ IFS=',' read -ra TABLES <<< "$TABLES_CSV"
 
 # ── Load environment ──────────────────────────────────────────────────────────
 if [[ -f "$GOVDATA_HOME/.env.prod" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "$GOVDATA_HOME/.env.prod"
-  set +a
+  source_env_file "$GOVDATA_HOME/.env.prod"
 elif [[ -f "$GOVDATA_HOME/.env.test" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "$GOVDATA_HOME/.env.test"
-  set +a
+  source_env_file "$GOVDATA_HOME/.env.test"
 fi
 
 if [[ "$ENV_NAME" == "dq" ]]; then
@@ -134,10 +130,7 @@ if [[ "$ENV_NAME" == "dq" ]]; then
     echo "Error: --env dq requested but $GOVDATA_HOME/.env.dq not found"
     exit 1
   fi
-  set -a
-  # shellcheck source=/dev/null
-  source "$GOVDATA_HOME/.env.dq"
-  set +a
+  source_env_file "$GOVDATA_HOME/.env.dq"
 fi
 
 if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then

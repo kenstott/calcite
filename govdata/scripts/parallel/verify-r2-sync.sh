@@ -27,12 +27,14 @@
 # Exit 0 = R2 complete for the scanned scope. Exit 1 = drift found. Exit 2 = usage/setup.
 
 set -o pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/../env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # shellcheck disable=SC1091
-set -a; . "$GOVDATA_ROOT/.env.prod" 2>/dev/null; set +a
+source_env_file "$GOVDATA_ROOT/.env.prod" 2>/dev/null
 
 BUCKET="${GOVDATA_PARQUET_BUCKET:-govdata-parquet-v1}"
 MINIO_REMOTE="${GOVDATA_RCLONE_REMOTE:-minio}"

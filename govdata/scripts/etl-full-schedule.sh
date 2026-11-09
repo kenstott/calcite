@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 set -e
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(dirname "$SCRIPT_DIR")}"
@@ -33,9 +35,7 @@ echo "Latest log symlink: $LATEST_LOG"
 # Load environment
 ENV_FILE="${ENV_FILE:-.env.prod}"
 if [[ -f "$GOVDATA_HOME/$ENV_FILE" ]]; then
-    set -a
-    source "$GOVDATA_HOME/$ENV_FILE"
-    set +a
+    source_env_file "$GOVDATA_HOME/$ENV_FILE"
 fi
 
 # Parse arguments

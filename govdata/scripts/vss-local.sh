@@ -20,6 +20,8 @@
 # the pool. Embeddings are generated LOCALLY on CPU and quantized codes (binary +
 # int8) are appended to the vectorized_chunk_codes dataset in the lake (Path B).
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GOVDATA_HOME="${GOVDATA_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -27,13 +29,13 @@ VENV="${VSS_EMBED_VENV:-$GOVDATA_HOME/build/.venv-embed}"
 
 # Load prod env (MinIO endpoint, AWS creds, rclone remote) for the Python script.
 if [ -f "$GOVDATA_HOME/.env.prod" ]; then
-  set -a; source "$GOVDATA_HOME/.env.prod"; set +a
+  source_env_file "$GOVDATA_HOME/.env.prod"
 fi
 # GOVDATA_DQ=true overlays .env.dq (same as common.sh) and requires the target to be a -dq bucket;
 # the tracker namespace is derived from that bucket name, so a DQ run never touches production state.
 if [ "${GOVDATA_DQ:-}" = "true" ]; then
   [ -f "$GOVDATA_HOME/.env.dq" ] || { echo "[vss-local] GOVDATA_DQ=true but $GOVDATA_HOME/.env.dq is missing" >&2; exit 1; }
-  set -a; source <(tr -d '\r' < "$GOVDATA_HOME/.env.dq"); set +a
+  source_env_file "$GOVDATA_HOME/.env.dq"
   [ -n "${GOVDATA_DQ_BUCKET:-}" ] || { echo "[vss-local] GOVDATA_DQ=true but GOVDATA_DQ_BUCKET is empty" >&2; exit 1; }
   export GOVDATA_PARQUET_DIR="s3://${GOVDATA_DQ_BUCKET}"
   case "$GOVDATA_PARQUET_DIR" in

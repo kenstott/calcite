@@ -20,6 +20,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_ROOT="$(cd "$GOVDATA_ROOT/.." && pwd)"
+# shellcheck source=../env-source.sh
+source "$SCRIPT_DIR/../env-source.sh"
+
+# Logs under runs/ can carry credentials and URLs; they are owner-only. private_dir creates the
+# directory mode 700 (chmod'ing it too when it already exists), private_log creates the file
+# mode 600 before any redirect or tee opens it, so the redirect keeps that mode.
+private_dir() { mkdir -p "$1" && chmod 700 "$1"; }
+private_log() { ( umask 077; : >> "$1" ); }
 
 # ── ETL worker JVM memory bounding (config-only; override via env) ─────────────
 # Heap is set per-schema (-Xmx); these cap the *native* footprint the pool budget
@@ -148,6 +156,10 @@ fi
 # will NOT override them.  This allows per-run overrides like:
 #   GOVDATA_START_YEAR=2025 GOVDATA_CACHE_DIR=/tmp/cache ./run-pool.sh ...
 load_env() {
+  # xtrace stays off for the whole function: it assigns, saves and re-exports credential values,
+  # and under set -x every one of those lines would be written to the trace with its value.
+  local _load_env_xtrace=0
+  case $- in *x*) _load_env_xtrace=1; set +x ;; esac
   local env_prod="$GOVDATA_ROOT/.env.prod"
   if [ -f "$env_prod" ]; then
     # Capture any caller-exported overrides before .env.prod stomps them.
@@ -182,13 +194,10 @@ load_env() {
     local _saved_heap_min="${ETL_HEAP_MIN:-}"
     local _saved_heap_max="${ETL_HEAP_MAX:-}"
 
-    set -a
-    # shellcheck disable=SC1090
-    # CRLF-tolerant: these files are often edited on Windows; sourcing CRLF directly
-    # throws `$'\r': command not found` and appends \r to every value (corrupting
-    # endpoints/credentials). Strip CR on the way in.
-    source <(tr -d '\r' < "$env_prod")
-    set +a
+    # source_env_file is CRLF-tolerant: these files are often edited on Windows; sourcing CRLF
+    # directly throws `$'\r': command not found` and appends \r to every value (corrupting
+    # endpoints/credentials).
+    source_env_file "$env_prod"
 
     # Restore caller-provided overrides. A DQ orchestrator points GOVDATA_PARQUET_DIR at the -dq
     # bucket; the PG tracker derives its schema namespace from that directory, so preserving it
@@ -217,15 +226,14 @@ load_env() {
     if [ ! -f "$env_dq" ]; then
       echo "FATAL: GOVDATA_DQ=true but $env_dq does not exist, so the DQ bucket (GOVDATA_DQ_BUCKET) is unknown;" \
            "refusing to run, since the target would resolve to the production bucket." >&2
+      if [ "$_load_env_xtrace" = 1 ]; then set -x; fi
       return 1 2>/dev/null || exit 1
     fi
-    set -a
-    # shellcheck disable=SC1090
-    source <(tr -d '\r' < "$env_dq")   # CRLF-tolerant (see note above)
-    set +a
+    source_env_file "$env_dq"
     if [ -z "${GOVDATA_DQ_BUCKET:-}" ]; then
       echo "FATAL: GOVDATA_DQ=true but GOVDATA_DQ_BUCKET is empty after sourcing $env_dq;" \
            "refusing to run, since the target would resolve to the production bucket." >&2
+      if [ "$_load_env_xtrace" = 1 ]; then set -x; fi
       return 1 2>/dev/null || exit 1
     fi
   fi
@@ -251,6 +259,7 @@ load_env() {
   export GOVDATA_TRACKER_PG_URL="${GOVDATA_TRACKER_PG_URL:-}"
   export GOVDATA_TRACKER_PG_USER="${GOVDATA_TRACKER_PG_USER:-}"
   export GOVDATA_TRACKER_PG_PASSWORD="${GOVDATA_TRACKER_PG_PASSWORD:-}"
+  if [ "$_load_env_xtrace" = 1 ]; then set -x; fi
 }
 
 # Emit the JSON operand fragment shared by every generated model: the tracker backend
@@ -281,6 +290,9 @@ tracker_operand_json() {
 # and the R2 destination no longer depends on a hand-edited rclone.conf [r2] stanza.
 # Fails loudly (set -u :?) if a required credential is missing — never silently skips.
 configure_r2_remote() {
+  # The credential lines below expand secret values; keep them out of an xtrace.
+  local _r2_xtrace=0
+  case $- in *x*) _r2_xtrace=1; set +x ;; esac
   : "${PROD_AWS_ACCESS_KEY_ID:?PROD_AWS_ACCESS_KEY_ID not set in .env.prod — cannot publish to R2}"
   : "${PROD_AWS_SECRET_ACCESS_KEY:?PROD_AWS_SECRET_ACCESS_KEY not set in .env.prod — cannot publish to R2}"
   : "${PROD_AWS_ENDPOINT_OVERRIDE:?PROD_AWS_ENDPOINT_OVERRIDE not set in .env.prod — cannot publish to R2}"
@@ -289,6 +301,7 @@ configure_r2_remote() {
   export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$PROD_AWS_ACCESS_KEY_ID"
   export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$PROD_AWS_SECRET_ACCESS_KEY"
   export RCLONE_CONFIG_R2_ENDPOINT="$PROD_AWS_ENDPOINT_OVERRIDE"
+  if [ "$_r2_xtrace" = 1 ]; then set -x; fi
   # R2 ignores region but the S3 backend requires one; PROD_AWS_REGION is 'auto' in .env.prod.
   export RCLONE_CONFIG_R2_REGION="${PROD_AWS_REGION:-auto}"
   export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
@@ -1714,11 +1727,12 @@ run_etl() {
   jar=$(resolve_classpath)
 
   local log_dir="$SCRIPT_DIR/runs/$worker_id"
-  mkdir -p "$log_dir"
+  private_dir "$log_dir"
 
   local timestamp
   timestamp=$(date +%Y%m%d_%H%M%S)
   local log_file="$log_dir/etl_${timestamp}.log"
+  private_log "$log_file"
 
   # Determine per-worker heap sizes
   local _HEAP_MIN _HEAP_MAX
@@ -1774,11 +1788,12 @@ run_etl_inline() {
   jar=$(resolve_classpath)
 
   local log_dir="$SCRIPT_DIR/runs/$worker_id"
-  mkdir -p "$log_dir"
+  private_dir "$log_dir"
 
   local timestamp
   timestamp=$(date +%Y%m%d_%H%M%S)
   local log_file="$log_dir/etl_${timestamp}.log"
+  private_log "$log_file"
 
   local _HEAP_MIN _HEAP_MAX
   get_heap_config "$worker_id"

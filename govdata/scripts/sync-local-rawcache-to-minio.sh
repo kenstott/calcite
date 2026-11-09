@@ -39,6 +39,8 @@
 #   MinIO:  govdata-raw-v1/cftc_trades/asset_class=RATES/day=06/.../response.json
 
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -67,7 +69,7 @@ if [[ ! -f "$ENV_DQ" ]]; then
   echo "ERROR: $ENV_DQ not found — MinIO credentials unavailable" >&2
   exit 1
 fi
-set -a; source "$ENV_DQ"; set +a
+source_env_file "$ENV_DQ"
 
 : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID not set in $ENV_DQ}"
 : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY not set in $ENV_DQ}"

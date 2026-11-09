@@ -33,6 +33,8 @@
 #   ./restore-tracker-db.sh
 #
 set -euo pipefail
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/env-source.sh"
 
 # sudo's secure_path resets PATH on the root transition, and $HOME is not reliable
 # across that boundary either (observed: became /root, so $HOME/.local/bin missed
@@ -122,10 +124,7 @@ pg_lsclusters
 
 # ---- role + database (idempotent) ------------------------------------------------
 [ -f "$ENV_PROD" ] || die "$ENV_PROD not found — can't read tracker DB credentials"
-set -a
-# shellcheck disable=SC1090
-source <(tr -d '\r' < "$ENV_PROD")
-set +a
+source_env_file "$ENV_PROD"
 URL="${GOVDATA_TRACKER_PG_URL:-${CALCITE_TRACKER_PG_URL:-}}"
 [ -n "$URL" ] || die "GOVDATA_TRACKER_PG_URL not set in .env.prod"
 HOSTPORT="${URL#*://}"
