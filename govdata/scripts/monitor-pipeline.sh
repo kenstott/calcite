@@ -27,7 +27,8 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID not set}"
-: "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY not set}"
+# length test: xtrace prints the length, never the secret
+[ "${#AWS_SECRET_ACCESS_KEY}" -gt 0 ] || { echo "AWS_SECRET_ACCESS_KEY not set" >&2; exit 1; }
 : "${AWS_ENDPOINT_OVERRIDE:?AWS_ENDPOINT_OVERRIDE not set}"
 
 GOVDATA_PARQUET_BASE="${GOVDATA_PARQUET_BASE:-s3://govdata-parquet-v1/sec}"
@@ -50,8 +51,8 @@ S3_SETUP="
 LOAD iceberg; LOAD httpfs;
 CREATE OR REPLACE SECRET r2 (
   TYPE S3,
-  KEY_ID '${AWS_ACCESS_KEY_ID}',
-  SECRET '${AWS_SECRET_ACCESS_KEY}',
+  PROVIDER credential_chain,
+  CHAIN 'env',
   ENDPOINT '${ENDPOINT}',
   REGION 'auto',
   USE_SSL true

@@ -37,16 +37,14 @@ import java.util.Map;
  * java -cp "build/libs/*" org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
  *   --warehouse s3a://govdata-parquet-v1/sec \
  *   --table vectorized_chunks \
- *   --s3-access-key $AWS_ACCESS_KEY_ID \
- *   --s3-secret-key $AWS_SECRET_ACCESS_KEY \
+ *   --s3-credentials-from-env \
  *   --s3-endpoint $AWS_ENDPOINT_OVERRIDE
  *
  * # Dry run (report only)
  * java -cp "build/libs/*" org.apache.calcite.adapter.govdata.etl.IcebergMaintenanceRunner \
  *   --warehouse s3a://govdata-parquet-v1/sec \
  *   --table vectorized_chunks \
- *   --s3-access-key $AWS_ACCESS_KEY_ID \
- *   --s3-secret-key $AWS_SECRET_ACCESS_KEY \
+ *   --s3-credentials-from-env \
  *   --s3-endpoint $AWS_ENDPOINT_OVERRIDE \
  *   --dry-run
  * </pre>
@@ -405,8 +403,7 @@ public class IcebergMaintenanceRunner {
     System.err.println("                          using this rather than assuming it is needed.");
     System.err.println();
     System.err.println("S3/R2 options:");
-    System.err.println("  --s3-access-key KEY     S3 access key ID");
-    System.err.println("  --s3-secret-key KEY     S3 secret access key");
+    System.err.println("  --s3-credentials-from-env  read AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY");
     System.err.println("  --s3-endpoint URL       S3 endpoint (for R2/MinIO)");
     System.err.println();
     System.err.println("Compaction options:");
@@ -472,11 +469,10 @@ public class IcebergMaintenanceRunner {
         case "--table":
           config.tableName = args[++i];
           break;
-        case "--s3-access-key":
-          config.s3AccessKey = args[++i];
-          break;
-        case "--s3-secret-key":
-          config.s3SecretKey = args[++i];
+        case S3EnvCredentials.FLAG:
+          S3EnvCredentials creds = S3EnvCredentials.read();
+          config.s3AccessKey = creds.accessKey;
+          config.s3SecretKey = creds.secretKey;
           break;
         case "--s3-endpoint":
           config.s3Endpoint = args[++i];

@@ -91,7 +91,7 @@ duckdb_setup() {
 INSTALL iceberg; LOAD iceberg;
 INSTALL httpfs; LOAD httpfs;
 CREATE OR REPLACE SECRET minio (
-  TYPE S3, KEY_ID '${AWS_ACCESS_KEY_ID}', SECRET '${AWS_SECRET_ACCESS_KEY}',
+  TYPE S3, PROVIDER credential_chain, CHAIN 'env',
   ENDPOINT '${ENDPOINT}', REGION 'auto', USE_SSL false, URL_STYLE 'path'
 );
 SET unsafe_enable_version_guessing = true;
