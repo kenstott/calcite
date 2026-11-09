@@ -62,6 +62,10 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
       "pjm_capacity_auction_prices"
   ));
 
+  private static final Set<String> ERCOT_TABLES = new HashSet<>(Arrays.asList(
+      "ercot_wholesale_prices"
+  ));
+
   @Override
   public String getSchemaResourceName() {
     return "/energy/energy-schema.yaml";
@@ -102,6 +106,10 @@ public class EnergySchemaFactory implements GovDataSubSchemaFactory {
 
     for (final String tableName : PJM_TABLES) {
       builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "pjm", enabledSources));
+    }
+
+    for (final String tableName : ERCOT_TABLES) {
+      builder.isEnabled(tableName, ctx -> isTableEnabled(tableName, "ercot", enabledSources));
     }
 
     LOGGER.debug("Configured ENERGY schema hooks: enabledSources={}",

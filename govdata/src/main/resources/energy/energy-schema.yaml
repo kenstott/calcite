@@ -203,6 +203,15 @@ dimension_values:
     minYear: 2021  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
     end: "2028"
 
+  # ERCOT wholesale price archive year range. ERCOT publishes one workbook per calendar year
+  # (DAM report 13060, RTM report 13061); the current year's workbook is refreshed in place as
+  # the year progresses, so freshness is hash-based and there is no data lag.
+  ercot_years: &ercot_years
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 2011  # earliest year the source has data in this layout (observed); GOVDATA_START_YEAR cannot reach below it
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
   # EIA fossil fuel production (crude API) year range
   eia_fossil_years: &eia_fossil_years
     type: yearRange
@@ -1945,6 +1954,107 @@ partitionedTables:
       iceberg:
         <<: *iceberg_common
         tableName: pjm_capacity_auction_prices
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  # ---------------------------------------------------------------------------
+  # ERCOT WHOLESALE ELECTRICITY PRICES (day-ahead and real-time, hubs and load zones)
+  # ---------------------------------------------------------------------------
+  - name: ercot_wholesale_prices
+    freshness:
+      type: hash
+    pattern: "type=*/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      ERCOT (Texas) wholesale electricity prices in $/MWh: daily average, minimum and maximum
+      Settlement Point Price per settlement point, for the Day-Ahead Market (hourly prices,
+      price_series 'DAM') and the Real-Time Market (15-minute prices, price_series 'RTM'),
+      from ERCOT's public Market Information System archive (ercot.com, reports 13060 and
+      13061; no API key). Settlement points are the 8 trading hubs (HB_NORTH, HB_SOUTH,
+      HB_WEST, HB_HOUSTON, HB_PAN plus the HB_HUBAVG and HB_BUSAVG averages) and the 8 load
+      zones (LZ_NORTH, LZ_SOUTH, LZ_WEST, LZ_HOUSTON, LZ_AEN, LZ_CPS, LZ_LCRA, LZ_RAYBN).
+      Aggregate avg_price_usd_mwh over a year (weighted by interval_count) for annual
+      wholesale price trends; the daily min/max expose scarcity events such as Winter Storm
+      Uri (Feb 2021, prices at the $9,000/MWh cap). Prices here are wholesale energy prices,
+      not retail rates (see eia_electricity_prices). ERCOT only: PJM capacity auction prices
+      are in pjm_capacity_auction_prices; other ISOs/RTOs (MISO, CAISO, NYISO, SPP) are not
+      yet ingested (kenstott/govdata-ops#1140).
+
+    dimensions:
+      type:
+        - ercot_dam
+        - ercot_rtm
+      year: *ercot_years
+
+    columns:
+      - name: delivery_date
+        type: date
+        nullable: false
+        comment: Operating day (Central Prevailing Time) the prices apply to.
+      - name: price_series
+        type: string
+        nullable: false
+        comment: >
+          'DAM' = Day-Ahead Market hourly price; 'RTM' = Real-Time Market 15-minute price
+          (hub and load-zone points as published, load zones load-weighted); 'RTM_LZEW' =
+          Real-Time Market load-zone price that is energy-weighted (ERCOT point type LZEW),
+          published under the same LZ_ names as the load-weighted 'RTM' series.
+      - name: settlement_point
+        type: string
+        nullable: false
+        comment: >
+          ERCOT settlement point name: HB_* trading hubs (HB_BUSAVG and HB_HUBAVG are
+          averages across buses/hubs) and LZ_* load zones. Fixed set of 15 names.
+      - name: avg_price_usd_mwh
+        type: double
+        nullable: false
+        comment: >
+          Simple mean of the day's interval prices in $/MWh (24 hourly values for DAM, 96
+          15-minute values for RTM; 23/25 on daylight-saving days, where the repeated hour is
+          included). Can be negative when wind oversupply pushes prices below zero.
+      - name: min_price_usd_mwh
+        type: double
+        nullable: false
+        comment: Lowest interval price of the day in $/MWh (negative values occur).
+      - name: max_price_usd_mwh
+        type: double
+        nullable: false
+        comment: Highest interval price of the day in $/MWh (capped at ERCOT's system-wide offer cap, $9,000/MWh since 2015).
+      - name: interval_count
+        type: integer
+        nullable: false
+        comment: >
+          Number of interval prices averaged for the day (the weight to use when rolling
+          avg_price_usd_mwh up to months or years).
+
+    source:
+      type: http
+      url: "https://www.ercot.com/misapp/servlets/IceDocListJsonWS?reportTypeId=13060"
+      method: GET
+      # ErcotWholesalePricesTransformer resolves the year's workbook from ERCOT's document
+      # list (the URL above is the throwaway fetch the framework issues first), streams the
+      # xlsx and reduces it to daily statistics.
+      parallel: 1
+      response:
+        format: TEXT
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.energy.ErcotWholesalePricesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=*/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        <<: *iceberg_common
+        tableName: ercot_wholesale_prices
         runMaintenance: true
         snapshotRetentionDays: 7
         batchPartitionColumns: [year]

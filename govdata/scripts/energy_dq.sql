@@ -9,7 +9,7 @@
 --         eia_state_energy_consumption, eia_natural_gas_storage,
 --         eia_petroleum_stocks, eia_retail_gasoline_prices, eia_crude_oil_imports, eia_refinery_operations,
 --         eia_coal_mines, ev_charging_stations, eia_drilling_activity,
---         pjm_capacity_auction_prices
+--         pjm_capacity_auction_prices, ercot_wholesale_prices
 -- Storage: Iceberg (iceberg_scan)
 --
 -- Worker coverage verified by T8 checks:
@@ -941,6 +941,96 @@ FROM (
   WHERE resource_clearing_price IS NOT NULL AND system_marginal_price IS NOT NULL
     AND resource_clearing_price < system_marginal_price
 ) t;
+
+-- ============================================================
+-- ercot_wholesale_prices
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true);
+
+-- T2: row_count (>= 1 year x 15 points x ~365 days for DAM alone)
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 5000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 5000, 'expected >= 5000 daily point rows per loaded year'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T6: pk_nulls (delivery_date, price_series, settlement_point NOT NULL)
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'delivery_date IS NULL OR price_series IS NULL OR settlement_point IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true)
+WHERE delivery_date IS NULL OR price_series IS NULL OR settlement_point IS NULL;
+
+-- T7: expected_values — min <= avg <= max, and prices stay within ERCOT's offer-cap band
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'min > avg, avg > max, or a price outside [-$251, $9,000] /MWh'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true)
+  WHERE min_price_usd_mwh > avg_price_usd_mwh + 1e-9
+     OR avg_price_usd_mwh > max_price_usd_mwh + 1e-9
+     OR max_price_usd_mwh > 9000.0
+     OR min_price_usd_mwh < -251.0
+) t;
+
+-- T8: PK duplication guard — one row per (date, series, point)
+INSERT INTO dq_results
+SELECT
+  'energy', 'ercot_wholesale_prices', 'T8_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'duplicate (delivery_date, price_series, settlement_point) keys'
+FROM (
+  SELECT delivery_date, price_series, settlement_point
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/ercot_wholesale_prices', allow_moved_paths := true)
+  GROUP BY 1, 2, 3 HAVING COUNT(*) > 1
+) d;
 
 -- ============================================================
 -- eia_fossil_fuel_production
