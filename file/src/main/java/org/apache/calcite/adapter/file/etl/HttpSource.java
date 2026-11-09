@@ -583,7 +583,7 @@ public class HttpSource implements DataSource {
         LOGGER.debug("Cached {} records for {}", data.size(), cacheKey);
       }
 
-      LOGGER.info("Fetched {} records from {}", data.size(), url);
+      LOGGER.info("Fetched {} records from {}", data.size(), SecretRedaction.redact(url));
       return data.iterator();
     } else {
       // Paginated requests - use streaming iterator to avoid buffering all pages in memory
@@ -686,7 +686,7 @@ public class HttpSource implements DataSource {
         try {
           csvReader.close();
         } catch (IOException e) {
-          LOGGER.debug("Failed to close CSV_STREAM reader: {}", e.getMessage());
+          LOGGER.debug("Failed to close CSV_STREAM reader: {}", SecretRedaction.redact(e.getMessage()));
         }
         csvReader = null;
       }
@@ -778,7 +778,7 @@ public class HttpSource implements DataSource {
               LOGGER.debug("Total record count from API: {}", totalCount);
             }
           } catch (Exception e) {
-            LOGGER.debug("Could not extract count field from response: {}", e.getMessage());
+            LOGGER.debug("Could not extract count field from response: {}", SecretRedaction.redact(e.getMessage()));
           }
         }
 
@@ -814,7 +814,7 @@ public class HttpSource implements DataSource {
             }
           } catch (Exception e) {
             hasMore = false;
-            throw new RuntimeException("Cursor extraction failed: " + e.getMessage(), e);
+            throw new RuntimeException("Cursor extraction failed: " + SecretRedaction.redact(e.getMessage()), e);
           }
         } else {
           offset += pageSize;
@@ -835,7 +835,7 @@ public class HttpSource implements DataSource {
       } catch (IOException e) {
         hasMore = false;
         throw new RuntimeException("Paginated fetch failed at offset=" + offset
-            + ": " + e.getMessage(), e);
+            + ": " + SecretRedaction.redact(e.getMessage()), e);
       }
     }
 
@@ -879,7 +879,7 @@ public class HttpSource implements DataSource {
           rawResponse = executeRequest(url, baseParams, variables, null, body);
         } catch (IOException e) {
           throw new RuntimeException("Body-cursor pagination failed at cursor="
-              + cursor + ": " + e.getMessage(), e);
+              + cursor + ": " + SecretRedaction.redact(e.getMessage()), e);
         }
 
         accumulateRawPage(rawResponse);
@@ -888,7 +888,7 @@ public class HttpSource implements DataSource {
           String transformed = transformResponse(rawResponse, url, baseParams, variables);
           pageData = parseResponse(transformed);
         } catch (IOException e) {
-          throw new RuntimeException("Failed to transform/parse page: " + e.getMessage(), e);
+          throw new RuntimeException("Failed to transform/parse page: " + SecretRedaction.redact(e.getMessage()), e);
         }
         pageData = normalizeRecords(pageData, variables);
 
@@ -906,7 +906,7 @@ public class HttpSource implements DataSource {
             nextCursor = (cn != null && cn.isTextual()) ? cn.asText() : null;
           }
         } catch (IOException e) {
-          throw new RuntimeException("Failed to read pagination state: " + e.getMessage(), e);
+          throw new RuntimeException("Failed to read pagination state: " + SecretRedaction.redact(e.getMessage()), e);
         }
         boolean canAdvance = morePages && nextCursor != null && !nextCursor.isEmpty();
 
@@ -955,7 +955,7 @@ public class HttpSource implements DataSource {
             hasMore = false;
             return false;
           }
-          LOGGER.info("CSV_STREAM opened: {}", fullUrl);
+          LOGGER.info("CSV_STREAM opened: {}", SecretRedaction.redact(fullUrl));
         }
 
         int batchSize = pageSize > 0 ? pageSize : 1000;
@@ -1006,10 +1006,10 @@ public class HttpSource implements DataSource {
       } catch (IOException e) {
         hasMore = false;
         if (csvReader != null) {
-          try { csvReader.close(); } catch (IOException closeEx) { LOGGER.debug("Failed to close CSV reader: {}", closeEx.getMessage()); }
+          try { csvReader.close(); } catch (IOException closeEx) { LOGGER.debug("Failed to close CSV reader: {}", SecretRedaction.redact(closeEx.getMessage())); }
           csvReader = null;
         }
-        throw new RuntimeException("CSV_STREAM batch failed: " + e.getMessage(), e);
+        throw new RuntimeException("CSV_STREAM batch failed: " + SecretRedaction.redact(e.getMessage()), e);
       }
     }
 
@@ -1045,7 +1045,7 @@ public class HttpSource implements DataSource {
           }
         }
       } catch (Exception e) {
-        LOGGER.warn("Failed to stream raw page to cache: {}", e.getMessage());
+        LOGGER.warn("Failed to stream raw page to cache: {}", SecretRedaction.redact(e.getMessage()));
       }
     }
 
@@ -1067,7 +1067,7 @@ public class HttpSource implements DataSource {
         LOGGER.info("Wrote streaming merged cache: {} ({} records)",
             rawCacheFilePath, cachedRecordCount);
       } catch (Exception e) {
-        LOGGER.warn("Failed to write merged cache: {}", e.getMessage());
+        LOGGER.warn("Failed to write merged cache: {}", SecretRedaction.redact(e.getMessage()));
       } finally {
         if (tempCacheFile != null && tempCacheFile.exists()) {
           tempCacheFile.delete();
@@ -1119,16 +1119,16 @@ public class HttpSource implements DataSource {
         if (errorBody.contains("InvalidObjectState")) {
           conn.disconnect();
           throw new IOException("HTTP 403 InvalidObjectState (object archived, not a genuine "
-              + "gap) for CSV_STREAM: " + fullUrl);
+              + "gap) for CSV_STREAM: " + SecretRedaction.redact(fullUrl));
         }
       }
       if (shouldSkip(status, config.getRateLimit())) {
-        LOGGER.debug("CSV_STREAM skip: HTTP {} for {} (skipOn match)", status, fullUrl);
+        LOGGER.debug("CSV_STREAM skip: HTTP {} for {} (skipOn match)", status, SecretRedaction.redact(fullUrl));
         conn.disconnect();
         return null;
       }
       rememberIf404(fullUrl, status);
-      throw new IOException("HTTP " + status + " for CSV_STREAM: " + fullUrl);
+      throw new IOException("HTTP " + status + " for CSV_STREAM: " + SecretRedaction.redact(fullUrl));
     }
     InputStream is = conn.getInputStream();
     String extractPattern = config.getExtractPattern();
@@ -1268,7 +1268,7 @@ public class HttpSource implements DataSource {
           }
         }
       } catch (Exception e) {
-        LOGGER.error("Batch {}/{} failed: {}", i + 1, batches.size(), e.getMessage());
+        LOGGER.error("Batch {}/{} failed: {}", i + 1, batches.size(), SecretRedaction.redact(e.getMessage()));
         // Continue with remaining batches
       }
     }
@@ -1340,7 +1340,7 @@ public class HttpSource implements DataSource {
         lastException = e;
         if (attempt < maxRetries) {
           long backoff = config.getRateLimit().getRetryBackoffMs() * (1L << attempt);
-          LOGGER.warn("Request failed, retrying in {}ms: {}", backoff, e.getMessage());
+          LOGGER.warn("Request failed, retrying in {}ms: {}", backoff, SecretRedaction.redact(e.getMessage()));
           try {
             Thread.sleep(backoff);
           } catch (InterruptedException ie) {
@@ -1367,7 +1367,7 @@ public class HttpSource implements DataSource {
 
   private static void failFastIfKnown404(String urlString) throws IOException {
     if (KNOWN_404_URLS.contains(urlString)) {
-      throw new IOException("HTTP 404 (known unavailable this run, request skipped): " + urlString);
+      throw new IOException("HTTP 404 (known unavailable this run, request skipped): " + SecretRedaction.redact(urlString));
     }
   }
 
@@ -1404,7 +1404,7 @@ public class HttpSource implements DataSource {
     SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
       int responseCode = conn.getResponseCode();
-      LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
+      LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), SecretRedaction.redact(urlString), responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
         return readResponse(conn.getInputStream());
@@ -1492,7 +1492,7 @@ public class HttpSource implements DataSource {
               backoff = rateLimit.getRetryBackoffMs() * (1L << (retries - 1));
             }
             LOGGER.warn("Request failed, retrying in {}ms (attempt {}/{}): {}",
-                backoff, retries, rateLimit.getMaxRetries(), e.getMessage());
+                backoff, retries, rateLimit.getMaxRetries(), SecretRedaction.redact(e.getMessage()));
             try {
               Thread.sleep(backoff);
             } catch (InterruptedException ie) {
@@ -1606,7 +1606,7 @@ public class HttpSource implements DataSource {
       int responseCode = conn.getResponseCode();
       if (responseCode < 200 || responseCode >= 300) {
         String errorBody = readResponse(conn.getErrorStream());
-        throw new IOException("URL resolver HTTP " + responseCode + " for " + resolverUrl
+        throw new IOException("URL resolver HTTP " + responseCode + " for " + SecretRedaction.redact(resolverUrl)
             + ": " + errorBody);
       }
       JsonNode root = OBJECT_MAPPER.readTree(readResponse(conn.getInputStream()));
@@ -1617,16 +1617,16 @@ public class HttpSource implements DataSource {
       } else {
         if (!root.isObject() || root.size() != 1) {
           throw new IOException("URL resolver expected a single-field JSON object from "
-              + resolverUrl + ", got: " + root);
+              + SecretRedaction.redact(resolverUrl) + ", got: " + root);
         }
         urlNode = root.elements().next();
       }
       if (urlNode == null || !urlNode.isTextual() || urlNode.asText().isEmpty()) {
         throw new IOException("URL resolver could not extract a download URL from "
-            + resolverUrl + ": " + root);
+            + SecretRedaction.redact(resolverUrl) + ": " + root);
       }
       String resolved = urlNode.asText();
-      LOGGER.debug("Resolved download URL from {} -> {}", resolverUrl, resolved);
+      LOGGER.debug("Resolved download URL from {} -> {}", SecretRedaction.redact(resolverUrl), resolved);
       return resolved;
     } finally {
       conn.disconnect();
@@ -1642,7 +1642,7 @@ public class HttpSource implements DataSource {
       // Log headers being used for debugging
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug("HTTP {} {} with {} custom headers",
-            config.getMethod(), urlString, config.getHeaders().size());
+            config.getMethod(), SecretRedaction.redact(urlString), config.getHeaders().size());
         for (Map.Entry<String, String> e : config.getHeaders().entrySet()) {
           LOGGER.debug("  Header: {}={}", e.getKey(),
               e.getKey().toLowerCase().contains("key") ? "[REDACTED]" : e.getValue());
@@ -1673,7 +1673,7 @@ public class HttpSource implements DataSource {
     SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
       int responseCode = conn.getResponseCode();
-      LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), urlString, responseCode);
+      LOGGER.debug("HTTP {} {} -> {}", config.getMethod(), SecretRedaction.redact(urlString), responseCode);
 
       if (responseCode >= 200 && responseCode < 300) {
         // Success — clear the circuit-breaker 503 count for this origin.
@@ -1730,12 +1730,12 @@ public class HttpSource implements DataSource {
           // Trigger URL failed but body is skipped — transformer owns all actual fetching.
           // Log and return empty string so the transformer can still run (and decide to skip).
           LOGGER.warn("Trigger URL returned HTTP {} (skipResponseBody=true): {}",
-              responseCode, urlString);
+              responseCode, SecretRedaction.redact(urlString));
           return "";
         }
         if (shouldSkip(responseCode, config.getRateLimit())) {
-          LOGGER.debug("HTTP {} from {} — skipping batch (skipOn match)", responseCode, urlString);
-          throw new SkippedBatchException("HTTP " + responseCode + " (skipped): " + urlString);
+          LOGGER.debug("HTTP {} from {} — skipping batch (skipOn match)", responseCode, SecretRedaction.redact(urlString));
+          throw new SkippedBatchException("HTTP " + responseCode + " (skipped): " + SecretRedaction.redact(urlString));
         }
         // 503/429: capture any Retry-After so the retry honors it. Count consecutive 503s per base
         // URI so a persistently-down origin trips the circuit breaker (subsequent calls fast-skip).
@@ -1881,7 +1881,7 @@ public class HttpSource implements DataSource {
       // broken response get cached as valid — and the raw cache is immutable, so a bad entry
       // would cause repeated downstream failures with no signal of the real cause.
       throw new IOException("Failed to check for API error in response (format=JSON, "
-          + "errorPath=" + respConfig.getErrorPath() + "): " + e.getMessage(), e);
+          + "errorPath=" + respConfig.getErrorPath() + "): " + SecretRedaction.redact(e.getMessage()), e);
     }
   }
 
@@ -2285,7 +2285,7 @@ public class HttpSource implements DataSource {
             : resolvedBody;
         return OBJECT_MAPPER.writeValueAsString(toSerialize);
       } catch (Exception e) {
-        throw new RuntimeException("Failed to serialize body to JSON: " + e.getMessage(), e);
+        throw new RuntimeException("Failed to serialize body to JSON: " + SecretRedaction.redact(e.getMessage()), e);
       }
     } else {
       // FORM_URLENCODED
@@ -2883,7 +2883,7 @@ public class HttpSource implements DataSource {
         close();
 
       } catch (IOException e) {
-        LOGGER.error("Error reading CSV: {}", e.getMessage());
+        LOGGER.error("Error reading CSV: {}", SecretRedaction.redact(e.getMessage()));
         exhausted = true;
         nextRow = null;
         try {
@@ -3589,12 +3589,12 @@ public class HttpSource implements DataSource {
     try {
       String transformed = responseTransformer.transform(response, context);
       if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("ResponseTransformer transformed response for {}", url);
+        LOGGER.debug("ResponseTransformer transformed response for {}", SecretRedaction.redact(url));
       }
       return transformed;
     } catch (RuntimeException e) {
       // ResponseTransformer threw an exception - this is how it signals API errors
-      LOGGER.warn("ResponseTransformer threw exception for {}: {}", url, e.getMessage());
+      LOGGER.warn("ResponseTransformer threw exception for {}: {}", SecretRedaction.redact(url), SecretRedaction.redact(e.getMessage()));
       throw e;
     }
   }
@@ -3700,7 +3700,7 @@ public class HttpSource implements DataSource {
     // fallback-guard: a cache entry that cannot be removed is left alone; the fetch then reads it,
     // which is the behaviour before this method existed, so this degrades rather than fails.
     } catch (IOException e) {
-      LOGGER.warn("Could not drop raw cache entry {}: {}", path, e.getMessage());
+      LOGGER.warn("Could not drop raw cache entry {}: {}", path, SecretRedaction.redact(e.getMessage()));
       return false;
     }
   }
@@ -3781,7 +3781,7 @@ public class HttpSource implements DataSource {
     SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
       int code = conn.getResponseCode();
-      LOGGER.debug("Freshness HEAD {} -> {}", urlString, code);
+      LOGGER.debug("Freshness HEAD {} -> {}", SecretRedaction.redact(urlString), code);
       Map<String, String> headers = captureHeaders(conn);
       return new ProbeResult(headers, null);
     } finally {
@@ -3800,7 +3800,7 @@ public class HttpSource implements DataSource {
     SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
       int code = conn.getResponseCode();
-      LOGGER.debug("Freshness GET {} -> {}", urlString, code);
+      LOGGER.debug("Freshness GET {} -> {}", SecretRedaction.redact(urlString), code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
       if (code >= 200 && code < 300) {
@@ -3820,7 +3820,7 @@ public class HttpSource implements DataSource {
   private ProbeResult probePost(String urlString, String query, Map<String, String> vars)
       throws IOException {
     if (query == null || query.isEmpty()) {
-      LOGGER.debug("Freshness GraphQL probe skipped: no query configured for {}", urlString);
+      LOGGER.debug("Freshness GraphQL probe skipped: no query configured for {}", SecretRedaction.redact(urlString));
       return new ProbeResult(null, null);
     }
     String requestBody =
@@ -3835,7 +3835,7 @@ public class HttpSource implements DataSource {
     SharedHttpClient.Response conn = SharedHttpClient.execute(request);
     try {
       int code = conn.getResponseCode();
-      LOGGER.debug("Freshness GraphQL POST {} -> {}", urlString, code);
+      LOGGER.debug("Freshness GraphQL POST {} -> {}", SecretRedaction.redact(urlString), code);
       Map<String, String> headers = captureHeaders(conn);
       String body = null;
       if (code >= 200 && code < 300) {
@@ -4024,7 +4024,7 @@ public class HttpSource implements DataSource {
       return false;
     // fallback-guard: allow hasValidRawCache treats an IOException while checking cache existence as a cache miss, which forces a re-fetch rather than trusting an unverifiable cache — the safe direction, logged at debug.
     } catch (IOException e) {
-      LOGGER.debug("Error checking raw cache: {}", e.getMessage());
+      LOGGER.debug("Error checking raw cache: {}", SecretRedaction.redact(e.getMessage()));
       return false;
     }
   }
@@ -4173,7 +4173,7 @@ public class HttpSource implements DataSource {
           parser.close();
         } catch (IOException e) {
           LOGGER.debug("streamJsonFromRawCache: error closing parser for {}: {}", cachePath,
-              e.getMessage());
+              SecretRedaction.redact(e.getMessage()));
         }
         return false;
       }
@@ -4238,7 +4238,7 @@ public class HttpSource implements DataSource {
             }
           }
         } catch (IOException e) {
-          LOGGER.error("streamFromRawCache: error reading {}: {}", cachePath, e.getMessage());
+          LOGGER.error("streamFromRawCache: error reading {}: {}", cachePath, SecretRedaction.redact(e.getMessage()));
         }
         if (!pending.isEmpty()) {
           return true;
@@ -4248,7 +4248,7 @@ public class HttpSource implements DataSource {
           parser.close();
         } catch (IOException e) {
           LOGGER.debug("streamFromRawCache: error closing parser for {}: {}", cachePath,
-              e.getMessage());
+              SecretRedaction.redact(e.getMessage()));
         }
         return false;
       }
@@ -4301,7 +4301,7 @@ public class HttpSource implements DataSource {
       storageProvider.writeFile(cachePath, content.getBytes(StandardCharsets.UTF_8));
       LOGGER.info("Raw cache written: {} ({} bytes)", cachePath, content.length());
     } catch (IOException e) {
-      LOGGER.warn("Failed to write raw cache: {} - {}", cachePath, e.getMessage());
+      LOGGER.warn("Failed to write raw cache: {} - {}", cachePath, SecretRedaction.redact(e.getMessage()));
     }
   }
 
