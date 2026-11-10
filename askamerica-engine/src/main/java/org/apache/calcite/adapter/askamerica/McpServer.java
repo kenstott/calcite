@@ -7552,7 +7552,8 @@ public class McpServer {
             boolean officeRead = false;
             for (JsonNode s : c.path("sources")) {
                 String norm = normalizeUrlForMatch(s.path("url").asText(""));
-                if (!norm.equals(article) && read.contains(norm) && isGovernmentHost(norm)) {
+                if (!norm.equals(article) && read.contains(norm) && pageLoaded(norm)
+                        && isGovernmentHost(norm)) {
                     officeRead = true;
                 }
             }
@@ -7655,7 +7656,13 @@ public class McpServer {
             + "claim. If no page loads, cite the off-site pages tried and say why in `why_no_page`.";
     }
 
-    /** Normalized URLs that web_fetch opened without error in this session. */
+    /**
+     * Normalized URLs web_fetch was called on in this session without a logged error. A refused
+     * fetch (HTTP 403, 412, 429) is returned to the caller as text, not as an error, so it is in
+     * this set too: pair it with {@link #pageLoaded}, which requires the page's extracted text.
+     * Measured live 2026-11-09 (daily eval q11): none of 24 fetches across three runs logged an
+     * error, including one that returned HTTP 412.
+     */
     private static java.util.Set<String> pagesReadThisSession() {
         java.util.Set<String> read = new java.util.HashSet<>();
         for (ObjectNode e : recentCallLogSnapshot()) {
@@ -7725,7 +7732,7 @@ public class McpServer {
             boolean pageRead = false;
             for (JsonNode s : c.path("sources")) {
                 String norm = normalizeUrlForMatch(s.path("url").asText(""));
-                if (!norm.equals(article) && read.contains(norm)) {
+                if (!norm.equals(article) && read.contains(norm) && pageLoaded(norm)) {
                     pageRead = true;
                 }
             }

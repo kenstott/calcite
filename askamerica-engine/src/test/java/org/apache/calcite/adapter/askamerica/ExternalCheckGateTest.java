@@ -48,6 +48,7 @@ class ExternalCheckGateTest {
 
     @AfterEach void clearCallLog() throws Exception {
         callLog().clear();
+        McpServer.FETCHED_TEXT.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -417,8 +418,14 @@ class ExternalCheckGateTest {
     }
 
     @Test void officePageReadAllowsUnsupported() throws Exception {
-        fetch(RELEASE, null);
+        loadedPage(RELEASE, 5000);
         assertNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
+    }
+
+    /** The live q11 shape: the fetch logged no error but returned only a refusal message. */
+    @Test void officePageFetchedWithoutTextDoesNotCount() throws Exception {
+        fetch(RELEASE, null);
+        assertNotNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
     }
 
     @Test void officePageThatFailedToOpenDoesNotCount() throws Exception {
@@ -475,8 +482,13 @@ class ExternalCheckGateTest {
     }
 
     @Test void namedSubjectWithAPageReadPasses() throws Exception {
-        fetch(STORY, null);
+        loadedPage(STORY, 5000);
         assertNull(namedGate(donClaim(sourceField(STORY))));
+    }
+
+    @Test void namedSubjectPageFetchedWithoutTextDoesNotCount() throws Exception {
+        fetch(STORY, null);
+        assertNotNull(namedGate(donClaim(sourceField(STORY))));
     }
 
     @Test void namedSubjectPageThatFailedDoesNotCount() throws Exception {
