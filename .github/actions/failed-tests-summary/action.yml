@@ -1,0 +1,9 @@
+name: 'Failed tests summary'
+description: 'Print the name and message of every failed test from Gradle JUnit XML reports, and keep the XML as an artifact'
+runs:
+  using: composite
+  steps:
+  - name: 'List failed tests'
+    shell: bash
+    run: |
+      python3 -I "${{ github.action_path }}/summarize.py" . | tee -a "$GITHUB_STEP_SUMMARY"
