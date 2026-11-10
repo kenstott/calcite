@@ -21,7 +21,9 @@ eval "$(sed -n '/^embed_daily_window_decision() {/,/^}/p' "$HERE/run-scheduled.s
 eval "$(sed -n '/^run_daily_window_embedding() {/,/^}/p' "$HERE/run-scheduled.sh")"
 eval "$(sed -n '/^historical_is_complete() /p' "$HERE/run-scheduled.sh")"
 eval "$(sed -n '/^record_historical_conclusion() {/,/^}/p' "$HERE/run-scheduled.sh")"
-HISTORICAL_COMPLETE_FILE="$tmp/historical-complete"
+HISTORICAL_COMPLETE_FILE="$tmp/historical-conclusion"
+# #1147: the directory of per-schema .done markers sits beside the marker and must not satisfy it
+mkdir -p "$tmp/historical-complete"; : > "$tmp/historical-complete/banking.done"
 
 d() { embed_continuous_decision "$@"; }
 # args: mode current pool_exit now window_end margin
@@ -48,6 +50,8 @@ embed_daily_window_decision false 1000 8200 600 | grep -q '^skip historical not 
 embed_daily_window_decision true 7700 8200 600 | grep -q '^skip the window ends' && ok "daily window inside margin: skips" || bad "daily margin"
 
 # marker follows the latest historical conclusion
+! historical_is_complete && ok "historical-complete/ directory present: not complete" || bad "directory counted as marker"
+grep -q 'LOG_DIR/historical-conclusion' "$HERE/run-scheduled.sh" && ok "default marker path avoids the .done directory" || bad "default path"
 record_historical_conclusion "$tmp/w.log" 0
 historical_is_complete && ok "exit 0 records historical complete" || bad "marker not written"
 record_historical_conclusion "$tmp/w.log" 124

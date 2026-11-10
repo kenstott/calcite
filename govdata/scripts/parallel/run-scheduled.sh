@@ -220,8 +220,9 @@ run_x_schema_if_needed() {
 
 # The conclusion of the latest historical pool, kept so a daily window (which does not run
 # historical itself) can read it: present = the last unscoped historical pool drained its queue
-# (exit 0); removed when a later historical pool ends any other way.
-HISTORICAL_COMPLETE_FILE="${HISTORICAL_COMPLETE_FILE:-$LOG_DIR/historical-complete}"
+# (exit 0); removed when a later historical pool ends any other way. Must not be named
+# runs/historical-complete: that is the directory of per-schema .done markers (#1147).
+HISTORICAL_COMPLETE_FILE="${HISTORICAL_COMPLETE_FILE:-$LOG_DIR/historical-conclusion}"
 
 historical_is_complete() { [ -f "$HISTORICAL_COMPLETE_FILE" ]; }
 
