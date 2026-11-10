@@ -20,13 +20,20 @@ import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
 
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Diagnostic only: prints a full thread dump to stderr, once, for every test that has been
+ * Diagnostic only: writes a full thread dump to a file under {@code file.test.dumpDir}
+ * (flushed and closed at once, so it survives a hung or killed job) and to stderr, once, for every test that has been
  * running longer than {@code file.test.slowDumpMinutes} (default 5). It never interrupts or
  * fails a test. A CI job that later dies silently (issue #1112) then has the stacks of what
  * was running in its log.
@@ -35,6 +42,8 @@ public class SlowTestDumpListener implements TestExecutionListener {
   private static final long LIMIT_MS =
       Long.getLong("file.test.slowDumpMinutes", 5L) * 60_000L;
   private static final long POLL_MS = Math.max(1_000L, Math.min(30_000L, LIMIT_MS / 2));
+
+  private static final String DUMP_DIR = System.getProperty("file.test.dumpDir");
 
   private final Map<String, Long> running = new ConcurrentHashMap<>();
   private final Map<String, Boolean> dumped = new ConcurrentHashMap<>();
@@ -91,5 +100,22 @@ public class SlowTestDumpListener implements TestExecutionListener {
       sb.append(ti);
     }
     System.err.println(sb);
+    System.err.flush();
+    if (DUMP_DIR != null) {
+      writeFile(sb.toString());
+    }
+  }
+
+  /** Writes the dump to its own file; the name carries a timestamp so dumps never overwrite. */
+  private static void writeFile(String text) {
+    try {
+      Path dir = Paths.get(DUMP_DIR);
+      Files.createDirectories(dir);
+      Path f = dir.resolve("slow-test-" + System.currentTimeMillis() + ".txt");
+      Files.write(f, text.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE_NEW);
+    } catch (IOException e) {
+      System.err.println("SlowTestDumpListener could not write dump file: " + e);
+      System.err.flush();
+    }
   }
 }

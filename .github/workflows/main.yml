@@ -126,6 +126,7 @@ jobs:
     needs: changes
     if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Windows (JDK 11)'
+    timeout-minutes: 75
     runs-on: windows-latest
     steps:
     - name: 'Install winutils'
@@ -159,7 +160,7 @@ jobs:
         remote-build-cache-proxy-enabled: false
         arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build javadoc
     - name: 'Upload test JVM diagnostics'
-      if: failure()
+      if: failure() || cancelled()
       uses: actions/upload-artifact@v4
       with:
         name: file-test-diagnostics-${{ github.job }}
@@ -167,6 +168,7 @@ jobs:
         path: |
           file/build/heapdumps/**
           file/build/hs_err_pid*.log
+          file/build/slow-test-dumps/**
         if-no-files-found: ignore
         retention-days: 7
     - name: 'sqlline and sqllsh'
@@ -184,6 +186,7 @@ jobs:
     needs: changes
     if: github.event.action != 'labeled' && needs.changes.outputs.full_matrix == 'true'
     name: 'Windows (JDK 17)'
+    timeout-minutes: 75
     runs-on: windows-latest
     steps:
       - name: 'Install winutils'
@@ -217,7 +220,7 @@ jobs:
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build
       - name: 'Upload test JVM diagnostics'
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: file-test-diagnostics-${{ github.job }}
@@ -225,6 +228,7 @@ jobs:
           path: |
             file/build/heapdumps/**
             file/build/hs_err_pid*.log
+            file/build/slow-test-dumps/**
           if-no-files-found: ignore
           retention-days: 7
       - name: 'sqlline and sqllsh'
@@ -242,6 +246,7 @@ jobs:
     needs: changes
     if: github.event.action != 'labeled' && needs.changes.outputs.scope != 'none'
     name: 'Windows (JDK 21)'
+    timeout-minutes: 75
     runs-on: windows-latest
     steps:
       - name: 'Install winutils'
@@ -275,7 +280,7 @@ jobs:
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 ${{ needs.changes.outputs.tasks }}
       - name: 'Upload test JVM diagnostics'
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: file-test-diagnostics-${{ github.job }}
@@ -283,6 +288,7 @@ jobs:
           path: |
             file/build/heapdumps/**
             file/build/hs_err_pid*.log
+            file/build/slow-test-dumps/**
           if-no-files-found: ignore
           retention-days: 7
       - name: 'sqlline and sqllsh'
