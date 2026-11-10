@@ -133,7 +133,7 @@ run_ungrouped_edu_tables() {
     "libraries|library_outlets" \
     "f33|f33_district_finance" \
     "scorecard|college_scorecard,college_scorecard_programs" \
-    "fsa|fsa_pslf_discharge_summary")" || return 1
+    "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency")" || return 1
 
   [ -n "$unassigned" ] || return 0
   IFS=',' read -ra _un <<< "$unassigned"
@@ -185,7 +185,7 @@ run_historical_cadence() {
   # fixed-URL workbook re-fetched wholesale each run) — start/end are unused by this table
   # but run_edu_model always takes them.
   run_edu_model "edu-initial-fsa" \
-    '"fsa_pslf_discharge_summary"' "$START" "$END"
+    '"fsa_pslf_discharge_summary","fsa_loan_portfolio_status","fsa_loan_delinquency"' "$START" "$END"
 
   run_ungrouped_edu_tables "$START" "$END"
 }
@@ -238,6 +238,12 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "fsa_pslf_discharge_summary"; then
     run_edu_model "edu-annual-fsa" \
       '"fsa_pslf_discharge_summary"' "$START"
+  fi
+
+  # fsa_loan_portfolio_status / fsa_loan_delinquency: same snapshot + etag pattern as above.
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "fsa_loan_portfolio_status"; then
+    run_edu_model "edu-annual-fsa-loans" \
+      '"fsa_loan_portfolio_status","fsa_loan_delinquency"' "$START"
   fi
 }
 

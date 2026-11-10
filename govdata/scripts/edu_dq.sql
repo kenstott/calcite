@@ -50,6 +50,8 @@ FROM (
   UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'fsa_loan_delinquency', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -74,7 +76,7 @@ INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
   CASE
     WHEN n >= thresh                     THEN 'pass'
-    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions','fsa_pslf_discharge_summary') THEN 'fail'
+    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions','fsa_pslf_discharge_summary','fsa_loan_portfolio_status','fsa_loan_delinquency') THEN 'fail'
     ELSE 'warn'
   END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
@@ -94,6 +96,8 @@ FROM (
   UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
   UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
   UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
+  UNION ALL SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)  -- 4 portfolios x ~50 quarters x 7-8 statuses
+  UNION ALL SELECT 'fsa_loan_delinquency',                 COUNT(*),   300       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true)  -- 3 portfolios x ~45 quarters x 6 buckets
 );
 
 -- ============================================================
@@ -1062,6 +1066,60 @@ FROM (
   SELECT SUM(CASE WHEN metric_value < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)
   WHERE metric_value IS NOT NULL
+);
+
+-- fsa_loan_portfolio_status: PK (portfolio, fiscal_year, fiscal_quarter, status) non-null and unique
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_loan_portfolio_status', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)
+  WHERE portfolio IS NULL OR fiscal_year IS NULL OR fiscal_quarter IS NULL OR status IS NULL OR period_end_date IS NULL
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_loan_portfolio_status', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT portfolio, fiscal_year, fiscal_quarter, status FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)
+  GROUP BY portfolio, fiscal_year, fiscal_quarter, status HAVING COUNT(*) > 1
+);
+
+-- fsa_loan_portfolio_status: quarter in 1-4, no negative amounts, period_end_date consistent with fiscal year/quarter
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_loan_portfolio_status', 'value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)
+  WHERE fiscal_quarter NOT BETWEEN 1 AND 4 OR dollars_outstanding < 0 OR recipients < 0
+     OR YEAR(period_end_date) NOT IN (fiscal_year, fiscal_year - 1)
+);
+
+-- fsa_loan_delinquency: PK (portfolio, fiscal_year, fiscal_quarter, status) non-null and unique
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_loan_delinquency', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true)
+  WHERE portfolio IS NULL OR fiscal_year IS NULL OR fiscal_quarter IS NULL OR status IS NULL OR period_end_date IS NULL
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_loan_delinquency', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT portfolio, fiscal_year, fiscal_quarter, status FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true)
+  GROUP BY portfolio, fiscal_year, fiscal_quarter, status HAVING COUNT(*) > 1
+);
+
+-- fsa_loan_delinquency: quarter in 1-4, no negative amounts, period_end_date consistent with fiscal year/quarter
+INSERT INTO dq_results
+SELECT 'edu', 'fsa_loan_delinquency', 'value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true)
+  WHERE fiscal_quarter NOT BETWEEN 1 AND 4 OR dollars_outstanding < 0 OR recipients < 0
+     OR YEAR(period_end_date) NOT IN (fiscal_year, fiscal_year - 1)
 );
 
 -- ============================================================

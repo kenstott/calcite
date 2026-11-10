@@ -2902,6 +2902,196 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: fsa_loan_portfolio_status
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=fsa_loan_portfolio_status/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Federal Student Aid's quarterly Portfolio by Loan Status report (PortfoliobyLoanStatus.xls, from
+      studentaid.gov/data-center/student/portfolio; source system NSLDS). One row per (fiscal quarter,
+      portfolio, loan status) from FY2013 Q3 onward: how many dollars and loan-level recipients sit in
+      In-School, Grace, Repayment, Deferment, Forbearance, Cumulative in Default and Other status, for
+      the Direct Loan, FFEL, ED-held FFEL and federally-managed portfolios. This is the table for "how
+      many borrowers / dollars are in each repayment status" and for the cumulative-default stock
+      ('cumulative_in_default'). Delinquency buckets inside Repayment are in fsa_loan_delinquency.
+      Does not cover forgiveness (see fsa_pslf_discharge_summary) or private loans or credit-bureau
+      delinquency (New York Fed household-debt series are not in this table).
+      The report is a point-in-time snapshot of loans in FSA systems, not a flow. Since March 2020 the
+      CARES Act pause and later SAVE-plan forbearance moved large balances between Repayment and
+      Forbearance, so status shares are not comparable across those breaks. A snapshot table: the whole
+      history is replaced on each fetch; the newest quarter lags the period end by about two weeks.
+    columns:
+      - name: period_end_date
+        type: date
+        nullable: false
+        comment: Calendar date the quarterly NSLDS snapshot was run (federal fiscal Q1 = 12/31 of the prior calendar year, Q2 = 3/31, Q3 = 6/30, Q4 = 9/30)
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October 1 - September 30) of the snapshot
+      - name: fiscal_quarter
+        type: integer
+        nullable: false
+        comment: Federal fiscal quarter 1-4
+      - name: portfolio
+        type: string
+        nullable: false
+        comment: "One of 'direct_loan', 'ffel', 'ed_held_ffel', 'federally_managed' (the last two are FSA's own FFEL-held and combined-managed portfolios)"
+      - name: status
+        type: string
+        nullable: false
+        comment: Snake_case code for FSA's own column label (see status_label for the original wording)
+      - name: status_label
+        type: string
+        nullable: false
+        comment: FSA's own status column heading, verbatim apart from a trailing footnote asterisk
+      - name: dollars_outstanding
+        type: bigint
+        nullable: true
+        comment: Outstanding principal and interest in whole US dollars (converted from the source's billions)
+      - name: recipients
+        type: bigint
+        nullable: true
+        comment: Loan-level recipient count (converted from the source's millions) — a borrower with loans in several statuses is counted once per status, so counts do not sum to unique borrowers
+
+    source:
+      type: http
+      url: "https://studentaid.gov/sites/default/files/fsawg/datacenter/library/PortfoliobyLoanStatus.xls"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      response:
+        format: TEXT   # transformer re-downloads the legacy XLS and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.FsaLoanPortfolioTransformer$LoanStatus"
+
+    dimensions:
+      type:
+        - fsa_loan_portfolio_status
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fsa_loan_portfolio_status/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/edu"
+        tableName: fsa_loan_portfolio_status
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: fsa_loan_delinquency
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=fsa_loan_delinquency/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Federal Student Aid's quarterly Portfolio by Delinquency Status report
+      (DLPortfoliobyDelinquencyStatus.xls, from studentaid.gov/data-center/student/portfolio; source
+      NSLDS). One row per (fiscal quarter, portfolio, delinquency bucket) from FY2013 Q3 onward for the
+      loans in Repayment status: Current Repayment, 31-90, 91-180, 181-270 and 271-360 days delinquent,
+      and loans transferring to the Debt Management and Collections System (default). Use it for "what
+      share of federal student loans in repayment are delinquent, by quarter" - divide a delinquent
+      bucket's dollars_outstanding by the sum over all buckets for the same quarter and portfolio.
+      Covers the Direct Loan, ED-held FFEL and federally-managed portfolios (FFEL held by guaranty
+      agencies is not reported). Loans already transferred to DMCS are excluded from the report, and
+      FSA reports default as 361+ days for FFEL consistency. Repayment excludes loans in forbearance or
+      deferment, so after the 2020 pause and the 2023-2024 on-ramp the delinquency shares are of a
+      much smaller repayment base; FSA's own footnote on the sheet explains the breaks. A snapshot
+      table: the whole history is replaced on each fetch.
+    columns:
+      - name: period_end_date
+        type: date
+        nullable: false
+        comment: Calendar date the quarterly NSLDS snapshot was run (federal fiscal Q1 = 12/31 of the prior calendar year, Q2 = 3/31, Q3 = 6/30, Q4 = 9/30)
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year (October 1 - September 30) of the snapshot
+      - name: fiscal_quarter
+        type: integer
+        nullable: false
+        comment: Federal fiscal quarter 1-4
+      - name: portfolio
+        type: string
+        nullable: false
+        comment: "One of 'direct_loan', 'ffel', 'ed_held_ffel', 'federally_managed' (the last two are FSA's own FFEL-held and combined-managed portfolios)"
+      - name: status
+        type: string
+        nullable: false
+        comment: Snake_case code for FSA's own column label (see status_label for the original wording)
+      - name: status_label
+        type: string
+        nullable: false
+        comment: FSA's own status column heading, verbatim apart from a trailing footnote asterisk
+      - name: dollars_outstanding
+        type: bigint
+        nullable: true
+        comment: Outstanding principal and interest in whole US dollars (converted from the source's billions)
+      - name: recipients
+        type: bigint
+        nullable: true
+        comment: Loan-level recipient count (converted from the source's millions) — a borrower with loans in several statuses is counted once per status, so counts do not sum to unique borrowers
+
+    source:
+      type: http
+      url: "https://studentaid.gov/sites/default/files/fsawg/datacenter/library/DLPortfoliobyDelinquencyStatus.xls"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      response:
+        format: TEXT   # transformer re-downloads the legacy XLS and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.FsaLoanPortfolioTransformer$Delinquency"
+
+    dimensions:
+      type:
+        - fsa_loan_delinquency
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=fsa_loan_delinquency/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/edu"
+        tableName: fsa_loan_delinquency
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # Views
 # ============================================================================
