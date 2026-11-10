@@ -294,6 +294,7 @@ tasks.test {
     maxHeapSize = "2g"
     // -PslowTestDumpMinutes=N changes when SlowTestDumpListener dumps threads (default 5)
     project.findProperty("slowTestDumpMinutes")?.let { systemProperty("file.test.slowDumpMinutes", it.toString()) }
+    systemProperty("file.test.dumpDir", layout.buildDirectory.dir("slow-test-dumps").get().asFile.absolutePath)
     // Forward Testcontainers/Docker connection env to the forked test JVM. Gradle does not
     // propagate the launching environment to test workers by default, so Testcontainers
     // integration tests cannot otherwise see a custom DOCKER_HOST (needed on Docker Desktop
