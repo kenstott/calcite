@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.127.0](https://github.com/kenstott/calcite/compare/engine-v0.126.0...engine-v0.127.0) (2026-11-10)
+
+
+### Features
+
+* **edu:** add FSA federal student loan portfolio status and delinquency tables ([fb94df8](https://github.com/kenstott/calcite/commit/fb94df8d8cbb98f0bd0b82d1675279e2aad00511))
+* **govdata/energy:** add ercot_wholesale_prices from the ERCOT MIS day-ahead and real-time archives ([bda8098](https://github.com/kenstott/calcite/commit/bda80983b5e4b6912c096a3997537e3f75747f3b))
+* **govdata/fiscal:** add snap_participants_by_age from the FNS SNAP QC public-use files ([826ca64](https://github.com/kenstott/calcite/commit/826ca6493c5029272aa547abc655c2778c49d0b2))
+* **govdata/health:** add medicaid_expenditures_by_state_quarter from CMS-64 quarterly data ([cbc8838](https://github.com/kenstott/calcite/commit/cbc8838cd3ec5831c4685f3492e45f3e75f8a498))
+* **govdata/health:** medicaid_chip_enrollment_monthly from the CMS Performance Indicator datastore ([eaffd01](https://github.com/kenstott/calcite/commit/eaffd01f3f5a153623f0489885d5869423e87012))
+* **govdata/officials:** add 2024 House results from the Clerk of the House statistics volume ([7a4091d](https://github.com/kenstott/calcite/commit/7a4091d2035ab8d5c78e338329a93db8df8b68bb))
+
+
+### Bug Fixes
+
+* **askamerica-engine:** count only pages with loaded text in the office and named-subject gates ([3173654](https://github.com/kenstott/calcite/commit/31736542cba15df7e95ecb9ae05264a8d1b07d63))
+* **askamerica-engine:** deliver_report records an eval answer only after QC passed ([65ea567](https://github.com/kenstott/calcite/commit/65ea5670bb7f4e1346ee8224ed1671c0e4a9caad))
+* **askamerica-engine:** require a loaded off-site page before an attributed figure is not checkable ([0af2273](https://github.com/kenstott/calcite/commit/0af22733bdbde9f9cb3752288fa7082339a24204))
+* **askamerica-engine:** require a read page for a named 'unsupported' and close the unclaimed excuse ([27c4b39](https://github.com/kenstott/calcite/commit/27c4b394134c241e0fe7dec43c125ed1fdefe5cb))
+* **askamerica-engine:** require the office's own page before grading its action unsupported ([14b2dda](https://github.com/kenstott/calcite/commit/14b2ddaccea1add7422d7bc91375c3aa82bbc14d))
+* **askamerica-engine:** require two windows before grading an unanchored change contrary ([ee71f1f](https://github.com/kenstott/calcite/commit/ee71f1f87da56aad5fbeca99ca1fed38958fa9a9))
+* **ci:** build the macOS data-server bundles on macos-15 ([0c6b573](https://github.com/kenstott/calcite/commit/0c6b573b9920a63c3ecc1ac7876fb4da3f5e9f1f))
+* **etl:** redact credentials from HTTP log lines, exceptions and the shipped log layout ([69c948e](https://github.com/kenstott/calcite/commit/69c948e11fb0facb8e12b89acecf085de87f9854))
+* **govdata/health:** quote the report_status comment so the schema YAML parses ([8493a7f](https://github.com/kenstott/calcite/commit/8493a7f0a1133c3c33df7f44f0627c4d722eafd8))
+* **govdata/housing:** follow HUD's annual PIT workbook rename and add the 2025 count ([de01481](https://github.com/kenstott/calcite/commit/de01481f08461590217cff72e11181613f56154a))
+* **govdata/housing:** pass an explicit zone to Year.now so ErrorProne passes ([d3eda8e](https://github.com/kenstott/calcite/commit/d3eda8ef204f79885109e221a97f0e7f22a4be9e))
+* **govdata/scripts:** keep credential values out of bash -x traces and make runs/ logs owner-only ([62085d3](https://github.com/kenstott/calcite/commit/62085d358952f582ad46fba4bab5026c1365d15c))
+* **govdata/scripts:** keep S3 credentials off command lines and out of printed SQL ([#1138](https://github.com/kenstott/calcite/issues/1138)) ([03697cb](https://github.com/kenstott/calcite/commit/03697cb1ccdd1fe405e584b079210ac77eabd503))
+* **govdata/scripts:** take the remaining S3 secrets from the environment, not -D flags, python argv or expanded model JSON ([#1138](https://github.com/kenstott/calcite/issues/1138)) ([2b87b30](https://github.com/kenstott/calcite/commit/2b87b30b4839a85c0dc7a96c1b63a5fce647c549))
+* **govdata/sec:** fix-sec.sh reads submissions from the bulk zip and reports a miss instead of fetching live ([1b8d5d1](https://github.com/kenstott/calcite/commit/1b8d5d18a21342b15f699f26ade66478165914c0))
+* **govdata:** econ.fred_indicators writes each observation only in its own month batch ([d4d555b](https://github.com/kenstott/calcite/commit/d4d555bfb487d4e94922e0f413911c2977a15da6))
+* **govdata:** pre-daily CI gate judges origin/main, not unpushed local HEAD ([76b8ecc](https://github.com/kenstott/calcite/commit/76b8eccd51b7152ae019d5fdc7995ee00ecfd1c4))
+* **pgwire-calcite:** answer information_schema from the catalog cache, not Calcite ([44674f2](https://github.com/kenstott/calcite/commit/44674f281bd7694ebb9a06ead00f003fa1624f72))
+* **pgwire-calcite:** build the catalog with bulk inserts, not row-by-row executemany ([f3394a5](https://github.com/kenstott/calcite/commit/f3394a51984384abcbd6bd6c4c5edf096ef77370))
+
 ## [0.126.0](https://github.com/kenstott/calcite/compare/engine-v0.125.0...engine-v0.126.0) (2026-11-08)
 
 
