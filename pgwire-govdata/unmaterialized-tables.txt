@@ -1,0 +1,17 @@
+# Tables a govdata schema YAML declares but the warehouse does not hold yet (their ETL has not
+# run), so no complete catalog walk lists them and the shipped catalog cache cannot contain them.
+# check_catalog_cache_coverage.py accepts a declared table missing from the cache only when it is
+# listed here, and fails on an entry the cache holds or no YAML declares.
+#
+# Add an entry only after confirming the warehouse has no Iceberg table for it; a table that is
+# materialized but missing from the cache means the cache is stale -- regenerate it instead.
+#
+# Verified 2026-11-10 against s3://govdata-parquet-v1/: no <schema>/<table>/ prefix for any entry
+# below (a materialized control, health/aca_qhp_county_premiums, has its metadata/ files), and a
+# complete walk that day (jar declaring all six) produced the same 767 tables as the shipped cache.
+edu.fsa_loan_delinquency
+edu.fsa_loan_portfolio_status
+energy.ercot_wholesale_prices
+fiscal.snap_participants_by_age
+health.medicaid_chip_enrollment_monthly
+health.medicaid_expenditures_by_state_quarter

@@ -353,7 +353,7 @@ jobs:
             if [ "${{ matrix.adapter.name }}" = "govdata" ]; then
               # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
               PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \
-                "$expected" govdata/src/main/resources/*/*-schema.yaml
+                "$expected" pgwire-govdata/unmaterialized-tables.txt govdata/src/main/resources/*/*-schema.yaml
             fi
             cp "$expected" "bundle/model/$(basename "$expected")"
           fi
