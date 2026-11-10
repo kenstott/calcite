@@ -62,7 +62,7 @@ for i in "${!YEARS[@]}"; do
   if $DRY_RUN; then
     echo "[reload-cra] dry run: would remove $y from $DONE_FILE and run: run-pool.sh -j 1 banking:$y"
   else
-    sed -i "/^${y}\$/d" "$DONE_FILE"
+    sed -i "/^${y}\( .*\)\{0,1\}\$/d" "$DONE_FILE"
     if ! "$SCRIPT_DIR/run-pool.sh" -j 1 "banking:$y"; then
       echo "[reload-cra] banking:$y FAILED; stopping so the host is not hit again. Years after $y not attempted." >&2
       exit 1

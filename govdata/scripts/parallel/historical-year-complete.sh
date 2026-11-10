@@ -34,18 +34,69 @@ hcy_state_dir() {
   echo "$dir"
 }
 
+# Table-set fingerprint (#1148). A marker used to say only "this schema's slot ran", so a table
+# added to the schema afterwards never ran in a slot already marked done. A marker line is now
+# "<token> <fingerprint>", where the fingerprint is a hash of the table names the slot covers
+# (year tokens: tables with a year dimension; "once": tables without; any other token: all
+# tables), read from the schema YAML in the source tree. A marker whose fingerprint differs from
+# the current one is stale and the slot runs again. A bare "<token>" line from before this change
+# stays valid (no fleet-wide re-run on deploy); the next successful run rewrites it fingerprinted.
+hcy_fingerprint() {   # <schema> <token> — echoes the fingerprint, fails loudly if it cannot be computed
+  local schema="$1" token="$2" rel yaml
+  rel=$(schema_yaml_resource "$schema") || return 1
+  yaml="$SCRIPT_DIR/../../src/main/resources/$rel"
+  [ -f "$yaml" ] || { log_error "[historical-complete] schema YAML not found: $yaml"; return 1; }
+  python3 - "$yaml" "$token" <<'PY'
+import hashlib, sys
+import yaml
+path, token = sys.argv[1], sys.argv[2]
+doc = yaml.safe_load(open(path)) or {}
+names = []
+for key in ("partitionedTables", "tables"):
+    for t in doc.get(key) or []:
+        name = t.get("name")
+        if not name:
+            continue
+        has_year = "year" in (t.get("dimensions") or {})
+        if token.isdigit():
+            keep = has_year
+        elif token == "once":
+            keep = not has_year
+        else:
+            keep = True
+        if keep:
+            names.append(name)
+if not names:
+    sys.stderr.write("no tables derived from %s for token %s\n" % (path, token))
+    sys.exit(1)
+print(hashlib.sha1(",".join(sorted(names)).encode()).hexdigest()[:16])
+PY
+}
+
 hcy_is_complete() {   # <schema> <token>
-  local schema="$1" token="$2" dir
+  local schema="$1" token="$2" dir file fp
   dir=$(hcy_state_dir)
-  [ -f "$dir/${schema}.done" ] && grep -qxF "$token" "$dir/${schema}.done" 2>/dev/null
+  file="$dir/${schema}.done"
+  [ -f "$file" ] || return 1
+  if grep -q "^${token} " "$file" 2>/dev/null; then
+    # fingerprinted marker: valid only for the table set it was written against
+    fp=$(hcy_fingerprint "$schema" "$token") || { log_error "[historical-complete] cannot fingerprint ${schema}:${token}; re-running the slot"; return 1; }
+    grep -qxF "${token} ${fp}" "$file"
+  else
+    grep -qxF "$token" "$file" 2>/dev/null   # legacy bare marker
+  fi
 }
 
 hcy_mark_complete() {   # <schema> <token> — flock-guarded so concurrent workers never lose an append
-  local schema="$1" token="$2" dir
+  local schema="$1" token="$2" dir fp
   dir=$(hcy_state_dir)
+  fp=$(hcy_fingerprint "$schema" "$token") || { log_error "[historical-complete] cannot fingerprint ${schema}:${token}; NOT marking it complete"; return 1; }
   (
     flock 9
-    grep -qxF "$token" "$dir/${schema}.done" 2>/dev/null || echo "$token" >> "$dir/${schema}.done"
+    file="$dir/${schema}.done"
+    tmp=$(mktemp "$dir/.${schema}.XXXXXX")
+    { [ -f "$file" ] && grep -vxF "$token" "$file" | grep -v "^${token} "; echo "${token} ${fp}"; } > "$tmp" || true
+    mv "$tmp" "$file"
   ) 9>>"$dir/.lock"
 }
 

@@ -214,7 +214,7 @@ if ! $SKIP_HISTORICAL; then
       HCY_DONE_FILES=("$(hcy_state_dir)/${SCHEMA}.done")
     fi
     START_YEAR=""
-    START_YEAR=$(cat "${HCY_DONE_FILES[@]}" 2>/dev/null | grep -E '^[0-9]{4}$' | sort -n | head -1 || true)
+    START_YEAR=$(cat "${HCY_DONE_FILES[@]}" 2>/dev/null | grep -oE '^[0-9]{4}( |$)' | tr -d ' ' | sort -n | head -1 || true)
     if [[ -n "$START_YEAR" ]]; then
       echo "  Historical start year (oldest existing marker for ${SCHEMA}): ${START_YEAR}"
     elif [[ "$SCHEMA" == "lands" || "$SCHEMA" == "research" || "$SCHEMA" == "officials" ]]; then
