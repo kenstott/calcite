@@ -159,6 +159,9 @@ jobs:
         job-id: jdk${{ matrix.jdk }}
         remote-build-cache-proxy-enabled: false
         arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build javadoc
+    - name: 'Failed tests summary'
+      if: failure()
+      uses: ./.github/actions/failed-tests-summary
     - name: 'Upload test JVM diagnostics'
       if: failure() || cancelled()
       uses: actions/upload-artifact@v4
@@ -219,6 +222,9 @@ jobs:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 build
+      - name: 'Failed tests summary'
+        if: failure()
+        uses: ./.github/actions/failed-tests-summary
       - name: 'Upload test JVM diagnostics'
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
@@ -279,6 +285,9 @@ jobs:
           job-id: jdk${{ matrix.jdk }}
           remote-build-cache-proxy-enabled: false
           arguments: --scan --no-parallel --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64 ${{ needs.changes.outputs.tasks }}
+      - name: 'Failed tests summary'
+        if: failure()
+        uses: ./.github/actions/failed-tests-summary
       - name: 'Upload test JVM diagnostics'
         if: failure() || cancelled()
         uses: actions/upload-artifact@v4
