@@ -310,7 +310,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 3373790
-      checkedAt: "2026-11-09T21:21:03Z"
+      checkedAt: "2026-11-10T21:50:12Z"
     # DQ sample cap (GOVDATA_DQ mode): ~120k rows/year (state × source × sector × 12 months),
     # fetched per-year (backfill_period: annual) via ~24 paginated EIA API pages. Cap each
     # year's sample so DQ stops paginating early; prod loads everything.
@@ -479,7 +479,7 @@ partitionedTables:
       distinctYears: 20
       contiguous: true
       rowCount: 7440
-      checkedAt: "2026-11-09T21:21:03Z"
+      checkedAt: "2026-11-10T21:50:17Z"
     partitions: *standard_partitions
     comment: >
       EIA API v2 retail electricity sales data, fetched at annual frequency (price_month is
@@ -585,7 +585,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 2976
-      checkedAt: "2026-11-09T21:21:04Z"
+      checkedAt: "2026-11-10T21:50:19Z"
     partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 retail electricity sales and prices, monthly (electricity/retail-sales,
@@ -698,7 +698,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 37649
-      checkedAt: "2026-11-09T21:21:04Z"
+      checkedAt: "2026-11-10T21:50:24Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 861 annual electric utility survey. Covers all electric utilities, retail
@@ -879,7 +879,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 141873
-      checkedAt: "2026-11-09T21:21:05Z"
+      checkedAt: "2026-11-10T21:50:27Z"
     partitions: *standard_partitions
     comment: >
       EIA-861 utility-to-county service-territory crosswalk. One row per utility +
@@ -972,7 +972,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 11208
-      checkedAt: "2026-11-09T21:21:06Z"
+      checkedAt: "2026-11-10T21:50:31Z"
     partitions: *standard_partitions
     comment: >
       Power-outage frequency and duration by electric utility: EIA-861 reliability indices
@@ -1134,7 +1134,7 @@ partitionedTables:
       distinctYears: 12
       contiguous: true
       rowCount: 314042
-      checkedAt: "2026-11-09T21:21:07Z"
+      checkedAt: "2026-11-10T21:50:35Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 860 annual electric generator inventory. One row per generator (plant +
@@ -1704,7 +1704,7 @@ partitionedTables:
       distinctYears: 11
       contiguous: true
       rowCount: 345484
-      checkedAt: "2026-11-09T21:21:09Z"
+      checkedAt: "2026-11-10T21:50:38Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 860M generator inventory, one annual snapshot per snapshot_year.
@@ -2079,7 +2079,7 @@ partitionedTables:
       distinctYears: 21
       contiguous: true
       rowCount: 20808
-      checkedAt: "2026-11-09T21:21:11Z"
+      checkedAt: "2026-11-10T21:51:52Z"
     partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 petroleum crude oil production by state and month. Source is the single
@@ -2204,7 +2204,7 @@ partitionedTables:
       distinctYears: 21
       contiguous: true
       rowCount: 103624
-      checkedAt: "2026-11-09T21:21:12Z"
+      checkedAt: "2026-11-10T21:51:56Z"
     comment: >
       EIA API v2 natural gas production by state and month. Source is the separate endpoint
       natural-gas/prod/sum. Units are in different scale than crude oil (typically MCF or MMCF,
@@ -2530,7 +2530,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 151986
-      checkedAt: "2026-11-09T21:21:13Z"
+      checkedAt: "2026-11-10T21:51:58Z"
     partitions: *standard_partitions
     comment: >
       EIA API v2 weekly petroleum product stocks. Covers crude oil and refined products
@@ -2652,8 +2652,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 1
       contiguous: true
-      rowCount: 13640
-      checkedAt: "2026-11-09T21:21:14Z"
+      rowCount: 13950
+      checkedAt: "2026-11-10T21:51:59Z"
     partitions: *standard_partitions
     comment: >
       EIA weekly retail gasoline and diesel prices (Gasoline and Diesel Fuel Update, EIA API v2
@@ -2876,7 +2876,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 216183
-      checkedAt: "2026-11-09T21:21:15Z"
+      checkedAt: "2026-11-10T21:52:03Z"
     partitions: *standard_partitions
     comment: >
       EIA Form 814 monthly crude oil import survey. The transformer iterates all 12
@@ -3006,7 +3006,7 @@ partitionedTables:
       distinctYears: 21
       contiguous: true
       rowCount: 321675
-      checkedAt: "2026-11-09T21:21:19Z"
+      checkedAt: "2026-11-10T21:52:15Z"
     partitions: *standard_partitions_monthly
     comment: >
       EIA API v2 petroleum refinery process data in tall format. One row per EIA area +
@@ -3132,7 +3132,7 @@ partitionedTables:
       distinctYears: 19
       contiguous: true
       rowCount: 42493
-      checkedAt: "2026-11-09T21:21:19Z"
+      checkedAt: "2026-11-10T21:52:18Z"
     partitions: *standard_partitions
     comment: >
       MSHA MinesProdYearly coal mine production data (pipe-delimited CSV ZIP). The
