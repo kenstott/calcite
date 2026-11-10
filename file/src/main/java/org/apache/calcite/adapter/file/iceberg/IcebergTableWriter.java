@@ -1741,7 +1741,7 @@ public class IcebergTableWriter {
 
     List<StorageProvider.FileEntry> metadataFiles;
     try {
-      metadataFiles = storageProvider.listFiles(metadataDir, false);
+      metadataFiles = storageProvider.listFilesWithNamePrefix(metadataDir, "v");
     } catch (IOException e) {
       LOGGER.warn("Cannot list metadata directory {} for pruning: {}", metadataDir, e.getMessage());
       return 0;
@@ -2823,7 +2823,7 @@ public class IcebergTableWriter {
       // common-prefix entry instead of returning them individually.
       List<StorageProvider.FileEntry> metadataFiles;
       try {
-        metadataFiles = storageProvider.listFiles(metadataDir + "/", false);
+        metadataFiles = storageProvider.listFilesWithNamePrefix(metadataDir, "v");
       } catch (IOException e) {
         LOGGER.warn("Cannot list metadata directory {}: {}", metadataDir, e.getMessage());
         return;
@@ -2920,7 +2920,7 @@ public class IcebergTableWriter {
 
     List<StorageProvider.FileEntry> metadataFiles;
     try {
-      metadataFiles = storageProvider.listFiles(metadataDir + "/", false);
+      metadataFiles = storageProvider.listFilesWithNamePrefix(metadataDir, "v");
     } catch (IOException e) {
       LOGGER.warn("Cannot list metadata directory {} for repair: {}", metadataDir, e.getMessage());
       return -1;

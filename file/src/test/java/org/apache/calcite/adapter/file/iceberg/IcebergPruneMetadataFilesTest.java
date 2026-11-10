@@ -80,18 +80,20 @@ public class IcebergPruneMetadataFilesTest {
   @Test void firstPruneListsThenLaterPrunesDeleteByKey() throws IOException {
     IcebergTableWriter writer = new IcebergTableWriter(table, storage);
     hintAt(30);
-    when(storage.listFiles(metadataDir, false)).thenReturn(versionsUpTo(30));
+    when(storage.listFilesWithNamePrefix(metadataDir, "v")).thenReturn(versionsUpTo(30));
     when(storage.delete(anyString())).thenReturn(true);
 
     assertEquals(20, writer.pruneMetadataFiles(10));
-    verify(storage, times(1)).listFiles(metadataDir, false);
+    verify(storage, times(1)).listFilesWithNamePrefix(metadataDir, "v");
+    verify(storage, never()).listFiles(anyString(), anyBoolean());
     for (int v = 1; v <= 20; v++) {
       verify(storage).delete(versionPath(v));
     }
 
     hintAt(35);
     assertEquals(5, writer.pruneMetadataFiles(10));
-    verify(storage, times(1)).listFiles(anyString(), anyBoolean());
+    verify(storage, times(1)).listFilesWithNamePrefix(anyString(), anyString());
+    verify(storage, never()).listFiles(anyString(), anyBoolean());
     for (int v = 21; v <= 25; v++) {
       verify(storage).delete(versionPath(v));
     }
@@ -101,7 +103,7 @@ public class IcebergPruneMetadataFilesTest {
   @Test void failedDeleteIsRetriedByNextPrune() throws IOException {
     IcebergTableWriter writer = new IcebergTableWriter(table, storage);
     hintAt(12);
-    when(storage.listFiles(metadataDir, false)).thenReturn(versionsUpTo(12));
+    when(storage.listFilesWithNamePrefix(metadataDir, "v")).thenReturn(versionsUpTo(12));
     when(storage.delete(anyString())).thenReturn(true);
     when(storage.delete(versionPath(2))).thenThrow(new IOException("boom"));
 
@@ -110,7 +112,8 @@ public class IcebergPruneMetadataFilesTest {
     doReturn(true).when(storage).delete(versionPath(2));
     hintAt(12);
     assertEquals(1, writer.pruneMetadataFiles(10));
-    verify(storage, times(1)).listFiles(anyString(), anyBoolean());
+    verify(storage, times(1)).listFilesWithNamePrefix(anyString(), anyString());
+    verify(storage, never()).listFiles(anyString(), anyBoolean());
     verify(storage, times(2)).delete(versionPath(2));
   }
 }

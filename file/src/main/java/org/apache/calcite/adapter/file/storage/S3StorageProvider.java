@@ -344,6 +344,18 @@ public class S3StorageProvider implements StorageProvider {
   }
 
   @Override public List<FileEntry> listFiles(String path, boolean recursive) throws IOException {
+    return listKeys(path, "", recursive);
+  }
+
+  @Override public List<FileEntry> listFilesWithNamePrefix(String dirPath, String namePrefix)
+      throws IOException {
+    // The prefix goes into the LIST request itself, so the store never enumerates the other keys.
+    String dir = dirPath.endsWith("/") ? dirPath : dirPath + "/";
+    return listKeys(dir, namePrefix, false);
+  }
+
+  private List<FileEntry> listKeys(String path, String namePrefix, boolean recursive)
+      throws IOException {
     // Convert relative path to full S3 URI if needed
     String fullPath = toFullPath(path);
     S3Uri s3Uri = parseS3Uri(fullPath);
@@ -351,7 +363,7 @@ public class S3StorageProvider implements StorageProvider {
 
     ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.builder()
         .bucket(s3Uri.bucket)
-        .prefix(s3Uri.key)
+        .prefix(s3Uri.key + namePrefix)
         .overrideConfiguration(METADATA_CALL_TIMEOUT);
     if (!recursive) {
       requestBuilder.delimiter("/");

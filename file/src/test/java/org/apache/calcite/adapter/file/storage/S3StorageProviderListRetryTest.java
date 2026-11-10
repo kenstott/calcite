@@ -72,4 +72,22 @@ class S3StorageProviderListRetryTest {
         () -> provider.listFiles("s3://some-bucket/prefix/t/", true));
     verify(client, times(5)).listObjectsV2(any(ListObjectsV2Request.class));
   }
+
+  @Test void namePrefixListingSendsTheKeyPrefixAndDelimiterToTheStore() throws Exception {
+    S3Client client = mock(S3Client.class);
+    ListObjectsV2Response page = ListObjectsV2Response.builder()
+        .contents(S3Object.builder().key("prefix/t/metadata/v3.metadata.json").size(1L).build())
+        .isTruncated(false).build();
+    org.mockito.ArgumentCaptor<ListObjectsV2Request> captor =
+        org.mockito.ArgumentCaptor.forClass(ListObjectsV2Request.class);
+    when(client.listObjectsV2(captor.capture())).thenReturn(page);
+    S3StorageProvider provider = S3StorageProvider.forTesting(client, config());
+
+    List<StorageProvider.FileEntry> entries =
+        provider.listFilesWithNamePrefix("s3://some-bucket/prefix/t/metadata", "v");
+
+    assertEquals(1, entries.size());
+    assertEquals("prefix/t/metadata/v", captor.getValue().prefix());
+    assertEquals("/", captor.getValue().delimiter());
+  }
 }

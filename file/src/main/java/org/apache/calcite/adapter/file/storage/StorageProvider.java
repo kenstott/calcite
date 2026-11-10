@@ -54,6 +54,27 @@ public interface StorageProvider {
   List<FileEntry> listFiles(String path, boolean recursive) throws IOException;
 
   /**
+   * Lists the direct children of a directory whose file name starts with {@code namePrefix}.
+   * Object-store providers push the prefix into the LIST request so a directory holding tens of
+   * thousands of unrelated keys is not enumerated; this default filters a full listing.
+   *
+   * @param dirPath The directory path
+   * @param namePrefix Required start of each returned file name
+   * @return Matching file entries (directories are not matched by prefix)
+   * @throws IOException If an I/O error occurs
+   */
+  default List<FileEntry> listFilesWithNamePrefix(String dirPath, String namePrefix)
+      throws IOException {
+    List<FileEntry> matches = new java.util.ArrayList<>();
+    for (FileEntry entry : listFiles(dirPath, false)) {
+      if (!entry.isDirectory() && entry.getName().startsWith(namePrefix)) {
+        matches.add(entry);
+      }
+    }
+    return matches;
+  }
+
+  /**
    * Gets metadata for a single file.
    *
    * @param path The file path
