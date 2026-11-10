@@ -23,6 +23,7 @@ import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.ManifestFile;
 import org.apache.iceberg.ManifestFiles;
 import org.apache.iceberg.ManifestReader;
+import org.apache.iceberg.ReachableFileUtil;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.io.CloseableIterable;
@@ -58,7 +59,9 @@ import java.util.concurrent.TimeUnit;
  * schemas).
  *
  * <p>Usage: {@code IcebergOrphanCleanup --schema-resource econ/econ-schema.yaml [...]
- * [--s3-credentials-from-env --s3-endpoint URL] [--min-age-days N] [--delete]}. Exit code
+ * [--s3-credentials-from-env --s3-endpoint URL] [--min-age-days N] [--metadata
+ * [--metadata-min-age-days N]] [--delete]}. {@code --metadata} adds the {@code metadata/} pass
+ * (see {@link #cleanMetadata}); its window defaults to 14 days. Exit code
  * 0 when every table was handled, 1 when any table failed. A final summary names the failed
  * tables and, when the run is stopped early, the tables not reached.
  */
@@ -71,6 +74,9 @@ public final class IcebergOrphanCleanup {
 
   /** Smallest safety window the pass accepts, in days. */
   public static final int MINIMUM_MIN_AGE_DAYS = 1;
+
+  /** Default safety window for files under {@code metadata/}, in days. */
+  public static final int DEFAULT_METADATA_MIN_AGE_DAYS = 14;
 
   private IcebergOrphanCleanup() {
   }
@@ -182,6 +188,158 @@ public final class IcebergOrphanCleanup {
     }
     return new Outcome(name, false, false, delete, onDisk, held, orphans, young,
         deletable.size(), removed);
+  }
+
+  /** What one table's metadata/ pass found and did. */
+  public static final class MetadataOutcome {
+    public final String table;
+    public final boolean skippedBusy;
+    public final boolean deleted;
+    public final int onDisk;
+    public final int reachable;
+    public final int orphans;
+    public final int withinSafetyWindow;
+    public final int deletable;
+    public final long deletableBytes;
+    public final int deletedCount;
+
+    MetadataOutcome(String table, boolean skippedBusy, boolean deleted, int onDisk, int reachable,
+        int orphans, int withinSafetyWindow, int deletable, long deletableBytes,
+        int deletedCount) {
+      this.table = table;
+      this.skippedBusy = skippedBusy;
+      this.deleted = deleted;
+      this.onDisk = onDisk;
+      this.reachable = reachable;
+      this.orphans = orphans;
+      this.withinSafetyWindow = withinSafetyWindow;
+      this.deletable = deletable;
+      this.deletableBytes = deletableBytes;
+      this.deletedCount = deletedCount;
+    }
+
+    @Override public String toString() {
+      if (skippedBusy) {
+        return table + " metadata: skipped, commit lock held";
+      }
+      return table + " metadata: on disk " + onDisk + ", reachable " + reachable + ", orphans "
+          + orphans + ", inside safety window " + withinSafetyWindow + ", "
+          + (deleted ? "deleted " + deletedCount : "would delete " + deletable) + " ("
+          + deletableBytes + " bytes)";
+    }
+  }
+
+  /**
+   * Reports, and when {@code delete} is true removes, the orphan files directly under the table's
+   * {@code metadata/} directory: manifests, manifest lists, table-metadata versions and statistics
+   * files that the current table state does not reach.
+   *
+   * <p>Reachability is Iceberg's own: {@link ReachableFileUtil} supplies the table-metadata chain,
+   * the version hint, every snapshot's manifest list and the statistics files, and each retained
+   * snapshot supplies its manifests. Only names Iceberg writes ({@code .avro},
+   * {@code .metadata.json}, {@code .stats}) are candidates; nothing else under {@code metadata/} is
+   * touched. Expiry cannot reclaim manifests that a failed or retried commit wrote without
+   * reaching any snapshot, so they stay until this pass removes them once past the safety window.
+   *
+   * @param minAgeDays safety window; files modified more recently than this are never deleted
+   */
+  public static MetadataOutcome cleanMetadata(String name, Table table, StorageProvider storage,
+      int minAgeDays, boolean delete, long nowMillis) throws IOException {
+    if (minAgeDays < MINIMUM_MIN_AGE_DAYS) {
+      throw new IllegalArgumentException("minAgeDays must be at least " + MINIMUM_MIN_AGE_DAYS
+          + ", got " + minAgeDays);
+    }
+    CrossProcessCommitLock.Handle probe = CrossProcessCommitLock.tryAcquire(table.location());
+    if (probe == null) {
+      return new MetadataOutcome(name, true, delete, 0, 0, 0, 0, 0, 0L, 0);
+    }
+    probe.close();
+
+    table.refresh();
+    Set<String> reachable = reachableMetadataFiles(table);
+
+    long cutoff = nowMillis - TimeUnit.DAYS.toMillis(minAgeDays);
+    String location = table.location();
+    String directory = (location.endsWith("/") ? location : location + "/") + "metadata/";
+    int onDisk = 0;
+    int held = 0;
+    int orphans = 0;
+    int young = 0;
+    long bytes = 0L;
+    List<String> deletable = new ArrayList<>();
+    for (StorageProvider.FileEntry entry : storage.listFiles(directory, false)) {
+      if (!isIcebergMetadataFile(entry)) {
+        continue;
+      }
+      onDisk++;
+      if (reachable.contains(normalize(entry.getPath()))) {
+        held++;
+        continue;
+      }
+      orphans++;
+      if (entry.getLastModified() > cutoff) {
+        young++;
+      } else {
+        deletable.add(entry.getPath());
+        bytes += entry.getSize();
+      }
+    }
+    int removed = 0;
+    if (delete && !deletable.isEmpty()) {
+      removed = storage.deleteBatch(deletable);
+    }
+    return new MetadataOutcome(name, false, delete, onDisk, held, orphans, young,
+        deletable.size(), bytes, removed);
+  }
+
+  /**
+   * Every file under {@code metadata/} that the table's current state reaches. Fails closed: when
+   * the current metadata file or the current snapshot's manifest list is not in the set, the set is
+   * not trusted and nothing may be deleted against it.
+   */
+  static Set<String> reachableMetadataFiles(Table table) throws IOException {
+    Set<String> paths = new HashSet<>();
+    for (String path : ReachableFileUtil.metadataFileLocations(table, true)) {
+      paths.add(normalize(path));
+    }
+    String hint = ReachableFileUtil.versionHintLocation(table);
+    if (hint != null) {
+      paths.add(normalize(hint));
+    }
+    for (String path : ReachableFileUtil.manifestListLocations(table)) {
+      paths.add(normalize(path));
+    }
+    for (String path : ReachableFileUtil.statisticsFilesLocations(table)) {
+      paths.add(normalize(path));
+    }
+    FileIO io = table.io();
+    for (Snapshot snapshot : table.snapshots()) {
+      for (ManifestFile manifest : snapshot.allManifests(io)) {
+        paths.add(normalize(manifest.path()));
+      }
+    }
+    Snapshot current = table.currentSnapshot();
+    if (current != null && !paths.contains(normalize(current.manifestListLocation()))) {
+      throw new IllegalStateException("current snapshot manifest list "
+          + current.manifestListLocation() + " is not in the reachable set of " + table.name());
+    }
+    return paths;
+  }
+
+  /**
+   * True when a listed entry is a file Iceberg writes under {@code metadata/}: a manifest or
+   * manifest list ({@code .avro}), a table-metadata version ({@code .metadata.json}, optionally
+   * gzipped) or a statistics file ({@code .stats}). The version hint and anything else are not
+   * candidates.
+   */
+  static boolean isIcebergMetadataFile(StorageProvider.FileEntry entry) {
+    String path = normalize(entry.getPath());
+    if (entry.isDirectory() || path.endsWith("/") || !path.contains("/metadata/")) {
+      return false;
+    }
+    String file = entry.getName();
+    return file.endsWith(".avro") || file.endsWith(".metadata.json")
+        || file.endsWith(".metadata.json.gz") || file.endsWith(".stats");
   }
 
   /**
@@ -300,6 +458,8 @@ public final class IcebergOrphanCleanup {
     String endpoint = null;
     int minAgeDays = DEFAULT_MIN_AGE_DAYS;
     boolean delete = false;
+    boolean metadata = false;
+    int metadataMinAgeDays = DEFAULT_METADATA_MIN_AGE_DAYS;
     for (int i = 0; i < args.length; i++) {
       switch (args[i]) {
       case "--schema-resource":
@@ -319,6 +479,12 @@ public final class IcebergOrphanCleanup {
       case "--delete":
         delete = true;
         break;
+      case "--metadata":
+        metadata = true;
+        break;
+      case "--metadata-min-age-days":
+        metadataMinAgeDays = Integer.parseInt(args[++i]);
+        break;
       default:
         throw new IllegalArgumentException("Unknown argument: " + args[i]);
       }
@@ -328,6 +494,10 @@ public final class IcebergOrphanCleanup {
     }
     if (minAgeDays < MINIMUM_MIN_AGE_DAYS) {
       throw new IllegalArgumentException("--min-age-days must be at least "
+          + MINIMUM_MIN_AGE_DAYS);
+    }
+    if (metadataMinAgeDays < MINIMUM_MIN_AGE_DAYS) {
+      throw new IllegalArgumentException("--metadata-min-age-days must be at least "
           + MINIMUM_MIN_AGE_DAYS);
     }
 
@@ -390,6 +560,10 @@ public final class IcebergOrphanCleanup {
         requireUnderWarehouse(target.name, table.location(), target.warehouse);
         LOGGER.info("{}", cleanTable(target.name, table, storage, minAgeDays, delete,
             System.currentTimeMillis()));
+        if (metadata) {
+          LOGGER.info("{}", cleanMetadata(target.name, table, storage, metadataMinAgeDays, delete,
+              System.currentTimeMillis()));
+        }
         summary.completed(target.name);
       } catch (Exception e) {
         summary.failed(target.name, e);

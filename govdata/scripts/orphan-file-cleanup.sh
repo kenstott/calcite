@@ -5,7 +5,10 @@
 # deleted only when it is also older than --min-age-days (default 3, never below 1). Schemas with a live
 # ETL writer (run-pool pid markers) are skipped, and so is any table whose commit lock is held.
 #
-# Usage: orphan-file-cleanup.sh [--min-age-days N] [--delete]
+# --metadata also reports/removes orphan manifests, manifest lists and metadata.json versions under each
+# table's metadata/ (own window --metadata-min-age-days, default 14).
+#
+# Usage: orphan-file-cleanup.sh [--min-age-days N] [--metadata [--metadata-min-age-days N]] [--delete]
 # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_OVERRIDE and GOVDATA_PARQUET_DIR
 # (source govdata/.env.prod first); GOVDATA_JAR overrides the jar.
 set -euo pipefail

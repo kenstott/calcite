@@ -253,4 +253,122 @@ public class IcebergOrphanCleanupTest {
     assertTrue(report.contains("FAILED b: IOException: S3 LIST failed"), report);
     assertTrue(report.contains("NOT REACHED c"), report);
   }
+
+  private Path metadataDir(Table t) {
+    return Path.of(t.location().replaceFirst("^file:", ""), "metadata");
+  }
+
+  private Path orphanManifest(Table t, String name, long ageDays) throws IOException {
+    Path orphan = metadataDir(t).resolve(name);
+    Files.write(orphan, new byte[] {1, 2, 3});
+    Files.setLastModifiedTime(orphan,
+        FileTime.fromMillis(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(ageDays)));
+    return orphan;
+  }
+
+  private List<Path> metadataFiles(Table t) throws IOException {
+    try (java.util.stream.Stream<Path> files = Files.list(metadataDir(t))) {
+      return files.sorted().collect(java.util.stream.Collectors.toList());
+    }
+  }
+
+  @Test void metadataDryRunListsOldOrphanManifestAndDeletesNothing() throws Exception {
+    Path old = orphanManifest(table, "orphan-m0.avro", 30);
+
+    IcebergOrphanCleanup.MetadataOutcome out = IcebergOrphanCleanup.cleanMetadata("trade", table,
+        storage, 14, false, System.currentTimeMillis());
+
+    assertEquals(1, out.orphans);
+    assertEquals(1, out.deletable);
+    assertEquals(3L, out.deletableBytes);
+    assertEquals(0, out.deletedCount);
+    assertTrue(Files.exists(old), "a dry run deletes nothing");
+  }
+
+  @Test void metadataOrphanIsDeletedOnlyWithTheFlagAndLiveFilesSurvive() throws Exception {
+    Path old = orphanManifest(table, "orphan-m1.avro", 30);
+    // Age every live metadata file past the window so only reachability protects it.
+    List<Path> before = metadataFiles(table);
+    for (Path f : before) {
+      Files.setLastModifiedTime(f,
+          FileTime.fromMillis(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(60)));
+    }
+
+    IcebergOrphanCleanup.MetadataOutcome out = IcebergOrphanCleanup.cleanMetadata("trade", table,
+        storage, 14, true, System.currentTimeMillis());
+
+    assertEquals(1, out.deletedCount);
+    assertFalse(Files.exists(old));
+    assertEquals(1, out.orphans, "no live manifest, manifest list or metadata.json is an orphan");
+    for (Path f : before) {
+      if (!f.equals(old)) {
+        assertTrue(Files.exists(f), "reachable metadata file was deleted: " + f);
+      }
+    }
+    table.refresh();
+    assertNotNull(table.currentSnapshot());
+  }
+
+  @Test void youngOrphanManifestInsideTheWindowSurvives() throws Exception {
+    Path young = orphanManifest(table, "young-m0.avro", 1);
+
+    IcebergOrphanCleanup.MetadataOutcome out = IcebergOrphanCleanup.cleanMetadata("trade", table,
+        storage, 14, true, System.currentTimeMillis());
+
+    assertEquals(1, out.orphans);
+    assertEquals(1, out.withinSafetyWindow);
+    assertEquals(0, out.deletedCount);
+    assertTrue(Files.exists(young));
+  }
+
+  @Test void manifestHeldByARetainedOlderSnapshotIsNotAMetadataOrphan() throws Exception {
+    table.newDelete().deleteFromRowFilter(org.apache.iceberg.expressions.Expressions.alwaysTrue())
+        .commit();
+    table.refresh();
+    long old = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(60);
+    for (Path f : metadataFiles(table)) {
+      Files.setLastModifiedTime(f, FileTime.fromMillis(old));
+    }
+
+    IcebergOrphanCleanup.MetadataOutcome out = IcebergOrphanCleanup.cleanMetadata("trade", table,
+        storage, 14, true, System.currentTimeMillis());
+
+    assertEquals(0, out.orphans, "manifests of retained snapshots are reachable");
+    assertEquals(0, out.deletedCount);
+  }
+
+  @Test void metadataPassIgnoresVersionHintAndForeignFilesAndSiblingTables() throws Exception {
+    Path foreign = orphanManifest(table, "notes.txt", 60);
+    Path siblingManifest = orphanManifest(sibling, "sibling-orphan.avro", 60);
+
+    IcebergOrphanCleanup.MetadataOutcome out = IcebergOrphanCleanup.cleanMetadata("trade", table,
+        storage, 14, true, System.currentTimeMillis());
+
+    assertEquals(0, out.orphans);
+    assertTrue(Files.exists(foreign), "only names Iceberg writes are candidates");
+    assertTrue(Files.exists(siblingManifest), "another table's metadata/ is never listed");
+    assertTrue(Files.exists(metadataDir(table).resolve("version-hint.text")));
+  }
+
+  @Test void metadataWindowBelowOneDayIsRejected() {
+    assertThrows(IllegalArgumentException.class, () -> IcebergOrphanCleanup.cleanMetadata("trade",
+        table, storage, 0, true, System.currentTimeMillis()));
+  }
+
+  @Test void failedCommitLeavesNoNewManifestInMetadata() throws Exception {
+    DataFile df = new IcebergTableWriter(table, storage).writeRecords(
+        java.util.Collections.singletonList(java.util.Collections.<String, Object>singletonMap(
+            "name", "late")), java.util.Collections.singletonMap("year", "2024"));
+    long staleSnapshot = table.currentSnapshot().snapshotId();
+    append(table);
+    List<Path> before = metadataFiles(table);
+
+    assertThrows(org.apache.iceberg.exceptions.ValidationException.class,
+        () -> table.newOverwrite().addFile(df).validateFromSnapshot(staleSnapshot)
+            .conflictDetectionFilter(org.apache.iceberg.expressions.Expressions.alwaysTrue())
+            .validateNoConflictingData().validateNoConflictingDeletes().commit());
+
+    table.refresh();
+    assertEquals(before, metadataFiles(table), "a commit that fails must not leave a manifest");
+  }
 }
