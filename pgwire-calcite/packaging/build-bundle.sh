@@ -11,7 +11,7 @@
 #   bash pgwire-calcite/packaging/build-bundle.sh <adapter> <variant> <out-dir>
 #
 #   adapter   a name in packaging/adapters.json (e.g. servicenow)
-#   variant   linux-x86_64 | linux-arm64 | macos-arm64; the bundle runs on the machine it is
+#   variant   linux-x86_64 | linux-aarch64 | macos-arm64; the bundle runs on the machine it is
 #             built on, so the variant must be this machine's
 #   out-dir   receives pgwire-<adapter>-<version>-<variant>/ (bin/pgwire-<adapter> is the
 #             launcher) and pgwire-<adapter>-<version>-<variant>.tar.gz(.sha256)
@@ -34,13 +34,13 @@ PACKAGING="$ROOT/pgwire-calcite/packaging"
 [ -f "$PACKAGING/adapters.json" ] || { echo "run from the root of a calcite checkout" >&2; exit 1; }
 
 case "$VARIANT" in
-  linux-x86_64|linux-arm64|macos-arm64) ;;
+  linux-x86_64|linux-aarch64|macos-arm64) ;;
   *) echo "variant '$VARIANT' is not built by this script (Windows bundles are built by the release workflow)" >&2; exit 1 ;;
 esac
 # The bundle carries this machine's CPython and JRE, so it is this machine's variant
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) MACHINE=linux-x86_64 ;;
-  Linux-aarch64) MACHINE=linux-arm64 ;;
+  Linux-aarch64) MACHINE=linux-aarch64 ;;
   Darwin-arm64) MACHINE=macos-arm64 ;;
   *) MACHINE="$(uname -s)-$(uname -m)" ;;
 esac
@@ -177,7 +177,7 @@ print('embedder model cached')
     if [ "$ADAPTER" = "govdata" ]; then
       # The check imports PyYAML, which the runner's system python lacks; uv supplies it for this run.
       PYTHONPATH=pgwire-calcite/src uv run --no-project --with pyyaml python pgwire-calcite/scripts/check_catalog_cache_coverage.py \
-        "$expected" govdata/src/main/resources/*/*-schema.yaml
+        "$expected" pgwire-govdata/unmaterialized-tables.txt govdata/src/main/resources/*/*-schema.yaml
     fi
     cp "$expected" "$bundle/model/$(basename "$expected")"
   fi

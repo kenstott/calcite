@@ -1,0 +1,54 @@
+name: Release scripts test
+
+# The tests of the release workflows' scripts (.github/scripts/test_*.py), run against stubbed gh:
+# that every supported platform, Linux arm64 included, gets every pgwire bundle and Maven Central
+# bundle (REQ-294), the Central bundle layout, the promote's fetch-and-verify, the engine's bundle
+# wait, and the govdata catalog cache coverage check. And actionlint over the release workflows they read. Publishes nothing.
+
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/**'
+      - 'pgwire-calcite/packaging/*.json'
+      - 'pgwire-calcite/scripts/check_catalog_cache_coverage.py'
+      - 'pgwire-govdata/**'
+      - '.github/workflows/askamerica-engine.yml'
+      - '.github/workflows/pgwire-adapters-release.yml'
+      - '.github/workflows/pgwire-calcite-release.yml'
+      - '.github/workflows/promote-maven-central.yml'
+      - '.github/workflows/release-assets-check.yml'
+      - '.github/workflows/release-scripts-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Release script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyyaml pytest
+      - run: python -m pytest -q .github/scripts
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Expressions, job graph, matrix and runner labels; -shellcheck= leaves the run scripts to
+      # the tests above.
+      - uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: >-
+            -color -shellcheck=
+            .github/workflows/askamerica-engine.yml
+            .github/workflows/pgwire-adapters-release.yml
+            .github/workflows/pgwire-calcite-release.yml
+            .github/workflows/promote-maven-central.yml
+            .github/workflows/release-assets-check.yml
+            .github/workflows/release-scripts-test.yml

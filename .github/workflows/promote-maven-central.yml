@@ -64,7 +64,7 @@ jobs:
           for name in $names; do
             sha256sum -c "${name}.sha256"
           done
-          echo "all $(wc -w <<<"$names") bundles of $TAG match their sha256"
+          echo "all $(wc -w <<<"$names" | tr -d ' ') bundles of $TAG match their sha256"
 
       - name: Upload to Sonatype Central Portal
         env:
