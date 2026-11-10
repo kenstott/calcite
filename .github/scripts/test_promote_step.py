@@ -3,7 +3,8 @@
 
 Covers: a complete release verifies; a missing bundle or .sha256 fails naming it, before any
 download; a checksum mismatch fails; an unreadable release fails; a tag of another kind fails;
-the engine-v and sih-v bundle sets.
+the engine-v and sih-v bundle sets, with every pgwire connector and platform (Linux arm64
+included) from the release that first builds their Central bundles.
 
 Run: python3 .github/scripts/test_promote_step.py
 """
@@ -20,11 +21,17 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORKFLOW = os.path.join(ROOT, ".github", "workflows", "promote-maven-central.yml")
 LISTER = os.path.join(ROOT, ".github", "scripts", "central-bundles.sh")
+NAMES = os.path.join(ROOT, ".github", "scripts", "pgwire_release_names.py")
+PACKAGING = os.path.join(ROOT, "pgwire-calcite", "packaging")
 VERSION = "9.9.9"
 TAG = "engine-v" + VERSION
 ENGINE = ["askamerica-engine", "govdata", "trino-calcite-base", "trino-calcite", "trino-cloudops",
           "trino-file", "trino-salesforce", "trino-servicenow", "trino-sharepoint", "trino-splunk"]
 SIH = ["sih-govdata", "sih-splunk", "sih-sharepoint", "sih-aperio", "sih-cloudops"]
+# REQ-294: the supported platforms, and the pgwire connectors as of VERSION.
+VARIANTS = ["linux-x86_64", "linux-aarch64", "macos-arm64", "windows-x86_64"]
+CONNECTORS = ["file", "sharepoint", "splunk", "salesforce", "servicenow", "jira", "cloudops", "govdata"]
+PGWIRE = ["pgwire-%s-%s" % (c, v) for v in VARIANTS for c in ["shared"] + CONNECTORS]
 
 FAKE_GH = r'''#!/usr/bin/env bash
 d="$FAKE_DIR"
@@ -60,7 +67,18 @@ class CentralBundlesTest(unittest.TestCase):
     def test_engine_set(self):
         r = self.lister(TAG)
         self.assertEqual(0, r.returncode, r.stderr)
-        self.assertEqual([bundle(a) for a in ENGINE], r.stdout.split())
+        self.assertEqual([bundle(a) for a in ENGINE + PGWIRE], r.stdout.split())
+
+    def test_engine_set_names_every_connector_on_every_platform(self):
+        names = set(self.lister(TAG).stdout.split())
+        for variant in VARIANTS:
+            for connector in ["shared"] + CONNECTORS:
+                self.assertIn(bundle("pgwire-%s-%s" % (connector, variant)), names)
+
+    def test_engine_set_before_the_pgwire_central_bundles(self):
+        r = self.lister("engine-v0.127.1")
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual([bundle(a, "0.127.1") for a in ENGINE], r.stdout.split())
 
     def test_sih_set(self):
         r = self.lister("sih-v1.2.3")
@@ -82,11 +100,14 @@ class PromoteFetchStepTest(unittest.TestCase):
         os.makedirs(os.path.join(d, "files"))
         os.makedirs(os.path.join(d, "work", ".github", "scripts"))
         shutil.copy(LISTER, os.path.join(d, "work", ".github", "scripts", "central-bundles.sh"))
+        shutil.copy(NAMES, os.path.join(d, "work", ".github", "scripts", "pgwire_release_names.py"))
+        shutil.copytree(PACKAGING, os.path.join(d, "work", "pgwire-calcite", "packaging"),
+                        ignore=lambda _dir, names: [n for n in names if not n.endswith(".json")])
         gh = os.path.join(d, "bin", "gh")
         open(gh, "w").write(FAKE_GH)
         os.chmod(gh, os.stat(gh).st_mode | stat.S_IEXEC)
         names = []
-        for a in ENGINE:
+        for a in ENGINE + PGWIRE:
             name = bundle(a)
             content = ("bundle " + name).encode()
             open(os.path.join(d, "files", name), "wb").write(content)
@@ -115,8 +136,8 @@ class PromoteFetchStepTest(unittest.TestCase):
     def test_complete_release_verifies(self):
         r = self.run_step()
         self.assertEqual(0, r.returncode, r.stdout + r.stderr)
-        self.assertIn("all %d bundles of %s match their sha256" % (len(ENGINE), TAG), r.stdout)
-        self.assertEqual(len(ENGINE), len(self.downloads()))
+        self.assertIn("all %d bundles of %s match their sha256" % (len(ENGINE + PGWIRE), TAG), r.stdout)
+        self.assertEqual(len(ENGINE + PGWIRE), len(self.downloads()))
 
     def test_missing_bundle_fails_naming_it_before_any_download(self):
         gone = bundle("trino-splunk")

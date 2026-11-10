@@ -32,6 +32,7 @@ on:
           - all
           - linux-file-govdata
           - windows-file
+          - linux-aarch64
   release:
     types: [created]
 
@@ -65,6 +66,7 @@ env:
 jobs:
   # Which adapters and platforms this run builds. "linux-file-govdata" is the branch check:
   # the file bundle (which the smoke job runs) and the govdata bundle, for linux-x86_64 only.
+  # "linux-aarch64" is every adapter for Linux arm64 only, and its Maven Central bundles.
   plan:
     runs-on: ubuntu-latest
     outputs:
@@ -92,10 +94,11 @@ jobs:
           # arguments follow these, so only an explicit `--auth none` argument turns it off - a
           # test's choice; no environment variable does.
           adapters = json.load(open("pgwire-calcite/packaging/adapters.json"))
+          # Every supported platform (REQ-294): the one table release-assets-complete.sh and
+          # central-bundles.sh also read. Linux arm64 builds on GitHub's arm64 runner.
           platforms = [
-              {"runner": "ubuntu-latest", "variant": "linux-x86_64"},
-              {"runner": "macos-15", "variant": "macos-arm64"},
-              {"runner": "windows-latest", "variant": "windows-x86_64"},
+              {"runner": p["runner"], "variant": p["variant"]}
+              for p in json.load(open("pgwire-calcite/packaging/platforms.json"))
           ]
           if scope == "linux-file-govdata":
               adapters = [a for a in adapters if a["name"] in ("file", "govdata")]
@@ -104,6 +107,8 @@ jobs:
               # The smallest run that starts a Windows server: one jar set, one bundle.
               adapters = [a for a in adapters if a["name"] == "file"]
               platforms = [p for p in platforms if p["variant"] == "windows-x86_64"]
+          elif scope == "linux-aarch64":
+              platforms = [p for p in platforms if p["variant"] == "linux-aarch64"]
           elif scope != "all":
               raise SystemExit(f"unknown scope: {scope}")
           # The smoke job runs the file bundle on the Unix runners; smoke-windows runs it on
@@ -853,6 +858,119 @@ jobs:
         run: |
           Get-Content smoke-server.out -ErrorAction SilentlyContinue
           Get-Content smoke-server.log -ErrorAction SilentlyContinue
+
+  # The Maven Central bundles of this release (REQ-294: connector bundles reach installs through
+  # Maven Central; the engine release builds, signs and publishes them for every supported
+  # platform). Per platform: one artifact per connector, io.simpleishard:pgwire-<connector>-<variant>,
+  # and pgwire-shared-<variant> holding, once, the files two or more of that platform's bundles
+  # have in common (Provisa's runtime_deps/maven_bundles.py reads this layout). Every run lays them
+  # out; a publishing run signs them with the project key and attaches each zip, with its sha256,
+  # to engine-v<version>. Nothing here uploads to Maven Central: "Promote to Maven Central"
+  # (promote-maven-central.yml) is the separate, manual step, and central-bundles.sh names these.
+  maven-bundles:
+    needs: [plan, bundle, smoke, smoke-windows]
+    # A smoke job is skipped in a run that builds no bundle for it; that must not skip this.
+    if: >-
+      always() && needs.bundle.result == 'success'
+      && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped')
+      && (needs.smoke-windows.result == 'success' || needs.smoke-windows.result == 'skipped')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # One platform per job: all of a platform's tarballs (govdata alone is close to a
+        # gigabyte) are unpacked side by side to find the files they share.
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Make room for the platform's bundles
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h .
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*-${{ matrix.os.variant }}
+          merge-multiple: true
+          path: tarballs
+
+      - name: Split the shared files and lay out the Central bundles
+        run: |
+          set -euo pipefail
+          VER="${{ github.event.inputs.version || github.ref_name }}"
+          VER="${VER#engine-v}"
+          echo "VERSION=$VER" >> "$GITHUB_ENV"
+          python3 .github/scripts/pgwire_maven_bundles.py tarballs bundles "$VER"
+          rm -rf tarballs
+
+      # pipefail: a key that fails to decode stops here, not as an empty import gpg reports as fine.
+      - name: Import GPG key
+        if: env.PUBLISH == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+
+      - name: Sign, checksum and zip each Central bundle
+        env:
+          GPG_KEY_ID:     ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          mkdir -p central
+          for dir in bundles/*/; do
+            artifact="$(basename "$dir")"
+            while IFS= read -r -d '' f; do
+              if [ "$PUBLISH" = "true" ]; then
+                if [ -n "$GPG_PASSPHRASE" ]; then
+                  gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+                    --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+                else
+                  gpg --batch --yes --local-user "$GPG_KEY_ID" --armor --detach-sign "$f"
+                fi
+                test -f "$f.asc" || { echo "$f was not signed" >&2; exit 1; }
+              fi
+              md5sum "$f" | cut -d' ' -f1 > "$f.md5"
+              sha1sum "$f" | cut -d' ' -f1 > "$f.sha1"
+            done < <(find "$dir" -type f ! -name '*.sha256' -print0)
+            zip_name="${artifact}-${VERSION}-central-bundle.zip"
+            # Stored, not deflated: the tarballs inside are already compressed.
+            ( cd "$dir" && zip -qr0 "../../central/${zip_name}" io )
+            ( cd central && sha256sum "$zip_name" > "${zip_name}.sha256" )
+          done
+          ls -l central
+
+      - name: Report the bundle sizes for the promote
+        run: |
+          cat bundles/sizes.json
+          {
+            echo "### Central bundle sizes, ${{ matrix.os.variant }} (bytes)"
+            [ "$PUBLISH" = "true" ] || echo "Not signed: this run does not publish."
+            echo '```json'; cat bundles/sizes.json; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pgwire-central-bundles-${{ matrix.os.variant }}
+          path: |
+            central/*.zip
+            central/*.zip.sha256
+            bundles/sizes.json
+          retention-days: 7
+
+      - name: Attach to release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || format('engine-v{0}', github.event.inputs.version) }}"
+          gh release upload "$TAG" --repo "${{ github.repository }}" --clobber \
+            central/*-central-bundle.zip central/*-central-bundle.zip.sha256
 
   publish:
     needs: [plan, bundle, smoke, smoke-windows]

@@ -1,0 +1,6 @@
+[
+  {"runner": "ubuntu-latest", "variant": "linux-x86_64"},
+  {"runner": "ubuntu-24.04-arm", "variant": "linux-aarch64", "since": "0.128.0"},
+  {"runner": "macos-15", "variant": "macos-arm64"},
+  {"runner": "windows-latest", "variant": "windows-x86_64"}
+]

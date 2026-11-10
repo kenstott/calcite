@@ -21,7 +21,8 @@ tag="$1"
 case "$tag" in
   engine-v*)
     version="${tag#engine-v}"
-    # askamerica-engine.yml, publish-govdata.yml, and publish-trino.yml's matrix.
+    # askamerica-engine.yml, publish-govdata.yml, and publish-trino.yml's matrix; the pgwire
+    # connector bundles follow the loop below.
     artifacts=(askamerica-engine govdata
       trino-calcite-base trino-calcite trino-cloudops trino-file
       trino-salesforce trino-servicenow trino-sharepoint trino-splunk) ;;
@@ -37,3 +38,8 @@ esac
 for artifact in "${artifacts[@]}"; do
   echo "${artifact}-${version}-central-bundle.zip"
 done
+# pgwire-adapters-release.yml's maven-bundles job: every pgwire connector and platform, and each
+# platform's pgwire-shared bundle (REQ-294), from the release that first builds them.
+if [[ "$tag" == engine-v* ]]; then
+  python3 "$(dirname "$0")/pgwire_release_names.py" central "$version"
+fi
