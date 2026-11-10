@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.128.0](https://github.com/kenstott/calcite/compare/engine-v0.127.0...engine-v0.128.0) (2026-11-10)
+
+
+### Features
+
+* **release:** Linux arm64 pgwire bundles and their Maven Central bundles (REQ-294) ([8728dab](https://github.com/kenstott/calcite/commit/8728dab9ef6c1ed4d574509f4a913dc3b2cc3003))
+
+
+### Bug Fixes
+
+* **govdata:** historical marker records the table set, a new table re-runs its slot ([#1148](https://github.com/kenstott/calcite/issues/1148)) ([d70a868](https://github.com/kenstott/calcite/commit/d70a8685acb0d2d23115dee753b00fc1022ceafd))
+* **govdata:** scheduler historical marker no longer collides with the .done directory ([6201294](https://github.com/kenstott/calcite/commit/6201294cb04b69066fe5552f72cd0fd1ac61fa3d)), closes [#1147](https://github.com/kenstott/calcite/issues/1147)
+* **pgwire-govdata:** coverage check accepts declared tables the warehouse does not hold yet ([283fa8e](https://github.com/kenstott/calcite/commit/283fa8e51dc37a097a72d08bfc766138675704fb))
+* **pgwire-govdata:** drop the 6 now-materialized tables from the unmaterialized list ([80e007c](https://github.com/kenstott/calcite/commit/80e007c228b8111ffeee85f971e952fcfee39a54))
+* **pgwire-govdata:** regenerate the catalog cache with the 6 tables that now have production data ([6fa79f8](https://github.com/kenstott/calcite/commit/6fa79f842c299829c34ee14ba3c8c9647d747d8f))
+
 ## [0.127.0](https://github.com/kenstott/calcite/compare/engine-v0.126.0...engine-v0.127.0) (2026-11-10)
 
 
