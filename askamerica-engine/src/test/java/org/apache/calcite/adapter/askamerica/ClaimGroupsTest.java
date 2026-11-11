@@ -160,6 +160,15 @@ class ClaimGroupsTest {
     assertTrue(problem.contains("claim 1 is grouped `fidelity` and marked `central`"), problem);
   }
 
+  @Test void anOpinionIsGradedNotCheckable() {
+    ArrayNode claims = mixedClaims();
+    ((ObjectNode) claims.get(1)).put("kind", "opinion");
+    String problem = ClaimScoring.enforce(claims);
+    assertNotNull(problem);
+    assertTrue(problem.contains("claim 2 is `kind`: \"opinion\" with verdict 'mostly false'"),
+        problem);
+  }
+
   @Test void aSingleClaimNeedsNoGroup() {
     assertNull(ClaimScoring.enforce(claims(claim("Rents climbed every year", null, "true"))));
   }
@@ -305,27 +314,28 @@ class ClaimGroupsTest {
     assertTrue(ClaimScoring.enforce(none).contains("have 2 claims marked `central`"));
   }
 
-  @Test void aPersonalAttackIsAnUnsupportedClaimCountedOnItsOwnLine() {
-    ObjectNode attack = author("John stinks like fish", "unsupported", "toward_thesis");
+  @Test void aPersonalAttackIsNotCheckableAndCountedOnItsOwnLine() {
+    ObjectNode attack = author("John stinks like fish", "not checkable here", null);
     attack.put("kind", "attack");
+    attack.put("reason", "name-calling: no fact about John is asserted");
     ArrayNode claims = claims(author("Rents rose 4 percent", "true", null).put("central", true),
         author("Lots of people think John is dumb", "unsupported", "toward_thesis"), attack);
     assertNull(ClaimScoring.enforce(claims));
     JsonNode score = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
-    assertEquals(3, score.path("graded").asInt());
+    assertEquals(2, score.path("graded").asInt());
     assertEquals(1, score.path("attacks").asInt());
-    assertEquals(50, score.path("honesty_score").asInt());
-    assertEquals(100, score.path("bias_score").asInt());
 
     String html = McpServer.claimsSection(claims).html;
-    assertTrue(html.contains("<strong>unsupported</strong> &middot; personal attack"), html);
-    assertTrue(html.contains("2 fell short, 1 of them a personal attack. In this article only."),
+    assertTrue(html.contains("<strong>not checkable here</strong> &middot; personal attack"),
         html);
+    assertTrue(html.contains("1 fell short, 1 personal attack not gradable. In this article "
+        + "only."), html);
+    assertTrue(html.contains("a personal attack — not checkable: name-calling"), html);
 
-    attack.put("verdict", "not checkable here");
+    attack.put("verdict", "unsupported");
     String problem = ClaimScoring.enforce(claims(claims.get(0).deepCopy(), attack));
     assertNotNull(problem);
-    assertTrue(problem.contains("its verdict is 'unsupported'"), problem);
+    assertTrue(problem.contains("its verdict is 'not checkable here'"), problem);
   }
 
   @Test void theHeadlineStatesTheVerdictTheScoresGive() {

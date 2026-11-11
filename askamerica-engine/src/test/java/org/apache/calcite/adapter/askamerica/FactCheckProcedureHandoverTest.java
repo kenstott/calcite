@@ -82,7 +82,7 @@ class FactCheckProcedureHandoverTest {
   @Test void noticeCarriesTheRecipeSteps() {
     String notice = McpServer.factCheckProcedureNotice();
     assertTrue(notice.contains("Every comparative or streak phrase MUST be its own claim"));
-    assertTrue(notice.contains("MUST NOT be graded 'not checkable here'"));
+    assertTrue(notice.contains("The central claim MUST be graded on the evidence found"));
   }
 
   @Test void refusalHandsOverTheProcedureOnceThenPasses() {

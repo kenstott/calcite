@@ -129,7 +129,7 @@ class ExternalCheckGateTest {
     @Test void warehouseClaimsAndAttacksAreExempt() throws Exception {
         assertNull(gate("[{\"assertion\":\"Rent burden is 45%\",\"verdict\":\"true\","
             + "\"warehouse_value\":\"44.3%\"},"
-            + "{\"assertion\":\"He is a liar\",\"kind\":\"attack\",\"verdict\":\"unsupported\","
+            + "{\"assertion\":\"He is a liar\",\"kind\":\"attack\",\"verdict\":\"not checkable here\","
             + "\"reason\":\"insult\"}]"));
     }
 
@@ -334,7 +334,7 @@ class ExternalCheckGateTest {
         assertNull(measureGate("[{\"assertion\":\"a\",\"verdict\":\"not checkable here\","
             + "\"reason\":\"x\",\"warehouse_value\":\"4.12%\"},"
             + "{\"assertion\":\"b\",\"verdict\":\"true\"},"
-            + "{\"assertion\":\"He is a liar\",\"kind\":\"attack\",\"verdict\":\"unsupported\","
+            + "{\"assertion\":\"He is a liar\",\"kind\":\"attack\",\"verdict\":\"not checkable here\","
             + "\"reason\":\"insult\"}]"));
     }
 
@@ -414,7 +414,7 @@ class ExternalCheckGateTest {
         String problem = officeGate(officeClaim("unsupported", ",\"searched\":[\"AG lawsuit\"]"));
         assertNotNull(problem);
         assertTrue(problem.contains("filed a lawsuit Thursday"), problem);
-        assertTrue(problem.contains("'not checkable here'"), problem);
+        assertTrue(problem.contains("whether or not the article names it"), problem);
     }
 
     @Test void officePageReadAllowsUnsupported() throws Exception {
@@ -422,15 +422,16 @@ class ExternalCheckGateTest {
         assertNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
     }
 
-    /** The live q11 shape: the fetch logged no error but returned only a refusal message. */
-    @Test void officePageFetchedWithoutTextDoesNotCount() throws Exception {
+    /** The live q11 shape: the fetch logged no error but returned only a refusal message. The
+     *  office's page was looked for; the claim is graded on what else was found. */
+    @Test void officePageFetchedWithoutTextAllowsUnsupported() throws Exception {
         fetch(RELEASE, null);
-        assertNotNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
+        assertNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
     }
 
-    @Test void officePageThatFailedToOpenDoesNotCount() throws Exception {
+    @Test void officePageThatFailedToOpenAllowsUnsupported() throws Exception {
         fetch(RELEASE, "HTTP 403");
-        assertNotNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
+        assertNull(officeGate(officeClaim("unsupported", sourceField(RELEASE))));
     }
 
     @Test void nonGovernmentPageDoesNotCount() throws Exception {
@@ -455,7 +456,7 @@ class ExternalCheckGateTest {
     @Test void warehouseClaimsAndAttacksAreExemptFromTheOfficeCheck() throws Exception {
         assertNull(officeGate("[{\"assertion\":\"The governor's budget grew 4%\","
             + "\"verdict\":\"unsupported\",\"warehouse_value\":\"3.9%\"},"
-            + "{\"assertion\":\"The mayor is a crook\",\"verdict\":\"unsupported\","
+            + "{\"assertion\":\"The mayor is a crook\",\"verdict\":\"not checkable here\","
             + "\"kind\":\"attack\"}]"));
     }
 
@@ -655,9 +656,51 @@ class ExternalCheckGateTest {
             + "\"verdict\":\"not checkable here\",\"searched\":[\" \"]}]"));
     }
 
-    @Test void searchedCentralClaimAndOtherClaimsPass() throws Exception {
-        assertNull(centralGate("[{\"assertion\":\"a\",\"central\":true,"
+    /** Follow-up run 1 on q14: two searches listed, the release never fetched. */
+    @Test void searchesAloneDoNotLeaveTheCentralClaimUngraded() throws Exception {
+        assertNotNull(centralGate("[{\"assertion\":\"a\",\"central\":true,"
             + "\"verdict\":\"not checkable here\",\"searched\":[\"NHTSA first half 2026\"]}]"));
+    }
+
+    /** A blocked primary page does not make a factual central claim uncheckable. */
+    @Test void aBlockedPrimaryPageDoesNotLeaveTheCentralClaimUngraded() throws Exception {
+        String release = "https://www.nhtsa.gov/press-releases/decline-traffic-fatalities-first-half-2026";
+        fetch(release, "HTTP 403");
+        assertNotNull(centralGate("[{\"assertion\":\"a\",\"central\":true,"
+            + "\"verdict\":\"not checkable here\",\"sources\":[{\"url\":\"" + release + "\"}]}]"));
+    }
+
+    @Test void aCentralOpinionMayBeUncheckable() throws Exception {
+        assertNull(centralGate("[{\"assertion\":\"Chocolate chip cookies are the best cookies\","
+            + "\"central\":true,\"kind\":\"opinion\",\"verdict\":\"not checkable here\"}]"));
+    }
+
+    private static String shapeGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceClaimShape", JsonNode.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson));
+    }
+
+    @Test void anOpinionWithoutAReasonIsRefused() throws Exception {
+        String problem = shapeGate("[{\"assertion\":\"Chocolate chip cookies are the best\","
+            + "\"kind\":\"opinion\",\"verdict\":\"not checkable here\"}]");
+        assertNotNull(problem);
+        assertTrue(problem.contains("figurative speech"), problem);
+    }
+
+    @Test void anOpinionWithAReasonPassesTheShapeGate() throws Exception {
+        assertNull(shapeGate("[{\"assertion\":\"Senator A is a crook\",\"kind\":\"opinion\","
+            + "\"verdict\":\"not checkable here\",\"reason\":\"figurative speech: the "
+            + "speech calls the vote dishonest and alleges no crime\"}]"));
+    }
+
+    @Test void anOpinionNeedsNoMeasure() throws Exception {
+        assertNull(measureGate("[{\"assertion\":\"Chocolate chip cookies are the best\","
+            + "\"kind\":\"opinion\",\"verdict\":\"not checkable here\","
+            + "\"reason\":\"an opinion of taste\"}]"));
+    }
+
+    @Test void gradedCentralAndUncheckableOtherClaimsPass() throws Exception {
         assertNull(centralGate("[{\"assertion\":\"a\",\"central\":true,\"verdict\":\"true\"},"
             + "{\"assertion\":\"b\",\"verdict\":\"not checkable here\"}]"));
     }

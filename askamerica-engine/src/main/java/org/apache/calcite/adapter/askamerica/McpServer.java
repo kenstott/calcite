@@ -827,8 +827,8 @@ public class McpServer {
             + "verbatim sentence. Separate the CLAIM from its ATTRIBUTION: 'officials say "
             + "unemployment fell' is graded on whether unemployment fell, not on whether "
             + "officials said it, and 'X said Y' is graded on Y. Whether a quote was actually "
-            + "spoken is never the assertion under test. Skip opinion and prediction; keep "
-            + "numbers, trends, rankings, comparisons and causal claims.\n"
+            + "spoken is never the assertion under test. Skip opinion and prediction, except an opinion the piece's case rests on: keep that one "
+            + "with `kind`: `opinion`. Keep numbers, trends, rankings, comparisons and causal claims.\n"
             + "1a. **'Validate this' NEVER means 'confirm the event happened and the quotes are "
             + "transcribed accurately.'** That is fact-checking the REPORTER, a categorically "
             + "easier task than fact-checking the REPORTED — and it is not the task. Measured "
@@ -900,7 +900,7 @@ public class McpServer {
             + "exists but that no table here carries. A personal attack on a person or group "
             + "MUST also carry `kind`: `attack`; any factual assertion inside it ('was "
             + "convicted of fraud') MUST be split out and graded as its own claim. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. A figure the article attributes to a person, office or organization MUST NOT be graded 'not checkable here' until a page off the article's own site has been read and is listed in the claim's `sources`; if no such page loads, `why_no_page` MUST name what was tried. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. "
+            + "A claim other than the central claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. The central claim MUST NOT be graded 'not checkable here' unless it is `kind`: `opinion`; it MUST be graded on the evidence found, including copies that quote its source. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' until that office's own page, found whether or not the article names it, was fetched with web_fetch this session and is listed in the claim's `sources`. It is graded on the evidence found, whoever published it; when that page will not load and nothing found supports the claim, it is 'unsupported'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. A figure the article attributes to a person, office or organization MUST NOT be graded 'not checkable here' until a page off the article's own site has been read and is listed in the claim's `sources`; if no such page loads, `why_no_page` MUST name what was tried. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. "
             + "'Partially false' needs the reason: "
             + "right direction wrong magnitude, right figure wrong year, true nationally but not "
             + "for the place named, true for a subgroup presented as the whole. A mismatch "
@@ -2944,7 +2944,17 @@ public class McpServer {
             + "claim that asserts a cause, motive or consequence — split from the fact it "
             + "starts from, which is its own claim — and its verdict grades the evidence for "
             + "that link alone; `attack` for a personal attack, whose verdict is "
-            + "`unsupported` and which is counted on its own line; otherwise `fact` or omitted. `central` is true on "
+            + "'not checkable here', whose `reason` MUST say in one sentence why no evidence can "
+            + "test it, and which is counted on its own line; `opinion` for a belief or "
+            + "taste on a personal basis that no evidence can test ('chocolate chip cookies are "
+            + "the best cookies'), whose verdict is 'not checkable here' and whose `reason` "
+            + "MUST say in one sentence why no evidence can test it: an opinion of taste, a "
+            + "belief, or figurative speech. For an opinion "
+            + "that may imply a checkable fact ('politician A is a crook'), the claim's `reason` "
+            + "MUST state whether the speaker meant it literally, from the context. Meant "
+            + "literally ('has committed crimes'), the implied fact MUST be split out as its own "
+            + "claim, searched for (a criminal record) and graded; meant figuratively ('is "
+            + "dishonest'), it stays an opinion; otherwise `fact` or omitted. `central` is true on "
             + "exactly one claim of the author and of each speaker — the assertion their case "
             + "depends on; honesty cannot exceed that claim's own credit by more than "
             + ClaimScoring.CENTRAL_CAP_MARGIN + " points. "
@@ -2973,7 +2983,7 @@ public class McpServer {
             + "`why_not`: when preview_report refuses a claim because one of its figures appears "
             + "in a fetched source, either act on that evidence or say here why it does not "
             + "change the grade; the reason is printed on the report. "
-            + "A claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' unless that office's own page was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. A figure the article attributes to a person, office or organization MUST NOT be graded 'not checkable here' until a page off the article's own site has been read and is listed in the claim's `sources`; if no such page loads, `why_no_page` MUST name what was tried. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. Use 'unsupported' when the piece asserts it as fact with no "
+            + "A claim other than the central claim whose source could not be reached or read (HTTP 403, a timeout, a paywall, no table or tracker to query) MUST be graded 'not checkable here' with the reason naming the source and the failure. The central claim MUST NOT be graded 'not checkable here' unless it is `kind`: `opinion`; it MUST be graded on the evidence found, including copies that quote its source. Failing to confirm a claim is not evidence against it: 'unsupported', 'partially false', 'mostly false' and 'false' need positive contrary evidence, meaning a source you actually read that shows something different, never a source you could not open. An assertion that a government office or official took an action or issued a figure MUST NOT be graded 'unsupported' until that office's own page, found whether or not the article names it, was fetched with web_fetch this session and is listed in the claim's `sources`. It is graded on the evidence found, whoever published it; when that page will not load and nothing found supports the claim, it is 'unsupported'. An assertion about a named person or organization MUST NOT be graded 'unsupported' unless a page other than the article was read with web_fetch this session and is listed in the claim's `sources`; otherwise it MUST be graded 'not checkable here'. A figure the article attributes to a person, office or organization MUST NOT be graded 'not checkable here' until a page off the article's own site has been read and is listed in the claim's `sources`; if no such page loads, `why_no_page` MUST name what was tried. When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A window given only as a length ('over the past five years') has no endpoints and MUST be treated as not stated. Use 'unsupported' when the piece asserts it as fact with no "
             + "evidence and none was found. Use 'not checkable here' only when search_catalog's "
             + "unmatched_terms show no table carries the measure or its components, and "
             + "'stale vintage' when the article cites a release newer than the loaded window — "
@@ -7432,7 +7442,12 @@ public class McpServer {
                     + "here' when the measure exists but no table carries it, with a reason "
                     + "naming what was searched.");
             }
-            if (!graded && !nonBlank(c, "reason")) {
+            if ((ClaimScoring.isOpinion(c) || ClaimScoring.isAttack(c)) && !nonBlank(c, "reason")) {
+                problems.add("the assertion \"" + assertion
+                    + "\" is an opinion or personal attack without a reason. Say in one sentence "
+                    + "why no evidence can test it: an opinion of taste, a belief, figurative "
+                    + "speech, or name-calling.");
+            } else if (!graded && !nonBlank(c, "reason")) {
                 problems.add("the assertion \"" + assertion
                     + "\" is '" + verdict + "' without a reason. Say which measure was searched "
                     + "for, which terms search_catalog left unmatched, and which components were "
@@ -7452,7 +7467,7 @@ public class McpServer {
      * {@code web_fetch} in this session (any outcome, a 403 or timeout included), or when it lists
      * the web searches it ran in {@code searched}. The article under test ({@code source_url})
      * does not count: reading the piece is not checking it. A personal attack ({@code kind:
-     * attack}) is exempt, as it is graded unsupported by rule.
+     * attack}) is exempt, as it is graded not checkable by rule.
      *
      * <p>Measured live 2026-11-07 (daily eval q3, The 51st's D.C. evictions piece): four of seven
      * claims were graded 'not checkable here' with no sources, zero web searches, and no fetch
@@ -7521,10 +7536,12 @@ public class McpServer {
             + "|court of appeals|health care authority|agency)\\b|['\u2019]s office\\b");
 
     /**
-     * A government office's action or figure graded 'unsupported' must rest on that office's own
-     * page, read successfully this session and cited in the claim's {@code sources}. Without one
-     * the claim is 'not checkable here': searches that found nothing say nothing about whether
-     * the office acted.
+     * A government office's action or figure graded 'unsupported' must cite that office's own
+     * page, fetched this session with any outcome, in the claim's {@code sources}: searches that
+     * found nothing say nothing about whether the office acted. When the page will not load, the
+     * claim is graded on whatever else was found, and 'unsupported' stands when nothing supports
+     * it; refusing 'unsupported' there left a factual central claim with no accepted grade
+     * (2026-11-11).
      *
      * <p>Measured live 2026-11-09 (daily eval q2, Spokesman-Review on Washington Medicaid): a suit
      * the Attorney General filed on Nov. 5 was graded 'unsupported' from search results alone,
@@ -7535,7 +7552,15 @@ public class McpServer {
      * is not caught, and any government page satisfies the check, not only the named office's.
      */
     private static String enforceOfficeClaimRead(JsonNode claims, String articleUrl) {
-        java.util.Set<String> read = pagesReadThisSession();
+        java.util.Set<String> fetched = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText(""))) {
+                String url = e.path("args").path("url").asText("");
+                if (!url.isEmpty()) {
+                    fetched.add(normalizeUrlForMatch(url));
+                }
+            }
+        }
         String article = articleUrl == null ? null : normalizeUrlForMatch(articleUrl);
         java.util.List<String> unread = new java.util.ArrayList<>();
         for (JsonNode c : claims) {
@@ -7548,15 +7573,14 @@ public class McpServer {
                     || !GOVERNMENT_ACTOR.matcher(assertion).find()) {
                 continue;
             }
-            boolean officeRead = false;
+            boolean officeFetched = false;
             for (JsonNode s : c.path("sources")) {
                 String norm = normalizeUrlForMatch(s.path("url").asText(""));
-                if (!norm.equals(article) && read.contains(norm) && pageLoaded(norm)
-                        && isGovernmentHost(norm)) {
-                    officeRead = true;
+                if (!norm.equals(article) && fetched.contains(norm) && isGovernmentHost(norm)) {
+                    officeFetched = true;
                 }
             }
-            if (!officeRead) {
+            if (!officeFetched) {
                 unread.add("\"" + assertion + "\"");
             }
         }
@@ -7564,10 +7588,11 @@ public class McpServer {
             return null;
         }
         return "validation refused: " + unread.size() + " claim(s) about a government office are "
-            + "graded 'unsupported' without that office's own page being read: "
-            + String.join("; ", unread) + ". web_fetch the office's release or record and list "
-            + "that URL in the claim's `sources`, then grade on what it says. If the page cannot "
-            + "be found or opened, the verdict MUST be 'not checkable here'.";
+            + "graded 'unsupported' without that office's own page being fetched: "
+            + String.join("; ", unread) + ". Find the office's release or record, whether or not "
+            + "the article names it, web_fetch it and list that URL in the claim's `sources`. "
+            + "Grade on the evidence found, whoever published it; when that page will not load "
+            + "and nothing found supports the claim, it is 'unsupported'.";
     }
 
     /** Below this much extracted text a fetched page counts as not having loaded. */
@@ -7627,6 +7652,7 @@ public class McpServer {
                     || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
                     || "attack".equals(c.path("kind").asText("").trim()
                         .toLowerCase(java.util.Locale.ROOT))
+                    || ClaimScoring.isOpinion(c)
                     || !assertion.matches("(?s).*\\d.*") || !attributed) {
                 continue;
             }
@@ -8025,7 +8051,8 @@ public class McpServer {
             if (!("not checkable here".equals(verdict)
                     || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict))
                     || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
-                    || "attack".equals(c.path("kind").asText(""))) {
+                    || "attack".equals(c.path("kind").asText(""))
+                    || ClaimScoring.isOpinion(c)) {
                 continue;
             }
             String assertion = c.path("assertion").asText("").trim();
@@ -8125,30 +8152,31 @@ public class McpServer {
             + "then resubmit." + factCheckProcedureNotice();
     }
 
+    /**
+     * The central claim is graded on the evidence found. 'not checkable here' stands for it only
+     * when it is an opinion or belief on a personal basis that no evidence can test ('chocolate
+     * chip cookies are the best cookies'); a missing warehouse table or a page that will not load
+     * never makes a factual claim uncheckable (measured 2026-11-11, daily eval q14: a run listed
+     * two searches, never fetched the release, and left the central figure ungraded).
+     */
     private static String enforceCentralClaimSearched(JsonNode claims) {
-        java.util.List<String> unsearched = new java.util.ArrayList<>();
+        java.util.List<String> ungraded = new java.util.ArrayList<>();
         for (JsonNode c : claims) {
             String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
-            if (!c.path("central").asBoolean(false) || !"not checkable here".equals(verdict)) {
-                continue;
-            }
-            boolean searched = false;
-            for (JsonNode q : c.path("searched")) {
-                if (!q.asText("").trim().isEmpty()) {
-                    searched = true;
-                }
-            }
-            if (!searched) {
-                unsearched.add("\"" + c.path("assertion").asText("").trim() + "\"");
+            if (c.path("central").asBoolean(false)
+                    && ClaimScoring.VERDICT_NOT_CHECKABLE.equals(verdict)
+                    && !ClaimScoring.isOpinion(c)) {
+                ungraded.add("\"" + c.path("assertion").asText("").trim() + "\"");
             }
         }
-        if (unsearched.isEmpty()) {
+        if (ungraded.isEmpty()) {
             return null;
         }
-        return "validation refused: the central claim " + String.join("; ", unsearched)
-            + " is graded 'not checkable here' with no search for its own figures. web_search "
-            + "for the release that announced those figures and for other outlets' copies of the "
-            + "article, list the queries in `searched`, web_fetch what they find, and grade on it.";
+        return "validation refused: the central claim " + String.join("; ", ungraded)
+            + " MUST be graded on the evidence found, not 'not checkable here'. web_fetch the "
+            + "release or report that published its figures and grade on it; when that page "
+            + "will not load, grade on copies that quote it. 'not checkable here' is only for a "
+            + "central claim with `kind`: \"opinion\", a belief or taste no evidence can test.";
     }
 
     private static final java.util.Set<String> CONTRARY_VERDICTS = java.util.Set.of(
@@ -9340,8 +9368,11 @@ public class McpServer {
             }
             appendDetailRow(details, "Asserts", ClaimScoring.isCausal(c)
                 ? "a cause — graded on the evidence for the cause alone"
-                : ClaimScoring.isAttack(c) ? "a personal attack — no evidence offered for it"
-                    : "");
+                : ClaimScoring.isAttack(c)
+                    ? "a personal attack — not checkable: " + c.path("reason").asText("")
+                    : ClaimScoring.isOpinion(c)
+                        ? "an opinion — not checkable: " + c.path("reason").asText("")
+                        : "");
             appendDetailRow(details, "Central claim", ClaimScoring.isCentral(c)
                 ? "the assertion this party's case depends on; it caps their honesty score"
                 : "");
@@ -9464,7 +9495,8 @@ public class McpServer {
         int attacks = score.path("attacks").asInt();
         if (attacks > 0) {
             sb.append(", ").append(attacks)
-                .append(attacks == 1 ? " of them a personal attack" : " of them personal attacks");
+                .append(attacks == 1 ? " personal attack" : " personal attacks")
+                .append(" not gradable");
         }
         sb.append(". In this article only.");
         JsonNode citejacked = score.path("citejacked");

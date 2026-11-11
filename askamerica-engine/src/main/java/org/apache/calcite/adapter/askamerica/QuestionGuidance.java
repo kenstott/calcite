@@ -565,7 +565,7 @@ final class QuestionGuidance {
             + "`false` need a source actually read that shows otherwise. "
             + "When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A sentence joining a fact to a "
             + "cause MUST be split, the cause carrying `kind`: `causal`; a personal attack "
-            + "MUST carry `kind`: `attack` and verdict `unsupported`. The author and each speaker MUST have exactly one "
+            + "MUST carry `kind`: `attack`, verdict 'not checkable here' and a one-sentence `reason`. The author and each speaker MUST have exactly one "
             + "claim marked `central`: true. `title` MUST be the headline's subject only — "
             + "\"The <publication> article's claims about <a>, <b> and <c>\" — which the "
             + "engine completes from the scores. Every author or subject claim that fell short MUST "

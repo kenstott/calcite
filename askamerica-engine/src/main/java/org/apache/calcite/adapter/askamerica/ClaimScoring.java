@@ -56,12 +56,14 @@ final class ClaimScoring {
 
     static final String KIND_CAUSAL = "causal";
     static final String KIND_ATTACK = "attack";
-    static final List<String> KINDS = Arrays.asList("fact", KIND_CAUSAL, KIND_ATTACK);
+    static final String KIND_OPINION = "opinion";
+    static final List<String> KINDS = Arrays.asList("fact", KIND_CAUSAL, KIND_ATTACK, KIND_OPINION);
 
     /** Asserted as fact with no evidence offered and none found: an insult, an appeal to what
      *  "lots of people think" or "everyone knows". Unlike a claim that cannot be checked here,
      *  it is graded: a piece does not look honest by asserting what nobody can show. */
     static final String VERDICT_UNSUPPORTED = "unsupported";
+    static final String VERDICT_NOT_CHECKABLE = "not checkable here";
 
     /** A party's honesty cannot exceed their central claim's own credit by more than this many
      *  points: accurate detail does not redeem a case whose main assertion failed. */
@@ -167,9 +169,14 @@ final class ClaimScoring {
         return KIND_CAUSAL.equals(c.path("kind").asText("").trim().toLowerCase(Locale.ROOT));
     }
 
-    /** A personal attack: an unsupported claim like any other, and counted on its own line. */
+    /** A personal attack: not checkable, so excluded from the score, and counted on its own line. */
     static boolean isAttack(JsonNode c) {
         return KIND_ATTACK.equals(c.path("kind").asText("").trim().toLowerCase(Locale.ROOT));
+    }
+
+    /** True for an opinion or belief on a personal basis that no evidence can test. */
+    static boolean isOpinion(JsonNode c) {
+        return KIND_OPINION.equals(c.path("kind").asText("").trim().toLowerCase(Locale.ROOT));
     }
 
     /** True for the one claim a party's case depends on. */
@@ -470,11 +477,17 @@ final class ClaimScoring {
             String b = block(c);
             centrals.put(b, Integer.valueOf((centrals.containsKey(b)
                 ? centrals.get(b).intValue() : 0) + (isCentral(c) ? 1 : 0)));
+            if (isOpinion(c) && !VERDICT_NOT_CHECKABLE.equals(verdict(c))) {
+                problems.add("claim " + n + " is `kind`: \"" + KIND_OPINION + "\" with verdict '"
+                    + verdict(c) + "': an opinion or belief no evidence can test is graded '"
+                    + VERDICT_NOT_CHECKABLE + "'. A factual assertion inside it is a separate "
+                    + "claim with its own verdict");
+            }
             if (isAttack(c)) {
-                if (!VERDICT_UNSUPPORTED.equals(verdict(c))) {
+                if (!VERDICT_NOT_CHECKABLE.equals(verdict(c))) {
                     problems.add("claim " + n + " is `kind`: \"" + KIND_ATTACK + "\" with "
-                        + "verdict '" + verdict(c) + "': a personal attack offers no evidence, "
-                        + "so its verdict is '" + VERDICT_UNSUPPORTED + "'. A factual assertion "
+                        + "verdict '" + verdict(c) + "': no evidence can test a personal attack, "
+                        + "so its verdict is '" + VERDICT_NOT_CHECKABLE + "'. A factual assertion "
                         + "inside it is a separate claim with its own verdict");
                 }
                 if (isCentral(c)) {
