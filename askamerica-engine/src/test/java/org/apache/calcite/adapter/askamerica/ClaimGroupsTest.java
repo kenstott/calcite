@@ -354,7 +354,7 @@ class ClaimGroupsTest {
         author("Lots of people think so", "unsupported", "toward_thesis"),
         author("Rents doubled", "mostly false", "toward_thesis"),
         author("Rents rose 4 percent", "true", null));
-    assertEquals(subject + " are very biased and mostly false.",
+    assertEquals(subject + " are very biased and mostly false; 1 claim could not be confirmed.",
         ClaimScoring.headline(subject + ".", bad));
 
     ArrayNode good = claims(author("Rents rose 4 percent", "true", null).put("central", true),
@@ -537,5 +537,51 @@ class ClaimGroupsTest {
         null, null, Collections.<ReportPage.Source>emptyList(), null, null,
         Collections.<ReportPage.Filter>emptyList(), null);
     assertFalse(html.contains("class=\"under-review\""));
+  }
+
+  /** Daily eval q14, run r1 (2026-11-10): two claims graded 'unsupported' and none false
+   *  made the headline read "partly false". */
+  @Test void unsupportedClaimsAreCountedBesideTheAccuracyNotInIt() {
+    ObjectNode central = author("Deaths fell to the lowest rate since 2014", "true", null);
+    central.put("central", true);
+    ArrayNode claims = claims(central,
+        author("Deaths fell 2.5 percent", "true", null),
+        author("Q1 deaths fell 5 percent", "true", null),
+        author("Bicyclist deaths rose 4 percent", "unsupported", "neutral"),
+        author("Pedestrian deaths fell", "unsupported", "neutral"));
+    JsonNode score = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
+    assertEquals(3, score.path("checked").asInt());
+    assertEquals(2, score.path("unsupported").asInt());
+    assertEquals(100, score.path("accuracy_score").asInt());
+    assertEquals(70, score.path("honesty_score").asInt());
+    assertEquals("are accurate; 2 claims could not be confirmed",
+        ClaimScoring.verdictClause(score));
+  }
+
+  @Test void fewerThanThreeCheckedClaimsAreTooFewToRate() {
+    ObjectNode central = author("Deaths fell", "true", null);
+    central.put("central", true);
+    ArrayNode claims = claims(central,
+        author("Bicyclist deaths rose 4 percent", "unsupported", "neutral"),
+        author("Pedestrian deaths fell", "unsupported", "neutral"));
+    assertEquals("are too few to rate; 2 claims could not be confirmed",
+        ClaimScoring.verdictClause(ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR)));
+  }
+
+  /** Daily eval q14, run r3 (2026-11-11): nine of ten claims, all figures the article reported
+   *  as fact, were grouped fidelity, and the headline read "too few to rate". */
+  @Test void moreSourceAuditClaimsThanScoredOnesAreRefused() {
+    ObjectNode central = author("Deaths fell to the lowest rate since 2014", "mostly true",
+        "neutral");
+    central.put("central", true);
+    ArrayNode claims = claims(central,
+        claim("Deaths fell 2.5% to 16,750, NHTSA said", "fidelity", "true"),
+        claim("2021 deaths rose 10.8% to 43,230", "fidelity", "true"));
+    String problem = ClaimScoring.enforce(claims);
+    assertNotNull(problem);
+    assertTrue(problem.contains("2 claims are grouped `fidelity` and only 1 are scored"),
+        problem);
+    claims.add(author("Deaths fell 2.5% to 16,750", "true", null));
+    assertNull(ClaimScoring.enforce(claims));
   }
 }

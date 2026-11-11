@@ -3015,6 +3015,12 @@ public class McpServer {
             + "extension looks up a page's validation by this URL, so it must be the precise "
             + "page under test, not a reference or fact-check source fetched along the way. "
             + "The publish is refused if this is missing when claims are present."));
+        pubProps.set("article_copy_url", prop("string",
+            "For a validation whose `source_url` would not load (403, paywall, empty page): the "
+            + "URL of a copy of the same story that you web_fetched and read, such as a "
+            + "syndication partner's or wire service's page. The claims MUST be extracted from "
+            + "that text. The publish is refused when the article did not load and no copy "
+            + "that loaded is named here."));
         pubProps.set("footnote", prop("string", "The caveat that qualifies the whole report."));
         pubProps.set("byline", prop("string", "Attribution line, e.g. 'Prepared 2026-08-19'."));
         pubProps.set("filters", prop("array",
@@ -4795,6 +4801,9 @@ public class McpServer {
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceReferencedSourcesRead(
                             args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceArticleTextRead(claims,
+                            args.path("source_url").asText(null),
+                            args.path("article_copy_url").asText(null)));
                         addIfPresent(gateProblems, enforceFiguresAccountedFor(claims,
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceMeasureSearched(claims));
@@ -7933,6 +7942,52 @@ public class McpServer {
             + unread.size() + " were never fetched: " + String.join(" , ", unread) + " . "
             + "web_fetch each one (a 403, 404 or timeout counts as fetched), check the claims "
             + "that rest on it against what it actually says, then publish again.";
+    }
+
+    /**
+     * The claims of a validation must come from the article's text: the page at
+     * {@code source_url}, or, when that did not load, a copy of the same story named in
+     * {@code article_copy_url} that did load and carries at least one of the claims' figures.
+     *
+     * <p>Measured live 2026-11-10 (daily eval q14, run r2): investing.com returned 403, no copy
+     * was read, and the report graded only the two claims in the headline. Runs that read the
+     * Reuters copy on another site graded six to ten.
+     */
+    private static String enforceArticleTextRead(JsonNode claims, String articleUrl,
+            String copyUrl) {
+        if (articleUrl == null || articleUrl.trim().isEmpty()
+                || pageLoaded(normalizeUrlForMatch(articleUrl))) {
+            return null;
+        }
+        if (copyUrl == null || copyUrl.trim().isEmpty()) {
+            return "validation refused: the article " + articleUrl + " did not load, so its "
+                + "claims were not read from its text. web_search the headline or a distinctive "
+                + "sentence for a copy of the same story (a syndication partner, the wire "
+                + "service, an archive), web_fetch it, extract the claims from that text, and "
+                + "name it in `article_copy_url`.";
+        }
+        String copy = normalizeUrlForMatch(copyUrl);
+        if (!pageLoaded(copy)) {
+            return "validation refused: `article_copy_url` " + copyUrl + " was not read in this "
+                + "session or did not load. web_fetch a copy of the story that loads and name "
+                + "that one.";
+        }
+        java.util.List<String> figures = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            figures.addAll(distinctiveFigures(c.path("assertion").asText("")));
+        }
+        if (figures.isEmpty()) {
+            return null;
+        }
+        String text = String.join("\n", FETCHED_TEXT.get(copy));
+        for (String f : figures) {
+            if (text.contains(f)) {
+                return null;
+            }
+        }
+        return "validation refused: `article_copy_url` " + copyUrl + " carries none of the "
+            + "claims' figures (" + String.join(", ", figures) + "), so it is not a copy of the "
+            + "story the claims came from. Name the copy you extracted them from.";
     }
 
     /** Verdicts that say the claim is wrong or could not be confirmed. */

@@ -734,4 +734,48 @@ class ExternalCheckGateTest {
         assertNotNull(centralGate("[{\"assertion\":\"a\",\"central\":true,\"verdict\":\"true\"},"
             + "{\"assertion\":\"b\",\"verdict\":\"not checkable here\"}]"));
     }
+
+    private static String articleTextGate(String claimsJson, String copyUrl) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceArticleTextRead",
+            JsonNode.class, String.class, String.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE, copyUrl);
+    }
+
+    private static String page(String body) {
+        StringBuilder sb = new StringBuilder(body);
+        while (sb.length() < 300) {
+            sb.append(" Traffic safety advocates called the figures encouraging.");
+        }
+        return sb.toString();
+    }
+
+    private static final String CLAIMS =
+        "[{\"assertion\":\"Deaths fell 2.5% to 16,750\",\"verdict\":\"true\"}]";
+
+    @Test void articleThatLoadedNeedsNoCopy() throws Exception {
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(ARTICLE),
+            java.util.Collections.singletonList(page("Deaths fell 2.5% to 16,750.")));
+        assertNull(articleTextGate(CLAIMS, null));
+    }
+
+    /** Daily eval q14, run r2 (2026-11-10): investing.com returned 403, no copy was read, and
+     *  only the two headline claims were graded. */
+    @Test void articleThatDidNotLoadNeedsACopyCarryingTheClaimsFigures() throws Exception {
+        String problem = articleTextGate(CLAIMS, null);
+        assertNotNull(problem);
+        assertTrue(problem.contains("did not load") && problem.contains("article_copy_url"),
+            problem);
+
+        String copy = "https://www.aol.com/articles/us-traffic-deaths.html";
+        assertTrue(articleTextGate(CLAIMS, copy).contains("was not read"));
+
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(page("An unrelated story about rents.")));
+        assertTrue(articleTextGate(CLAIMS, copy).contains("carries none of the claims' figures"));
+
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(page("U.S. traffic deaths fell 2.5% to 16,750.")));
+        assertNull(articleTextGate(CLAIMS, copy));
+    }
 }

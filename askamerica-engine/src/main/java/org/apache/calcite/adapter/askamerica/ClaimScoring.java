@@ -279,6 +279,9 @@ final class ClaimScoring {
         int attacks = 0;
         int central = 0;
         double centralCredit = -1;
+        int checked = 0;
+        int unsupported = 0;
+        double checkedSum = 0;
         ArrayNode citejacked = MAPPER.createArrayNode();
         int n = 0;
         for (JsonNode c : claims) {
@@ -303,6 +306,12 @@ final class ClaimScoring {
             }
             graded++;
             creditSum += credit;
+            if (VERDICT_UNSUPPORTED.equals(verdict(c))) {
+                unsupported++;
+            } else {
+                checked++;
+                checkedSum += credit;
+            }
             if (credit < 1) {
                 errors++;
                 double w = 1 - credit;
@@ -333,6 +342,16 @@ final class ClaimScoring {
         } else {
             out.put("honesty", "no checkable claims");
         }
+        out.put("checked", checked);
+        out.put("unsupported", unsupported);
+        if (checked > 0) {
+            int accuracy = (int) Math.round(100 * checkedSum / checked);
+            if (centralCredit >= 0 && !VERDICT_UNSUPPORTED.equals(verdict(claims.get(central - 1)))) {
+                accuracy = Math.min(accuracy,
+                    (int) Math.round(100 * centralCredit) + CENTRAL_CAP_MARGIN);
+            }
+            out.put("accuracy_score", accuracy);
+        }
         out.put("errors", errors);
         if (errors > 0) {
             int bias = (int) Math.round(100 * lean / errorWeight);
@@ -349,30 +368,38 @@ final class ClaimScoring {
     /**
      * The headline's verdict on a block's claims — "are very biased and mostly false", "are
      * balanced and accurate" — from that block's scores. Bias is left out when the errors are
-     * too few to show a lean.
+     * too few to show a lean. Accuracy is judged on the claims checked against evidence; an
+     * 'unsupported' claim was never shown false, so it is counted beside the verdict instead.
      */
     static String verdictClause(JsonNode score) {
-        if (score.path("graded").asInt() < MIN_FOR_LABEL) {
-            return "are too few to rate";
+        if (score.path("checked").asInt() < MIN_FOR_LABEL) {
+            return "are too few to rate" + unsupportedNote(score);
         }
-        int honesty = score.path("honesty_score").asInt();
-        String accuracy = honesty >= 90 ? "accurate"
-            : honesty >= 75 ? "mostly accurate"
-            : honesty >= 50 ? "partly false"
-            : honesty >= 25 ? "mostly false" : "false";
+        int checked = score.path("accuracy_score").asInt();
+        String accuracy = checked >= 90 ? "accurate"
+            : checked >= 75 ? "mostly accurate"
+            : checked >= 50 ? "partly false"
+            : checked >= 25 ? "mostly false" : "false";
         int errors = score.path("errors").asInt();
+        String clause;
         if (errors == 0) {
-            return "are balanced and " + accuracy;
+            clause = "are balanced and " + accuracy;
+        } else if (errors < MIN_FOR_LABEL) {
+            clause = "are " + accuracy;
+        } else {
+            int bias = score.path("bias_score").asInt();
+            clause = bias <= -25 ? "are " + accuracy + " and cut against its own case"
+                : "are " + (bias >= 75 ? "very biased" : bias >= 50 ? "biased"
+                    : bias >= 25 ? "somewhat biased" : "balanced") + " and " + accuracy;
         }
-        if (errors < MIN_FOR_LABEL) {
-            return "are " + accuracy;
-        }
-        int bias = score.path("bias_score").asInt();
-        if (bias <= -25) {
-            return "are " + accuracy + " and cut against its own case";
-        }
-        return "are " + (bias >= 75 ? "very biased" : bias >= 50 ? "biased"
-            : bias >= 25 ? "somewhat biased" : "balanced") + " and " + accuracy;
+        return clause + unsupportedNote(score);
+    }
+
+    private static String unsupportedNote(JsonNode score) {
+        int unsupported = score.path("unsupported").asInt();
+        return unsupported == 0 ? ""
+            : "; " + unsupported + (unsupported == 1 ? " claim" : " claims")
+                + " could not be confirmed";
     }
 
     /** The block a validation's headline speaks for: the author's claims, or the only
@@ -550,6 +577,22 @@ final class ClaimScoring {
                 + "repeats from a source as its own, are `" + GROUP_AUTHOR + "` claims, and a "
                 + "person or organization it covers asserting something is a `" + GROUP_SUBJECT
                 + "` claim; mark exactly one of each party's claims `central`");
+        }
+        int fidelity = 0;
+        for (JsonNode c : claims) {
+            if (GROUP_FIDELITY.equals(group(c))) {
+                fidelity++;
+            }
+        }
+        int scored = claims.size() - fidelity - ungrouped.size();
+        if (scored > 0 && fidelity > scored) {
+            problems.add(fidelity + " claims are grouped `" + GROUP_FIDELITY + "` and only "
+                + scored + " are scored. A figure or event the piece reports as fact is the "
+                + "piece's own `" + GROUP_AUTHOR + "` claim, graded on the evidence, whether or "
+                + "not the piece attributes it (\"fell 2.5% to 16,750, NHTSA said\" is the "
+                + "author's claim that deaths fell 2.5% to 16,750). `" + GROUP_FIDELITY + "` "
+                + "audits only whether the piece relayed a source it cites faithfully; it is "
+                + "never the only place a reported figure is graded");
         }
         if (!ungrouped.isEmpty()) {
             problems.add(0, "claim(s) " + ungrouped + " carry no valid `group`: `"
