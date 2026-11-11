@@ -36,7 +36,7 @@ public class HudPitCoCCountsProvider extends AbstractHudPitCountsDataProvider {
   }
 
   @Override protected Map<String, Object> buildRow(int year, Map<String, String> idValues,
-      String metricName, double count) {
+      String metricName, double count, String sourceVintage) {
     // HUD's national total row leaves 'CoC Number' blank (only 'CoC Name' = 'Total' identifies
     // it); substitute a stable sentinel so (year, coc_number, metric_name) stays a non-null PK,
     // and skip the state_abbr derivation for it - "TO" would be a false state code.
@@ -56,6 +56,7 @@ public class HudPitCoCCountsProvider extends AbstractHudPitCountsDataProvider {
         ? null : cocNumber.substring(0, 2));
     row.put("metric_name", metricName);
     row.put("count", Integer.valueOf((int) Math.round(count)));
+    row.put("source_vintage", sourceVintage);
     return row;
   }
 }

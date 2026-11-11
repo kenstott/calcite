@@ -37,6 +37,7 @@ import java.net.URI;
 import java.time.Year;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,6 +64,13 @@ import java.util.regex.Pattern;
  * after the last real data row — the footnote rows have text only in one identifier column and no
  * metric values, so the null-cell skip already excludes them without any special-case detection.
  *
+ * <p>HUD re-publishes the whole history each year as a new cumulative workbook, and a newer
+ * edition can drop or rename breakout columns for earlier years. The newest workbook is
+ * authoritative for every (year, metric) it publishes; the older {@code 2007-<endYear>} workbooks
+ * down to {@code 2007-2024} contribute only (year, metric) pairs the newer ones lack, and each
+ * row's {@code source_vintage} records which workbook supplied it. Metric names are kept exactly
+ * as each workbook publishes them, so a renamed breakout appears under both names in a year.
+ *
  * <p>HUD's WAF answers a non-browser User-Agent with an HTTP 202 challenge and no file (same
  * gate as {@link HudPictureCountyDataProvider}); a full browser UA bypasses it.
  */
@@ -82,8 +90,13 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
 
   private static final String WORKBOOK_BASE_URL =
       "https://www.huduser.gov/portal/sites/default/files/xls/";
-  /** End year of the first cumulative workbook (2007-2025) that carries the 2025 count. */
+  /** End year of the first cumulative workbook (2007-2025) that carries the 2025 count; at least one edition from this year on must be published. */
   private static final int FIRST_KNOWN_END_YEAR = 2025;
+  /**
+   * End year of the oldest cumulative workbook still read for metrics the newer editions dropped
+   * (2007-2024 carries breakout columns that the 2007-2025 edition no longer publishes).
+   */
+  private static final int OLDEST_VINTAGE_END_YEAR = 2024;
 
   /**
    * File name of this table's workbook minus the {@code 2007-<endYear>-} prefix, e.g.
@@ -96,31 +109,55 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
   /** Header text of columns that identify the row (CoC/state) rather than a metric value. */
   protected abstract Set<String> idColumnNames();
 
-  /** Builds one output row for a single (year, entity, metric) melted cell. */
+  /**
+   * Builds one output row for a single (year, entity, metric) melted cell. {@code sourceVintage}
+   * names the workbook the cell came from, e.g. {@code 2007-2025}.
+   */
   protected abstract Map<String, Object> buildRow(int year, Map<String, String> idValues,
-      String metricName, double count);
+      String metricName, double count, String sourceVintage);
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
-    String url = null;
-    byte[] body = null;
-    // Newest first: the first workbook HUD has published wins. Only a 404 means "not published
-    // yet"; every other failure is thrown by download().
-    for (int endYear = Year.now(ZoneOffset.UTC).getValue(); endYear >= FIRST_KNOWN_END_YEAR; endYear--) {
-      String candidate = WORKBOOK_BASE_URL + "2007-" + endYear + "-" + workbookSuffix();
-      LOGGER.info("{}: fetching {}", getClass().getSimpleName(), candidate);
-      body = download(candidate);
-      if (body != null) {
-        url = candidate;
-        break;
-      }
-      LOGGER.info("{}: {} not published (HTTP 404)", getClass().getSimpleName(), candidate);
-    }
-    if (body == null) {
-      throw new IOException("No HUD PIT workbook published for " + workbookSuffix()
-          + " from 2007-" + Year.now(ZoneOffset.UTC).getValue() + " down to 2007-" + FIRST_KNOWN_END_YEAR);
-    }
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    // (year|metric) pairs already supplied by a newer workbook; an older workbook only
+    // contributes pairs outside this set, so a metric HUD still publishes is never duplicated
+    // under its older vintage while a metric HUD dropped keeps its history.
+    Set<String> coveredYearMetrics = new HashSet<String>();
+    boolean newestFound = false;
+    // Newest first. Only a 404 means "not published yet"; every other failure is thrown by
+    // download(). The newest workbook must exist; older vintages down to
+    // OLDEST_VINTAGE_END_YEAR are read when still hosted.
+    for (int endYear = Year.now(ZoneOffset.UTC).getValue(); endYear >= OLDEST_VINTAGE_END_YEAR;
+        endYear--) {
+      String vintage = "2007-" + endYear;
+      String candidate = WORKBOOK_BASE_URL + vintage + "-" + workbookSuffix();
+      LOGGER.info("{}: fetching {}", getClass().getSimpleName(), candidate);
+      byte[] body = download(candidate);
+      if (body == null) {
+        LOGGER.info("{}: {} not published (HTTP 404)", getClass().getSimpleName(), candidate);
+        continue;
+      }
+      if (endYear >= FIRST_KNOWN_END_YEAR) {
+        newestFound = true;
+      }
+      Set<String> vintageYearMetrics = new HashSet<String>();
+      int before = rows.size();
+      readWorkbook(body, candidate, vintage, coveredYearMetrics, vintageYearMetrics, rows);
+      coveredYearMetrics.addAll(vintageYearMetrics);
+      LOGGER.info("{}: {} contributed {} long-format rows", getClass().getSimpleName(), candidate,
+          rows.size() - before);
+    }
+    if (!newestFound) {
+      throw new IOException("No HUD PIT workbook published for " + workbookSuffix()
+          + " from 2007-" + Year.now(ZoneOffset.UTC).getValue() + " down to 2007-"
+          + OLDEST_VINTAGE_END_YEAR);
+    }
+    LOGGER.info("{}: {} long-format rows in total", getClass().getSimpleName(), rows.size());
+    return rows.iterator();
+  }
+
+  private void readWorkbook(byte[] body, String url, String vintage, Set<String> skipYearMetrics,
+      Set<String> seenYearMetrics, List<Map<String, Object>> rows) throws IOException {
     try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(body))) {
       XSSFBReader reader = new XSSFBReader(pkg);
       XSSFBStylesTable styles = reader.getXSSFBStylesTable();
@@ -134,18 +171,19 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
             continue;
           }
           int year = Integer.parseInt(sheetName.trim());
-          parseSheet(sheetStream, styles, sst, year, rows);
+          parseSheet(sheetStream, styles, sst, year, vintage, skipYearMetrics, seenYearMetrics,
+              rows);
         }
       }
     } catch (OpenXML4JException | SAXException e) {
       throw new IOException("Failed to parse HUD PIT counts workbook from " + url, e);
     }
-    LOGGER.info("{}: {} long-format rows from {}", getClass().getSimpleName(), rows.size(), url);
-    return rows.iterator();
   }
 
   private void parseSheet(InputStream sheetStream, XSSFBStylesTable styles,
-      XSSFBSharedStringsTable sst, int year, List<Map<String, Object>> out) throws IOException {
+      XSSFBSharedStringsTable sst, final int year, final String vintage,
+      final Set<String> skipYearMetrics, final Set<String> seenYearMetrics,
+      final List<Map<String, Object>> out) throws IOException {
     final Set<String> idColumns = idColumnNames();
     final List<String> headers = new ArrayList<String>();
     final List<String> currentRow = new ArrayList<String>();
@@ -175,12 +213,17 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
           if (h == null || idColumns.contains(h)) {
             continue;
           }
+          String yearMetric = year + "|" + h;
+          if (skipYearMetrics.contains(yearMetric)) {
+            continue;
+          }
           String raw = i < currentRow.size() ? currentRow.get(i) : null;
           Double value = parseCount(raw);
           if (value == null) {
             continue;
           }
-          out.add(buildRow(year, idValues, h, value.doubleValue()));
+          seenYearMetrics.add(yearMetric);
+          out.add(buildRow(year, idValues, h, value.doubleValue(), vintage));
         }
       }
 
