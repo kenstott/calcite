@@ -42,6 +42,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -118,65 +119,120 @@ abstract class AbstractHudPitCountsDataProvider implements DataProvider {
 
   @Override public Iterator<Map<String, Object>> fetch(EtlPipelineConfig config,
       Map<String, String> variables) throws IOException {
-    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
-    // (year|metric) pairs already supplied by a newer workbook; an older workbook only
-    // contributes pairs outside this set, so a metric HUD still publishes is never duplicated
-    // under its older vintage while a metric HUD dropped keeps its history.
-    Set<String> coveredYearMetrics = new HashSet<String>();
-    boolean newestFound = false;
-    // Newest first. Only a 404 means "not published yet"; every other failure is thrown by
-    // download(). The newest workbook must exist; older vintages down to
-    // OLDEST_VINTAGE_END_YEAR are read when still hosted.
-    for (int endYear = Year.now(ZoneOffset.UTC).getValue(); endYear >= OLDEST_VINTAGE_END_YEAR;
-        endYear--) {
-      String vintage = "2007-" + endYear;
-      String candidate = WORKBOOK_BASE_URL + vintage + "-" + workbookSuffix();
-      LOGGER.info("{}: fetching {}", getClass().getSimpleName(), candidate);
-      byte[] body = download(candidate);
-      if (body == null) {
-        LOGGER.info("{}: {} not published (HTTP 404)", getClass().getSimpleName(), candidate);
-        continue;
-      }
-      if (endYear >= FIRST_KNOWN_END_YEAR) {
-        newestFound = true;
-      }
-      Set<String> vintageYearMetrics = new HashSet<String>();
-      int before = rows.size();
-      readWorkbook(body, candidate, vintage, coveredYearMetrics, vintageYearMetrics, rows);
-      coveredYearMetrics.addAll(vintageYearMetrics);
-      LOGGER.info("{}: {} contributed {} long-format rows", getClass().getSimpleName(), candidate,
-          rows.size() - before);
-    }
-    if (!newestFound) {
-      throw new IOException("No HUD PIT workbook published for " + workbookSuffix()
-          + " from 2007-" + Year.now(ZoneOffset.UTC).getValue() + " down to 2007-"
-          + OLDEST_VINTAGE_END_YEAR);
-    }
-    LOGGER.info("{}: {} long-format rows in total", getClass().getSimpleName(), rows.size());
-    return rows.iterator();
+    return new VintageIterator();
   }
 
-  private void readWorkbook(byte[] body, String url, String vintage, Set<String> skipYearMetrics,
-      Set<String> seenYearMetrics, List<Map<String, Object>> rows) throws IOException {
-    try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(body))) {
-      XSSFBReader reader = new XSSFBReader(pkg);
-      XSSFBStylesTable styles = reader.getXSSFBStylesTable();
-      XSSFBSharedStringsTable sst = new XSSFBSharedStringsTable(pkg);
-      XSSFBReader.SheetIterator sheetIterator =
-          (XSSFBReader.SheetIterator) reader.getSheetsData();
-      while (sheetIterator.hasNext()) {
-        try (InputStream sheetStream = sheetIterator.next()) {
-          String sheetName = sheetIterator.getSheetName();
-          if (sheetName == null || !YEAR_SHEET.matcher(sheetName.trim()).matches()) {
-            continue;
+  /**
+   * Streams rows one worksheet at a time so only a single sheet's melted rows (plus one
+   * workbook's bytes) is held in memory, never the whole multi-vintage history. Workbooks are
+   * read newest first; (year, metric) pairs a newer workbook supplied are skipped in older ones,
+   * so a metric HUD still publishes is never duplicated under an older vintage while a metric
+   * HUD dropped keeps its history.
+   */
+  private final class VintageIterator implements Iterator<Map<String, Object>> {
+    private final Set<String> coveredYearMetrics = new HashSet<String>();
+    private Set<String> vintageYearMetrics = new HashSet<String>();
+    private final Iterator<Map<String, Object>> empty = new ArrayList<Map<String, Object>>().iterator();
+    private Iterator<Map<String, Object>> current = empty;
+    private int nextEndYear = Year.now(ZoneOffset.UTC).getValue();
+    private boolean newestFound;
+    private byte[] body;
+    private String candidate;
+    private String vintage;
+    private OPCPackage pkg;
+    private XSSFBStylesTable styles;
+    private XSSFBSharedStringsTable sst;
+    private XSSFBReader.SheetIterator sheets;
+    private long total;
+    private boolean done;
+
+    @Override public boolean hasNext() {
+      try {
+        while (!current.hasNext()) {
+          if (done) {
+            return false;
           }
-          int year = Integer.parseInt(sheetName.trim());
-          parseSheet(sheetStream, styles, sst, year, vintage, skipYearMetrics, seenYearMetrics,
-              rows);
+          advance();
         }
+        return true;
+      } catch (IOException e) {
+        throw new IllegalStateException(e.getMessage(), e);
       }
-    } catch (OpenXML4JException | SAXException e) {
-      throw new IOException("Failed to parse HUD PIT counts workbook from " + url, e);
+    }
+
+    @Override public Map<String, Object> next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      return current.next();
+    }
+
+    private void advance() throws IOException {
+      if (sheets == null) {
+        openNextWorkbook();
+        return;
+      }
+      if (!sheets.hasNext()) {
+        closeWorkbook();
+        return;
+      }
+      List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+      try (InputStream sheetStream = sheets.next()) {
+        String sheetName = sheets.getSheetName();
+        if (sheetName == null || !YEAR_SHEET.matcher(sheetName.trim()).matches()) {
+          return;
+        }
+        int year = Integer.parseInt(sheetName.trim());
+        parseSheet(sheetStream, styles, sst, year, vintage, coveredYearMetrics,
+            vintageYearMetrics, rows);
+      }
+      total += rows.size();
+      current = rows.iterator();
+    }
+
+    private void openNextWorkbook() throws IOException {
+      while (nextEndYear >= OLDEST_VINTAGE_END_YEAR) {
+        int endYear = nextEndYear--;
+        vintage = "2007-" + endYear;
+        candidate = WORKBOOK_BASE_URL + vintage + "-" + workbookSuffix();
+        LOGGER.info("{}: fetching {}", getClass().getSimpleName(), candidate);
+        body = download(candidate);
+        if (body == null) {
+          LOGGER.info("{}: {} not published (HTTP 404)", getClass().getSimpleName(), candidate);
+          continue;
+        }
+        if (endYear >= FIRST_KNOWN_END_YEAR) {
+          newestFound = true;
+        }
+        try {
+          pkg = OPCPackage.open(new ByteArrayInputStream(body));
+          XSSFBReader reader = new XSSFBReader(pkg);
+          styles = reader.getXSSFBStylesTable();
+          sst = new XSSFBSharedStringsTable(pkg);
+          sheets = (XSSFBReader.SheetIterator) reader.getSheetsData();
+        } catch (OpenXML4JException | SAXException e) {
+          throw new IOException("Failed to parse HUD PIT counts workbook from " + candidate, e);
+        }
+        return;
+      }
+      if (!newestFound) {
+        throw new IOException("No HUD PIT workbook published for " + workbookSuffix()
+            + " from 2007-" + Year.now(ZoneOffset.UTC).getValue() + " down to 2007-"
+            + OLDEST_VINTAGE_END_YEAR);
+      }
+      LOGGER.info("{}: {} long-format rows in total", getClass().getSimpleName(), total);
+      done = true;
+    }
+
+    private void closeWorkbook() throws IOException {
+      pkg.revert();
+      coveredYearMetrics.addAll(vintageYearMetrics);
+      vintageYearMetrics = new HashSet<String>();
+      pkg = null;
+      styles = null;
+      sst = null;
+      sheets = null;
+      body = null;
     }
   }
 
