@@ -569,7 +569,8 @@ final class QuestionGuidance {
             + "claim marked `central`: true. `title` MUST be the headline's subject only — "
             + "\"The <publication> article's claims about <a>, <b> and <c>\" — which the "
             + "engine completes from the scores. Every author or subject claim that fell short MUST "
-            + "carry `errs`: toward_thesis | against_thesis | neutral. The engine computes the "
+            + "carry `errs`: toward_thesis | against_thesis | neutral. Every author or subject claim graded 'mostly true', 'partially false', 'mostly false' or 'false' MUST carry `inaccuracy`: what in the claim differs from the evidence. A figure that matches the evidence MUST be graded 'true' even when it is an estimate, a projection, preliminary or from a secondary source; a claim no evidence was found for MUST be graded 'unsupported'. "
+            + "The engine computes the "
             + "honesty and bias scores for the author and each speaker; you MUST NOT assign a "
             + "rating of your own, and you MUST report them for this article only."),
         new Template(

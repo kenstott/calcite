@@ -49,8 +49,14 @@ class ClaimGroupsTest {
       c.put("group", group);
     }
     c.put("verdict", verdict);
+    if (FELL_SHORT.contains(verdict)) {
+      c.put("inaccuracy", "The figure in the claim differs from the one in the evidence");
+    }
     return c;
   }
+
+  private static final java.util.List<String> FELL_SHORT = java.util.Arrays.asList(
+      "mostly true", "partially false", "partly false", "mostly false", "false");
 
   /** An author claim offering no cited evidence; {@code errs} may be null. */
   private static ObjectNode author(String assertion, String verdict, String errs) {
@@ -270,7 +276,9 @@ class ClaimGroupsTest {
     assertEquals(2, block.path("claims").get(3).path("n").asInt());
   }
 
-  @Test void anAssertionWithNoEvidenceBehindItCountsAgainstHonesty() {
+  /** An assertion no evidence was found for is neither honest nor dishonest: it is left out of
+   *  the honesty score, as it is of the accuracy score, and counted beside them. */
+  @Test void anAssertionWithNoEvidenceFoundIsLeftOutOfHonesty() {
     ArrayNode claims = claims(author("Rents rose 4 percent", "true", null),
         author("Everyone knows the city is finished", "unsupported", "toward_thesis"),
         author("Morale collapsed", "not checkable here", null));
@@ -278,7 +286,8 @@ class ClaimGroupsTest {
     JsonNode score = ClaimScoring.score(claims, ClaimScoring.GROUP_AUTHOR);
     assertEquals(2, score.path("graded").asInt());
     assertEquals(1, score.path("excluded").asInt());
-    assertEquals(63, score.path("honesty_score").asInt());
+    assertEquals(1, score.path("unsupported").asInt());
+    assertEquals(100, score.path("honesty_score").asInt());
     assertTrue(java.util.Arrays.asList(McpServer.VERDICTS).contains("unsupported"));
   }
 
@@ -553,7 +562,7 @@ class ClaimGroupsTest {
     assertEquals(3, score.path("checked").asInt());
     assertEquals(2, score.path("unsupported").asInt());
     assertEquals(100, score.path("accuracy_score").asInt());
-    assertEquals(70, score.path("honesty_score").asInt());
+    assertEquals(100, score.path("honesty_score").asInt());
     assertEquals("are accurate; 2 claims could not be confirmed",
         ClaimScoring.verdictClause(score));
   }
@@ -583,5 +592,44 @@ class ClaimGroupsTest {
         problem);
     claims.add(author("Deaths fell 2.5% to 16,750", "true", null));
     assertNull(ClaimScoring.enforce(claims));
+  }
+
+  /** Daily eval q14 (2026-11-10): an estimate that matched NHTSA's own was graded 'mostly
+   *  true' with no difference named, and the hedge cost the article a Pinocchio. */
+  @Test void aVerdictBelowTrueMustNameTheInaccuracy() {
+    ObjectNode central = author("Deaths fell to 16,750", "mostly true", "neutral");
+    central.put("central", true);
+    central.remove("inaccuracy");
+    String refusal = ClaimScoring.enforce(claims(central,
+        author("Deaths fell 2.5 percent", "true", null)));
+    assertNotNull(refusal);
+    assertTrue(refusal.contains("claim 1 is graded 'mostly true' with no `inaccuracy`"),
+        refusal);
+    assertTrue(refusal.contains("the verdict MUST be 'true'"), refusal);
+  }
+
+  @Test void aHedgeAboutTheFigureIsNotAnInaccuracy() {
+    ObjectNode central = author("Deaths fell to 16,750", "mostly true", "neutral");
+    central.put("central", true);
+    central.put("inaccuracy", "It is a preliminary estimate, not primary-confirmed");
+    String refusal = ClaimScoring.enforce(claims(central,
+        author("Deaths fell 2.5 percent", "true", null)));
+    assertNotNull(refusal);
+    assertTrue(refusal.contains("names a hedge about the figure"), refusal);
+  }
+
+  @Test void aStatedDifferenceFromAnEstimateIsAnInaccuracy() {
+    ObjectNode central = author("Deaths fell to 16,750", "mostly true", "neutral");
+    central.put("central", true);
+    central.put("inaccuracy", "NHTSA's estimate is 16,950, not 16,750");
+    assertNull(ClaimScoring.enforce(claims(central,
+        author("Deaths fell 2.5 percent", "true", null))));
+  }
+
+  @Test void unsupportedAndTrueClaimsNeedNoInaccuracy() {
+    ObjectNode central = author("Deaths fell to 16,750", "true", null);
+    central.put("central", true);
+    assertNull(ClaimScoring.enforce(claims(central,
+        author("Bicyclist deaths rose 4 percent", "unsupported", "neutral"))));
   }
 }

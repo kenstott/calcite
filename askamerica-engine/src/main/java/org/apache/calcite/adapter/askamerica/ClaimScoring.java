@@ -264,8 +264,9 @@ final class ClaimScoring {
 
     /**
      * One scored block's result: how many claims were graded and how many could not be, the
-     * honesty score (0-100, the mean credit of the graded claims, capped by the central
-     * claim) with its characterization, the bias score (-100 to 100, the net share of the
+     * honesty score (0-100, the mean credit of the claims checked against evidence, capped by
+     * the central claim; an 'unsupported' claim was never shown false, so it is left out of
+     * honesty, accuracy and bias and counted beside them) with its characterization, the bias score (-100 to 100, the net share of the
      * error that favours the party's own case) with its characterization, how many of the
      * claims are personal attacks, and the numbers of the citejacked claims.
      */
@@ -305,12 +306,13 @@ final class ClaimScoring {
                 continue;
             }
             graded++;
-            creditSum += credit;
-            if (VERDICT_UNSUPPORTED.equals(verdict(c))) {
+            boolean isUnsupported = VERDICT_UNSUPPORTED.equals(verdict(c));
+            if (isUnsupported) {
                 unsupported++;
             } else {
                 checked++;
                 checkedSum += credit;
+                creditSum += credit;
             }
             if (credit < 1) {
                 errors++;
@@ -327,9 +329,11 @@ final class ClaimScoring {
         if (central > 0) {
             out.put("central", central);
         }
-        if (graded > 0) {
-            int honesty = (int) Math.round(100 * creditSum / graded);
-            if (centralCredit >= 0) {
+        boolean centralUnsupported = central > 0
+            && VERDICT_UNSUPPORTED.equals(verdict(claims.get(central - 1)));
+        if (checked > 0) {
+            int honesty = (int) Math.round(100 * creditSum / checked);
+            if (centralCredit >= 0 && !centralUnsupported) {
                 int cap = (int) Math.round(100 * centralCredit) + CENTRAL_CAP_MARGIN;
                 if (honesty > cap) {
                     out.put("honesty_before_cap", honesty);
@@ -337,7 +341,7 @@ final class ClaimScoring {
                 }
             }
             out.put("honesty_score", honesty);
-            out.put("honesty", graded < MIN_FOR_LABEL
+            out.put("honesty", checked < MIN_FOR_LABEL
                 ? "too few checkable claims to characterize" : honestyLabel(honesty));
         } else {
             out.put("honesty", "no checkable claims");
@@ -346,7 +350,7 @@ final class ClaimScoring {
         out.put("unsupported", unsupported);
         if (checked > 0) {
             int accuracy = (int) Math.round(100 * checkedSum / checked);
-            if (centralCredit >= 0 && !VERDICT_UNSUPPORTED.equals(verdict(claims.get(central - 1)))) {
+            if (centralCredit >= 0 && !centralUnsupported) {
                 accuracy = Math.min(accuracy,
                     (int) Math.round(100 * centralCredit) + CENTRAL_CAP_MARGIN);
             }
@@ -467,6 +471,46 @@ final class ClaimScoring {
      * the author and each speaker with exactly one central claim. Returns null when the claims
      * can be scored.
      */
+    /** Words that describe how firm a figure is, not how it differs from the evidence. */
+    private static final java.util.regex.Pattern HEDGE = java.util.regex.Pattern.compile(
+        "estimate|projection|projected|preliminary|forward[- ]looking|on track|not primary"
+        + "|secondary|not confirmed|unconfirmed|unverified|could not (find|locate|confirm)"
+        + "|plausib|not a record|not official|not yet final",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * A graded verdict below 'true' MUST name what in the claim differs from the evidence, in
+     * `inaccuracy`. A hedge about the figure's firmness is not an inaccuracy: such a claim is
+     * 'true' when the evidence matches it and 'unsupported' when no evidence was found.
+     */
+    static String inaccuracyProblem(JsonNode c, int n) {
+        double credit = credit(c);
+        if (credit < 0 || credit >= 1 || VERDICT_UNSUPPORTED.equals(verdict(c))) {
+            return null;
+        }
+        String inaccuracy = c.path("inaccuracy").asText("").trim();
+        String fix = "If nothing in the claim differs from the evidence, the verdict MUST be "
+            + "'true'; if no evidence was found, it MUST be 'unsupported'";
+        if (inaccuracy.isEmpty()) {
+            return "claim " + n + " is graded '" + verdict(c) + "' with no `inaccuracy`: it "
+                + "MUST state what in the claim differs from the evidence. " + fix;
+        }
+        if (!isCausal(c) && !inaccuracy.matches("(?s).*\\d.*")
+                && HEDGE.matcher(inaccuracy).find()) {
+            return "claim " + n + " is graded '" + verdict(c) + "' and its `inaccuracy` (\""
+                + inaccuracy + "\") names a hedge about the figure, not a difference from the "
+                + "evidence. An estimate, projection, preliminary or secondary-source figure "
+                + "that matches the evidence MUST NOT be graded below 'true'. " + fix;
+        }
+        return null;
+    }
+
+    private static void addIfPresent(List<String> problems, String p) {
+        if (p != null) {
+            problems.add(p);
+        }
+    }
+
     static String enforce(JsonNode claims) {
         if (claims.size() < 2) {
             return null;
@@ -561,6 +605,7 @@ final class ClaimScoring {
                 problems.add("claim " + n + " fell short of true and supported but carries no "
                     + "valid `errs` (" + String.join(" | ", ERRS) + ")");
             }
+            addIfPresent(problems, inaccuracyProblem(c, n));
         }
         for (java.util.Map.Entry<String, Integer> e : centrals.entrySet()) {
             if (e.getValue().intValue() != 1) {

@@ -919,7 +919,7 @@ public class McpServer {
             + "the fact.\n"
             + "7. create_report_artifact with the `claims` array (one entry per assertion, each "
             + "with `group`, `speaker`, `kind`, `central`, `rests_on`, `support`, "
-            + "`source_finding`, `errs`, "
+            + "`source_finding`, `errs`, `inaccuracy`, "
             + "article_value, warehouse_value, independent_value, sources, table, "
             + "sql and reason), `source_url` (the article's URL), a `title` that MUST be the "
             + "headline's subject only (\"The <publication> article's claims about <a>, <b> "
@@ -962,7 +962,8 @@ public class McpServer {
             + "claim whose verdict is not `true`, or whose support is `overreach` or "
             + "`contradicted`, MUST carry `errs`: `toward_thesis` when the error makes that "
             + "party's own case look stronger, `against_thesis` when it weakens it, `neutral` "
-            + "otherwise. The engine computes an honesty score and a bias score for the "
+            + "otherwise. Every author or subject claim graded 'mostly true', 'partially false', 'mostly false' or 'false' MUST carry `inaccuracy`: what in the claim differs from the evidence. A figure that matches the evidence MUST be graded 'true' even when it is an estimate, a projection, preliminary or from a secondary source; a claim no evidence was found for MUST be graded 'unsupported'. "
+            + "The engine computes an honesty score and a bias score for the "
             + "author and for each speaker from these fields and returns each with its "
             + "characterization. You MUST NOT assign a rating of your own. You MUST report "
             + "the engine's scores and characterizations as returned, for this article only, "
@@ -2937,7 +2938,8 @@ public class McpServer {
             + "contradicted (the evidence's own finding runs against the claim) | decorative "
             + "(the evidence does not bear on the claim). Every author or subject claim that "
             + "is not `true`, or whose support is overreach or contradicted, carries `errs`: "
-            + "toward_thesis | against_thesis | neutral. The engine computes an honesty score "
+            + "toward_thesis | against_thesis | neutral. Every author or subject claim graded 'mostly true', 'partially false', 'mostly false' or 'false' MUST carry `inaccuracy`: what in the claim differs from the evidence. A figure that matches the evidence MUST be graded 'true' even when it is an estimate, a projection, preliminary or from a secondary source; a claim no evidence was found for MUST be graded 'unsupported'. "
+            + "The engine computes an honesty score "
             + "(0-100) and a bias score (-100 to 100) for the author and for each speaker from "
             + "these fields; a claim that overreaches its evidence counts for at most half and "
             + "one its evidence contradicts counts for nothing. `kind` is `causal` for a "
@@ -9639,6 +9641,7 @@ public class McpServer {
                 c.path("source_finding").asText(""));
             appendDetailRow(details, "Evidence support", supportText(support));
             appendDetailRow(details, "Errs", errsText(c.path("errs").asText("")));
+            appendDetailRow(details, "Inaccuracy", c.path("inaccuracy").asText(""));
             appendDetailRow(details, "Why", c.path("reason").asText(""));
             appendDetailRow(details, "Evidence found and set aside because",
                 c.path("why_not").asText(""));
