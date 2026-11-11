@@ -471,17 +471,33 @@ final class ClaimScoring {
      * the author and each speaker with exactly one central claim. Returns null when the claims
      * can be scored.
      */
-    /** Words that describe how firm a figure is, not how it differs from the evidence. */
+    /** Words that describe how firm a figure is or how far it was checked, not how it differs
+     *  from the evidence. */
     private static final java.util.regex.Pattern HEDGE = java.util.regex.Pattern.compile(
-        "estimate|projection|projected|preliminary|forward[- ]looking|on track|not primary"
-        + "|secondary|not confirmed|unconfirmed|unverified|could not (find|locate|confirm)"
-        + "|plausib|not a record|not official|not yet final",
+        "estimate|projection|projected|preliminary|forward[- ]looking|on track|on pace"
+        + "|primary|secondary|confirm|verif|could not|cannot|unable|not (in|found in) the "
+        + "warehouse|not in warehouse|not tested|untested|plausib|consistent with|relayed"
+        + "|via |attributed|unnamed|characteri[sz]ation|wording|not a record|not official"
+        + "|not yet final|revis|subject to change",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** Words that say the claim and the evidence differ. */
+    private static final java.util.regex.Pattern DIFFERENCE = java.util.regex.Pattern.compile(
+        "differ|rather than|instead of|overstat|understat|exaggerat|inflat|higher than"
+        + "|lower than|more than|less than|incorrect|wrong|mislabel|omits?|, not [-$0-9'\"]|\\bvs\\.? "
+        + "|\\bbut (the evidence|it|the data|nhtsa|the source)",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** An outright statement that nothing in the claim is wrong. */
+    private static final java.util.regex.Pattern NO_ERROR = java.util.regex.Pattern.compile(
+        "not (an? )?(error|mistake)|no (error|discrepancy|difference)|not wrong|matches",
         java.util.regex.Pattern.CASE_INSENSITIVE);
 
     /**
      * A graded verdict below 'true' MUST name what in the claim differs from the evidence, in
-     * `inaccuracy`. A hedge about the figure's firmness is not an inaccuracy: such a claim is
-     * 'true' when the evidence matches it and 'unsupported' when no evidence was found.
+     * `inaccuracy`. A hedge about the figure's firmness or how far it was checked is not an
+     * inaccuracy: such a claim is 'true' when the evidence matches it and 'unsupported' when
+     * no evidence was found.
      */
     static String inaccuracyProblem(JsonNode c, int n) {
         double credit = credit(c);
@@ -495,12 +511,16 @@ final class ClaimScoring {
             return "claim " + n + " is graded '" + verdict(c) + "' with no `inaccuracy`: it "
                 + "MUST state what in the claim differs from the evidence. " + fix;
         }
-        if (!isCausal(c) && !inaccuracy.matches("(?s).*\\d.*")
-                && HEDGE.matcher(inaccuracy).find()) {
+        boolean noError = NO_ERROR.matcher(inaccuracy).find();
+        boolean hedgeOnly = !isCausal(c) && HEDGE.matcher(inaccuracy).find()
+            && !DIFFERENCE.matcher(inaccuracy).find();
+        if (noError || hedgeOnly) {
             return "claim " + n + " is graded '" + verdict(c) + "' and its `inaccuracy` (\""
-                + inaccuracy + "\") names a hedge about the figure, not a difference from the "
-                + "evidence. An estimate, projection, preliminary or secondary-source figure "
-                + "that matches the evidence MUST NOT be graded below 'true'. " + fix;
+                + inaccuracy + "\") names no difference between the claim and the evidence. "
+                + "`inaccuracy` MUST say what the claim gets wrong (\"the claim says X; the "
+                + "evidence says Y\"). An estimate, projection, preliminary, revised or "
+                + "secondary-source figure, or one the warehouse does not hold, MUST NOT be "
+                + "graded below 'true' on that ground. " + fix;
         }
         return null;
     }

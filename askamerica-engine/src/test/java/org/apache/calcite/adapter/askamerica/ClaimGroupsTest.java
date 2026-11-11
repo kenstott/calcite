@@ -615,13 +615,35 @@ class ClaimGroupsTest {
     String refusal = ClaimScoring.enforce(claims(central,
         author("Deaths fell 2.5 percent", "true", null)));
     assertNotNull(refusal);
-    assertTrue(refusal.contains("names a hedge about the figure"), refusal);
+    assertTrue(refusal.contains("names no difference between the claim and the evidence"),
+        refusal);
+  }
+
+  /** Daily eval q14, run inaccuracy-r1 (2026-11-11): five 'mostly true' verdicts whose
+   *  `inaccuracy` only hedged, each carrying a number, all passed. */
+  @Test void aHedgeCarryingANumberIsStillNotAnInaccuracy() {
+    String[] hedges = {
+        "1.02 matches NHTSA; 'lowest since 2014' is Reuters' characterization I could not "
+            + "confirm from NHTSA tables.",
+        "NHTSA's earlier Q1 release said -4.3%; later revised to about 5% per Reuters. "
+            + "Revision, not error.",
+        "Not in warehouse; reported by NHTSA via Reuters, primary page 403.",
+        "Attributed to unnamed experts; consistent with NHTSA/GHSA literature but not tested "
+            + "here."};
+    for (String hedge : hedges) {
+      ObjectNode central = author("Deaths fell to 16,750", "mostly true", "neutral");
+      central.put("central", true);
+      central.put("inaccuracy", hedge);
+      String refusal = ClaimScoring.enforce(claims(central,
+          author("Deaths fell 2.5 percent", "true", null)));
+      assertNotNull(refusal, hedge);
+    }
   }
 
   @Test void aStatedDifferenceFromAnEstimateIsAnInaccuracy() {
     ObjectNode central = author("Deaths fell to 16,750", "mostly true", "neutral");
     central.put("central", true);
-    central.put("inaccuracy", "NHTSA's estimate is 16,950, not 16,750");
+    central.put("inaccuracy", "The claim says 16,750; NHTSA's estimate is 16,950, not 16,750");
     assertNull(ClaimScoring.enforce(claims(central,
         author("Deaths fell 2.5 percent", "true", null))));
   }
