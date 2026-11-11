@@ -112,4 +112,28 @@ class FactCheckProcedureHandoverTest {
     recordCall("find_recipe", null);
     assertTrue(recipeConsulted());
   }
+
+  @Test void theHeadlineIsReadFromTheArticleUrl() {
+    assertEquals("us traffic deaths fall in first half of 2026 lowest rate since 2014",
+        McpServer.headlineFromUrl("https://investing.com/news/stock-market-news/"
+            + "us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014-5016323"));
+    assertEquals("us traffic deaths fell sharply in early 2026",
+        McpServer.headlineFromUrl("https://in.marketscreener.com/news/"
+            + "us-traffic-deaths-fell-sharply-in-early-2026-ce7f5ed9db80f22c"));
+    assertEquals("traffic deaths down in first half",
+        McpServer.headlineFromUrl("https://www.detroitnews.com/story/2026/11/10/"
+            + "traffic-deaths-down-in-first-half/92708095007/"));
+    assertNull(McpServer.headlineFromUrl("https://example.com/article/12345"));
+  }
+
+  @Test void newsFeedItemsYieldThePublishersUrls() {
+    String rss = "<rss><channel><link>https://www.bing.com/news/search?q=x&amp;format=rss"
+        + "</link><item><link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;"
+        + "url=https%3a%2f%2fwww.usnews.com%2fnews%2fa%2f2026-11-10%2fus-traffic-deaths&amp;"
+        + "c=1&amp;mkt=en-us</link></item><item><link>http://www.bing.com/news/apiclick.aspx?"
+        + "ref=FexRss&amp;url=https%3a%2f%2fwww.detroitnews.com%2fstory%2fx%2f&amp;c=2</link>"
+        + "</item></channel></rss>";
+    assertEquals(List.of("https://www.usnews.com/news/a/2026-11-10/us-traffic-deaths",
+        "https://www.detroitnews.com/story/x/"), McpServer.newsFeedArticleUrls(rss));
+  }
 }

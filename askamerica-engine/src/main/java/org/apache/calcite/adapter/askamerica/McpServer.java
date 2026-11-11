@@ -4114,6 +4114,11 @@ public class McpServer {
                                 TextScoringEngine.DEFAULT_DOMAIN)).toString();
                     }
                     if (isArticleUrl(args.path("url").asText(""))
+                        && !pageLoaded(normalizeUrlForMatch(args.path("url").asText("")))
+                        && COPY_SEARCHED.add(normalizeUrlForMatch(args.path("url").asText("")))) {
+                        text = text + articleCopyNotice(args.path("url").asText(""));
+                    }
+                    if (isArticleUrl(args.path("url").asText(""))
                         && FACT_CHECK_PROCEDURE_SERVED.compareAndSet(false, true)) {
                         text = text + factCheckProcedureNotice();
                         PROCEDURE_SERVED_BY_CALL.set(FACT_CHECK_RECIPE_ID);
@@ -8213,6 +8218,121 @@ public class McpServer {
             }
         }
         return true;
+    }
+
+    /** Article URLs whose copies were already searched for this session. */
+    static final java.util.Set<String> COPY_SEARCHED =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** How many search results are fetched when looking for a copy of an article. */
+    private static final int COPY_CANDIDATES = 6;
+
+    /**
+     * The headline an article URL carries in its last path segment, as search words:
+     * {@code .../us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014-5016323}
+     * gives "us traffic deaths fall in first half of 2026 lowest rate since 2014". Null when the
+     * segment holds fewer than four words.
+     */
+    static String headlineFromUrl(String url) {
+        String path;
+        try {
+            path = java.net.URI.create(url.trim()).getPath();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+        if (path == null) {
+            return null;
+        }
+        String[] segs = path.split("/");
+        String best = "";
+        for (String seg : segs) {
+            if (seg.split("-").length > best.split("-").length) {
+                best = seg;
+            }
+        }
+        String words = best.replaceAll("\\.[a-z]{2,5}$", "")
+            .replaceAll("-[0-9a-f]{6,}$", "").replaceAll("-\\d{5,}$", "")
+            .replace('-', ' ').replace('_', ' ').trim();
+        return words.split("\\s+").length >= 4 ? words : null;
+    }
+
+    /** The publisher URLs in a Bing News RSS feed, in feed order: each item's link is a Bing
+     *  click-through carrying the article's own URL in its {@code url} parameter. */
+    static java.util.List<String> newsFeedArticleUrls(String rss) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("<link>[^<]*apiclick\\.aspx[^<]*?[?&](?:amp;)?url=([^&<]+)").matcher(rss);
+        while (m.find()) {
+            String u = java.net.URLDecoder.decode(m.group(1),
+                java.nio.charset.StandardCharsets.UTF_8);
+            if (!out.contains(u)) {
+                out.add(u);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Searches news for the headline of an article that did not load, fetches the results, and
+     * lists the ones that loaded as copies to read, each now readable from the fetch cache.
+     *
+     * <p>Measured live 2026-11-11 (daily eval q14, copy-gate run r2): investing.com returned
+     * 403 and the model found no copy, though usnews.com and detroitnews.com carried the
+     * Reuters story under the same headline.
+     */
+    private static String articleCopyNotice(String articleUrl) {
+        String headline = headlineFromUrl(articleUrl);
+        if (headline == null) {
+            return "\n\n--- the article did not load ---\nIts URL carries no headline to search "
+                + "for. web_search its headline for a copy of the same story, web_fetch one "
+                + "that loads, extract the claims from its text and name it in "
+                + "`article_copy_url`.";
+        }
+        String feed = "https://www.bing.com/news/search?format=rss&q="
+            + java.net.URLEncoder.encode(headline, java.nio.charset.StandardCharsets.UTF_8);
+        java.util.List<String> found;
+        try {
+            found = newsFeedArticleUrls(new String(fetchUrlContent(feed).bytes,
+                java.nio.charset.StandardCharsets.UTF_8));
+        } catch (FetchException fe) {
+            return "\n\n--- the article did not load ---\nThe engine's news search for \""
+                + headline + "\" failed: " + fe.getMessage() + ". web_search the headline for "
+                + "a copy of the same story, web_fetch one that loads, extract the claims from "
+                + "its text and name it in `article_copy_url`.";
+        }
+        String articleHost = hostOf(normalizeUrlForMatch(articleUrl));
+        java.util.List<String> loaded = new java.util.ArrayList<>();
+        java.util.List<String> failed = new java.util.ArrayList<>();
+        int tried = 0;
+        for (String u : found) {
+            if (tried == COPY_CANDIDATES || !isArticleUrl(u)
+                    || hostOf(normalizeUrlForMatch(u)).equals(articleHost)) {
+                continue;
+            }
+            tried++;
+            ObjectNode a = MAPPER.createObjectNode();
+            a.put("url", u);
+            webFetch(a);
+            (pageLoaded(normalizeUrlForMatch(u)) ? loaded : failed).add(u);
+        }
+        StringBuilder sb = new StringBuilder("\n\n--- the article did not load: copies of the "
+            + "story ---\nThe engine searched news for \"" + headline + "\" and fetched "
+            + tried + " result(s).");
+        if (loaded.isEmpty()) {
+            sb.append(" None loaded. web_search the headline for another copy of the same story, "
+                + "web_fetch one that loads, extract the claims from its text and name it in "
+                + "`article_copy_url`.");
+        } else {
+            sb.append(" These loaded; one may be the same story under the same headline. "
+                + "web_fetch it, confirm it is the same story, extract the claims from its text "
+                + "and name it in `article_copy_url`:");
+            for (String u : loaded) {
+                sb.append("\n- ").append(u);
+            }
+        }
+        if (!failed.isEmpty()) {
+            sb.append("\nDid not load: ").append(String.join(" , ", failed));
+        }
+        return sb.toString();
     }
 
     static String factCheckProcedureNotice() {
