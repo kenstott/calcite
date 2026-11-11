@@ -370,7 +370,7 @@ final class QuestionGuidance {
         + "ones in this connector's own data you would otherwise have no way to detect.\n\n"
         + "Fetch every URL with web_fetch first. Only when web_fetch reports HTTP 401, 403, "
         + "429 or 451 for a primary source, retry that same URL once with the client's own "
-        + "WebFetch/Fetch tool before grading anything 'not checkable here'.",
+        + "WebFetch/Fetch tool before grading anything 'unsupported'.",
 
         "AskAmerica usage guide 6/9 — ASKING WELL, worked rewrites (vague question -> "
         + "sharpened question -> why), part 1/2. Apply the same move to the user's "
@@ -559,10 +559,10 @@ final class QuestionGuidance {
             + "none) and, when that is not empty, `source_finding` (what the evidence itself "
             + "found, read from the source) and `support`: supported | overreach | "
             + "contradicted | decorative. A claim asserted as fact with no evidence offered "
-            + "and none found MUST be graded `unsupported`, except that a claim whose source could "
-            + "not be reached or read MUST be graded `not checkable here`: failing to confirm a claim "
-            + "is not evidence against it, and `unsupported`, `partially false`, `mostly false` and "
-            + "`false` need a source actually read that shows otherwise. "
+            + "and none found MUST be graded `unsupported`, as MUST a claim whose source could not be "
+            + "reached or read and that nothing else found supports; `not checkable here` is only "
+            + "for an opinion or a personal attack. `partially false`, `mostly false` and `false` "
+            + "need a source actually read that shows otherwise. "
             + "When a claim does not state its window (a month, year-to-date, a calendar or fiscal year, 'over the past year'), test each plausible window, the latest month and the one before it, year-to-date and the calendar year, before grading it contrary: a figure that differs in one window is not evidence against the claim when another window matches. A sentence joining a fact to a "
             + "cause MUST be split, the cause carrying `kind`: `causal`; a personal attack "
             + "MUST carry `kind`: `attack`, verdict 'not checkable here' and a one-sentence `reason`. The author and each speaker MUST have exactly one "

@@ -169,6 +169,15 @@ class ClaimGroupsTest {
         problem);
   }
 
+  /** q14 opinion-r3 (2026-11-11): ten claims, all source audits, none central, published. */
+  @Test void aReportOfOnlySourceAuditsIsRefused() {
+    String problem = ClaimScoring.enforce(claims(
+        claim("The study found rents rose 1.4 percent", "fidelity", "true"),
+        claim("The bureau counted 3 million arrivals", "fidelity", "true")));
+    assertNotNull(problem);
+    assertTrue(problem.contains("every claim is grouped `fidelity`"), problem);
+  }
+
   @Test void aSingleClaimNeedsNoGroup() {
     assertNull(ClaimScoring.enforce(claims(claim("Rents climbed every year", null, "true"))));
   }

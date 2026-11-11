@@ -544,6 +544,13 @@ final class ClaimScoring {
                     + "one a reader would repeat");
             }
         }
+        if (centrals.isEmpty() && ungrouped.isEmpty()) {
+            problems.add("every claim is grouped `" + GROUP_FIDELITY + "`, so nothing is scored "
+                + "and no claim is central. The piece's own assertions, including a figure it "
+                + "repeats from a source as its own, are `" + GROUP_AUTHOR + "` claims, and a "
+                + "person or organization it covers asserting something is a `" + GROUP_SUBJECT
+                + "` claim; mark exactly one of each party's claims `central`");
+        }
         if (!ungrouped.isEmpty()) {
             problems.add(0, "claim(s) " + ungrouped + " carry no valid `group`: `"
                 + GROUP_FIDELITY + "` when the assertion relays a study, release, report, "

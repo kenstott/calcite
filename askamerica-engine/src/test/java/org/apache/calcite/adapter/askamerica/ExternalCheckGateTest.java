@@ -479,7 +479,17 @@ class ExternalCheckGateTest {
         String problem = namedGate(donClaim(",\"searched\":[\"Don Jr wedding oligarch\"]"));
         assertNotNull(problem);
         assertTrue(problem.contains("Don Jr."), problem);
-        assertTrue(problem.contains("'not checkable here'"), problem);
+        assertTrue(problem.contains("why_no_page"), problem);
+    }
+
+    @Test void namedSubjectPageThatFailedPassesWithAReason() throws Exception {
+        fetch(STORY, "HTTP 403");
+        assertNull(namedGate(donClaim(sourceField(STORY)
+            + ",\"why_no_page\":\"ProPublica returned 403; no other reporting found\"")));
+    }
+
+    @Test void namedSubjectReasonWithoutAnAttemptIsRefused() throws Exception {
+        assertNotNull(namedGate(donClaim(",\"why_no_page\":\"nothing found\"")));
     }
 
     @Test void namedSubjectWithAPageReadPasses() throws Exception {
@@ -554,7 +564,7 @@ class ExternalCheckGateTest {
     }
 
     private static String notCheckableGate(String claimsJson) throws Exception {
-        Method m = McpServer.class.getDeclaredMethod("enforceNotCheckableAttempted",
+        Method m = McpServer.class.getDeclaredMethod("enforceUnsupportedFigureAttempted",
             JsonNode.class, String.class);
         m.setAccessible(true);
         return (String) m.invoke(null, MAPPER.readTree(claimsJson), ARTICLE);
@@ -572,7 +582,7 @@ class ExternalCheckGateTest {
 
     private static String budgetClaim(String extra) {
         return "[{\"assertion\":\"The budget from Polis adds $250 million\","
-            + "\"verdict\":\"not checkable here\",\"group\":\"author_claims\"" + extra + "}]";
+            + "\"verdict\":\"unsupported\",\"group\":\"author_claims\"" + extra + "}]";
     }
 
     /** The q8 shape: only the article's own site and a Drive shell. */
@@ -626,15 +636,16 @@ class ExternalCheckGateTest {
         assertNull(notCheckableGate("[{\"assertion\":\"The budget adds $250 million\","
             + "\"verdict\":\"true\",\"speaker\":\"X\"}]"));
         assertNull(notCheckableGate("[{\"assertion\":\"Prices are rising fast\","
-            + "\"verdict\":\"not checkable here\",\"speaker\":\"X\"}]"));
+            + "\"verdict\":\"unsupported\",\"speaker\":\"X\"}]"));
         assertNull(notCheckableGate("[{\"assertion\":\"Some 4 in 10 think so\","
-            + "\"verdict\":\"not checkable here\",\"group\":\"author_claims\"}]"));
+            + "\"verdict\":\"unsupported\",\"group\":\"author_claims\"}]"));
         assertNull(notCheckableGate("[{\"assertion\":\"Polis cut $250 million\","
-            + "\"verdict\":\"not checkable here\",\"speaker\":\"X\",\"warehouse_value\":\"none\"}]"));
+            + "\"verdict\":\"unsupported\",\"speaker\":\"X\",\"warehouse_value\":\"none\"}]"));
+        assertNull(notCheckableGate(budgetClaim("").replace("unsupported", "not checkable here")));
     }
 
     private static String centralGate(String claimsJson) throws Exception {
-        Method m = McpServer.class.getDeclaredMethod("enforceCentralClaimSearched",
+        Method m = McpServer.class.getDeclaredMethod("enforceNotCheckableOnlyForOpinions",
             JsonNode.class);
         m.setAccessible(true);
         return (String) m.invoke(null, MAPPER.readTree(claimsJson));
@@ -648,7 +659,7 @@ class ExternalCheckGateTest {
             + "ViewPublication/813833\"}]}]");
         assertNotNull(problem);
         assertTrue(problem.contains("16,750"), problem);
-        assertTrue(problem.startsWith("validation refused: the central claim"), problem);
+        assertTrue(problem.startsWith("validation refused: \"H1 2026"), problem);
     }
 
     @Test void blankSearchesOnTheCentralClaimDoNotCount() throws Exception {
@@ -668,6 +679,20 @@ class ExternalCheckGateTest {
         fetch(release, "HTTP 403");
         assertNotNull(centralGate("[{\"assertion\":\"a\",\"central\":true,"
             + "\"verdict\":\"not checkable here\",\"sources\":[{\"url\":\"" + release + "\"}]}]"));
+    }
+
+    /** q14 opinion-r3 (2026-11-11): a figure no accessible source carried, left uncheckable. */
+    @Test void anUnreachableFigureIsNotUncheckable() throws Exception {
+        String problem = centralGate("[{\"assertion\":\"Bicyclist deaths rose in 2025\","
+            + "\"verdict\":\"not checkable here\",\"group\":\"fidelity\","
+            + "\"reason\":\"No accessible source carries the 2025 bicyclist figure\"}]");
+        assertNotNull(problem);
+        assertTrue(problem.contains("'unsupported'"), problem);
+    }
+
+    @Test void aPersonalAttackMayBeUncheckable() throws Exception {
+        assertNull(centralGate("[{\"assertion\":\"John stinks like fish\",\"kind\":\"attack\","
+            + "\"verdict\":\"not checkable here\",\"reason\":\"name-calling\"}]"));
     }
 
     @Test void aCentralOpinionMayBeUncheckable() throws Exception {
@@ -700,8 +725,13 @@ class ExternalCheckGateTest {
             + "\"reason\":\"an opinion of taste\"}]"));
     }
 
-    @Test void gradedCentralAndUncheckableOtherClaimsPass() throws Exception {
+    @Test void gradedCentralAndUnsupportedOtherClaimsPass() throws Exception {
         assertNull(centralGate("[{\"assertion\":\"a\",\"central\":true,\"verdict\":\"true\"},"
+            + "{\"assertion\":\"b\",\"verdict\":\"unsupported\"}]"));
+    }
+
+    @Test void anUncheckableOtherFactualClaimIsRefused() throws Exception {
+        assertNotNull(centralGate("[{\"assertion\":\"a\",\"central\":true,\"verdict\":\"true\"},"
             + "{\"assertion\":\"b\",\"verdict\":\"not checkable here\"}]"));
     }
 }
