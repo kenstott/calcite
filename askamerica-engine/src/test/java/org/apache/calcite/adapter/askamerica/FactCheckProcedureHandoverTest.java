@@ -166,4 +166,17 @@ class FactCheckProcedureHandoverTest {
         }
         return out.toByteArray();
     }
+
+    @Test
+    void copySearchRunsTheHeadlineItsKeywordsAndEachHalf() {
+        List<String> qs = McpServer.copySearchQueries(
+            "us traffic deaths fall in first half of 2026 lowest rate since 2014");
+        assertEquals(java.util.Arrays.asList(
+            "us traffic deaths fall in first half of 2026 lowest rate since 2014",
+            "us traffic deaths fall first half 2026 lowest rate since 2014",
+            "us traffic deaths fall in first",
+            "half of 2026 lowest rate since 2014"), qs);
+        assertEquals(java.util.Arrays.asList("stocks rally on jobs data", "stocks rally jobs data"),
+            McpServer.copySearchQueries("stocks rally on jobs data"));
+    }
 }

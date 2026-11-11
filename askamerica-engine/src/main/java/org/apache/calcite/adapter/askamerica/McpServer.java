@@ -8289,18 +8289,26 @@ public class McpServer {
                 + "that loads, extract the claims from its text and name it in "
                 + "`article_copy_url`.";
         }
-        String feed = "https://www.bing.com/news/search?format=rss&q="
-            + java.net.URLEncoder.encode(headline, java.nio.charset.StandardCharsets.UTF_8);
-        java.util.List<String> found;
-        try {
-            found = newsFeedArticleUrls(new String(fetchUrlContent(feed).bytes,
-                java.nio.charset.StandardCharsets.UTF_8));
-        } catch (FetchException fe) {
-            return "\n\n--- the article did not load ---\nThe engine's news search for \""
-                + headline + "\" failed: " + fe.getMessage() + ". web_search the headline for "
-                + "a copy of the same story, web_fetch one that loads, extract the claims from "
-                + "its text and name it in `article_copy_url`.";
+        java.util.List<String> queries = copySearchQueries(headline);
+        java.util.Set<String> foundSet = new java.util.LinkedHashSet<>();
+        java.util.List<String> searchFailures = new java.util.ArrayList<>();
+        for (String q : queries) {
+            String feed = "https://www.bing.com/news/search?format=rss&q="
+                + java.net.URLEncoder.encode(q, java.nio.charset.StandardCharsets.UTF_8);
+            try {
+                foundSet.addAll(newsFeedArticleUrls(new String(fetchUrlContent(feed).bytes,
+                    java.nio.charset.StandardCharsets.UTF_8)));
+            } catch (FetchException fe) {
+                searchFailures.add("\"" + q + "\": " + fe.getMessage());
+            }
         }
+        if (searchFailures.size() == queries.size()) {
+            return "\n\n--- the article did not load ---\nThe engine's news search failed for "
+                + "every query: " + String.join("; ", searchFailures) + ". web_search the "
+                + "headline for a copy of the same story, web_fetch one that loads, extract the "
+                + "claims from its text and name it in `article_copy_url`.";
+        }
+        java.util.List<String> found = new java.util.ArrayList<>(foundSet);
         String articleHost = hostOf(normalizeUrlForMatch(articleUrl));
         java.util.List<String> loaded = new java.util.ArrayList<>();
         java.util.List<String> failed = new java.util.ArrayList<>();
@@ -8317,8 +8325,8 @@ public class McpServer {
             (pageLoaded(normalizeUrlForMatch(u)) ? loaded : failed).add(u);
         }
         StringBuilder sb = new StringBuilder("\n\n--- the article did not load: copies of the "
-            + "story ---\nThe engine searched news for \"" + headline + "\" and fetched "
-            + tried + " result(s).");
+            + "story ---\nThe engine searched news for \"" + String.join("\", \"", queries)
+            + "\" and fetched " + tried + " result(s).");
         if (loaded.isEmpty()) {
             sb.append(" None loaded. web_search the headline for another copy of the same story, "
                 + "web_fetch one that loads, extract the claims from its text and name it in "
@@ -8334,7 +8342,37 @@ public class McpServer {
         if (!failed.isEmpty()) {
             sb.append("\nDid not load: ").append(String.join(" , ", failed));
         }
+        if (!searchFailures.isEmpty()) {
+            sb.append("\nSearches that failed: ").append(String.join("; ", searchFailures));
+        }
         return sb.toString();
+    }
+
+    private static final java.util.Set<String> HEADLINE_STOPWORDS = new java.util.HashSet<>(
+        java.util.Arrays.asList("a", "an", "the", "in", "of", "to", "for", "on", "at", "and",
+            "by", "with", "as", "is", "are"));
+
+    /** News feeds return a different few results per query and per request, so the copy search
+     *  runs the headline, the headline without stopwords, and each half of the headline, and
+     *  merges what they return. Measured live 2026-11-11 (q14): the full headline alone
+     *  returned two unloadable copies on one request and a loadable third on the next. */
+    static java.util.List<String> copySearchQueries(String headline) {
+        java.util.Set<String> qs = new java.util.LinkedHashSet<>();
+        qs.add(headline);
+        String[] words = headline.split("\\s+");
+        java.util.List<String> kept = new java.util.ArrayList<>();
+        for (String w : words) {
+            if (!HEADLINE_STOPWORDS.contains(w.toLowerCase(java.util.Locale.ROOT))) {
+                kept.add(w);
+            }
+        }
+        qs.add(String.join(" ", kept));
+        if (words.length >= 8) {
+            int mid = words.length / 2;
+            qs.add(String.join(" ", java.util.Arrays.copyOfRange(words, 0, mid)));
+            qs.add(String.join(" ", java.util.Arrays.copyOfRange(words, mid, words.length)));
+        }
+        return new java.util.ArrayList<>(qs);
     }
 
     static String factCheckProcedureNotice() {
