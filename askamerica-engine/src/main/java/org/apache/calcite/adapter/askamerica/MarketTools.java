@@ -65,7 +65,7 @@ final class MarketTools {
     private static final Set<String> EVENT_SPEC_KEYS = new HashSet<>(Arrays.asList(
         "source", "event_id", "samples", "samples_sql", "mean", "sd", "lower", "upper",
         "level", "price_median", "cumulative_vol_pct", "round", "conditions", "column",
-        "fee_rate", "build_forecast", "probability", "probability_source"));
+        "fee_rate", "build_forecast", "probability", "probability_source", "house_control_model"));
 
     private final PredictionMarkets.Fetcher fetcher;
     private final PredictionMarkets.ListingCache cache;
@@ -416,6 +416,13 @@ final class MarketTools {
         if (has(spec, "probability")) {
             forms.add("probability");
         }
+        if (has(spec, "house_control_model")) {
+            forms.add("house_control_model");
+            if (has(spec, "probability_source")) {
+                throw new IllegalArgumentException("house_control_model states its own "
+                    + "probability_source; do not give one");
+            }
+        }
         if (has(spec, "probability_source") && !has(spec, "probability")) {
             throw new IllegalArgumentException("probability_source needs probability");
         }
@@ -457,6 +464,32 @@ final class MarketTools {
                     + "conditions: {market_id: {\"above\": 0.5}} for a market that resolves "
                     + "YES when the outcome happens, {\"below\": 0.5} for one that resolves "
                     + "YES when it does not");
+            }
+        } else if ("house_control_model".equals(forms.get(0))) {
+            JsonNode m = spec.get("house_control_model");
+            if (!m.isObject() || !has(m, "president_party") || !has(m, "midterm")
+                || !has(m, "prior_d_vote_share")) {
+                throw new IllegalArgumentException("house_control_model is {president_party: "
+                    + "\"D\" or \"R\", midterm: true or false, prior_d_vote_share: the "
+                    + "previous cycle's national Democratic two-party House vote share, 0-1}");
+            }
+            String party = m.get("president_party").asText();
+            if (!"D".equals(party) && !"R".equals(party)) {
+                throw new IllegalArgumentException("president_party must be \"D\" or \"R\", "
+                    + "got " + party);
+            }
+            if (!m.get("midterm").isBoolean()) {
+                throw new IllegalArgumentException("midterm must be true or false, got "
+                    + m.get("midterm"));
+            }
+            double p = HouseControlModel.probabilityDemocraticControl("D".equals(party),
+                m.get("midterm").asBoolean(), doubleArg(m, "prior_d_vote_share"));
+            f = MarketPricing.probability(p, HouseControlModel.SOURCE);
+            if (!has(spec, "conditions")) {
+                throw new IllegalArgumentException("house_control_model is the probability "
+                    + "that Democrats control the House: it prices the markets named in "
+                    + "conditions: {market_id: {\"above\": 0.5}} for a market that resolves "
+                    + "YES when Democrats win the House, {\"below\": 0.5} when Republicans do");
             }
         } else if ("mean".equals(forms.get(0))) {
             double mean = doubleArg(spec, "mean");

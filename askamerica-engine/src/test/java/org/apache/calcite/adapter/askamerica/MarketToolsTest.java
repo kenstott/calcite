@@ -399,6 +399,33 @@ class MarketToolsTest {
     assertFalse(out.has("next"));
   }
 
+  @Test void theHouseControlModelPricesAnEventWithItsStatedLimits() throws Exception {
+    String model = ",'house_control_model':{'president_party':'R','midterm':true,"
+        + "'prior_d_vote_share':0.4865},'conditions':{'m1':{'above':0.5}}";
+    JsonNode out = call(tools().priceEvent(args("{'source':'polymarket','event_id':'"
+        + POLY_ID + "'" + model + "}")));
+    String forecast = out.get("forecast").toString();
+    assertTrue(forecast.contains("Brier 0.109"), forecast);
+    assertTrue(forecast.contains("n=24"), forecast);
+    assertTrue(forecast.contains("House only"), forecast);
+    assertTrue(forecast.contains("chosen on the same 24 points"), forecast);
+    assertEquals(0.775, out.get("priced_markets").get(0).get("fair").asDouble(), 0.002);
+  }
+
+  @Test void theHouseControlModelStatesItsOwnSourceAndNeedsConditions() {
+    String model = "'house_control_model':{'president_party':'R','midterm':true,"
+        + "'prior_d_vote_share':0.4865}";
+    assertThrows(IllegalArgumentException.class, () -> tools().priceEvent(args(
+        "{'source':'kalshi','event_id':'" + KALSHI_ID + "'," + model
+            + ",'probability_source':'mine'}")));
+    assertThrows(IllegalArgumentException.class, () -> tools().priceEvent(args(
+        "{'source':'kalshi','event_id':'" + KALSHI_ID + "'," + model + "}")));
+    assertThrows(IllegalArgumentException.class, () -> tools().priceEvent(args(
+        "{'source':'polymarket','event_id':'" + POLY_ID + "','conditions':{'m1':{'above':0.5}},"
+            + "'house_control_model':{'president_party':'X','midterm':true,"
+            + "'prior_d_vote_share':0.4865}}")));
+  }
+
   @Test void aSearchIsNotOverAtTheFirstEventThatFails() throws Exception {
     MarketTools t = tools();
     // Fair values of 0.45 and 0.14 against quotes of 0.40/0.44 and 0.20/0.24: neither side

@@ -3422,6 +3422,15 @@ public class McpServer {
             "Where the probability comes from: the measured model (with its cross-validation) "
             + "or the publication that states it. Required with probability; never the "
             + "market's own price."));
+        mktEventProps.set("house_control_model", prop("object",
+            "Forecast form for which party controls the U.S. House after an election: "
+            + "{president_party: \"D\" or \"R\", midterm: true or false, prior_d_vote_share: "
+            + "the previous cycle's national Democratic two-party House vote share, 0-1}. A "
+            + "fitted model (1978-2024, 24 cycles) giving the probability Democrats win 218 "
+            + "seats; it states its own probability_source, so give none. Needs conditions "
+            + "like probability. You MUST report its stated Brier (0.109, leave one cycle "
+            + "out, n=24), that the specification was chosen on the same 24 points, and that "
+            + "it is House only: it says nothing about the Senate or a single race."));
         mktEventProps.set("build_forecast", prop("boolean",
             "true: the engine builds the forecast from the catalog series the rules settle "
             + "on and prices with it. Give no other forecast form and no round."));
