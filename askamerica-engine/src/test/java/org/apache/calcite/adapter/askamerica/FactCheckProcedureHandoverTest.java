@@ -136,4 +136,34 @@ class FactCheckProcedureHandoverTest {
     assertEquals(List.of("https://www.usnews.com/news/a/2026-11-10/us-traffic-deaths",
         "https://www.detroitnews.com/story/x/"), McpServer.newsFeedArticleUrls(rss));
   }
+
+    @Test
+    void evalValidationWithoutRunSubpathIsRefused() {
+        ObjectNode args = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+        assertNull(McpServer.enforceRunSubpathPresent(args, false));
+        String refusal = McpServer.enforceRunSubpathPresent(args, true);
+        assertNotNull(refusal);
+        assertTrue(refusal.contains("run_subpath"), refusal);
+        args.put("run_subpath", "q14/askamerica/2026-11-10");
+        assertNull(McpServer.enforceRunSubpathPresent(args, true));
+    }
+
+    @Test
+    void procedureGradesAMatchingEstimateTrue() throws Exception {
+        try (java.io.InputStream in = McpServer.class.getResourceAsStream("/recipes.json")) {
+            assertNotNull(in);
+            String json = new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(json.contains("the figure being preliminary MUST NOT lower the verdict"));
+        }
+    }
+
+    private static byte[] readAll(java.io.InputStream in) throws java.io.IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) > 0) {
+            out.write(buf, 0, n);
+        }
+        return out.toByteArray();
+    }
 }

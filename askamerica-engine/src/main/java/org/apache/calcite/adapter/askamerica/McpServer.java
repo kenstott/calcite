@@ -3042,7 +3042,8 @@ public class McpServer {
             pubProps.set(
                 "run_subpath", prop("string",
                 "Identifies this run as 'q<N>/<persona>/<yyyy-mm-dd>' — copy this exactly from "
-                + "your prompt's delivery instructions. When set, the rendered HTML page is also "
+                + "your prompt's delivery instructions. MUST be set on every call that has "
+                + "`claims`. When set, the rendered HTML page is also "
                 + "saved to that run's directory as report.html, since the "
                 + "http://127.0.0.1/... link above does not survive past this session."));
         }
@@ -4797,6 +4798,7 @@ public class McpServer {
                     ReportPage.Section renderedClaims = null;
                     if (claims.isArray() && claims.size() > 0) {
                         addIfPresent(gateProblems, enforceSourceUrlPresent(args));
+                        addIfPresent(gateProblems, enforceRunSubpathPresent(args, EVAL_MODE));
                         addIfPresent(gateProblems, enforceClaimShape(claims));
                         addIfPresent(gateProblems, enforceExternalCheckAttempted(claims,
                             args.path("source_url").asText(null)));
@@ -8745,6 +8747,20 @@ public class McpServer {
             + "reliable way to infer it (guessing from the last web_fetch call silently picked "
             + "the wrong URL whenever a reference/fact-check fetch happened after the article "
             + "itself, which produced a published report the extension could never find).";
+    }
+
+    /** In eval mode a validation with no {@code run_subpath} saves no report.html or claims.json
+     *  to the run's directory, so the run cannot be scored. Refuse it. */
+    static String enforceRunSubpathPresent(JsonNode args, boolean evalMode) {
+        if (!evalMode) {
+            return null;
+        }
+        String sub = args.path("run_subpath").asText(null);
+        if (sub != null && !sub.trim().isEmpty()) {
+            return null;
+        }
+        return "validation refused: no `run_subpath` was given. Pass the run_subpath from "
+            + "your prompt's delivery instructions ('q<N>/<persona>/<yyyy-mm-dd>').";
     }
 
     /** A validation whose claims rest on the caller's own warehouse analysis must show it: refuse
