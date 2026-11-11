@@ -60,8 +60,12 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Usage: {@code IcebergOrphanCleanup --schema-resource econ/econ-schema.yaml [...]
  * [--s3-credentials-from-env --s3-endpoint URL] [--min-age-days N] [--metadata
- * [--metadata-min-age-days N]] [--delete]}. {@code --metadata} adds the {@code metadata/} pass
- * (see {@link #cleanMetadata}); its window defaults to 14 days. Exit code
+ * [--metadata-min-age-days N]] [--metadata-only] [--tables schema/table[,schema/table]]
+ * [--delete]}. {@code --metadata} adds the {@code metadata/} pass (see {@link #cleanMetadata});
+ * its window defaults to 14 days. {@code --metadata-only} runs that pass alone, without listing
+ * data files. {@code --tables} restricts the run to the named tables, each given as the schema
+ * directory of its {@code --schema-resource} and the table name; a name that matches no table is an
+ * error. Exit code
  * 0 when every table was handled, 1 when any table failed. A final summary names the failed
  * tables and, when the run is stopped early, the tables not reached.
  */
@@ -342,6 +346,35 @@ public final class IcebergOrphanCleanup {
         || file.endsWith(".metadata.json.gz") || file.endsWith(".stats");
   }
 
+  /** The {@code --tables} key of a table: its schema resource's directory and its name. */
+  static String scopeKey(String resource, String table) {
+    int slash = resource.indexOf('/');
+    if (slash <= 0) {
+      throw new IllegalArgumentException("schema resource has no schema directory: " + resource);
+    }
+    return resource.substring(0, slash) + "/" + table;
+  }
+
+  /**
+   * Keeps the targets named in {@code scope}, recording each match in {@code matched}. An empty
+   * scope keeps every target.
+   */
+  static List<IcebergIdleMaintenance.Target> scopeTargets(String resource,
+      List<IcebergIdleMaintenance.Target> targets, Set<String> scope, Set<String> matched) {
+    if (scope.isEmpty()) {
+      return targets;
+    }
+    List<IcebergIdleMaintenance.Target> kept = new ArrayList<>();
+    for (IcebergIdleMaintenance.Target target : targets) {
+      String key = scopeKey(resource, target.name);
+      if (scope.contains(key)) {
+        kept.add(target);
+        matched.add(key);
+      }
+    }
+    return kept;
+  }
+
   /**
    * Refuses a table whose metadata records a location outside the warehouse being cleaned. Iceberg
    * resolves manifests and data files from the absolute paths in its metadata, so a table whose
@@ -459,6 +492,8 @@ public final class IcebergOrphanCleanup {
     int minAgeDays = DEFAULT_MIN_AGE_DAYS;
     boolean delete = false;
     boolean metadata = false;
+    boolean metadataOnly = false;
+    Set<String> scope = new java.util.LinkedHashSet<>();
     int metadataMinAgeDays = DEFAULT_METADATA_MIN_AGE_DAYS;
     for (int i = 0; i < args.length; i++) {
       switch (args[i]) {
@@ -481,6 +516,18 @@ public final class IcebergOrphanCleanup {
         break;
       case "--metadata":
         metadata = true;
+        break;
+      case "--metadata-only":
+        metadata = true;
+        metadataOnly = true;
+        break;
+      case "--tables":
+        for (String key : args[++i].split(",")) {
+          if (!key.matches("[^/,\\s]+/[^/,\\s]+")) {
+            throw new IllegalArgumentException("--tables entries must be schema/table, got: " + key);
+          }
+          scope.add(key);
+        }
         break;
       case "--metadata-min-age-days":
         metadataMinAgeDays = Integer.parseInt(args[++i]);
@@ -525,6 +572,7 @@ public final class IcebergOrphanCleanup {
     LOGGER.info("orphan cleanup mode: {}, safety window {} days",
         delete ? "DELETE" : "dry run (no files deleted)", minAgeDays);
     List<IcebergIdleMaintenance.Target> targets = new ArrayList<>();
+    Set<String> matched = new java.util.HashSet<>();
     for (String resource : resources) {
       JsonNode root;
       try (InputStream in = IcebergOrphanCleanup.class.getResourceAsStream("/" + resource)) {
@@ -533,7 +581,14 @@ public final class IcebergOrphanCleanup {
         }
         root = YamlUtils.parseYamlOrJson(in, resource);
       }
-      targets.addAll(IcebergIdleMaintenance.targetsOf(root, resource));
+      targets.addAll(scopeTargets(resource, IcebergIdleMaintenance.targetsOf(root, resource),
+          scope, matched));
+    }
+    if (!matched.containsAll(scope)) {
+      Set<String> missing = new java.util.LinkedHashSet<>(scope);
+      missing.removeAll(matched);
+      throw new IllegalArgumentException("--tables names no maintained table in the given "
+          + "--schema-resource files: " + missing);
     }
     final RunSummary summary = new RunSummary();
     for (IcebergIdleMaintenance.Target target : targets) {
@@ -558,8 +613,10 @@ public final class IcebergOrphanCleanup {
         }
         Table table = IcebergCatalogManager.loadTable(catalogConfig, target.name);
         requireUnderWarehouse(target.name, table.location(), target.warehouse);
-        LOGGER.info("{}", cleanTable(target.name, table, storage, minAgeDays, delete,
-            System.currentTimeMillis()));
+        if (!metadataOnly) {
+          LOGGER.info("{}", cleanTable(target.name, table, storage, minAgeDays, delete,
+              System.currentTimeMillis()));
+        }
         if (metadata) {
           LOGGER.info("{}", cleanMetadata(target.name, table, storage, metadataMinAgeDays, delete,
               System.currentTimeMillis()));

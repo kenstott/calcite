@@ -8,7 +8,11 @@
 # --metadata also reports/removes orphan manifests, manifest lists and metadata.json versions under each
 # table's metadata/ (own window --metadata-min-age-days, default 14).
 #
-# Usage: orphan-file-cleanup.sh [--min-age-days N] [--metadata [--metadata-min-age-days N]] [--delete]
+# --tables schema/table[,schema/table] limits the run to those tables (only their schemas are loaded);
+# --metadata-only runs the metadata/ pass alone, without the recursive data-file listing.
+#
+# Usage: orphan-file-cleanup.sh [--min-age-days N] [--metadata [--metadata-min-age-days N]]
+#                               [--metadata-only] [--tables schema/table,...] [--delete]
 # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_OVERRIDE and GOVDATA_PARQUET_DIR
 # (source govdata/.env.prod first); GOVDATA_JAR overrides the jar.
 set -euo pipefail
@@ -29,9 +33,21 @@ JAR="${GOVDATA_JAR:-$HOME/sih-govdata.jar}"
 
 detect_active_schemas "$SCRIPT_DIR/parallel/runs/pids"
 
+# the schema directories named by --tables, so unrelated schemas are not walked
+TABLE_SCHEMAS=""
+prev=""
+for a in "$@"; do
+  if [[ "$prev" == "--tables" ]]; then
+    IFS=',' read -ra pairs <<< "$a"
+    for pair in "${pairs[@]}"; do TABLE_SCHEMAS="$TABLE_SCHEMAS ${pair%%/*} "; done
+  fi
+  prev="$a"
+done
+
 SCHEMA_ARGS=()
 for f in "$PROJECT_ROOT"/govdata/src/main/resources/*/*-schema.yaml; do
   schema_dir="$(basename "$(dirname "$f")")"
+  if [[ -n "$TABLE_SCHEMAS" && "$TABLE_SCHEMAS" != *" $schema_dir "* ]]; then continue; fi
   case " $ACTIVE_SCHEMAS " in
     *" $schema_dir "*) echo "skipping $schema_dir: live ETL writer" >&2; continue ;;
   esac

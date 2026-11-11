@@ -254,6 +254,37 @@ public class IcebergOrphanCleanupTest {
     assertTrue(report.contains("NOT REACHED c"), report);
   }
 
+  @Test void tablesScopeKeepsOnlyNamedTablesAndRecordsMatches() {
+    List<IcebergIdleMaintenance.Target> targets = new ArrayList<>();
+    targets.add(new IcebergIdleMaintenance.Target("cftc_trades", "s3://w/cftc", 7));
+    targets.add(new IcebergIdleMaintenance.Target("other", "s3://w/cftc", 7));
+    java.util.Set<String> scope = new java.util.HashSet<>();
+    scope.add("cftc/cftc_trades");
+    scope.add("sec/filing_metadata");
+    java.util.Set<String> matched = new java.util.HashSet<>();
+
+    List<IcebergIdleMaintenance.Target> kept = IcebergOrphanCleanup.scopeTargets(
+        "cftc/cftc-schema.yaml", targets, scope, matched);
+
+    assertEquals(1, kept.size());
+    assertEquals("cftc_trades", kept.get(0).name);
+    assertEquals(java.util.Collections.singleton("cftc/cftc_trades"), matched);
+  }
+
+  @Test void emptyTablesScopeKeepsEveryTarget() {
+    List<IcebergIdleMaintenance.Target> targets = new ArrayList<>();
+    targets.add(new IcebergIdleMaintenance.Target("a", "s3://w/x", 7));
+    targets.add(new IcebergIdleMaintenance.Target("b", "s3://w/x", 7));
+
+    assertEquals(2, IcebergOrphanCleanup.scopeTargets("x/x-schema.yaml", targets,
+        new java.util.HashSet<String>(), new java.util.HashSet<String>()).size());
+  }
+
+  @Test void scopeKeyRejectsResourceWithoutSchemaDirectory() {
+    assertThrows(IllegalArgumentException.class,
+        () -> IcebergOrphanCleanup.scopeKey("schema.yaml", "t"));
+  }
+
   private Path metadataDir(Table t) {
     return Path.of(t.location().replaceFirst("^file:", ""), "metadata");
   }
