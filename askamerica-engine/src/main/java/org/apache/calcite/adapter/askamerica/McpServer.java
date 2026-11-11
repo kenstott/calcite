@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * AskAmerica MCP server — implements the Model Context Protocol over stdio.
@@ -3291,7 +3290,8 @@ public class McpServer {
             + "sequence, the formula, and the plausible-but-wrong shortcut a real run has "
             + "already been caught taking. Call this for ANY question that averages or trends "
             + "a rate over multiple years, compares a figure across places, computes a "
-            + "share/ratio/index, or attributes a trend to a named cause — before you decide "
+            + "share/ratio/index, or attributes a trend to a named cause, and call it with "
+            + "topic 'fact-check news article' before fact-checking any article — before you decide "
             + "you're already certain of the method, not only after you notice you aren't. "
             + "Feeling certain is exactly the state every recipe in this catalog was written "
             + "from — each one records a run that also felt confident right up until the check "
@@ -3811,6 +3811,7 @@ public class McpServer {
         // Cleared per call so a repair reported below belongs to this statement, not a
         // previous one that happened to run on the same worker thread.
         LAST_REPAIR_NOTICE.remove();
+        PROCEDURE_SERVED_BY_CALL.remove();
         long t0 = System.currentTimeMillis();
         String text;
         String telemetrySql = null;
@@ -3994,8 +3995,11 @@ public class McpServer {
                         ? Math.min(Math.max(1, args.get("limit").asInt()), 20)
                         : 5;
                     log.println("[askamerica-mcp] tool=find_recipe topic=" + topic);
-                    markRecipeConsulted();
                     text = RecipeCatalog.find(topic, lim);
+                    if (text.contains("\"" + FACT_CHECK_RECIPE_ID + "\"")) {
+                        FACT_CHECK_PROCEDURE_SERVED.set(true);
+                        PROCEDURE_SERVED_BY_CALL.set(FACT_CHECK_RECIPE_ID);
+                    }
                     break;
                 }
                 case "find_market_candidates": {
@@ -4093,6 +4097,11 @@ public class McpServer {
                             textArray(args.path("score_aliases")),
                             tsText(args, "score_domain",
                                 TextScoringEngine.DEFAULT_DOMAIN)).toString();
+                    }
+                    if (isArticleUrl(args.path("url").asText(""))
+                        && FACT_CHECK_PROCEDURE_SERVED.compareAndSet(false, true)) {
+                        text = text + factCheckProcedureNotice();
+                        PROCEDURE_SERVED_BY_CALL.set(FACT_CHECK_RECIPE_ID);
                     }
                     break;
                 }
@@ -4783,6 +4792,8 @@ public class McpServer {
                         addIfPresent(gateProblems, enforceWindowsTested(claims));
                         addIfPresent(gateProblems, enforceNotCheckableAttempted(claims,
                             args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceCentralClaimSearched(claims));
+                        addIfPresent(gateProblems, enforceFactCheckProcedureServed());
                         addIfPresent(gateProblems, enforceArticleFiguresClaimed(claims,
                             args.path("source_url").asText(null), args.path("unclaimed")));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
@@ -6695,10 +6706,7 @@ public class McpServer {
     private static final ThreadLocal<String> LAST_REPAIR_NOTICE = new ThreadLocal<>();
 
     /**
-     * Whether find_recipe has been called at any point in this server process.
-     *
-     * <p>The stdio server is one process per client session, so process lifetime IS session
-     * lifetime and a static flag is the correct scope — no per-request state to thread through.
+     * Whether find_recipe has been called in the current task.
      *
      * <p>Why this exists: the "call find_recipe before any multi-step comparison" mandate was
      * carried first in the initialize.instructions banner (which this file's own comment at the
@@ -6709,42 +6717,19 @@ public class McpServer {
      * the channel that has actually changed a run's next query in this corpus, so the mandate is
      * moved onto it here rather than restated in prose a third time.
      */
-    private static final java.util.concurrent.atomic.AtomicBoolean RECIPE_CONSULTED =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
-
-    /**
-     * How long a recorded find_recipe call keeps counting as consulted across process restarts.
-     * A host that drops and re-spawns the stdio process mid-task starts a fresh process for the
-     * same working session, so the in-memory flag alone would re-fire the warning for a caller
-     * that already did the right thing; the marker file carries it over, bounded so a later,
-     * unrelated session still gets prompted.
-     */
-    private static final long RECIPE_CONSULTED_TTL_MILLIS = TimeUnit.HOURS.toMillis(4);
-
-    private static java.io.File recipeConsultedMarker() {
-        return new java.io.File(System.getProperty("user.home"), ".askamerica/recipe-consulted");
-    }
-
     private static boolean recipeConsulted() {
-        if (RECIPE_CONSULTED.get()) {
-            return true;
-        }
-        long markedAt = recipeConsultedMarker().lastModified();
-        return markedAt > 0 && System.currentTimeMillis() - markedAt < RECIPE_CONSULTED_TTL_MILLIS;
-    }
-
-    private static void markRecipeConsulted() {
-        RECIPE_CONSULTED.set(true);
-        try {
-            java.io.File marker = recipeConsultedMarker();
-            java.io.File dir = marker.getParentFile();
-            if (!dir.exists()) {
-                dir.mkdirs();
+        // Scoped to the current task by recentCallLogSnapshot (since the last published report,
+        // within the idle gap), and restored across a process restart by CallLogStore. A
+        // home-directory marker with a 4-hour lifetime was used before: it carried one
+        // conversation's find_recipe call into every other conversation in that window, so the
+        // recipe_not_consulted diagnostic and gate stayed silent for runs that never called it
+        // (measured 2026-11-11, daily eval q14: three runs, no find_recipe, no diagnostic).
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("find_recipe".equals(e.path("tool").asText(""))) {
+                return true;
             }
-            java.nio.file.Files.write(marker.toPath(), new byte[0]);
-        } catch (java.io.IOException e) {
-            log.println("[askamerica-mcp] recipe-consulted marker write failed: " + e.getMessage());
         }
+        return false;
     }
 
     /** Below this confidence (on either the verdict or the Pinocchios score), a
@@ -7076,6 +7061,11 @@ public class McpServer {
         e.put("ts", java.time.Instant.now().toString());
         e.put("tool", tool);
         e.put("ms", ms);
+        String served = PROCEDURE_SERVED_BY_CALL.get();
+        if (served != null) {
+            e.put("procedure_served", served);
+            PROCEDURE_SERVED_BY_CALL.remove();
+        }
         if (args != null && args.hasNonNull("sql")) {
             String sqlText = args.get("sql").asText();
             e.put("sql", sqlText);
@@ -8051,6 +8041,114 @@ public class McpServer {
             }
         }
         return problems.isEmpty() ? null : "validation refused: " + String.join(" ALSO: ", problems);
+    }
+
+    /**
+     * A central claim graded 'not checkable here' must list the web searches run for its own
+     * figures in {@code searched}. Pages fetched for other claims do not count: a loaded page
+     * that lacks the figure says nothing about whether the figure is published elsewhere.
+     *
+     * <p>Measured live 2026-11-11 (daily eval q14, Reuters on H1 2026 traffic deaths): the
+     * central claim (16,750 deaths, 1.02 per 100M VMT) was graded 'not checkable here' citing
+     * NHTSA's Q1 report, which loaded but predates the H1 figure, and the NSC release. No search
+     * for the H1 figure was run, though the same run's predecessor found it.
+     * {@link #enforceNotCheckableAttempted} accepted the loaded Q1 report.
+     *
+     * <p>{@code searched} is self-reported: web search is the client's tool and never passes
+     * through this server.
+     */
+    private static final String FACT_CHECK_RECIPE_ID = "fact-check-a-news-article";
+
+    /**
+     * Whether the article fact-check procedure has reached the model this session: appended to
+     * the first article web_fetch, returned by find_recipe, or carried by the refusal in
+     * {@link #enforceFactCheckProcedureServed()}.
+     *
+     * <p>Measured 2026-11-11 (daily eval q14, three runs): with the procedure in recipes.json and
+     * a pointer to it in the find_recipe description, no run called find_recipe. A pointer in a
+     * tool description does not deliver a recipe; a tool result does.
+     */
+    static final java.util.concurrent.atomic.AtomicBoolean FACT_CHECK_PROCEDURE_SERVED =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * The recipe id this tool call's result handed to the model, written to the call's
+     * calls.jsonl entry as {@code procedure_served}. Tool results are not logged, so without it
+     * a run's log cannot show whether the procedure reached the model or by which call.
+     */
+    static final ThreadLocal<String> PROCEDURE_SERVED_BY_CALL = new ThreadLocal<>();
+
+    private static final java.util.Set<String> DATA_FILE_SUFFIXES = java.util.Set.of(
+        ".pdf", ".csv", ".xls", ".xlsx", ".json", ".xml", ".zip", ".txt");
+
+    /** A page that may be a news article: not a government host and not a data file. */
+    static boolean isArticleUrl(String url) {
+        java.net.URI uri;
+        try {
+            uri = java.net.URI.create(url.trim());
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        String host = uri.getHost();
+        if (host == null) {
+            return false;
+        }
+        host = host.toLowerCase(java.util.Locale.ROOT);
+        if (host.endsWith(".gov") || host.endsWith(".mil")) {
+            return false;
+        }
+        String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(java.util.Locale.ROOT);
+        for (String s : DATA_FILE_SUFFIXES) {
+            if (path.endsWith(s)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static String factCheckProcedureNotice() {
+        return "\n\n--- if you are fact-checking this page, follow this procedure ---\n"
+            + RecipeCatalog.body(FACT_CHECK_RECIPE_ID);
+    }
+
+    /**
+     * Refuses a validation report once when the fact-check procedure never reached the model,
+     * and hands the procedure over in the refusal. The refusal itself serves it, so the next
+     * attempt passes: this delivers the procedure, it does not block on it.
+     */
+    static String enforceFactCheckProcedureServed() {
+        if (!FACT_CHECK_PROCEDURE_SERVED.compareAndSet(false, true)) {
+            return null;
+        }
+        PROCEDURE_SERVED_BY_CALL.set(FACT_CHECK_RECIPE_ID);
+        return "validation refused: check the claims against this procedure before publishing, "
+            + "then resubmit." + factCheckProcedureNotice();
+    }
+
+    private static String enforceCentralClaimSearched(JsonNode claims) {
+        java.util.List<String> unsearched = new java.util.ArrayList<>();
+        for (JsonNode c : claims) {
+            String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (!c.path("central").asBoolean(false) || !"not checkable here".equals(verdict)) {
+                continue;
+            }
+            boolean searched = false;
+            for (JsonNode q : c.path("searched")) {
+                if (!q.asText("").trim().isEmpty()) {
+                    searched = true;
+                }
+            }
+            if (!searched) {
+                unsearched.add("\"" + c.path("assertion").asText("").trim() + "\"");
+            }
+        }
+        if (unsearched.isEmpty()) {
+            return null;
+        }
+        return "validation refused: the central claim " + String.join("; ", unsearched)
+            + " is graded 'not checkable here' with no search for its own figures. web_search "
+            + "for the release that announced those figures and for other outlets' copies of the "
+            + "article, list the queries in `searched`, web_fetch what they find, and grade on it.";
     }
 
     private static final java.util.Set<String> CONTRARY_VERDICTS = java.util.Set.of(

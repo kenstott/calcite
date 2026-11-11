@@ -445,6 +445,13 @@ final class ClaimScoring {
             n++;
             String g = group(c);
             if (GROUP_FIDELITY.equals(g)) {
+                if (isCentral(c)) {
+                    problems.add("claim " + n + " is grouped `" + GROUP_FIDELITY + "` and marked "
+                        + "`central`: the source audit is not scored, so a central claim there "
+                        + "counts for nothing. Remove `central` from it. When the piece repeats "
+                        + "the figure as its own assertion, that is a separate `" + GROUP_AUTHOR
+                        + "` claim, and it carries `central`");
+                }
                 continue;
             }
             if (!GROUP_AUTHOR.equals(g) && !GROUP_SUBJECT.equals(g)) {

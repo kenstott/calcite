@@ -631,4 +631,34 @@ class ExternalCheckGateTest {
         assertNull(notCheckableGate("[{\"assertion\":\"Polis cut $250 million\","
             + "\"verdict\":\"not checkable here\",\"speaker\":\"X\",\"warehouse_value\":\"none\"}]"));
     }
+
+    private static String centralGate(String claimsJson) throws Exception {
+        Method m = McpServer.class.getDeclaredMethod("enforceCentralClaimSearched",
+            JsonNode.class);
+        m.setAccessible(true);
+        return (String) m.invoke(null, MAPPER.readTree(claimsJson));
+    }
+
+    /** The q14 shape: the central figure left uncheckable, citing fetched pages, no searches. */
+    @Test void uncheckableCentralClaimWithoutSearchesIsRefused() throws Exception {
+        String problem = centralGate("[{\"assertion\":\"H1 2026 deaths fell to 16,750\","
+            + "\"central\":true,\"verdict\":\"not checkable here\","
+            + "\"sources\":[{\"url\":\"https://crashstats.nhtsa.dot.gov/Api/Public/"
+            + "ViewPublication/813833\"}]}]");
+        assertNotNull(problem);
+        assertTrue(problem.contains("16,750"), problem);
+        assertTrue(problem.startsWith("validation refused: the central claim"), problem);
+    }
+
+    @Test void blankSearchesOnTheCentralClaimDoNotCount() throws Exception {
+        assertNotNull(centralGate("[{\"assertion\":\"a\",\"central\":true,"
+            + "\"verdict\":\"not checkable here\",\"searched\":[\" \"]}]"));
+    }
+
+    @Test void searchedCentralClaimAndOtherClaimsPass() throws Exception {
+        assertNull(centralGate("[{\"assertion\":\"a\",\"central\":true,"
+            + "\"verdict\":\"not checkable here\",\"searched\":[\"NHTSA first half 2026\"]}]"));
+        assertNull(centralGate("[{\"assertion\":\"a\",\"central\":true,\"verdict\":\"true\"},"
+            + "{\"assertion\":\"b\",\"verdict\":\"not checkable here\"}]"));
+    }
 }

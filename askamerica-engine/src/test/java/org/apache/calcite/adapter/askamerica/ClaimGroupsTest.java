@@ -152,6 +152,14 @@ class ClaimGroupsTest {
     assertNotNull(ClaimScoring.enforce(citejacked));
   }
 
+  @Test void aSourceAuditClaimIsNeverCentral() {
+    ArrayNode claims = mixedClaims();
+    ((ObjectNode) claims.get(0)).put("central", true);
+    String problem = ClaimScoring.enforce(claims);
+    assertNotNull(problem);
+    assertTrue(problem.contains("claim 1 is grouped `fidelity` and marked `central`"), problem);
+  }
+
   @Test void aSingleClaimNeedsNoGroup() {
     assertNull(ClaimScoring.enforce(claims(claim("Rents climbed every year", null, "true"))));
   }

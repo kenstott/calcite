@@ -72,6 +72,16 @@ final class RecipeCatalog {
         }
     }
 
+    /** The body of the recipe with this id. A missing id is a packaging error in recipes.json. */
+    static String body(String id) {
+        for (JsonNode r : root()) {
+            if (id.equals(r.path("id").asText(""))) {
+                return r.path("body").asText();
+            }
+        }
+        throw new IllegalStateException("recipes.json has no recipe with id " + id);
+    }
+
     static String find(String topic, int limit) {
         ArrayNode matches = MAPPER.createArrayNode();
         if (topic == null || topic.trim().isEmpty()) {
