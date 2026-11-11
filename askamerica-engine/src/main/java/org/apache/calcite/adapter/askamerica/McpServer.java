@@ -965,7 +965,8 @@ public class McpServer {
             + "otherwise. Every author or subject claim graded 'mostly true', 'partially false', 'mostly false' or 'false' MUST carry `inaccuracy`: what in the claim differs from the evidence. A figure that matches the evidence MUST be graded 'true' even when it is an estimate, a projection, preliminary or from a secondary source; a claim no evidence was found for MUST be graded 'unsupported'. "
             + "The engine computes an honesty score and a bias score for the "
             + "author and for each speaker from these fields and returns each with its "
-            + "characterization. You MUST NOT assign a rating of your own. You MUST report "
+            + "characterization, and a 0-4 Pinocchio rating from the same scores. You MUST "
+            + "NOT assign a rating of your own, Pinocchios included. You MUST report "
             + "the engine's scores and characterizations as returned, for this article only, "
             + "and MUST NOT present them as a judgment of the person in general.\n"
             + "9. CITEJACKING: borrowing a source's credibility for an assertion the source "
@@ -4640,6 +4641,7 @@ public class McpServer {
                     boolean asArtifact = "create_report_artifact".equals(name);
                     // A new attempt supersedes any earlier pass until it passes too.
                     REPORT_PASSED_QC = false;
+                    LAST_PINOCCHIOS = -1;
                     String rTitle = args.path("title").asText(null);
                     String rSub = args.has("subtitle") && !args.get("subtitle").isNull()
                         ? args.get("subtitle").asText() : null;
@@ -4829,6 +4831,7 @@ public class McpServer {
                         addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle));
                         if (gateProblems.isEmpty()) {
                             rTitle = ClaimScoring.headline(rTitle, claims);
+                            LAST_PINOCCHIOS = ClaimScoring.pinocchios(claims);
                         }
                         ReportPage.Section claimsSec = claimsSection(claims);
                         if (claimsSec != null) {
@@ -4929,7 +4932,11 @@ public class McpServer {
                         + "outlives this process: restore_report re-serves it over http by that "
                         + "id, and publish_report publishes it by that id in any later session."
                         + (hasClaims ? " The headline is \"" + rTitle + "\" — you MUST open "
-                            + "your answer with it, unchanged." : "");
+                            + "your answer with it, unchanged." : "")
+                        + (hasClaims && LAST_PINOCCHIOS >= 0 ? " The rating is "
+                            + LAST_PINOCCHIOS + (LAST_PINOCCHIOS == 1 ? " Pinocchio" : " Pinocchios")
+                            + ", from the claim scores; your answer MUST state that rating and "
+                            + "no other." : "");
                     if (asArtifact) {
                         // The artifact is drawn from the report description, never from the
                         // rendered page: the claims travel as data, so the page's claims
@@ -6866,7 +6873,14 @@ public class McpServer {
      *  pre-QC draft. */
     static volatile boolean REPORT_PASSED_QC = false;
 
+    /** The Pinocchio rating the latest passing validation's claim scores gave; -1 for none. */
+    static volatile int LAST_PINOCCHIOS = -1;
+
     private static String deliverReport(String runSubpath, String markdown) throws Exception {
+        String rating = ClaimScoring.pinocchioProblem(markdown, LAST_PINOCCHIOS);
+        if (rating != null) {
+            throw new IllegalArgumentException(rating);
+        }
         if (!REPORT_PASSED_QC) {
             throw new IllegalArgumentException("deliver_report refused: the latest preview_report "
                 + "or create_report_artifact has not passed QC. Fix every issue it listed, call "

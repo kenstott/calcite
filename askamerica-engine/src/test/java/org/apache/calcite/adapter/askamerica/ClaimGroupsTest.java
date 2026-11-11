@@ -654,4 +654,39 @@ class ClaimGroupsTest {
     assertNull(ClaimScoring.enforce(claims(central,
         author("Bicyclist deaths rose 4 percent", "unsupported", "neutral"))));
   }
+
+  /** Daily eval q14, run inaccuracy-r3 (2026-11-11): every checked claim true, headline
+   *  "accurate", and the agent still wrote "1 Pinocchio". */
+  @Test void thePinocchioRatingComesFromTheClaimScores() {
+    ObjectNode central = author("Deaths fell to 16,750", "true", null);
+    central.put("central", true);
+    ArrayNode claims = claims(central,
+        author("Deaths fell 2.5 percent", "true", null),
+        author("Q1 deaths fell 5 percent", "true", null),
+        author("Bicyclist deaths rose 4 percent", "unsupported", "neutral"));
+    assertEquals(0, ClaimScoring.pinocchios(claims));
+    assertNull(ClaimScoring.pinocchioProblem("**Rating: 0 Pinocchios** on the 0-4 Pinocchio "
+        + "scale.", 0));
+    String wrong = ClaimScoring.pinocchioProblem("Rating: 1 Pinocchio (mostly accurate).", 0);
+    assertNotNull(wrong);
+    assertTrue(wrong.contains("The rating MUST be 0 Pinocchios"), wrong);
+    assertNotNull(ClaimScoring.pinocchioProblem("Rating: mostly accurate.", 0));
+    assertNull(ClaimScoring.pinocchioProblem("Rating: one Pinocchio.", 1));
+    assertNull(ClaimScoring.pinocchioProblem("No rating.", -1));
+  }
+
+  @Test void tooFewCheckedClaimsEarnNoPinocchioRating() {
+    ObjectNode central = author("Deaths fell", "true", null);
+    central.put("central", true);
+    assertEquals(-1, ClaimScoring.pinocchios(claims(central,
+        author("Bicyclist deaths rose 4 percent", "unsupported", "neutral"))));
+  }
+
+  @Test void aMostlyFalseRecordEarnsThreePinocchios() {
+    ObjectNode central = author("Wages were suppressed", "mostly false", "toward_thesis");
+    central.put("central", true);
+    assertEquals(3, ClaimScoring.pinocchios(claims(central,
+        author("Rents rose 9 percent", "mostly false", "toward_thesis"),
+        author("Rents rose in 40 cities", "mostly false", "toward_thesis"))));
+  }
 }

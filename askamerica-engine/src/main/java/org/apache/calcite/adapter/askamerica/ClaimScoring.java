@@ -399,6 +399,55 @@ final class ClaimScoring {
         return clause + unsupportedNote(score);
     }
 
+    /**
+     * The Washington Post Fact Checker rating the headline's block earns, 0-4, from the same
+     * accuracy score as the headline's verdict: accurate 0, mostly accurate 1, partly false 2,
+     * mostly false 3, false 4. -1 when no single party speaks for the piece or its checked
+     * claims are too few to rate.
+     */
+    static int pinocchios(JsonNode claims) {
+        String block = headlineBlock(claims);
+        if (block == null) {
+            return -1;
+        }
+        JsonNode score = score(claims, block);
+        if (score.path("checked").asInt() < MIN_FOR_LABEL) {
+            return -1;
+        }
+        int a = score.path("accuracy_score").asInt();
+        return a >= 90 ? 0 : a >= 75 ? 1 : a >= 50 ? 2 : a >= 25 ? 3 : 4;
+    }
+
+    private static final java.util.regex.Pattern PINOCCHIO_RATING =
+        java.util.regex.Pattern.compile(
+            "(?i)(?<![-\u2013\\d])\\b([0-4]|zero|one|two|three|four)\\s+pinocchios?\\b");
+
+    /**
+     * A delivered verdict MUST state the engine's rating and no other; null when it does or
+     * the engine gave none.
+     */
+    static String pinocchioProblem(String markdown, int engine) {
+        if (engine < 0) {
+            return null;
+        }
+        String want = engine + (engine == 1 ? " Pinocchio" : " Pinocchios");
+        java.util.regex.Matcher m = PINOCCHIO_RATING.matcher(markdown == null ? "" : markdown);
+        boolean stated = false;
+        java.util.List<String> words = Arrays.asList("zero", "one", "two", "three", "four");
+        while (m.find()) {
+            String g = m.group(1).toLowerCase(Locale.ROOT);
+            int n = words.contains(g) ? words.indexOf(g) : Integer.parseInt(g);
+            if (n != engine) {
+                return "deliver_report refused: the verdict states \"" + m.group()
+                    + "\", and the engine's rating from the claim scores is " + want
+                    + ". The rating MUST be " + want + ".";
+            }
+            stated = true;
+        }
+        return stated ? null
+            : "deliver_report refused: the verdict MUST state the engine's rating, " + want + ".";
+    }
+
     private static String unsupportedNote(JsonNode score) {
         int unsupported = score.path("unsupported").asInt();
         return unsupported == 0 ? ""
