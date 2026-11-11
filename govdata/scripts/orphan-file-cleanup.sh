@@ -11,8 +11,11 @@
 # --tables schema/table[,schema/table] limits the run to those tables (only their schemas are loaded);
 # --metadata-only runs the metadata/ pass alone, without the recursive data-file listing.
 #
+# --list-orphans FILE (needs --metadata, read-only, refused with --delete) writes every metadata/ file the pass
+# classified: table, class (ORPHAN_DELETABLE | ORPHAN_YOUNG | REACHABLE:<role>), size, mtime, path.
+#
 # Usage: orphan-file-cleanup.sh [--min-age-days N] [--metadata [--metadata-min-age-days N]]
-#                               [--metadata-only] [--tables schema/table,...] [--delete]
+#                               [--metadata-only] [--tables schema/table,...] [--list-orphans FILE] [--delete]
 # Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_OVERRIDE and GOVDATA_PARQUET_DIR
 # (source govdata/.env.prod first); GOVDATA_JAR overrides the jar.
 set -euo pipefail

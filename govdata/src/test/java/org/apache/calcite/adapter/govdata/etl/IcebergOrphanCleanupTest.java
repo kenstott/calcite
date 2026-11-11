@@ -402,4 +402,84 @@ public class IcebergOrphanCleanupTest {
     table.refresh();
     assertEquals(before, metadataFiles(table), "a commit that fails must not leave a manifest");
   }
+
+  private List<String[]> listingRows(StringBuilder listing) {
+    List<String[]> rows = new ArrayList<>();
+    for (String line : listing.toString().split("\n")) {
+      if (!line.isEmpty()) {
+        rows.add(line.split("\t"));
+      }
+    }
+    return rows;
+  }
+
+  @Test void listingNamesEveryOrphanAndAccountsForEveryReachableFile() throws Exception {
+    append(table);
+    Path old = orphanManifest(table, "orphan-m0.avro", 30);
+    Path young = orphanManifest(table, "young-m0.avro", 1);
+    StringBuilder listing = new StringBuilder();
+
+    IcebergOrphanCleanup.MetadataOutcome out = IcebergOrphanCleanup.cleanMetadata("trade", table,
+        storage, 14, false, System.currentTimeMillis(), listing);
+
+    List<String[]> rows = listingRows(listing);
+    assertEquals(out.onDisk, rows.size(), "one line per classified file");
+    java.util.Set<String> expectedReachable = new java.util.HashSet<>();
+    for (String p : org.apache.iceberg.ReachableFileUtil.metadataFileLocations(table, true)) {
+      expectedReachable.add(IcebergOrphanCleanup.normalize(p));
+    }
+    for (String p : org.apache.iceberg.ReachableFileUtil.manifestListLocations(table)) {
+      expectedReachable.add(IcebergOrphanCleanup.normalize(p));
+    }
+    for (org.apache.iceberg.Snapshot snap : table.snapshots()) {
+      for (org.apache.iceberg.ManifestFile m : snap.allManifests(table.io())) {
+        expectedReachable.add(IcebergOrphanCleanup.normalize(m.path()));
+      }
+    }
+    int reachableRows = 0;
+    for (String[] row : rows) {
+      assertEquals(5, row.length);
+      assertEquals("trade", row[0]);
+      String path = IcebergOrphanCleanup.normalize(row[4]);
+      if (row[1].startsWith("REACHABLE:")) {
+        reachableRows++;
+        assertTrue(expectedReachable.contains(path), "unexpected reachable file " + path);
+      } else {
+        assertFalse(expectedReachable.contains(path), "a reachable file is listed as orphan");
+      }
+    }
+    assertEquals(expectedReachable.size(), reachableRows,
+        "every reachable file on disk is accounted for");
+    assertEquals(1, rows.stream().filter(r -> r[1].equals("ORPHAN_DELETABLE")
+        && r[4].endsWith("orphan-m0.avro") && r[2].equals("3")).count());
+    assertEquals(1, rows.stream().filter(r -> r[1].equals("ORPHAN_YOUNG")
+        && r[4].endsWith("young-m0.avro")).count());
+    assertTrue(Files.exists(old) && Files.exists(young), "listing deletes nothing");
+  }
+
+  @Test void listingOfAReachableMetadataFileIsNeverMarkedDeletableEvenWhenOld() throws Exception {
+    append(table);
+    for (Path f : metadataFiles(table)) {
+      Files.setLastModifiedTime(f,
+          FileTime.fromMillis(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(90)));
+    }
+    StringBuilder listing = new StringBuilder();
+
+    IcebergOrphanCleanup.cleanMetadata("trade", table, storage, 14, false,
+        System.currentTimeMillis(), listing);
+
+    for (String[] row : listingRows(listing)) {
+      assertFalse(row[1].startsWith("ORPHAN"), "no orphan expected, got " + row[1] + " " + row[4]);
+    }
+  }
+
+  @Test void listOrphansRefusedWithDeleteAndWithoutMetadata() {
+    String[] withDelete = {"--schema-resource", "x/x-schema.yaml", "--metadata", "--delete",
+        "--list-orphans", tempDir.resolve("l.tsv").toString()};
+    String[] withoutMetadata = {"--schema-resource", "x/x-schema.yaml",
+        "--list-orphans", tempDir.resolve("l.tsv").toString()};
+    assertThrows(IllegalArgumentException.class, () -> IcebergOrphanCleanup.main(withDelete));
+    assertThrows(IllegalArgumentException.class,
+        () -> IcebergOrphanCleanup.main(withoutMetadata));
+  }
 }

@@ -65,7 +65,9 @@ import java.util.concurrent.TimeUnit;
  * its window defaults to 14 days. {@code --metadata-only} runs that pass alone, without listing
  * data files. {@code --tables} restricts the run to the named tables, each given as the schema
  * directory of its {@code --schema-resource} and the table name; a name that matches no table is an
- * error. Exit code
+ * error. {@code --list-orphans FILE} writes every metadata/ candidate with its class, size and
+ * modification time (see {@link #cleanMetadata}) and requires {@code --metadata}; it is refused
+ * together with {@code --delete}, so a listing is always read-only. Exit code
  * 0 when every table was handled, 1 when any table failed. A final summary names the failed
  * tables and, when the run is stopped early, the tables not reached.
  */
@@ -249,6 +251,24 @@ public final class IcebergOrphanCleanup {
    */
   public static MetadataOutcome cleanMetadata(String name, Table table, StorageProvider storage,
       int minAgeDays, boolean delete, long nowMillis) throws IOException {
+    return cleanMetadata(name, table, storage, minAgeDays, delete, nowMillis, null);
+  }
+
+  /**
+   * As {@link #cleanMetadata(String, Table, StorageProvider, int, boolean, long)}, and when
+   * {@code listing} is not null writes one tab-separated line per candidate file before anything is
+   * deleted: {@code table, class, size, modified (ISO-8601 UTC), path}. The class is
+   * {@code ORPHAN_DELETABLE}, {@code ORPHAN_YOUNG} (inside the safety window, never deleted) or
+   * {@code REACHABLE:<role>}, so every file the pass kept can be accounted for as well as every file
+   * it would remove.
+   *
+   * <p>A commit still in flight is protected by the safety window, not by the lock probe: the probe
+   * only skips a table whose commit lock is held at that instant, whereas a manifest a commit has
+   * written but not yet published is unreachable and young, and the window (at least one day) keeps
+   * it out of the deletable set.
+   */
+  public static MetadataOutcome cleanMetadata(String name, Table table, StorageProvider storage,
+      int minAgeDays, boolean delete, long nowMillis, Appendable listing) throws IOException {
     if (minAgeDays < MINIMUM_MIN_AGE_DAYS) {
       throw new IllegalArgumentException("minAgeDays must be at least " + MINIMUM_MIN_AGE_DAYS
           + ", got " + minAgeDays);
@@ -260,7 +280,7 @@ public final class IcebergOrphanCleanup {
     probe.close();
 
     table.refresh();
-    Set<String> reachable = reachableMetadataFiles(table);
+    Map<String, String> reachable = reachableMetadataFiles(table);
 
     long cutoff = nowMillis - TimeUnit.DAYS.toMillis(minAgeDays);
     String location = table.location();
@@ -276,16 +296,20 @@ public final class IcebergOrphanCleanup {
         continue;
       }
       onDisk++;
-      if (reachable.contains(normalize(entry.getPath()))) {
+      String role = reachable.get(normalize(entry.getPath()));
+      if (role != null) {
         held++;
+        listEntry(listing, name, "REACHABLE:" + role, entry);
         continue;
       }
       orphans++;
       if (entry.getLastModified() > cutoff) {
         young++;
+        listEntry(listing, name, "ORPHAN_YOUNG", entry);
       } else {
         deletable.add(entry.getPath());
         bytes += entry.getSize();
+        listEntry(listing, name, "ORPHAN_DELETABLE", entry);
       }
     }
     int removed = 0;
@@ -301,33 +325,44 @@ public final class IcebergOrphanCleanup {
    * the current metadata file or the current snapshot's manifest list is not in the set, the set is
    * not trusted and nothing may be deleted against it.
    */
-  static Set<String> reachableMetadataFiles(Table table) throws IOException {
-    Set<String> paths = new HashSet<>();
+  static Map<String, String> reachableMetadataFiles(Table table) throws IOException {
+    Map<String, String> paths = new HashMap<>();
     for (String path : ReachableFileUtil.metadataFileLocations(table, true)) {
-      paths.add(normalize(path));
+      paths.putIfAbsent(normalize(path), "METADATA_JSON");
     }
     String hint = ReachableFileUtil.versionHintLocation(table);
     if (hint != null) {
-      paths.add(normalize(hint));
+      paths.putIfAbsent(normalize(hint), "VERSION_HINT");
     }
     for (String path : ReachableFileUtil.manifestListLocations(table)) {
-      paths.add(normalize(path));
+      paths.putIfAbsent(normalize(path), "MANIFEST_LIST");
     }
     for (String path : ReachableFileUtil.statisticsFilesLocations(table)) {
-      paths.add(normalize(path));
+      paths.putIfAbsent(normalize(path), "STATISTICS");
     }
     FileIO io = table.io();
     for (Snapshot snapshot : table.snapshots()) {
       for (ManifestFile manifest : snapshot.allManifests(io)) {
-        paths.add(normalize(manifest.path()));
+        paths.putIfAbsent(normalize(manifest.path()), "MANIFEST");
       }
     }
     Snapshot current = table.currentSnapshot();
-    if (current != null && !paths.contains(normalize(current.manifestListLocation()))) {
+    if (current != null && !paths.containsKey(normalize(current.manifestListLocation()))) {
       throw new IllegalStateException("current snapshot manifest list "
           + current.manifestListLocation() + " is not in the reachable set of " + table.name());
     }
     return paths;
+  }
+
+  private static void listEntry(Appendable listing, String table, String kind,
+      StorageProvider.FileEntry entry) throws IOException {
+    if (listing == null) {
+      return;
+    }
+    listing.append(table).append('\t').append(kind).append('\t')
+        .append(Long.toString(entry.getSize())).append('\t')
+        .append(java.time.Instant.ofEpochMilli(entry.getLastModified()).toString()).append('\t')
+        .append(entry.getPath()).append('\n');
   }
 
   /**
@@ -493,6 +528,7 @@ public final class IcebergOrphanCleanup {
     boolean delete = false;
     boolean metadata = false;
     boolean metadataOnly = false;
+    String listOrphans = null;
     Set<String> scope = new java.util.LinkedHashSet<>();
     int metadataMinAgeDays = DEFAULT_METADATA_MIN_AGE_DAYS;
     for (int i = 0; i < args.length; i++) {
@@ -529,6 +565,9 @@ public final class IcebergOrphanCleanup {
           scope.add(key);
         }
         break;
+      case "--list-orphans":
+        listOrphans = args[++i];
+        break;
       case "--metadata-min-age-days":
         metadataMinAgeDays = Integer.parseInt(args[++i]);
         break;
@@ -546,6 +585,13 @@ public final class IcebergOrphanCleanup {
     if (metadataMinAgeDays < MINIMUM_MIN_AGE_DAYS) {
       throw new IllegalArgumentException("--metadata-min-age-days must be at least "
           + MINIMUM_MIN_AGE_DAYS);
+    }
+    if (listOrphans != null && !metadata) {
+      throw new IllegalArgumentException("--list-orphans requires --metadata or --metadata-only");
+    }
+    if (listOrphans != null && delete) {
+      throw new IllegalArgumentException("--list-orphans is read-only and cannot be combined with "
+          + "--delete");
     }
 
     Map<String, String> hadoopConfig = new HashMap<>();
@@ -590,6 +636,9 @@ public final class IcebergOrphanCleanup {
       throw new IllegalArgumentException("--tables names no maintained table in the given "
           + "--schema-resource files: " + missing);
     }
+    java.io.Writer listing = listOrphans == null ? null
+        : java.nio.file.Files.newBufferedWriter(java.nio.file.Paths.get(listOrphans),
+            java.nio.charset.StandardCharsets.UTF_8);
     final RunSummary summary = new RunSummary();
     for (IcebergIdleMaintenance.Target target : targets) {
       summary.pending.add(target.name);
@@ -619,13 +668,19 @@ public final class IcebergOrphanCleanup {
         }
         if (metadata) {
           LOGGER.info("{}", cleanMetadata(target.name, table, storage, metadataMinAgeDays, delete,
-              System.currentTimeMillis()));
+              System.currentTimeMillis(), listing));
+          if (listing != null) {
+            listing.flush();
+          }
         }
         summary.completed(target.name);
       } catch (Exception e) {
         summary.failed(target.name, e);
         LOGGER.error("{}: orphan cleanup failed", target.name, e);
       }
+    }
+    if (listing != null) {
+      listing.close();
     }
     LOGGER.info("orphan cleanup finished\n{}", summary.render());
     int failed = summary.failedCount();
