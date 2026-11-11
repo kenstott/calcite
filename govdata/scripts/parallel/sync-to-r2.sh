@@ -322,7 +322,7 @@ _copy_split_schema() {
       base="${u%/_root}"
       src="${MINIO_REMOTE}:${BUCKETS[0]}/$s/$base"; dst="${R2_REMOTE}:${BUCKETS[0]}/$s/$base"; extra="--max-depth 1"
     fi
-    timeout --kill-after=60 "$UNIT_MAX" rclone copy "$src" "$dst" --exclude "**/version-hint.text" \
+    timeout --kill-after=60 "$UNIT_MAX" rclone copy "$src" "$dst" --exclude "version-hint.text" \
       --min-age "${min_age}s" --max-age "$(( now - lo ))s" $_uflags $extra 2>&1 | while IFS= read -r line; do
       log_info "sync-to-r2: [$s/$u] $line"
     done
@@ -507,7 +507,7 @@ for s in "${_schemas[@]}"; do
       _rc_data=$?
     else
       timeout --kill-after=60 "$SLICE_MAX" rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
-        --exclude "**/version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
+        --exclude "version-hint.text" $_slice_flags 2>&1 | while IFS= read -r line; do
         log_info "sync-to-r2: [$s] $line"
       done
       _rc_data=${PIPESTATUS[0]}
