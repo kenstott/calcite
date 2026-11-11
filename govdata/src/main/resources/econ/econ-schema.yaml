@@ -8642,13 +8642,12 @@ partitionedTables:
       checkedAt: "2026-11-11T22:24:47Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
         - name: month
-          type: string
+          type: VARCHAR
     comment: >
       Monthly U.S. goods exports by origin state, HS-6 commodity, and
       destination country (Census International Trade timeseries, statehs
