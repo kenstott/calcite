@@ -103,31 +103,16 @@ Model.json operand options:
 
 ## ETL Integration
 
-The `etl-full-schedule.sh` script automatically rebuilds VSS after ETL:
-
-```bash
-# At end of etl-full-schedule.sh
-if [[ $COMPLETED -gt 0 ]]; then
-    # Extract unique years from SEC jobs (dynamic, not hardcoded)
-    SEC_YEARS=$(echo "$JOBS" | grep "|sec|" | awk -F'|' '{print $5}' | sort -rn | uniq)
-
-    for YEAR in $SEC_YEARS; do
-        ./vss.sh refresh "$YEAR"
-    done
-    ./vss.sh upload
-fi
-```
-
-This ensures the VSS cache stays in sync with Iceberg data for all processed years.
+`etl-full-schedule.sh` no longer rebuilds VSS. The `vss.sh` / `vss-rebuild-full.sh` /
+`vss-gpu-runner.sh` pipeline read the frozen `sec/vectorized_chunks` Iceberg table and was
+removed; embeddings are produced by the routine `scripts/vss-local.sh` sweep (see its header).
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `scripts/vss.sh` | VSS management (refresh, upload, search, stats) |
-| `scripts/vss-rebuild-full.sh` | One-time full rebuild from all Iceberg data |
-| `s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb` | Pre-built VSS database |
-| `s3://govdata-parquet-v1/cache/vss/metadata.json` | VSS metadata (updated timestamp, row count) |
+| `scripts/vss-local.sh` / `scripts/vss-local.py` | Current CPU embedding sweep |
+| `s3://govdata-parquet-v1/cache/vss/chunks_vss.duckdb` | Legacy HNSW database from the removed pipeline |
 
 ## Tasks
 

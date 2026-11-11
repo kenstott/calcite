@@ -139,59 +139,6 @@ FROM it ORDER BY random() LIMIT 5;
 "
 echo ""
 
-# ── vectorized_chunks ────────────────────────────────────────────────────────
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "TABLE: vectorized_chunks"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-run_duckdb "
-CREATE VIEW vc AS SELECT * FROM iceberg_scan('${BASE}/vectorized_chunks');
-
-SELECT 'total rows'     AS metric, count(*)::VARCHAR           AS value FROM vc
-UNION ALL
-SELECT 'year range',      min(year)::VARCHAR||' - '||max(year)::VARCHAR FROM vc
-UNION ALL
-SELECT 'with embedding',  sum(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END)::VARCHAR FROM vc
-UNION ALL
-SELECT 'null embedding',  sum(CASE WHEN embedding IS NULL THEN 1 ELSE 0 END)::VARCHAR FROM vc
-UNION ALL
-SELECT 'embed null %',    round(100.0*sum(CASE WHEN embedding IS NULL THEN 1 ELSE 0 END)/count(*),2)::VARCHAR||'%' FROM vc;
-
-SELECT year, count(*) AS chunks,
-       sum(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) AS with_embed,
-       round(100.0*sum(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END)/count(*),1) AS embed_pct
-FROM vc GROUP BY year ORDER BY year;
-
-SELECT source_type, count(*) AS chunks,
-       round(100.0*sum(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END)/count(*),1) AS embed_pct
-FROM vc GROUP BY source_type ORDER BY chunks DESC LIMIT 15;
-
-SELECT array_length(embedding) AS dim, count(*) AS cnt
-FROM vc WHERE embedding IS NOT NULL
-GROUP BY dim ORDER BY cnt DESC LIMIT 5;
-
-SELECT col, null_pct FROM (
-  SELECT 'chunk_id'          AS col, round(100.0*sum(CASE WHEN chunk_id IS NULL THEN 1 ELSE 0 END)/count(*),2) AS null_pct FROM vc
-  UNION ALL SELECT 'source_type',     round(100.0*sum(CASE WHEN source_type IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'section',         round(100.0*sum(CASE WHEN section IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'chunk_text',      round(100.0*sum(CASE WHEN chunk_text IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'enriched_text',   round(100.0*sum(CASE WHEN enriched_text IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'content_type',    round(100.0*sum(CASE WHEN content_type IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'financial_concepts', round(100.0*sum(CASE WHEN financial_concepts IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'speaker_name',    round(100.0*sum(CASE WHEN speaker_name IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-  UNION ALL SELECT 'speaker_role',    round(100.0*sum(CASE WHEN speaker_role IS NULL THEN 1 ELSE 0 END)/count(*),2) FROM vc
-) ORDER BY null_pct DESC;
-
-SELECT cik, source_type, section,
-       substring(chunk_text, 1, 100) AS text_preview,
-       CASE WHEN embedding IS NULL THEN 'NULL'
-            ELSE '[' || ROUND(embedding[1]::DECIMAL, 6)::VARCHAR || ', '
-                     || ROUND(embedding[2]::DECIMAL, 6)::VARCHAR || ', ... ('
-                     || array_length(embedding)::VARCHAR || ' dims)]'
-       END AS embedding_preview
-FROM vc WHERE embedding IS NOT NULL ORDER BY random() LIMIT 5;
-"
-echo ""
-
 # ── Other tables: filing_contexts, financial_line_items, mda_sections, xbrl_relationships ────
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "OTHER TABLES: filing_contexts / financial_line_items / mda_sections / xbrl_relationships / earnings_transcripts"
@@ -217,7 +164,7 @@ echo ""
 echo "============================================================"
 echo "  SUMMARY"
 echo "  Warehouse: ${BASE}"
-echo "  Tables checked: filing_metadata, insider_transactions, vectorized_chunks,"
+echo "  Tables checked: filing_metadata, insider_transactions,"
 echo "                  filing_contexts, financial_line_items, mda_sections,"
 echo "                  xbrl_relationships, earnings_transcripts"
 echo "============================================================"
