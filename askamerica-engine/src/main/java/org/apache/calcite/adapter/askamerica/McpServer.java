@@ -15460,6 +15460,13 @@ public class McpServer {
                     return out.toString();
                 }
             }
+            byte[] unwrapped = unwrapMultipartPdf(bytes);
+            if (unwrapped != bytes) {
+                log.println("[askamerica-mcp] web_fetch url=" + urlStr
+                    + " unwrapped multipart-framed PDF " + bytes.length + " -> "
+                    + unwrapped.length + " bytes");
+                bytes = unwrapped;
+            }
             if (cacheable) {
                 WEB_FETCH_CACHE.put(urlStr, new CachedFetch(bytes, contentType));
             }
@@ -15531,7 +15538,42 @@ public class McpServer {
      * header is used only as a secondary signal once magic bytes are inconclusive — a server
      * can mislabel the header, but it can't fake a PDF's or zip's magic number.
      */
-    private static String sniffContentKind(byte[] bytes, String contentType) {
+    /**
+     * Strips multipart/form-data framing from a PDF a server returns wrapped in a single
+     * form part (crashstats.nhtsa.dot.gov does this: the body opens with a
+     * {@code ------WebKitFormBoundary...} line and part headers, then {@code %PDF-}). Returns
+     * the bytes from {@code %PDF-} through the last {@code %%EOF}; returns {@code bytes}
+     * itself, unchanged, when the body does not open with a boundary line followed by a PDF
+     * within its part headers.
+     */
+    static byte[] unwrapMultipartPdf(byte[] bytes) {
+        if (bytes.length < 4 || bytes[0] != '-' || bytes[1] != '-') {
+            return bytes;
+        }
+        int limit = Math.min(bytes.length - 5, 1024);
+        int start = -1;
+        for (int i = 2; i <= limit; i++) {
+            if (bytes[i] == '%' && bytes[i + 1] == 'P' && bytes[i + 2] == 'D'
+                    && bytes[i + 3] == 'F' && bytes[i + 4] == '-') {
+                start = i;
+                break;
+            }
+        }
+        if (start < 0) {
+            return bytes;
+        }
+        int end = bytes.length;
+        for (int i = bytes.length - 5; i > start; i--) {
+            if (bytes[i] == '%' && bytes[i + 1] == '%' && bytes[i + 2] == 'E'
+                    && bytes[i + 3] == 'O' && bytes[i + 4] == 'F') {
+                end = i + 5;
+                break;
+            }
+        }
+        return java.util.Arrays.copyOfRange(bytes, start, end);
+    }
+
+    static String sniffContentKind(byte[] bytes, String contentType) {
         if (bytes.length >= 5
                 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F'
                 && bytes[4] == '-') {
