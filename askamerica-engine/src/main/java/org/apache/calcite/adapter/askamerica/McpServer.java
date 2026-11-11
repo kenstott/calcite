@@ -7972,22 +7972,38 @@ public class McpServer {
                 + "session or did not load. web_fetch a copy of the story that loads and name "
                 + "that one.";
         }
-        java.util.List<String> figures = new java.util.ArrayList<>();
+        java.util.Set<String> figures = new java.util.LinkedHashSet<>();
+        java.util.Set<String> centralFigures = new java.util.LinkedHashSet<>();
         for (JsonNode c : claims) {
-            figures.addAll(distinctiveFigures(c.path("assertion").asText("")));
+            java.util.List<String> f = distinctiveFigures(c.path("assertion").asText(""));
+            figures.addAll(f);
+            if (c.path("central").asBoolean(false)) {
+                centralFigures.addAll(f);
+            }
         }
         if (figures.isEmpty()) {
             return null;
         }
         String text = String.join("\n", FETCHED_TEXT.get(copy));
+        java.util.List<String> missing = new java.util.ArrayList<>();
         for (String f : figures) {
-            if (text.contains(f)) {
-                return null;
+            if (!text.contains(f)) {
+                missing.add(f);
             }
         }
-        return "validation refused: `article_copy_url` " + copyUrl + " carries none of the "
-            + "claims' figures (" + String.join(", ", figures) + "), so it is not a copy of the "
-            + "story the claims came from. Name the copy you extracted them from.";
+        java.util.List<String> centralMissing = new java.util.ArrayList<>(centralFigures);
+        centralMissing.retainAll(missing);
+        if (centralMissing.isEmpty() && 2 * missing.size() <= figures.size()) {
+            return null;
+        }
+        return "validation refused: `article_copy_url` " + copyUrl + " is missing "
+            + missing.size() + " of the claims' " + figures.size() + " figures ("
+            + String.join(", ", missing) + ")"
+            + (centralMissing.isEmpty() ? "" : ", including the central claim's "
+                + String.join(", ", centralMissing))
+            + ", so it is not a copy of the story the claims came from. A copy carries the "
+            + "central claim's figures and most of the others. Find one that does, web_fetch it, "
+            + "extract the claims from its text and name it.";
     }
 
     /** Verdicts that say the claim is wrong or could not be confirmed. */

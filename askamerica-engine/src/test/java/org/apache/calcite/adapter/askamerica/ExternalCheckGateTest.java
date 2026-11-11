@@ -772,10 +772,30 @@ class ExternalCheckGateTest {
 
         McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
             java.util.Collections.singletonList(page("An unrelated story about rents.")));
-        assertTrue(articleTextGate(CLAIMS, copy).contains("carries none of the claims' figures"));
+        assertTrue(articleTextGate(CLAIMS, copy).contains("is missing 2 of the claims' 2"));
 
         McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
             java.util.Collections.singletonList(page("U.S. traffic deaths fell 2.5% to 16,750.")));
         assertNull(articleTextGate(CLAIMS, copy));
+    }
+
+    /** Daily eval q14, copy-gate run r1 (2026-11-11): the named "copy" was a 2023 Reuters story
+     *  sharing only the article's boilerplate crash-cost figure. */
+    @Test void aStoryCarryingOnlyBoilerplateFiguresIsNotACopy() throws Exception {
+        String claims = "[{\"assertion\":\"Deaths fell 2.5% to 16,750 from 17,175\","
+            + "\"central\":true,\"verdict\":\"unsupported\"},"
+            + "{\"assertion\":\"Crashes cost $340 billion\",\"verdict\":\"mostly true\"}]";
+        String copy = "https://www.claimsjournal.com/news/national/2023/01/10/314671.htm";
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(page("Crashes cost $340 billion in 2019.")));
+        String problem = articleTextGate(claims, copy);
+        assertNotNull(problem);
+        assertTrue(problem.contains("including the central claim's 2.5%, 16,750, 17,175"),
+            problem);
+
+        McpServer.FETCHED_TEXT.put(McpServer.normalizeUrlForMatch(copy),
+            java.util.Collections.singletonList(
+                page("Deaths fell 2.5% to 16,750 from 17,175 in the first half.")));
+        assertNull(articleTextGate(claims, copy));
     }
 }
