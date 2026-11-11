@@ -2158,7 +2158,15 @@ partitionedTables:
       here as one combined CoC row; the companion by-state file splits its counts between
       MO and KS, so per-state rollups from this table will not exactly match
       hud_pit_counts_by_state for those two states. Source: huduser.gov/portal/sites/
-      default/files/xls/2007-2025-PIT-Counts-by-CoC.xlsb (annual PIT count cycle).
+      default/files/xls/2007-2025-PIT-Counts-by-CoC.xlsb (annual PIT count cycle). HUD re-publishes the whole history each year and a newer
+      edition can drop or rename breakout columns for earlier years (the 2007-2025 edition
+      lacks most 2014/2015 demographic breakouts that 2007-2024 carries), so the newest
+      workbook is authoritative for every (year, metric) it publishes and older workbooks
+      (2007-2024 onward) supply only (year, metric) pairs the newer ones lack; source_vintage
+      marks which workbook each row came from. metric_name is kept as each workbook publishes
+      it, so a renamed breakout (e.g. 'Hispanic/Latina/e/o' in 2007-2024 vs 'Hispanic/Latina/o'
+      in 2007-2025) can appear under both names in one year - filter on source_vintage or match
+      both spellings.
 
     dimensions:
       type:
@@ -2197,6 +2205,10 @@ partitionedTables:
         type: integer
         nullable: false
         comment: The homeless count for this (year, coc_number, metric_name)
+      - name: source_vintage
+        type: string
+        nullable: false
+        comment: HUD cumulative workbook this row was read from, e.g. '2007-2025' (newest edition) or '2007-2024' (an older edition, used only for metrics the newer edition no longer publishes for that year)
 
     source:
       type: http
@@ -2249,7 +2261,15 @@ partitionedTables:
       same wide-to-long melt for the same reason (1,300+ source columns by 2024). Includes
       a national total row (state_abbr = 'Total'). A blank/suppressed source cell is
       omitted rather than written as a null count row. Source: huduser.gov/portal/sites/
-      default/files/xls/2007-2025-PIT-Counts-by-State.xlsb (annual PIT count cycle).
+      default/files/xls/2007-2025-PIT-Counts-by-State.xlsb (annual PIT count cycle). HUD re-publishes the whole history each year and a newer
+      edition can drop or rename breakout columns for earlier years (the 2007-2025 edition
+      lacks most 2014/2015 demographic breakouts that 2007-2024 carries), so the newest
+      workbook is authoritative for every (year, metric) it publishes and older workbooks
+      (2007-2024 onward) supply only (year, metric) pairs the newer ones lack; source_vintage
+      marks which workbook each row came from. metric_name is kept as each workbook publishes
+      it, so a renamed breakout (e.g. 'Hispanic/Latina/e/o' in 2007-2024 vs 'Hispanic/Latina/o'
+      in 2007-2025) can appear under both names in one year - filter on source_vintage or match
+      both spellings.
 
     dimensions:
       type:
@@ -2276,6 +2296,10 @@ partitionedTables:
         type: integer
         nullable: false
         comment: The homeless count for this (year, state_abbr, metric_name)
+      - name: source_vintage
+        type: string
+        nullable: false
+        comment: HUD cumulative workbook this row was read from, e.g. '2007-2025' (newest edition) or '2007-2024' (an older edition, used only for metrics the newer edition no longer publishes for that year)
 
     source:
       type: http

@@ -36,7 +36,7 @@ public class HudPitStateCountsProvider extends AbstractHudPitCountsDataProvider 
   }
 
   @Override protected Map<String, Object> buildRow(int year, Map<String, String> idValues,
-      String metricName, double count) {
+      String metricName, double count, String sourceVintage) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     row.put("type", "hud_pit_counts_by_state");
     row.put("year", Integer.valueOf(year));
@@ -44,6 +44,7 @@ public class HudPitStateCountsProvider extends AbstractHudPitCountsDataProvider 
     row.put("number_of_cocs", parseIntOrNull(idValues.get("Number of CoCs")));
     row.put("metric_name", metricName);
     row.put("count", Integer.valueOf((int) Math.round(count)));
+    row.put("source_vintage", sourceVintage);
     return row;
   }
 
