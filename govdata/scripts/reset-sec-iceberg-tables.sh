@@ -60,7 +60,6 @@ SEC_TABLES=(
     "mda_sections"
     "risk_factor_sections"
     "stock_prices"
-    "vectorized_chunks"
     "xbrl_relationships"
 )
 

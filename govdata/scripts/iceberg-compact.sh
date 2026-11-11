@@ -30,7 +30,6 @@ ALL_TABLES=(
   insider_transactions
   earnings_transcripts
   stock_prices
-  vectorized_chunks
 )
 
 # Parse arguments: separate our flags from passthrough flags

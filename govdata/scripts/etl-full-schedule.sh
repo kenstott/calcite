@@ -561,10 +561,5 @@ echo "Completed: $COMPLETED"
 echo "Failed: $FAILED"
 echo "=============================================="
 
-# Post-processing (GPU embeddings + VSS index) runs automatically per-job
-# via schema-level postProcess configuration in sec-schema.yaml.
-# This enables parallel job execution - each job handles its own post-processing.
-#
-# Schema postProcess runs after each job's tables are materialized:
-#   1. gpu_embeddings: scripts/vss-gpu-runner.sh - generates embeddings on GPU
-#   2. vss_refresh: scripts/vss.sh refresh - rebuilds HNSW index cache
+# Embeddings are not part of this script: chunks are embedded by the routine vss-local.sh sweep
+# (see vss-local.sh), which replaced the retired GPU runner and vss.sh refresh.
