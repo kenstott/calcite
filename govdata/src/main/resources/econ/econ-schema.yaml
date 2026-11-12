@@ -8325,15 +8325,14 @@ partitionedTables:
       checkedAt: "2026-11-11T22:24:36Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: direction
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
         - name: month
-          type: string
+          type: VARCHAR
     comment: >
       Monthly U.S. goods exports by HS-6 commodity and destination country
       (Census International Trade timeseries, exports/hs endpoint). Tall layout:
@@ -8479,15 +8478,14 @@ partitionedTables:
       checkedAt: "2026-11-11T22:24:42Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: direction
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
         - name: month
-          type: string
+          type: VARCHAR
     comment: >
       Monthly U.S. goods imports by HS-6 commodity and origin country, including
       CIF charges (Census International Trade timeseries, imports/hs endpoint). Tall
@@ -8807,17 +8805,16 @@ partitionedTables:
       checkedAt: "2026-11-11T22:25:15Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: direction
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
         - name: month
-          type: string
+          type: VARCHAR
         - name: chapter
-          type: string
+          type: VARCHAR
     comment: >
       Monthly U.S. goods imports by HS-10 commodity and origin country, curated to the
       HS-2 chapters carrying critical-mineral and metal commodities (25 salt/earths/stone,
@@ -8975,17 +8972,16 @@ partitionedTables:
       checkedAt: "2026-11-11T22:25:41Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: direction
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
         - name: month
-          type: string
+          type: VARCHAR
         - name: chapter
-          type: string
+          type: VARCHAR
     comment: >
       Monthly U.S. goods exports by HS-10 commodity and destination country, curated to
       the same critical-mineral HS-2 chapters as trade_imports_critical_minerals (see that
@@ -9125,15 +9121,14 @@ partitionedTables:
       checkedAt: "2026-11-11T22:26:43Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: reporter
-          type: string
+          type: VARCHAR
         - name: flow
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
     comment: >
       UN Comtrade bilateral merchandise trade: reported value and quantity per
       reporter country x partner country x HS-6 commodity x flow x year. Tall.
@@ -9280,11 +9275,11 @@ partitionedTables:
     pattern: "type=ilostat/indicator=*/*.parquet"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: indicator
-          type: string
+          type: VARCHAR
     comment: >
       UN ILO ILOSTAT labor indicators: value per country x indicator x sex x
       classification x year. Tall — the international analog of the econ BLS tables
@@ -9408,11 +9403,10 @@ partitionedTables:
       checkedAt: "2026-11-11T22:26:46Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
     comment: >
       USITC DataWeb imports-for-consumption with the duty breakout: one row per
       HTS-8 x partner country x year. The tariff counterpart to econ.trade_imports
@@ -9543,11 +9537,10 @@ partitionedTables:
       checkedAt: "2026-11-11T22:26:48Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
     comment: >
       USITC statutory Harmonized Tariff Schedule rate lines (the published
       general/special/column-2 rates, as opposed to duties actually collected in
@@ -9663,11 +9656,10 @@ partitionedTables:
       checkedAt: "2026-11-11T22:26:49Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
-        - name: year
-          type: integer
+          type: VARCHAR
+        - *partition_year
     comment: >
       USGS Mineral Commodity Summaries (MCS) per-commodity salient statistics, long-format:
       one row per (release, commodity, country, statistic, statistic_detail, data_year).
