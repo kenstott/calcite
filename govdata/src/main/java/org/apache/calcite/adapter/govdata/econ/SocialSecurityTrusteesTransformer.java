@@ -15,6 +15,7 @@ import org.apache.calcite.adapter.file.etl.StreamingResponseTransformer;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -59,7 +60,7 @@ public class SocialSecurityTrusteesTransformer implements StreamingResponseTrans
 
   @Override public Iterator<Map<String, Object>> fetchAndTransform(RequestContext context) {
     SsaBrowserSession session = SsaBrowserSession.get(context);
-    int current = LocalDate.now().getYear();
+    int current = LocalDate.now(ZoneId.of("America/New_York")).getYear();
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     for (int year = FIRST_REPORT_YEAR; year <= current; year++) {
       String url = String.format(PAGE_URL, year);
