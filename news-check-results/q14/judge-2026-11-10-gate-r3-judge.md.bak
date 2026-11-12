@@ -1,0 +1,55 @@
+# q14 judge: Reuters/Investing.com "US traffic deaths fall in first half of 2026, lowest rate since 2014"
+
+Rank: [expert, askamerica, everyman]
+
+Story dated 2026-11-10, judged 2026-11-11. askamerica ran on engine-dev 1.42.0-SNAPSHOT.
+
+## Ratings given
+| Arm | Pinocchios | Primary sources read |
+|---|---|---|
+| expert | 0 | NHTSA DOT HS 813 833 Table 1; 813 800 (2025 rate); 813 829 (bicyclists); 813 403 (cost study); NSC release |
+| askamerica | 0 | NHTSA DOT HS 813 833 Table 1; warehouse FARS (transport.fatal_crashes) 2015-2024; NHTSA economic-impact page; Reuters text via AOL and a second reprint |
+| everyman | 1 | none (nhtsa.gov 403); search excerpts, Carscoops, syndicated copies |
+
+## Assessment
+- **Correct verdict:** 0 Pinocchios. The article's figures reproduce from NHTSA's own tables:
+  - H1 2025 = 8,120 + 9,055 = 17,175.
+  - 16,750 is -2.5% from that.
+  - H1 2014 rate was about 1.01, so "lowest rate since 2014" holds.
+  - H1 2015 deaths were 16,193, so "lowest count since 2015" holds.
+
+  everyman's deduction treats "second-lowest" and "lowest since 2014" as being in tension. Both are true, so this is not a defect in the article.
+- **expert (1st):**
+  - Traced every numeric claim to a named NHTSA publication.
+  - Recomputed the H1 2026 rate from H1 2025 VMT and NSC's +0.8% VMT change, getting 1.019.
+  - Reproduced 16,750 from the quarter split.
+  - Confirmed the bicyclist count and the cost figures from the primary studies.
+  - Tested the fifth-straight-decline claim year by year.
+  - Added NSC's divergent estimate as context.
+- **askamerica (2nd):**
+  - Covered every claim in the piece, including the fifth-straight-decline claim, tested against warehouse FARS 2021-2024 plus NHTSA's 2025 projection.
+  - Checked the 2021 +10.8% against warehouse FARS.
+  - Read NHTSA's quarterly table for the H1 baselines.
+  - Gave the same omitted-context points as expert, including NSC and the projection caveat.
+
+  It falls short of expert in three places:
+  - It did not re-derive the 1.02 rate.
+  - It left the 1,148 bicyclist figure unconfirmed by a primary release.
+  - It graded the 2025 rate claim from a table rather than NHTSA's 2025 report.
+
+  The gap to expert is small.
+- **everyman (3rd):**
+  - Good claim coverage, 10 rows.
+  - Read no primary document.
+  - Left "lowest since 2015" unconfirmed.
+  - Its single deduction is a misreading.
+
+## Severity invariant
+askamerica ranks above everyman. No flag.
+
+## Defects
+None new.
+
+## Connector procedure check
+- Neither the `fact-check-a-news-article` recipe nor the validate_article prompt was read in this run: no `find_recipe` call. The trend and streak coverage here came from the model unprompted.
+- 3 `preview_report` refusals before the report published. The new central-claim refusal did not fire: the central claim was graded `true`.

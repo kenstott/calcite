@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The WFTV/Stacker (Shipley Energy) article's claims about data center demand, PJM capacity prices and electricity costs are balanced and accurate; 2 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s1-t1-s1:checked ~ table tbody.s0{display:none}
+#s1-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"]{color:var(--link)}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"] .srtcue{opacity:1}
+#s1-t1-s1:checked ~ .srtreset{display:inline-block}
+#s1-t1-s2:checked ~ table tbody.s0{display:none}
+#s1-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"]{color:var(--link)}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"] .srtcue{opacity:1}
+#s1-t1-s2:checked ~ .srtreset{display:inline-block}
+#s1-t1-s3:checked ~ table tbody.s0{display:none}
+#s1-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"]{color:var(--link)}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"] .srtcue{opacity:1}
+#s1-t1-s3:checked ~ .srtreset{display:inline-block}
+#s1-t1-s4:checked ~ table tbody.s0{display:none}
+#s1-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s1-t1-s4:checked ~ table label[for="s1-t1-s4"]{color:var(--link)}
+#s1-t1-s4:checked ~ table label[for="s1-t1-s4"] .srtcue{opacity:1}
+#s1-t1-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The WFTV/Stacker (Shipley Energy) article's claims about data center demand, PJM capacity prices and electricity costs are balanced and accurate; 2 claims could not be confirmed.</h1>
+<p class="subtitle">Warehouse: energy.* (PJM auctions, EIA prices, Henry Hub); primary sources fetched where reachable. Checked 2026-11-11.</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.wftv.com/news/how-data-center/EZXZIDKMFYZ6PK7LB7OCPYQNYI/">https://www.wftv.com/news/how-data-center/EZXZIDKMFYZ6PK7LB7OCPYQNYI/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 461" width="880" height="461" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="461" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">PJM capacity prices and Henry Hub during Winter Storm Fern</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">AskAmerica energy.pjm_capacity_auction_prices (RTO, $/MW-day); energy.eia_natural_gas_price ($/MMBtu)</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">PJM RTO capacity clearing price by delivery year</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="91" y1="246" x2="390" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="83" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$0.00</text>
+      <line class="grid" x1="91" y1="218.86" x2="390" y2="218.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="83" y="222.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$50.00</text>
+      <line class="grid" x1="91" y1="191.71" x2="390" y2="191.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="83" y="195.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$100.00</text>
+      <line class="grid" x1="91" y1="164.57" x2="390" y2="164.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="83" y="168.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$150.00</text>
+      <line class="grid" x1="91" y1="137.43" x2="390" y2="137.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="83" y="141.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$200.00</text>
+      <line class="grid" x1="91" y1="110.29" x2="390" y2="110.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="83" y="114.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$250.00</text>
+      <line class="grid" x1="91" y1="83.14" x2="390" y2="83.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="83" y="87.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$300.00</text>
+      <line class="grid" x1="91" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-7" class="tick" x="83" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">$350.00</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="91" y1="56" x2="91" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="91" y1="246" x2="390" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="151" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 151)">$/MW-day</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2024-25" class="tick" x="140.83" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024/25</text>
+      <text id="p1-xtick-2025-26" class="tick" x="240.50" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025/26</text>
+      <text id="p1-xtick-2026-27" class="tick" x="340.17" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026/27</text>
+    </g>
+    <g id="p1-series-mw-day" class="series">
+      <g class="hover">
+        <title>2024/25 — $/MW-day: $28.92</title>
+        <rect id="p1-mark-mw-day-2024-25" class="bar" x="108.94" y="230.30" width="62.79" height="15.70" fill="#2563eb"/>
+        <rect class="hit" x="108.94" y="56" width="62.79" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-mw-day-2024-25" class="value-label" x="140.33" y="226.30" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">$28.92</text>
+      <g class="hover">
+        <title>2025/26 — $/MW-day: $269.92</title>
+        <rect id="p1-mark-mw-day-2025-26" class="bar" x="208.61" y="99.47" width="62.79" height="146.53" fill="#2563eb"/>
+        <rect class="hit" x="208.61" y="56" width="62.79" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-mw-day-2025-26" class="value-label" x="240.00" y="95.47" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">$269.92</text>
+      <g class="hover">
+        <title>2026/27 — $/MW-day: $329.17</title>
+        <rect id="p1-mark-mw-day-2026-27" class="bar" x="308.27" y="67.31" width="62.79" height="178.69" fill="#2563eb"/>
+        <rect class="hit" x="308.27" y="56" width="62.79" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-mw-day-2026-27" class="value-label" x="339.67" y="63.31" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">$329.17</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="82" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="82" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Henry Hub spot, Jan 22-30 2026 (EIA daily)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="60" y1="246" x2="390" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="52" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="218.86" x2="390" y2="218.86" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="52" y="222.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="60" y1="191.71" x2="390" y2="191.71" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="52" y="195.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="164.57" x2="390" y2="164.57" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="52" y="168.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">15</text>
+      <line class="grid" x1="60" y1="137.43" x2="390" y2="137.43" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="52" y="141.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="60" y1="110.29" x2="390" y2="110.29" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="52" y="114.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">25</text>
+      <line class="grid" x1="60" y1="83.14" x2="390" y2="83.14" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-6" class="tick" x="52" y="87.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-7" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">35</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="246" x2="390" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="151" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 151)">$/MMBtu</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-jan-22" class="tick" x="83.57" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 22</text>
+      <text id="p2-xtick-jan-23" class="tick" x="130.71" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 23</text>
+      <text id="p2-xtick-jan-26" class="tick" x="177.86" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 26</text>
+      <text id="p2-xtick-jan-27" class="tick" x="225" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 27</text>
+      <text id="p2-xtick-jan-28" class="tick" x="272.14" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 28</text>
+      <text id="p2-xtick-jan-29" class="tick" x="319.29" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 29</text>
+      <text id="p2-xtick-jan-30" class="tick" x="366.43" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Jan 30</text>
+    </g>
+    <g id="p2-series-mmbtu" class="series">
+      <path id="p2-line-mmbtu" class="line" d="M 83.57 200.29 L 130.71 79.23 L 177.86 110.23 L 225 152.68 L 272.14 195.30 L 319.29 190.36 L 366.43 207.02" fill="none" stroke="#2563eb" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <g class="hover">
+        <title>Jan 22 — $/MMBtu: 8.42</title>
+        <circle id="p2-mark-mmbtu-jan-22" class="point" cx="83.57" cy="200.29" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="83.57" cy="200.29" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jan 23 — $/MMBtu: 30.72</title>
+        <circle id="p2-mark-mmbtu-jan-23" class="point" cx="130.71" cy="79.23" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="130.71" cy="79.23" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jan 26 — $/MMBtu: 25.01</title>
+        <circle id="p2-mark-mmbtu-jan-26" class="point" cx="177.86" cy="110.23" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="177.86" cy="110.23" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jan 27 — $/MMBtu: 17.19</title>
+        <circle id="p2-mark-mmbtu-jan-27" class="point" cx="225" cy="152.68" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="225" cy="152.68" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jan 28 — $/MMBtu: 9.34</title>
+        <circle id="p2-mark-mmbtu-jan-28" class="point" cx="272.14" cy="195.30" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="272.14" cy="195.30" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jan 29 — $/MMBtu: 10.25</title>
+        <circle id="p2-mark-mmbtu-jan-29" class="point" cx="319.29" cy="190.36" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="319.29" cy="190.36" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jan 30 — $/MMBtu: 7.18</title>
+        <circle id="p2-mark-mmbtu-jan-30" class="point" cx="366.43" cy="207.02" r="3" fill="#2563eb"/>
+        <circle class="hit" cx="366.43" cy="207.02" r="8" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="408" fill="#6b7280">Article's 'record $30.57 on Jan. 26' is NGI's figure; EIA daily series peaks at $30.72 on Jan. 23.</text>
+  <g id="brand">
+  <svg x="20" y="420" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="435" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:57161/a/52ea8f59d42272ff03d31d11181c58e0.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 97/100 — honest</strong> &middot; <strong>Bias +22/100 — no consistent lean</strong></p><p>27 claims graded, 0 not gradable, 4 fell short. In this article only.</p></div>
+<p><strong>23</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>2</strong> unsupported &middot; <strong>27</strong> assertions checked</p>
+<input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s0" checked><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s1"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s2"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s3"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s4"><table><thead><tr><th><label class="srth" for="s1-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s1-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>7</td><td>a given increase in wholesale prices reaches retail bills at roughly half its size</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#6 — supported</td></tr><tr class="verdict-unsupported"><td>16</td><td>North Dakota saw electricity demand grow almost 40% while inflation-adjusted prices fell by about 3 cents per kilowatt-hour.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>24</td><td>Day-ahead power prices at PJM's Western Hub cleared at $2,323 per megawatt-hour the next day.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>20</td><td>despite a record price</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>23</td><td>The Henry Hub natural gas spot price set an all-time daily record of about $30.57 per million British thermal units on Jan. 26.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Three years ago, U.S. utilities expected peak electricity demand to grow by about 24 gigawatts over the following five years. Their most recent forecasts put that figure at roughly 166 gigawatts, 6.9 times the earlier estimate, and about 90 gigawatts of the increase is tied to data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Data centers used about 4.4% of U.S. electricity in 2023, according to Lawrence Berkeley National Laboratory, and the lab projects that share could reach 6.7% to 12% by 2028.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>the average U.S. residential price rising from 17.3 cents per kilowatt-hour in 2025 to 18.2 cents in 2026</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>expects record national electricity sales in 2026, driven by data center development and manufacturing</td><td><strong>true</strong> &middot; causal claim</td><td>#3 — supported</td></tr><tr class="verdict-true"><td>5</td><td>Researchers at the Federal Reserve Bank of Dallas estimate that existing data centers have already raised wholesale electricity prices by 2% to 6% on average nationwide.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>wholesale power typically makes up about half of the retail price of electricity</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>Its clearing price rose from $28.92 per megawatt-day for 2024/2025 to $269.92 for 2025/2026, then hit a federally approved cap in each of the next three auctions. The 2028/2029 auction cleared at $325 per megawatt-day and still came in 6,831 megawatts short of PJM's reliability requirement.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>PJM's independent market monitor attributes about 46% of capacity costs across the last four auctions, or $29.4 billion, to data center demand.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>10</td><td>The Midcontinent grid operator saw summer capacity prices reach a record $666.50 per megawatt-day for 2025/2026 as its surplus shrank. A year later, the picture shifted. Capacity offered into the 2026/2027 auction grew 3.4%, led by solar additions, and annualized prices fell to between $116 and $126 per megawatt-day, down from $212 to $217 the year before.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>In August 2026, Gov. Greg Abbott directed state regulators and ERCOT to audit every data center seeking a grid connection before any project moves forward, citing more than 474 gigawatts of requests, more than five times the state's record peak demand, with about 90% coming from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Georgia Power's pipeline of prospective large-load projects grew from about 16,000 megawatts in 2023 to roughly 69,000 megawatts by December 2025, about 80% of it from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>13</td><td>Georgia Power projects that new large-load contracts will produce about $950 million a year in customer savings beginning in 2029</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>14</td><td>state commission staff cautioned that the related generation buildout could add around $20 a month to residential bills</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>15</td><td>Data centers account for roughly 15% of the current load of Oregon's investor-owned utilities, according to the state's utility commission. Under a 2025 state law, Oregon regulators approved new rates for Portland General Electric in July 2026 that raised data center rates by an average of 29% while lowering residential rates by 1.3% and commercial rates by 2.1%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>17</td><td>Utility forecasts add up to about 90 gigawatts of new data center load by 2030, while data center market analysts estimate growth is unlikely to need much more than 65 gigawatts over that period.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>18</td><td>The North American Electric Reliability Corporation, which oversees grid reliability, found that 13 of 23 North American assessment areas face elevated or high risk of supply shortfalls within five years, with data centers as a main driver of load growth.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>19</td><td>PJM's 2028/2029 auction cleared only 525 megawatts of new generation and plant upgrades</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>21</td><td>GE Vernova alone reported 116 gigawatts of gas turbine orders and reservations in mid-2026.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>22</td><td>In PJM, natural gas plants produced about 44% of the region's electricity in 2024, so gas prices weigh heavily on wholesale power prices.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>25</td><td>The U.S. Department of Energy issued an emergency order allowing PJM to direct data centers and other large facilities onto backup generation as a last resort to prevent blackouts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>26</td><td>Ohio regulators approved a tariff in July 2025 requiring new AEP Ohio data centers above 25 megawatts to pay for at least 85% of their subscribed capacity for up to 12 years, regardless of actual use. Virginia regulators created a new rate class for Dominion Energy customers requiring 25 megawatts or more, effective in 2027. Oregon's 2025 law created a separate class for data centers above 20 megawatts, and Georgia now requires the state commission to review Georgia Power's large-load contracts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>27</td><td>The Data Center Coalition, an industry group, has called some of Oregon's rules out of step with other states.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>27</td><td>The Data Center Coalition, an industry group, has called some of Oregon's rules out of step with other states.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>26</td><td>Ohio regulators approved a tariff in July 2025 requiring new AEP Ohio data centers above 25 megawatts to pay for at least 85% of their subscribed capacity for up to 12 years, regardless of actual use. Virginia regulators created a new rate class for Dominion Energy customers requiring 25 megawatts or more, effective in 2027. Oregon's 2025 law created a separate class for data centers above 20 megawatts, and Georgia now requires the state commission to review Georgia Power's large-load contracts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>25</td><td>The U.S. Department of Energy issued an emergency order allowing PJM to direct data centers and other large facilities onto backup generation as a last resort to prevent blackouts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>24</td><td>Day-ahead power prices at PJM's Western Hub cleared at $2,323 per megawatt-hour the next day.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>23</td><td>The Henry Hub natural gas spot price set an all-time daily record of about $30.57 per million British thermal units on Jan. 26.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>22</td><td>In PJM, natural gas plants produced about 44% of the region's electricity in 2024, so gas prices weigh heavily on wholesale power prices.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>21</td><td>GE Vernova alone reported 116 gigawatts of gas turbine orders and reservations in mid-2026.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>20</td><td>despite a record price</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>19</td><td>PJM's 2028/2029 auction cleared only 525 megawatts of new generation and plant upgrades</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>18</td><td>The North American Electric Reliability Corporation, which oversees grid reliability, found that 13 of 23 North American assessment areas face elevated or high risk of supply shortfalls within five years, with data centers as a main driver of load growth.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>17</td><td>Utility forecasts add up to about 90 gigawatts of new data center load by 2030, while data center market analysts estimate growth is unlikely to need much more than 65 gigawatts over that period.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>16</td><td>North Dakota saw electricity demand grow almost 40% while inflation-adjusted prices fell by about 3 cents per kilowatt-hour.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>15</td><td>Data centers account for roughly 15% of the current load of Oregon's investor-owned utilities, according to the state's utility commission. Under a 2025 state law, Oregon regulators approved new rates for Portland General Electric in July 2026 that raised data center rates by an average of 29% while lowering residential rates by 1.3% and commercial rates by 2.1%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>14</td><td>state commission staff cautioned that the related generation buildout could add around $20 a month to residential bills</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>13</td><td>Georgia Power projects that new large-load contracts will produce about $950 million a year in customer savings beginning in 2029</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Georgia Power's pipeline of prospective large-load projects grew from about 16,000 megawatts in 2023 to roughly 69,000 megawatts by December 2025, about 80% of it from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>In August 2026, Gov. Greg Abbott directed state regulators and ERCOT to audit every data center seeking a grid connection before any project moves forward, citing more than 474 gigawatts of requests, more than five times the state's record peak demand, with about 90% coming from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>10</td><td>The Midcontinent grid operator saw summer capacity prices reach a record $666.50 per megawatt-day for 2025/2026 as its surplus shrank. A year later, the picture shifted. Capacity offered into the 2026/2027 auction grew 3.4%, led by solar additions, and annualized prices fell to between $116 and $126 per megawatt-day, down from $212 to $217 the year before.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>PJM's independent market monitor attributes about 46% of capacity costs across the last four auctions, or $29.4 billion, to data center demand.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>Its clearing price rose from $28.92 per megawatt-day for 2024/2025 to $269.92 for 2025/2026, then hit a federally approved cap in each of the next three auctions. The 2028/2029 auction cleared at $325 per megawatt-day and still came in 6,831 megawatts short of PJM's reliability requirement.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>a given increase in wholesale prices reaches retail bills at roughly half its size</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#6 — supported</td></tr><tr class="verdict-true"><td>6</td><td>wholesale power typically makes up about half of the retail price of electricity</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Researchers at the Federal Reserve Bank of Dallas estimate that existing data centers have already raised wholesale electricity prices by 2% to 6% on average nationwide.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>expects record national electricity sales in 2026, driven by data center development and manufacturing</td><td><strong>true</strong> &middot; causal claim</td><td>#3 — supported</td></tr><tr class="verdict-true"><td>3</td><td>the average U.S. residential price rising from 17.3 cents per kilowatt-hour in 2025 to 18.2 cents in 2026</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Data centers used about 4.4% of U.S. electricity in 2023, according to Lawrence Berkeley National Laboratory, and the lab projects that share could reach 6.7% to 12% by 2028.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Three years ago, U.S. utilities expected peak electricity demand to grow by about 24 gigawatts over the following five years. Their most recent forecasts put that figure at roughly 166 gigawatts, 6.9 times the earlier estimate, and about 90 gigawatts of the increase is tied to data centers.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>7</td><td>a given increase in wholesale prices reaches retail bills at roughly half its size</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#6 — supported</td></tr><tr class="verdict-true"><td>15</td><td>Data centers account for roughly 15% of the current load of Oregon's investor-owned utilities, according to the state's utility commission. Under a 2025 state law, Oregon regulators approved new rates for Portland General Electric in July 2026 that raised data center rates by an average of 29% while lowering residential rates by 1.3% and commercial rates by 2.1%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Data centers used about 4.4% of U.S. electricity in 2023, according to Lawrence Berkeley National Laboratory, and the lab projects that share could reach 6.7% to 12% by 2028.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>24</td><td>Day-ahead power prices at PJM's Western Hub cleared at $2,323 per megawatt-hour the next day.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>20</td><td>despite a record price</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>expects record national electricity sales in 2026, driven by data center development and manufacturing</td><td><strong>true</strong> &middot; causal claim</td><td>#3 — supported</td></tr><tr class="verdict-true"><td>21</td><td>GE Vernova alone reported 116 gigawatts of gas turbine orders and reservations in mid-2026.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>13</td><td>Georgia Power projects that new large-load contracts will produce about $950 million a year in customer savings beginning in 2029</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Georgia Power's pipeline of prospective large-load projects grew from about 16,000 megawatts in 2023 to roughly 69,000 megawatts by December 2025, about 80% of it from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>In August 2026, Gov. Greg Abbott directed state regulators and ERCOT to audit every data center seeking a grid connection before any project moves forward, citing more than 474 gigawatts of requests, more than five times the state's record peak demand, with about 90% coming from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>22</td><td>In PJM, natural gas plants produced about 44% of the region's electricity in 2024, so gas prices weigh heavily on wholesale power prices.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>Its clearing price rose from $28.92 per megawatt-day for 2024/2025 to $269.92 for 2025/2026, then hit a federally approved cap in each of the next three auctions. The 2028/2029 auction cleared at $325 per megawatt-day and still came in 6,831 megawatts short of PJM's reliability requirement.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>16</td><td>North Dakota saw electricity demand grow almost 40% while inflation-adjusted prices fell by about 3 cents per kilowatt-hour.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>26</td><td>Ohio regulators approved a tariff in July 2025 requiring new AEP Ohio data centers above 25 megawatts to pay for at least 85% of their subscribed capacity for up to 12 years, regardless of actual use. Virginia regulators created a new rate class for Dominion Energy customers requiring 25 megawatts or more, effective in 2027. Oregon's 2025 law created a separate class for data centers above 20 megawatts, and Georgia now requires the state commission to review Georgia Power's large-load contracts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>19</td><td>PJM's 2028/2029 auction cleared only 525 megawatts of new generation and plant upgrades</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>PJM's independent market monitor attributes about 46% of capacity costs across the last four auctions, or $29.4 billion, to data center demand.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Researchers at the Federal Reserve Bank of Dallas estimate that existing data centers have already raised wholesale electricity prices by 2% to 6% on average nationwide.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>14</td><td>state commission staff cautioned that the related generation buildout could add around $20 a month to residential bills</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>the average U.S. residential price rising from 17.3 cents per kilowatt-hour in 2025 to 18.2 cents in 2026</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>27</td><td>The Data Center Coalition, an industry group, has called some of Oregon's rules out of step with other states.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>23</td><td>The Henry Hub natural gas spot price set an all-time daily record of about $30.57 per million British thermal units on Jan. 26.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>10</td><td>The Midcontinent grid operator saw summer capacity prices reach a record $666.50 per megawatt-day for 2025/2026 as its surplus shrank. A year later, the picture shifted. Capacity offered into the 2026/2027 auction grew 3.4%, led by solar additions, and annualized prices fell to between $116 and $126 per megawatt-day, down from $212 to $217 the year before.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>18</td><td>The North American Electric Reliability Corporation, which oversees grid reliability, found that 13 of 23 North American assessment areas face elevated or high risk of supply shortfalls within five years, with data centers as a main driver of load growth.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>25</td><td>The U.S. Department of Energy issued an emergency order allowing PJM to direct data centers and other large facilities onto backup generation as a last resort to prevent blackouts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Three years ago, U.S. utilities expected peak electricity demand to grow by about 24 gigawatts over the following five years. Their most recent forecasts put that figure at roughly 166 gigawatts, 6.9 times the earlier estimate, and about 90 gigawatts of the increase is tied to data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>17</td><td>Utility forecasts add up to about 90 gigawatts of new data center load by 2030, while data center market analysts estimate growth is unlikely to need much more than 65 gigawatts over that period.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>wholesale power typically makes up about half of the retail price of electricity</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>23</td><td>The Henry Hub natural gas spot price set an all-time daily record of about $30.57 per million British thermal units on Jan. 26.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>20</td><td>despite a record price</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Three years ago, U.S. utilities expected peak electricity demand to grow by about 24 gigawatts over the following five years. Their most recent forecasts put that figure at roughly 166 gigawatts, 6.9 times the earlier estimate, and about 90 gigawatts of the increase is tied to data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Data centers used about 4.4% of U.S. electricity in 2023, according to Lawrence Berkeley National Laboratory, and the lab projects that share could reach 6.7% to 12% by 2028.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>the average U.S. residential price rising from 17.3 cents per kilowatt-hour in 2025 to 18.2 cents in 2026</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Researchers at the Federal Reserve Bank of Dallas estimate that existing data centers have already raised wholesale electricity prices by 2% to 6% on average nationwide.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>wholesale power typically makes up about half of the retail price of electricity</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>Its clearing price rose from $28.92 per megawatt-day for 2024/2025 to $269.92 for 2025/2026, then hit a federally approved cap in each of the next three auctions. The 2028/2029 auction cleared at $325 per megawatt-day and still came in 6,831 megawatts short of PJM's reliability requirement.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>PJM's independent market monitor attributes about 46% of capacity costs across the last four auctions, or $29.4 billion, to data center demand.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>10</td><td>The Midcontinent grid operator saw summer capacity prices reach a record $666.50 per megawatt-day for 2025/2026 as its surplus shrank. A year later, the picture shifted. Capacity offered into the 2026/2027 auction grew 3.4%, led by solar additions, and annualized prices fell to between $116 and $126 per megawatt-day, down from $212 to $217 the year before.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>In August 2026, Gov. Greg Abbott directed state regulators and ERCOT to audit every data center seeking a grid connection before any project moves forward, citing more than 474 gigawatts of requests, more than five times the state's record peak demand, with about 90% coming from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Georgia Power's pipeline of prospective large-load projects grew from about 16,000 megawatts in 2023 to roughly 69,000 megawatts by December 2025, about 80% of it from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>13</td><td>Georgia Power projects that new large-load contracts will produce about $950 million a year in customer savings beginning in 2029</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>14</td><td>state commission staff cautioned that the related generation buildout could add around $20 a month to residential bills</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>15</td><td>Data centers account for roughly 15% of the current load of Oregon's investor-owned utilities, according to the state's utility commission. Under a 2025 state law, Oregon regulators approved new rates for Portland General Electric in July 2026 that raised data center rates by an average of 29% while lowering residential rates by 1.3% and commercial rates by 2.1%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>17</td><td>Utility forecasts add up to about 90 gigawatts of new data center load by 2030, while data center market analysts estimate growth is unlikely to need much more than 65 gigawatts over that period.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>18</td><td>The North American Electric Reliability Corporation, which oversees grid reliability, found that 13 of 23 North American assessment areas face elevated or high risk of supply shortfalls within five years, with data centers as a main driver of load growth.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>19</td><td>PJM's 2028/2029 auction cleared only 525 megawatts of new generation and plant upgrades</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>21</td><td>GE Vernova alone reported 116 gigawatts of gas turbine orders and reservations in mid-2026.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>22</td><td>In PJM, natural gas plants produced about 44% of the region's electricity in 2024, so gas prices weigh heavily on wholesale power prices.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>25</td><td>The U.S. Department of Energy issued an emergency order allowing PJM to direct data centers and other large facilities onto backup generation as a last resort to prevent blackouts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>26</td><td>Ohio regulators approved a tariff in July 2025 requiring new AEP Ohio data centers above 25 megawatts to pay for at least 85% of their subscribed capacity for up to 12 years, regardless of actual use. Virginia regulators created a new rate class for Dominion Energy customers requiring 25 megawatts or more, effective in 2027. Oregon's 2025 law created a separate class for data centers above 20 megawatts, and Georgia now requires the state commission to review Georgia Power's large-load contracts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>27</td><td>The Data Center Coalition, an industry group, has called some of Oregon's rules out of step with other states.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>expects record national electricity sales in 2026, driven by data center development and manufacturing</td><td><strong>true</strong> &middot; causal claim</td><td>#3 — supported</td></tr><tr class="verdict-true"><td>7</td><td>a given increase in wholesale prices reaches retail bills at roughly half its size</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#6 — supported</td></tr><tr class="verdict-unsupported"><td>16</td><td>North Dakota saw electricity demand grow almost 40% while inflation-adjusted prices fell by about 3 cents per kilowatt-hour.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>24</td><td>Day-ahead power prices at PJM's Western Hub cleared at $2,323 per megawatt-hour the next day.</td><td><strong>unsupported</strong></td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>4</td><td>expects record national electricity sales in 2026, driven by data center development and manufacturing</td><td><strong>true</strong> &middot; causal claim</td><td>#3 — supported</td></tr><tr class="verdict-true"><td>7</td><td>a given increase in wholesale prices reaches retail bills at roughly half its size</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#6 — supported</td></tr><tr class="verdict-unsupported"><td>16</td><td>North Dakota saw electricity demand grow almost 40% while inflation-adjusted prices fell by about 3 cents per kilowatt-hour.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>24</td><td>Day-ahead power prices at PJM's Western Hub cleared at $2,323 per megawatt-hour the next day.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>20</td><td>despite a record price</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>23</td><td>The Henry Hub natural gas spot price set an all-time daily record of about $30.57 per million British thermal units on Jan. 26.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Three years ago, U.S. utilities expected peak electricity demand to grow by about 24 gigawatts over the following five years. Their most recent forecasts put that figure at roughly 166 gigawatts, 6.9 times the earlier estimate, and about 90 gigawatts of the increase is tied to data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Data centers used about 4.4% of U.S. electricity in 2023, according to Lawrence Berkeley National Laboratory, and the lab projects that share could reach 6.7% to 12% by 2028.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>the average U.S. residential price rising from 17.3 cents per kilowatt-hour in 2025 to 18.2 cents in 2026</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Researchers at the Federal Reserve Bank of Dallas estimate that existing data centers have already raised wholesale electricity prices by 2% to 6% on average nationwide.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>wholesale power typically makes up about half of the retail price of electricity</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>Its clearing price rose from $28.92 per megawatt-day for 2024/2025 to $269.92 for 2025/2026, then hit a federally approved cap in each of the next three auctions. The 2028/2029 auction cleared at $325 per megawatt-day and still came in 6,831 megawatts short of PJM's reliability requirement.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>PJM's independent market monitor attributes about 46% of capacity costs across the last four auctions, or $29.4 billion, to data center demand.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>10</td><td>The Midcontinent grid operator saw summer capacity prices reach a record $666.50 per megawatt-day for 2025/2026 as its surplus shrank. A year later, the picture shifted. Capacity offered into the 2026/2027 auction grew 3.4%, led by solar additions, and annualized prices fell to between $116 and $126 per megawatt-day, down from $212 to $217 the year before.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>In August 2026, Gov. Greg Abbott directed state regulators and ERCOT to audit every data center seeking a grid connection before any project moves forward, citing more than 474 gigawatts of requests, more than five times the state's record peak demand, with about 90% coming from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Georgia Power's pipeline of prospective large-load projects grew from about 16,000 megawatts in 2023 to roughly 69,000 megawatts by December 2025, about 80% of it from data centers.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>13</td><td>Georgia Power projects that new large-load contracts will produce about $950 million a year in customer savings beginning in 2029</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>14</td><td>state commission staff cautioned that the related generation buildout could add around $20 a month to residential bills</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>15</td><td>Data centers account for roughly 15% of the current load of Oregon's investor-owned utilities, according to the state's utility commission. Under a 2025 state law, Oregon regulators approved new rates for Portland General Electric in July 2026 that raised data center rates by an average of 29% while lowering residential rates by 1.3% and commercial rates by 2.1%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>17</td><td>Utility forecasts add up to about 90 gigawatts of new data center load by 2030, while data center market analysts estimate growth is unlikely to need much more than 65 gigawatts over that period.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>18</td><td>The North American Electric Reliability Corporation, which oversees grid reliability, found that 13 of 23 North American assessment areas face elevated or high risk of supply shortfalls within five years, with data centers as a main driver of load growth.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>19</td><td>PJM's 2028/2029 auction cleared only 525 megawatts of new generation and plant upgrades</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>21</td><td>GE Vernova alone reported 116 gigawatts of gas turbine orders and reservations in mid-2026.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>22</td><td>In PJM, natural gas plants produced about 44% of the region's electricity in 2024, so gas prices weigh heavily on wholesale power prices.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>25</td><td>The U.S. Department of Energy issued an emergency order allowing PJM to direct data centers and other large facilities onto backup generation as a last resort to prevent blackouts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>26</td><td>Ohio regulators approved a tariff in July 2025 requiring new AEP Ohio data centers above 25 megawatts to pay for at least 85% of their subscribed capacity for up to 12 years, regardless of actual use. Virginia regulators created a new rate class for Dominion Energy customers requiring 25 megawatts or more, effective in 2027. Oregon's 2025 law created a separate class for data centers above 20 megawatts, and Georgia now requires the state commission to review Georgia Power's large-load contracts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>27</td><td>The Data Center Coalition, an industry group, has called some of Oregon's rules out of step with other states.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s1-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (an opinion or personal attack no evidence can test), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Three years ago, U.S. utilities expected peak electricity demand to grow by about 24 gigawatts over the following five years. Their most recent forecasts put that figure at roughly 166 gigawatts, 6.9 times the earlier estimate, and about 90 gigawatts of the increase is tied to data centers.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Grid Strategies 2025 national load growth report: 24 GW -&gt; 166 GW (6.9x), ~90 GW data centers<ul class="claim-sources"><li><a href="https://gridstrategiesllc.com/wp-content/uploads/Grid-Strategies-National-Load-Growth-Report-2025.pdf">Grid Strategies National Load Growth Report 2025</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Data centers used about 4.4% of U.S. electricity in 2023, according to Lawrence Berkeley National Laboratory, and the lab projects that share could reach 6.7% to 12% by 2028.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>DOE/LBNL 2024 report: 4.4% in 2023, 6.7-12% by 2028<ul class="claim-sources"><li><a href="https://www.energy.gov/articles/doe-releases-new-report-evaluating-increase-electricity-demand-data-centers">DOE LBNL data center report</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; the average U.S. residential price rising from 17.3 cents per kilowatt-hour in 2025 to 18.2 cents in 2026</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2025 residential US avg 17.3 c/kWh (2024: 16.48); current STEO shows 17.2 for 2025, a rounding/vintage difference <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.eia.gov/outlooks/steo/report/elec_coal_renew.php">EIA STEO</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT price_year, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE state_abbr='US' AND sector_code='RES' AND price_year IN (2024,2025)</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; expects record national electricity sales in 2026, driven by data center development and manufacturing</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>EIA STEO electricity section<ul class="claim-sources"><li><a href="https://www.eia.gov/outlooks/steo/report/elec_coal_renew.php">EIA STEO</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#3</dd>
+<dt>What that evidence found</dt><dd>EIA STEO attributes record 2026 sales to commercial (data center) and industrial demand growth</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Researchers at the Federal Reserve Bank of Dallas estimate that existing data centers have already raised wholesale electricity prices by 2% to 6% on average nationwide.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Dallas Fed WP 2606: 2-6% wholesale effect (a modeled estimate)<ul class="claim-sources"><li><a href="https://www.dallasfed.org/~/media/documents/research/papers/2026/wp2606.pdf">Dallas Fed WP 2606</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; wholesale power typically makes up about half of the retail price of electricity</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Dallas Fed commentary<ul class="claim-sources"><li><a href="https://www.dallasfed.org/research/economics/2026/0305-kay-datacenters">Dallas Fed commentary</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; a given increase in wholesale prices reaches retail bills at roughly half its size</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Dallas Fed commentary<ul class="claim-sources"><li><a href="https://www.dallasfed.org/research/economics/2026/0305-kay-datacenters">Dallas Fed commentary</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Rests on</dt><dd>#6</dd>
+<dt>What that evidence found</dt><dd>Dallas Fed commentary states roughly half pass-through</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Its clearing price rose from $28.92 per megawatt-day for 2024/2025 to $269.92 for 2025/2026, then hit a federally approved cap in each of the next three auctions. The 2028/2029 auction cleared at $325 per megawatt-day and still came in 6,831 megawatts short of PJM's reliability requirement.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>RTO clearing: 2024/25 28.92; 2025/26 269.92; 2026/27 329.17 <code>energy.pjm_capacity_auction_prices</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/">PJM 2028/29 BRA release</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT delivery_year, resource_clearing_price FROM energy.pjm_capacity_auction_prices WHERE lda='RTO' AND delivery_year&gt;=2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; PJM's independent market monitor attributes about 46% of capacity costs across the last four auctions, or $29.4 billion, to data center demand.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>IMM (Bowring) via Utility Dive: ~46%, $29.4B. A monitor attribution, contested by others.<ul class="claim-sources"><li><a href="https://utilitydive.com/news/pjm-data-centers-capacity-auction-imm-bowring/825626">Utility Dive on IMM</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; The Midcontinent grid operator saw summer capacity prices reach a record $666.50 per megawatt-day for 2025/2026 as its surplus shrank. A year later, the picture shifted. Capacity offered into the 2026/2027 auction grew 3.4%, led by solar additions, and annualized prices fell to between $116 and $126 per megawatt-day, down from $212 to $217 the year before.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>MISO PRA presentation and Utility Dive match<ul class="claim-sources"><li><a href="https://secure.in.gov/iurc/files/1.-MISO-SRF-Presentation-2025.pdf">MISO SRF presentation</a></li><li><a href="https://www.utilitydive.com/news/miso-capacity-auction-nerc/818797/">Utility Dive MISO</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; In August 2026, Gov. Greg Abbott directed state regulators and ERCOT to audit every data center seeking a grid connection before any project moves forward, citing more than 474 gigawatts of requests, more than five times the state's record peak demand, with about 90% coming from data centers.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Texas governor release matches<ul class="claim-sources"><li><a href="https://gov.texas.gov/news/post/governor-abbott-directs-comprehensive-data-center-audit">Texas Governor release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; Georgia Power's pipeline of prospective large-load projects grew from about 16,000 megawatts in 2023 to roughly 69,000 megawatts by December 2025, about 80% of it from data centers.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Atlanta News First / PSC chair reporting matches<ul class="claim-sources"><li><a href="https://www.atlantanewsfirst.com/2026/03/17/georgia-psc-chairman-defends-data-center-power-expansion-amid-criticism">Atlanta News First</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#13 &middot; <strong>true</strong> &mdash; Georgia Power projects that new large-load contracts will produce about $950 million a year in customer savings beginning in 2029</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Georgia Power Aug 26 2026 release: approximately $950 million per year beginning 2029 (a company projection)<ul class="claim-sources"><li><a href="https://www.placera.se/pressmeddelanden/southern-company-georgia-power-s-contract-with-openai-approved-latest-approval-part-of-portfolio-of-large-load-contracts-delivering-approximately-950-million-in-annual-savings-beginning-in-2029-20260827">Georgia Power release via PR Newswire/Placera</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#14 &middot; <strong>true</strong> &mdash; state commission staff cautioned that the related generation buildout could add around $20 a month to residential bills</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Atlanta News First: PSC staff cautioned it could add $20 a month; a later stipulation guaranteeing 2029-31 revenue means, per Georgia Power, the increase will not materialize (omitted by the article)<ul class="claim-sources"><li><a href="https://www.atlantanewsfirst.com/2026/03/17/georgia-psc-chairman-defends-data-center-power-expansion-amid-criticism">Atlanta News First</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#15 &middot; <strong>true</strong> &mdash; Data centers account for roughly 15% of the current load of Oregon's investor-owned utilities, according to the state's utility commission. Under a 2025 state law, Oregon regulators approved new rates for Portland General Electric in July 2026 that raised data center rates by an average of 29% while lowering residential rates by 1.3% and commercial rates by 2.1%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Oregon PUC report pp.2,8: roughly 15 percent of IOU load; PUC release PR-26-15: 29% increase, residential -1.3%, commercial -2.1%<ul class="claim-sources"><li><a href="https://www.oregon.gov/puc/forms/Forms%20and%20Reports/2026%20POWER%20Act%20Legislative%20Report.pdf">Oregon PUC POWER Act report</a></li><li><a href="https://www.oregon.gov/puc/news-events/Documents/PR-202615.pdf">Oregon PUC release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#16 &middot; <strong>unsupported</strong> &mdash; North Dakota saw electricity demand grow almost 40% while inflation-adjusted prices fell by about 3 cents per kilowatt-hour.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>ND sales 18.5 (2016), 22.9 (2021), 30.3 (2025) TWh; price 8.94, 8.65, 8.20 c/kWh nominal <code>energy.eia_electricity_prices</code></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Figure comes from a Boston Globe/LBNL analysis with an unstated window and was not re-derived. Warehouse ND all-sector sales rose 18.5 to 30.3 TWh (+64%) 2016-2025 and 22.9 TWh in 2021 (+24% from 2016), while nominal price fell only 8.94 to 8.20 c/kWh; the article's window is unknown.</dd>
+<dt>Warehouse searched for</dt><dd>North Dakota electricity sales and price</dd>
+<dt>Web searches run</dt><dd>North Dakota electricity demand 40% inflation-adjusted prices fell 3 cents Boston Globe; LBNL retail electricity price trends North Dakota</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT price_year, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE state_abbr='ND' AND sector_code='ALL'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#17 &middot; <strong>true</strong> &mdash; Utility forecasts add up to about 90 gigawatts of new data center load by 2030, while data center market analysts estimate growth is unlikely to need much more than 65 gigawatts over that period.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Grid Strategies / Utility Dive: ~90 GW utility forecasts vs ~65 GW analyst view; duplicate-counting caveat<ul class="claim-sources"><li><a href="https://www.utilitydive.com/news/some-load-forecasts-using-unrealistically-high-load-factors-grid-strateg/805927/">Utility Dive on load factors</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#18 &middot; <strong>true</strong> &mdash; The North American Electric Reliability Corporation, which oversees grid reliability, found that 13 of 23 North American assessment areas face elevated or high risk of supply shortfalls within five years, with data centers as a main driver of load growth.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NERC LTRA via POWER: 13 of 23<ul class="claim-sources"><li><a href="https://www.powermag.com/nerc-warns-long-term-grid-reliability-risks-mounting-from-surging-demand-lagging-resources/">POWER on NERC LTRA</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#19 &middot; <strong>true</strong> &mdash; PJM's 2028/2029 auction cleared only 525 megawatts of new generation and plant upgrades</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>PJM release: 525 MW of new generation and uprates<ul class="claim-sources"><li><a href="https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/">PJM 2028/29 BRA release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#20 &middot; <strong>partially false</strong> &mdash; despite a record price</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>2026/27 RTO clearing price 329.17 exceeds 325 <code>energy.pjm_capacity_auction_prices</code></dd>
+<dt>Independent evidence</dt><dd>PJM release: $325 vs prior $333.44 (-2.5%)<ul class="claim-sources"><li><a href="https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/">PJM 2028/29 BRA release</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says the 2028/2029 auction had a record price; PJM says it cleared at $325, 2.5% below the prior auction's $333.44 cap, and the warehouse shows 2026/27 at $329.17.</dd>
+<dt>Windows tested</dt><dd>2028/29 vs 2027/28 auction: 325 vs 333.44; 2028/29 vs 2026/27 (warehouse): 325 vs 329.17</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT delivery_year, resource_clearing_price FROM energy.pjm_capacity_auction_prices WHERE lda='RTO' AND delivery_year&gt;=2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#21 &middot; <strong>true</strong> &mdash; GE Vernova alone reported 116 gigawatts of gas turbine orders and reservations in mid-2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Utility Dive: backlog 116 GW<ul class="claim-sources"><li><a href="https://www.utilitydive.com/news/ge-vernova-gas-turbine-backlog-climbs-to-116-gw/826039/">Utility Dive GE Vernova</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#22 &middot; <strong>true</strong> &mdash; In PJM, natural gas plants produced about 44% of the region's electricity in 2024, so gas prices weigh heavily on wholesale power prices.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>PJM 2024 State of the Market<ul class="claim-sources"><li><a href="https://www.pjm.com/-/media/DotCom/committees-groups/committees/mc/2025/20250425-special-som/2024-annual-state-of-the-market-report-for-pjm.pdf">PJM 2024 SOM</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#23 &middot; <strong>mostly true</strong> &mdash; The Henry Hub natural gas spot price set an all-time daily record of about $30.57 per million British thermal units on Jan. 26.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>EIA daily: Jan 23 30.72; Jan 26 25.01 <code>energy.eia_natural_gas_price</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://naturalgasintel.com/news/henry-hub-prices-smash-all-time-records-as-winter-storm-fern-lng-tag-team-to-tighten-balances/">NGI</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says $30.57 on Jan. 26; EIA's daily series shows $30.72 on Jan. 23 and $25.01 on Jan. 26, so $30.57 is NGI's averaged figure and the record date differs by source.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_date, value_dollars_per_mmbtu FROM energy.eia_natural_gas_price WHERE report_date BETWEEN '2026-01-22' AND '2026-01-30'</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#24 &middot; <strong>unsupported</strong> &mdash; Day-ahead power prices at PJM's Western Hub cleared at $2,323 per megawatt-hour the next day.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbre.com/insights/figures/energy-market-flash-winter-storm-fern">CBRE energy market flash (403)</a></li><li><a href="https://www.spglobal.com/energy/en/news-research/latest-news/electric-power/012726-us-wholesale-power-prices-reach-record-highs-in-winter-storm-retail-electricity-outages-continue">S&amp;P Global (403)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>CBRE's cited PDF and S&amp;P Global returned 403 to the engine; a web search shows CBRE citing $2,323/MWh day-ahead without naming a hub, and S&amp;P reporting West Hub on-peak day-ahead for Jan. 27 at $890.01. The Western Hub attribution could not be confirmed.</dd>
+<dt>No page loaded because</dt><dd>CBRE (cited PDF and insights page) and S&amp;P Global returned HTTP 403 to the engine fetch; the PJM market monitor Fern PDF was not opened.</dd>
+<dt>Warehouse searched for</dt><dd>PJM Western Hub day-ahead price January 27 2026</dd>
+<dt>Web searches run</dt><dd>PJM Western Hub day-ahead $2,323 per megawatt-hour January 27 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#25 &middot; <strong>true</strong> &mdash; The U.S. Department of Energy issued an emergency order allowing PJM to direct data centers and other large facilities onto backup generation as a last resort to prevent blackouts.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>DOE Section 202(c) Order No. 202-26-06<ul class="claim-sources"><li><a href="https://www.energy.gov/ceser/federal-power-act-section-202c-pjm-interconnection-pjm-order-no-202-26-06">DOE 202(c) order</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#26 &middot; <strong>true</strong> &mdash; Ohio regulators approved a tariff in July 2025 requiring new AEP Ohio data centers above 25 megawatts to pay for at least 85% of their subscribed capacity for up to 12 years, regardless of actual use. Virginia regulators created a new rate class for Dominion Energy customers requiring 25 megawatts or more, effective in 2027. Oregon's 2025 law created a separate class for data centers above 20 megawatts, and Georgia now requires the state commission to review Georgia Power's large-load contracts.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>POWER, Cardinal News, Oregon PUC (Schedule 96, 20 MW)<ul class="claim-sources"><li><a href="https://www.powermag.com/regulator-approves-aep-ohios-landmark-data-center-tariff/">POWER on AEP Ohio</a></li><li><a href="https://cardinalnews.org/2025/11/26/regulators-approve-dominion-energy-rate-increase/">Cardinal News Dominion</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#27 &middot; <strong>true</strong> &mdash; The Data Center Coalition, an industry group, has called some of Oregon's rules out of step with other states.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Fox Business: DCC told it the PUC order is 'significantly out of step with the approaches and best practices being implemented in many other states.'<ul class="claim-sources"><li><a href="https://www.foxbusiness.com/economy/oregon-data-centers-face-sharp-electricity-rate-hike-under-new-law">Fox Business</a></li></ul></dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>5 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 40 rows — 10187 ms</summary><pre><code>SELECT * FROM energy.pjm_capacity_auction_prices ORDER BY 1 FETCH FIRST 40 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 2 rows — 4068 ms</summary><pre><code>SELECT price_year, sector_code, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE state_abbr='US' AND sector_code='RES' AND price_year IN (2024,2025) </code></pre></details>
+<details class="sqltoggle"><summary>query — 20 rows — 2348 ms</summary><pre><code>SELECT price_year, avg_price_cents_kwh, sales_million_kwh FROM energy.eia_electricity_prices WHERE state_abbr='ND' AND sector_code='ALL' ORDER BY price_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 794 ms</summary><pre><code>SELECT delivery_year, resource_clearing_price FROM energy.pjm_capacity_auction_prices WHERE lda='RTO' AND delivery_year&gt;=2024 ORDER BY delivery_year</code></pre></details>
+<details class="sqltoggle"><summary>query — 7 rows — 783 ms</summary><pre><code>SELECT report_date, value_dollars_per_mmbtu FROM energy.eia_natural_gas_price WHERE report_date BETWEEN '2026-01-22' AND '2026-01-30' ORDER BY report_date</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://askamerica.ai">AskAmerica energy.pjm_capacity_auction_prices</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT delivery_year, resource_clearing_price FROM energy.pjm_capacity_auction_prices WHERE lda='RTO' AND delivery_year&gt;=2024</code></pre></details></li>
+<li><a href="https://askamerica.ai">AskAmerica energy.eia_natural_gas_price</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT report_date, value_dollars_per_mmbtu FROM energy.eia_natural_gas_price WHERE report_date BETWEEN '2026-01-22' AND '2026-01-30'</code></pre></details></li>
+<li><a href="https://www.oregon.gov/puc/forms/Forms%20and%20Reports/2026%20POWER%20Act%20Legislative%20Report.pdf">Oregon PUC POWER Act report</a></li>
+<li><a href="https://insidelines.pjm.com/pjm-capacity-auction-procures-138318-mw-of-generation-resources-as-work-continues-to-address-growing-electricity-demand/">PJM 2028/29 BRA release</a></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

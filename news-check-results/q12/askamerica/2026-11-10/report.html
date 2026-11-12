@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The California Governor's &quot;California is Booming&quot; release's claims about GDP growth, unemployment and jobs are biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t1-s4:checked ~ table tbody.s0{display:none}
+#s2-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"]{color:var(--link)}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"] .srtcue{opacity:1}
+#s2-t1-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The California Governor's &quot;California is Booming&quot; release's claims about GDP growth, unemployment and jobs are biased and mostly accurate.</h1>
+<p class="subtitle">Governor's press release 2026-11-10; BEA SAGDP1/SAGDP2/SQGDP2, BLS LAUS, FRED PAYEMS; checked 2026-11-11</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.gov.ca.gov/2026/11/10/california-is-booming/">https://www.gov.ca.gov/2026/11/10/california-is-booming/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 572" width="880" height="572" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="572" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">California is Booming: nominal vs real</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="64" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="100" fill="#6b7280">Nominal GDP growth, 2019Q1 to 2026Q2</text>
+  <text class="stat-value" x="36" y="130" fill="#1f2328">+51.7%</text>
+  </g>
+  <text class="caption" x="24" y="185" fill="#6b7280">BEA SQGDP2, current dollars</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="64" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="100" fill="#6b7280">Real GDP growth, 2019 to 2025</text>
+  <text class="stat-value" x="464" y="130" fill="#1f2328">+15.5%</text>
+  </g>
+  <text class="caption" x="452" y="185" fill="#6b7280">BEA SAGDP1 chained 2017 dollars; US +15.6%</text>
+  <rect class="panel-edge" x="20" y="220" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="220" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p3-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">GDP growth since 2019</text>
+    <g id="p3-gridlines">
+      <line class="grid" x1="129" y1="56" x2="129" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-value-tick-0" class="tick" x="129" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0%</text>
+      <line class="grid" x1="194.25" y1="56" x2="194.25" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-value-tick-1" class="tick" x="194.25" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">10.0%</text>
+      <line class="grid" x1="259.50" y1="56" x2="259.50" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-value-tick-2" class="tick" x="259.50" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">20.0%</text>
+      <line class="grid" x1="324.75" y1="56" x2="324.75" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-value-tick-3" class="tick" x="324.75" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">30.0%</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p3-value-tick-4" class="tick" x="390" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">40.0%</text>
+    </g>
+    <g id="p3-axes">
+      <line class="axis" x1="129" y1="56" x2="129" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="129" y1="246" x2="390" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p3-category-axis-labels">
+      <text id="p3-xtick-ca-nominal-2019-25" class="tick" x="121" y="91.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">CA nominal 2019-25</text>
+      <text id="p3-xtick-ca-real-2019-25" class="tick" x="121" y="155" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">CA real 2019-25</text>
+      <text id="p3-xtick-us-real-2019-25" class="tick" x="121" y="218.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">US real 2019-25</text>
+    </g>
+    <g id="p3-series-percent" class="series">
+      <g class="hover">
+        <title>CA nominal 2019-25 — Percent: 40.0%</title>
+        <rect id="p3-mark-percent-ca-nominal-2019-25" class="bar" x="129" y="67.40" width="261" height="39.53" fill="#2563eb"/>
+        <rect class="hit" x="129" y="67.40" width="261" height="39.53" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>CA real 2019-25 — Percent: 15.5%</title>
+        <rect id="p3-mark-percent-ca-real-2019-25" class="bar" x="129" y="130.73" width="101.14" height="39.53" fill="#2563eb"/>
+        <rect class="hit" x="129" y="130.73" width="261" height="39.53" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>US real 2019-25 — Percent: 15.6%</title>
+        <rect id="p3-mark-percent-us-real-2019-25" class="bar" x="129" y="194.07" width="101.79" height="39.53" fill="#2563eb"/>
+        <rect class="hit" x="129" y="194.07" width="261" height="39.53" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p3-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="220" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="220" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p4-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Unemployment rate, Sept 2026</text>
+    <g id="p4-gridlines">
+      <line class="grid" x1="52" y1="246" x2="390" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-0" class="tick" x="44" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0.0%</text>
+      <line class="grid" x1="52" y1="214.33" x2="390" y2="214.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-1" class="tick" x="44" y="218.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1.0%</text>
+      <line class="grid" x1="52" y1="182.67" x2="390" y2="182.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-2" class="tick" x="44" y="186.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2.0%</text>
+      <line class="grid" x1="52" y1="151" x2="390" y2="151" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-3" class="tick" x="44" y="155" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3.0%</text>
+      <line class="grid" x1="52" y1="119.33" x2="390" y2="119.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-4" class="tick" x="44" y="123.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4.0%</text>
+      <line class="grid" x1="52" y1="87.67" x2="390" y2="87.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-5" class="tick" x="44" y="91.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5.0%</text>
+      <line class="grid" x1="52" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p4-ytick-6" class="tick" x="44" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6.0%</text>
+    </g>
+    <g id="p4-axes">
+      <line class="axis" x1="52" y1="56" x2="52" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="52" y1="246" x2="390" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p4-x-axis-labels">
+      <text id="p4-xtick-dc" class="tick" x="80.17" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">DC</text>
+      <text id="p4-xtick-ct" class="tick" x="136.50" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">CT</text>
+      <text id="p4-xtick-ca" class="tick" x="192.83" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">CA</text>
+      <text id="p4-xtick-or" class="tick" x="249.17" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">OR</text>
+      <text id="p4-xtick-mi" class="tick" x="305.50" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">MI</text>
+      <text id="p4-xtick-az" class="tick" x="361.83" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">AZ</text>
+    </g>
+    <g id="p4-series-rate" class="series">
+      <g class="hover">
+        <title>DC — Rate: 5.6%</title>
+        <rect id="p4-mark-rate-dc" class="bar" x="62.14" y="68.67" width="35.05" height="177.33" fill="#2563eb"/>
+        <rect class="hit" x="62.14" y="56" width="35.05" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>CT — Rate: 5.1%</title>
+        <rect id="p4-mark-rate-ct" class="bar" x="118.47" y="84.50" width="35.05" height="161.50" fill="#2563eb"/>
+        <rect class="hit" x="118.47" y="56" width="35.05" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>CA — Rate: 5.1%</title>
+        <rect id="p4-mark-rate-ca" class="bar" x="174.81" y="84.50" width="35.05" height="161.50" fill="#2563eb"/>
+        <rect class="hit" x="174.81" y="56" width="35.05" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>OR — Rate: 5.0%</title>
+        <rect id="p4-mark-rate-or" class="bar" x="231.14" y="87.67" width="35.05" height="158.33" fill="#2563eb"/>
+        <rect class="hit" x="231.14" y="56" width="35.05" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>MI — Rate: 5.0%</title>
+        <rect id="p4-mark-rate-mi" class="bar" x="287.47" y="87.67" width="35.05" height="158.33" fill="#2563eb"/>
+        <rect class="hit" x="287.47" y="56" width="35.05" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>AZ — Rate: 4.9%</title>
+        <rect id="p4-mark-rate-az" class="bar" x="343.81" y="90.83" width="35.05" height="155.17" fill="#2563eb"/>
+        <rect class="hit" x="343.81" y="56" width="35.05" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p4-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="531" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="546" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:54939/a/9296188e9450679f533bf35c72c89f7b.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The release's hard numbers largely check out (GDP near $4.5T, manufacturing $391B, unemployment 5.1%, wages, minimum wage, exports). The framing is selective: the 50% growth is nominal; real growth is about 15.5%, same as the US. The release omits that 5.1% unemployment is tied second-highest among states (only DC higher), and the jobs-share figure varies by release (17%, 26%, 14.6%). <strong>Rating: 2 Pinocchios.</strong></p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — mostly honest (capped by central claim #1; 81 before the cap)</strong> &middot; <strong>Bias +56/100 — biased</strong></p><p>12 claims graded, 0 not gradable, 5 fell short. In this article only.</p></div>
+<p><strong>7</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>2</strong> partially false &middot; <strong>1</strong> unsupported &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s4"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-partially-false"><td>1</td><td>California's economy has grown more than 50% since January 2019.</td><td><strong>partially false</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-unsupported"><td>12</td><td>55,000 exporters, 94%, 99.8% small businesses, $5 million, 17,600 businesses assisted and 10% figures.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>6</td><td>California accounts for 26% of national job growth (129,300 of 496,000).</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Unemployment is 5.1%, the lowest since February 2024.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>10</td><td>CalCompetes has awarded $1.8 billion in credits to businesses promising $37.6 billion in investment and 75,000 jobs.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>California's GDP is about $4.5 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>California's manufacturing output is $391B, 18% larger than Texas.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>California wages are about 20% above the national average.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>California's minimum wage will be $17.40 in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>California exported $188 billion of goods, $162 billion manufactured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>California farms received $64.7 billion in cash receipts, up 4.5%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>E15 gasoline blends up to 15% ethanol and was signed into expanded access.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-unsupported"><td>12</td><td>55,000 exporters, 94%, 99.8% small businesses, $5 million, 17,600 businesses assisted and 10% figures.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>E15 gasoline blends up to 15% ethanol and was signed into expanded access.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>10</td><td>CalCompetes has awarded $1.8 billion in credits to businesses promising $37.6 billion in investment and 75,000 jobs.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>California farms received $64.7 billion in cash receipts, up 4.5%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>California exported $188 billion of goods, $162 billion manufactured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>California's minimum wage will be $17.40 in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>6</td><td>California accounts for 26% of national job growth (129,300 of 496,000).</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>California wages are about 20% above the national average.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Unemployment is 5.1%, the lowest since February 2024.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>California's manufacturing output is $391B, 18% larger than Texas.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>California's GDP is about $4.5 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>California's economy has grown more than 50% since January 2019.</td><td><strong>partially false</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>12</td><td>55,000 exporters, 94%, 99.8% small businesses, $5 million, 17,600 businesses assisted and 10% figures.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>10</td><td>CalCompetes has awarded $1.8 billion in credits to businesses promising $37.6 billion in investment and 75,000 jobs.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>6</td><td>California accounts for 26% of national job growth (129,300 of 496,000).</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>California exported $188 billion of goods, $162 billion manufactured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>California farms received $64.7 billion in cash receipts, up 4.5%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>California wages are about 20% above the national average.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>California's economy has grown more than 50% since January 2019.</td><td><strong>partially false</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>California's GDP is about $4.5 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>California's manufacturing output is $391B, 18% larger than Texas.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>California's minimum wage will be $17.40 in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>E15 gasoline blends up to 15% ethanol and was signed into expanded access.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Unemployment is 5.1%, the lowest since February 2024.</td><td><strong>mostly true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>Unemployment is 5.1%, the lowest since February 2024.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>10</td><td>CalCompetes has awarded $1.8 billion in credits to businesses promising $37.6 billion in investment and 75,000 jobs.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>6</td><td>California accounts for 26% of national job growth (129,300 of 496,000).</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>California's economy has grown more than 50% since January 2019.</td><td><strong>partially false</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>California's GDP is about $4.5 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>California's manufacturing output is $391B, 18% larger than Texas.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>California wages are about 20% above the national average.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>California's minimum wage will be $17.40 in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>California exported $188 billion of goods, $162 billion manufactured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>California farms received $64.7 billion in cash receipts, up 4.5%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>E15 gasoline blends up to 15% ethanol and was signed into expanded access.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>12</td><td>55,000 exporters, 94%, 99.8% small businesses, $5 million, 17,600 businesses assisted and 10% figures.</td><td><strong>unsupported</strong></td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-partially-false"><td>1</td><td>California's economy has grown more than 50% since January 2019.</td><td><strong>partially false</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-unsupported"><td>12</td><td>55,000 exporters, 94%, 99.8% small businesses, $5 million, 17,600 businesses assisted and 10% figures.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>6</td><td>California accounts for 26% of national job growth (129,300 of 496,000).</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Unemployment is 5.1%, the lowest since February 2024.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>10</td><td>CalCompetes has awarded $1.8 billion in credits to businesses promising $37.6 billion in investment and 75,000 jobs.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>California's GDP is about $4.5 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>California's manufacturing output is $391B, 18% larger than Texas.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>California wages are about 20% above the national average.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>California's minimum wage will be $17.40 in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>8</td><td>California exported $188 billion of goods, $162 billion manufactured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>California farms received $64.7 billion in cash receipts, up 4.5%.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>E15 gasoline blends up to 15% ethanol and was signed into expanded access.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-partially-false"><summary>#1 &middot; <strong>partially false</strong> &mdash; California's economy has grown more than 50% since January 2019.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Article says</dt><dd>more than 50% / $1.5T</dd>
+<dt>Warehouse says</dt><dd>Nominal 2019Q1 to 2026Q2 +51.7% (+$1.54T); real (chained 2017$) 2019 to 2025 only +15.5%, US +15.6% <code>econ.state_quarterly_gdp SQGDP2; econ.state_gdp SAGDP1</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bea.gov/data/gdp/gdp-state">BEA state GDP</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>Figure is nominal and borderline; real growth matches the US.</dd>
+<dt>Evidence found and set aside because</dt><dd>The $1.54 billion hit in the CDFA page is a broiler crop value, unrelated to GDP; the grade rests on BEA data.</dd>
+<dt>Windows tested</dt><dd>2019Q1 to 2026Q2 nominal: +51.7%; 2019 annual to 2025 annual nominal: +40.0%; 2019 to 2025 real: +15.5%</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, data_value FROM econ.state_quarterly_gdp WHERE geo_name='California' AND table_name='SQGDP2' AND line_code='1'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; California's GDP is about $4.5 trillion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>2026Q2 annualized $4,530,521M <code>econ.state_quarterly_gdp SQGDP2</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bea.gov/data/gdp/gdp-state">BEA state GDP</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, data_value FROM econ.state_quarterly_gdp WHERE geo_name='California' AND table_name='SQGDP2' AND line_code='1'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; California's manufacturing output is $391B, 18% larger than Texas.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>2025 CA $390.5B vs TX $332.1B = +17.6% <code>econ.state_gdp SAGDP2 line 12</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://business.ca.gov/industries/manufacturing/">GO-Biz manufacturing</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT geo_name, data_value FROM econ.state_gdp WHERE table_name='SAGDP2' AND line_code='12' AND year=2025 AND geo_name IN ('California','Texas')</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; Unemployment is 5.1%, the lowest since February 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>CA 5.1% Sept 2026; early 2024 5.1%; but tied second-highest of states (DC 5.6, CT 5.1, CA 5.1) <code>econ.regional_employment</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bls.gov/lau/">BLS LAUS</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>Number right; omits that it is among the highest in the nation.</dd>
+<dt>Windows tested</dt><dd>Sept 2026: 5.1%; Feb 2024: 5.1%</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT * FROM econ.regional_employment WHERE series='LASST060000000000003'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; California wages are about 20% above the national average.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>2025 average wage $97,593 vs $79,216 = +23.2% <code>econ.state_personal_income</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.bea.gov/data/income-saving/personal-income-by-state">BEA personal income</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT * FROM econ.state_personal_income WHERE year=2025</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#6 &middot; <strong>partially false</strong> &mdash; California accounts for 26% of national job growth (129,300 of 496,000).</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>Arithmetic 129.3/496 = 26%; PAYEMS Sept to Sept +580k gives about 22%; Governor's July release said 17% <code>econ.fred_indicators PAYEMS; econ.state_industry</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/series/PAYEMS">FRED PAYEMS</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>National denominator does not match current vintage and share varies by window.</dd>
+<dt>Windows tested</dt><dd>Sept 2025 to Sept 2026: 22%; Dec 2025 to Sept 2026: about 18%</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;, value FROM econ.fred_indicators WHERE series='PAYEMS'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; California's minimum wage will be $17.40 in 2027.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>$17.40 effective Jan 1, 2027, certified by Finance July 31, 2026<ul class="claim-sources"><li><a href="https://dir.ca.gov/DIRNews/2026/2026-66.html">DIR news release 2026-66</a></li></ul></dd>
+<dt>Web searches run</dt><dd>California minimum wage 2027 $17.40 Department of Finance announcement</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; California exported $188 billion of goods, $162 billion manufactured.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>USTR: $188.4B total, $161.9B manufactured (2025)<ul class="claim-sources"><li><a href="https://ustr.gov/countries-regions/united-states-trade-data/california">USTR California trade data</a></li></ul></dd>
+<dt>Web searches run</dt><dd>California goods exports 2025 record $188 billion Census</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; California farms received $64.7 billion in cash receipts, up 4.5%.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>CDFA: $64.7B in 2025, +4.5%<ul class="claim-sources"><li><a href="https://www.cdfa.ca.gov/Statistics/">CDFA Statistics</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; CalCompetes has awarded $1.8 billion in credits to businesses promising $37.6 billion in investment and 75,000 jobs.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Governor's July 13, 2026 release: $1.8B to 271 businesses, $37.6B, 75,000 jobs; these are company commitments, not realized outcomes<ul class="claim-sources"><li><a href="https://business.ca.gov/california-competes-tax-credit/">GO-Biz CalCompetes</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Figures match the office's own release but are projections.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; E15 gasoline blends up to 15% ethanol and was signed into expanded access.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Sept 19, 2026 release: SB 795 signed; E15 is up to 15% ethanol<ul class="claim-sources"><li><a href="https://www.gov.ca.gov/2026/09/19/governor-newsom-signs-bill-expanding-fuel-options-to-help-californians-save-at-the-pump-amid-donald-trumps-gas-price-crisis/">Governor SB 795 release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#12 &middot; <strong>unsupported</strong> &mdash; 55,000 exporters, 94%, 99.8% small businesses, $5 million, 17,600 businesses assisted and 10% figures.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Governor Gavin Newsom — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://calosba.ca.gov/calosba-announces-small-business-technical-assistance-grant-awardees/">CalOSBA grantee page</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Not verified: only the Governor's own earlier July 13 release repeats the 99.8% figure (self-citation, no independent source); the cited CalOSBA page did not contain 17,600; no primary source found for the rest.</dd>
+<dt>Evidence found and set aside because</dt><dd>The 99.8% passage in the July 13 release is the same office restating its own figure, so it is not independent evidence and does not change the grade.</dd>
+<dt>Warehouse searched for</dt><dd>California small business share of businesses and exporters count</dd>
+<dt>Web searches run</dt><dd>California goods exports 2025 record $188 billion Census</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>$1.5</strong> &mdash; Part of the trillion-dollar GDP gain claim, covered in claim 1</li></ul>
+</section>
+<section>
+<h2>Exclusions disclosed</h2>
+<p>Queries on the state GDP and employment tables excluded rows where measure IS NOT NULL failed, that is rows with a null measure value; this removed only empty placeholder rows and does not change any headline figure (nominal growth +51.7%, real +15.5%, unemployment 5.1%). Rollup rows (United States, All industry total) were excluded from state rankings.</p>
+</section>
+<section>
+<h2>Not verified</h2>
+<p>Patent counts, Nobel claims, R&amp;D, unicorn counts, the 603% growth, 4.2% productivity, $7.7B revenue beat and zero-deficit claim were not independently verified. Attacks on Trump policies are opinion. Venture capital leadership is plausible (Crunchbase about $385B, over 75% of US YTD) but over half comes from OpenAI and Anthropic.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify every claim</strong>: Patents, Nobels, R&amp;D, unicorns and several fiscal claims not verified; listed in report.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>11 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 12 rows — 981 ms</summary><pre><code>SELECT geo_name, year, table_name, line_code, description, unit, data_value FROM econ.state_gdp WHERE geo_name IN ('California','Texas','United States') AND table_name='SAGDP1' AND line_code='1' AND year IN (2018,2019,2024,2025) ORDER BY geo_name, year</code></pre></details>
+<details class="sqltoggle"><summary>query — 46 rows — 700 ms</summary><pre><code>SELECT geo_name, year, line_code, description, unit, data_value FROM econ.state_gdp WHERE geo_name IN ('California','Texas','United States') AND table_name='SAGDP2' AND year=2025 AND (description ILIKE '%Manufacturing%' OR line_code IN ('1','2')) ORDER BY geo_name, line_code</code></pre></details>
+<details class="sqltoggle"><summary>query — 11 rows — 945 ms</summary><pre><code>SELECT state_fips, year, period, value FROM econ.regional_employment WHERE series='LASST060000000000003' AND ((year=2026) OR (year=2025 AND period IN ('M09','M12'))) ORDER BY year, period</code></pre></details>
+<details class="sqltoggle"><summary>query — 55 rows — 1523 ms</summary><pre><code>SELECT series, year, period, value FROM econ.state_industry WHERE series IN ('SMU06000000000000001') AND ((year=2026) OR (year=2025 AND period IN ('M09','M12'))) ORDER BY year, period</code></pre></details>
+<details class="sqltoggle"><summary>query — 10 rows — 550 ms</summary><pre><code>SELECT geo_name, year, data_value FROM econ.state_gdp WHERE geo_name IN ('California','Texas') AND table_name='SAGDP2' AND line_code='1' AND year IN (2018,2019,2022,2024,2025) ORDER BY geo_name, year</code></pre></details>
+<details class="sqltoggle"><summary>query — 13 rows — 1078 ms</summary><pre><code>SELECT year, period, value FROM econ.regional_employment WHERE series='LASST060000000000003' AND ((year=2024) OR (year=2023 AND period='M12')) ORDER BY year, period</code></pre></details>
+<details class="sqltoggle"><summary>query — 45 rows — 24361 ms</summary><pre><code>SELECT geo_name, year, description, data_value FROM econ.state_personal_income WHERE geo_name IN ('California','United States') AND year=2025 AND (description ILIKE '%per capita personal income%' OR description ILIKE '%Population%' OR description ILIKE '%Wages and salaries%')</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 5244 ms</summary><pre><code>SELECT date, value FROM econ.fred_indicators WHERE series='PAYEMS' AND date IN ('2025-09-01','2025-12-01','2026-09-01','2026-08-01') ORDER BY date</code></pre></details>
+<details class="sqltoggle"><summary>query — 6 rows — 1258 ms</summary><pre><code>SELECT state_fips, value FROM econ.regional_employment WHERE measure IS NOT NULL AND series LIKE '%03' AND year=2026 AND period='M09' ORDER BY value DESC LIMIT 6</code></pre></details>
+<details class="sqltoggle"><summary>query — 5 rows — 6186 ms</summary><pre><code>SELECT description, year, data_value FROM econ.state_quarterly_gdp WHERE geo_name='California' AND table_name='SQGDP2' AND line_code='1' ORDER BY year DESC LIMIT 5</code></pre></details>
+<details class="sqltoggle"><summary>query — 4 rows — 2088 ms</summary><pre><code>SELECT year, data_value FROM econ.state_quarterly_gdp WHERE geo_name='California' AND table_name='SQGDP2' AND line_code='1' AND year IN ('2018:Q4','2019:Q1','2019:Q2','2019:Q4') ORDER BY year</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.bea.gov/data/gdp/gdp-state">BEA state GDP</a></li>
+<li><a href="https://www.bls.gov/lau/">BLS LAUS</a></li>
+<li><a href="https://dir.ca.gov/DIRNews/2026/2026-66.html">DIR 2027 minimum wage</a></li>
+<li><a href="https://ustr.gov/countries-regions/united-states-trade-data/california">USTR California trade</a></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The ABC News article's claims about soaring electricity bills, state price increases and midterm politics are biased and partly false.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t1-s4:checked ~ table tbody.s0{display:none}
+#s2-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"]{color:var(--link)}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"] .srtcue{opacity:1}
+#s2-t1-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The ABC News article's claims about soaring electricity bills, state price increases and midterm politics are biased and partly false.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://abcnews.com/US/ahead-midterms-backlash-grows-soaring-electricity-bills/story?id=137675396">https://abcnews.com/US/ahead-midterms-backlash-grows-soaring-electricity-bills/story?id=137675396</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Article figures vs EIA residential, Aug 2026 YoY</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">EIA Electric Power Monthly Table 5.6.A; preliminary 2026</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="312" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="312" viewBox="0 0 412 312" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="312" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Year-over-year price change (%)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="42" y1="234" x2="390" y2="234" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="34" y="238" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="42" y1="189.50" x2="390" y2="189.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="34" y="193.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="42" y1="145" x2="390" y2="145" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="34" y="149" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="42" y1="100.50" x2="390" y2="100.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="34" y="104.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">15</text>
+      <line class="grid" x1="42" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="34" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="42" y1="56" x2="42" y2="234" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="42" y1="234" x2="390" y2="234" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-us" class="tick" x="100" y="252" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">US</text>
+      <text id="p1-xtick-maine" class="tick" x="216" y="252" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Maine</text>
+      <text id="p1-xtick-ohio" class="tick" x="332" y="252" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Ohio</text>
+    </g>
+    <g id="p1-series-abc-article" class="series">
+      <g class="hover">
+        <title>US — ABC article: 5</title>
+        <rect id="p1-mark-abc-article-us" class="bar" x="62.88" y="189.50" width="36.12" height="44.50" fill="#2563eb"/>
+        <rect class="hit" x="62.88" y="56" width="36.12" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-abc-article-us" class="value-label" x="80.94" y="185.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">5</text>
+      <g class="hover">
+        <title>Maine — ABC article: 16</title>
+        <rect id="p1-mark-abc-article-maine" class="bar" x="178.88" y="91.60" width="36.12" height="142.40" fill="#2563eb"/>
+        <rect class="hit" x="178.88" y="56" width="36.12" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-abc-article-maine" class="value-label" x="196.94" y="87.60" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">16</text>
+      <g class="hover">
+        <title>Ohio — ABC article: 12</title>
+        <rect id="p1-mark-abc-article-ohio" class="bar" x="294.88" y="127.20" width="36.12" height="106.80" fill="#2563eb"/>
+        <rect class="hit" x="294.88" y="56" width="36.12" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-abc-article-ohio" class="value-label" x="312.94" y="123.20" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">12</text>
+    </g>
+    <g id="p1-series-eia-residential-aug-2026" class="series">
+      <g class="hover">
+        <title>US — EIA residential Aug 2026: 3.4</title>
+        <rect id="p1-mark-eia-residential-aug-2026-us" class="bar" x="100" y="203.74" width="36.12" height="30.26" fill="#ea580c"/>
+        <rect class="hit" x="100" y="56" width="36.12" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-eia-residential-aug-2026-us" class="value-label" x="118.06" y="199.74" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">3.4</text>
+      <g class="hover">
+        <title>Maine — EIA residential Aug 2026: 14.1</title>
+        <rect id="p1-mark-eia-residential-aug-2026-maine" class="bar" x="216" y="108.51" width="36.12" height="125.49" fill="#ea580c"/>
+        <rect class="hit" x="216" y="56" width="36.12" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-eia-residential-aug-2026-maine" class="value-label" x="234.06" y="104.51" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">14.1</text>
+      <g class="hover">
+        <title>Ohio — EIA residential Aug 2026: 10.4</title>
+        <rect id="p1-mark-eia-residential-aug-2026-ohio" class="bar" x="332" y="141.44" width="36.12" height="92.56" fill="#ea580c"/>
+        <rect class="hit" x="332" y="56" width="36.12" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-eia-residential-aug-2026-ohio" class="value-label" x="350.06" y="137.44" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">10.4</text>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-abc-article" x="87" y="278" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-abc-article" class="legend-label" x="103" y="287" fill="#1f2328" font-size="11" style="font-size:11px">ABC article</text>
+      <rect id="p1-legend-swatch-eia-residential-aug-2026" x="177" y="278" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-eia-residential-aug-2026" class="legend-label" x="193" y="287" fill="#1f2328" font-size="11" style="font-size:11px">EIA residential Aug 2026</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:62619/a/a5e27a73f89569444cfa1fb8881ca822.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Direction is right but the lede numbers run high versus EIA: residential prices rose 3.4% nationally in Aug 2026 (5.1% is all sectors); Maine residential +14.1% (article 16%), Ohio +10.4% (article 12%). My assessment: 2 Pinocchios. Scores below are the engine's.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 65/100 — mixed</strong> &middot; <strong>Bias +57/100 — biased</strong></p><p>5 claims graded, 0 not gradable, 5 fell short. In this article only. <strong>Citejacking:</strong> #3, #4 lean on cited evidence that does not carry them.</p></div>
+<p><strong>5</strong> mostly true &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s4"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>5</td><td>An ABC News analysis found that in the top 10 states where electric bills have increased the most, five are home to competitive races for the U.S. Senate.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>3</td><td>In Maine, where longtime Republican Sen. Susan Collins is in a tight race with Democratic candidate Troy Jackson, electricity costs have surged 16% in one year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>4</td><td>In Ohio, where incumbent Republican Sen. John Husted and former Democratic Sen. Sherrod Brown are facing off, electricity costs are up 12% in the past year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>6</td><td>At an Oct. 20 county meeting in Loudoun County, Virginia, where there are more data centers than any other region in the country, some residents spoke up to say the rise in electricity costs is unsustainable.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>7</td><td>The department shares tips on its website, including using power strips and turning them off when not in use; sealing gaps around doors and windows to improve insulation; turning the water heater to 120 degrees Fahrenheit and washing clothes in warm water instead of hot water.</td><td><strong>mostly true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>7</td><td>The department shares tips on its website, including using power strips and turning them off when not in use; sealing gaps around doors and windows to improve insulation; turning the water heater to 120 degrees Fahrenheit and washing clothes in warm water instead of hot water.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>At an Oct. 20 county meeting in Loudoun County, Virginia, where there are more data centers than any other region in the country, some residents spoke up to say the rise in electricity costs is unsustainable.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>An ABC News analysis found that in the top 10 states where electric bills have increased the most, five are home to competitive races for the U.S. Senate.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>In Ohio, where incumbent Republican Sen. John Husted and former Democratic Sen. Sherrod Brown are facing off, electricity costs are up 12% in the past year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>3</td><td>In Maine, where longtime Republican Sen. Susan Collins is in a tight race with Democratic candidate Troy Jackson, electricity costs have surged 16% in one year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>5</td><td>An ABC News analysis found that in the top 10 states where electric bills have increased the most, five are home to competitive races for the U.S. Senate.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>At an Oct. 20 county meeting in Loudoun County, Virginia, where there are more data centers than any other region in the country, some residents spoke up to say the rise in electricity costs is unsustainable.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>3</td><td>In Maine, where longtime Republican Sen. Susan Collins is in a tight race with Democratic candidate Troy Jackson, electricity costs have surged 16% in one year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>4</td><td>In Ohio, where incumbent Republican Sen. John Husted and former Democratic Sen. Sherrod Brown are facing off, electricity costs are up 12% in the past year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>7</td><td>The department shares tips on its website, including using power strips and turning them off when not in use; sealing gaps around doors and windows to improve insulation; turning the water heater to 120 degrees Fahrenheit and washing clothes in warm water instead of hot water.</td><td><strong>mostly true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>3</td><td>In Maine, where longtime Republican Sen. Susan Collins is in a tight race with Democratic candidate Troy Jackson, electricity costs have surged 16% in one year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>4</td><td>In Ohio, where incumbent Republican Sen. John Husted and former Democratic Sen. Sherrod Brown are facing off, electricity costs are up 12% in the past year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>6</td><td>At an Oct. 20 county meeting in Loudoun County, Virginia, where there are more data centers than any other region in the country, some residents spoke up to say the rise in electricity costs is unsustainable.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>7</td><td>The department shares tips on its website, including using power strips and turning them off when not in use; sealing gaps around doors and windows to improve insulation; turning the water heater to 120 degrees Fahrenheit and washing clothes in warm water instead of hot water.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>An ABC News analysis found that in the top 10 states where electric bills have increased the most, five are home to competitive races for the U.S. Senate.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>3</td><td>In Maine, where longtime Republican Sen. Susan Collins is in a tight race with Democratic candidate Troy Jackson, electricity costs have surged 16% in one year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>4</td><td>In Ohio, where incumbent Republican Sen. John Husted and former Democratic Sen. Sherrod Brown are facing off, electricity costs are up 12% in the past year.</td><td><strong>mostly true</strong></td><td>#1 — overreach</td></tr><tr class="verdict-mostly-true"><td>5</td><td>An ABC News analysis found that in the top 10 states where electric bills have increased the most, five are home to competitive races for the U.S. Senate.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>At an Oct. 20 county meeting in Loudoun County, Virginia, where there are more data centers than any other region in the country, some residents spoke up to say the rise in electricity costs is unsustainable.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>7</td><td>The department shares tips on its website, including using power strips and turning them off when not in use; sealing gaps around doors and windows to improve insulation; turning the water heater to 120 degrees Fahrenheit and washing clothes in warm water instead of hot water.</td><td><strong>mostly true</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Claims by Derrick Robinson — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 25/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence it rests on</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>8</td><td>The fact that someone like me, for example, my utility bill is going from an average of about $250 a month to around $850 a month, and we're hearing those same things across the country.</td><td><strong>unsupported</strong> &middot; central claim</td><td>none cited</td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> partially false &middot; <strong>1</strong> unsupported &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-partially-false"><td>1</td><td>Over the past year, residential electricity costs have spiked approximately 5% nationwide, according to the U.S. Energy Information Administration.</td><td><strong>partially false</strong></td></tr>
+<tr class="verdict-unsupported"><td>2</td><td>Across the country, 57% of Americans now say their utilities are unaffordable, up from 45% in February.</td><td><strong>unsupported</strong></td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-partially-false"><summary>#1 &middot; <strong>partially false</strong> &mdash; Over the past year, residential electricity costs have spiked approximately 5% nationwide, according to the U.S. Energy Information Administration.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>calendar 2025 vs 2024 residential 17.30 vs 16.48 c/kWh = +5.0% <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd>EIA Aug 2026 vs Aug 2025 residential +3.4%; all sectors +5.1%<ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/monthly/update/end-use.php">EIA Electricity Monthly Update</a></li></ul></dd>
+<dt>Why</dt><dd>5% is the all-sector figure, not residential</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_abbr, &quot;year&quot;, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE sector_code='RES' AND state_abbr='US'</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#2 &middot; <strong>unsupported</strong> &mdash; Across the country, 57% of Americans now say their utilities are unaffordable, up from 45% in February.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Why</dt><dd>Ipsos Oct 20 2026 release fetched; utilities item not in the summary and topline PDF was not read.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#3 &middot; <strong>mostly true</strong> &mdash; In Maine, where longtime Republican Sen. Susan Collins is in a tight race with Democratic candidate Troy Jackson, electricity costs have surged 16% in one year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>calendar 2025 residential +14.4% (27.78 vs 24.29) <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd>+14.1% residential<ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/monthly/epm_table_grapher.php?t=epmt_5_6_a">EIA Table 5.6.A</a></li></ul></dd>
+<dt>Rests on</dt><dd>#1</dd>
+<dt>What that evidence found</dt><dd>EIA Aug 2026 Maine residential +14.1%, all sectors +5.8%</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; In Ohio, where incumbent Republican Sen. John Husted and former Democratic Sen. Sherrod Brown are facing off, electricity costs are up 12% in the past year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>calendar 2025 +6.1% (16.96 vs 15.99) <code>energy.eia_electricity_prices</code></dd>
+<dt>Independent evidence</dt><dd>+10.4% residential<ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/monthly/epm_table_grapher.php?t=epmt_5_6_a">EIA Table 5.6.A</a></li></ul></dd>
+<dt>Rests on</dt><dd>#1</dd>
+<dt>What that evidence found</dt><dd>EIA Aug 2026 Ohio residential +10.4%</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; An ABC News analysis found that in the top 10 states where electric bills have increased the most, five are home to competitive races for the U.S. Senate.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Top 10 residential Aug increases HI, ME, NH, DC, VA, DE, MI, ID, OH, IA; ME, NH, MI, OH, IA plausibly the five<ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/monthly/epm_table_grapher.php?t=epmt_5_6_a">EIA Table 5.6.A</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; At an Oct. 20 county meeting in Loudoun County, Virginia, where there are more data centers than any other region in the country, some residents spoke up to say the rise in electricity costs is unsustainable.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Loudoun/Northern Virginia widely documented as largest data center market; Virginia residential +11.3% Aug YoY (EIA table). Meeting itself not independently confirmed.<ul class="claim-sources"><li><a href="https://www.eia.gov/electricity/monthly/epm_table_grapher.php?t=epmt_5_6_a">EIA Table 5.6.A</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; The department shares tips on its website, including using power strips and turning them off when not in use; sealing gaps around doors and windows to improve insulation; turning the water heater to 120 degrees Fahrenheit and washing clothes in warm water instead of hot water.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>energy.gov/save hub fetched and is a DOE energy-savings resource page; the specific tips page was not read, tips match DOE Energy Saver guidance<ul class="claim-sources"><li><a href="https://www.energy.gov/save">DOE Energy Savings Hub</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; The fact that someone like me, for example, my utility bill is going from an average of about $250 a month to around $850 a month, and we're hearing those same things across the country.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Derrick Robinson — what they assert, as the piece reports it</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>Personal anecdote, no evidence; 3.4x rise far exceeds state rate changes (Virginia residential +11.3%).</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Ipsos 57% vs 45%</strong>: Release confirmed, utilities item is in topline PDF not read.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 6 rows — 4750 ms</summary><pre><code>SELECT state_abbr, &quot;year&quot;, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE sector_code='RES' AND &quot;year&quot; IN ('2024','2025') AND state_abbr IN ('ME','OH','US') ORDER BY state_abbr, &quot;year&quot;</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.eia.gov/electricity/monthly/epm_table_grapher.php?t=epmt_5_6_a">EIA Electric Power Monthly Table 5.6.A</a></li>
+<li><a href="https://www.eia.gov/electricity/monthly/update/end-use.php">EIA Electricity Monthly Update</a></li>
+<li><a href="https://www.ipsos.com/en-us/ABC-News-Washington-Post-Ipsos-Poll-October-2026">Ipsos ABC/WaPo poll Oct 2026</a></li>
+<li><a href="https://www.energy.gov/save">DOE Energy Savings Hub</a></li>
+<li><a href="https://www.eia.gov/opendata/">AskAmerica energy.eia_electricity_prices</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT state_abbr, &quot;year&quot;, avg_price_cents_kwh FROM energy.eia_electricity_prices WHERE sector_code='RES' AND &quot;year&quot; IN ('2024','2025') AND state_abbr IN ('ME','OH','US')</code></pre></details></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

@@ -190,5 +190,624 @@
     "run_subpath": "q8/askamerica/2026-09-29",
     "pinocchios": 3,
     "source_url": "https://www.independent.org/article/2026/09/23/governments-worsening-deficit/"
+  },
+  {
+    "topic_slug": "cnn-october-2026-jobs-report",
+    "headline": "CNN: US economy added 165,000 jobs in October and the unemployment rate fell",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q1/askamerica/2026-11-06",
+    "pinocchios": 0,
+    "source_url": "https://cnn.com/2026/11/06/economy/us-jobs-report-october",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; pinocchios is the persona's own rating (engine honesty 79/100)"
+  },
+  {
+    "topic_slug": "whitmer-michigan-violent-crime-seven-year-low",
+    "headline": "Michigan violent crime hits seven-year low, governor's office says",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q2/askamerica/2026-11-06",
+    "pinocchios": 1,
+    "source_url": "https://www.wnem.com/2026/10/26/michigan-violent-crime-hits-seven-year-low-governors-office-says/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; pinocchios is the persona's own rating (engine: governor's office honesty 88/100)"
+  },
+  {
+    "topic_slug": "nbc-senate-battleground-gas-grocery-housing-costs",
+    "headline": "In some Senate battleground states, the cost of gas, groceries and housing is rising faster than the national average",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q3/askamerica/2026-11-06",
+    "pinocchios": null,
+    "source_url": "https://www.nbcnews.com/business/economy/senate-gas-grocery-housing-costs-trump-rcna607097",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; askamerica final report carries engine scores only (author honesty 63/100, mixed), no Pinocchio of its own; expert 2, everyman 1"
+  },
+  {
+    "topic_slug": "opensecrets-2026-midterms-record-12-billion",
+    "headline": "Billions spent as 2026 becomes the most expensive election in U.S. history",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q4/askamerica/2026-11-06",
+    "pinocchios": null,
+    "source_url": "https://spectrumnews1.com/ky/lexington/politics/2026/11/02/2026-midterm-election-most-expensive-in-history--12-billion",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "severity_flag": true,
+    "note": "test run, local only; askamerica wrongly graded the OpenSecrets $11.9B attribution partially false (#1102); expert 1, everyman 2 Pinocchios"
+  },
+  {
+    "topic_slug": "abc-midterms-electricity-bills-backlash",
+    "headline": "Ahead of midterms, backlash grows over soaring electricity bills",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q5/askamerica/2026-11-06",
+    "pinocchios": null,
+    "source_url": "https://abcnews.com/US/ahead-midterms-backlash-grows-soaring-electricity-bills/story?id=137675396",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "severity_flag": true,
+    "note": "test run, local only; ABC figures match EIA July 2026 exactly; askamerica tested August only and graded national 5% partially false (#1102); expert 1, everyman 1 Pinocchio"
+  },
+  {
+    "topic_slug": "abc-measles-5000-cases-45-states",
+    "headline": "Measles cases surpass 5,000 in the US with infections confirmed in 45 states: CDC",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q6/askamerica/2026-11-06",
+    "pinocchios": 1,
+    "source_url": "https://abcnews.com/Health/measles-cases-surpass-5000-us-infections-confirmed-45/story?id=137907591",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "severity_flag": true,
+    "note": "test run, local only; first story on main-based engine build with #1101/#1102; engine web_fetch 403 on cdc.gov (#1105); all three 1 Pinocchio"
+  },
+  {
+    "topic_slug": "arkansas-farm-bankruptcies-q3-2026-most-in-nation",
+    "headline": "Arkansas farm bankruptcies on the rise, most in the nation",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q7/askamerica/2026-11-06",
+    "pinocchios": null,
+    "source_url": "https://talkbusiness.net/2026/10/arkansas-farm-bankruptcies-on-the-rise-most-in-the-nation/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine 'too few to rate'; expert 1, everyman 1 Pinocchio; #1105 client-fetch retry observed; filed #1106"
+  },
+  {
+    "topic_slug": "npr-mpi-deportations-980k-study",
+    "headline": "A new study gives us a clearer picture on how many people have been deported",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q8/askamerica/2026-11-06",
+    "pinocchios": null,
+    "source_url": "https://www.npr.org/2026/10/23/nx-s1-6012356/a-new-study-gives-us-a-clearer-picture-on-how-many-people-have-been-deported",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine 'too few to rate'; expert 1, everyman 1 Pinocchio; filed #1107"
+  },
+  {
+    "topic_slug": "dailycaller-housing-starts-mortgage-rates-oct-2026",
+    "headline": "American Dream Of Homeownership Slips Further Away As Construction Falls",
+    "checked_date": "2026-11-06",
+    "run_subpath": "q9/askamerica/2026-11-06",
+    "pinocchios": null,
+    "source_url": "https://dailycaller.com/2026/10/20/americas-housing-market-takes-another-hit-as-high-mortgage-rates-squeeze-buyers-and-builders/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine 'too few to rate' (3-claim array); all personas 1 Pinocchio; warehouse covered nearly every series"
+  },
+  {
+    "topic_slug": "abc-aca-2027-premiums-open-enrollment",
+    "headline": "With premiums on the rise, what to know as ACA coverage open enrollment begins",
+    "checked_date": "2026-11-07",
+    "run_subpath": "q1/askamerica/2026-11-07",
+    "pinocchios": null,
+    "source_url": "https://abc13.com/story/premiums-rise-what-know-aca-coverage-open-enrollment-begins/20009427/",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "test run, local only; engine released 0.124.5 (no claims array, self-assigned 1 Pinocchio); everyman and expert 1 Pinocchio; filed #1116"
+  },
+  {
+    "topic_slug": "breitbart-jobless-claims-57-year-low",
+    "headline": "Jobless Claims Fall To 57-Year Low of 189,000",
+    "checked_date": "2026-11-07",
+    "run_subpath": "q2/askamerica/2026-11-07",
+    "pinocchios": 0,
+    "source_url": "https://www.breitbart.com/economy/2026/11/05/jobless-claims-fall-to-57-year-low-of-189000/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main e3fe1935c4 (claims.json produced, 6 claims); everyman 1 Pinocchio (wrongly graded IUR claim), expert 1 leaning 0; askamerica below expert on pre-1986 ICSA and IURSA coverage; filed #1117"
+  },
+  {
+    "topic_slug": "51st-dc-evictions-12-year-high",
+    "headline": "D.C. evictions hit 12-year high as safety net shrinks and cost of living soars",
+    "checked_date": "2026-11-07",
+    "run_subpath": "q3/askamerica/2026-11-07",
+    "pinocchios": 1,
+    "source_url": "https://51st.news/dc-record-evictions-housing-crisis",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only. askamerica run 10 on main 7f1fa47bb6: coverage gate refused 22 unclaimed figures, run expanded to 15 claims + anecdote figures unclaimed; figure gate caught CLCPP 63%, answered with why_not; CLCPP read from the right report; no errors; lenient on unemployment, missed ERAP peak year, 2,420 unreconciled. Runs 6-10: 1st, 2nd, 1st, 1st, 1st."
+  },
+  {
+    "topic_slug": "whitehouse-tariffs-reshoring-manufacturing-jobs-nov-2026",
+    "headline": "President Trump Was Right: Tariffs and Tax Cuts Are Reshoring Manufacturing, Creating Jobs",
+    "checked_date": "2026-11-08",
+    "run_subpath": "q1/askamerica/2026-11-08",
+    "pinocchios": 3,
+    "source_url": "https://www.whitehouse.gov/releases/2026/11/president-trump-was-right-tariffs-and-tax-cuts-are-reshoring-manufacturing-creating-jobs/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main 7f1fa47bb6. All 3 personas 3 Pinocchios. askamerica unique: 1.25M private jobs verified, wage-growth-highest false; missed trade YTD nuance; NO claims array (omitted source_url, question restated without URL) so claim gates skipped. econ.employment_statistics unreadable on data-server bundle 0.118.0: stale periodName view (cause of #1104; reopen blocked by permission)."
+  },
+  {
+    "topic_slug": "medicaldaily-axios-overdose-430-counties",
+    "headline": "Overdose Deaths Climbed in 430 U.S. Counties While the National Toll Fell 12% to Nearly 68,000",
+    "checked_date": "2026-11-08",
+    "run_subpath": "q2/askamerica/2026-11-08",
+    "pinocchios": 1,
+    "source_url": "https://www.medicaldaily.com/us-overdose-deaths-rise-430-counties-480874",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main 7f1fa47bb6, data server 0.124.4. All 1 Pinocchio. askamerica from health.cdc_county_overdose_deaths: 430/842 not reproducible (233/593/352 strict; 320/776), county figures confirmed, unique Ohio tally (38 measurable) and 62.6% suppressed. NO claims array / source_url again (2nd run): claim gates skipped."
+  },
+  {
+    "topic_slug": "aaa-gas-national-average-november-record-2026",
+    "headline": "National Average Falls 12 Cents in One Week",
+    "checked_date": "2026-11-08",
+    "run_subpath": "q3/askamerica/2026-11-08",
+    "pinocchios": 0,
+    "source_url": "https://gasprices.aaa.com/national-average-falls-12-cents-in-one-week/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main 8087c200ed, data server 0.124.4. All 0-1 Pinocchio; EIA weekly figures confirmed by all. askamerica alone tested the November $4 record (BLS Nov max $3.853, 2022) and flagged the crude-range wording (FRED WTI $99-110 to Nov 3). Wording gate fired on 'Fact-check' with no URL; published with claims + source_url. energy.eia_retail_gasoline_prices not queryable: bundle 0.124.4 predates the table (0.124.7), version skew, not filed."
+  },
+  {
+    "topic_slug": "newsweek-snap-enrollment-drops-300k-june-2026",
+    "headline": "SNAP Enrollment Drops 300k In Single Month\u2014Here Are Worst Impacted States",
+    "checked_date": "2026-11-08",
+    "run_subpath": "q4/askamerica/2026-11-08",
+    "pinocchios": 1,
+    "source_url": "https://www.newsweek.com/snap-enrollment-drops-300k-single-month-here-are-worst-impacted-states-12466361",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main 8087c200ed, data server 0.124.4. All 1 Pinocchio. expert confirmed June national figures from USDA files and found revised drop ~205k; askamerica caught pre-OBBBA age limit 54 not 59 but warehouse SNAP ends May 2026 (Jun-Sep 2026 rows NULL). describe_table fails on every table with bundle 0.124.4 (SqlLibrary.BIGQUERY). Wording gate fired."
+  },
+  {
+    "topic_slug": "opb-oregon-2026-wildfire-season-by-the-numbers",
+    "headline": "Fewer fires, record damage: Oregon's 2026 wildfire season by the numbers",
+    "checked_date": "2026-11-08",
+    "run_subpath": "q5/askamerica/2026-11-08",
+    "pinocchios": 2,
+    "source_url": "https://opb.org/article/2026/10/24/oregon-2026-wildfire-season-by-the-numbers",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main 382db82223, data server 0.124.4. All flagged 2.1M acres/'13% over 1.9M' as inconsistent. askamerica measured 2.54M vs 2.01M acres from disasters.wildfire_perimeters (NIFC) and caught the USDA loan claim (24 counties, storms/flooding, not 18/wildfire). describe_table failed on the primary-key step again (#1129)."
+  },
+  {
+    "topic_slug": "gma-kindergarten-vaccine-exemptions-record-2025-26",
+    "headline": "Vaccine exemption rate for kindergarteners reaches record high: CDC",
+    "checked_date": "2026-11-08",
+    "run_subpath": "q6/askamerica/2026-11-08",
+    "pinocchios": 0,
+    "source_url": "https://www.goodmorningamerica.com/wellness/story/exemption-rate-routine-childhood-vaccines-us-kindergartners-hits-135716718",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "test run, local only; engine main 382db82223, data server 0.126.0 (draft bundle). askamerica verified every figure incl. state rankings from health.cdc_school_vaccination_coverage; web arms could not. Recorded answer never passed QC: deliver_report (ungated, eval-only) ran 1s after a refused preview; no passing preview. describe_table cold-start timeout on primary-key step again."
+  },
+  {
+    "topic_slug": "nbc-meet-the-press-nov-8-2026-midterms-transcript",
+    "headline": "NBC Meet the Press, Nov. 8, 2026: midterm results and guest claims on gas prices, inflation and health coverage",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q1/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-8-2026-rcna608110",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine 65ea5670bb, patched data server overlay on 45533 (f3394a5198, 44674f281b) with v2 catalog cache. Only askamerica read the transcript verbatim and tested guest economics against BLS/EIA. QC: preview refused twice and artifact once, then passed; delivered. No timeouts; no describe_table call in this run."
+  },
+  {
+    "topic_slug": "spokesman-wa-medicaid-cuts-congress-priority-nov-2026",
+    "headline": "Democratic lawmakers in Washington state say healthcare funding should be priority for Congress",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q2/askamerica/2026-11-09",
+    "pinocchios": 2,
+    "source_url": "https://www.spokesman.com/stories/2026/nov/09/democratic-lawmakers-in-washington-state-say-healt/",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "local only; SEVERITY: askamerica below everyman. Graded the real Nov 5 AG suit 'unsupported' from search results without fetching atg.wa.gov. No arm found that the state's 20% is of expansion enrollees (~120,000), not residents as the article says. Regroup to fidelity/subject_claims refused after data-server restart; delivered report unchanged. Patched data server 45533; describe_table 3.2s on a fresh server."
+  },
+  {
+    "topic_slug": "ibtimes-hud-2026-pit-homelessness-record-drop",
+    "headline": "The U.S. Just Recorded A Record Drop In Homelessness. The Government Is Claiming Credit.",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q3/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://www.ibtimes.com/hud-2026-pit-count-homelessness-decline-3809530",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine 14b2ddacce with office-page gate (did not fire), patched data server 45533. Only askamerica tested figures against warehouse PIT data and caught the Ruege attribution not in his report. PIT tables end 2024. data_coverage took 26.8s; no timeouts."
+  },
+  {
+    "topic_slug": "click2houston-texas-electricity-hinojosa-40-percent",
+    "headline": "The cost of keeping the lights on: What Texas' next governor could do to lower electricity bills",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q4/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://www.click2houston.com/news/local/2026/11/06/the-cost-of-keeping-the-lights-on-what-texas-next-governor-could-do-to-lower-electricity-bills/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine 14b2ddacce, patched data server 45533. All arms called the 40% overstated; judge's live query gives +32% to +40% by window (2020 to 2026 YTD +37%). askamerica ran one query and one window, 'partially false' too strong. preview_report called without run_subpath, so report.html/claims.json are only in ~/.askamerica/reports. Office-page gate did not fire."
+  },
+  {
+    "topic_slug": "cbs-face-the-nation-nov-8-2026-transcript",
+    "headline": "CBS Face the Nation, Nov. 8, 2026: inflation, lobbying revenue and midterm claims",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q5/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://www.cbsnews.com/news/full-transcript-face-the-nation-with-margaret-brennan-11-08-2026/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine ee71f1f87d with both gates (neither refused; askamerica listed windows_tested unprompted), patched data server 45533. Only askamerica tested guest figures against CPI and LDA filings. Continental 'partially false' too strong: LDA income is not total revenue."
+  },
+  {
+    "topic_slug": "cnn-state-of-the-union-nov-8-2026-transcript",
+    "headline": "CNN State of the Union, Nov. 8, 2026: Blanche, Garcia, Hamilton and Sanders claims",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q6/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://transcripts.cnn.com/show/sotu/date/2026-11-08/segment/01",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine was official 0.126.1 WITHOUT the gates: auto-updater overwrote the local build at 15:15. askamerica read 20k of ~51k chars, graded 4 claims, graded the documented Don Jr. wedding payment 'unsupported' (second instance after q2), parked real later figures in unclaimed."
+  },
+  {
+    "topic_slug": "radio-oklahoma-pso-rate-increase-3-55-percent",
+    "headline": "PSO Rate Increase Approved for December 2026 in Oklahoma",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q7/askamerica/2026-11-09",
+    "pinocchios": 2,
+    "source_url": "https://www.radiooklahomanews.com/post/pso-rate-increase-approved-for-december-2026-in-oklahoma",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "local only; dev jar with all gates, patched data server 45533. askamerica found Interim Order title and 3.55% not staff-verified; no warehouse data applies. No gate refused. windows_tested filled with non-windows ('Nov 5 vote', 'order status')."
+  },
+  {
+    "topic_slug": "coloradosun-polis-600m-medicaid-cuts-2027-28-budget",
+    "headline": "Jared Polis proposes $600M in cuts to Medicaid to address state budget crunch",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q8/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://coloradosun.com/2026/11/02/jared-polis-november-budget-proposal-2027-2028-medicaid-cuts/",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "local only; SEVERITY: askamerica below everyman. Dev jar with all gates, patched data server 45533. Only fetched Colorado Sun pages and a dead Drive link; bundled six central figures into one 'not checkable' claim though Denver7 and others carried them. 828% graded mostly true from the same paper's explainer. Medicaid-table query errors were caused by dev jar being newer than the data server."
+  },
+  {
+    "topic_slug": "baltimore-sun-mayor-scott-media-counties-negative-image",
+    "headline": "SUN: Mayor Scott blames media, surrounding counties for Baltimore's negative image",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q9/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://foxbaltimore.com/news/local/sun-mayor-scott-blames-media-surrounding-counties-for-baltimores-negative-image",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; article is 11 days old, outside the 7-day default. Dev jar 0af22733bd, rebuilt pgwire-dev server. All arms caught 65% as the April 2025 UMBC figure (2026 is 62%, verified from the PDF). First live gate refusals: named-subject and not-checkable each refused one draft."
+  },
+  {
+    "topic_slug": "thegrio-birmingham-homicides-woodfin-75-year-low",
+    "headline": "Birmingham homicides drop to historic lows under Mayor Randall Woodfin's leadership",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q10/askamerica/2026-11-09",
+    "pinocchios": 2,
+    "source_url": "https://thegrio.com/2026/10/15/birmingham-homicides-mayor-randall-woodfin-violence-prevention/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "local only; article is 25 days old, outside the 7-day default. Dev jar 0af22733bd, rebuilt pgwire-dev server. All arms: 63/130 are not the year-end totals (88/152). Office-page gate refused one draft, its first live refusal."
+  },
+  {
+    "topic_slug": "justice-in-aging-from-dc-medicare-immigrants-dental-fair-housing",
+    "headline": "From DC: Medicare Eligibility Changes, Reduced Dental Benefits, Fair Housing Trends, and more!",
+    "checked_date": "2026-11-09",
+    "run_subpath": "q11/askamerica/2026-11-09",
+    "pinocchios": 1,
+    "source_url": "https://justiceinaging.org/from-dc-11062026/",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "local only; SEVERITY: askamerica below everyman. No warehouse data used; graded the final rule from the proposed rule; never searched Federal Register tables; bundled claims. Article fetch failed HTTP 412. Found: failed web_fetch logs no error, so office and named-subject gates can count unopened pages."
+  },
+  {
+    "topic_slug": "newsom-california-is-booming-nov-2026",
+    "headline": "California is booming",
+    "checked_date": "2026-11-10",
+    "run_subpath": "q12/askamerica/2026-11-10",
+    "pinocchios": 1,
+    "source_url": "https://www.gov.ca.gov/2026/11/10/california-is-booming/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine-dev 0.128.0. Warehouse verified GDP (nominal +48%, $4.5T outruns published BEA), manufacturing vs Texas, R&D, wages (24% not 20%). Left VC/jobs/min wage/$7.7B ungraded and skipped zero-deficit claim. Filed govdata-ops #1160 (econ.trade_by_state 404 on R2)."
+  },
+  {
+    "topic_slug": "cnbc-long-term-unemployment-27-weeks-oct-2026",
+    "headline": "Long-term unemployment: average duration hits 27.1 weeks",
+    "checked_date": "2026-11-10",
+    "run_subpath": "q13/askamerica/2026-11-10",
+    "pinocchios": 1,
+    "source_url": "https://www.cnbc.com/2026/11/06/long-term-unemployment-october-jobs-report.html",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine-dev 0.128.0. Replaced dropped CPI-release pick (user: release stories need a trend). Warehouse confirmed 'longest since 2016' (Aug 2016 27.2) and 'highest share since late 2021' (Dec 2021 31.2%); graded Stahle partially false. Left JOLTS/Disney/Amex/Richmond Fed ungraded; second depth-over-breadth instance after q12."
+  },
+  {
+    "topic_slug": "reuters-us-traffic-deaths-h1-2026-lowest-rate-since-2014",
+    "headline": "US traffic deaths fall in first half of 2026, lowest rate since 2014",
+    "checked_date": "2026-11-10",
+    "run_subpath": "q14/askamerica/2026-11-10",
+    "pinocchios": 1,
+    "source_url": "https://investing.com/news/stock-market-news/us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014-5016323",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; run of record is hand-over run 2 of 3 on engine-dev 1.42.0-SNAPSHOT (2026-11-11; fact-check procedure handed over on article web_fetch / validation refusal). askamerica 2nd, above everyman, no severity flag. 10 claims incl. streak, cause, bicyclists, cost study; lowest-since-2015 tested on warehouse first-half FARS. Gaps vs expert: no NHTSA document read; 1-Pinocchio for omitted context where 0 is correct; two claims marked central. Other runs: q14/askamerica-2026-11-10-{pre-recipe,recipe1,recipe2}.bak, -gate-r1..r3, -handover-r1, -handover-r3."
+  },
+  {
+    "topic_slug": "stacker-data-center-electricity-costs-nov-2026",
+    "headline": "How data centers affect power bills",
+    "checked_date": "2026-11-11",
+    "run_subpath": "q15/askamerica/2026-11-11",
+    "pinocchios": 0,
+    "source_url": "https://www.wftv.com/news/how-data-center/EZXZIDKMFYZ6PK7LB7OCPYQNYI/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine-dev 1.42.0-SNAPSHOT (49737e7dec). Correct verdict 1: 'record price' false, Dallas Fed 2-6% superseded by wp2606r1. Engine set 0 from 23 true/1 mostly true/1 partially false (calibration gap: one named inaccuracy not capping at >=1)."
+  },
+  {
+    "topic_slug": "newsweek-rollins-beef-prices-good-with-that",
+    "headline": "Trump official says Americans saying 'I'm good' with surging beef prices",
+    "checked_date": "2026-11-11",
+    "run_subpath": "q16/askamerica/2026-11-11",
+    "pinocchios": 1,
+    "source_url": "https://www.newsweek.com/rollins-americans-good-with-surging-beef-prices-12468996",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "local only; run of record is rerun 2 on engine-dev 5cb40458e6 (author claims < 3 rated together with fidelity claims) + 5af6cf566e + govdata 8eef1e801b. Engine set the rating (1, author score 79); deliver_report refused the agent's 3 on Rollins's quote. EO date (Sep 4, not August) now checked and graded false. Correct verdict 1; all three arms gave 1; askamerica ranked 1st. Prior runs: q16/askamerica-2026-11-11-pre-fidelity-block.bak (gave 2, ranked 2nd), q16/askamerica-2026-11-11-pre-series-comment.bak (ranked 3rd)."
+  },
+  {
+    "topic_slug": "ajmc-uninsured-rate-11-2-commonwealth-fund",
+    "headline": "Uninsured Rate Rises to 11.2% as Coverage Erodes Before Medicaid Cuts",
+    "checked_date": "2026-11-11",
+    "run_subpath": "q17/askamerica/2026-11-11",
+    "pinocchios": 0,
+    "source_url": "https://www.ajmc.com/view/uninsured-rate-rises-to-11-2-as-coverage-erodes-before-medicaid-cuts",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; correct verdict 0, askamerica exact. Missed marketplace/Medicaid share claims, premium range, party splits, CBO 7.5M mix-up; find_recipe consulted only after first preview."
+  },
+  {
+    "topic_slug": "americanpress-louisiana-ui-claims-11-week-decline",
+    "headline": "Louisiana unemployment insurance claims decline for 11 consecutive weeks",
+    "checked_date": "2026-11-11",
+    "run_subpath": "q18/askamerica/2026-11-11",
+    "pinocchios": 0,
+    "source_url": "https://americanpress.com/2026/11/05/louisiana-unemployment-insurance-claims-decline-for-11-consecutive-weeks/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "local only; engine-dev 5cb40458e6. Correct verdict 0; askamerica 0 (engine-set, agent judged 1), expert 1, everyman 1. askamerica ranked 2nd: BLS state figures verified in warehouse, but the 11-week streak and six weekly claims figures graded unsupported (warehouse holds only national ICSA; DOL 403). Expert verified them from DOL ETA 539; judge confirmed via FRED LAICLAIMS/LACCLAIMS. Resolution: kenstott/govdata-ops#1171 (state weekly UI claims sourcing gap). Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "axios-credit-card-debt-record-q3-2026-income-gap",
+    "headline": "Credit card debt hits record high as Americans struggle with cost-of-living",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q1/askamerica/2026-11-12",
+    "pinocchios": 0,
+    "source_url": "https://www.axios.com/2026/11/10/credit-card-debt-record-2026-delinquency-income-gap",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev 5cb40458e6. Correct verdict 0; askamerica 0 (engine-set), expert 1, everyman 1. Axios 403 for all arms; askamerica graded a CNBC copy and said so. No warehouse table for household debt or card delinquency: kenstott/govdata-ops#1172. No dashboard (no warehouse data used). Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "stateline-student-loan-defaults-collections-coming",
+    "headline": "Collections are coming for millions of student loans in default",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q2/askamerica/2026-11-12",
+    "pinocchios": 1,
+    "source_url": "https://stateline.org/2026/11/12/collections-are-coming-for-millions-of-student-loans-in-default/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev 5cb40458e6. Correct verdict 0; all three arms gave 1. askamerica ranked 1st: central 9.3M/$234.1B confirmed in edu.fsa_loan_portfolio_status, NY Fed state shares from the chart workbook. Rated 1 on loose forbearance/pause timing wording the judge did not count. Stateline's own state ranking and the vocational two-thirds figure unconfirmed (no state default table; student-loan sourcing already tracked in govdata-ops#1146). Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "centersquare-gao-interest-on-debt-1-4-trillion-fy2026",
+    "headline": "Interest on the debt cost $1.4 trillion last year, audit finds",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q3/askamerica/2026-11-12",
+    "pinocchios": 0,
+    "source_url": "https://yournews.com/2026/11/11/7262862/interest-on-the-debt-cost-1-4-trillion-last-year-audit/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev 5cb40458e6. Correct verdict 0; askamerica 0 (engine-set), expert 1, everyman 1. Debt figures confirmed in econ.federal_debt ($40.17T, +$2.53T, +105% from 2016). CBO net-interest ranking unsupported: cbo.gov 403 and econ.federal_outlays_by_function is on the OMB basis. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "ccf-children-losing-medicaid-chip-and-snap-nov-2026",
+    "headline": "Millions of Low-Income Children Are Losing Both Medicaid/CHIP Coverage and SNAP Benefits",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q5/askamerica/2026-11-12",
+    "pinocchios": 1,
+    "source_url": "https://ccf.georgetown.edu/2026/11/09/millions-of-low-income-children-are-losing-both-medicaid-chip-coverage-and-snap-benefits/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev 5cb40458e6. Correct verdict 1; all three arms gave 1; askamerica ranked 1st. NO REPORT DELIVERED: CCF page 403 and no copy loadable, so preview_report/deliver_report refused (article-text gate). agent.md is the agent's final message saved by the harness; no report.html, claims.json or dashboard. Central 2.56M child Medicaid/CHIP decline supported by health.medicaid_chip_enrollment_monthly; SNAP checked with an all-ages proxy (no child-specific monthly SNAP in warehouse). Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "gulfnews-us-crude-record-14-3-million-bpd-eia-steo",
+    "headline": "US crude oil production hits a record 14.3 million barrels per day: EIA",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q4/askamerica/2026-11-12",
+    "pinocchios": 3,
+    "source_url": "https://gulfnews.com/business/energy/us-crude-oil-production-hits-a-record-143-million-barrels-per-day-eia-1.500743145",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "SEVERITY FLAG: askamerica ranked 3rd, below everyman, in both judge passes. Run of record is the rerun on engine-dev 3d10f661e3 (accuracy capped at the central claim's own grade): askamerica 3 (central graded mostly false), expert 3, everyman 2. First run (q4/askamerica-2026-11-12-pre-central-cap.bak) gave 1 with the central claim partially false; first judge put the correct verdict at 3, the clean rejudge at 2, so the judges disagree. Rejudge's stated reasons for last place: Brent $104/$99 left unsupported (STEO tables not parsed; expert found them) and 3 judged too harsh, though expert also gave 3 and ranked 1st. Resolution: engine fix 3d10f661e3. Open: no STEO forecast series in the warehouse."
+  },
+  {
+    "topic_slug": "industrialcyber-bridewell-ransomware-victims-80-percent-q3-2026",
+    "headline": "Bridewell reports 80% surge in global ransomware victims as manufacturing emerges as top target in Q3 2026",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q6/askamerica/2026-11-12",
+    "pinocchios": 1,
+    "source_url": "https://industrialcyber.co/ransomware/bridewell-reports-80-surge-in-global-ransomware-victims-as-manufacturing-emerges-as-top-target-in-q3-2026/",
+    "ranks": {
+      "everyman": 1,
+      "expert": 2,
+      "askamerica": 3
+    },
+    "note": "SEVERITY FLAG: askamerica ranked 3rd, below everyman, in both judge passes. All three arms gave 1 in both. Article 403 for every arm and both judges, so its wording was never read. Run of record is the rerun on engine-dev e9daf4f09b (fidelity claims graded against the source itself, searched for when its address fails): askamerica now read Bridewell's report in full (first run composed an address that 404'd and graded from a CinchOps relay; q6/askamerica-2026-11-12-pre-source-fetch-rule.bak). Rejudge's reasons for last place: charged the article with Bridewell's own 30%-vs-26% inconsistency, and cited a ReliaQuest sector ranking the judge could not confirm. Judges disagree on the correct verdict (0 then 1). Resolution: engine instruction e9daf4f09b. No ransomware leak-site table in the warehouse; only cyber_vuln.kev_catalog applied."
+  },
+  {
+    "topic_slug": "fool-2027-cola-trump-bump-double-edged-sword",
+    "headline": "Social Security's Trump Bump-Led 2027 COLA Is a Double-Edged Sword for Tens of Millions of Retirees",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q8/askamerica/2026-11-12",
+    "pinocchios": 1,
+    "source_url": "https://www.fool.com/retirement/2026/11/07/social-security-trump-bump-led-2027-cola-is-double-edged-sword-for-tens-of-millions-retirees/",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "engine-dev e9daf4f09b. Correct verdict 1; all three arms gave 1; askamerica ranked 1st. Graded the tariff/Hormuz causation partially false and the Gallup 80-90% and 29M figures unsupported. Warehouse has no CPI-W, COLA, Part B or Trustees data: https://github.com/kenstott/govdata-ops/issues/1174. ssa.gov 403. No dashboard. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "rismedia-nar-yun-pent-up-demand-nov-2026",
+    "headline": "Significant Pent-Up Demand Could Be Released If Supply, Affordability and Confidence Improve",
+    "checked_date": "2026-11-12",
+    "run_subpath": "q9/askamerica/2026-11-12",
+    "pinocchios": 0,
+    "source_url": "https://www.rismedia.com/2026/11/09/pent-up-demand-could-be-released-supply-affordability-confidence-improve/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev e9daf4f09b. Correct verdict 0; askamerica 0 (engine-set), expert 1, everyman 1. Payrolls, existing-home sales, sentiment and population checked in the warehouse; only arm to catch that 5.2M sales was 1999, not 2000. Severity invariant not triggered."
   }
 ]

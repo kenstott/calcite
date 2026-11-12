@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The AJMC article's claims about the 2026 uninsured rate, marketplace enrollment and Medicaid cuts are balanced and accurate; 3 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t1-s4:checked ~ table tbody.s0{display:none}
+#s2-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"]{color:var(--link)}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"] .srtcue{opacity:1}
+#s2-t1-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The AJMC article's claims about the 2026 uninsured rate, marketplace enrollment and Medicaid cuts are balanced and accurate; 3 claims could not be confirmed.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.ajmc.com/view/uninsured-rate-rises-to-11-2-as-coverage-erodes-before-medicaid-cuts">https://www.ajmc.com/view/uninsured-rate-rises-to-11-2-as-coverage-erodes-before-medicaid-cuts</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Marketplace effectuated enrollment, February</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Effectuated enrollment (millions)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="42" y1="276" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="34" y="280" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="42" y1="232" x2="390" y2="232" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="34" y="236" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5</text>
+      <line class="grid" x1="42" y1="188" x2="390" y2="188" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="34" y="192" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="42" y1="144" x2="390" y2="144" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="34" y="148" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">15</text>
+      <line class="grid" x1="42" y1="100" x2="390" y2="100" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="34" y="104" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="42" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="34" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">25</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="42" y1="56" x2="42" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="42" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2024" class="tick" x="100" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p1-xtick-2025" class="tick" x="216" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+      <text id="p1-xtick-2026" class="tick" x="332" y="294" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026</text>
+    </g>
+    <g id="p1-series-feb-enrollment" class="series">
+      <g class="hover">
+        <title>2024 — Feb enrollment: 19.88</title>
+        <rect id="p1-mark-feb-enrollment-2024" class="bar" x="62.88" y="101.06" width="73.24" height="174.94" fill="#2563eb"/>
+        <rect class="hit" x="62.88" y="56" width="73.24" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-feb-enrollment-2024" class="value-label" x="99.50" y="97.06" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">19.88</text>
+      <g class="hover">
+        <title>2025 — Feb enrollment: 21.78</title>
+        <rect id="p1-mark-feb-enrollment-2025" class="bar" x="178.88" y="84.34" width="73.24" height="191.66" fill="#2563eb"/>
+        <rect class="hit" x="178.88" y="56" width="73.24" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-feb-enrollment-2025" class="value-label" x="215.50" y="80.34" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">21.78</text>
+      <g class="hover">
+        <title>2026 — Feb enrollment: 19.17</title>
+        <rect id="p1-mark-feb-enrollment-2026" class="bar" x="294.88" y="107.30" width="73.24" height="168.70" fill="#2563eb"/>
+        <rect class="hit" x="294.88" y="56" width="73.24" height="220" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-feb-enrollment-2026" class="value-label" x="331.50" y="103.30" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">19.17</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:61609/a/711dfbeebc19fdd2af9a1890b79528ba.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Largely accurate (about 1 Pinocchio). Core survey figures match the Commonwealth Fund as relayed by other outlets, and the marketplace enrollment drop matches CMS data in the warehouse (Feb 2025 21.8M to Feb 2026 19.2M). Two projection figures (Medicaid 11.5M, CBO 7.5M), the $750-$4,035 premium range and a few subgroup percentages could not be verified because the Commonwealth Fund site returned 403.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — honest</strong> &middot; <strong>Bias 0/100 — no consistent lean</strong></p><p>12 claims graded, 0 not gradable, 3 fell short. In this article only.</p></div>
+<p><strong>9</strong> true &middot; <strong>3</strong> unsupported &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s4"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The uninsured rate among US adults aged 19 to 64 years rose from 8.9% in 2024 to 11.2% in 2026, a statistically significant increase.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-unsupported"><td>8</td><td>Among adults insured all year, 30% were underinsured, including 29% of those with employer-sponsored insurance and half of marketplace enrollees; 19% of marketplace enrollees moved to lower-premium plans.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>10</td><td>The expiration of enhanced tax credits raised average annual premiums by $750 to $4035 depending on income.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>11</td><td>Changes are projected to produce net Medicaid enrollment losses of 11.5 million over the next decade. The Congressional Budget Office projects separate marketplace changes, combined with rising premiums, will reduce enrollment by 7.5 million.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Overall, 46% of working-age adults were inadequately insured in 2026: 11% were uninsured, 12% had a coverage gap during the year, and 23% were underinsured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>The research firm SSRS surveyed a nationally representative sample of 9360 adults aged 19 years and older from May 7 through July 20, 2026; most analyses focused on 7,362 respondents aged 19 to 64 years.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>The share of working-age adults who did not get needed care because of cost rose from 46% in 2022 to 50% in 2026, a statistically significant increase that also held among people insured all year.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Effectuated marketplace enrollment, which counts only people who paid their premiums, fell 13%, from 22.1 million in 2025 to 19.2 million in February 2026, according to a KFF analysis.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>The administration has attributed the drop to its antifraud efforts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>More than half of marketplace enrollees did not get needed care because of cost, and one-third were paying off medical bills over time, compared with 43% and 31%, respectively, among people with employer coverage.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>Nearly three-quarters (73%) of adults aged 19 years and older said the federal government has a responsibility to ensure all Americans have health coverage, including 93% of Democrats, 76% of Independents, and 45% of Republicans.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Medicaid work requirements of 80 hours per month for most expansion enrollees take effect in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>12</td><td>Medicaid work requirements of 80 hours per month for most expansion enrollees take effect in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>11</td><td>Changes are projected to produce net Medicaid enrollment losses of 11.5 million over the next decade. The Congressional Budget Office projects separate marketplace changes, combined with rising premiums, will reduce enrollment by 7.5 million.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>10</td><td>The expiration of enhanced tax credits raised average annual premiums by $750 to $4035 depending on income.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>Nearly three-quarters (73%) of adults aged 19 years and older said the federal government has a responsibility to ensure all Americans have health coverage, including 93% of Democrats, 76% of Independents, and 45% of Republicans.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>8</td><td>Among adults insured all year, 30% were underinsured, including 29% of those with employer-sponsored insurance and half of marketplace enrollees; 19% of marketplace enrollees moved to lower-premium plans.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>More than half of marketplace enrollees did not get needed care because of cost, and one-third were paying off medical bills over time, compared with 43% and 31%, respectively, among people with employer coverage.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>The administration has attributed the drop to its antifraud efforts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Effectuated marketplace enrollment, which counts only people who paid their premiums, fell 13%, from 22.1 million in 2025 to 19.2 million in February 2026, according to a KFF analysis.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>The share of working-age adults who did not get needed care because of cost rose from 46% in 2022 to 50% in 2026, a statistically significant increase that also held among people insured all year.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>The research firm SSRS surveyed a nationally representative sample of 9360 adults aged 19 years and older from May 7 through July 20, 2026; most analyses focused on 7,362 respondents aged 19 to 64 years.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Overall, 46% of working-age adults were inadequately insured in 2026: 11% were uninsured, 12% had a coverage gap during the year, and 23% were underinsured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>The uninsured rate among US adults aged 19 to 64 years rose from 8.9% in 2024 to 11.2% in 2026, a statistically significant increase.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>8</td><td>Among adults insured all year, 30% were underinsured, including 29% of those with employer-sponsored insurance and half of marketplace enrollees; 19% of marketplace enrollees moved to lower-premium plans.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>11</td><td>Changes are projected to produce net Medicaid enrollment losses of 11.5 million over the next decade. The Congressional Budget Office projects separate marketplace changes, combined with rising premiums, will reduce enrollment by 7.5 million.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Effectuated marketplace enrollment, which counts only people who paid their premiums, fell 13%, from 22.1 million in 2025 to 19.2 million in February 2026, according to a KFF analysis.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Medicaid work requirements of 80 hours per month for most expansion enrollees take effect in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>More than half of marketplace enrollees did not get needed care because of cost, and one-third were paying off medical bills over time, compared with 43% and 31%, respectively, among people with employer coverage.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>Nearly three-quarters (73%) of adults aged 19 years and older said the federal government has a responsibility to ensure all Americans have health coverage, including 93% of Democrats, 76% of Independents, and 45% of Republicans.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Overall, 46% of working-age adults were inadequately insured in 2026: 11% were uninsured, 12% had a coverage gap during the year, and 23% were underinsured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>The administration has attributed the drop to its antifraud efforts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>10</td><td>The expiration of enhanced tax credits raised average annual premiums by $750 to $4035 depending on income.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>The research firm SSRS surveyed a nationally representative sample of 9360 adults aged 19 years and older from May 7 through July 20, 2026; most analyses focused on 7,362 respondents aged 19 to 64 years.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>The share of working-age adults who did not get needed care because of cost rose from 46% in 2022 to 50% in 2026, a statistically significant increase that also held among people insured all year.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>The uninsured rate among US adults aged 19 to 64 years rose from 8.9% in 2024 to 11.2% in 2026, a statistically significant increase.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s3"><tr class="verdict-true"><td>2</td><td>Overall, 46% of working-age adults were inadequately insured in 2026: 11% were uninsured, 12% had a coverage gap during the year, and 23% were underinsured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>The research firm SSRS surveyed a nationally representative sample of 9360 adults aged 19 years and older from May 7 through July 20, 2026; most analyses focused on 7,362 respondents aged 19 to 64 years.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Effectuated marketplace enrollment, which counts only people who paid their premiums, fell 13%, from 22.1 million in 2025 to 19.2 million in February 2026, according to a KFF analysis.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>The administration has attributed the drop to its antifraud efforts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>Nearly three-quarters (73%) of adults aged 19 years and older said the federal government has a responsibility to ensure all Americans have health coverage, including 93% of Democrats, 76% of Independents, and 45% of Republicans.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Medicaid work requirements of 80 hours per month for most expansion enrollees take effect in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>The share of working-age adults who did not get needed care because of cost rose from 46% in 2022 to 50% in 2026, a statistically significant increase that also held among people insured all year.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>More than half of marketplace enrollees did not get needed care because of cost, and one-third were paying off medical bills over time, compared with 43% and 31%, respectively, among people with employer coverage.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>The uninsured rate among US adults aged 19 to 64 years rose from 8.9% in 2024 to 11.2% in 2026, a statistically significant increase.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-unsupported"><td>8</td><td>Among adults insured all year, 30% were underinsured, including 29% of those with employer-sponsored insurance and half of marketplace enrollees; 19% of marketplace enrollees moved to lower-premium plans.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>10</td><td>The expiration of enhanced tax credits raised average annual premiums by $750 to $4035 depending on income.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>11</td><td>Changes are projected to produce net Medicaid enrollment losses of 11.5 million over the next decade. The Congressional Budget Office projects separate marketplace changes, combined with rising premiums, will reduce enrollment by 7.5 million.</td><td><strong>unsupported</strong></td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>1</td><td>The uninsured rate among US adults aged 19 to 64 years rose from 8.9% in 2024 to 11.2% in 2026, a statistically significant increase.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-unsupported"><td>8</td><td>Among adults insured all year, 30% were underinsured, including 29% of those with employer-sponsored insurance and half of marketplace enrollees; 19% of marketplace enrollees moved to lower-premium plans.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>10</td><td>The expiration of enhanced tax credits raised average annual premiums by $750 to $4035 depending on income.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-unsupported"><td>11</td><td>Changes are projected to produce net Medicaid enrollment losses of 11.5 million over the next decade. The Congressional Budget Office projects separate marketplace changes, combined with rising premiums, will reduce enrollment by 7.5 million.</td><td><strong>unsupported</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Overall, 46% of working-age adults were inadequately insured in 2026: 11% were uninsured, 12% had a coverage gap during the year, and 23% were underinsured.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>The research firm SSRS surveyed a nationally representative sample of 9360 adults aged 19 years and older from May 7 through July 20, 2026; most analyses focused on 7,362 respondents aged 19 to 64 years.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>The share of working-age adults who did not get needed care because of cost rose from 46% in 2022 to 50% in 2026, a statistically significant increase that also held among people insured all year.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>5</td><td>Effectuated marketplace enrollment, which counts only people who paid their premiums, fell 13%, from 22.1 million in 2025 to 19.2 million in February 2026, according to a KFF analysis.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>6</td><td>The administration has attributed the drop to its antifraud efforts.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>More than half of marketplace enrollees did not get needed care because of cost, and one-third were paying off medical bills over time, compared with 43% and 31%, respectively, among people with employer coverage.</td><td><strong>true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>9</td><td>Nearly three-quarters (73%) of adults aged 19 years and older said the federal government has a responsibility to ensure all Americans have health coverage, including 93% of Democrats, 76% of Independents, and 45% of Republicans.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>12</td><td>Medicaid work requirements of 80 hours per month for most expansion enrollees take effect in 2027.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (an opinion or personal attack no evidence can test), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The uninsured rate among US adults aged 19 to 64 years rose from 8.9% in 2024 to 11.2% in 2026, a statistically significant increase.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Commonwealth Fund news release as quoted by Medical Daily: 8.9% (2024) to 11.2% (2026); Healthcare Dive: 8.9% to about 11%. Survey-based, working-age only.<ul class="claim-sources"><li><a href="https://www.medicaldaily.com/us-adults-skipped-health-care-cost-2026-survey-480499">Medical Daily on CMWF survey</a></li><li><a href="https://www.healthcaredive.com/news/uninsured-rate-rises-ahead-medicaid-work-requirements/833832/">Healthcare Dive</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Web searches run</dt><dd>Commonwealth Fund 2026 Biennial Health Insurance Survey uninsured 11.2% 8.9%</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Overall, 46% of working-age adults were inadequately insured in 2026: 11% were uninsured, 12% had a coverage gap during the year, and 23% were underinsured.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Same split reported by Medical Daily and Healthcare Dive.<ul class="claim-sources"><li><a href="https://www.medicaldaily.com/us-adults-skipped-health-care-cost-2026-survey-480499">Medical Daily</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; The research firm SSRS surveyed a nationally representative sample of 9360 adults aged 19 years and older from May 7 through July 20, 2026; most analyses focused on 7,362 respondents aged 19 to 64 years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>9,360 adults, 7,362 aged 19-64, May 7-July 20, SSRS (Medical Daily).<ul class="claim-sources"><li><a href="https://www.medicaldaily.com/us-adults-skipped-health-care-cost-2026-survey-480499">Medical Daily</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The share of working-age adults who did not get needed care because of cost rose from 46% in 2022 to 50% in 2026, a statistically significant increase that also held among people insured all year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Medical Daily and Healthcare Dive both report 46% to 50%. The 'because of cost' is the survey's own self-reported item definition, not an inferred cause.<ul class="claim-sources"><li><a href="https://www.medicaldaily.com/us-adults-skipped-health-care-cost-2026-survey-480499">Medical Daily</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Effectuated marketplace enrollment, which counts only people who paid their premiums, fell 13%, from 22.1 million in 2025 to 19.2 million in February 2026, according to a KFF analysis.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CMS effectuated enrollment, February: 2025 = 21.78M, 2026 = 19.17M (-12.0%); 2025 full-year average about 22.4M per table notes <code>health.aca_effectuated_enrollment_monthly</code></dd>
+<dt>Independent evidence</dt><dd>KFF (June 29, 2026): dropped 13% from a high of 22.1 million in 2025 to 19.2 million in February 2026; ASPE brief says 19.2M.<ul class="claim-sources"><li><a href="https://www.kff.org/quick-insights/aca-marketplace-enrollment-is-down-by-3-million-after-big-jump-in-premium-payments/">KFF</a></li><li><a href="https://aspe.hhs.gov/reports/aca-exchange-enrollment-2026">ASPE</a></li></ul></dd>
+<dt>Why</dt><dd>22.1M is KFF's 2025 peak; like-for-like February drop is about 12%. Immaterial.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT benefit_year, month_num, effectuated_enrollment FROM health.aca_effectuated_enrollment_monthly WHERE geo_level='National' AND platform='All' AND month_num=2 AND benefit_year IN (2024,2025,2026)</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; The administration has attributed the drop to its antifraud efforts.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>ASPE brief credits program-integrity efforts; KFF notes the same attribution.<ul class="claim-sources"><li><a href="https://aspe.hhs.gov/reports/aca-exchange-enrollment-2026">ASPE</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; More than half of marketplace enrollees did not get needed care because of cost, and one-third were paying off medical bills over time, compared with 43% and 31%, respectively, among people with employer coverage.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Medical Daily: more than half of marketplace enrollees, one-third paying bills; 43% and 31% for job-based coverage. 'Because of cost' is the survey item's own definition.<ul class="claim-sources"><li><a href="https://www.medicaldaily.com/us-adults-skipped-health-care-cost-2026-survey-480499">Medical Daily</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; Among adults insured all year, 30% were underinsured, including 29% of those with employer-sponsored insurance and half of marketplace enrollees; 19% of marketplace enrollees moved to lower-premium plans.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.medicaldaily.com/us-adults-skipped-health-care-cost-2026-survey-480499">Medical Daily</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Commonwealth Fund report returned HTTP 403 and no readable copy carried 30%, 29% or 19%; not an obvious error.</dd>
+<dt>Warehouse searched for</dt><dd>uninsured rate health insurance coverage</dd>
+<dt>Web searches run</dt><dd>Commonwealth Fund 2026 biennial survey underinsured employer 29% marketplace</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; Nearly three-quarters (73%) of adults aged 19 years and older said the federal government has a responsibility to ensure all Americans have health coverage, including 93% of Democrats, 76% of Independents, and 45% of Republicans.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Healthcare Dive confirms 73%; the party splits (93/76/45) were not found in any readable copy.<ul class="claim-sources"><li><a href="https://www.healthcaredive.com/news/uninsured-rate-rises-ahead-medicaid-work-requirements/833832/">Healthcare Dive</a></li></ul></dd>
+<dt>Why</dt><dd>Headline 73% verified; party splits not independently seen.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#10 &middot; <strong>unsupported</strong> &mdash; The expiration of enhanced tax credits raised average annual premiums by $750 to $4035 depending on income.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.kff.org/quick-insights/aca-marketplace-enrollment-is-down-by-3-million-after-big-jump-in-premium-payments/">KFF</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Attributed to the report, which returned HTTP 403; no copy carried the range. KFF reports an average 114% payment increase, directionally consistent.</dd>
+<dt>Warehouse searched for</dt><dd>enhanced premium tax credit expiration average premium increase by income</dd>
+<dt>Web searches run</dt><dd>Commonwealth Fund 2026 biennial survey enhanced premium tax credits $750 $4,035</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#11 &middot; <strong>unsupported</strong> &mdash; Changes are projected to produce net Medicaid enrollment losses of 11.5 million over the next decade. The Congressional Budget Office projects separate marketplace changes, combined with rising premiums, will reduce enrollment by 7.5 million.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.healthcaredive.com/news/uninsured-rate-rises-ahead-medicaid-work-requirements/833832/">Healthcare Dive</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Could not locate either figure in a source I could open. Healthcare Dive cites an Urban Institute estimate of up to 10 million losing Medicaid, a different estimate.</dd>
+<dt>Warehouse searched for</dt><dd>CBO projected Medicaid enrollment loss H.R. 1 work requirements</dd>
+<dt>Web searches run</dt><dd>H.R. 1 Medicaid enrollment loss 11.5 million CBO marketplace 7.5 million</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; Medicaid work requirements of 80 hours per month for most expansion enrollees take effect in 2027.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Healthcare Dive and Medical Daily confirm 2027 start and 80 hours.<ul class="claim-sources"><li><a href="https://www.healthcaredive.com/news/uninsured-rate-rises-ahead-medicaid-work-requirements/833832/">Healthcare Dive</a></li></ul></dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Misleading-context flags</h2>
+<ul><li>The 11.2% is a survey estimate for ages 19-64, not the overall uninsured rate; the Fund says its survey runs lower than federal surveys (NHIS 2025 all-ages: 8.3%).</li><li>Causation (expired credits, end of continuous enrollment) is the authors' interpretation of coincident trends.</li><li>The 2027 Medicaid cuts did not cause the 2026 rise; the article says so.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 1520 ms</summary><pre><code>SELECT benefit_year, month_num, effectuated_enrollment FROM health.aca_effectuated_enrollment_monthly WHERE geo_level='National' AND platform='All' AND month_num=2 AND benefit_year IN (2024,2025,2026) ORDER BY benefit_year</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

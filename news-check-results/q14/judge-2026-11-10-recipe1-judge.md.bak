@@ -1,0 +1,32 @@
+# q14 judge — Reuters/Investing.com "US traffic deaths fall in first half of 2026, lowest rate since 2014"
+
+Rank: [expert, askamerica, everyman]
+
+Run: 2026-11-10 story, judged 2026-11-11. askamerica on engine-dev 1.42.0-SNAPSHOT (commits 4bd5ce8565 multipart-PDF unwrap, 3e3e5bcaee validate_article non-warehouse/trend recipe).
+
+## Ratings given
+| Arm | Pinocchios | Primary sources actually read |
+|---|---|---|
+| expert | 0 | NHTSA DOT HS 813 833 Table 1; 813 800 (2025 rate); 813 829 (bicyclists); 813 403 (cost study); NSC release |
+| askamerica | 0 | NHTSA DOT HS 813 833 table; warehouse FARS 2014-2024 (2020/2021 counts); Reuters syndicated text |
+| everyman | 1 | none (nhtsa.gov 403); search excerpts, Carscoops, syndication |
+
+## Assessment
+- **Correct verdict:** the article's figures reproduce from NHTSA's own tables (H1 2025 = 8,120 + 9,055 = 17,175; Q1 -5% / Q2 -0.2% reproduce 16,750; H1 2014 rate about 1.01, so "lowest since 2014" holds). 0 Pinocchios is right. everyman's 1-Pinocchio deduction rests on a "second-lowest vs lowest since 2014" tension that is not a contradiction (both are true), and on a release it never read.
+- **expert (1st):** every numeric claim traced to a named NHTSA publication. It confirmed the bicyclist figure (1,103 to 1,148) and the $30B/$340B cost figures from the primary studies. It also tested the "fifth straight yearly decline" trend year by year (-1.2, -4.0, -4.3, -6.7%) and added NSC's divergent estimate as context.
+- **askamerica (2nd):** read the primary quarterly table and checked the 2021 +10.8% against warehouse FARS. Its H1 2015/2019 comparisons were correct. Weaker than expert in four places:
+  - It left the bicyclist figure and the $30B/$1.37T cost figures at search-summary level.
+  - It omitted the "fifth straight yearly decline" trend claim, which warehouse FARS 2021-2024 can test, from `claims`.
+  - It omitted the attributed causes (less enforcement, impaired driving) from `claims`.
+  - It gave no NSC context.
+- **everyman (3rd):** broad claim coverage (10 rows), but no primary document was read. "Lowest since 2015" was left unconfirmed, and its one deduction is a misreading.
+
+## Severity invariant
+askamerica ranks above everyman. No flag. (The pre-recipe run, kept at `q14/askamerica-2026-11-10-pre-recipe.bak/`, ranked below everyman; that run's judge is at `q14/judge-2026-11-10-pre-recipe.bak/`.)
+
+## Defects
+- None new. The multipart-framed PDF read failure on crashstats.nhtsa.dot.gov is fixed in 4bd5ce8565. This run read 813 833's table (calls.jsonl seq 6).
+
+## Recipe check
+- The validate_article non-warehouse rule held: the cost-study and bicyclist claims were graded from the web, not dropped.
+- The trend rule was not applied. "Fifth straight yearly decline" is a trend assertion the warehouse FARS annual series covers through 2024, and it is absent from `claims`. That is one instance; it needs a second before the recipe wording is changed.

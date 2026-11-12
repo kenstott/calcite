@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fox45/Baltimore Sun article's claims about Mayor Scott, media, and Baltimore polling and crime are somewhat biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t1-s4:checked ~ table tbody.s0{display:none}
+#s2-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"]{color:var(--link)}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"] .srtcue{opacity:1}
+#s2-t1-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fox45/Baltimore Sun article's claims about Mayor Scott, media, and Baltimore polling and crime are somewhat biased and mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://foxbaltimore.com/news/local/sun-mayor-scott-blames-media-surrounding-counties-for-baltimores-negative-image">https://foxbaltimore.com/news/local/sun-mayor-scott-blames-media-surrounding-counties-for-baltimores-negative-image</a></p>
+</header>
+<section>
+<h2>Summary</h2>
+<p>Rating: 1 Pinocchio. Most numbers match UMBC's April 2026 poll and city crime releases; the vacancy count is confirmed (11,558 official). One error: 65% distrust of city government is the April 2025 figure; April 2026 is 62%. The $1 billion downtown loss, the crime-perception poll figures, the PILOT deal size and the quoted county-detractor claim could not be verified. Framing: the same poll shows 61% trust local news, which cuts against the mayor's media-blame thesis.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 82/100 — mostly honest</strong> &middot; <strong>Bias +40/100 — somewhat biased</strong></p><p>7 claims graded, 4 not gradable, 4 fell short. In this article only.</p></div>
+<p><strong>3</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>4</strong> not checkable here &middot; <strong>11</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s4"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>6</td><td>As of Oct. 28, Baltimore Police reported 102 homicides compared to 108 at this time last year. The number of nonfatal shootings is higher than 2025, with 259 so far this year, compared to 254.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>According to a poll conducted by the University of Maryland, Baltimore County (UMBC) in April, 65% of 666 Baltimore City residents surveyed said they trust their local government “never” or “only some of the time.”</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>As for news consumption, a 2025 UMBC poll found that 42% of city residents polled received their news from The Baltimore Sun and 53% from Fox45.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>8</td><td>Since Scott took office, vacant properties have been reduced from above 16,000 to just above 11,000.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Only 41% believed that the city is headed in the right direction while 45% said the city is not progressing in the right direction. But, 61% of residents are optimistic about the future of the city.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Of the same polled residents, 61% said they have “a lot” or “some” trust in local news organizations, stating that the coverage is accurate and fair. Conversely, 38% of residents said they had little to no trust of news organizations at all.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>A 2025 poll of 628 Baltimore County residents by UMBC found that 42% of county residents polled said improvement of public safety would encourage them to visit Baltimore City. 19% said nothing would encourage them to visit.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>As for crime, 27% of Baltimore City residents polled said crime in their neighborhoods has dropped within the last year, with 44% saying that crime has stagnated and 21% saying there is more crime.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>downtown Baltimore area, which lost $1 billion in value last year.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>10</td><td>The downtown value loss was due to vacancies.</td><td><strong>not checkable here</strong> &middot; causal claim</td><td>#8 — decorative</td></tr><tr class="verdict-not-checkable-here"><td>11</td><td>a similar deal for the West Lexington Corridor, approved last week, will see the same tax break for a $160 million development deal for the developers of University of Maryland, Baltimore’s North Quad.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-not-checkable-here"><td>11</td><td>a similar deal for the West Lexington Corridor, approved last week, will see the same tax break for a $160 million development deal for the developers of University of Maryland, Baltimore’s North Quad.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>10</td><td>The downtown value loss was due to vacancies.</td><td><strong>not checkable here</strong> &middot; causal claim</td><td>#8 — decorative</td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>downtown Baltimore area, which lost $1 billion in value last year.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>8</td><td>Since Scott took office, vacant properties have been reduced from above 16,000 to just above 11,000.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>As for crime, 27% of Baltimore City residents polled said crime in their neighborhoods has dropped within the last year, with 44% saying that crime has stagnated and 21% saying there is more crime.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>As of Oct. 28, Baltimore Police reported 102 homicides compared to 108 at this time last year. The number of nonfatal shootings is higher than 2025, with 259 so far this year, compared to 254.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>As for news consumption, a 2025 UMBC poll found that 42% of city residents polled received their news from The Baltimore Sun and 53% from Fox45.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>A 2025 poll of 628 Baltimore County residents by UMBC found that 42% of county residents polled said improvement of public safety would encourage them to visit Baltimore City. 19% said nothing would encourage them to visit.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Of the same polled residents, 61% said they have “a lot” or “some” trust in local news organizations, stating that the coverage is accurate and fair. Conversely, 38% of residents said they had little to no trust of news organizations at all.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Only 41% believed that the city is headed in the right direction while 45% said the city is not progressing in the right direction. But, 61% of residents are optimistic about the future of the city.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>According to a poll conducted by the University of Maryland, Baltimore County (UMBC) in April, 65% of 666 Baltimore City residents surveyed said they trust their local government “never” or “only some of the time.”</td><td><strong>partially false</strong></td><td>none cited</td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>5</td><td>As for news consumption, a 2025 UMBC poll found that 42% of city residents polled received their news from The Baltimore Sun and 53% from Fox45.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>8</td><td>Since Scott took office, vacant properties have been reduced from above 16,000 to just above 11,000.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>As for crime, 27% of Baltimore City residents polled said crime in their neighborhoods has dropped within the last year, with 44% saying that crime has stagnated and 21% saying there is more crime.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>According to a poll conducted by the University of Maryland, Baltimore County (UMBC) in April, 65% of 666 Baltimore City residents surveyed said they trust their local government “never” or “only some of the time.”</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>11</td><td>a similar deal for the West Lexington Corridor, approved last week, will see the same tax break for a $160 million development deal for the developers of University of Maryland, Baltimore’s North Quad.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>downtown Baltimore area, which lost $1 billion in value last year.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>As of Oct. 28, Baltimore Police reported 102 homicides compared to 108 at this time last year. The number of nonfatal shootings is higher than 2025, with 259 so far this year, compared to 254.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Only 41% believed that the city is headed in the right direction while 45% said the city is not progressing in the right direction. But, 61% of residents are optimistic about the future of the city.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Of the same polled residents, 61% said they have “a lot” or “some” trust in local news organizations, stating that the coverage is accurate and fair. Conversely, 38% of residents said they had little to no trust of news organizations at all.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>A 2025 poll of 628 Baltimore County residents by UMBC found that 42% of county residents polled said improvement of public safety would encourage them to visit Baltimore City. 19% said nothing would encourage them to visit.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>10</td><td>The downtown value loss was due to vacancies.</td><td><strong>not checkable here</strong> &middot; causal claim</td><td>#8 — decorative</td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>5</td><td>As for news consumption, a 2025 UMBC poll found that 42% of city residents polled received their news from The Baltimore Sun and 53% from Fox45.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>8</td><td>Since Scott took office, vacant properties have been reduced from above 16,000 to just above 11,000.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>As of Oct. 28, Baltimore Police reported 102 homicides compared to 108 at this time last year. The number of nonfatal shootings is higher than 2025, with 259 so far this year, compared to 254.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>As for crime, 27% of Baltimore City residents polled said crime in their neighborhoods has dropped within the last year, with 44% saying that crime has stagnated and 21% saying there is more crime.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>downtown Baltimore area, which lost $1 billion in value last year.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>11</td><td>a similar deal for the West Lexington Corridor, approved last week, will see the same tax break for a $160 million development deal for the developers of University of Maryland, Baltimore’s North Quad.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>10</td><td>The downtown value loss was due to vacancies.</td><td><strong>not checkable here</strong> &middot; causal claim</td><td>#8 — decorative</td></tr><tr class="verdict-partially-false"><td>1</td><td>According to a poll conducted by the University of Maryland, Baltimore County (UMBC) in April, 65% of 666 Baltimore City residents surveyed said they trust their local government “never” or “only some of the time.”</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Only 41% believed that the city is headed in the right direction while 45% said the city is not progressing in the right direction. But, 61% of residents are optimistic about the future of the city.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Of the same polled residents, 61% said they have “a lot” or “some” trust in local news organizations, stating that the coverage is accurate and fair. Conversely, 38% of residents said they had little to no trust of news organizations at all.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>A 2025 poll of 628 Baltimore County residents by UMBC found that 42% of county residents polled said improvement of public safety would encourage them to visit Baltimore City. 19% said nothing would encourage them to visit.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-not-checkable-here"><td>10</td><td>The downtown value loss was due to vacancies.</td><td><strong>not checkable here</strong> &middot; causal claim</td><td>#8 — decorative</td></tr><tr class="verdict-mostly-true"><td>6</td><td>As of Oct. 28, Baltimore Police reported 102 homicides compared to 108 at this time last year. The number of nonfatal shootings is higher than 2025, with 259 so far this year, compared to 254.</td><td><strong>mostly true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-partially-false"><td>1</td><td>According to a poll conducted by the University of Maryland, Baltimore County (UMBC) in April, 65% of 666 Baltimore City residents surveyed said they trust their local government “never” or “only some of the time.”</td><td><strong>partially false</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>As for news consumption, a 2025 UMBC poll found that 42% of city residents polled received their news from The Baltimore Sun and 53% from Fox45.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>8</td><td>Since Scott took office, vacant properties have been reduced from above 16,000 to just above 11,000.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Only 41% believed that the city is headed in the right direction while 45% said the city is not progressing in the right direction. But, 61% of residents are optimistic about the future of the city.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Of the same polled residents, 61% said they have “a lot” or “some” trust in local news organizations, stating that the coverage is accurate and fair. Conversely, 38% of residents said they had little to no trust of news organizations at all.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>4</td><td>A 2025 poll of 628 Baltimore County residents by UMBC found that 42% of county residents polled said improvement of public safety would encourage them to visit Baltimore City. 19% said nothing would encourage them to visit.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>7</td><td>As for crime, 27% of Baltimore City residents polled said crime in their neighborhoods has dropped within the last year, with 44% saying that crime has stagnated and 21% saying there is more crime.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>9</td><td>downtown Baltimore area, which lost $1 billion in value last year.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr><tr class="verdict-not-checkable-here"><td>11</td><td>a similar deal for the West Lexington Corridor, approved last week, will see the same tax break for a $160 million development deal for the developers of University of Maryland, Baltimore’s North Quad.</td><td><strong>not checkable here</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Claims by Brandon Scott — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence it rests on</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>12</td><td>When it comes to negativity, our biggest [detractors] it’s our Baltimore County folks, it’s some of our Howard County folks, our Anne Arundel County folks.</td><td><strong>not checkable here</strong> &middot; central claim</td><td>none cited</td></tr>
+</tbody></table>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-partially-false"><summary>#1 &middot; <strong>partially false</strong> &mdash; According to a poll conducted by the University of Maryland, Baltimore County (UMBC) in April, 65% of 666 Baltimore City residents surveyed said they trust their local government “never” or “only some of the time.”</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Article says</dt><dd>65%</dd>
+<dt>Independent evidence</dt><dd>62% in April 2026 (n=666); 65% was April 2025 (n=642)<ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2026/04/Part-1-UMBC-Poll-Apr28.pdf">UMBC Poll April 2026</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Windows tested</dt><dd>April 2026: 62%; April 2025: 65%</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Only 41% believed that the city is headed in the right direction while 45% said the city is not progressing in the right direction. But, 61% of residents are optimistic about the future of the city.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>41/45/10 and 61% optimistic<ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2026/04/Part-1-UMBC-Poll-Apr28.pdf">UMBC Poll April 2026</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Of the same polled residents, 61% said they have “a lot” or “some” trust in local news organizations, stating that the coverage is accurate and fair. Conversely, 38% of residents said they had little to no trust of news organizations at all.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>61% / 38%<ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2026/04/Part-1-UMBC-Poll-Apr28.pdf">UMBC Poll April 2026</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; A 2025 poll of 628 Baltimore County residents by UMBC found that 42% of county residents polled said improvement of public safety would encourage them to visit Baltimore City. 19% said nothing would encourage them to visit.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>n=628; 42% public safety; 19% nothing<ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2025/04/UMBC-Poll-Wed-April-16-FINAL.pdf">UMBC Poll April 2025</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; As for news consumption, a 2025 UMBC poll found that 42% of city residents polled received their news from The Baltimore Sun and 53% from Fox45.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>42% Sun, 53% Fox45; the poll asks whether respondents have consumed each outlet, not a primary source<ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2025/04/UMBC-Poll-Wed-April-16-FINAL.pdf">UMBC Poll April 2025</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; As of Oct. 28, Baltimore Police reported 102 homicides compared to 108 at this time last year. The number of nonfatal shootings is higher than 2025, with 259 so far this year, compared to 254.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Oct 1 city release: 83 vs 98 homicides, 226 vs 236 nonfatal; JNS late Oct: 101 vs 105 and 253 vs 247. Oct 28 figures not directly confirmed but consistent.<ul class="claim-sources"><li><a href="https://www.baltimorecity.gov/mayor/news-media/press-releases/2026-10-01-mayor-brandon-m-scott-statement-on-decline-in-homicides-through-september-2026">Mayor's Oct 1 release</a></li><li><a href="https://www.jns.org/news/u-s-news/after-touted-historic-reduction-of-murders-in-2026-baltimore-back-on-2025-pace">JNS</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Windows tested</dt><dd>Oct 1: 83 vs 98; late Oct (JNS): 101 vs 105</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#7 &middot; <strong>not checkable here</strong> &mdash; As for crime, 27% of Baltimore City residents polled said crime in their neighborhoods has dropped within the last year, with 44% saying that crime has stagnated and 21% saying there is more crime.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2026/04/Part-2-UMBC-Poll-Wed-April-1.pdf">UMBC Poll Part 2</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>search_catalog has no poll or perception table; the April 2026 UMBC Part 1 and Part 2 releases do not contain these figures.</dd>
+<dt>No page loaded because</dt><dd>UMBC Part 1 and Part 2 PDFs read; no matching text; originating poll not identified.</dd>
+<dt>Warehouse searched for</dt><dd>Baltimore City resident poll crime perception</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#8 &middot; <strong>mostly true</strong> &mdash; Since Scott took office, vacant properties have been reduced from above 16,000 to just above 11,000.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Official count 11,558 per Baltimore Fishbowl; Scott said 16,000 at Dec 2020; Maryland Matters (HTTP 403, not read) reportedly cites a smaller drop<ul class="claim-sources"><li><a href="https://baltimorefishbowl.com/stories/dan-rodricks-in-case-you-missed-it-baltimore-vacants-have-fallen-below-12000/">Baltimore Fishbowl</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Web searches run</dt><dd>Baltimore vacant properties 16,000 11,000 Scott</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#9 &middot; <strong>not checkable here</strong> &mdash; downtown Baltimore area, which lost $1 billion in value last year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://baltimorefishbowl.com/stories/dan-rodricks-in-case-you-missed-it-baltimore-vacants-have-fallen-below-12000/">Baltimore Fishbowl</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>No catalog table carries downtown property value; the off-site page read contains no such figure.</dd>
+<dt>Evidence found and set aside because</dt><dd>The $1.2 billion in the Fishbowl page is a city/state vacants funding pledge, unrelated to downtown value loss.</dd>
+<dt>No page loaded because</dt><dd>Baltimore Fishbowl page read (no downtown value figure); Maryland Matters returned HTTP 403.</dd>
+<dt>Warehouse searched for</dt><dd>Baltimore downtown property value loss vacancies</dd>
+<dt>Web searches run</dt><dd>Baltimore downtown lost $1 billion in value vacancies</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#10 &middot; <strong>not checkable here</strong> &mdash; The downtown value loss was due to vacancies.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://baltimorefishbowl.com/stories/dan-rodricks-in-case-you-missed-it-baltimore-vacants-have-fallen-below-12000/">Baltimore Fishbowl</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#8</dd>
+<dt>What that evidence found</dt><dd>No source found for the underlying loss figure.</dd>
+<dt>Evidence support</dt><dd>decorative — the evidence does not bear on the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Rests on an unverified figure.</dd>
+<dt>Evidence found and set aside because</dt><dd>The $1.2 billion in the Fishbowl page is a funding pledge, not a downtown value loss.</dd>
+<dt>No page loaded because</dt><dd>Baltimore Fishbowl read; no figure.</dd>
+<dt>Warehouse searched for</dt><dd>Baltimore downtown property value loss vacancies</dd>
+<dt>Web searches run</dt><dd>Baltimore downtown lost $1 billion in value vacancies</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#11 &middot; <strong>not checkable here</strong> &mdash; a similar deal for the West Lexington Corridor, approved last week, will see the same tax break for a $160 million development deal for the developers of University of Maryland, Baltimore’s North Quad.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://baltimorefishbowl.com/stories/dan-rodricks-in-case-you-missed-it-baltimore-vacants-have-fallen-below-12000/">Baltimore Fishbowl</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>search_catalog unmatched_terms: lexington, pilot. No table carries Board of Estimates PILOT approvals.</dd>
+<dt>No page loaded because</dt><dd>Searches this session did not surface a page on the West Lexington PILOT.</dd>
+<dt>Warehouse searched for</dt><dd>West Lexington PILOT North Quad Baltimore</dd>
+<dt>Web searches run</dt><dd>West Lexington Corridor PILOT $160 million North Quad Baltimore</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#12 &middot; <strong>not checkable here</strong> &mdash; When it comes to negativity, our biggest [detractors] it’s our Baltimore County folks, it’s some of our Howard County folks, our Anne Arundel County folks.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Brandon Scott — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2025/04/UMBC-Poll-Wed-April-16-FINAL.pdf">UMBC Poll April 2025</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>Subjective perception claim; no table carries it. UMBC 2025: 19% of county residents say nothing would draw them to the city, 42% say better public safety would.</dd>
+<dt>No page loaded because</dt><dd>UMBC 2025 poll read; it does not rank detractors.</dd>
+<dt>Warehouse searched for</dt><dd>county residents perception of Baltimore City negativity</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 9 rows — 9815 ms</summary><pre><code>SELECT agency_name, ori, county_name FROM crime.cde_agencies WHERE agency_name ILIKE '%Baltimore%' AND state_abbr='MD' FETCH FIRST 10 ROWS ONLY</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2026/04/Part-1-UMBC-Poll-Apr28.pdf">UMBC Poll April 2026</a></li>
+<li><a href="https://politics.umbc.edu/wp-content/uploads/sites/778/2025/04/UMBC-Poll-Wed-April-16-FINAL.pdf">UMBC Poll April 2025</a></li>
+<li><a href="https://www.baltimorecity.gov/mayor/news-media/press-releases/2026-10-01-mayor-brandon-m-scott-statement-on-decline-in-homicides-through-september-2026">Mayor Oct 1 release</a></li>
+<li><a href="https://www.jns.org/news/u-s-news/after-touted-historic-reduction-of-murders-in-2026-baltimore-back-on-2025-pace">JNS</a></li>
+<li><a href="https://cde.ucr.cjis.gov">crime.cde_agencies</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT agency_name, ori, county_name FROM crime.cde_agencies WHERE agency_name ILIKE '%Baltimore%' AND state_abbr='MD'</code></pre></details></li>
+</ol>
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Investing.com/Reuters article's claims about first-half 2026 US traffic deaths, the 2025 fatality rate and 2021 pandemic deaths are balanced and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t1-s4:checked ~ table tbody.s0{display:none}
+#s2-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"]{color:var(--link)}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"] .srtcue{opacity:1}
+#s2-t1-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Investing.com/Reuters article's claims about first-half 2026 US traffic deaths, the 2025 fatality rate and 2021 pandemic deaths are balanced and mostly accurate.</h1>
+<p class="subtitle">Warehouse: transport.fatal_crashes (FARS 2008-2024). 2025-26 figures are NHTSA projections, checked against NHTSA DOT HS 813 833 and the Reuters text.</p>
+<p class="under-review"><span>Article under review</span><a href="https://investing.com/news/stock-market-news/us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014-5016323">https://investing.com/news/stock-market-news/us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014-5016323</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">US traffic deaths, FARS 2014-2024</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Annual traffic deaths (FARS)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="44" y1="56" x2="44" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="44" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0</text>
+      <line class="grid" x1="113.20" y1="56" x2="113.20" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="113.20" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">10,000</text>
+      <line class="grid" x1="182.40" y1="56" x2="182.40" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="182.40" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">20,000</text>
+      <line class="grid" x1="251.60" y1="56" x2="251.60" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="251.60" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">30,000</text>
+      <line class="grid" x1="320.80" y1="56" x2="320.80" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="320.80" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">40,000</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="390" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">50,000</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="44" y1="56" x2="44" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="44" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-2014" class="tick" x="36" y="70" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2014</text>
+      <text id="p1-xtick-2015" class="tick" x="36" y="90" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2015</text>
+      <text id="p1-xtick-2016" class="tick" x="36" y="110" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2016</text>
+      <text id="p1-xtick-2017" class="tick" x="36" y="130" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2017</text>
+      <text id="p1-xtick-2018" class="tick" x="36" y="150" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="36" y="170" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="36" y="190" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="36" y="210" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="36" y="230" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="36" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="36" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2024</text>
+    </g>
+    <g id="p1-series-deaths" class="series">
+      <g class="hover">
+        <title>2014 — Deaths: 32,744</title>
+        <rect id="p1-mark-deaths-2014" class="bar" x="44" y="59.60" width="226.59" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="57.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2015 — Deaths: 35,484</title>
+        <rect id="p1-mark-deaths-2015" class="bar" x="44" y="79.60" width="245.55" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="77.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2016 — Deaths: 37,806</title>
+        <rect id="p1-mark-deaths-2016" class="bar" x="44" y="99.60" width="261.62" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="97.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2017 — Deaths: 37,473</title>
+        <rect id="p1-mark-deaths-2017" class="bar" x="44" y="119.60" width="259.31" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="117.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2018 — Deaths: 36,835</title>
+        <rect id="p1-mark-deaths-2018" class="bar" x="44" y="139.60" width="254.90" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="137.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Deaths: 36,355</title>
+        <rect id="p1-mark-deaths-2019" class="bar" x="44" y="159.60" width="251.58" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="157.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Deaths: 39,007</title>
+        <rect id="p1-mark-deaths-2020" class="bar" x="44" y="179.60" width="269.93" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="177.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2021 — Deaths: 43,230</title>
+        <rect id="p1-mark-deaths-2021" class="bar" x="44" y="199.60" width="299.15" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="197.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Deaths: 42,721</title>
+        <rect id="p1-mark-deaths-2022" class="bar" x="44" y="219.60" width="295.63" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="217.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Deaths: 41,025</title>
+        <rect id="p1-mark-deaths-2023" class="bar" x="44" y="239.60" width="283.89" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="237.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Deaths: 39,254</title>
+        <rect id="p1-mark-deaths-2024" class="bar" x="44" y="259.60" width="271.64" height="11.80" fill="#2563eb"/>
+        <rect class="hit" x="44" y="257.50" width="346" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:56357/a/232658aa2400b693a4a9df023e9cf37a.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Every checkable claim holds. The piece faithfully reports NHTSA's early estimate (16,750 deaths in H1 2026, -2.5% from 17,175; rate 1.02 vs 1.05). Historic figures match FARS in the warehouse (2021: 43,230, up 10.8% from 39,007; 2019: 36,355). Grade: 0 Pinocchios. Caveat: 2025-26 numbers are projections; warehouse FARS ends at 2024. The Investing.com page returned HTTP 403, so text was read from the Reuters syndication on wiky.com.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 89/100 — mostly honest</strong> &middot; <strong>Bias 0/100 — no consistent lean</strong></p><p>7 claims graded, 0 not gradable, 3 fell short. In this article only.</p></div>
+<p><strong>4</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>7</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s4"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The fatality rate fell to 1.02 fatalities per 100 million vehicle miles traveled and the number of deaths fell to the lowest number since 2015.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Full-year traffic deaths for 2025 fell to the lowest number since 2019 and the fatality rate fell to 1.10 fatalities per 100 million vehicle miles traveled, the second-lowest yearly figure in US history</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>Deaths fell 5% in the first three months of 2026 but just 0.2% in the second three months.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>bicyclist deaths, which rose 4% to 1,148 last year. In 2023, bicyclist deaths hit their highest figure in more than four decades.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>traffic deaths dropped 2.5% to 16,750 in the first half of the year ... down from 17,175 in the same period last year.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>This year is on pace to be the fifth straight year of declines</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>US traffic deaths jumped 10.8% in 2021 to 43,230, the most in a single year since 2005.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>7</td><td>US traffic deaths jumped 10.8% in 2021 to 43,230, the most in a single year since 2005.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>bicyclist deaths, which rose 4% to 1,148 last year. In 2023, bicyclist deaths hit their highest figure in more than four decades.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>Deaths fell 5% in the first three months of 2026 but just 0.2% in the second three months.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Full-year traffic deaths for 2025 fell to the lowest number since 2019 and the fatality rate fell to 1.10 fatalities per 100 million vehicle miles traveled, the second-lowest yearly figure in US history</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>This year is on pace to be the fifth straight year of declines</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>traffic deaths dropped 2.5% to 16,750 in the first half of the year ... down from 17,175 in the same period last year.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>The fatality rate fell to 1.02 fatalities per 100 million vehicle miles traveled and the number of deaths fell to the lowest number since 2015.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>6</td><td>bicyclist deaths, which rose 4% to 1,148 last year. In 2023, bicyclist deaths hit their highest figure in more than four decades.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>Deaths fell 5% in the first three months of 2026 but just 0.2% in the second three months.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Full-year traffic deaths for 2025 fell to the lowest number since 2019 and the fatality rate fell to 1.10 fatalities per 100 million vehicle miles traveled, the second-lowest yearly figure in US history</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>The fatality rate fell to 1.02 fatalities per 100 million vehicle miles traveled and the number of deaths fell to the lowest number since 2015.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>This year is on pace to be the fifth straight year of declines</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>traffic deaths dropped 2.5% to 16,750 in the first half of the year ... down from 17,175 in the same period last year.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>US traffic deaths jumped 10.8% in 2021 to 43,230, the most in a single year since 2005.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>Full-year traffic deaths for 2025 fell to the lowest number since 2019 and the fatality rate fell to 1.10 fatalities per 100 million vehicle miles traveled, the second-lowest yearly figure in US history</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>Deaths fell 5% in the first three months of 2026 but just 0.2% in the second three months.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>bicyclist deaths, which rose 4% to 1,148 last year. In 2023, bicyclist deaths hit their highest figure in more than four decades.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>traffic deaths dropped 2.5% to 16,750 in the first half of the year ... down from 17,175 in the same period last year.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>This year is on pace to be the fifth straight year of declines</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>US traffic deaths jumped 10.8% in 2021 to 43,230, the most in a single year since 2005.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>The fatality rate fell to 1.02 fatalities per 100 million vehicle miles traveled and the number of deaths fell to the lowest number since 2015.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>1</td><td>The fatality rate fell to 1.02 fatalities per 100 million vehicle miles traveled and the number of deaths fell to the lowest number since 2015.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>4</td><td>Full-year traffic deaths for 2025 fell to the lowest number since 2019 and the fatality rate fell to 1.10 fatalities per 100 million vehicle miles traveled, the second-lowest yearly figure in US history</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>5</td><td>Deaths fell 5% in the first three months of 2026 but just 0.2% in the second three months.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>6</td><td>bicyclist deaths, which rose 4% to 1,148 last year. In 2023, bicyclist deaths hit their highest figure in more than four decades.</td><td><strong>mostly true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>traffic deaths dropped 2.5% to 16,750 in the first half of the year ... down from 17,175 in the same period last year.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>This year is on pace to be the fifth straight year of declines</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>7</td><td>US traffic deaths jumped 10.8% in 2021 to 43,230, the most in a single year since 2005.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The fatality rate fell to 1.02 fatalities per 100 million vehicle miles traveled and the number of deaths fell to the lowest number since 2015.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>FARS 2014-2024 totals consistent with NHTSA table <code>transport.fatal_crashes</code></dd>
+<dt>Independent evidence</dt><dd>NHTSA Q1 report table: H1 2015 = 16,193, H1 2016 = 17,717, H1 2019 = 17,025; H1 2014 rate about 1.01, later years higher<ul class="claim-sources"><li><a href="https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813833">NHTSA DOT HS 813 833</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(fatalities) FROM transport.fatal_crashes GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; traffic deaths dropped 2.5% to 16,750 in the first half of the year ... down from 17,175 in the same period last year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>8,120 + 9,055 = 17,175 (NHTSA H1 2025); 16,750/17,175 = -2.47%. Projection.<ul class="claim-sources"><li><a href="https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813833">NHTSA DOT HS 813 833</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; This year is on pace to be the fifth straight year of declines</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>FARS 2021 43,230 &gt; 2022 42,721 &gt; 2023 41,025 &gt; 2024 39,254; 2025 36,640 (NHTSA projection) <code>transport.fatal_crashes</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813833">NHTSA DOT HS 813 833</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(fatalities) FROM transport.fatal_crashes GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; Full-year traffic deaths for 2025 fell to the lowest number since 2019 and the fatality rate fell to 1.10 fatalities per 100 million vehicle miles traveled, the second-lowest yearly figure in US history</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>2025 36,640 vs 2019 36,355, 2020 39,007; rate 1.10 per NHTSA table. Second-lowest is NHTSA's characterization, not recomputed.<ul class="claim-sources"><li><a href="https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813833">NHTSA DOT HS 813 833</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; Deaths fell 5% in the first three months of 2026 but just 0.2% in the second three months.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NHTSA July report: Q1 -4.3%; -5% appears revised; implied Q2 about -0.2% consistent with H1 total.<ul class="claim-sources"><li><a href="https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813833">NHTSA DOT HS 813 833</a></li><li><a href="https://wiky.com/2026/11/10/us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014/">Reuters via WIKY</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; bicyclist deaths, which rose 4% to 1,148 last year. In 2023, bicyclist deaths hit their highest figure in more than four decades.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NHTSA 2025 sub-category estimate per search coverage: pedalcyclist +4%, 1,148; four-decade claim unverified<ul class="claim-sources"><li><a href="https://wiky.com/2026/11/10/us-traffic-deaths-fall-in-first-half-of-2026-lowest-rate-since-2014/">Reuters via WIKY (same figures, republished)</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Web searches run</dt><dd>NHTSA 2025 bicyclist deaths 1,148 early estimate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; US traffic deaths jumped 10.8% in 2021 to 43,230, the most in a single year since 2005.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>FARS 2021 = 43,230; 2020 = 39,007 (+10.8%) <code>transport.fatal_crashes</code></dd>
+<dt>Independent evidence</dt><dd>2005 about 43,510 per FARS history<ul class="claim-sources"><li><a href="https://crashstats.nhtsa.dot.gov/Api/Public/ViewPublication/813833">NHTSA DOT HS 813 833</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;year&quot;, SUM(fatalities) FROM transport.fatal_crashes GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Notes</h2>
+<ul><li>Lowest-rate-since-2014: H1 2014 rate about 1.01 vs 1.02 now; 2015-2025 higher. Holds.</li><li>Lowest H1 count since 2015: H1 2015 = 16,193; 2016 = 17,717; 2019 = 17,025. Holds.</li><li>Q1 -5% differs from NHTSA's July report (-4.3%), a revision; implied Q2 -0.2% consistent. NHTSA H1 release page returned 403.</li><li>Bicyclist figures confirmed only via secondary coverage. Expert attributions and the cost-study figures were not graded.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 17 rows — 3531 ms</summary><pre><code>SELECT &quot;year&quot;, SUM(fatalities) f, COUNT(*) c FROM transport.fatal_crashes GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

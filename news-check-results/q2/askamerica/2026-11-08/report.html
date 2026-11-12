@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The MedicalDaily article's claims about county overdose deaths, the national decline and Cincinnati-area counties</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The MedicalDaily article's claims about county overdose deaths, the national decline and Cincinnati-area counties</h1>
+<p class="subtitle">CDC VSRR provisional county data (health.cdc_county_overdose_deaths, data as of 2026-10-04), 12 months ending March 2025 vs March 2026</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.medicaldaily.com/us-overdose-deaths-rise-430-counties-480874">https://www.medicaldaily.com/us-overdose-deaths-rise-430-counties-480874</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">County overdose deaths, 12 months ending Mar 2025 vs Mar 2026</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">CDC VSRR via warehouse; counties with an unsuppressed count in both windows</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="312" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="312" viewBox="0 0 412 312" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="312" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="13" style="font-size:13px" font-weight="600" text-anchor="middle">Counties by direction: Axios (article) vs warehouse</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="77" y1="234" x2="390" y2="234" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="69" y="238" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="198.40" x2="390" y2="198.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="69" y="202.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200</text>
+      <line class="grid" x1="77" y1="162.80" x2="390" y2="162.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="69" y="166.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">400</text>
+      <line class="grid" x1="77" y1="127.20" x2="390" y2="127.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="69" y="131.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">600</text>
+      <line class="grid" x1="77" y1="91.60" x2="390" y2="91.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="69" y="95.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">800</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="234" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="234" x2="390" y2="234" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="145" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 145)">Counties</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-rose" class="tick" x="155.25" y="252" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Rose</text>
+      <text id="p1-xtick-fell" class="tick" x="311.75" y="252" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Fell</text>
+    </g>
+    <g id="p1-series-article-axios" class="series">
+      <g class="hover">
+        <title>Rose — Article/Axios: 430</title>
+        <rect id="p1-mark-article-axios-rose" class="bar" x="105.17" y="157.46" width="49.08" height="76.54" fill="#2563eb"/>
+        <rect class="hit" x="105.17" y="56" width="49.08" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Fell — Article/Axios: 842</title>
+        <rect id="p1-mark-article-axios-fell" class="bar" x="261.67" y="84.12" width="49.08" height="149.88" fill="#2563eb"/>
+        <rect class="hit" x="261.67" y="56" width="49.08" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-warehouse" class="series">
+      <g class="hover">
+        <title>Rose — Warehouse: 233</title>
+        <rect id="p1-mark-warehouse-rose" class="bar" x="155.25" y="192.53" width="49.08" height="41.47" fill="#ea580c"/>
+        <rect class="hit" x="155.25" y="56" width="49.08" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Fell — Warehouse: 593</title>
+        <rect id="p1-mark-warehouse-fell" class="bar" x="311.75" y="128.45" width="49.08" height="105.55" fill="#ea580c"/>
+        <rect class="hit" x="311.75" y="56" width="49.08" height="178" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-article-axios" x="116.50" y="278" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-article-axios" class="legend-label" x="132.50" y="287" fill="#1f2328" font-size="11" style="font-size:11px">Article/Axios</text>
+      <rect id="p1-legend-swatch-warehouse" x="220.50" y="278" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-warehouse" class="legend-label" x="236.50" y="287" fill="#1f2328" font-size="11" style="font-size:11px">Warehouse</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:64094/a/5cd822415a3d3b59e47efd1ed94b517d.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><strong>Rating: 1 Pinocchio.</strong> The national figures, the Butler, Hamilton and Campbell numbers, Rio Arriba's rate and the CDC suppression rule match CDC data in the warehouse. The headline '430 counties up, 842 down' is relayed from Axios and does not reproduce: the CDC county file gives 233 up, 593 down, 352 unchanged. 'Nearly half' undeterminable understates it (52% to 63%).</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>4</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>2</strong> partially false &middot; <strong>1</strong> mostly false &middot; <strong>2</strong> not checkable here &middot; <strong>10</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-partially-false"><td>1</td><td>Overdose deaths rose in 430 U.S. counties over the past year even as the national toll fell about 12% to nearly 68,000</td><td><strong>partially false</strong></td></tr><tr class="verdict-mostly-false"><td>2</td><td>Deaths declined in 842 counties, comparing the 12 months ending March 2025 with the 12 months ending March 2026.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-true"><td>3</td><td>That report covered the national estimate of 67,798 deaths for the 12 months ending March 2026, a 12.3% decrease.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The analysis could not determine trends in nearly half of U.S. counties because the CDC withholds exact counts when a county has one to nine deaths</td><td><strong>mostly true</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>Of 42 Ohio counties with a measurable trend, deaths fell in 30, rose in nine, and stayed the same in three</td><td><strong>partially false</strong></td></tr><tr class="verdict-true"><td>6</td><td>In the Cincinnati area, estimated deaths fell 30% in Butler County, from 104 to 73, and 27% in Hamilton County, from 200 to 147. Across the river in Campbell County, Kentucky, deaths rose 31%, from 13 to 17.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>7</td><td>Rio Arriba County, New Mexico, had about 173 overdose deaths per 100,000 residents, the highest calculable rate in the analysis.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>8</td><td>Separate county coroner's data show overdose deaths there peaked at 236 in 2017 before falling to 87 in 2025.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>9</td><td>A University of Arizona researcher has pointed to more potent fentanyl and methamphetamine in Arizona, along with long drive times to treatment in rural areas</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>10</td><td>&quot;The most useful data does more than show us what has happened; it helps us decide what to do next,&quot; said Grant Baldwin, director of the CDC's Division of Overdose Prevention</td><td><strong>not checkable here</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-not-checkable-here"><td>10</td><td>&quot;The most useful data does more than show us what has happened; it helps us decide what to do next,&quot; said Grant Baldwin, director of the CDC's Division of Overdose Prevention</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>9</td><td>A University of Arizona researcher has pointed to more potent fentanyl and methamphetamine in Arizona, along with long drive times to treatment in rural areas</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>8</td><td>Separate county coroner's data show overdose deaths there peaked at 236 in 2017 before falling to 87 in 2025.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>7</td><td>Rio Arriba County, New Mexico, had about 173 overdose deaths per 100,000 residents, the highest calculable rate in the analysis.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>In the Cincinnati area, estimated deaths fell 30% in Butler County, from 104 to 73, and 27% in Hamilton County, from 200 to 147. Across the river in Campbell County, Kentucky, deaths rose 31%, from 13 to 17.</td><td><strong>true</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>Of 42 Ohio counties with a measurable trend, deaths fell in 30, rose in nine, and stayed the same in three</td><td><strong>partially false</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The analysis could not determine trends in nearly half of U.S. counties because the CDC withholds exact counts when a county has one to nine deaths</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>3</td><td>That report covered the national estimate of 67,798 deaths for the 12 months ending March 2026, a 12.3% decrease.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-false"><td>2</td><td>Deaths declined in 842 counties, comparing the 12 months ending March 2025 with the 12 months ending March 2026.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-partially-false"><td>1</td><td>Overdose deaths rose in 430 U.S. counties over the past year even as the national toll fell about 12% to nearly 68,000</td><td><strong>partially false</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-not-checkable-here"><td>10</td><td>&quot;The most useful data does more than show us what has happened; it helps us decide what to do next,&quot; said Grant Baldwin, director of the CDC's Division of Overdose Prevention</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>9</td><td>A University of Arizona researcher has pointed to more potent fentanyl and methamphetamine in Arizona, along with long drive times to treatment in rural areas</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-false"><td>2</td><td>Deaths declined in 842 counties, comparing the 12 months ending March 2025 with the 12 months ending March 2026.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-true"><td>6</td><td>In the Cincinnati area, estimated deaths fell 30% in Butler County, from 104 to 73, and 27% in Hamilton County, from 200 to 147. Across the river in Campbell County, Kentucky, deaths rose 31%, from 13 to 17.</td><td><strong>true</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>Of 42 Ohio counties with a measurable trend, deaths fell in 30, rose in nine, and stayed the same in three</td><td><strong>partially false</strong></td></tr><tr class="verdict-partially-false"><td>1</td><td>Overdose deaths rose in 430 U.S. counties over the past year even as the national toll fell about 12% to nearly 68,000</td><td><strong>partially false</strong></td></tr><tr class="verdict-true"><td>7</td><td>Rio Arriba County, New Mexico, had about 173 overdose deaths per 100,000 residents, the highest calculable rate in the analysis.</td><td><strong>true</strong></td></tr><tr class="verdict-not-checkable-here"><td>8</td><td>Separate county coroner's data show overdose deaths there peaked at 236 in 2017 before falling to 87 in 2025.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-true"><td>3</td><td>That report covered the national estimate of 67,798 deaths for the 12 months ending March 2026, a 12.3% decrease.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The analysis could not determine trends in nearly half of U.S. counties because the CDC withholds exact counts when a county has one to nine deaths</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>2</td><td>Deaths declined in 842 counties, comparing the 12 months ending March 2025 with the 12 months ending March 2026.</td><td><strong>mostly false</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>The analysis could not determine trends in nearly half of U.S. counties because the CDC withholds exact counts when a county has one to nine deaths</td><td><strong>mostly true</strong></td></tr><tr class="verdict-not-checkable-here"><td>8</td><td>Separate county coroner's data show overdose deaths there peaked at 236 in 2017 before falling to 87 in 2025.</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-not-checkable-here"><td>10</td><td>&quot;The most useful data does more than show us what has happened; it helps us decide what to do next,&quot; said Grant Baldwin, director of the CDC's Division of Overdose Prevention</td><td><strong>not checkable here</strong></td></tr><tr class="verdict-partially-false"><td>1</td><td>Overdose deaths rose in 430 U.S. counties over the past year even as the national toll fell about 12% to nearly 68,000</td><td><strong>partially false</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>Of 42 Ohio counties with a measurable trend, deaths fell in 30, rose in nine, and stayed the same in three</td><td><strong>partially false</strong></td></tr><tr class="verdict-true"><td>3</td><td>That report covered the national estimate of 67,798 deaths for the 12 months ending March 2026, a 12.3% decrease.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>In the Cincinnati area, estimated deaths fell 30% in Butler County, from 104 to 73, and 27% in Hamilton County, from 200 to 147. Across the river in Campbell County, Kentucky, deaths rose 31%, from 13 to 17.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>7</td><td>Rio Arriba County, New Mexico, had about 173 overdose deaths per 100,000 residents, the highest calculable rate in the analysis.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>A University of Arizona researcher has pointed to more potent fentanyl and methamphetamine in Arizona, along with long drive times to treatment in rural areas</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (no table carries the measure), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-partially-false"><summary>#1 &middot; <strong>partially false</strong> &mdash; Overdose deaths rose in 430 U.S. counties over the past year even as the national toll fell about 12% to nearly 68,000</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>National: 68,080 predicted vs 77,306 (-11.9%); counties: 233 rose, 593 fell, 352 equal among 1,178 determinable <code>health.cdc_county_overdose_deaths; health.cdc_state_drug_overdose_deaths</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cdc.gov/nchs/nvss/vsrr/drug-overdose-data.htm">CDC VSRR provisional county counts (warehouse)</a></li></ul></dd>
+<dt>Why</dt><dd>National figure true; 430 county count not reproduced (233 in CDC data). Axios page returned 403.</dd>
+<dt>Evidence found and set aside because</dt><dd>The 12% passage in the fetched MedicalDaily pages is the article's own headline blurb, not independent evidence; the 12% is true per the warehouse and the 430 is what is unreproduced.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select sum(case when b.c&gt;a.c then 1 else 0 end) from county a join county b (Mar 2025 vs Mar 2026, non-null)</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#2 &middot; <strong>mostly false</strong> &mdash; Deaths declined in 842 counties, comparing the 12 months ending March 2025 with the 12 months ending March 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>593 counties fell <code>health.cdc_county_overdose_deaths</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>same county join, b.c&lt;a.c</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; That report covered the national estimate of 67,798 deaths for the 12 months ending March 2026, a 12.3% decrease.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>Oct 4 vintage: reported 67,576 vs 77,064 = -12.3%; predicted 68,080 (-11.9%); 67,798 is an earlier release <code>health.cdc_state_drug_overdose_deaths</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select year, month, predicted_value, data_value from health.cdc_state_drug_overdose_deaths where state='US' and indicator='Number of Drug Overdose Deaths'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; The analysis could not determine trends in nearly half of U.S. counties because the CDC withholds exact counts when a county has one to nine deaths</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>Suppression confirmed by footnote; 1,629 of 3,144 (52%) suppressed in Mar 2026; 1,970 of 3,148 (63%) lack a count in either window <code>health.cdc_county_overdose_deaths</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select count(*), sum(case when provisional_drug_overdose is null then 1 else 0 end) from health.cdc_county_overdose_deaths where year='2026' and month='3'</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; Of 42 Ohio counties with a measurable trend, deaths fell in 30, rose in nine, and stayed the same in three</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>38 Ohio counties: 28 fell, 7 rose, 3 same <code>health.cdc_county_overdose_deaths</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>same county join filtered to st_abbrev='OH'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; In the Cincinnati area, estimated deaths fell 30% in Butler County, from 104 to 73, and 27% in Hamilton County, from 200 to 147. Across the river in Campbell County, Kentucky, deaths rose 31%, from 13 to 17.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>Butler 104-&gt;73 (-29.8%), Hamilton 200-&gt;147 (-26.5%), Campbell 13-&gt;17 (+30.8%) <code>health.cdc_county_overdose_deaths</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select st_abbrev, countyname, year, provisional_drug_overdose from health.cdc_county_overdose_deaths where month='3' and year in ('2025','2026') and fips in ('39017','39061','21037')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Rio Arriba County, New Mexico, had about 173 overdose deaths per 100,000 residents, the highest calculable rate in the analysis.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>69 deaths / 40,070 = 172.2 per 100,000; highest among counties with 1,000+ residents and unsuppressed counts <code>health.cdc_county_overdose_deaths; census.acs_population</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select max(count/pop*100000) from county join acs_population 2024</code></pre></details>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#8 &middot; <strong>not checkable here</strong> &mdash; Separate county coroner's data show overdose deaths there peaked at 236 in 2017 before falling to 87 in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.axios.com/local/north-of-cincy/2026/11/03/drug-overdose-deaths-butler-warren-county-ohio-data">Axios Cincinnati (HTTP 403)</a></li></ul></dd>
+<dt>Why</dt><dd>Rests on Axios Cincinnati, which returned HTTP 403; catalog search found no coroner data (unmatched term: coroner).</dd>
+<dt>Warehouse searched for</dt><dd>Butler County Ohio coroner overdose deaths 2017 2025</dd>
+<dt>Web searches run</dt><dd>Butler County Ohio coroner overdose deaths 2017 peak 236</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; A University of Arizona researcher has pointed to more potent fentanyl and methamphetamine in Arizona, along with long drive times to treatment in rural areas</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NPR: Beth Meyerson cites more potent fentanyl and methamphetamine and over two hours' drive time for rural opioid treatment<ul class="claim-sources"><li><a href="https://www.apr.org/2026-05-28/u-s-street-drug-deaths-keep-dropping-but-some-western-states-see-deadly-overdose-surge">NPR via Alabama Public Radio, May 28 2026</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#10 &middot; <strong>not checkable here</strong> &mdash; &quot;The most useful data does more than show us what has happened; it helps us decide what to do next,&quot; said Grant Baldwin, director of the CDC's Division of Overdose Prevention</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://cdc.gov/media/releases/2026/cdc-launches-new-overdose-prevention-data-channel.html">CDC release (HTTP 403)</a></li></ul></dd>
+<dt>Why</dt><dd>CDC release returned HTTP 403; the earlier MedicalDaily article carries a shorter version of the quote. Catalog has no press-statement data.</dd>
+<dt>Warehouse searched for</dt><dd>CDC press statement quote</dd>
+<dt>Web searches run</dt><dd>Grant Baldwin CDC overdose prevention data channel quote</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>5%</strong> &mdash; Appears only in a link title to a different MedicalDaily story (heart valve death rates), not a claim of this article</li></ul>
+</section>
+<section>
+<h2>Exclusions disclosed</h2>
+<p>My county queries applied the predicates a.c IS NOT NULL and b.c IS NOT NULL: they excluded every county whose count is suppressed (1-9 deaths) in either window. That excluded 1,970 of 3,148 counties, leaving 1,178 for the up/down tally (233 up, 593 down, 352 equal). The Ohio tally excluded the suppressed Ohio counties through the same rule, leaving 38. The March 2026 suppression count used provisional_drug_overdose IS NULL, which counted rather than dropped the 1,629 of 3,144 suppressed counties. The Rio Arriba rank excluded suppressed counties and counties under 1,000 residents. Including suppressed counties gives no trend to compute, so no alternative headline exists.</p>
+</section>
+<section>
+<h2>Misleading framing</h2>
+<p>The headline presents 430 rising counties as established though the figure could not be reproduced and covers only counties with reportable counts. The article does caveat small numbers and provisional data. The 12-month windows end in March, so the 'past year' is not calendar 2025.</p>
+</section>
+<section>
+<h2>Limits</h2>
+<p>Axios pages, the CDC press release and the CDC dashboard returned HTTP 403. NPR (via APR) and the article's other linked MedicalDaily pages were read; none contradicts the checked figures. The warehouse has no coroner data.</p>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>10 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 1432 ms</summary><pre><code>select * from health.cdc_county_overdose_deaths fetch first 3 rows only</code></pre></details>
+<details class="sqltoggle"><summary>query — 17 rows — 1783 ms</summary><pre><code>select &quot;year&quot;,&quot;month&quot;, indicator, predicted_value, data_value from health.cdc_state_drug_overdose_deaths where state='US' and indicator like 'Number of Drug Overdose Deaths' and &quot;year&quot; in ('2025','2026') fetch first 30 rows only</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1144 ms</summary><pre><code>select count(*) total_counties, sum(case when a.c is not null and b.c is not null then 1 else 0 end) both_known, sum(case when a.c is not null and b.c is not null and b.c&gt;a.c then 1 else 0 end) rose, sum(case when a.c is not null and b.c is not null and b.c&lt;a.c then 1 else 0 end) fell, sum(case when a.c is not null and b.c is not null and b.c=a.c then 1 else 0 end) same, sum(case when a.c is null or b.c is null then 1 else 0 end) unknown from (select fips, cast(provisional_drug_overdose as double) c from health.cdc_county_overdose_deaths where monthendingdate='2025-03-31') a join (select fips, cast(provisional_drug_overdose as double) c from health.cdc_county_overdose_deaths where monthendingdate='2026-03-31') b on a.fips=b.fips</code></pre></details>
+<details class="sqltoggle"><summary>query — 763 ms</summary><pre><code>select st_abbrev, countyname, fips, monthendingdate, provisional_drug_overdose from health.cdc_county_overdose_deaths where monthendingdate in ('2025-03-31','2026-03-31') and ((st_abbrev='OH' and countyname in ('Butler','Hamilton')) or (st_abbrev='KY' and countyname='Campbell') or (st_abbrev='NM' and countyname='Rio Arriba')) order by fips, monthendingdate</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 1093 ms</summary><pre><code>select count(*) total_counties, sum(case when a.c is not null and b.c is not null and b.c&gt;a.c then 1 else 0 end) rose, sum(case when a.c is not null and b.c is not null and b.c&lt;a.c then 1 else 0 end) fell, sum(case when a.c is not null and b.c is not null and b.c=a.c then 1 else 0 end) same_, sum(case when a.c is null or b.c is null then 1 else 0 end) suppressed_either from (select fips, cast(provisional_drug_overdose as double) c from health.cdc_county_overdose_deaths where &quot;year&quot;='2025' and &quot;month&quot;='3') a join (select fips, cast(provisional_drug_overdose as double) c from health.cdc_county_overdose_deaths where &quot;year&quot;='2026' and &quot;month&quot;='3') b on a.fips=b.fips</code></pre></details>
+<details class="sqltoggle"><summary>query — 8 rows — 694 ms</summary><pre><code>select st_abbrev, countyname, fips, &quot;year&quot;, provisional_drug_overdose from health.cdc_county_overdose_deaths where &quot;month&quot;='3' and &quot;year&quot; in ('2025','2026') and ((st_abbrev='OH' and countyname in ('Butler','Hamilton')) or (st_abbrev='KY' and countyname='Campbell') or (st_abbrev='NM' and countyname='Rio Arriba')) order by fips, &quot;year&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 2107 ms</summary><pre><code>select sum(case when b.c&gt;a.c then 1 else 0 end) rose, sum(case when b.c&lt;a.c then 1 else 0 end) fell, sum(case when b.c=a.c then 1 else 0 end) same_, count(*) n from (select fips, cast(provisional_drug_overdose as double) c from health.cdc_county_overdose_deaths where &quot;year&quot;='2025' and &quot;month&quot;='3' and st_abbrev='OH' and provisional_drug_overdose is not null) a join (select fips, cast(provisional_drug_overdose as double) c from health.cdc_county_overdose_deaths where &quot;year&quot;='2026' and &quot;month&quot;='3' and st_abbrev='OH' and provisional_drug_overdose is not null) b on a.fips=b.fips</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 592 ms</summary><pre><code>select count(*) n, sum(case when provisional_drug_overdose is null then 1 else 0 end) supp from health.cdc_county_overdose_deaths where &quot;year&quot;='2026' and &quot;month&quot;='3'</code></pre></details>
+<details class="sqltoggle"><summary>query — 3 rows — 2974 ms</summary><pre><code>select &quot;year&quot;, total_population from census.acs_population where county_fips='35039' order by &quot;year&quot; desc fetch first 3 rows only</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 3823 ms</summary><pre><code>select max(cast(provisional_drug_overdose as double)/p.total_population*100000) mx from health.cdc_county_overdose_deaths d join (select county_fips, total_population from census.acs_population where &quot;year&quot;='2024') p on p.county_fips=lpad(d.fips,5,'0') where d.&quot;year&quot;='2026' and d.&quot;month&quot;='3' and d.provisional_drug_overdose is not null and p.total_population&gt;=1000</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

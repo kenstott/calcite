@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Fact-check: interest on the debt cost $1.4 trillion</title>
+<style>body{font-family:sans-serif;max-width:900px;margin:2em auto;padding:0 1em;line-height:1.5}table{border-collapse:collapse}td,th{border:1px solid #aaa;padding:4px 8px;font-size:14px}img{max-width:100%}</style></head><body>
+<h1>Fact-check: "Interest on the debt cost $1.4 trillion last year, audit finds"</h1>
+<img src="agent-dashboard.png" alt="Dashboard">
+<h2>Mostly accurate, with one framing problem: 1 Pinocchio</h2>
+<p>The headline figure checks out: gross interest on federal debt was <strong>$1,360 billion</strong> in FY2026 (Treasury), and GAO's audit (GAO-27-108795, released 2026-11-09) reports $1.4 trillion, about $1.1 trillion of it on debt held by the public. The piece itself says the remainder was credited to trust funds. Debt of $40.2 trillion, the $2.5 trillion one-year rise, the doubling in a decade, and the debt-limit and continuing-resolution background all verify.</p>
+<ul>
+<li><strong>Misleading framing:</strong> "cost $1.4 trillion" counts about <strong>$292 billion</strong> of intragovernmental interest that the government pays to itself. Net interest in Treasury's Monthly Treasury Statement is <strong>$1,051.8 billion</strong> (up 8.4% from $970.4 billion). The headline invites a reader to treat $1.4T as the budget burden; it is the gross measure.</li>
+<li><strong>Not confirmed:</strong> CBO net interest of "$1.14 trillion" (CBO's PDF returned HTML to my client, HTTP 403 on the page; I confirmed only the +$115 billion / 11% rise and the rank behind Social Security). The two Dickerson quotes and Treasury's non-response are interview material not checkable here.</li>
+<li><strong>Debt-limit dates:</strong> NTU's published projection (Dickerson, 2026-08-20) says most likely May 2027 (range Feb-Jul 2027) and X-date February 2028. The article's February 2027 and late-November 2027 are inconsistent with that piece; they may be an updated or interview-stated scenario. I could not verify them.</li>
+<li><strong>What would change the rating:</strong> a CBO figure far from $1.14T, or an NTU update supporting the Feb/Nov 2027 dates, would move it to a clean 0-1; the gross-versus-net framing keeps it at 1.</li></ul>
+<h2>Claim table</h2>
+<table><tr><th>Claim</th><th>Finding</th><th>Verdict</th></tr>
+<tr><td>Interest cost $1.4T in FY2026 per GAO audit</td><td>Treasury interest_expense FY2026: public issues 1,068.5B + government account series 291.9B = 1,360.4B. GAO-27-108795 reports $1.4T</td><td>True (gross)</td></tr>
+<tr><td>~$1.1T to bondholders, rest to trust funds</td><td>1,068.5B public; 291.9B intragovernmental</td><td>True</td></tr>
+<tr><td>GAO found schedules fairly presented, controls effective</td><td>Per GAO product page, as of 9/30/2026</td><td>True</td></tr>
+<tr><td>Debt $40.2T at Sept 30</td><td>Debt to the Penny: $40,171.8B</td><td>True</td></tr>
+<tr><td>Up about $2.5T in a year</td><td>37,637.6B to 40,171.8B = +2,534.3B</td><td>True</td></tr>
+<tr><td>About double a decade earlier ($19.6T)</td><td>2016-09-30: $19,573.4B; ratio 2.05 (GAO: 105%)</td><td>True</td></tr>
+<tr><td>Public-held interest ~$392B in FY2021 to ~$1.1T</td><td>GAO: ~$392B; Treasury FY2021 public issues: 389.0B</td><td>True</td></tr>
+<tr><td>Rise due to debt and higher rates</td><td>GAO wording matches; CBO says the same</td><td>True</td></tr>
+<tr><td>CBO net interest $1.14T, second to Social Security</td><td>Rank confirmed (AAF summary of CBO); dollar figure not seen. Treasury net is $1.05T (different measure)</td><td>Partly confirmed</td></tr>
+<tr><td>CBO FY2026 deficit about $2T</td><td>CBO MBR: $2.0T, +$217B</td><td>True</td></tr>
+<tr><td>CBO average deficits above $2.4T next decade</td><td>CRFB summary of CBO Feb 2026 baseline: $24.4T over 2027-2036, about $2.44T per year</td><td>True</td></tr>
+<tr><td>CR (P.L. 119-103) funds government through Dec 11</td><td>CRS R49353; signed 2026-09-02</td><td>True</td></tr>
+<tr><td>Limit $41.1T set July 2025 (OBBBA, +$5T)</td><td>$41.104T per NTU/GAO</td><td>True</td></tr>
+<tr><td>Eight suspensions since 2013 (CRFB)</td><td>CRFB and CRS both say eight</td><td>True</td></tr>
+<tr><td>Dickerson: limit reached Feb 2027, resources exhausted end-Nov 2027</td><td>Conflicts with NTU Aug 2026 projection (May 2027; X-date Feb 2028)</td><td>Unverified, tension</td></tr>
+<tr><td>Dickerson and Ditch quotes; Treasury did not respond</td><td>Interview material, no published source found</td><td>Not checkable here</td></tr></table>
+<h2>Method and caveats</h2>
+<p>Treasury Fiscal Data API queries were run live (debt_to_penny, interest_expense, mts_table_5 and 9). interest_expense sums rows by category at record_date 9/30; the FY2025 sum (1,220.0B) matches GAO's $1.2T. The CBO source could not be read directly, and the article body was read through a summarizing fetch tool, not verbatim, so wording-level checks are limited.</p>
+<h2>Sources</h2><ul>
+<li>https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny and /v2/accounting/od/interest_expense, /v1/accounting/mts/mts_table_5, mts_table_9</li>
+<li>https://www.gao.gov/products/gao-27-108795 and https://www.gao.gov/products/GAO-26-107908</li>
+<li>https://www.cbo.gov/publication/61986; https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/; https://www.crfb.org/papers/cbos-february-2026-budget-and-economic-outlook</li>
+<li>https://www.ntu.org/publications/detail/projecting-the-debt-limit</li>
+<li>https://www.everycrsreport.com/reports/R49353.html; https://www.everycrsreport.com/reports/IN11829.html; https://www.crfb.org/papers/qa-everything-you-should-know-about-debt-ceiling</li>
+<li>Article: https://yournews.com/2026/11/11/7262862/interest-on-the-debt-cost-1-4-trillion-last-year-audit/ (original Center Square)</li></ul>
+</body></html>

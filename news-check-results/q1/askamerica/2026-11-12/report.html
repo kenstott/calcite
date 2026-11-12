@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Axios credit-card-debt article's claims about record balances, delinquency and the income gap (Axios text not read; graded on CNBC copy) are accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t1-s4:checked ~ table tbody.s0{display:none}
+#s2-t1-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"]{color:var(--link)}
+#s2-t1-s4:checked ~ table label[for="s2-t1-s4"] .srtcue{opacity:1}
+#s2-t1-s4:checked ~ .srtreset{display:inline-block}
+#s2-t4-s1:checked ~ table tbody.s0{display:none}
+#s2-t4-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"]{color:var(--link)}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"] .srtcue{opacity:1}
+#s2-t4-s1:checked ~ .srtreset{display:inline-block}
+#s2-t4-s2:checked ~ table tbody.s0{display:none}
+#s2-t4-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"]{color:var(--link)}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"] .srtcue{opacity:1}
+#s2-t4-s2:checked ~ .srtreset{display:inline-block}
+#s2-t4-s3:checked ~ table tbody.s0{display:none}
+#s2-t4-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"]{color:var(--link)}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"] .srtcue{opacity:1}
+#s2-t4-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Axios credit-card-debt article's claims about record balances, delinquency and the income gap (Axios text not read; graded on CNBC copy) are accurate.</h1>
+<p class="subtitle">Primary sources: NY Fed Q3 2026 Household Debt and Credit release and Liberty Street post (Nov 10, 2026); TransUnion Q3 2026 CIIR (Nov 5, 2026); LendingTree. AskAmerica warehouse has no matching table.</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.axios.com/2026/11/10/credit-card-debt-record-2026-delinquency-income-gap">https://www.axios.com/2026/11/10/credit-card-debt-record-2026-delinquency-income-gap</a></p>
+</header>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Read the Axios article text</strong>: Axios returned HTTP 403 to both the engine fetch and WebFetch. Its text was never read. Claims were extracted from the CNBC story of the same NY Fed release (the engine's named copy), so Axios's own wording, quotes and any extra claims are ungraded.</li></ul>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 95/100 — honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>5 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>4</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s4"><table><thead><tr><th><label class="srth" for="s2-t1-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t1-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s4">Evidence it rests on<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Collectively, credit card balances climbed by $22 billion in the third quarter to a record $1.29 trillion, according to the Federal Reserve Bank of New York's latest household debt report.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans are increasingly turning to credit cards as financial pressures mount, new reports show.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Balances are up 4.2% from a year earlier.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Total household debt, including mortgages, auto loans and student loans, also expanded by $334 billion for the July-to-September period to a record $19.1 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>Costs for goods and services rose more than expected again in October, the Bureau of Labor Statistics also reported Tuesday.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>11</td><td>Costs for goods and services rose more than expected again in October, the Bureau of Labor Statistics also reported Tuesday.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans are increasingly turning to credit cards as financial pressures mount, new reports show.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Total household debt, including mortgages, auto loans and student loans, also expanded by $334 billion for the July-to-September period to a record $19.1 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Balances are up 4.2% from a year earlier.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Collectively, credit card balances climbed by $22 billion in the third quarter to a record $1.29 trillion, according to the Federal Reserve Bank of New York's latest household debt report.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>9</td><td>Americans are increasingly turning to credit cards as financial pressures mount, new reports show.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Balances are up 4.2% from a year earlier.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Collectively, credit card balances climbed by $22 billion in the third quarter to a record $1.29 trillion, according to the Federal Reserve Bank of New York's latest household debt report.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>Costs for goods and services rose more than expected again in October, the Bureau of Labor Statistics also reported Tuesday.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Total household debt, including mortgages, auto loans and student loans, also expanded by $334 billion for the July-to-September period to a record $19.1 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>9</td><td>Americans are increasingly turning to credit cards as financial pressures mount, new reports show.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Balances are up 4.2% from a year earlier.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Total household debt, including mortgages, auto loans and student loans, also expanded by $334 billion for the July-to-September period to a record $19.1 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>Costs for goods and services rose more than expected again in October, the Bureau of Labor Statistics also reported Tuesday.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>1</td><td>Collectively, credit card balances climbed by $22 billion in the third quarter to a record $1.29 trillion, according to the Federal Reserve Bank of New York's latest household debt report.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>1</td><td>Collectively, credit card balances climbed by $22 billion in the third quarter to a record $1.29 trillion, according to the Federal Reserve Bank of New York's latest household debt report.</td><td><strong>true</strong> &middot; central claim</td><td>none cited</td></tr><tr class="verdict-mostly-true"><td>9</td><td>Americans are increasingly turning to credit cards as financial pressures mount, new reports show.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>none cited</td></tr><tr class="verdict-true"><td>2</td><td>Balances are up 4.2% from a year earlier.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>3</td><td>Total household debt, including mortgages, auto loans and student loans, also expanded by $334 billion for the July-to-September period to a record $19.1 trillion.</td><td><strong>true</strong></td><td>none cited</td></tr><tr class="verdict-true"><td>11</td><td>Costs for goods and services rose more than expected again in October, the Bureau of Labor Statistics also reported Tuesday.</td><td><strong>true</strong></td><td>none cited</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Claims by Ted Rossman — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence it rests on</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>12</td><td>&quot;Higher prices and higher rates have pushed more people into debt,&quot; said Ted Rossman, principal consumer finance analyst at Money Management International.</td><td><strong>not checkable here</strong> &middot; central claim</td><td>none cited</td></tr>
+</tbody></table>
+<h3>Claims by Kyle Moore — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>0 claims graded, 1 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> not checkable here &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence it rests on</th></tr></thead><tbody>
+<tr class="verdict-not-checkable-here"><td>13</td><td>&quot;The throughline connecting so many of Tuesday's outcomes was a recognition that the American economy is failing American families,&quot; Moore said.</td><td><strong>not checkable here</strong> &middot; central claim</td><td>none cited</td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>5</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>6</strong> assertions checked</p>
+<input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s0" checked><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s1"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s2"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s3"><table><thead><tr><th><label class="srth" for="s2-t4-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t4-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t4-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>4</td><td>The average credit card balance per consumer now stands at $6,678, up 2.4% year over year, a separate quarterly credit industry insights report from TransUnion found.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>The number of people with credit cards rose 2% to 178 million from 174.8 million.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Over time, an increasing share of new credit cards has gone to borrowers with lower incomes and credit scores, and &quot;those accounts are now showing higher levels of distress,&quot; the New York Fed researchers said in a corresponding blog post.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>7</td><td>Macroeconomic headwinds — namely high inflation and rising borrowing costs — have squeezed consumers, with inflation outpacing wage growth for low-income brackets.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>8</td><td>The gap in credit card delinquency between lower- and higher-income areas has widened since 2022.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>10</td><td>the average interest rate on a new credit card offer is about 24%, according to data from LendingTree</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>10</td><td>the average interest rate on a new credit card offer is about 24%, according to data from LendingTree</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>8</td><td>The gap in credit card delinquency between lower- and higher-income areas has widened since 2022.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>7</td><td>Macroeconomic headwinds — namely high inflation and rising borrowing costs — have squeezed consumers, with inflation outpacing wage growth for low-income brackets.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Over time, an increasing share of new credit cards has gone to borrowers with lower incomes and credit scores, and &quot;those accounts are now showing higher levels of distress,&quot; the New York Fed researchers said in a corresponding blog post.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>The number of people with credit cards rose 2% to 178 million from 174.8 million.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>The average credit card balance per consumer now stands at $6,678, up 2.4% year over year, a separate quarterly credit industry insights report from TransUnion found.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>7</td><td>Macroeconomic headwinds — namely high inflation and rising borrowing costs — have squeezed consumers, with inflation outpacing wage growth for low-income brackets.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Over time, an increasing share of new credit cards has gone to borrowers with lower incomes and credit scores, and &quot;those accounts are now showing higher levels of distress,&quot; the New York Fed researchers said in a corresponding blog post.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>The average credit card balance per consumer now stands at $6,678, up 2.4% year over year, a separate quarterly credit industry insights report from TransUnion found.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>10</td><td>the average interest rate on a new credit card offer is about 24%, according to data from LendingTree</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>8</td><td>The gap in credit card delinquency between lower- and higher-income areas has widened since 2022.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>5</td><td>The number of people with credit cards rose 2% to 178 million from 174.8 million.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>5</td><td>The number of people with credit cards rose 2% to 178 million from 174.8 million.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>4</td><td>The average credit card balance per consumer now stands at $6,678, up 2.4% year over year, a separate quarterly credit industry insights report from TransUnion found.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>6</td><td>Over time, an increasing share of new credit cards has gone to borrowers with lower incomes and credit scores, and &quot;those accounts are now showing higher levels of distress,&quot; the New York Fed researchers said in a corresponding blog post.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>7</td><td>Macroeconomic headwinds — namely high inflation and rising borrowing costs — have squeezed consumers, with inflation outpacing wage growth for low-income brackets.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>8</td><td>The gap in credit card delinquency between lower- and higher-income areas has widened since 2022.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>10</td><td>the average interest rate on a new credit card offer is about 24%, according to data from LendingTree</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t4-s0">reset order</label>
+<p class="note">Verdicts: true, mostly true, partially false, mostly false, false, unsupported (asserted as fact with no evidence offered and none found), not checkable here (an opinion or personal attack no evidence can test), stale vintage (the article cites a release this corpus has not loaded — a freshness gap, not a falsehood). Honesty is the share of a party's checkable claims that held up (true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported 0.25, false 0); a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Collectively, credit card balances climbed by $22 billion in the third quarter to a record $1.29 trillion, according to the Federal Reserve Bank of New York's latest household debt report.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NY Fed press release 2026-11-10: card balances +$22B in Q3, $1.285T total<ul class="claim-sources"><li><a href="https://www.newyorkfed.org/newsevents/news/research/2026/20261110">NY Fed press release, Nov 10 2026</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>Warehouse has no NY Fed household-debt table; graded on the primary release.</dd>
+<dt>Web searches run</dt><dd>search_catalog household debt credit card balances New York Fed</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Balances are up 4.2% from a year earlier.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NY Fed: +$52B annual change on $1.285T total, so $52B/$1.233T = 4.2%<ul class="claim-sources"><li><a href="https://www.newyorkfed.org/newsevents/news/research/2026/20261110">NY Fed press release</a></li></ul></dd>
+<dt>Why</dt><dd>Arithmetic of published components.</dd>
+<dt>Web searches run</dt><dd>search_catalog household debt credit card balances New York Fed</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Total household debt, including mortgages, auto loans and student loans, also expanded by $334 billion for the July-to-September period to a record $19.1 trillion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NY Fed: +$334B (1.8%) to $19.105T<ul class="claim-sources"><li><a href="https://www.newyorkfed.org/newsevents/news/research/2026/20261110">NY Fed press release</a></li></ul></dd>
+<dt>Why</dt><dd>Matches primary release.</dd>
+<dt>Web searches run</dt><dd>search_catalog household debt New York Fed</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The average credit card balance per consumer now stands at $6,678, up 2.4% year over year, a separate quarterly credit industry insights report from TransUnion found.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>TransUnion Q3 2026 CIIR: average debt per borrower $6,678 vs $6,523 (+2.4%)<ul class="claim-sources"><li><a href="https://newsroom.transunion.com/q3-2026-ciir/">TransUnion Q3 2026 CIIR</a></li></ul></dd>
+<dt>Why</dt><dd>Matches primary release.</dd>
+<dt>Web searches run</dt><dd>search_catalog credit card delinquency</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; The number of people with credit cards rose 2% to 178 million from 174.8 million.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>TransUnion: number of consumers carrying a balance 178.0M vs 174.8M (+1.8%)<ul class="claim-sources"><li><a href="https://newsroom.transunion.com/q3-2026-ciir/">TransUnion Q3 2026 CIIR</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>TransUnion's metric is consumers carrying a balance, not all people with credit cards (TransUnion counts 590.5 million bankcards).</dd>
+<dt>Web searches run</dt><dd>TransUnion Q3 2026 CIIR</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Over time, an increasing share of new credit cards has gone to borrowers with lower incomes and credit scores, and &quot;those accounts are now showing higher levels of distress,&quot; the New York Fed researchers said in a corresponding blog post.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Liberty Street post: during the pandemic an increasing share of new cards went to lower-income, lower-score borrowers; those accounts show higher distress. The post says the share was elevated 2020-2023 and that cards issued since early 2023 went to higher-score borrowers, so 'over time' is a simplification.<ul class="claim-sources"><li><a href="https://libertystreeteconomics.newyorkfed.org/2026/11/a-look-at-the-wider-divide-in-credit-card-delinquency-by-income">Liberty Street Economics, Nov 10 2026</a></li></ul></dd>
+<dt>Why</dt><dd>Quote matches; time framing simplified.</dd>
+<dt>Web searches run</dt><dd>Liberty Street credit card delinquency income</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Macroeconomic headwinds — namely high inflation and rising borrowing costs — have squeezed consumers, with inflation outpacing wage growth for low-income brackets.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Same sentence appears in the Liberty Street post<ul class="claim-sources"><li><a href="https://libertystreeteconomics.newyorkfed.org/2026/11/a-look-at-the-wider-divide-in-credit-card-delinquency-by-income">Liberty Street Economics, Nov 10 2026</a></li></ul></dd>
+<dt>Why</dt><dd>Verbatim from the source.</dd>
+<dt>Web searches run</dt><dd>Liberty Street credit card delinquency income</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; The gap in credit card delinquency between lower- and higher-income areas has widened since 2022.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Liberty Street chart title: 'The Credit Card Delinquency Gap Between Low-Income and High-Income Areas Widened After 2022'. Measure is flow into serious delinquency by zip-code income quartile, not household income.<ul class="claim-sources"><li><a href="https://libertystreeteconomics.newyorkfed.org/2026/11/a-look-at-the-wider-divide-in-credit-card-delinquency-by-income">Liberty Street Economics, Nov 10 2026</a></li></ul></dd>
+<dt>Why</dt><dd>Supported; neighborhood-level, not individual income.</dd>
+<dt>Web searches run</dt><dd>Liberty Street credit card delinquency income</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#9 &middot; <strong>mostly true</strong> &mdash; Americans are increasingly turning to credit cards as financial pressures mount, new reports show.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Balances grew 4.2% y/y and TransUnion counts record originations, but the NY Fed says card delinquency flow improved (7.05% to 6.87%) and Rossman says growth is slowing.<ul class="claim-sources"><li><a href="https://www.newyorkfed.org/newsevents/news/research/2026/20261110">NY Fed press release</a></li><li><a href="https://newsroom.transunion.com/q3-2026-ciir/">TransUnion Q3 2026 CIIR</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>Balance growth is real, but the same reports show card delinquency transitions easing and growth slowing; 'financial pressures mount' for cards is only partly supported.</dd>
+<dt>Why</dt><dd>Selective framing.</dd>
+<dt>Web searches run</dt><dd>NY Fed Q3 2026 household debt delinquency</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; the average interest rate on a new credit card offer is about 24%, according to data from LendingTree</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>LendingTree: average APR on a new card offer 23.96% (up from 23.82% prior month); average across accounts accruing interest is 22.36% (Q3 2026), a different measure<ul class="claim-sources"><li><a href="https://www.lendingtree.com/credit-cards/study/average-credit-card-interest-rate-in-america/">LendingTree average credit card interest rate</a></li></ul></dd>
+<dt>Why</dt><dd>Matches the primary page; applies to new offers, not rates actually paid.</dd>
+<dt>Web searches run</dt><dd>LendingTree average credit card interest rate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; Costs for goods and services rose more than expected again in October, the Bureau of Labor Statistics also reported Tuesday.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CNBC CPI report (same day): CPI +0.4% vs 0.3% expected; core +0.3% vs 0.2%. BLS page itself not fetched; BLS gave no annual rate for October.<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report Oct 2026</a></li></ul></dd>
+<dt>Why</dt><dd>Secondary report of a BLS release; consistent with Yahoo copy.</dd>
+<dt>Web searches run</dt><dd>October 2026 CPI</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#12 &middot; <strong>not checkable here</strong> &mdash; &quot;Higher prices and higher rates have pushed more people into debt,&quot; said Ted Rossman, principal consumer finance analyst at Money Management International.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Ted Rossman — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://finance.yahoo.com/economy/policy/articles/americans-owe-record-1-29-034502857.html">Yahoo Finance copy quoting Rossman</a></li></ul></dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: An interpretive judgment about causes that no data series isolates; meant as a figurative summary, and the same quote appears in the Yahoo copy.</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>An interpretive judgment about causes that no data series isolates; meant as a figurative summary, and the same quote appears in the Yahoo copy.</dd>
+<dt>Web searches run</dt><dd>Ted Rossman credit card debt higher prices higher rates</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-not-checkable-here"><summary>#13 &middot; <strong>not checkable here</strong> &mdash; &quot;The throughline connecting so many of Tuesday's outcomes was a recognition that the American economy is failing American families,&quot; Moore said.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Kyle Moore — what they assert, as the piece reports it</dd>
+<dt>Asserts</dt><dd>an opinion — not checkable: A partisan interpretation of voter motives, figurative and untestable.</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Why</dt><dd>A partisan interpretation of voter motives, figurative and untestable.</dd>
+<dt>Web searches run</dt><dd>Kyle Moore Century Foundation midterm economy</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 2970 ms</summary><pre><code>select series, count(*) n, max(&quot;date&quot;) b from econ.fred_indicators where series in ('DRCCLACBS','CCLACBW027SBOG','REVOLSL') and &quot;date&quot;&gt;='2025-01-01' group by series</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
