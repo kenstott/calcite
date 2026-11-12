@@ -80,6 +80,26 @@ final class ClaimScoring {
         Pattern.CASE_INSENSITIVE);
 
     private static final String SUBJECT_PREFIX = GROUP_SUBJECT + ":";
+    /** Wording by which a sentence hands its figure to a source. */
+    static final Pattern ATTRIBUTION_PHRASE = Pattern.compile(
+        "(?i)\\b(according to|data (?:show|shows|showed|shown)|citing|cited by|"
+        + "as reported by|(?:report|study|survey|analysis|audit|poll|release)s? "
+        + "(?:found|finds|show|shows|showed|estimates|estimated))\\b");
+    /** A named organization estimating, forecasting, projecting or expecting something. */
+    static final Pattern ATTRIBUTION_ORG = Pattern.compile(
+        "\\b[A-Z][A-Za-z&.]+(?: [A-Z][A-Za-z&.]+){0,3} "
+        + "(?:estimates|estimated|forecasts|projects|projected|expects)\\b");
+
+    /** The attribution wording in an assertion, or null when it names no source. */
+    static String attribution(String assertion) {
+        Matcher m = ATTRIBUTION_PHRASE.matcher(assertion);
+        if (m.find()) {
+            return m.group();
+        }
+        m = ATTRIBUTION_ORG.matcher(assertion);
+        return m.find() ? m.group() : null;
+    }
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ClaimScoring() {
@@ -684,6 +704,17 @@ final class ClaimScoring {
                     if (!r.isInt() || ref < 1 || ref > claims.size() || ref == n) {
                         problems.add("claim " + n + " has `rests_on` entry " + r + ": each "
                             + "entry is the number (1-" + claims.size() + ") of another claim");
+                    }
+                }
+                if (restsOn.size() == 0 && GROUP_AUTHOR.equals(g)) {
+                    String cites = attribution(c.path("assertion").asText(""));
+                    if (cites != null) {
+                        problems.add("claim " + n + " attributes its figure to a source ('"
+                            + cites + "') but has `rests_on`: []. A figure the piece relays "
+                            + "from a source MUST be grouped `" + GROUP_FIDELITY + "`. When the "
+                            + "piece also asserts it as its own point, keep this claim and set "
+                            + "`rests_on` to the number of the `" + GROUP_FIDELITY
+                            + "` claim that carries the source's figure");
                     }
                 }
                 if (restsOn.size() > 0) {

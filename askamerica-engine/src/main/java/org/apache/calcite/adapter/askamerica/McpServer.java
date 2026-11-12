@@ -9591,8 +9591,11 @@ public class McpServer {
                 .append(ClaimScoring.isCentral(c) ? " &middot; central claim" : "")
                 .append("</td>");
             if (ClaimScoring.isScored(block)) {
-                rows.append("<td>").append(restsOn.isEmpty() ? "none cited"
-                    : ReportPage.esc(restsOn + (support.isEmpty() ? "" : " — " + support)))
+                String cited = restsOn.isEmpty() ? ""
+                    : ReportPage.esc(restsOn + (support.isEmpty() ? "" : " — " + support));
+                String checked = checkedAgainst(c);
+                rows.append("<td>").append(cited.isEmpty() && checked.isEmpty() ? "none cited"
+                    : cited + (cited.isEmpty() || checked.isEmpty() ? "" : "<br>") + checked)
                     .append("</td>");
             }
             rows.append("</tr>\n");
@@ -9818,6 +9821,30 @@ public class McpServer {
                 : " lean on cited evidence that does not carry them.");
         }
         return sb.append("</p></div>\n").toString();
+    }
+
+    /** What the checker graded the claim against, as "Checked against: table; source":
+     *  the warehouse table and up to three named sources, linked. Empty when it names none. */
+    static String checkedAgainst(JsonNode c) {
+        List<String> parts = new ArrayList<>();
+        String table = c.path("table").asText("").trim();
+        if (!table.isEmpty()) {
+            parts.add("<code>" + ReportPage.esc(table) + "</code>");
+        }
+        for (JsonNode src : c.path("sources")) {
+            if (parts.size() == 3) {
+                break;
+            }
+            String title = src.path("title").asText("").trim();
+            String url = src.path("url").asText("").trim();
+            if (title.isEmpty()) {
+                continue;
+            }
+            parts.add(url.startsWith("http")
+                ? "<a href=\"" + ReportPage.esc(url) + "\">" + ReportPage.esc(title) + "</a>"
+                : ReportPage.esc(title));
+        }
+        return parts.isEmpty() ? "" : "Checked against: " + String.join("; ", parts);
     }
 
     /** The claims a claim rests on, as "#1, #3"; empty when it names none. */

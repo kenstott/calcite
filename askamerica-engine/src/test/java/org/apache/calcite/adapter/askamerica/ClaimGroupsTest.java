@@ -79,6 +79,46 @@ class ClaimGroupsTest {
     assertEquals(2, ClaimScoring.pinocchios(claims));
   }
 
+  /** 501 of 515 scored claims across the saved reports cited nothing, and 86 of the 218
+   *  uncited author claims named their source in the sentence itself (2026-11-12). */
+  @Test void anAuthorClaimThatNamesItsSourceMustCiteItOrMoveToTheSourceAudit() {
+    ObjectNode relayed = author(
+        "The unemployment rate fell to 4.1%, according to Bureau of Labor Statistics data",
+        "true", null);
+    relayed.put("central", true);
+    String refused = ClaimScoring.enforce(claims(relayed,
+        author("Hiring slowed in the spring", "true", null)));
+    assertNotNull(refused);
+    assertTrue(refused.contains("claim 1 attributes its figure to a source ('according to')"),
+        refused);
+    assertFalse(refused.contains("claim 2 attributes"), refused);
+
+    assertEquals("The EIA expects",
+        ClaimScoring.attribution("The EIA expects inventories to rise in 2027"));
+    assertNull(ClaimScoring.attribution("Rents rose 4 percent last year"));
+    assertNull(ClaimScoring.attribution("The senator said rents doubled"));
+
+    ObjectNode audit = claim("BLS put the unemployment rate at 4.1%", "fidelity", "true");
+    ObjectNode resting = restingOn(author(
+        "The unemployment rate fell to 4.1%, according to Bureau of Labor Statistics data",
+        "true", null), 1, "supported");
+    resting.put("central", true);
+    String ok = ClaimScoring.enforce(claims(audit, resting));
+    assertTrue(ok == null || !ok.contains("attributes its figure"), String.valueOf(ok));
+  }
+
+  @Test void theEvidenceCellNamesWhatTheClaimWasCheckedAgainst() {
+    ObjectNode c = author("Debt reached $40.2 trillion", "true", null);
+    assertEquals("", McpServer.checkedAgainst(c));
+    c.put("table", "econ.federal_debt");
+    ObjectNode src = c.putArray("sources").addObject();
+    src.put("title", "GAO-27-108795");
+    src.put("url", "https://www.gao.gov/products/gao-27-108795");
+    assertEquals("Checked against: <code>econ.federal_debt</code>; "
+        + "<a href=\"https://www.gao.gov/products/gao-27-108795\">GAO-27-108795</a>",
+        McpServer.checkedAgainst(c));
+  }
+
   @Test void theVerdictKeyListsEveryVerdictWithTheCreditTheScoringUses() {
     String key = McpServer.verdictKey();
     assertTrue(key.contains("<td>True</td><td>Matches the evidence</td><td>1</td>"), key);
