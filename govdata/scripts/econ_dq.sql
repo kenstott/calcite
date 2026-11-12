@@ -65,6 +65,7 @@ FROM (
   UNION ALL SELECT 'jolts_state',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'treasury_yields',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'federal_debt',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',         allow_moved_paths := true) LIMIT 1) t)
@@ -126,6 +127,7 @@ FROM (
   UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0
   UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
   UNION ALL SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
+  UNION ALL SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50  -- one row per year 1975-2026
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
   UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
   UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400
@@ -178,6 +180,7 @@ SELECT 'jolts_regional'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'jolts_state'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',            allow_moved_paths := true) LIMIT 1;
 SELECT 'wage_growth'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',            allow_moved_paths := true) LIMIT 1;
 SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1;
+SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_employment'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',    allow_moved_paths := true) LIMIT 1;
 SELECT 'treasury_yields'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',        allow_moved_paths := true) LIMIT 1;
 SELECT 'federal_debt'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',           allow_moved_paths := true) LIMIT 1;
@@ -345,6 +348,30 @@ SELECT 'econ', 'state_ui_claims', 'known_value', 'fail', 'LA 2026-10-17', 'initi
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)
 WHERE state = 'LA' AND week_ending = DATE '2026-10-17'
 HAVING COALESCE(MAX(initial_claims), -1) <> 1179 OR COALESCE(MAX(continued_weeks_claimed), -1) <> 5295;
+
+-- social_security_cola
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_cola', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true))
+WHERE null_percentage = 100.0 AND column_name <> 'footnote';  -- footnote is set only for 1999
+
+-- social_security_cola PK uniqueness and known values (SSA table: 1975 = 8.0, 2022 = 8.7, 2026 = 3.6)
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_cola', 'pk_duplicates', 'fail', 'year', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) GROUP BY 1 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_cola', 'known_value', 'fail', 'year 1975/2022/2026', 'cola_pct 8.0 / 8.7 / 3.6',
+  'got ' || COALESCE(CAST(MAX(cola_pct) FILTER (WHERE year = 1975) AS VARCHAR), 'no row') || ' / '
+  || COALESCE(CAST(MAX(cola_pct) FILTER (WHERE year = 2022) AS VARCHAR), 'no row') || ' / '
+  || COALESCE(CAST(MAX(cola_pct) FILTER (WHERE year = 2026) AS VARCHAR), 'no row')
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)
+HAVING COALESCE(MAX(cola_pct) FILTER (WHERE year = 1975), -1) <> 8.0
+    OR COALESCE(MAX(cola_pct) FILTER (WHERE year = 2022), -1) <> 8.7
+    OR COALESCE(MAX(cola_pct) FILTER (WHERE year = 2026), -1) <> 3.6;
 
 -- wage_growth
 INSERT INTO dq_results
@@ -669,6 +696,13 @@ SELECT 'econ', 'state_ui_claims', 'all_same_value', 'warn',
   column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
+
+-- social_security_cola (footnote is set only for 1999, so it has one distinct value by design)
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_cola', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name NOT IN ('type', 'footnote');
 
 -- wage_growth
 INSERT INTO dq_results

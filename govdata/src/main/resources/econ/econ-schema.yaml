@@ -4632,6 +4632,95 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: social_security_cola
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=social_security_cola/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Social Security cost-of-living adjustments (COLAs), one row per year from 1975 to the latest
+      determination, as published by the Social Security Administration Office of the Chief
+      Actuary. cola_pct is the percentage increase in benefits. The year column is SSA's own: the
+      year the increase takes effect (December from 1983, June 1975-1982), so the increase announced
+      in October 2026 and applied from January 2027 benefits is listed under 2026 (3.6) and the
+      one announced in October 2022 (8.7, the largest since 1981) under 2022. The COLA is the
+      percentage rise of the CPI-W average for July-September over the prior year's July-September
+      average (for 1976-1983 first-quarter averages); the monthly CPI-W series CWUR0000SA0 is in
+      inflation_metrics. Use it for COLA size and rank-since-a-year claims. Medicare Part B
+      premiums and the Trustees' trust fund projections are not in this table. ssa.gov refuses
+      non-browser clients, so the page is read through a headed browser session. Source:
+      https://www.ssa.gov/oact/cola/colaseries.html.
+
+    dimensions:
+      type:
+        - social_security_cola
+
+    columns:
+      - name: year
+        type: integer
+        nullable: true
+        comment: >
+          SSA's COLA year: the year the increase takes effect (benefits payable for December, June for 1975-1982). The COLA announced in October of a year applies from that year's December benefit, paid in January of the next, and is listed under the announcement year (3.6 under 2026); PK.
+      - name: cola_pct
+        type: double
+        nullable: true
+        comment: >
+          Cost-of-living adjustment in percent as published by SSA (2022 = 8.7, 2025 = 2.8, 2026 = 3.6).
+      - name: effective_month
+        type: integer
+        nullable: true
+        comment: >
+          Month of the benefit payable that the increase applies to: 6 (June) for 1975-1982, 12 (December) from 1983, as stated on the SSA page.
+      - name: footnote
+        type: string
+        nullable: true
+        comment: >
+          SSA footnote text for the year (only 1999, whose COLA was determined as 2.4 and is effectively 2.5 under Public Law 106-554); null otherwise.
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads the page through a
+      # headed browser session (ssa.gov answers HTTP 403 to every non-browser client). The parameters
+      # are read by the transformer from this block. Headed Chrome needs a display (DISPLAY or
+      # WAYLAND_DISPLAY); when the browser cannot start the table fails, naming the cause.
+      url: "https://www.ssa.gov/oact/cola/colaseries.html"
+      method: GET
+      parameters:
+        ssaBrowserScript: "${SSA_BROWSER_SCRIPT:}"
+        ssaNodeCommand: "${SSA_NODE_COMMAND:node}"
+        ssaChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        ssaRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        ssaEntryPageUrl: "https://www.ssa.gov/oact/cola/Benefits.html"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.SocialSecurityColaTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=social_security_cola/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- LABOR PRODUCTIVITY ---
   - name: labor_productivity
     # BLS revises recent quarters of the Major Sector Productivity series and
