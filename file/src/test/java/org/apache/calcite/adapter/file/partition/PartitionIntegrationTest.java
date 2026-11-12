@@ -357,7 +357,7 @@ public class PartitionIntegrationTest extends BaseFileTest {
         + "\"pattern\":\"*/logs.parquet\","
         + "\"partitions\":{"
         + "\"style\":\"directory\","
-        + "\"columns\":[\"region\"]"
+        + "\"columnDefinitions\":[\"region\"]"
         + "}"
         + "}]"
         + "}}]}";
