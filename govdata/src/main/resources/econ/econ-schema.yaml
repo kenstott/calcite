@@ -10715,6 +10715,9 @@ views:
   # metadata and do not run until queried.
 
   - name: comtrade_bilateral_trade
+    # year passes through comtrade_flows.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Enriched UN Comtrade bilateral flows: one row per year x reporter x partner x
       HS-6 x flow, with reporter/partner country names and M49 regions joined from
@@ -10744,6 +10747,9 @@ views:
       WHERE f.is_aggregate = FALSE
 
   - name: comtrade_partner_balances
+    # year passes through comtrade_flows.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
     comment: >
       Bilateral trade balance from UN Comtrade, aggregated across commodities: one
       row per year x reporter x partner with total exports, total imports, and net
