@@ -705,6 +705,16 @@ final class ReportPage {
             + "summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}\n"
             + "details[open] summary{border-bottom:1px solid var(--rule)}\n"
             + "details > *:not(summary){margin:.7rem}\n"
+            // A claim's detail is a two-column list: the label small and muted on the left,
+            // its value on the right, so a label never reads as a value. Stacked when narrow.
+            + ".claim-detail dl{display:grid;grid-template-columns:11rem 1fr;"
+            + "gap:.45rem 1rem;align-items:baseline}\n"
+            + ".claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;"
+            + "letter-spacing:.02em}\n"
+            + ".claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}\n"
+            + ".claim-detail dd ul{margin:0;padding-left:1.1rem}\n"
+            + "@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}"
+            + ".claim-detail dd{margin:0 0 .5rem}}\n"
             + "pre{padding:.7rem;border-radius:6px;"
             + "font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;"
             + "background:color-mix(in srgb,var(--rule) 45%,transparent)}\n"
