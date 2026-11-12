@@ -60,9 +60,10 @@ class ClaimGroupsTest {
 
   /** An author claim offering no cited evidence; {@code errs} may be null. */
   /** Daily eval news q4 (2026-11-12): a headline presenting EIA's 2027 forecast as output
-   *  already reached was graded partially false, and seven true secondary figures lifted
-   *  the piece to 1 Pinocchio, below the unaided arm's 2. */
-  @Test void trueDetailDoesNotLiftTheRatingAboveTheCentralClaim() {
+   *  already reached, with seven true secondary figures. Capping accuracy at the central
+   *  claim's grade with no margin was tried that day and withdrawn: three runs graded the
+   *  same headline partially false, mostly false and false, and the rating swung 1, 3, 4. */
+  @Test void trueDetailLiftsTheRatingNoFurtherThanTheMarginAboveTheCentralClaim() {
     ObjectNode central = author("US crude production has hit a record 14.3 million b/d",
         "partially false", "toward_thesis");
     central.put("central", true);
@@ -74,14 +75,15 @@ class ClaimGroupsTest {
         author("LNG exports rise from 15 to 19 Bcf/d", "true", null),
         author("Brent averages $86 in 2027", "true", null),
         author("Inventories rise in 2027 as net imports increase", "true", null));
-    assertEquals(50, ClaimScoring.score(claims, ClaimScoring.headlineBlock(claims))
-        .path("accuracy_score").asInt());
-    assertEquals(2, ClaimScoring.pinocchios(claims));
+    assertEquals(50 + ClaimScoring.CENTRAL_CAP_MARGIN,
+        ClaimScoring.score(claims, ClaimScoring.headlineBlock(claims))
+            .path("accuracy_score").asInt());
+    assertEquals(1, ClaimScoring.pinocchios(claims));
   }
 
-  /** Live run 2026-11-12: a central claim graded mostly false whose cited source contradicts
-   *  it scored 0 and rated the piece 4 Pinocchios, where its verdict alone gives 3. */
-  @Test void aContradictedCentralClaimRatesThePieceByItsVerdict() {
+  /** A central claim graded mostly false whose cited source contradicts it earns no credit,
+   *  and the margin above it rates the piece 3 Pinocchios, not 4. */
+  @Test void aContradictedCentralClaimRatesThePieceWithinTheMargin() {
     ObjectNode audit = claim("EIA forecasts 14.3 million b/d for 2027", "fidelity",
         "mostly false");
     ObjectNode central = restingOn(author("US crude production hits a record 14.3 million b/d",
@@ -430,8 +432,7 @@ class ClaimGroupsTest {
         author("Lots of people think so", "unsupported", "toward_thesis"),
         author("Rents doubled", "mostly false", "toward_thesis"),
         author("Rents rose 4 percent", "true", null));
-    // The central claim is false, so the piece is: one true detail does not lift it.
-    assertEquals(subject + " are very biased and false; 1 claim could not be confirmed.",
+    assertEquals(subject + " are very biased and mostly false; 1 claim could not be confirmed.",
         ClaimScoring.headline(subject + ".", bad));
 
     ArrayNode good = claims(author("Rents rose 4 percent", "true", null).put("central", true),

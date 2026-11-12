@@ -369,12 +369,8 @@ final class ClaimScoring {
         if (checked > 0) {
             int accuracy = (int) Math.round(100 * checkedSum / checked);
             if (centralCredit >= 0 && !centralUnsupported) {
-                // Accuracy, and so the Pinocchio rating, is never better than the central
-                // claim's own verdict: true secondary detail does not dilute a failed
-                // headline. The verdict already grades the claim against its evidence, so
-                // the deduction for contradicted evidence is not taken a second time here.
-                accuracy = Math.min(accuracy, (int) Math.round(
-                    100 * verdictCredit(claims.get(central - 1))));
+                accuracy = Math.min(accuracy,
+                    (int) Math.round(100 * centralCredit) + CENTRAL_CAP_MARGIN);
             }
             out.put("accuracy_score", accuracy);
         }
