@@ -1499,6 +1499,10 @@ partitionedTables:
       per lb), APU000074714 (Gasoline, unleaded regular, per gallon). Also carries bacon,
       chicken, cheese, butter, coffee, sugar, produce, electricity (APU000072610, per kWh),
       utility gas (APU000072620, per therm), fuel oil, diesel and other gasoline grades.
+      Many items have sibling series. Ground beef: APU0000FC1101 (All uncooked ground beef, per
+      lb, the figure news coverage cites), APU0000703111 (ground chuck), APU0000703112 (100%
+      beef). When matching a reported
+      price, MUST query every sibling series for the item before calling a figure wrong.
       Series are long-format (one row per series and month): ALWAYS filter on series. Item
       names and units are in BLS's ap.item/ap.series catalog
       (https://download.bls.gov/pub/time.series/ap/ap.series). For CPI index levels of the same
