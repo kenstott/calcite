@@ -950,6 +950,21 @@ FROM (
   WHERE series = 'CUUR0000SA0' AND value IS NOT NULL AND value <= 0
 );
 
+-- inflation_metrics: CPI-W series (basis of the Social Security COLA) must be present with positive values
+INSERT INTO dq_results
+SELECT
+  'econ', 'inflation_metrics', 'expected_values',
+  CASE WHEN n_nsa > 0 AND n_sa > 0 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n_nsa AS VARCHAR) || '/' || CAST(n_sa AS VARCHAR) || '/' || CAST(bad AS VARCHAR), '>0/>0/0',
+  'CPI-W rows: CWUR0000SA0 count / CWSR0000SA0 count / rows with value <= 0'
+FROM (
+  SELECT
+    COUNT(*) FILTER (WHERE series = 'CWUR0000SA0') AS n_nsa,
+    COUNT(*) FILTER (WHERE series = 'CWSR0000SA0') AS n_sa,
+    COUNT(*) FILTER (WHERE series IN ('CWUR0000SA0', 'CWSR0000SA0') AND value IS NOT NULL AND value <= 0) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/inflation_metrics', allow_moved_paths := true)
+);
+
 -- regional_cpi: area_code must be one of the 4 Census region codes
 INSERT INTO dq_results
 SELECT

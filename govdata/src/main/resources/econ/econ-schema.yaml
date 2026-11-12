@@ -844,7 +844,8 @@ partitionedTables:
     partitions: *standard_partitions
     comment: >
       National monthly CPI-U (all items, core less food and energy, and water/sewerage
-      maintenance) plus PPI final demand finished goods — 4 index series (base period
+      maintenance), CPI-W (all items, NSA and SA; basis of the Social Security COLA) plus PPI
+      final demand finished goods — 6 index series (base period
       1982-84=100), national level only, not rates. The series CUUR0000SEHG02 is the
       price index for household water and sewer service (what consumers are billed);
       its period-over-period change is the national measure of how much water and sewer
@@ -861,11 +862,16 @@ partitionedTables:
         nullable: true
         comment: >
           BLS series identifier. This table is long-format: one row per (series, period), and it
-          mixes CPI with PPI, so ALWAYS filter on series. The 4 series loaded are:
+          mixes CPI with PPI, so ALWAYS filter on series. The 6 series loaded are:
           CUUR0000SA0 CPI-U, U.S. city average, all items, not seasonally adjusted (1982-84=100);
           CUUR0000SA0L1E CPI-U core, all items less food and energy, not seasonally adjusted;
           CUUR0000SEHG02 CPI-U Water and sewerage maintenance, U.S. city average, NSA;
-          WPUFD49207 PPI final demand, finished goods.
+          WPUFD49207 PPI final demand, finished goods;
+          CWUR0000SA0 CPI-W (urban wage earners and clerical workers), U.S. city average, all
+          items, not seasonally adjusted (1982-84=100) — the index the Social Security cost-of-living
+          adjustment (COLA) is computed from: COLA = average of the Jul-Sep (period M07-M09)
+          CWUR0000SA0 values over the prior year's Jul-Sep average, minus 1, rounded to 0.1%;
+          CWSR0000SA0 the same CPI-W seasonally adjusted.
           All are index levels, not rates — compute inflation as a period-over-period change.
           The four series do not share one start date at the source: CUUR0000SA0 (the series
           adjust_inflation uses) reaches back to 1913, CUUR0000SA0L1E and WPUFD49207 to the
@@ -920,6 +926,8 @@ partitionedTables:
         - "CUUR0000SA0L1E"
         - "WPUFD49207"
         - "CUUR0000SEHG02"
+        - "CWUR0000SA0"
+        - "CWSR0000SA0"
       rateLimit:  # BLS API limits: 500 daily queries, 25/series per query
         minIntervalMs: 1100  # Wait time between requests
         maxRetries: 3
@@ -941,6 +949,8 @@ partitionedTables:
           - "CUUR0000SA0L1E"  # CPI All Items Less Food and Energy
           - "WPUFD49207"      # PPI Finished Goods
           - "CUUR0000SEHG02"  # CPI Water and sewerage maintenance (U.S. city average, NSA)
+          - "CWUR0000SA0"     # CPI-W all items, NSA (the index the Social Security COLA is computed from)
+          - "CWSR0000SA0"     # CPI-W all items, seasonally adjusted
         startyear: "{year}"
         endyear: "{year}"
         registrationkey: "{env:BLS_API_KEY}"
