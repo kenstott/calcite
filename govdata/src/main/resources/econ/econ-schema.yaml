@@ -405,6 +405,10 @@ dimension_values:
     - "PI"
     - "PSAVERT"
     - "MEHOINUSA672N" # Real median household income, US (annual, CPI-adjusted dollars; Census CPS ASEC via FRED)
+    - "DRCCLACBS"     # Delinquency rate on credit card loans, all commercial banks, SA (quarterly, percent)
+    - "CORCCACBS"     # Charge-off rate on credit card loans, all commercial banks, SA (quarterly, percent)
+    - "REVOLSL"       # Total revolving consumer credit owned and securitized, SA (monthly, $M; Fed G.19)
+    - "TERMCBCCALLNS" # Commercial bank interest rate on credit card plans, all accounts (quarterly, percent)
     # Production & activity
     - "INDPRO"
     - "TCU"
@@ -2534,6 +2538,127 @@ partitionedTables:
       format: iceberg
       output:
         pattern: "type=state_occupation_employment/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+        overwritePartitions: true
+
+  # --- HOUSEHOLD DEBT AND CREDIT (NY Fed, quarterly) ---
+  - name: household_debt_credit
+    # The New York Fed publishes one data workbook per quarterly report at
+    # www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/hhd_c_report_<YYYY>q<Q>.xlsx
+    # (keyless, confirmed live 12 Nov 2026 for 2026q2 and 2026q3). Every workbook carries the whole
+    # history back to 2003Q1, so HouseholdDebtCreditTransformer finds the newest workbook by
+    # probing back from the current quarter (a quarter not yet published is HTTP 404), downloads it
+    # once per run, and emits the quarters belonging to the year dimension. The source url is the
+    # directory only; the transformer appends the file name.
+    pattern: "type=household_debt_credit/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      New York Fed Consumer Credit Panel / Equifax "Quarterly Report on Household Debt and
+      Credit", national series, quarterly from 2003Q1 to the newest report (2026Q3 as of the
+      November 2026 release). Long format, one row per (metric, loan_type or
+      delinquency_status, quarter). metric = balance: dollar balance in trillions of USD
+      (unit trillions_usd) by loan_type mortgage, heloc, auto, credit_card, student_loan, other
+      and total (total household debt; 2026Q3 total 19.10, credit_card 1.285). metric =
+      pct_balance_90plus_delinquent: percent of each loan type's balance 90+ days delinquent.
+      metric = flow_into_early_delinquency_30plus: percent of balance moving from current into
+      30+ days late in the quarter. metric = flow_into_serious_delinquency_90plus: percent of
+      balance newly 90+ days delinquent in the quarter (credit_card 2026Q3 6.87).
+      metric = balance_share_by_delinquency_status: percent of total balance (loan_type total)
+      in each delinquency_status: current, 30_days_late, 60_days_late, 90_days_late,
+      120_plus_days_late, severely_derogatory (and total = 100). The loan-type percent metrics
+      use loan_type total for the all-debt figure. A series that does not exist for a quarter
+      (student loan flow early in the history) has no row. period 2026Q3 = end of September
+      2026. Complements the commercial-bank card delinquency and charge-off rates in
+      fred_indicators (DRCCLACBS, CORCCACBS), which do not cover all lenders.
+      Not included: number of accounts, originations by credit score, age and state
+      breakdowns (other sheets of the same workbook).
+
+    dimensions:
+      type:
+        - household_debt_credit
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2003}"
+        minYear: 2003
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+
+    columns:
+      - name: metric
+        type: string
+        nullable: false
+        comment: >
+          balance, balance_share_by_delinquency_status, pct_balance_90plus_delinquent,
+          flow_into_early_delinquency_30plus or flow_into_serious_delinquency_90plus (PK part)
+      - name: loan_type
+        type: string
+        nullable: false
+        comment: >
+          mortgage, heloc (home equity revolving), auto, credit_card, student_loan, other, or
+          total (all household debt; also the value for balance_share_by_delinquency_status) (PK part)
+      - name: delinquency_status
+        type: string
+        nullable: true
+        comment: >
+          Only for metric balance_share_by_delinquency_status: current, 30_days_late,
+          60_days_late, 90_days_late, 120_plus_days_late, severely_derogatory or total; null for
+          every other metric
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of the quarter (PK part)
+      - name: quarter
+        type: integer
+        nullable: false
+        comment: Calendar quarter 1-4 (PK part)
+      - name: period
+        type: string
+        nullable: false
+        comment: Year and quarter label, for example 2026Q3
+      - name: value
+        type: double
+        nullable: false
+        comment: Value in the unit column
+      - name: unit
+        type: string
+        nullable: false
+        comment: trillions_usd for balance; percent for every other metric
+      - name: release
+        type: string
+        nullable: false
+        comment: Report workbook this row was read from, for example 2026q3 (history is revised slightly between releases)
+
+    source:
+      type: http
+      url: "https://www.newyorkfed.org/medialibrary/interactives/householdcredit/data/xls/"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.HouseholdDebtCreditTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=household_debt_credit/year=*/"
       partition:
         columns: [type, year]
       options:
@@ -5808,7 +5933,13 @@ partitionedTables:
           University of Michigan consumer sentiment index, monthly, index 1966:Q1=100; DCOILWTICO =
           WTI crude oil spot price (oil prices), daily, dollars per barrel; DTWEXBGS = broad
           trade-weighted U.S. dollar index (dollar exchange rate), daily, index Jan 2006=100; USREC =
-          NBER recession indicator, monthly, 1 for recession and 0 for expansion.
+          NBER recession indicator, monthly, 1 for recession and 0 for expansion; DRCCLACBS =
+          delinquency rate on credit card loans at all commercial banks (credit card delinquency),
+          quarterly, percent, seasonally adjusted; CORCCACBS = charge-off rate on credit card loans at
+          all commercial banks, quarterly, percent, seasonally adjusted annualized; REVOLSL =
+          revolving consumer credit owned and securitized (mostly credit cards, Fed G.19), monthly,
+          billions of dollars, seasonally adjusted; TERMCBCCALLNS = commercial bank interest rate on
+          credit card plans, all accounts, quarterly, percent.
       - *date_column
       - name: value
         type: double
@@ -5885,6 +6016,10 @@ partitionedTables:
         - "PI"           # Personal income
         - "PSAVERT"      # Personal saving rate
         - "MEHOINUSA672N" # Real median household income, US (annual, CPI-adjusted dollars)
+        - "DRCCLACBS"    # Delinquency rate on credit card loans, all commercial banks, SA (quarterly, percent)
+        - "CORCCACBS"    # Charge-off rate on credit card loans, all commercial banks, SA (quarterly, percent)
+        - "REVOLSL"      # Total revolving consumer credit owned and securitized, SA (monthly, $M; Fed G.19)
+        - "TERMCBCCALLNS" # Commercial bank interest rate on credit card plans, all accounts (quarterly, percent)
         # Production & activity
         - "INDPRO"       # Industrial production index
         - "TCU"          # Capacity utilization
