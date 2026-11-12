@@ -6157,13 +6157,14 @@ partitionedTables:
       checkedAt: "2026-11-11T22:18:37Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: year
-          type: string
+          type: INTEGER
+          storedDigits: 4
         - name: state
-          type: string
+          type: VARCHAR
     comment: >
       LEHD Origin-Destination Employment Statistics (LODES) Workplace Area Characteristics
       (WAC): total job counts at the workplace census block level, broken out by worker age
