@@ -31,13 +31,20 @@ import org.apache.calcite.prepare.Prepare;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.convert.ConverterRule;
 import org.apache.calcite.rel.core.TableModify;
+import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
+import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.schema.Table;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Objects.requireNonNull;
@@ -109,6 +116,35 @@ public class ServiceNowTableModify extends TableModify implements EnumerableRel 
     return implementor.result(physType, builder.toBlock());
   }
 
+  /**
+   * What the writer needs of the rows a modify reads: for an UPDATE or DELETE only the sys_id
+   * (the first column) and, for an UPDATE, the new values that follow the table row, so the scan
+   * requests only those fields and the ones its filter reads. A field the instance does not
+   * return to this user (an ACL, a field it computes) is then never asked for. An INSERT's rows
+   * are its values, all written.
+   */
+  static RelNode written(TableModify modify) {
+    final RelNode input = modify.getInput();
+    if (!modify.isUpdate() && !modify.isDelete()) {
+      return input;
+    }
+    final List<RelDataTypeField> fields = input.getRowType().getFieldList();
+    final int values = modify.isUpdate()
+        ? requireNonNull(modify.getUpdateColumnList(), "updateColumnList").size()
+        : 0;
+    final RexBuilder rexBuilder = modify.getCluster().getRexBuilder();
+    final List<RexNode> projects = new ArrayList<>();
+    final List<String> names = new ArrayList<>();
+    projects.add(rexBuilder.makeInputRef(input, 0));
+    names.add(fields.get(0).getName());
+    for (int i = fields.size() - values; i < fields.size(); i++) {
+      projects.add(rexBuilder.makeInputRef(input, i));
+      names.add(fields.get(i).getName());
+    }
+    return LogicalProject.create(input, ImmutableList.of(), projects, names,
+        ImmutableSet.of());
+  }
+
   /** The rule behind {@link #RULE}. */
   private static class ModifyRule extends ConverterRule {
     protected ModifyRule(Config config) {
@@ -124,7 +160,7 @@ public class ServiceNowTableModify extends TableModify implements EnumerableRel 
           modify.getTraitSet().replace(EnumerableConvention.INSTANCE);
       return new ServiceNowTableModify(modify.getCluster(), traitSet,
           modify.getTable(), modify.getCatalogReader(),
-          convert(modify.getInput(), traitSet), modify.getOperation(),
+          convert(written(modify), traitSet), modify.getOperation(),
           modify.getUpdateColumnList(), modify.getSourceExpressionList(),
           modify.isFlattened());
     }

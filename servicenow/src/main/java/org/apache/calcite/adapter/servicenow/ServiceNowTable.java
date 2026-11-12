@@ -236,8 +236,9 @@ public class ServiceNowTable extends AbstractQueryableTable
    * {@link ServiceNowTableModify}.
    *
    * @param operation     INSERT, UPDATE or DELETE
-   * @param rows          for INSERT, one value per table column; for DELETE, the table row; for
-   *                      UPDATE, the table row followed by one new value per update column
+   * @param rows          for INSERT, one value per table column; for DELETE, the row's sys_id;
+   *                      for UPDATE, the row's sys_id followed by one new value per update column
+   *                      ({@link ServiceNowTableModify#written})
    * @param updateColumns comma-separated update column names (UPDATE only)
    * @return single-element enumerable holding the number of records written
    */
