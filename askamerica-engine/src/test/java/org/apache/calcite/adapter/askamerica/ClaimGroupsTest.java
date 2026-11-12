@@ -694,6 +694,38 @@ class ClaimGroupsTest {
     assertTrue(clause.contains("mostly accurate"), clause);
   }
 
+  /** Daily eval q16 rerun (2026-11-11): 2 checked author claims left the piece unrated, and the
+   *  agent rated it 2 Pinocchios on a quoted secretary's misstatement. */
+  @Test void tooFewAuthorClaimsAreRatedWithTheFidelityClaims() {
+    ObjectNode central = author("Ground beef averaged $7.16 in August", "true", null);
+    central.put("central", true);
+    ObjectNode quoted = claim("A pound of ground beef was $6.50", "subject_claims",
+        "mostly false");
+    quoted.put("speaker", "Secretary Rollins");
+    quoted.put("errs", "toward_thesis");
+    ArrayNode claims = claims(central,
+        author("The price was $6.631 a year earlier", "true", null),
+        claim("The herd is 86.2 million, smallest in 75 years", "fidelity", "true"),
+        claim("CPA counts 450,000 fewer ranchers since 1997", "fidelity", "mostly true"),
+        claim("Diesel averaged $6.5107 per AAA", "fidelity", "true"),
+        quoted);
+    assertEquals(ClaimScoring.BLOCK_AUTHOR_WITH_FIDELITY, ClaimScoring.headlineBlock(claims));
+    JsonNode score = ClaimScoring.score(claims, ClaimScoring.headlineBlock(claims));
+    assertEquals(5, score.path("checked").asInt());
+    assertEquals(0, ClaimScoring.pinocchios(claims));
+  }
+
+  @Test void enoughAuthorClaimsAreRatedWithoutTheFidelityClaims() {
+    ObjectNode central = author("Deaths fell to 16,750", "true", null);
+    central.put("central", true);
+    ArrayNode claims = claims(central,
+        author("Deaths fell 2.5 percent", "true", null),
+        author("Q1 deaths fell 5 percent", "true", null),
+        claim("NHTSA says the rate is lowest since 2014", "fidelity", "false"));
+    assertEquals("author_claims", ClaimScoring.headlineBlock(claims));
+    assertEquals(0, ClaimScoring.pinocchios(claims));
+  }
+
   @Test void aMostlyTrueClaimAloneStillAllowsZeroPinocchios() {
     ObjectNode central = author("Deaths fell to 16,750", "true", null);
     central.put("central", true);

@@ -38,6 +38,9 @@ import java.util.regex.Pattern;
  */
 final class ClaimScoring {
     static final String GROUP_FIDELITY = "fidelity";
+    /** The headline's block when the author's own claims are too few to rate alone: the
+     *  author's claims together with the fidelity claims. Speakers' claims never join it. */
+    static final String BLOCK_AUTHOR_WITH_FIDELITY = "author_claims+fidelity";
     static final String GROUP_AUTHOR = "author_claims";
     static final String GROUP_SUBJECT = "subject_claims";
 
@@ -288,7 +291,7 @@ final class ClaimScoring {
         int n = 0;
         for (JsonNode c : claims) {
             n++;
-            if (!block.equals(block(c))) {
+            if (!inBlock(c, block)) {
                 continue;
             }
             if (isAttack(c)) {
@@ -463,17 +466,31 @@ final class ClaimScoring {
                 + " could not be confirmed";
     }
 
-    /** The block a validation's headline speaks for: the author's claims, or the only
-     *  speaker's when the piece has no author's voice; null when several speakers share it. */
+    /** Whether claim {@code c} is scored in {@code block}. */
+    static boolean inBlock(JsonNode c, String block) {
+        String b = block(c);
+        if (BLOCK_AUTHOR_WITH_FIDELITY.equals(block)) {
+            return GROUP_AUTHOR.equals(b) || GROUP_FIDELITY.equals(b);
+        }
+        return block.equals(b);
+    }
+
+    /** The block a validation's headline speaks for: the author's claims (joined by the
+     *  fidelity claims when the author's alone are too few to rate), or the only speaker's
+     *  when the piece has no author's voice; null when several speakers share it. */
     static String headlineBlock(JsonNode claims) {
+        List<String> all = blocks(claims);
         List<String> scored = new ArrayList<>();
-        for (String b : blocks(claims)) {
+        for (String b : all) {
             if (isScored(b)) {
                 scored.add(b);
             }
         }
-        return scored.contains(GROUP_AUTHOR) ? GROUP_AUTHOR
-            : scored.size() == 1 ? scored.get(0) : null;
+        if (!scored.contains(GROUP_AUTHOR)) {
+            return scored.size() == 1 ? scored.get(0) : null;
+        }
+        boolean tooFew = score(claims, GROUP_AUTHOR).path("checked").asInt() < MIN_FOR_LABEL;
+        return tooFew && all.contains(GROUP_FIDELITY) ? BLOCK_AUTHOR_WITH_FIDELITY : GROUP_AUTHOR;
     }
 
     /**
