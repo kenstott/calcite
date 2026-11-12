@@ -311,6 +311,11 @@ CALCITE_TEST_SPLUNK=true gtimeout 1800 ./gradlew :splunk:test --continue --conso
 ## 📋 SHAREPOINT ADAPTER
 
 ### Integration Test Configuration
+The live tests authenticate with a certificate. `file/local-test.properties` (not tracked;
+see `file/local-test.properties.sample`) or the environment must hold `SHAREPOINT_TENANT_ID`,
+`SHAREPOINT_CLIENT_ID`, `SHAREPOINT_SITE_URL`, `SHAREPOINT_CERT_PATH` and
+`SHAREPOINT_CERT_PASSWORD`; a missing key fails the test with a message naming it.
+
 ```bash
 # Enable SharePoint integration tests
 SHAREPOINT_INTEGRATION_TESTS=true gtimeout 1800 ./gradlew :sharepoint-list:test --continue --console=plain

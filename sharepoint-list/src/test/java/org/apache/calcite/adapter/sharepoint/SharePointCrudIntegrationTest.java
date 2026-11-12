@@ -25,18 +25,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -202,7 +197,7 @@ public class SharePointCrudIntegrationTest {
 
     // Test WHERE clause with different conditions
     String selectSql =
-        String.format(Locale.ROOT, "SELECT task_title, task_priority FROM sharepoint.%s WHERE priority = ? AND is_completed = ?",
+        String.format(Locale.ROOT, "SELECT task_title, task_priority FROM sharepoint.%s WHERE task_priority = ? AND task_completed = ?",
             testListName);
 
     try (PreparedStatement pstmt = connection.prepareStatement(selectSql)) {
@@ -264,6 +259,70 @@ public class SharePointCrudIntegrationTest {
     }
   }
 
+  /** Insert, update and delete one row of a new list, reading it back after each. */
+  @Test public void testUpdateRoundTrip() throws Exception {
+    createTestList();
+
+    String insertSql =
+        String.format(Locale.ROOT, "INSERT INTO sharepoint.%s (task_title, task_description, "
+            + "task_priority, task_completed) VALUES (?, ?, ?, ?)", testListName);
+    try (PreparedStatement pstmt = connection.prepareStatement(insertSql)) {
+      pstmt.setString(1, "Round trip");
+      pstmt.setString(2, "before update");
+      pstmt.setInt(3, 1);
+      pstmt.setBoolean(4, false);
+      assertEquals(1, pstmt.executeUpdate(), "Should insert exactly 1 row");
+    }
+
+    String selectSql =
+        String.format(Locale.ROOT, "SELECT id, task_title, task_description, task_priority, "
+            + "task_completed FROM sharepoint.%s", testListName);
+    String itemId;
+    try (Statement stmt = connection.createStatement();
+         ResultSet rs = stmt.executeQuery(selectSql)) {
+      assertTrue(rs.next(), "Should find the inserted record");
+      itemId = rs.getString("id");
+      assertEquals("before update", rs.getString("task_description"));
+      assertEquals(1, rs.getInt("task_priority"));
+      assertFalse(rs.getBoolean("task_completed"));
+      assertFalse(rs.next(), "Should only have one record");
+    }
+
+    String updateSql =
+        String.format(Locale.ROOT, "UPDATE sharepoint.%s SET task_description = ?, "
+            + "task_priority = ?, task_completed = ? WHERE id = ?", testListName);
+    try (PreparedStatement pstmt = connection.prepareStatement(updateSql)) {
+      pstmt.setString(1, "after update");
+      pstmt.setInt(2, 5);
+      pstmt.setBoolean(3, true);
+      pstmt.setString(4, itemId);
+      assertEquals(1, pstmt.executeUpdate(), "Should update exactly 1 row");
+    }
+
+    try (Statement stmt = connection.createStatement();
+         ResultSet rs = stmt.executeQuery(selectSql)) {
+      assertTrue(rs.next(), "Should find the updated record");
+      assertEquals(itemId, rs.getString("id"), "The update keeps the row's id");
+      assertEquals("Round trip", rs.getString("task_title"), "A column not set is unchanged");
+      assertEquals("after update", rs.getString("task_description"));
+      assertEquals(5, rs.getInt("task_priority"));
+      assertTrue(rs.getBoolean("task_completed"));
+      assertFalse(rs.next(), "An update adds no record");
+    }
+
+    String deleteSql =
+        String.format(Locale.ROOT, "DELETE FROM sharepoint.%s WHERE id = ?", testListName);
+    try (PreparedStatement pstmt = connection.prepareStatement(deleteSql)) {
+      pstmt.setString(1, itemId);
+      assertEquals(1, pstmt.executeUpdate(), "Should delete exactly 1 row");
+    }
+
+    try (Statement stmt = connection.createStatement();
+         ResultSet rs = stmt.executeQuery(selectSql)) {
+      assertFalse(rs.next(), "The list is empty after the delete");
+    }
+  }
+
   @Test public void testDeleteMultiple() throws Exception {
     createTestList();
     insertTestData();
@@ -317,7 +376,7 @@ public class SharePointCrudIntegrationTest {
 
     // Insert record with various data types
     String insertSql =
-        String.format(Locale.ROOT, "INSERT INTO sharepoint.%s (title, description, priority, is_completed, task_due_date) "
+        String.format(Locale.ROOT, "INSERT INTO sharepoint.%s (task_title, task_description, task_priority, task_completed, task_due_date) "
         + "VALUES (?, ?, ?, ?, ?)", testListName);
 
     try (PreparedStatement pstmt = connection.prepareStatement(insertSql)) {
@@ -333,7 +392,7 @@ public class SharePointCrudIntegrationTest {
 
     // Retrieve and verify the data types
     String selectSql =
-        String.format(Locale.ROOT, "SELECT title, description, priority, is_completed, task_due_date FROM sharepoint.%s",
+        String.format(Locale.ROOT, "SELECT task_title, task_description, task_priority, task_completed, task_due_date FROM sharepoint.%s",
             testListName);
 
     try (Statement stmt = connection.createStatement();
@@ -354,22 +413,11 @@ public class SharePointCrudIntegrationTest {
   // Helper methods
 
   private static Properties loadTestConfig() throws IOException {
-    Properties props = new Properties();
+    return SharePointTestCredentials.load().properties();
+  }
 
-    Path configPath = Paths.get("../file/local-test.properties");
-    if (!Files.exists(configPath)) {
-      configPath = Paths.get("../../file/local-test.properties");
-    }
-
-    if (Files.exists(configPath)) {
-      try (FileInputStream fis = new FileInputStream(configPath.toFile())) {
-        props.load(fis);
-      }
-    } else {
-      throw new RuntimeException("Test configuration file not found: local-test.properties");
-    }
-
-    return props;
+  private static Map<String, Object> authConfig() {
+    return SharePointTestCredentials.load().authConfig();
   }
 
   private Connection createConnection() throws SQLException {
@@ -380,12 +428,8 @@ public class SharePointCrudIntegrationTest {
     CalciteConnection calciteConnection = conn.unwrap(CalciteConnection.class);
     SchemaPlus rootSchema = calciteConnection.getRootSchema();
 
-    Map<String, Object> operand = new HashMap<>();
+    Map<String, Object> operand = authConfig();
     operand.put("siteUrl", testConfig.getProperty("SHAREPOINT_SITE_URL"));
-    operand.put("authType", "CLIENT_CREDENTIALS");
-    operand.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    operand.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    operand.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
 
     SharePointListSchema sharePointSchema =
         new SharePointListSchema(testConfig.getProperty("SHAREPOINT_SITE_URL"), operand);
@@ -396,11 +440,7 @@ public class SharePointCrudIntegrationTest {
   }
 
   private MicrosoftGraphListClient createDirectClient() throws Exception {
-    Map<String, Object> authConfig = new HashMap<>();
-    authConfig.put("authType", "CLIENT_CREDENTIALS");
-    authConfig.put("clientId", testConfig.getProperty("SHAREPOINT_CLIENT_ID"));
-    authConfig.put("clientSecret", testConfig.getProperty("SHAREPOINT_CLIENT_SECRET"));
-    authConfig.put("tenantId", testConfig.getProperty("SHAREPOINT_TENANT_ID"));
+    Map<String, Object> authConfig = authConfig();
 
     org.apache.calcite.adapter.sharepoint.auth.SharePointAuth auth =
         org.apache.calcite.adapter.sharepoint.auth.SharePointAuthFactory.createAuth(authConfig);

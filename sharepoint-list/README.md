@@ -79,7 +79,7 @@ DELETE FROM sharepoint."Project Tasks" WHERE Status = 'Completed';
 | SELECT | Yes |
 | INSERT | Yes |
 | DELETE | Yes |
-| UPDATE | Planned |
+| UPDATE | Yes |
 | CREATE TABLE | Yes (creates a SharePoint list) |
 | DROP TABLE | Yes (deletes a SharePoint list) |
 

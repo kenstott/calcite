@@ -61,7 +61,7 @@ print_usage() {
     echo ""
     echo "Environment variables for SharePoint:"
     echo "  SHAREPOINT_INTEGRATION_TESTS=true"
-    echo "  SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID, SHAREPOINT_CLIENT_SECRET, SHAREPOINT_SITE_URL"
+    echo "  SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID, SHAREPOINT_SITE_URL, SHAREPOINT_CERT_PATH, SHAREPOINT_CERT_PASSWORD"
     echo ""
     echo "Environment variables for File adapter:"
     echo "  CALCITE_FILE_ENGINE_TYPE=PARQUET|DUCKDB|LINQ4J|ARROW"
@@ -208,7 +208,7 @@ case $ADAPTER in
         export SHAREPOINT_INTEGRATION_TESTS=true
         if [ "$ENV_VARS" != "true" ]; then
             echo -e "${YELLOW}Note: SharePoint tests require environment variables. Use --env-vars and set:${NC}"
-            echo "  SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID, SHAREPOINT_CLIENT_SECRET, SHAREPOINT_SITE_URL"
+            echo "  SHAREPOINT_TENANT_ID, SHAREPOINT_CLIENT_ID, SHAREPOINT_SITE_URL, SHAREPOINT_CERT_PATH, SHAREPOINT_CERT_PASSWORD"
         fi
         ;;
 

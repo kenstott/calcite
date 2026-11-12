@@ -10,6 +10,7 @@
  */
 package org.apache.calcite.adapter.file;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Test to verify Microsoft Graph API credentials are available locally.
  * This test checks multiple credential sources and reports their status.
  */
+@Disabled("needs a client secret; the test tenant authenticates by certificate (owner decision 2026-10-08)")
 @Tag("integration")
 public class MicrosoftGraphCredentialTest {
 

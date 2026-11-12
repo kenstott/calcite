@@ -17,8 +17,10 @@
 package org.apache.calcite.adapter.sharepoint;
 
 import org.apache.calcite.schema.Schema;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.lookup.Lookup;
+import org.apache.calcite.tools.Frameworks;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -38,13 +40,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SharePointMetadataIntegrationTest {
 
   @Test void testMetadataSchemaIntegration() {
-    Map<String, Object> authConfig = createAuthConfig();
-
-    SharePointListSchema schema =
-        new SharePointListSchema(loadTestConfig().getProperty("SHAREPOINT_SITE_URL"), authConfig);
-
-    // Test that metadata sub-schemas are available using the new Lookup API
-    Lookup<? extends Schema> subSchemaLookup = schema.subSchemas();
+    // Test that the metadata schemas are available using the new Lookup API
+    Lookup<? extends Schema> subSchemaLookup = metadataSchemas();
     assertTrue(subSchemaLookup.get("pg_catalog") != null);
     assertTrue(subSchemaLookup.get("information_schema") != null);
 
@@ -73,41 +70,28 @@ class SharePointMetadataIntegrationTest {
     assertNotNull(spLists);
   }
 
+  /**
+   * The schemas the factory registers beside the SharePoint schema: pg_catalog and
+   * information_schema are siblings of it, not sub-schemas.
+   */
+  private Lookup<? extends SchemaPlus> metadataSchemas() {
+    Map<String, Object> operand = new HashMap<>(createAuthConfig());
+    operand.put("siteUrl", loadTestConfig().getProperty("SHAREPOINT_SITE_URL"));
+    SchemaPlus root = Frameworks.createRootSchema(false);
+    root.add("sharepoint", SharePointListSchemaFactory.INSTANCE.create(root, "sharepoint", operand));
+    return root.subSchemas();
+  }
+
   private Map<String, Object> createAuthConfig() {
     // Load from local-test.properties file
     Properties props = loadTestConfig();
 
     Map<String, Object> authConfig = new HashMap<>();
-    authConfig.put("authType", "CLIENT_CREDENTIALS");
-    authConfig.put("tenantId", props.getProperty("SHAREPOINT_TENANT_ID"));
-    authConfig.put("clientId", props.getProperty("SHAREPOINT_CLIENT_ID"));
-    authConfig.put("clientSecret", props.getProperty("SHAREPOINT_CLIENT_SECRET"));
+    authConfig.putAll(SharePointTestCredentials.load().authConfig());
     return authConfig;
   }
 
   private Properties loadTestConfig() {
-    Properties props = new Properties();
-    try {
-      // Try to load from file module's local-test.properties
-      java.nio.file.Path configPath = java.nio.file.Paths.get("../file/local-test.properties");
-      if (!java.nio.file.Files.exists(configPath)) {
-        configPath = java.nio.file.Paths.get("../../file/local-test.properties");
-      }
-
-      if (java.nio.file.Files.exists(configPath)) {
-        try (java.io.FileInputStream fis = new java.io.FileInputStream(configPath.toFile())) {
-          props.load(fis);
-        }
-      } else {
-        // Fall back to environment variables
-        props.setProperty("SHAREPOINT_TENANT_ID", System.getenv("SHAREPOINT_TENANT_ID"));
-        props.setProperty("SHAREPOINT_CLIENT_ID", System.getenv("SHAREPOINT_CLIENT_ID"));
-        props.setProperty("SHAREPOINT_CLIENT_SECRET", System.getenv("SHAREPOINT_CLIENT_SECRET"));
-        props.setProperty("SHAREPOINT_SITE_URL", System.getenv("SHAREPOINT_SITE_URL"));
-      }
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to load test configuration", e);
-    }
-    return props;
+    return SharePointTestCredentials.load().properties();
   }
 }
