@@ -9841,11 +9841,11 @@ partitionedTables:
     pattern: "type=ilostat/indicator=*/*.parquet"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: indicator
-          type: string
+          type: VARCHAR
     comment: >
       UN ILO ILOSTAT labor indicators: value per country x indicator x sex x
       classification x year. Tall — the international analog of the econ BLS tables
@@ -10103,11 +10103,11 @@ partitionedTables:
       checkedAt: "2026-11-11T22:26:48Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: year
-          type: integer
+          type: INTEGER
     comment: >
       USITC statutory Harmonized Tariff Schedule rate lines (the published
       general/special/column-2 rates, as opposed to duties actually collected in
@@ -10223,11 +10223,11 @@ partitionedTables:
       checkedAt: "2026-11-11T22:26:49Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: year
-          type: integer
+          type: INTEGER
     comment: >
       USGS Mineral Commodity Summaries (MCS) per-commodity salient statistics, long-format:
       one row per (release, commodity, country, statistic, statistic_detail, data_year).

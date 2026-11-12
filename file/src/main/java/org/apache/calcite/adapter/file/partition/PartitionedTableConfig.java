@@ -548,6 +548,12 @@ public class PartitionedTableConfig {
     if (partitionsMap != null) {
       String style = (String) partitionsMap.get("style");
 
+      if (partitionsMap.containsKey("columns")) {
+        throw new IllegalArgumentException("Table '" + name
+            + "': partitions.columns is not supported; declare the partition columns under"
+            + " partitions.columnDefinitions");
+      }
+
       // Handle column definitions - always use columnDefinitions format
       List<String> simpleColumns = null;
       List<ColumnDefinition> columnDefinitions = null;

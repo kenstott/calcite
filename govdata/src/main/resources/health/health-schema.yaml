@@ -3294,11 +3294,11 @@ partitionedTables:
       checkedAt: "2026-11-11T22:36:03Z"
     partitions:
       style: hive
-      columns:
+      columnDefinitions:
         - name: type
-          type: string
+          type: VARCHAR
         - name: year
-          type: integer
+          type: INTEGER
     comment: >
       CMS Payroll-Based Journal (PBJ) "Daily Nurse Staffing" (data.cms.gov catalog entry
       "Payroll Based Journal Daily Nurse Staffing"), one row per facility (PROVNUM — joins
