@@ -111,7 +111,7 @@ public final class RetryableHttp {
    * all 197 to say what they already meant. Callers reaching this class directly (the
    * streaming transformers) previously ignored the declaration outright.
    */
-  private static boolean isRetryableStatus(int status,
+  static boolean isRetryableStatus(int status,
       HttpSourceConfig.RateLimitConfig rateLimit) {
     if (status == 429 || status == 500 || status == 502 || status == 503 || status == 504) {
       return true;

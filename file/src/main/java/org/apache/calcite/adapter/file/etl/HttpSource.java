@@ -1544,6 +1544,9 @@ public class HttpSource implements DataSource {
   private static final long RETRY_AFTER_CAP_MS = 300_000L;
 
   /** A retryable HTTP error carrying the server's Retry-After delay in ms (-1 if not provided). */
+  private static final java.util.regex.Pattern HTTP_STATUS_PREFIX =
+      java.util.regex.Pattern.compile("^HTTP (\\d{3})\\b");
+
   private static final class RetryableHttpException extends IOException {
     private final long retryAfterMs;
     RetryableHttpException(String message, long retryAfterMs) {
@@ -3531,7 +3534,13 @@ public class HttpSource implements DataSource {
       return false;
     }
 
-    // Check for retryable HTTP status codes
+    // Check for retryable HTTP status codes: the transient-server baseline shared with
+    // RetryableHttp (429/500/502/503/504) plus whatever the source declares in retryOn.
+    java.util.regex.Matcher status = HTTP_STATUS_PREFIX.matcher(message);
+    if (status.find() && RetryableHttp.isRetryableStatus(Integer.parseInt(status.group(1)),
+        rateLimit)) {
+      return true;
+    }
     for (int code : rateLimit.getRetryOn()) {
       if (message.contains("HTTP " + code)) {
         return true;
