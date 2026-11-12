@@ -200,6 +200,7 @@ SELECT 'trade_imports_critical_minerals' AS tbl, * FROM iceberg_scan('s3://${GOV
 SELECT 'labor_productivity'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/labor_productivity',     allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_price_parities' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_price_parities', allow_moved_paths := true) LIMIT 1;
 SELECT 'state_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true) LIMIT 1;
+SELECT 'household_debt_credit' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true) LIMIT 1;
 SELECT 'industry_occupation_employment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/industry_occupation_employment', allow_moved_paths := true) LIMIT 1;
 SELECT 'apparel_cpi'             AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/apparel_cpi',             allow_moved_paths := true) LIMIT 1;
 SELECT 'household_furnishings_cpi' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_furnishings_cpi', allow_moved_paths := true) LIMIT 1;
@@ -1268,6 +1269,105 @@ SELECT 'econ', 'state_occupation_employment', 'expected_values',
   'rows where employment headcount is negative'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_occupation_employment', allow_moved_paths := true)
       WHERE employment IS NOT NULL AND employment < 0);
+
+-- ============================================================================
+-- household_debt_credit (NY Fed Household Debt and Credit Report, quarterly national series)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true) LIMIT 1));
+
+-- 5 metrics x 7 categories per quarter (about 35 rows per quarter, a few fewer early in the
+-- history where student loan has no value); a single DQ year of 4 quarters is about 140 rows
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'row_count',
+  CASE WHEN n >= 100 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '100',
+  CASE WHEN n >= 100 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'release');  -- a DQ run over one year has a constant year; release is one workbook per run
+
+-- PK (metric, loan_type, delinquency_status, year, quarter) must be unique
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (metric, loan_type, delinquency_status, year, quarter) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT metric, loan_type, delinquency_status, year, quarter FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true)
+        GROUP BY metric, loan_type, delinquency_status, year, quarter HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with metric outside the five known metrics, quarter outside 1-4, or negative value'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true)
+      WHERE metric NOT IN ('balance', 'balance_share_by_delinquency_status', 'pct_balance_90plus_delinquent',
+                           'flow_into_early_delinquency_30plus', 'flow_into_serious_delinquency_90plus')
+         OR quarter NOT BETWEEN 1 AND 4
+         OR value < 0);
+
+-- percent metrics are percentages: none above 100 (the status-share total is 100 plus source rounding, tolerance 0.05)
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'percent-unit rows with value above 100.05'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true)
+      WHERE unit = 'percent' AND value > 100.05);
+
+-- balance components must sum to the published total within rounding (trillions of USD)
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'quarters where balance components differ from the total by more than 0.01 trillion'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT year, quarter,
+               SUM(CASE WHEN loan_type <> 'total' THEN value END) AS parts,
+               MAX(CASE WHEN loan_type = 'total' THEN value END) AS total
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true) WHERE metric = 'balance'
+        GROUP BY year, quarter)
+      WHERE ABS(parts - total) > 0.01);
+
+-- the delinquency-status shares of each quarter sum to 100
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'quarters where delinquency-status shares do not sum to 100 (tolerance 0.05)'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT year, quarter, SUM(value) AS s FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true)
+        WHERE metric = 'balance_share_by_delinquency_status' AND delinquency_status <> 'total'
+        GROUP BY year, quarter)
+      WHERE ABS(s - 100) > 0.05);
+
+-- every ingested quarter must carry the full metric set
+INSERT INTO dq_results
+SELECT 'econ', 'household_debt_credit', 'per_quarter_row_count',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'quarters with fewer than 28 rows'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT year, quarter, COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/household_debt_credit', allow_moved_paths := true)
+        GROUP BY year, quarter HAVING COUNT(*) < 28));
 
 -- ============================================================================
 -- industry_occupation_employment (BLS OEWS national industry x occupation mix, new 14 Sep 2026)
