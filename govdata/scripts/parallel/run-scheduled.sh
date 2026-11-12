@@ -256,6 +256,27 @@ embed_continuous_decision() {
   fi
 }
 
+# Phase 2 of the pre-daily release (seed, push, CI gate, release, jar for the next window), run once
+# per daily window after the daily pool and x-schema have finished. Idempotent within a window (the
+# first run leaves a marker in the window log). A failure or a refused CI gate is reported and never
+# stops the window.
+run_pre_daily_release_phase2() {
+  local window_log="$1"
+  if grep -q "pre-daily release phase 2:" "$window_log" 2>/dev/null; then
+    echo "[$(ts)] pre-daily release phase 2 already ran in this window" >> "$window_log"
+    return 0
+  fi
+  echo "[$(ts)] pre-daily release phase 2: seed, push, gate, release, build" | tee -a "$window_log"
+  local rc=0
+  "$SCRIPT_DIR/pre-daily-release.sh" --release >> "$window_log" 2>&1 || rc=$?
+  if [ "$rc" -eq 3 ]; then
+    log_error "ERROR: pre-daily-release --release CI gate refused (exit 3): no release, and the jar staged for the next window is STALE; see $window_log"
+  elif [ "$rc" -ne 0 ]; then
+    log_error "ERROR: pre-daily-release --release failed (exit $rc); see $window_log"
+  fi
+  return 0
+}
+
 # Daily window, after daily's pool, fill and x-schema have all finished: with historical complete,
 # embedding runs to the end of the window minus the yield margin. Same pure "run <s>"/"skip <why>" output.
 embed_daily_window_decision() {
@@ -379,10 +400,11 @@ run_window() {
     true
   } | tee -a "$window_log"
 
-  # Daily windows start on the code merged since the last window: push, release, build and
-  # stage the jar. A failure leaves the previously staged jar in place, and says so.
+  # Daily windows start on the code merged since the last window: phase 1 pushes, gates on CI and
+  # stages the jar (no seed, no release; those are phase 2, run_pre_daily_release_phase2, after the
+  # daily work). A failure leaves the previously staged jar in place, and says so.
   if [ "$mode" = "daily" ]; then
-    echo "[$(ts)] pre-daily release: push, release, build" | tee -a "$window_log"
+    echo "[$(ts)] pre-daily release phase 1: push, gate, build" | tee -a "$window_log"
     "$SCRIPT_DIR/pre-daily-release.sh" >> "$window_log" 2>&1; local pdr_rc=$?
     if [ "$pdr_rc" -eq 3 ]; then
       log_error "ERROR: pre-daily-release CI gate refused (exit 3): the shared jar is STALE; see $window_log"
@@ -445,7 +467,10 @@ run_window() {
         # run until the fill mode ALSO concludes, which can be most of the remaining window
         # (hours). Only meaningful for "daily" itself; the fill mode's own conclusion is covered
         # by the end-of-function call below.
-        [ "$current" = "daily" ] && run_x_schema_if_needed "$window_log"
+        if [ "$current" = "daily" ]; then
+          run_x_schema_if_needed "$window_log"
+          run_pre_daily_release_phase2 "$window_log"
+        fi
         current="$fill_mode"
         continue
       fi
@@ -502,6 +527,7 @@ run_window() {
   # be attributed only to window timeouts.
   if [ "$mode" = "daily" ]; then
     run_x_schema_if_needed "$window_log"
+    run_pre_daily_release_phase2 "$window_log"
     run_daily_window_embedding "$window_log" "$window_end"
   fi
 

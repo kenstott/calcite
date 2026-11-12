@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
 #
-# pre-daily-release.sh — run at the start of each daily window: push main, release, build and
-# stage the jar, so the daily ETL runs the code that was merged since the last window.
+# pre-daily-release.sh — the pre-daily push, CI gate, jar build, seed and release, in two phases.
+#
+#   Phase 1 (default, window start): push main, CI gate, build and stage the jar, so the daily ETL
+#     runs the code merged since the last window. No seed, no release: a seed rebuild fails whenever
+#     a merged schema change adds a table that has no data yet (the seed catalog is discovered from
+#     the lake), and a slow gate must not hold the ETL back for that. The ETL does not need the seed.
+#   Phase 2 (--release, run by run-scheduled.sh after the daily pool, fill and x-schema have
+#     finished): the seed check and rebuild, the push, the CI gate, the engine release and a staged
+#     jar for the next window. The release happens once, here, never per PR.
 #
 #   1. commit   nothing is committed here. Fixes reach main through fix-branch.sh (after DQ);
 #               tracked changes still uncommitted in the shared tree are somebody's edit in
 #               progress, so they are reported and left out of the release and the jar.
 #   2. push     origin main (kenstott/calcite), only as a fast-forward.
-#   2b. seed    build-seed.sh --check says whether a schema MODEL changed since the committed DuckDB
+#   2b. seed    (phase 2 only) build-seed.sh --check says whether a schema MODEL changed since the committed DuckDB
 #               seed (exit 10: no, and nothing below happens). If so: build a jar from HEAD,
 #               regenerate the seed with it, commit the seed files and push, so the release and
 #               the jar below carry the new seed. A failed seed rebuild is reported and the
-#               release continues on the committed seed.
+#               release continues on the committed seed. Seed generation uses the jar phase 1
+#               staged when that jar is built from HEAD, else a jar built from HEAD. The tables
+#               build-seed.sh reports as FAILED (for example no data yet) are logged by name.
 #   2c. CI gate the release and the staged jar ship only code whose CI is green. Commits above the
 #               newest non-generated (code) commit are auto-generated seed or coverage-metadata
 #               commits that change no code, so the gate judges origin/main (what was pushed; a
@@ -25,15 +34,16 @@
 #               window continues on the jar already staged. The log then says the shared jar is
 #               stale and by how many code commits, and the exit status is 3. The seed rebuild and its push above
 #               are not gated. --dry-run prints the decision and never waits.
-#   3. release  engine-v<next patch> on kenstott/calcite when code changed since the last tag
+#   3. release  (phase 2 only) engine-v<next patch> on kenstott/calcite when code changed since the last tag
 #               AND we're about to build a fresh jar for this head_sha (step 4's own gate) —
 #               a release always accompanies the build it corresponds to, not a wall-clock timer.
 #   4. build    shadowJar from a clean checkout of HEAD, staged over the shared sih-govdata.jar
 #               by atomic rename (JVMs that already loaded classes from the old file keep them).
 #
-# Usage: pre-daily-release.sh [--dry-run] [--build-only]
+# Usage: pre-daily-release.sh [--dry-run] [--build-only | --release]
 #   --dry-run     print what would be pushed, released and built; change nothing
-#   --build-only  skip push and release (used to test the build and staging)
+#   --build-only  stage a jar from a pushed, CI-green head: no push, no seed, no release
+#   --release     phase 2: seed, push, CI gate, release, stage a jar for the next window
 # Env: STAGE_DIR overrides the directory the jar is staged into (default govdata/build/libs).
 set -euo pipefail
 
@@ -47,13 +57,18 @@ RELEASE_PATHS=(govdata/src file/src core/src linq4j/src askamerica-engine/src dr
 
 DRY_RUN=false
 BUILD_ONLY=false
+RELEASE_PHASE=false
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
     --build-only) BUILD_ONLY=true ;;
-    *) echo "Usage: $0 [--dry-run] [--build-only]" >&2; exit 2 ;;
+    --release) RELEASE_PHASE=true ;;
+    *) echo "Usage: $0 [--dry-run] [--build-only | --release]" >&2; exit 2 ;;
   esac
 done
+if $BUILD_ONLY && $RELEASE_PHASE; then
+  echo "--build-only and --release are mutually exclusive" >&2; exit 2
+fi
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { echo "[$(ts)] pre-daily-release: $*"; }
@@ -147,6 +162,8 @@ SEED_DIR_REL="govdata/src/main/resources/duckdb/seed"
 SEED_NOT_NEEDED=10
 if $BUILD_ONLY; then
   log "--build-only: skipping the seed check"
+elif ! $RELEASE_PHASE; then
+  log "phase 1: seed and release are left to the end-of-daily --release run"
 else
   seed_rc=0
   seed_note="$("$GOVDATA_ROOT/scripts/build-seed.sh" --check 2>&1)" || seed_rc=$?
@@ -163,10 +180,20 @@ else
     echo "$seed_note" | sed 's/^/    /'
     mkdir -p "$STAGE_DIR"
     seed_jar="$STAGE_DIR/sih-govdata-seedgen.$$.jar"
-    if ! build_jar "$head_sha" "$seed_jar"; then
+    seed_jar_own=true
+    if [ -f "$STAGE_DIR/sih-govdata.jar" ] && [ -f "$STAGE_DIR/sih-govdata.jar.commit" ] \
+       && [ "$(cat "$STAGE_DIR/sih-govdata.jar.commit")" = "$head_sha" ]; then
+      seed_jar="$STAGE_DIR/sih-govdata.jar"; seed_jar_own=false
+      log "generating the seed with the jar staged for $head_sha"
+    fi
+    seed_out="$(mktemp "${TMPDIR:-/tmp}/pre-daily-seed.XXXXXX")"
+    if $seed_jar_own && ! build_jar "$head_sha" "$seed_jar"; then
       log "ERROR: no jar to generate the seed with; continuing on the committed seed"
-    elif ! MODEL_VERIFY_JAR="$seed_jar" timeout 7200 "$GOVDATA_ROOT/scripts/build-seed.sh"; then
-      log "ERROR: build-seed.sh failed; continuing on the committed seed"
+    elif ! { MODEL_VERIFY_JAR="$seed_jar" timeout 7200 "$GOVDATA_ROOT/scripts/build-seed.sh" >"$seed_out" 2>&1; seed_build_rc=$?; \
+             tail -n 40 "$seed_out" | sed 's/^/    /'; [ "$seed_build_rc" -eq 0 ]; }; then
+      log "ERROR: build-seed.sh failed (rc=$seed_build_rc); continuing on the committed seed"
+      failed_tables="$(grep -E 'FAILED [A-Za-z0-9_]+\.[A-Za-z0-9_]+' "$seed_out" | sed 's/^/    /' || true)"
+      [ -z "$failed_tables" ] || { log "tables the seed could not be built for (no data yet, or other):"; echo "$failed_tables"; }
     elif [ -z "$(git status --porcelain -- "$SEED_DIR_REL")" ]; then
       log "INFO: the rebuilt seed is identical to the committed one; nothing to commit"
     else
@@ -184,7 +211,8 @@ else
         fi
       fi
     fi
-    rm -f "$seed_jar"
+    rm -f "$seed_out"
+    ! $seed_jar_own || rm -f "$seed_jar"
   fi
 fi
 
@@ -286,26 +314,21 @@ else
 fi
 
 # ── 3. release ───────────────────────────────────────────────────────────────
-# Gated on the same signal step 4 uses to decide whether to build: a real release only
-# happens on a window where we're actually building a new jar for this head_sha, so it
-# stays tied to genuine new code rather than a wall-clock timer. Every scheduler restart
-# starts a new daily window, but a restart with no new commits leaves the stamp matching
-# head_sha, so will_build is false and this doesn't re-release — the RELEASE_PATHS diff
-# below already prevents releasing when nothing release-relevant changed since the last
-# tag; will_build additionally prevents releasing a head_sha whose jar isn't being (re)built
-# this run.
+# Phase 2 only. Phase 1 has usually staged the jar for this head already, so the release is not
+# tied to a fresh build; the RELEASE_PATHS diff against the last tag is what makes it happen once
+# (after the tag exists, nothing release-relevant differs) and only when engine code changed.
 stamp="$STAGE_DIR/sih-govdata.jar.commit"
 dest="$STAGE_DIR/sih-govdata.jar"
 will_build=true
 [ -f "$dest" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$head_sha" ] && will_build=false
 
-if $release_ok; then
+if ! $RELEASE_PHASE; then
+  log "phase 1: no release; the release is cut by the end-of-daily --release run"
+elif $release_ok; then
   last_tag="$(git tag -l 'engine-v*' --sort=-v:refname | head -1)"
   [ -n "$last_tag" ] || { log "ERROR: no engine-v* tag to release after"; exit 1; }
   if git diff --quiet "$last_tag" HEAD -- "${RELEASE_PATHS[@]}"; then
     log "no engine code changed since $last_tag; no release"
-  elif ! $will_build; then
-    log "the staged jar is already built from $head_sha; not releasing again for the same commit"
   else
     ver="${last_tag#engine-v}"
     next="${ver%.*}.$(( ${ver##*.} + 1 ))"

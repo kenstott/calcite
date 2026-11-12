@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests pre-daily-release.sh's seed step in a scratch repository with stubbed gradle, gh and
+# Phase 1 (no flag) never seeds or releases; phase 2 (--release) does. Tests pre-daily-release.sh's seed step in a scratch repository with stubbed gradle, gh and
 # build-seed.sh: nothing is rebuilt, committed or released for the seed unless build-seed.sh says a
 # schema model changed; when it does, the seed is regenerated, committed, pushed, and the release
 # and the staged jar carry the new commit; a failed rebuild does not stop the release. The CI gate
@@ -53,7 +53,8 @@ S
   (cd "$tmp/w" && git add -A govdata/scripts && git commit -qm "stub seed" && git push -q origin main)
   : > "$tmp/seed-builds.log"
 }
-run() { (cd "$tmp/w" && CI_WAIT_SECS="${CI_WAIT_SECS:-0}" CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-0}" CI_POLL_SECS=1 PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh) > "$tmp/out.log" 2>&1; echo $? > "$tmp/rc"; }
+run() { (cd "$tmp/w" && CI_WAIT_SECS="${CI_WAIT_SECS:-0}" CI_NONE_GRACE_SECS="${CI_NONE_GRACE_SECS:-0}" CI_POLL_SECS=1 PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh ${PHASE_ARGS---release}) > "$tmp/out.log" 2>&1; echo $? > "$tmp/rc"; }
+run1() { PHASE_ARGS="" run; }
 
 # 1. model unchanged: no seed build, no seed commit
 setup; stub_seed 10 0; head0=$(git -C "$tmp/w" rev-parse HEAD); run
@@ -151,7 +152,7 @@ CI_WAIT_SECS=2 run
 
 # --dry-run prints the decision and changes nothing
 setup; stub_seed 10 0; echo '[]' > "$tmp/gh-runs.json"
-(cd "$tmp/w" && PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh --dry-run) > "$tmp/out.log" 2>&1
+(cd "$tmp/w" && PATH="$tmp/bin:$PATH" bash govdata/scripts/parallel/pre-daily-release.sh --release --dry-run) > "$tmp/out.log" 2>&1
 grep -q "would not release or stage a new jar (CI gate)" "$tmp/out.log" && [ ! -e "$tmp/w/govdata/build/libs/sih-govdata.jar" ] \
   && ok "--dry-run: gate decision printed" || bad "--dry-run: $(tail -3 "$tmp/out.log")"
 
@@ -180,4 +181,46 @@ local_head=$(git -C "$tmp/w" rev-parse HEAD)
 setup; stub_seed 10 0; echo '[{"status":"completed","conclusion":"failure","url":"http://ci/f","createdAt":"2026-10-31T00:00:00Z"}]' > "$tmp/gh-runs.json"
 run
 [ "$(cat "$tmp/rc")" -eq 3 ] && grep -q "shared jar is STALE" "$tmp/out.log" && ok "gate refusal: exit 3 and stale-jar message" || bad "refusal: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+
+# ── phase 1: push, gate, build; no seed, no release ──
+setup; stub_seed 0 0
+mkdir -p "$tmp/w/govdata/src/main/java"; echo x > "$tmp/w/govdata/src/main/java/A.java"
+(cd "$tmp/w" && git add -A && git commit -qm "code change"); head0=$(git -C "$tmp/w" rev-parse HEAD); : > "$tmp/gh.log"
+run1
+[ "$(cat "$tmp/rc")" -eq 0 ] && [ ! -s "$tmp/seed-builds.log" ] && [ "$(git -C "$tmp/w" rev-parse HEAD)" = "$head0" ] \
+  && ok "phase 1: model changed but no seed built or committed" || bad "phase 1 seed: rc=$(cat "$tmp/rc") $(tail -3 "$tmp/out.log")"
+[ "$(git -C "$tmp/origin.git" rev-parse main)" = "$head0" ] && ok "phase 1: pushed" || bad "phase 1: not pushed"
+[ "$(cat "$tmp/w/govdata/build/libs/sih-govdata.jar.commit" 2>/dev/null)" = "$head0" ] && ok "phase 1: jar staged at the pushed head" || bad "phase 1: no staged jar"
+! grep -q "release create" "$tmp/gh.log" && ! git -C "$tmp/origin.git" rev-parse engine-v0.1.1 >/dev/null 2>&1 \
+  && ok "phase 1: nothing released" || bad "phase 1: released"
+
+# phase 1 with a refused gate stages nothing and exits 3 with the stale message
+setup; stub_seed 0 0; echo '[{"status":"completed","conclusion":"failure","url":"http://ci/f","createdAt":"2026-10-31T00:00:00Z"}]' > "$tmp/gh-runs.json"
+run1
+[ "$(cat "$tmp/rc")" -eq 3 ] && [ ! -e "$tmp/w/govdata/build/libs/sih-govdata.jar" ] && grep -q "shared jar is STALE" "$tmp/out.log" \
+  && ok "phase 1: gate refusal stages nothing, exit 3" || bad "phase 1 gate: rc=$(cat "$tmp/rc")"
+
+# phase 2 after phase 1 on the same head: the staged jar generates the seed; the release is still cut, once
+setup; stub_seed 0 0
+mkdir -p "$tmp/w/govdata/src/main/java"; echo x > "$tmp/w/govdata/src/main/java/A.java"
+(cd "$tmp/w" && git add -A && git commit -qm "code change"); run1
+: > "$tmp/gh.log"; run
+grep -q "generating the seed with the jar staged" "$tmp/out.log" && ! grep -q seedgen "$tmp/seed-builds.log" \
+  && ok "phase 2: seed generated with the jar phase 1 staged" || bad "phase 2 jar reuse: $(tail -5 "$tmp/out.log")"
+git -C "$tmp/origin.git" rev-parse 'engine-v0.1.1^{commit}' >/dev/null 2>&1 && ok "phase 2: release cut though phase 1 had staged a jar" || bad "phase 2: no release"
+stub_seed 10 0; run; ! grep -q "releasing engine-v0.1.2" "$tmp/out.log" && ok "phase 2 rerun: no second release" || bad "phase 2 rerun released again"
+
+# phase 2: a seed that fails for tables with no data is reported by table and the release continues
+setup; stub_seed 0 1
+sed -i 's|^\[ 1 -eq 0 \]|echo "FAILED econ.state_ui_claims: no columns" >\&2\n[ 1 -eq 0 ]|' "$tmp/w/govdata/scripts/build-seed.sh"
+mkdir -p "$tmp/w/govdata/src/main/java"; echo y > "$tmp/w/govdata/src/main/java/B.java"
+(cd "$tmp/w" && git add -A && git commit -qm "code change" -q)
+run
+grep -q "FAILED econ.state_ui_claims" "$tmp/out.log" && grep -q "tables the seed could not be built for" "$tmp/out.log" \
+  && git -C "$tmp/origin.git" rev-parse 'engine-v0.1.1' >/dev/null 2>&1 \
+  && ok "phase 2: failed tables named, release not stopped" || bad "phase 2 failed tables: rc=$(cat "$tmp/rc") $(tail -6 "$tmp/out.log")"
+
+# the flags are exclusive
+(cd "$tmp/w" && bash govdata/scripts/parallel/pre-daily-release.sh --build-only --release) >/dev/null 2>&1
+[ $? -eq 2 ] && ok "--build-only with --release is refused" || bad "--build-only --release accepted"
 exit $fail
