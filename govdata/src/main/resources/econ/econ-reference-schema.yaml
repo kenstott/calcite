@@ -1133,6 +1133,7 @@ partitionedTables:
         - "CIVPART"
         - "ICSA"
         - "CCSA"
+        - "IURSA"
         - "AWHMAN"
         - "CPIAUCSL"
         - "CPIAUCNS"
