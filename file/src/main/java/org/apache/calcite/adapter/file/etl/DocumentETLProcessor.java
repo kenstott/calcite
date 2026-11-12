@@ -765,6 +765,14 @@ public class DocumentETLProcessor {
       result = lookupAccession(documentSource, cik, submissions, accession);
     }
 
+    if (result == null && submissions.local
+        && documentSource.isLocalContentAuthoritative(submissionsUrl)) {
+      throw new IOException(
+          "accession " + accession + " not found for CIK " + cik + " in the local submissions "
+          + "copy, which is authoritative and not rechecked live — the copy may predate the "
+          + "filing, so this is not a confirmed absence");
+    }
+
     if (result == null && submissions.overflowFetchFailed) {
       throw new IOException(
           "accession " + accession + " not found for CIK " + cik + " in submissions.json, but "

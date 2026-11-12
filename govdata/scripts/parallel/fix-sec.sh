@@ -200,14 +200,13 @@ export ETL_HEAP_MAX="${HEAP_GB}g"
 
 # The per-filer submissions JSON comes from SEC's nightly submissions.zip, never from data.sec.gov:
 # a repair asks for tens of thousands of accessions and sec.gov blocks this host within minutes of
-# per-CIK requests (#1054). A zip already on disk is reused with no network call; otherwise one
-# conditional GET fetches it (honouring the host cool-down). A filer or accession the zip lacks is
-# reported missing, not fetched live (SEC_BULK_SUBMISSIONS_AUTHORITATIVE).
+# per-CIK requests (#1054). One conditional GET per run refreshes the zip (a 304 when SEC's copy is
+# unchanged, honouring the host cool-down); a zip reused unchecked predates the filings filed since
+# it was built, and its misses are final (SEC_BULK_SUBMISSIONS_AUTHORITATIVE). A failed refresh
+# stops the run.
 SUBMISSIONS_BULK_DIR="${SEC_SUBMISSIONS_BULK_DIR:-/var/tmp/govdata/bulk-submissions}"
-if [ ! -f "$SUBMISSIONS_BULK_DIR/submissions.zip" ]; then
-  "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" \
-    || { echo "fix-sec: no submissions.zip in $SUBMISSIONS_BULK_DIR and it could not be fetched; refusing to fall back to per-CIK requests" >&2; exit 1; }
-fi
+"$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" \
+  || { echo "fix-sec: submissions.zip in $SUBMISSIONS_BULK_DIR could not be refreshed; refusing to run against a possibly stale copy or fall back to per-CIK requests" >&2; exit 1; }
 export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
 export SEC_BULK_SUBMISSIONS_AUTHORITATIVE=true
 log_info "fix-sec: submissions from $SEC_BULK_SUBMISSIONS_ZIP (authoritative, no live per-CIK requests)"
