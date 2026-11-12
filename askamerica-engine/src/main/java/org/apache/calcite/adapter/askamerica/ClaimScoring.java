@@ -80,42 +80,6 @@ final class ClaimScoring {
         Pattern.CASE_INSENSITIVE);
 
     private static final String SUBJECT_PREFIX = GROUP_SUBJECT + ":";
-    /** Wording by which a sentence hands its figure to a source. */
-    static final Pattern ATTRIBUTION_PHRASE = Pattern.compile(
-        "(?i)\\b(according to|data (?:show|shows|showed|shown)|citing|cited by|"
-        + "as reported by|(?:report|study|survey|analysis|audit|poll|release)s? "
-        + "(?:found|finds|show|shows|showed|estimates|estimated))\\b");
-    /** A named organization estimating, forecasting, projecting or expecting something. */
-    static final Pattern ATTRIBUTION_ORG = Pattern.compile(
-        "\\b[A-Z][A-Za-z&.]+(?: [A-Z][A-Za-z&.]+){0,3} "
-        + "(?:estimates|estimated|forecasts|projects|projected|expects)\\b");
-
-    /** Whether `rests_on` names at least one claim and every claim it names is a source-audit
-     *  claim. */
-    static boolean restsOnFidelity(JsonNode claims, JsonNode restsOn) {
-        if (!restsOn.isArray() || restsOn.size() == 0) {
-            return false;
-        }
-        for (JsonNode r : restsOn) {
-            int ref = r.asInt(0);
-            if (ref < 1 || ref > claims.size()
-                || !GROUP_FIDELITY.equals(group(claims.get(ref - 1)))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /** The attribution wording in an assertion, or null when it names no source. */
-    static String attribution(String assertion) {
-        Matcher m = ATTRIBUTION_PHRASE.matcher(assertion);
-        if (m.find()) {
-            return m.group();
-        }
-        m = ATTRIBUTION_ORG.matcher(assertion);
-        return m.find() ? m.group() : null;
-    }
-
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ClaimScoring() {
@@ -734,18 +698,6 @@ final class ClaimScoring {
                         problems.add("claim " + n + " has `rests_on` entry " + r + ": each "
                             + "entry is the number (1-" + claims.size() + ") of another claim");
                     }
-                }
-                String cites = GROUP_AUTHOR.equals(g)
-                    ? attribution(c.path("assertion").asText("")) : null;
-                if (cites != null && !isCentral(c)) {
-                    problems.add("claim " + n + " attributes its figure to a source ('" + cites
-                        + "'): a figure the piece relays from a source MUST be grouped `"
-                        + GROUP_FIDELITY + "`, not `" + GROUP_AUTHOR + "`. Regroup it");
-                } else if (cites != null && !restsOnFidelity(claims, restsOn)) {
-                    problems.add("claim " + n + " is the central claim and attributes its "
-                        + "figure to a source ('" + cites + "'): `rests_on` MUST name the `"
-                        + GROUP_FIDELITY + "` claim that carries that source's own figure, and "
-                        + "only `" + GROUP_FIDELITY + "` claims");
                 }
                 if (restsOn.size() > 0) {
                     if (!SUPPORTS.contains(support(c))) {

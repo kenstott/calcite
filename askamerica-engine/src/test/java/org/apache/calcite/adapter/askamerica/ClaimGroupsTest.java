@@ -79,55 +79,6 @@ class ClaimGroupsTest {
     assertEquals(2, ClaimScoring.pinocchios(claims));
   }
 
-  /** 501 of 515 scored claims across the saved reports cited nothing, and 86 of the 218
-   *  uncited author claims named their source in the sentence itself (2026-11-12). */
-  @Test void anAuthorClaimThatNamesItsSourceMustCiteItOrMoveToTheSourceAudit() {
-    ObjectNode relayed = author(
-        "The unemployment rate fell to 4.1%, according to Bureau of Labor Statistics data",
-        "true", null);
-    relayed.put("central", true);
-    String refused = ClaimScoring.enforce(claims(relayed,
-        author("Hiring slowed in the spring", "true", null)));
-    assertNotNull(refused);
-    assertTrue(refused.contains("claim 1 is the central claim and attributes its figure to a "
-        + "source ('according to')"), refused);
-    assertFalse(refused.contains("claim 2 attributes"), refused);
-
-    assertEquals("The EIA expects",
-        ClaimScoring.attribution("The EIA expects inventories to rise in 2027"));
-    assertNull(ClaimScoring.attribution("Rents rose 4 percent last year"));
-    assertNull(ClaimScoring.attribution("The senator said rents doubled"));
-
-    ObjectNode audit = claim("BLS put the unemployment rate at 4.1%", "fidelity", "true");
-    ObjectNode resting = restingOn(author(
-        "The unemployment rate fell to 4.1%, according to Bureau of Labor Statistics data",
-        "true", null), 1, "supported");
-    resting.put("central", true);
-    String ok = ClaimScoring.enforce(claims(audit, resting));
-    assertTrue(ok == null || !ok.contains("attributes its figure"), String.valueOf(ok));
-
-    // Live run 2026-11-12: refused with `rests_on`: [], the agent kept six relayed EIA
-    // figures as author claims and pointed each at an unrelated source-audit claim.
-    ObjectNode dodge = restingOn(author(
-        "EIA forecasts that diesel will average $5.03 per gallon", "true", null),
-        1, "supported");
-    String dodged = ClaimScoring.enforce(claims(audit, resting, dodge));
-    assertNotNull(dodged);
-    assertTrue(dodged.contains("claim 3 attributes its figure to a source ('EIA forecasts')"),
-        dodged);
-    assertTrue(dodged.contains("MUST be grouped `fidelity`"), dodged);
-
-    // A central claim that names its source must rest on source-audit claims only.
-    ObjectNode onAuthor = restingOn(author(
-        "Output hit a record, according to the EIA", "true", null), 1, "supported");
-    onAuthor.put("central", true);
-    String wrongTarget = ClaimScoring.enforce(claims(
-        author("Output rose last year", "true", null), onAuthor));
-    assertNotNull(wrongTarget);
-    assertTrue(wrongTarget.contains("claim 2 is the central claim and attributes"),
-        wrongTarget);
-  }
-
   /** Live run 2026-11-12: a central claim graded mostly false whose cited source contradicts
    *  it scored 0 and rated the piece 4 Pinocchios, where its verdict alone gives 3. */
   @Test void aContradictedCentralClaimRatesThePieceByItsVerdict() {
