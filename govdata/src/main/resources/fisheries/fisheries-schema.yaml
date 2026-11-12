@@ -165,7 +165,7 @@ partitionedTables:
       distinctYears: 75
       contiguous: true
       rowCount: 229841
-      checkedAt: "2026-11-11T22:33:23Z"
+      checkedAt: "2026-11-12T22:52:57Z"
     partitions: *standard_partitions
     comment: >
       NOAA Fisheries FOSS annual landings by state and species, 1950 to current-2. Two
@@ -316,7 +316,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 239424
-      checkedAt: "2026-11-11T22:33:26Z"
+      checkedAt: "2026-11-12T22:52:58Z"
     partitions: *standard_partitions
     comment: >
       NOAA Fisheries MRIP (Marine Recreational Information Program) recreational catch by
@@ -538,7 +538,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 13655
-      checkedAt: "2026-11-11T22:33:28Z"
+      checkedAt: "2026-11-12T22:53:00Z"
     partitions: *standard_partitions
     comment: >
       NOAA Fisheries MRIP recreational fishing effort, in angler trips, by year x wave x state x
