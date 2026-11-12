@@ -59,6 +59,26 @@ class ClaimGroupsTest {
       "mostly true", "partially false", "partly false", "mostly false", "false");
 
   /** An author claim offering no cited evidence; {@code errs} may be null. */
+  /** Daily eval news q4 (2026-11-12): a headline presenting EIA's 2027 forecast as output
+   *  already reached was graded partially false, and seven true secondary figures lifted
+   *  the piece to 1 Pinocchio, below the unaided arm's 2. */
+  @Test void trueDetailDoesNotLiftTheRatingAboveTheCentralClaim() {
+    ObjectNode central = author("US crude production has hit a record 14.3 million b/d",
+        "partially false", "toward_thesis");
+    central.put("central", true);
+    ArrayNode claims = claims(central,
+        author("Crude inventories fell to the lowest October level since 2014", "true", null),
+        author("Henry Hub averages $2.87 from November through March", "true", null),
+        author("Almost 70 Bcf more gas will be in storage", "true", null),
+        author("Diesel will average $5.03 a gallon", "true", null),
+        author("LNG exports rise from 15 to 19 Bcf/d", "true", null),
+        author("Brent averages $86 in 2027", "true", null),
+        author("Inventories rise in 2027 as net imports increase", "true", null));
+    assertEquals(50, ClaimScoring.score(claims, ClaimScoring.headlineBlock(claims))
+        .path("accuracy_score").asInt());
+    assertEquals(2, ClaimScoring.pinocchios(claims));
+  }
+
   private static ObjectNode author(String assertion, String verdict, String errs) {
     ObjectNode c = claim(assertion, "author_claims", verdict);
     c.putArray("rests_on");
@@ -363,7 +383,8 @@ class ClaimGroupsTest {
         author("Lots of people think so", "unsupported", "toward_thesis"),
         author("Rents doubled", "mostly false", "toward_thesis"),
         author("Rents rose 4 percent", "true", null));
-    assertEquals(subject + " are very biased and mostly false; 1 claim could not be confirmed.",
+    // The central claim is false, so the piece is: one true detail does not lift it.
+    assertEquals(subject + " are very biased and false; 1 claim could not be confirmed.",
         ClaimScoring.headline(subject + ".", bad));
 
     ArrayNode good = claims(author("Rents rose 4 percent", "true", null).put("central", true),
