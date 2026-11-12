@@ -101,7 +101,7 @@ for spec in "${TABLES[@]}"; do
   for sub in metadata data; do
     TZ=UTC rclone lsf -R --files-only --format "pst" --separator $'\t' \
         "${R2_REMOTE}:${BUCKET}/${base}/${sub}" \
-      | awk -F'\t' -v sub="$sub" 'BEGIN{OFS="\t"} {print sub "/" $1, $2, $3}' >> "$OUT_DIR/$tag.r2list"
+      | awk -F'\t' -v pfx="$sub" 'BEGIN{OFS="\t"} {print pfx "/" $1, $2, $3}' >> "$OUT_DIR/$tag.r2list"
   done
 
   set +e
