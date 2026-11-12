@@ -4721,6 +4721,89 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: medicare_part_b_premiums
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=medicare_part_b_premiums/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Medicare Part B standard monthly premium and annual deductible, one row per calendar year
+      from 2005 to the latest year CMS has announced, taken from the annual CMS notice "Medicare
+      Part B Monthly Actuarial Rates, Premium Rates, and Annual Deductible" in the Federal
+      Register (published September-November of the prior year, so the 2027 premium appears once
+      CMS publishes that notice). standard_premium is the premium for enrollees at the standard
+      rate (2026 = 202.90, 2025 = 185.00, 2023 = 164.90 after the 2022 figure of 170.10); it is
+      not the higher income-related (IRMAA) premium and not the hold-harmless amount some
+      enrollees pay. Use it for premium-level and Social Security-COLA-offset claims; the COLA is
+      in social_security_cola and the CPI-W it follows in inflation_metrics. Trustees Report
+      projections are not in this table. Source: Federal Register documents API
+      (https://www.federalregister.gov/api/v1/documents.json), CMS notices.
+
+    dimensions:
+      type:
+        - medicare_part_b_premiums
+
+    columns:
+      - name: year
+        type: integer
+        nullable: true
+        comment: >
+          Calendar year the premium and deductible apply to (the notice is published the year before); PK.
+      - name: standard_premium
+        type: double
+        nullable: true
+        comment: >
+          Standard Part B monthly premium in dollars (2026 = 202.90, 2025 = 185.00, 2009 = 96.40).
+      - name: annual_deductible
+        type: double
+        nullable: true
+        comment: >
+          Part B annual deductible in dollars (2026 = 283.00, 2025 = 257.00).
+      - name: notice_document_number
+        type: string
+        nullable: true
+        comment: >
+          Federal Register document number of the CMS notice the figures come from (2025-20251 for 2026).
+      - name: notice_publication_date
+        type: string
+        nullable: true
+        comment: >
+          Date the notice was published in the Federal Register (ISO yyyy-mm-dd).
+
+    source:
+      type: http
+      url: "https://www.federalregister.gov/api/v1/documents.json?conditions[term]=%22Part+B+Monthly+Actuarial+Rates%22&conditions[type][]=NOTICE&per_page=100&order=oldest&fields[]=document_number&fields[]=title&fields[]=publication_date&fields[]=raw_text_url"
+      method: GET
+      response:
+        format: JSON
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.MedicarePartBPremiumsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=medicare_part_b_premiums/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- LABOR PRODUCTIVITY ---
   - name: labor_productivity
     # BLS revises recent quarters of the Major Sector Productivity series and
