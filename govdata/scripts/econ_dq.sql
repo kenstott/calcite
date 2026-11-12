@@ -2206,3 +2206,18 @@ GROUP BY report_year
 HAVING COUNT(*) <> 3
     OR COUNT(*) FILTER (WHERE unfunded_obligation_trillions IS NOT NULL AND fund = 'OASDI') <> 1
     OR COUNT(*) FILTER (WHERE unfunded_obligation_trillions IS NOT NULL AND fund <> 'OASDI') <> 0;
+
+-- social_security_trustees_projections: actuarial balance on every row; payable share on OASDI rows; 2026 known values
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trustees_projections', 'payable_and_balance', 'fail', 'report_year, fund',
+  'balance on all rows, payable pct on every OASDI row, 2026 OASI 78/62, OASDI 83/65, balance OASDI -4.42',
+  'report ' || CAST(report_year AS VARCHAR) || ' fund ' || fund
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)
+WHERE actuarial_balance_pct_payroll IS NULL
+   OR (fund = 'OASDI' AND (payable_benefits_pct_at_depletion IS NULL OR payable_benefits_pct_final_year IS NULL
+       OR payable_benefits_pct_at_depletion NOT BETWEEN 1 AND 100 OR payable_benefits_pct_final_year NOT BETWEEN 1 AND 100))
+   OR (fund = 'DI' AND payable_benefits_pct_at_depletion IS NOT NULL)
+   OR (report_year = 2026 AND fund = 'OASI' AND (payable_benefits_pct_at_depletion <> 78 OR payable_benefits_pct_final_year <> 62
+       OR actuarial_balance_pct_payroll <> -4.55))
+   OR (report_year = 2026 AND fund = 'OASDI' AND (payable_benefits_pct_at_depletion <> 83 OR payable_benefits_pct_final_year <> 65
+       OR actuarial_balance_pct_payroll <> -4.42));

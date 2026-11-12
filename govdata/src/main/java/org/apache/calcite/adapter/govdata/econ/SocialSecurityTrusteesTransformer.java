@@ -30,7 +30,8 @@ import java.util.regex.Pattern;
  * each Social Security Trustees Report, {@code https://www.ssa.gov/oact/tr/<year>/II_D_project.html},
  * through a headed browser (ssa.gov refuses plain HTTP).
  *
- * <p>Reports 2016 to the latest are read; the table layout is the same in all of them (earlier
+ * <p>Also reads the 75-year actuarial balance (Table II.D2) and the sentence giving the share of
+ * scheduled benefits payable after reserve depletion. Reports 2016 to the latest are read; the table layout is the same in all of them (earlier
  * reports use a different layout and are not covered). The report for the current calendar year is
  * skipped when SSA has not published it yet (404); a 404 for any earlier year, or a page whose
  * table or unfunded-obligation sentence cannot be found, fails the run.
@@ -49,6 +50,21 @@ public class SocialSecurityTrusteesTransformer implements StreamingResponseTrans
   private static final Pattern DEPLETION = Pattern.compile(
       "Projected year of trust fund reserve depletion\\s+" + VALUE + "\\s+" + VALUE + "\\s+"
           + VALUE + "\\s");
+  private static final Pattern ACTUARIAL_BALANCE = Pattern.compile(
+      "Shown in this report:\\s+Actuarial balance\\s+(-?\\d*\\.\\d+)\\s+(-?\\d*\\.\\d+)\\s+"
+          + "(-?\\d*\\.\\d+)\\s");
+  // Combined OASDI: "continuing income is sufficient to support expenditures at a level of 79
+  // percent of program cost for the rest of 2034, declining to 74 percent for 2090" (2016-2025) or
+  // "... sufficient to pay 83 percent of OASDI scheduled benefits for the rest of 2034, declining
+  // to 65 percent for 2100" (2026). The first match on the page is the combined fund.
+  private static final Pattern PAYABLE_OASDI = Pattern.compile(
+      "continuing income is sufficient to (?:support expenditures at a level of|pay) (\\d+) percent "
+          + "of (?:program cost|OASDI scheduled benefits) for the rest of (\\d{4}), "
+          + "(?:declining|rising) to (\\d+) percent for (\\d{4})");
+  // OASI alone, stated explicitly only in some reports (2026).
+  private static final Pattern PAYABLE_OASI = Pattern.compile(
+      "OASI income is sufficient to pay (\\d+) percent of scheduled OASI benefits for the rest of "
+          + "(\\d{4}), (?:declining|rising) to (\\d+) percent for (\\d{4})");
   private static final Pattern UNFUNDED = Pattern.compile(
       "unfunded obligation of \\$([0-9]+(?:\\.[0-9]+)?)\\s+trillion");
 
@@ -94,6 +110,10 @@ public class SocialSecurityTrusteesTransformer implements StreamingResponseTrans
     Matcher attained = require(YEAR_ATTAINED, text, where + "Table II.D1 year attained row");
     Matcher depletion = require(DEPLETION, text, where + "Table II.D1 depletion year row");
     Matcher unfunded = require(UNFUNDED, text, where + "75-year unfunded obligation sentence");
+    Matcher balance = require(ACTUARIAL_BALANCE, text, where + "Table II.D2 actuarial balance row");
+    Matcher payable = require(PAYABLE_OASDI, text, where + "OASDI payable-benefit sentence");
+    Matcher payableOasi = PAYABLE_OASI.matcher(text);
+    boolean hasOasi = payableOasi.find();
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     for (int i = 0; i < FUNDS.length; i++) {
       String dep = depletion.group(i + 1);
@@ -107,6 +127,20 @@ public class SocialSecurityTrusteesTransformer implements StreamingResponseTrans
       row.put("max_ratio_year", Integer.valueOf(attained.group(i + 1)));
       row.put("unfunded_obligation_trillions",
           i == FUNDS.length - 1 ? Double.valueOf(unfunded.group(1)) : null);
+      row.put("actuarial_balance_pct_payroll", Double.valueOf(balance.group(i + 1)));
+      Matcher pay = i == 2 ? payable : i == 0 && hasOasi ? payableOasi : null;
+      if (pay != null && !pay.group(2).equals(dep)) {
+        throw new IllegalStateException(where + FUNDS[i] + " payable-benefit sentence starts in "
+            + pay.group(2) + " but the depletion year is " + dep + "; the page layout changed");
+      }
+      // Payable share is stated for OASDI in every report and for OASI only in some; DI benefits
+      // are always payable in full, so it has no row value.
+      row.put("payable_benefits_pct_at_depletion",
+          pay == null ? null : Integer.valueOf(pay.group(1)));
+      row.put("payable_benefits_pct_final_year",
+          pay == null ? null : Integer.valueOf(pay.group(3)));
+      row.put("payable_projection_end_year",
+          pay == null ? null : Integer.valueOf(pay.group(4)));
       rows.add(row);
     }
     return rows;

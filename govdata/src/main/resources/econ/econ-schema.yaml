@@ -4741,9 +4741,11 @@ partitionedTables:
       projected trust fund ratio (reserves as a percent of a year's cost) and max_ratio_year when
       it occurs. unfunded_obligation_trillions is the combined OASDI 75-year present-value unfunded
       obligation in trillions of dollars (2026 report 29.3; 2025 report 25.1) and is set only on
-      the OASDI row. Not in this table: the quarter of depletion, the share of scheduled benefits
-      still payable after depletion, the actuarial balance, the low-cost and high-cost scenarios,
-      and reports before 2016. ssa.gov refuses non-browser clients, so the pages are read through a
+      the OASDI row. Also carries the 75-year actuarial balance (Table II.D2) and the share of scheduled
+      benefits payable after depletion (OASDI in every report, OASI where the report states it
+      separately, so the 22% OASI cut of the 2026 report is payable_benefits_pct_at_depletion =
+      78). Not in this table: the quarter of depletion, the low-cost and high-cost scenarios, and
+      reports before 2016. ssa.gov refuses non-browser clients, so the pages are read through a
       headed browser session. Source: https://www.ssa.gov/oact/tr/ (section II.D, Table II.D1).
 
     dimensions:
@@ -4781,6 +4783,26 @@ partitionedTables:
         nullable: true
         comment: >
           Combined OASDI present-value unfunded obligation over the 75-year period, in trillions of dollars; set only on the OASDI row, null on OASI and DI.
+      - name: actuarial_balance_pct_payroll
+        type: double
+        nullable: true
+        comment: >
+          75-year actuarial balance in percent of taxable payroll from Table II.D2 (negative = actuarial deficit; 2026 report: OASI -4.55, DI 0.13, OASDI -4.42).
+      - name: payable_benefits_pct_at_depletion
+        type: integer
+        nullable: true
+        comment: >
+          Percent of scheduled benefits that continuing income can pay in the year the reserves run out and the rest of that year (2026 report: OASI 78, OASDI 83; 2025 report OASDI 81). Set on the OASDI row in every report and on the OASI row only in reports that state it separately (2026); null for DI, whose benefits stay payable in full.
+      - name: payable_benefits_pct_final_year
+        type: integer
+        nullable: true
+        comment: >
+          Percent of scheduled benefits payable in the last year of the 75-year projection, after the decline following depletion (2026 report: OASI 62, OASDI 65 in 2100); same population as payable_benefits_pct_at_depletion.
+      - name: payable_projection_end_year
+        type: integer
+        nullable: true
+        comment: >
+          Last year of the projection period to which payable_benefits_pct_final_year refers (2100 for the 2026 report; 2090 for 2016).
 
     source:
       type: http
