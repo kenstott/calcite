@@ -90,6 +90,22 @@ final class ClaimScoring {
         "\\b[A-Z][A-Za-z&.]+(?: [A-Z][A-Za-z&.]+){0,3} "
         + "(?:estimates|estimated|forecasts|projects|projected|expects)\\b");
 
+    /** Whether `rests_on` names at least one claim and every claim it names is a source-audit
+     *  claim. */
+    static boolean restsOnFidelity(JsonNode claims, JsonNode restsOn) {
+        if (!restsOn.isArray() || restsOn.size() == 0) {
+            return false;
+        }
+        for (JsonNode r : restsOn) {
+            int ref = r.asInt(0);
+            if (ref < 1 || ref > claims.size()
+                || !GROUP_FIDELITY.equals(group(claims.get(ref - 1)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** The attribution wording in an assertion, or null when it names no source. */
     static String attribution(String assertion) {
         Matcher m = ATTRIBUTION_PHRASE.matcher(assertion);
@@ -258,6 +274,19 @@ final class ClaimScoring {
      * evidence that contradicts the claim leaves it none, whatever its verdict.
      */
     static double credit(JsonNode c) {
+        double base = verdictCredit(c);
+        if (base < 0) {
+            return -1;
+        }
+        if (isCitejacked(c)) {
+            return SUPPORT_CONTRADICTED.equals(support(c)) ? 0.0 : Math.min(base, 0.5);
+        }
+        return base;
+    }
+
+    /** The credit the verdict alone carries, before any deduction for the evidence the claim
+     *  rests on; -1 when the verdict is not graded. */
+    static double verdictCredit(JsonNode c) {
         double base;
         switch (verdict(c)) {
         case "true":
@@ -278,9 +307,6 @@ final class ClaimScoring {
             break;
         default:
             return -1;
-        }
-        if (isCitejacked(c)) {
-            return SUPPORT_CONTRADICTED.equals(support(c)) ? 0.0 : Math.min(base, 0.5);
         }
         return base;
     }
@@ -380,8 +406,11 @@ final class ClaimScoring {
             int accuracy = (int) Math.round(100 * checkedSum / checked);
             if (centralCredit >= 0 && !centralUnsupported) {
                 // Accuracy, and so the Pinocchio rating, is never better than the central
-                // claim's own grade: true secondary detail does not dilute a failed headline.
-                accuracy = Math.min(accuracy, (int) Math.round(100 * centralCredit));
+                // claim's own verdict: true secondary detail does not dilute a failed
+                // headline. The verdict already grades the claim against its evidence, so
+                // the deduction for contradicted evidence is not taken a second time here.
+                accuracy = Math.min(accuracy, (int) Math.round(
+                    100 * verdictCredit(claims.get(central - 1))));
             }
             out.put("accuracy_score", accuracy);
         }
@@ -706,16 +735,17 @@ final class ClaimScoring {
                             + "entry is the number (1-" + claims.size() + ") of another claim");
                     }
                 }
-                if (restsOn.size() == 0 && GROUP_AUTHOR.equals(g)) {
-                    String cites = attribution(c.path("assertion").asText(""));
-                    if (cites != null) {
-                        problems.add("claim " + n + " attributes its figure to a source ('"
-                            + cites + "') but has `rests_on`: []. A figure the piece relays "
-                            + "from a source MUST be grouped `" + GROUP_FIDELITY + "`. When the "
-                            + "piece also asserts it as its own point, keep this claim and set "
-                            + "`rests_on` to the number of the `" + GROUP_FIDELITY
-                            + "` claim that carries the source's figure");
-                    }
+                String cites = GROUP_AUTHOR.equals(g)
+                    ? attribution(c.path("assertion").asText("")) : null;
+                if (cites != null && !isCentral(c)) {
+                    problems.add("claim " + n + " attributes its figure to a source ('" + cites
+                        + "'): a figure the piece relays from a source MUST be grouped `"
+                        + GROUP_FIDELITY + "`, not `" + GROUP_AUTHOR + "`. Regroup it");
+                } else if (cites != null && !restsOnFidelity(claims, restsOn)) {
+                    problems.add("claim " + n + " is the central claim and attributes its "
+                        + "figure to a source ('" + cites + "'): `rests_on` MUST name the `"
+                        + GROUP_FIDELITY + "` claim that carries that source's own figure, and "
+                        + "only `" + GROUP_FIDELITY + "` claims");
                 }
                 if (restsOn.size() > 0) {
                     if (!SUPPORTS.contains(support(c))) {

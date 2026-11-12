@@ -9770,7 +9770,9 @@ public class McpServer {
         StringBuilder sb = new StringBuilder("<table class=\"verdict-key\"><thead><tr>"
             + "<th>Verdict</th><th>Means</th><th>Credit</th></tr></thead><tbody>\n");
         for (String[] v : VERDICT_MEANINGS) {
-            double credit = ClaimScoring.credit(MAPPER.createObjectNode().put("verdict", v[0]));
+            // An unsupported claim was never shown false: it is counted beside the scores.
+            double credit = ClaimScoring.VERDICT_UNSUPPORTED.equals(v[0]) ? -1
+                : ClaimScoring.verdictCredit(MAPPER.createObjectNode().put("verdict", v[0]));
             String shown = credit < 0 ? "not scored"
                 : credit == Math.rint(credit) ? String.valueOf((int) credit)
                 : String.valueOf(credit);

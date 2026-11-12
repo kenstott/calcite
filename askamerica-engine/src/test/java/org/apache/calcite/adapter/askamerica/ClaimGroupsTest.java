@@ -89,8 +89,8 @@ class ClaimGroupsTest {
     String refused = ClaimScoring.enforce(claims(relayed,
         author("Hiring slowed in the spring", "true", null)));
     assertNotNull(refused);
-    assertTrue(refused.contains("claim 1 attributes its figure to a source ('according to')"),
-        refused);
+    assertTrue(refused.contains("claim 1 is the central claim and attributes its figure to a "
+        + "source ('according to')"), refused);
     assertFalse(refused.contains("claim 2 attributes"), refused);
 
     assertEquals("The EIA expects",
@@ -105,6 +105,43 @@ class ClaimGroupsTest {
     resting.put("central", true);
     String ok = ClaimScoring.enforce(claims(audit, resting));
     assertTrue(ok == null || !ok.contains("attributes its figure"), String.valueOf(ok));
+
+    // Live run 2026-11-12: refused with `rests_on`: [], the agent kept six relayed EIA
+    // figures as author claims and pointed each at an unrelated source-audit claim.
+    ObjectNode dodge = restingOn(author(
+        "EIA forecasts that diesel will average $5.03 per gallon", "true", null),
+        1, "supported");
+    String dodged = ClaimScoring.enforce(claims(audit, resting, dodge));
+    assertNotNull(dodged);
+    assertTrue(dodged.contains("claim 3 attributes its figure to a source ('EIA forecasts')"),
+        dodged);
+    assertTrue(dodged.contains("MUST be grouped `fidelity`"), dodged);
+
+    // A central claim that names its source must rest on source-audit claims only.
+    ObjectNode onAuthor = restingOn(author(
+        "Output hit a record, according to the EIA", "true", null), 1, "supported");
+    onAuthor.put("central", true);
+    String wrongTarget = ClaimScoring.enforce(claims(
+        author("Output rose last year", "true", null), onAuthor));
+    assertNotNull(wrongTarget);
+    assertTrue(wrongTarget.contains("claim 2 is the central claim and attributes"),
+        wrongTarget);
+  }
+
+  /** Live run 2026-11-12: a central claim graded mostly false whose cited source contradicts
+   *  it scored 0 and rated the piece 4 Pinocchios, where its verdict alone gives 3. */
+  @Test void aContradictedCentralClaimRatesThePieceByItsVerdict() {
+    ObjectNode audit = claim("EIA forecasts 14.3 million b/d for 2027", "fidelity",
+        "mostly false");
+    ObjectNode central = restingOn(author("US crude production hits a record 14.3 million b/d",
+        "mostly false", "toward_thesis"), 1, "contradicted");
+    central.put("central", true);
+    ArrayNode claims = claims(audit, central,
+        author("Inventories fell to the lowest October level since 2014", "true", null),
+        author("Gasoline prices eased in October", "true", null));
+    assertEquals(25, ClaimScoring.score(claims, ClaimScoring.headlineBlock(claims))
+        .path("accuracy_score").asInt());
+    assertEquals(3, ClaimScoring.pinocchios(claims));
   }
 
   @Test void theEvidenceCellNamesWhatTheClaimWasCheckedAgainst() {
@@ -128,7 +165,9 @@ class ClaimGroupsTest {
         + "<td>0.5</td>"), key);
     assertTrue(key.contains("<td>False</td><td>Contradicted by the evidence</td><td>0</td>"),
         key);
-    assertTrue(key.contains("<td>Unsupported</td>"), key);
+    assertTrue(key.contains("<td>Unsupported</td>"
+        + "<td>Stated as fact; no evidence offered and none found</td><td>not scored</td>"),
+        key);
     assertTrue(key.contains("<td>Not checkable here</td>"
         + "<td>An opinion or personal attack no evidence can test</td><td>not scored</td>"),
         key);
