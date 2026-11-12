@@ -527,6 +527,7 @@ final class ClaimScoring {
         + "|primary|secondary|confirm|verif|could not|cannot|unable|not (in|found in) the "
         + "warehouse|not in warehouse|not tested|untested|plausib|consistent with|relayed"
         + "|via |attributed|unnamed|characteri[sz]ation|wording|not a record|not official"
+        + "|not (directly )?measured|expert view|opinion"
         + "|not yet final|revis|subject to change",
         java.util.regex.Pattern.CASE_INSENSITIVE);
 
@@ -561,7 +562,10 @@ final class ClaimScoring {
                 + "MUST state what in the claim differs from the evidence. " + fix;
         }
         boolean noError = NO_ERROR.matcher(inaccuracy).find();
-        boolean hedgeOnly = !isCausal(c) && HEDGE.matcher(inaccuracy).find()
+        // A cause no evidence establishes is graded false or mostly false, and saying so is its
+        // inaccuracy; a cause graded mostly right on that ground is a hedge like any other.
+        boolean causalFalse = isCausal(c) && credit < 0.5;
+        boolean hedgeOnly = !causalFalse && HEDGE.matcher(inaccuracy).find()
             && !DIFFERENCE.matcher(inaccuracy).find();
         if (noError || hedgeOnly) {
             return "claim " + n + " is graded '" + verdict(c) + "' and its `inaccuracy` (\""

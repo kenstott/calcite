@@ -689,4 +689,23 @@ class ClaimGroupsTest {
         author("Rents rose 9 percent", "mostly false", "toward_thesis"),
         author("Rents rose in 40 cities", "mostly false", "toward_thesis"))));
   }
+
+  /** Daily eval q14, run rating-r3 (2026-11-11): the experts' pandemic explanation, a causal
+   *  claim, was graded 'mostly true' because the cause was "not directly measured here". */
+  @Test void aCausalClaimGradedMostlyRightOnAHedgeIsRefused() {
+    ObjectNode fact = author("Deaths rose in 2021", "true", null);
+    fact.put("central", true);
+    ObjectNode cause = author("Emptier roads caused riskier driving", "mostly true", "neutral");
+    cause.put("kind", "causal");
+    cause.put("inaccuracy", "Causal mechanism is an expert view, not directly measured here; "
+        + "experts unnamed.");
+    String refusal = ClaimScoring.enforce(claims(fact, cause));
+    assertNotNull(refusal);
+    assertTrue(refusal.contains("claim 2 is graded 'mostly true'"), refusal);
+
+    cause.put("verdict", "mostly false");
+    cause.put("inaccuracy", "No evidence establishes the link; it is not measured here.");
+    String falseCause = ClaimScoring.enforce(claims(fact, cause));
+    assertTrue(falseCause == null || !falseCause.contains("claim 2 is graded"), falseCause);
+  }
 }
