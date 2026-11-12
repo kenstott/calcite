@@ -67,6 +67,7 @@ FROM (
   UNION ALL SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'social_security_trustees_projections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'treasury_yields',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'federal_debt',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',         allow_moved_paths := true) LIMIT 1) t)
@@ -130,6 +131,7 @@ FROM (
   UNION ALL SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
   UNION ALL SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50  -- one row per year 1975-2026
   UNION ALL SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20  -- one row per year 2005-2026
+  UNION ALL SELECT 'social_security_trustees_projections',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)), 30  -- 3 funds x reports 2016-2026
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
   UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
   UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400
@@ -184,6 +186,7 @@ SELECT 'wage_growth'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
 SELECT 'medicare_part_b_premiums'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1;
+SELECT 'social_security_trustees_projections'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_employment'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',    allow_moved_paths := true) LIMIT 1;
 SELECT 'treasury_yields'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',        allow_moved_paths := true) LIMIT 1;
 SELECT 'federal_debt'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',           allow_moved_paths := true) LIMIT 1;
@@ -2166,3 +2169,40 @@ SELECT 'econ', 'ces_revision_vintages_alfred', 'pk_duplicates',
 FROM (SELECT COUNT(*) AS dups FROM (
         SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true)
         GROUP BY 1,2,3 HAVING COUNT(*) > 1));
+
+-- social_security_trustees_projections
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trustees_projections', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- social_security_trustees_projections PK uniqueness and known values (2026 report: OASI 2032, OASDI 2034, DI none, unfunded 29.3)
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trustees_projections', 'pk_duplicates', 'fail', 'report_year, fund', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT report_year, fund FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trustees_projections', 'known_value', 'fail', 'report 2026', 'OASI 2032 / DI null / OASDI 2034 / unfunded 29.3',
+  'got ' || COALESCE(CAST(MAX(depletion_year) FILTER (WHERE fund = 'OASI') AS VARCHAR), 'no row') || ' / '
+  || COALESCE(CAST(MAX(depletion_year) FILTER (WHERE fund = 'DI') AS VARCHAR), 'null') || ' / '
+  || COALESCE(CAST(MAX(depletion_year) FILTER (WHERE fund = 'OASDI') AS VARCHAR), 'no row') || ' / '
+  || COALESCE(CAST(MAX(unfunded_obligation_trillions) FILTER (WHERE fund = 'OASDI') AS VARCHAR), 'no row')
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)
+WHERE report_year = 2026
+HAVING COALESCE(MAX(depletion_year) FILTER (WHERE fund = 'OASI'), -1) <> 2032
+    OR MAX(depletion_year) FILTER (WHERE fund = 'DI') IS NOT NULL
+    OR COALESCE(MAX(depletion_year) FILTER (WHERE fund = 'OASDI'), -1) <> 2034
+    OR COALESCE(MAX(unfunded_obligation_trillions) FILTER (WHERE fund = 'OASDI'), -1) <> 29.3;
+
+-- social_security_trustees_projections: each report year has the three funds; unfunded obligation is set on OASDI only
+INSERT INTO dq_results
+SELECT 'econ', 'social_security_trustees_projections', 'fund_shape', 'fail', 'report_year', '3 funds; unfunded set only on OASDI',
+  'report ' || CAST(report_year AS VARCHAR) || ' has ' || CAST(COUNT(*) AS VARCHAR) || ' rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)
+GROUP BY report_year
+HAVING COUNT(*) <> 3
+    OR COUNT(*) FILTER (WHERE unfunded_obligation_trillions IS NOT NULL AND fund = 'OASDI') <> 1
+    OR COUNT(*) FILTER (WHERE unfunded_obligation_trillions IS NOT NULL AND fund <> 'OASDI') <> 0;

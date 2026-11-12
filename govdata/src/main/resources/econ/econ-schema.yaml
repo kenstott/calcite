@@ -4721,6 +4721,104 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: social_security_trustees_projections
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=social_security_trustees_projections/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Social Security Trustees Report headline solvency measures under the intermediate
+      assumptions, one row per report year (2016 to the latest published) and trust fund (OASI, DI
+      and the combined OASDI), from Table II.D1 and section II.D of each report. depletion_year is
+      the year the fund's reserves are projected to run out (2026 report: OASI 2032, OASDI 2034;
+      null for DI, whose reserves stay positive through 2100), after which only continuing income
+      can pay benefits, so scheduled benefits are cut. max_trust_fund_ratio_pct is the highest
+      projected trust fund ratio (reserves as a percent of a year's cost) and max_ratio_year when
+      it occurs. unfunded_obligation_trillions is the combined OASDI 75-year present-value unfunded
+      obligation in trillions of dollars (2026 report 29.3; 2025 report 25.1) and is set only on
+      the OASDI row. Not in this table: the quarter of depletion, the share of scheduled benefits
+      still payable after depletion, the actuarial balance, the low-cost and high-cost scenarios,
+      and reports before 2016. ssa.gov refuses non-browser clients, so the pages are read through a
+      headed browser session. Source: https://www.ssa.gov/oact/tr/ (section II.D, Table II.D1).
+
+    dimensions:
+      type:
+        - social_security_trustees_projections
+
+    columns:
+      - name: report_year
+        type: integer
+        nullable: true
+        comment: >
+          Year of the Trustees Report (2026 = the report published in 2026, valuation date January 1, 2026); PK with fund.
+      - name: fund
+        type: string
+        nullable: true
+        comment: >
+          Trust fund: OASI (Old-Age and Survivors Insurance), DI (Disability Insurance) or OASDI (the two combined); PK with report_year.
+      - name: depletion_year
+        type: integer
+        nullable: true
+        comment: >
+          Year the fund's reserves are projected to be depleted under the intermediate assumptions; null when the reserves stay positive through the 75-year period (DI in most reports).
+      - name: max_trust_fund_ratio_pct
+        type: integer
+        nullable: true
+        comment: >
+          Maximum projected trust fund ratio over the long-range period, in percent of annual cost (2026 report: OASI 153, DI 857, OASDI 151).
+      - name: max_ratio_year
+        type: integer
+        nullable: true
+        comment: >
+          Year in which the maximum trust fund ratio is attained (the first projection year when the ratio only declines).
+      - name: unfunded_obligation_trillions
+        type: double
+        nullable: true
+        comment: >
+          Combined OASDI present-value unfunded obligation over the 75-year period, in trillions of dollars; set only on the OASDI row, null on OASI and DI.
+
+    source:
+      type: http
+      # The URL is never fetched by the ETL: the streaming transformer reads each report page
+      # through the shared headed browser session (see social_security_cola).
+      url: "https://www.ssa.gov/oact/tr/"
+      method: GET
+      parameters:
+        ssaBrowserScript: "${SSA_BROWSER_SCRIPT:}"
+        ssaNodeCommand: "${SSA_NODE_COMMAND:node}"
+        ssaChromeExecutable: "${SSA_CHROME_EXECUTABLE:}"
+        ssaRequestDelayMs: "${SSA_REQUEST_DELAY_MS:4000}"
+        ssaEntryPageUrl: "https://www.ssa.gov/oact/cola/Benefits.html"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.SocialSecurityTrusteesTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=social_security_trustees_projections/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 1000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: medicare_part_b_premiums
     dataset_type: snapshot
     freshness:
@@ -4741,7 +4839,7 @@ partitionedTables:
       not the higher income-related (IRMAA) premium and not the hold-harmless amount some
       enrollees pay. Use it for premium-level and Social Security-COLA-offset claims; the COLA is
       in social_security_cola and the CPI-W it follows in inflation_metrics. Trustees Report
-      projections are not in this table. Source: Federal Register documents API
+      projections are in social_security_trustees_projections. Source: Federal Register documents API
       (https://www.federalregister.gov/api/v1/documents.json), CMS notices.
 
     dimensions:
