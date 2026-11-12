@@ -44,8 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CatalogVectorsTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Pattern VALUES_ROW = Pattern.compile("\\((\\d+), '((?:[^']|'')*)'\\)");
-    private static final Pattern SINGLE = Pattern.compile("SELECT EMBED\\('((?:[^']|'')*)'\\)");
+    private static final Pattern VALUES_ROW = Pattern.compile("\\((\\d+), '((?:[^']++|'')*+)'\\)");
+    private static final Pattern SINGLE = Pattern.compile("SELECT EMBED\\('((?:[^']++|'')*+)'\\)");
 
     @TempDir File dir;
 
