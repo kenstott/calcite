@@ -752,7 +752,7 @@
       "expert": 2,
       "everyman": 3
     },
-    "note": "engine-dev 5cb40458e6. Correct verdict 1; all three arms gave 1; askamerica ranked 1st. NO REPORT DELIVERED: CCF page 403 and no copy loadable, so preview_report/deliver_report refused (article-text gate). agent.md is the agent's final message saved by the harness; no report.html, claims.json or dashboard. Central 2.56M child Medicaid/CHIP decline supported by health.medicaid_chip_enrollment_monthly; SNAP checked with an all-ages proxy (no child-specific monthly SNAP in warehouse). Severity invariant not triggered."
+    "note": "engine-dev 5cb40458e6. Correct verdict 1; all three arms gave 1; askamerica ranked 1st. NO REPORT DELIVERED: CCF page 403 and no copy loadable, so preview_report/deliver_report refused (article-text gate). agent.md is the agent's final message saved by the harness; no report.html, claims.json or dashboard. Central 2.56M child Medicaid/CHIP decline supported by health.medicaid_chip_enrollment_monthly; SNAP checked with an all-ages proxy (no child-specific monthly SNAP in warehouse). Severity invariant not triggered. Not published as a study: the agent's final message is kept at q5/askamerica-2026-11-12-undelivered/agent.md so the run_subpath holds no content."
   },
   {
     "topic_slug": "gulfnews-us-crude-record-14-3-million-bpd-eia-steo",
