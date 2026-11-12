@@ -79,6 +79,23 @@ class ClaimGroupsTest {
     assertEquals(2, ClaimScoring.pinocchios(claims));
   }
 
+  @Test void theVerdictKeyListsEveryVerdictWithTheCreditTheScoringUses() {
+    String key = McpServer.verdictKey();
+    assertTrue(key.contains("<td>True</td><td>Matches the evidence</td><td>1</td>"), key);
+    assertTrue(key.contains("<td>Mostly true</td>"), key);
+    assertTrue(key.contains("</td><td>0.75</td>"), key);
+    assertTrue(key.contains("<td>Partially false</td><td>Part holds, part does not</td>"
+        + "<td>0.5</td>"), key);
+    assertTrue(key.contains("<td>False</td><td>Contradicted by the evidence</td><td>0</td>"),
+        key);
+    assertTrue(key.contains("<td>Unsupported</td>"), key);
+    assertTrue(key.contains("<td>Not checkable here</td>"
+        + "<td>An opinion or personal attack no evidence can test</td><td>not scored</td>"),
+        key);
+    assertTrue(key.contains("<td>Stale vintage</td>"), key);
+    assertEquals(8, key.split("<tr><td>").length - 1);
+  }
+
   private static ObjectNode author(String assertion, String verdict, String errs) {
     ObjectNode c = claim(assertion, "author_claims", verdict);
     c.putArray("rests_on");
@@ -457,7 +474,7 @@ class ClaimGroupsTest {
     int author = html.indexOf("<h3>Author");
     int speaker = html.indexOf("<h3>Claims by Senator Vale");
     int audit = html.indexOf("<h3>Source Audit");
-    int detail = html.indexOf("<p class=\"note\">Verdicts:");
+    int detail = html.indexOf("<p class=\"note\">Honesty is the share");
     assertTrue(author >= 0 && author < speaker && speaker < audit && audit < detail, html);
 
     String authorBlock = html.substring(author, speaker);

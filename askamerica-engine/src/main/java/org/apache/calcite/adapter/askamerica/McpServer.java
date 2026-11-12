@@ -9697,7 +9697,7 @@ public class McpServer {
         if (n == 0) {
             return null;
         }
-        StringBuilder groups = new StringBuilder();
+        StringBuilder groups = new StringBuilder(verdictKey());
         for (String b : blocks) {
             int inBlock = 0;
             StringBuilder tiles = new StringBuilder("<p>");
@@ -9724,7 +9724,7 @@ public class McpServer {
             groups.append(tiles)
                 .append("<table><thead><tr><th>#</th><th>Assertion (verbatim)</th>"
                     + "<th>Verdict</th>")
-                .append(scored ? "<th>Evidence it rests on</th>" : "")
+                .append(scored ? "<th>Evidence Cited</th>" : "")
                 .append("</tr></thead><tbody>\n");
             for (Integer number : ClaimScoring.order(claims, b)) {
                 groups.append(rowByNumber.get(number));
@@ -9732,13 +9732,8 @@ public class McpServer {
             groups.append("</tbody></table>\n");
         }
         String html = groups
-            + "<p class=\"note\">Verdicts: true, mostly true, partially false, mostly false, "
-            + "false, unsupported (asserted as fact with no evidence offered and none found), "
-            + "not checkable here (an opinion or personal attack no evidence can test), stale vintage (the "
-            + "article cites a release this corpus has not loaded — a freshness gap, not a "
-            + "falsehood). Honesty is the share of a party's checkable claims that held up "
-            + "(true 1, mostly true 0.75, partially false 0.5, mostly false and unsupported "
-            + "0.25, false 0); a "
+            + "<p class=\"note\">Honesty is the share of a party's checkable claims that held "
+            + "up, each counted at the credit shown in the verdict key above; a "
             + "claim resting on cited evidence narrower than the claim counts for at most half, "
             + "and one resting on evidence that contradicts it counts for nothing. Honesty "
             + "cannot exceed the credit of the party's central claim by more than "
@@ -9749,6 +9744,38 @@ public class McpServer {
             + " claims or errors, and do not measure what the piece left out.</p>\n"
             + "<h3>Claim detail</h3>\n" + details;
         return new ReportPage.Section("Claim-by-claim verdicts", html);
+    }
+
+    /** Each verdict, what it means, in the order a reader meets them. */
+    private static final String[][] VERDICT_MEANINGS = {
+        {"true", "Matches the evidence"},
+        {"mostly true", "Right in substance, loose in detail"},
+        {"partially false", "Part holds, part does not"},
+        {"mostly false", "The main point does not hold"},
+        {"false", "Contradicted by the evidence"},
+        {ClaimScoring.VERDICT_UNSUPPORTED,
+            "Stated as fact; no evidence offered and none found"},
+        {ClaimScoring.VERDICT_NOT_CHECKABLE,
+            "An opinion or personal attack no evidence can test"},
+        {"stale vintage",
+            "Cites a release this corpus has not loaded; a freshness gap, not a falsehood"},
+    };
+
+    /** The key to the Verdict column, shown above the first claims table. The credit column
+     *  is read from {@link ClaimScoring#credit}, so it cannot drift from the scoring. */
+    static String verdictKey() {
+        StringBuilder sb = new StringBuilder("<table class=\"verdict-key\"><thead><tr>"
+            + "<th>Verdict</th><th>Means</th><th>Credit</th></tr></thead><tbody>\n");
+        for (String[] v : VERDICT_MEANINGS) {
+            double credit = ClaimScoring.credit(MAPPER.createObjectNode().put("verdict", v[0]));
+            String shown = credit < 0 ? "not scored"
+                : credit == Math.rint(credit) ? String.valueOf((int) credit)
+                : String.valueOf(credit);
+            sb.append("<tr><td>").append(Character.toUpperCase(v[0].charAt(0)))
+                .append(v[0].substring(1)).append("</td><td>").append(v[1])
+                .append("</td><td>").append(shown).append("</td></tr>\n");
+        }
+        return sb.append("</tbody></table>\n").toString();
     }
 
     /** The honesty and bias line above one scored block's table. */
