@@ -64,6 +64,7 @@ FROM (
   UNION ALL SELECT 'jolts_regional',       (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',       allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'jolts_state',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'treasury_yields',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',      allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'federal_debt',         (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',         allow_moved_paths := true) LIMIT 1) t)
@@ -124,6 +125,7 @@ FROM (
   UNION ALL SELECT 'jolts_regional',        (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',        allow_moved_paths := true)), 0
   UNION ALL SELECT 'jolts_state',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',           allow_moved_paths := true)), 0
   UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
+  UNION ALL SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
   UNION ALL SELECT 'treasury_yields',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',       allow_moved_paths := true)), 300
   UNION ALL SELECT 'federal_debt',          (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',          allow_moved_paths := true)), 400
@@ -175,6 +177,7 @@ SELECT 'county_wages'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'jolts_regional'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_regional',         allow_moved_paths := true) LIMIT 1;
 SELECT 'jolts_state'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state',            allow_moved_paths := true) LIMIT 1;
 SELECT 'wage_growth'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',            allow_moved_paths := true) LIMIT 1;
+SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_employment'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',    allow_moved_paths := true) LIMIT 1;
 SELECT 'treasury_yields'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_yields',        allow_moved_paths := true) LIMIT 1;
 SELECT 'federal_debt'           AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_debt',           allow_moved_paths := true) LIMIT 1;
@@ -320,6 +323,27 @@ SELECT 'econ', 'jolts_state', 'all_null_cols', 'fail',
   column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts_state', allow_moved_paths := true))
 WHERE null_percentage = 100.0;
+
+-- state_ui_claims
+INSERT INTO dq_results
+SELECT 'econ', 'state_ui_claims', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- state_ui_claims PK uniqueness and known-value check (Louisiana, week ending 2026-10-17, as quoted by the state)
+INSERT INTO dq_results
+SELECT 'econ', 'state_ui_claims', 'pk_duplicates', 'fail', 'state,week_ending', '0 duplicates',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT state, week_ending FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'state_ui_claims', 'known_value', 'fail', 'LA 2026-10-17', 'initial 1179, continued 5295',
+  'got ' || COALESCE(CAST(MAX(initial_claims) AS VARCHAR), 'no row') || ' / ' || COALESCE(CAST(MAX(continued_weeks_claimed) AS VARCHAR), 'no row')
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)
+WHERE state = 'LA' AND week_ending = DATE '2026-10-17'
+HAVING COALESCE(MAX(initial_claims), -1) <> 1179 OR COALESCE(MAX(continued_weeks_claimed), -1) <> 5295;
 
 -- wage_growth
 INSERT INTO dq_results
@@ -637,6 +661,13 @@ FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/jolts
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'frequency', 'year', 'latest', 'table_name',
                           'industry_classification', 'src_line_nbr', 'unit_mult');
+
+-- state_ui_claims
+INSERT INTO dq_results
+SELECT 'econ', 'state_ui_claims', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type';
 
 -- wage_growth
 INSERT INTO dq_results

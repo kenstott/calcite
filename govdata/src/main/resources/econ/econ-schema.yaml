@@ -4372,6 +4372,131 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- STATE UI CLAIMS (DOL ETA 539) ---
+  - name: state_ui_claims
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=state_ui_claims/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Weekly state unemployment insurance claims, not seasonally adjusted, from the DOL
+      Employment and Training Administration ETA 539 report (ar539.csv): one row per state or
+      territory (50 states, DC, PR, VI) per week from 1984 to the latest published week. Initial
+      claims (initial_claims, new layoffs filing for benefits) and continued weeks claimed
+      (continued_weeks_claimed, people still collecting), plus the UCFE and UCX program
+      counterparts, covered employment and the insured unemployment rate. week_ending is the
+      claims week states quote in releases (Louisiana 2026-10-17: 1,179 initial, 5,295 continued).
+      Use it for state-level year-over-year and consecutive-week trend claims; the national
+      seasonally adjusted weekly series ICSA and CCSA are in fred_indicators. Recent weeks are
+      advance figures that DOL revises in later files. Source: https://oui.doleta.gov/unemploy/claims.asp.
+
+    dimensions:
+      type:
+        - state_ui_claims
+
+    columns:
+      - name: state
+        type: string
+        nullable: true
+        comment: >
+          Two-letter state / territory postal code (50 states, DC, PR, VI); PK component.
+      - name: week_ending
+        type: date
+        nullable: true
+        comment: >
+          Week ending date (Saturday) that the initial claims in this row belong to — the date the states and DOL news releases quote as the claims week (e.g. 2026-10-17); PK component. Source field rptdate.
+      - name: continued_week_ending
+        type: date
+        nullable: true
+        comment: >
+          Week ending date of the unemployment week that the continued weeks claimed refer to; one week before week_ending (continued claims are filed the week after the week of unemployment). Source field c2.
+      - name: week_number
+        type: integer
+        nullable: true
+        comment: >
+          Week number within the year as numbered by DOL (source c1).
+      - name: initial_claims
+        type: long
+        nullable: true
+        comment: >
+          State UI initial claims filed in the week, not seasonally adjusted (source c3). Louisiana week_ending 2026-10-17 = 1,179.
+      - name: initial_claims_ucfe
+        type: long
+        nullable: true
+        comment: >
+          Initial claims by federal civilian employees under UCFE (source c4).
+      - name: initial_claims_ucx
+        type: long
+        nullable: true
+        comment: >
+          Initial claims by ex-servicemembers under UCX (source c5).
+      - name: continued_weeks_claimed
+        type: long
+        nullable: true
+        comment: >
+          State UI continued weeks claimed (insured unemployment), not seasonally adjusted (source c8). Louisiana week_ending 2026-10-17 = 5,295.
+      - name: continued_weeks_claimed_ucfe
+        type: long
+        nullable: true
+        comment: >
+          Continued weeks claimed under UCFE (source c9).
+      - name: continued_weeks_claimed_ucx
+        type: long
+        nullable: true
+        comment: >
+          Continued weeks claimed under UCX (source c10).
+      - name: covered_employment
+        type: long
+        nullable: true
+        comment: >
+          Covered employment base used for the insured unemployment rate (source c18).
+      - name: insured_unemployment_rate
+        type: double
+        nullable: true
+        comment: >
+          Insured unemployment rate, percent, as published in the file (source c19).
+
+    source:
+      type: http
+      url: "https://oui.doleta.gov/unemploy/csv/ar539.csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      rowTransformers:
+        - type: class
+          class: "org.apache.calcite.adapter.govdata.econ.StateUiClaimsTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=state_ui_claims/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   # --- LABOR PRODUCTIVITY ---
   - name: labor_productivity
     # BLS revises recent quarters of the Major Sector Productivity series and
