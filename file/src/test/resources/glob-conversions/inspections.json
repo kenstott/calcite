@@ -1,0 +1,362 @@
+[
+ {
+  "inspection_id": 1,
+  "permit_id": "BP-0096",
+  "inspected_on": "2026-02-16",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 2,
+  "permit_id": "BP-0081",
+  "inspected_on": "2026-09-22",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 3,
+  "permit_id": "BP-0016",
+  "inspected_on": "2026-05-26",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 4,
+  "permit_id": "BP-0093",
+  "inspected_on": "2026-10-18",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 5,
+  "permit_id": "BP-0076",
+  "inspected_on": "2026-05-01",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 6,
+  "permit_id": "BP-0042",
+  "inspected_on": "2026-06-15",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 7,
+  "permit_id": "BP-0059",
+  "inspected_on": "2026-05-31",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 8,
+  "permit_id": "BP-0008",
+  "inspected_on": "2026-09-14",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 9,
+  "permit_id": "BP-0058",
+  "inspected_on": "2026-07-05",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 10,
+  "permit_id": "BP-0091",
+  "inspected_on": "2026-06-02",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 11,
+  "permit_id": "BP-0079",
+  "inspected_on": "2026-01-20",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 12,
+  "permit_id": "BP-0094",
+  "inspected_on": "2026-02-17",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 13,
+  "permit_id": "BP-0108",
+  "inspected_on": "2026-01-20",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 14,
+  "permit_id": "BP-0060",
+  "inspected_on": "2026-01-15",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 15,
+  "permit_id": "BP-0120",
+  "inspected_on": "2026-01-22",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 16,
+  "permit_id": "BP-0103",
+  "inspected_on": "2026-01-30",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 17,
+  "permit_id": "BP-0125",
+  "inspected_on": "2026-03-27",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 18,
+  "permit_id": "BP-0051",
+  "inspected_on": "2026-05-01",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 19,
+  "permit_id": "BP-0114",
+  "inspected_on": "2026-08-20",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 20,
+  "permit_id": "BP-0002",
+  "inspected_on": "2026-07-29",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 21,
+  "permit_id": "BP-0014",
+  "inspected_on": "2026-08-12",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 22,
+  "permit_id": "BP-0086",
+  "inspected_on": "2026-01-23",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 23,
+  "permit_id": "BP-0082",
+  "inspected_on": "2026-07-03",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 24,
+  "permit_id": "BP-0062",
+  "inspected_on": "2026-09-30",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 25,
+  "permit_id": "BP-0110",
+  "inspected_on": "2026-07-29",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 26,
+  "permit_id": "BP-0039",
+  "inspected_on": "2026-09-16",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 27,
+  "permit_id": "BP-0055",
+  "inspected_on": "2026-07-28",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 28,
+  "permit_id": "BP-0074",
+  "inspected_on": "2026-08-11",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 29,
+  "permit_id": "BP-0106",
+  "inspected_on": "2026-04-19",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 30,
+  "permit_id": "BP-0038",
+  "inspected_on": "2026-05-23",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 31,
+  "permit_id": "BP-0072",
+  "inspected_on": "2026-03-06",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 32,
+  "permit_id": "BP-0113",
+  "inspected_on": "2026-03-31",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 33,
+  "permit_id": "BP-0053",
+  "inspected_on": "2026-03-15",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 34,
+  "permit_id": "BP-0061",
+  "inspected_on": "2026-03-21",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 35,
+  "permit_id": "BP-0065",
+  "inspected_on": "2026-08-28",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 36,
+  "permit_id": "BP-0116",
+  "inspected_on": "2026-09-18",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 37,
+  "permit_id": "BP-0040",
+  "inspected_on": "2026-07-10",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 38,
+  "permit_id": "BP-0050",
+  "inspected_on": "2026-08-30",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 39,
+  "permit_id": "BP-0126",
+  "inspected_on": "2026-06-10",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 40,
+  "permit_id": "BP-0035",
+  "inspected_on": "2026-08-30",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 41,
+  "permit_id": "BP-0028",
+  "inspected_on": "2026-07-08",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 42,
+  "permit_id": "BP-0095",
+  "inspected_on": "2026-08-03",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 43,
+  "permit_id": "BP-0041",
+  "inspected_on": "2026-08-24",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 44,
+  "permit_id": "BP-0022",
+  "inspected_on": "2026-05-28",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 45,
+  "permit_id": "BP-0066",
+  "inspected_on": "2026-03-21",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 46,
+  "permit_id": "BP-0049",
+  "inspected_on": "2026-02-21",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 47,
+  "permit_id": "BP-0019",
+  "inspected_on": "2026-08-14",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 48,
+  "permit_id": "BP-0020",
+  "inspected_on": "2026-07-24",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 49,
+  "permit_id": "BP-0085",
+  "inspected_on": "2026-08-10",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 50,
+  "permit_id": "BP-0128",
+  "inspected_on": "2026-07-23",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 51,
+  "permit_id": "BP-0092",
+  "inspected_on": "2026-07-02",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 52,
+  "permit_id": "BP-0073",
+  "inspected_on": "2026-08-27",
+  "result": "failed"
+ },
+ {
+  "inspection_id": 53,
+  "permit_id": "BP-0109",
+  "inspected_on": "2026-08-04",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 54,
+  "permit_id": "BP-0023",
+  "inspected_on": "2026-05-04",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 55,
+  "permit_id": "BP-0026",
+  "inspected_on": "2026-07-29",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 56,
+  "permit_id": "BP-0018",
+  "inspected_on": "2026-06-23",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 57,
+  "permit_id": "BP-0045",
+  "inspected_on": "2026-02-10",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 58,
+  "permit_id": "BP-0090",
+  "inspected_on": "2026-06-28",
+  "result": "corrections needed"
+ },
+ {
+  "inspection_id": 59,
+  "permit_id": "BP-0010",
+  "inspected_on": "2026-08-04",
+  "result": "passed"
+ },
+ {
+  "inspection_id": 60,
+  "permit_id": "BP-0012",
+  "inspected_on": "2026-06-25",
+  "result": "corrections needed"
+ }
+]

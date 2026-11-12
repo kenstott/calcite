@@ -1,0 +1,301 @@
+complaint_id,opened_at,status,closed_at,category,neighborhood,address
+10001,2026-08-29T03:39,open,,Blocked sidewalk,Harbor Point,238 Pier Ave
+10002,2026-08-03T12:13,closed,2026-08-21T12:13,Blocked sidewalk,Old Town,33 Mill Ln
+10003,2026-08-16T17:15,open,,Blocked sidewalk,Eastgate,86 Gate St
+10004,2026-08-29T11:12,closed,2026-09-11T11:12,Blocked sidewalk,Riverside,232 Willow Ln
+10005,2026-08-17T00:09,closed,2026-08-24T00:09,Dust,Eastgate,136 Gate St
+10006,2026-08-19T15:37,open,,Blocked sidewalk,Millbrook,142 Elm St
+10007,2026-08-14T06:33,closed,2026-08-17T06:33,Blocked sidewalk,Cedar Heights,153 Ridge Rd
+10008,2026-08-28T16:57,open,,Noise,Harbor Point,225 Harbor Blvd
+10009,2026-08-28T19:44,open,,Noise,Riverside,168 Willow Ln
+10010,2026-08-20T13:46,closed,2026-08-23T13:46,Blocked sidewalk,Harbor Point,153 Dock St
+10011,2026-08-08T17:48,open,,Noise,Harbor Point,206 Harbor Blvd
+10012,2026-08-13T14:19,closed,2026-08-20T14:19,Blocked sidewalk,Riverside,202 River Rd
+10013,2026-08-20T05:34,open,,Trash,Harbor Point,36 Pier Ave
+10014,2026-08-03T03:28,open,,Dust,Eastgate,15 Gate St
+10015,2026-08-11T22:35,closed,2026-08-29T22:35,Noise,Riverside,58 Bank St
+10016,2026-08-21T05:39,closed,2026-09-07T05:39,Noise,Cedar Heights,87 Cedar Dr
+10017,2026-08-25T09:04,closed,2026-09-11T09:04,Noise,Cedar Heights,177 Cedar Dr
+10018,2026-08-09T14:48,closed,2026-08-14T14:48,Streetlight,Riverside,233 River Rd
+10019,2026-08-13T11:35,closed,2026-08-14T11:35,Noise,Harbor Point,144 Pier Ave
+10020,2026-08-05T00:01,open,,Blocked sidewalk,Cedar Heights,22 Cedar Dr
+10021,2026-08-06T02:08,open,,Blocked sidewalk,Eastgate,105 Orchard Ln
+10022,2026-08-14T18:41,open,,Blocked sidewalk,Riverside,2 Bank St
+10023,2026-08-11T10:51,open,,Dust,Old Town,50 Church St
+10024,2026-08-28T15:39,open,,Blocked sidewalk,Eastgate,58 Gate St
+10025,2026-08-29T18:13,closed,2026-09-03T18:13,Noise,Millbrook,200 Mill Rd
+10026,2026-08-06T01:55,open,,Streetlight,Eastgate,108 Gate St
+10027,2026-08-16T20:11,closed,2026-09-05T20:11,Noise,Riverside,170 Bank St
+10028,2026-08-07T13:39,closed,2026-08-22T13:39,Dust,Eastgate,191 Orchard Ln
+10029,2026-08-23T14:39,closed,2026-09-01T14:39,Blocked sidewalk,Millbrook,125 Elm St
+10030,2026-08-23T02:53,open,,Noise,Old Town,206 Mill Ln
+10031,2026-08-21T21:46,open,,Blocked sidewalk,Millbrook,28 Elm St
+10032,2026-08-07T15:28,closed,2026-08-20T15:28,Blocked sidewalk,Eastgate,192 Orchard Ln
+10033,2026-08-08T07:47,closed,2026-08-17T07:47,Dust,Harbor Point,118 Pier Ave
+10034,2026-08-15T00:49,open,,Dust,Cedar Heights,222 Summit Ave
+10035,2026-08-26T01:08,open,,Streetlight,Harbor Point,21 Harbor Blvd
+10036,2026-08-01T05:30,closed,2026-08-08T05:30,Trash,Old Town,178 Mill Ln
+10037,2026-08-11T13:03,open,,Trash,Riverside,123 Willow Ln
+10038,2026-08-08T11:15,closed,2026-08-11T11:15,Blocked sidewalk,Millbrook,94 Brook Ave
+10039,2026-08-18T15:25,open,,Blocked sidewalk,Harbor Point,22 Dock St
+10040,2026-08-19T12:52,closed,2026-09-08T12:52,Noise,Harbor Point,221 Dock St
+10041,2026-08-09T06:51,closed,2026-08-11T06:51,Street condition,Riverside,190 River Rd
+10042,2026-08-10T20:54,open,,Street condition,Riverside,137 Willow Ln
+10043,2026-08-28T15:02,open,,Noise,Harbor Point,33 Pier Ave
+10044,2026-08-07T19:36,closed,2026-08-17T19:36,Noise,Harbor Point,215 Pier Ave
+10045,2026-08-23T21:30,closed,2026-09-07T21:30,Streetlight,Eastgate,93 Gate St
+10046,2026-08-01T17:41,open,,Noise,Riverside,202 River Rd
+10047,2026-08-06T17:23,open,,Blocked sidewalk,Old Town,239 Mill Ln
+10048,2026-08-25T03:12,closed,2026-08-26T03:12,Dust,Riverside,111 Willow Ln
+10049,2026-08-17T14:32,open,,Noise,Riverside,65 Willow Ln
+10050,2026-08-12T04:39,closed,2026-08-29T04:39,Dust,Eastgate,86 Gate St
+10051,2026-08-14T14:57,closed,2026-08-20T14:57,Blocked sidewalk,Riverside,207 Bank St
+10052,2026-08-07T05:56,open,,Noise,Eastgate,138 East Ave
+10053,2026-08-18T15:03,closed,2026-09-06T15:03,Blocked sidewalk,Eastgate,191 Orchard Ln
+10054,2026-08-03T01:58,open,,Streetlight,Riverside,152 River Rd
+10055,2026-08-08T16:19,closed,2026-08-17T16:19,Dust,Harbor Point,225 Harbor Blvd
+10056,2026-08-26T18:54,closed,2026-08-28T18:54,Blocked sidewalk,Riverside,18 Willow Ln
+10057,2026-08-13T19:47,closed,2026-08-21T19:47,Noise,Millbrook,65 Brook Ave
+10058,2026-08-26T06:27,closed,2026-09-12T06:27,Dust,Millbrook,188 Mill Rd
+10059,2026-08-24T11:34,open,,Dust,Cedar Heights,222 Summit Ave
+10060,2026-08-08T21:47,open,,Noise,Eastgate,117 Orchard Ln
+10061,2026-08-20T22:00,closed,2026-09-07T22:00,Noise,Cedar Heights,222 Summit Ave
+10062,2026-08-06T17:43,open,,Blocked sidewalk,Cedar Heights,191 Summit Ave
+10063,2026-08-29T15:33,closed,2026-09-13T15:33,Blocked sidewalk,Harbor Point,203 Dock St
+10064,2026-08-02T21:52,closed,2026-08-20T21:52,Dust,Eastgate,35 Orchard Ln
+10065,2026-08-10T23:09,closed,2026-08-28T23:09,Streetlight,Old Town,89 Market St
+10066,2026-08-08T02:13,closed,2026-08-25T02:13,Trash,Harbor Point,122 Harbor Blvd
+10067,2026-08-17T02:20,open,,Street condition,Harbor Point,177 Harbor Blvd
+10068,2026-08-14T07:15,closed,2026-08-17T07:15,Street condition,Harbor Point,169 Pier Ave
+10069,2026-08-02T20:28,open,,Blocked sidewalk,Harbor Point,144 Pier Ave
+10070,2026-08-13T07:55,open,,Dust,Riverside,134 Bank St
+10071,2026-08-15T10:12,open,,Blocked sidewalk,Harbor Point,116 Harbor Blvd
+10072,2026-08-26T19:01,open,,Noise,Eastgate,144 Orchard Ln
+10073,2026-08-09T19:13,closed,2026-08-19T19:13,Blocked sidewalk,Riverside,53 Willow Ln
+10074,2026-08-02T03:05,open,,Dust,Riverside,8 Willow Ln
+10075,2026-08-18T18:20,closed,2026-09-03T18:20,Noise,Harbor Point,182 Dock St
+10076,2026-08-10T15:05,closed,2026-08-23T15:05,Dust,Millbrook,67 Elm St
+10077,2026-08-28T15:33,closed,2026-09-12T15:33,Streetlight,Cedar Heights,18 Cedar Dr
+10078,2026-08-10T21:48,closed,2026-08-15T21:48,Dust,Eastgate,169 East Ave
+10079,2026-08-29T06:47,open,,Noise,Harbor Point,120 Dock St
+10080,2026-08-20T00:11,open,,Streetlight,Eastgate,52 East Ave
+10081,2026-08-17T14:02,closed,2026-09-03T14:02,Dust,Eastgate,77 East Ave
+10082,2026-08-10T01:12,closed,2026-08-21T01:12,Dust,Old Town,98 Market St
+10083,2026-08-04T13:05,closed,2026-08-18T13:05,Blocked sidewalk,Riverside,134 Bank St
+10084,2026-08-24T21:40,closed,2026-09-10T21:40,Blocked sidewalk,Harbor Point,43 Harbor Blvd
+10085,2026-08-20T07:21,open,,Noise,Old Town,134 Church St
+10086,2026-08-13T15:22,closed,2026-08-16T15:22,Blocked sidewalk,Millbrook,67 Elm St
+10087,2026-08-01T15:07,closed,2026-08-10T15:07,Noise,Millbrook,28 Elm St
+10088,2026-08-21T10:39,open,,Dust,Eastgate,33 East Ave
+10089,2026-08-11T22:21,open,,Blocked sidewalk,Millbrook,18 Brook Ave
+10090,2026-08-06T21:55,closed,2026-08-26T21:55,Blocked sidewalk,Eastgate,150 Orchard Ln
+10091,2026-08-24T16:35,open,,Noise,Riverside,202 River Rd
+10092,2026-08-10T12:37,open,,Dust,Harbor Point,232 Harbor Blvd
+10093,2026-08-14T21:43,open,,Noise,Harbor Point,144 Pier Ave
+10094,2026-08-06T18:40,open,,Blocked sidewalk,Eastgate,75 Gate St
+10095,2026-08-06T16:06,open,,Noise,Eastgate,14 East Ave
+10096,2026-08-26T17:56,closed,2026-09-08T17:56,Noise,Old Town,168 Market St
+10097,2026-08-03T06:17,closed,2026-08-16T06:17,Noise,Eastgate,221 East Ave
+10098,2026-08-18T14:07,closed,2026-09-07T14:07,Dust,Millbrook,188 Mill Rd
+10099,2026-08-06T16:11,closed,2026-08-12T16:11,Blocked sidewalk,Harbor Point,79 Pier Ave
+10100,2026-08-07T19:18,closed,2026-08-19T19:18,Streetlight,Riverside,19 Bank St
+10101,2026-08-22T08:09,closed,2026-08-25T08:09,Noise,Riverside,230 Bank St
+10102,2026-08-13T00:01,closed,2026-08-23T00:01,Blocked sidewalk,Millbrook,85 Elm St
+10103,2026-08-12T04:32,open,,Noise,Eastgate,110 East Ave
+10104,2026-08-07T10:52,closed,2026-08-13T10:52,Dust,Harbor Point,221 Dock St
+10105,2026-08-09T12:35,closed,2026-08-15T12:35,Blocked sidewalk,Cedar Heights,216 Cedar Dr
+10106,2026-08-28T09:54,closed,2026-09-07T09:54,Noise,Riverside,200 Willow Ln
+10107,2026-08-03T15:10,open,,Street condition,Millbrook,233 Brook Ave
+10108,2026-08-25T15:11,closed,2026-09-12T15:11,Trash,Millbrook,162 Mill Rd
+10109,2026-08-11T11:58,closed,2026-08-18T11:58,Trash,Millbrook,26 Elm St
+10110,2026-08-19T00:57,open,,Noise,Harbor Point,67 Pier Ave
+10111,2026-08-28T15:15,open,,Blocked sidewalk,Old Town,206 Mill Ln
+10112,2026-08-13T09:10,closed,2026-08-18T09:10,Blocked sidewalk,Cedar Heights,84 Cedar Dr
+10113,2026-08-11T03:41,closed,2026-08-12T03:41,Dust,Riverside,114 Willow Ln
+10114,2026-08-12T03:54,closed,2026-08-31T03:54,Noise,Riverside,105 Willow Ln
+10115,2026-08-26T10:13,closed,2026-08-28T10:13,Noise,Eastgate,163 Gate St
+10116,2026-08-27T00:07,open,,Dust,Riverside,2 Bank St
+10117,2026-08-09T10:49,closed,2026-08-24T10:49,Dust,Harbor Point,121 Harbor Blvd
+10118,2026-08-15T07:28,closed,2026-09-02T07:28,Noise,Millbrook,156 Brook Ave
+10119,2026-08-02T13:49,closed,2026-08-10T13:49,Dust,Riverside,150 Bank St
+10120,2026-08-12T15:17,closed,2026-08-26T15:17,Blocked sidewalk,Riverside,149 River Rd
+10121,2026-08-10T01:27,closed,2026-08-14T01:27,Blocked sidewalk,Eastgate,86 Gate St
+10122,2026-08-22T23:49,closed,2026-08-27T23:49,Noise,Riverside,88 Bank St
+10123,2026-08-22T18:00,closed,2026-08-31T18:00,Dust,Harbor Point,205 Pier Ave
+10124,2026-08-08T11:38,closed,2026-08-18T11:38,Noise,Old Town,206 Mill Ln
+10125,2026-08-23T22:38,open,,Street condition,Millbrook,131 Brook Ave
+10126,2026-08-04T15:06,open,,Dust,Millbrook,67 Elm St
+10127,2026-08-20T12:55,closed,2026-08-31T12:55,Blocked sidewalk,Harbor Point,221 Dock St
+10128,2026-08-14T04:47,closed,2026-08-24T04:47,Dust,Cedar Heights,87 Cedar Dr
+10129,2026-08-11T19:30,closed,2026-08-26T19:30,Dust,Riverside,230 Bank St
+10130,2026-08-05T01:19,closed,2026-08-10T01:19,Street condition,Harbor Point,217 Pier Ave
+10131,2026-08-12T08:02,open,,Blocked sidewalk,Eastgate,110 East Ave
+10132,2026-08-17T05:16,closed,2026-08-20T05:16,Blocked sidewalk,Millbrook,156 Brook Ave
+10133,2026-08-10T19:30,closed,2026-08-25T19:30,Streetlight,Harbor Point,172 Dock St
+10134,2026-08-08T05:00,closed,2026-08-22T05:00,Dust,Harbor Point,16 Dock St
+10135,2026-08-09T00:16,open,,Noise,Eastgate,86 Orchard Ln
+10136,2026-08-19T04:26,closed,2026-08-28T04:26,Noise,Riverside,88 Bank St
+10137,2026-08-13T00:43,open,,Street condition,Eastgate,12 Orchard Ln
+10138,2026-08-01T14:29,closed,2026-08-06T14:29,Noise,Eastgate,86 Gate St
+10139,2026-08-02T18:57,open,,Noise,Cedar Heights,124 Cedar Dr
+10140,2026-08-10T21:27,closed,2026-08-21T21:27,Blocked sidewalk,Cedar Heights,171 Summit Ave
+10141,2026-08-26T13:13,open,,Dust,Riverside,59 River Rd
+10142,2026-08-26T22:26,closed,2026-09-02T22:26,Street condition,Harbor Point,3 Dock St
+10143,2026-08-25T07:39,closed,2026-09-06T07:39,Noise,Eastgate,113 Orchard Ln
+10144,2026-08-19T06:53,closed,2026-08-28T06:53,Blocked sidewalk,Cedar Heights,55 Cedar Dr
+10145,2026-08-10T20:06,open,,Blocked sidewalk,Old Town,36 Church St
+10146,2026-08-04T18:48,closed,2026-08-23T18:48,Street condition,Riverside,51 Willow Ln
+10147,2026-08-13T03:35,closed,2026-08-23T03:35,Noise,Cedar Heights,28 Ridge Rd
+10148,2026-08-01T23:53,open,,Blocked sidewalk,Old Town,206 Market St
+10149,2026-08-12T23:14,closed,2026-08-24T23:14,Street condition,Riverside,70 Bank St
+10150,2026-08-19T14:39,closed,2026-09-08T14:39,Noise,Eastgate,58 Gate St
+10151,2026-08-07T08:06,open,,Dust,Eastgate,191 Orchard Ln
+10152,2026-08-11T01:45,closed,2026-08-31T01:45,Dust,Eastgate,89 East Ave
+10153,2026-08-09T17:11,open,,Blocked sidewalk,Riverside,88 River Rd
+10154,2026-08-17T19:19,closed,2026-08-25T19:19,Blocked sidewalk,Millbrook,28 Elm St
+10155,2026-08-18T01:31,open,,Streetlight,Riverside,43 River Rd
+10156,2026-08-05T05:53,open,,Trash,Harbor Point,116 Harbor Blvd
+10157,2026-08-15T23:30,open,,Noise,Riverside,91 Willow Ln
+10158,2026-08-09T18:22,closed,2026-08-27T18:22,Dust,Old Town,98 Market St
+10159,2026-08-21T19:09,open,,Noise,Eastgate,29 Orchard Ln
+10160,2026-08-20T21:47,closed,2026-08-29T21:47,Noise,Old Town,36 Church St
+10161,2026-08-23T19:41,closed,2026-09-04T19:41,Dust,Millbrook,104 Elm St
+10162,2026-08-27T00:23,closed,2026-09-03T00:23,Blocked sidewalk,Cedar Heights,191 Summit Ave
+10163,2026-08-07T12:01,closed,2026-08-12T12:01,Streetlight,Harbor Point,74 Dock St
+10164,2026-08-16T23:18,closed,2026-08-25T23:18,Noise,Riverside,149 River Rd
+10165,2026-08-09T23:48,open,,Noise,Eastgate,156 Gate St
+10166,2026-08-13T02:28,closed,2026-09-01T02:28,Noise,Millbrook,163 Mill Rd
+10167,2026-08-16T19:00,open,,Blocked sidewalk,Cedar Heights,87 Cedar Dr
+10168,2026-08-08T04:09,closed,2026-08-21T04:09,Streetlight,Harbor Point,24 Harbor Blvd
+10169,2026-08-10T18:32,open,,Dust,Eastgate,38 East Ave
+10170,2026-08-11T02:15,closed,2026-08-16T02:15,Street condition,Eastgate,143 East Ave
+10171,2026-08-18T04:27,open,,Blocked sidewalk,Harbor Point,133 Dock St
+10172,2026-08-26T01:40,open,,Noise,Eastgate,89 East Ave
+10173,2026-08-25T21:39,open,,Blocked sidewalk,Harbor Point,111 Harbor Blvd
+10174,2026-08-14T21:48,closed,2026-08-21T21:48,Dust,Harbor Point,52 Harbor Blvd
+10175,2026-08-19T15:22,closed,2026-09-06T15:22,Blocked sidewalk,Harbor Point,193 Harbor Blvd
+10176,2026-08-23T01:50,open,,Streetlight,Harbor Point,194 Pier Ave
+10177,2026-08-29T20:53,open,,Trash,Eastgate,219 East Ave
+10178,2026-08-07T08:35,closed,2026-08-23T08:35,Streetlight,Eastgate,175 East Ave
+10179,2026-08-24T03:08,closed,2026-09-08T03:08,Noise,Cedar Heights,156 Ridge Rd
+10180,2026-08-10T23:06,open,,Noise,Riverside,1 Willow Ln
+10181,2026-08-12T09:34,closed,2026-08-14T09:34,Noise,Eastgate,221 East Ave
+10182,2026-08-16T01:45,open,,Dust,Eastgate,33 East Ave
+10183,2026-08-05T05:42,closed,2026-08-09T05:42,Blocked sidewalk,Eastgate,10 Orchard Ln
+10184,2026-08-01T06:51,closed,2026-08-11T06:51,Dust,Millbrook,104 Elm St
+10185,2026-08-29T12:11,closed,2026-09-01T12:11,Streetlight,Harbor Point,2 Dock St
+10186,2026-08-18T17:24,closed,2026-08-28T17:24,Noise,Harbor Point,116 Harbor Blvd
+10187,2026-08-15T03:48,open,,Dust,Harbor Point,205 Pier Ave
+10188,2026-08-08T20:31,closed,2026-08-14T20:31,Blocked sidewalk,Millbrook,143 Elm St
+10189,2026-08-17T06:29,closed,2026-08-28T06:29,Trash,Cedar Heights,120 Summit Ave
+10190,2026-08-17T12:14,open,,Dust,Eastgate,16 Orchard Ln
+10191,2026-08-09T11:27,closed,2026-08-17T11:27,Streetlight,Harbor Point,43 Pier Ave
+10192,2026-08-26T14:44,closed,2026-09-05T14:44,Dust,Eastgate,38 East Ave
+10193,2026-08-21T18:05,open,,Dust,Old Town,233 Market St
+10194,2026-08-24T05:03,open,,Dust,Eastgate,123 Gate St
+10195,2026-08-16T22:42,closed,2026-08-21T22:42,Dust,Riverside,88 Bank St
+10196,2026-08-18T20:48,open,,Street condition,Harbor Point,19 Pier Ave
+10197,2026-08-29T15:34,closed,2026-09-12T15:34,Dust,Eastgate,108 Orchard Ln
+10198,2026-08-16T14:06,open,,Dust,Eastgate,59 East Ave
+10199,2026-08-29T19:10,closed,2026-09-03T19:10,Streetlight,Eastgate,94 Gate St
+10200,2026-08-18T01:53,closed,2026-08-20T01:53,Streetlight,Old Town,165 Mill Ln
+10201,2026-08-25T01:58,closed,2026-09-02T01:58,Blocked sidewalk,Harbor Point,237 Dock St
+10202,2026-08-07T06:37,open,,Streetlight,Harbor Point,78 Dock St
+10203,2026-08-22T17:08,closed,2026-09-08T17:08,Blocked sidewalk,Old Town,98 Market St
+10204,2026-08-19T07:16,open,,Dust,Eastgate,86 Gate St
+10205,2026-08-07T12:20,closed,2026-08-10T12:20,Blocked sidewalk,Cedar Heights,191 Summit Ave
+10206,2026-08-09T03:31,open,,Blocked sidewalk,Old Town,100 Church St
+10207,2026-08-09T04:47,closed,2026-08-18T04:47,Noise,Eastgate,77 East Ave
+10208,2026-08-01T21:41,open,,Streetlight,Millbrook,158 Brook Ave
+10209,2026-08-21T17:43,open,,Street condition,Eastgate,165 Gate St
+10210,2026-08-05T11:09,open,,Street condition,Cedar Heights,233 Cedar Dr
+10211,2026-08-08T00:53,closed,2026-08-10T00:53,Blocked sidewalk,Riverside,221 Bank St
+10212,2026-08-07T04:48,closed,2026-08-27T04:48,Street condition,Eastgate,14 Orchard Ln
+10213,2026-08-06T12:03,open,,Dust,Riverside,91 Willow Ln
+10214,2026-08-06T01:54,closed,2026-08-16T01:54,Noise,Harbor Point,36 Harbor Blvd
+10215,2026-08-14T13:04,closed,2026-08-27T13:04,Dust,Riverside,222 Bank St
+10216,2026-08-22T12:36,closed,2026-08-23T12:36,Noise,Millbrook,28 Elm St
+10217,2026-08-06T20:45,closed,2026-08-12T20:45,Trash,Millbrook,114 Elm St
+10218,2026-08-24T17:12,closed,2026-09-01T17:12,Trash,Harbor Point,237 Dock St
+10219,2026-08-08T10:32,open,,Noise,Eastgate,80 Gate St
+10220,2026-08-15T16:15,closed,2026-08-24T16:15,Trash,Harbor Point,68 Pier Ave
+10221,2026-08-19T17:29,closed,2026-09-04T17:29,Noise,Old Town,131 Church St
+10222,2026-08-08T12:06,closed,2026-08-22T12:06,Blocked sidewalk,Riverside,86 River Rd
+10223,2026-08-12T22:31,closed,2026-08-30T22:31,Dust,Riverside,202 River Rd
+10224,2026-08-23T08:15,closed,2026-09-05T08:15,Dust,Harbor Point,121 Harbor Blvd
+10225,2026-08-13T21:31,closed,2026-08-24T21:31,Dust,Riverside,91 Willow Ln
+10226,2026-08-27T04:23,closed,2026-09-02T04:23,Noise,Riverside,222 Bank St
+10227,2026-08-20T11:48,closed,2026-08-25T11:48,Noise,Cedar Heights,139 Ridge Rd
+10228,2026-08-04T18:30,open,,Blocked sidewalk,Millbrook,28 Elm St
+10229,2026-08-10T07:23,closed,2026-08-12T07:23,Noise,Riverside,36 Willow Ln
+10230,2026-08-07T16:59,open,,Noise,Harbor Point,149 Pier Ave
+10231,2026-08-24T17:57,open,,Blocked sidewalk,Harbor Point,190 Pier Ave
+10232,2026-08-07T11:26,closed,2026-08-13T11:26,Blocked sidewalk,Millbrook,67 Elm St
+10233,2026-08-09T10:43,open,,Street condition,Riverside,151 Bank St
+10234,2026-08-16T19:52,closed,2026-08-17T19:52,Streetlight,Cedar Heights,118 Summit Ave
+10235,2026-08-22T08:31,closed,2026-09-07T08:31,Street condition,Eastgate,2 East Ave
+10236,2026-08-17T00:30,closed,2026-08-21T00:30,Blocked sidewalk,Eastgate,10 Orchard Ln
+10237,2026-08-02T20:15,open,,Dust,Millbrook,85 Elm St
+10238,2026-08-06T09:40,closed,2026-08-14T09:40,Blocked sidewalk,Eastgate,86 Orchard Ln
+10239,2026-08-26T09:16,open,,Noise,Eastgate,185 Gate St
+10240,2026-08-01T19:08,closed,2026-08-06T19:08,Dust,Harbor Point,67 Pier Ave
+10241,2026-08-04T22:19,closed,2026-08-08T22:19,Noise,Cedar Heights,177 Cedar Dr
+10242,2026-08-20T22:14,closed,2026-08-29T22:14,Noise,Harbor Point,205 Pier Ave
+10243,2026-08-15T15:37,closed,2026-08-28T15:37,Noise,Millbrook,234 Mill Rd
+10244,2026-08-29T14:25,closed,2026-09-02T14:25,Trash,Old Town,82 Market St
+10245,2026-08-10T11:10,open,,Dust,Harbor Point,220 Dock St
+10246,2026-08-15T11:50,open,,Dust,Riverside,202 River Rd
+10247,2026-08-10T15:08,closed,2026-08-17T15:08,Blocked sidewalk,Eastgate,171 Orchard Ln
+10248,2026-08-20T18:11,closed,2026-08-28T18:11,Blocked sidewalk,Harbor Point,206 Harbor Blvd
+10249,2026-08-26T20:03,closed,2026-08-31T20:03,Blocked sidewalk,Harbor Point,209 Pier Ave
+10250,2026-08-20T07:40,closed,2026-09-03T07:40,Dust,Harbor Point,128 Dock St
+10251,2026-08-22T17:36,closed,2026-09-02T17:36,Dust,Cedar Heights,85 Summit Ave
+10252,2026-08-18T20:44,open,,Blocked sidewalk,Cedar Heights,139 Ridge Rd
+10253,2026-08-28T17:04,closed,2026-09-02T17:04,Street condition,Harbor Point,155 Harbor Blvd
+10254,2026-08-16T14:48,closed,2026-08-30T14:48,Street condition,Millbrook,122 Brook Ave
+10255,2026-08-01T11:03,closed,2026-08-11T11:03,Blocked sidewalk,Cedar Heights,6 Summit Ave
+10256,2026-08-11T17:49,open,,Trash,Eastgate,74 East Ave
+10257,2026-08-06T03:36,closed,2026-08-17T03:36,Street condition,Harbor Point,168 Pier Ave
+10258,2026-08-06T04:30,open,,Noise,Riverside,168 Willow Ln
+10259,2026-08-19T09:34,closed,2026-08-21T09:34,Trash,Cedar Heights,223 Cedar Dr
+10260,2026-08-01T22:19,closed,2026-08-02T22:19,Noise,Harbor Point,79 Pier Ave
+10261,2026-08-09T03:45,closed,2026-08-24T03:45,Street condition,Eastgate,57 Gate St
+10262,2026-08-19T06:56,open,,Noise,Eastgate,103 East Ave
+10263,2026-08-09T13:01,open,,Noise,Harbor Point,190 Pier Ave
+10264,2026-08-11T01:39,closed,2026-08-23T01:39,Dust,Old Town,98 Market St
+10265,2026-08-17T15:25,closed,2026-09-04T15:25,Noise,Harbor Point,168 Dock St
+10266,2026-08-21T01:58,open,,Noise,Eastgate,136 Gate St
+10267,2026-08-07T03:03,closed,2026-08-09T03:03,Blocked sidewalk,Eastgate,15 Gate St
+10268,2026-08-06T07:48,closed,2026-08-24T07:48,Dust,Harbor Point,107 Dock St
+10269,2026-08-10T06:16,open,,Blocked sidewalk,Cedar Heights,222 Summit Ave
+10270,2026-08-07T23:46,closed,2026-08-09T23:46,Street condition,Eastgate,77 Orchard Ln
+10271,2026-08-27T12:51,closed,2026-09-11T12:51,Trash,Riverside,138 Bank St
+10272,2026-08-20T15:57,open,,Noise,Eastgate,103 East Ave
+10273,2026-08-11T02:30,closed,2026-08-18T02:30,Blocked sidewalk,Old Town,224 Church St
+10274,2026-08-16T12:56,closed,2026-08-23T12:56,Streetlight,Harbor Point,101 Pier Ave
+10275,2026-08-29T02:08,open,,Dust,Eastgate,14 East Ave
+10276,2026-08-09T04:15,open,,Blocked sidewalk,Cedar Heights,139 Ridge Rd
+10277,2026-08-05T17:51,open,,Street condition,Riverside,171 Bank St
+10278,2026-08-13T21:41,closed,2026-08-16T21:41,Noise,Eastgate,156 Gate St
+10279,2026-08-04T21:48,closed,2026-08-19T21:48,Dust,Eastgate,10 Orchard Ln
+10280,2026-08-10T22:24,closed,2026-08-25T22:24,Trash,Cedar Heights,80 Ridge Rd
+10281,2026-08-11T22:33,closed,2026-08-27T22:33,Streetlight,Harbor Point,75 Harbor Blvd
+10282,2026-08-26T04:50,open,,Dust,Eastgate,138 East Ave
+10283,2026-08-23T23:45,closed,2026-09-01T23:45,Streetlight,Old Town,108 Mill Ln
+10284,2026-08-17T01:38,closed,2026-09-01T01:38,Noise,Riverside,200 Willow Ln
+10285,2026-08-29T00:46,closed,2026-09-14T00:46,Blocked sidewalk,Eastgate,66 East Ave
+10286,2026-08-14T15:39,closed,2026-09-03T15:39,Dust,Harbor Point,240 Dock St
+10287,2026-08-18T09:14,closed,2026-09-05T09:14,Streetlight,Cedar Heights,65 Summit Ave
+10288,2026-08-08T18:56,closed,2026-08-16T18:56,Noise,Cedar Heights,222 Cedar Dr
+10289,2026-08-20T15:51,closed,2026-09-06T15:51,Noise,Riverside,151 River Rd
+10290,2026-08-23T04:40,closed,2026-09-06T04:40,Blocked sidewalk,Cedar Heights,222 Summit Ave
+10291,2026-08-07T23:51,closed,2026-08-25T23:51,Blocked sidewalk,Harbor Point,53 Pier Ave
+10292,2026-08-12T19:07,open,,Noise,Eastgate,86 Gate St
+10293,2026-08-04T08:08,closed,2026-08-10T08:08,Noise,Millbrook,125 Elm St
+10294,2026-08-20T10:39,closed,2026-09-03T10:39,Blocked sidewalk,Harbor Point,61 Harbor Blvd
+10295,2026-08-11T18:35,closed,2026-08-27T18:35,Street condition,Harbor Point,58 Dock St
+10296,2026-08-15T07:48,open,,Blocked sidewalk,Eastgate,86 Orchard Ln
+10297,2026-08-03T11:49,closed,2026-08-08T11:49,Streetlight,Harbor Point,131 Pier Ave
+10298,2026-08-21T12:39,closed,2026-08-23T12:39,Dust,Riverside,86 River Rd
+10299,2026-08-27T13:40,closed,2026-09-03T13:40,Streetlight,Eastgate,224 Orchard Ln
+10300,2026-08-22T14:01,open,,Dust,Riverside,59 River Rd
