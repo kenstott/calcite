@@ -1165,6 +1165,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         continue;
       }
 
+      // A source the schema's glob does not match is not part of the schema: not converted.
+      if (globFiltersSources() && !localSourceMatchesGlob(file)) {
+        LOGGER.debug("Not converting {} - does not match glob pattern '{}'", file.getName(),
+            directoryPattern);
+        continue;
+      }
+
       // Skip files that have already been processed via tableDef
       String fileAbsPath = file.getAbsolutePath();
       if (alreadyProcessedFiles.contains(fileAbsPath)) {
@@ -1249,10 +1256,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
   /**
    * Converts complex file types from storage provider to JSON.
    * Downloads convertible files (Excel, HTML, DOCX, etc.) to cache and converts them.
+   *
+   * @return the canonical paths of the downloaded copies of the sources the schema's glob
+   *     matches, the record {@link #conversionSourceMatchesGlob} ties a download-cache
+   *     conversion to; empty when no glob is set
    */
-  private void convertStorageProviderFilesToJson() {
+  private Set<String> convertStorageProviderFilesToJson() {
+    Set<String> globMatchedDownloads = new HashSet<>();
     if (storageProvider == null) {
-      return;
+      return globMatchedDownloads;
     }
 
     // Determine the base path for storage provider using baseDirectory (data directory)
@@ -1270,9 +1282,21 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
             continue;
           }
 
+          // A source the schema's glob does not match is not part of the schema: not
+          // downloaded, not converted.
+          final boolean filtered = globFiltersSources();
+          if (filtered && !matchesDirectoryPattern(relativeToStorageBase(basePath, entry))) {
+            LOGGER.debug("Not converting {} - does not match glob pattern '{}'",
+                entry.getName(), directoryPattern);
+            continue;
+          }
+
           try {
             // Download file to cache
             File cachedFile = downloadToCache(entry);
+            if (filtered) {
+              globMatchedDownloads.add(cachedFile.getCanonicalPath());
+            }
 
             // Determine output directory for converted JSON files
             // Use baseDirectory/.download-cache/conversions/
@@ -1313,6 +1337,98 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     } catch (Exception e) {
       LOGGER.error("Error processing storage provider files for conversion: {}", e.getMessage());
     }
+    return globMatchedDownloads;
+  }
+
+  /**
+   * Whether the schema's glob filters its sources, as discovery applies it: the storage-provider
+   * listing ({@link #processStorageProviderFiles}) filters by any pattern, the local scan
+   * ({@link #getFilesForProcessing}) by a glob pattern only.
+   */
+  private boolean globFiltersSources() {
+    if (directoryPattern == null || directoryPattern.isEmpty()) {
+      return false;
+    }
+    return storageProvider != null || isGlobPattern(directoryPattern);
+  }
+
+  /**
+   * Whether a source's path relative to the base directory matches the schema's glob. The one
+   * rule discovery and the conversion passes share; a {@code **}{@code /} pattern also matches
+   * at the root.
+   */
+  private boolean matchesDirectoryPattern(String relativePath) {
+    final boolean local = storageProvider == null || isLocal(storageProvider);
+    if (GlobMatcher.of(directoryPattern, local).matches(relativePath)) {
+      return true;
+    }
+    return directoryPattern.startsWith("**/")
+        && GlobMatcher.of(directoryPattern.substring(3), local).matches(relativePath);
+  }
+
+  /** A listed entry's path relative to the storage base path, the path the glob is matched on. */
+  private static String relativeToStorageBase(String basePath, StorageProvider.FileEntry entry) {
+    String relativePath = LocalPaths.relativize(basePath, entry.getPath());
+    return relativePath != null ? relativePath : entry.getPath();
+  }
+
+  /**
+   * The directory a local source's relative path is taken from: the storage base path when a
+   * storage provider lists the files, otherwise the directory {@link #findMatchingFiles} scans.
+   */
+  private String localGlobBasePath() {
+    if (storageProvider != null) {
+      return storageBasePath();
+    }
+    return baseDirectory != null ? baseDirectory : sourceDirectory.getAbsolutePath();
+  }
+
+  /** Whether a local source file, by its path relative to the base, matches the glob. */
+  private boolean localSourceMatchesGlob(File source) {
+    final String relativePath;
+    try {
+      relativePath =
+          LocalPaths.relativize(new File(localGlobBasePath()).getCanonicalPath(),
+              source.getCanonicalPath());
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException(
+          "Cannot resolve " + source + " against the schema's base directory", e);
+    }
+    // A file outside the base directory is no source of this schema.
+    return relativePath != null && matchesDirectoryPattern(relativePath);
+  }
+
+  /**
+   * Whether a conversion's source file matches the schema's glob. The conversion record
+   * (.conversions.json, keyed by the converted file, written by the converters to the operating
+   * cache directory) names the source as {@code originalFile}: a local source is matched by its
+   * path relative to the base; a storage-provider source was downloaded to
+   * .download-cache/originals and matches when this run's conversion pass matched its listing
+   * entry ({@code globMatchedDownloads}). A conversion with no record cannot be tied to a source,
+   * so under a glob it is not registered.
+   */
+  private boolean conversionSourceMatchesGlob(File convertedFile,
+      ConversionMetadata converterRecords, Set<String> globMatchedDownloads) {
+    ConversionMetadata.ConversionRecord record =
+        converterRecords.getConversionRecordByConvertedFile(convertedFile.getAbsolutePath());
+    if (record == null || record.originalFile == null) {
+      LOGGER.warn("Not registering {} - no conversion record names its source, so it cannot be "
+          + "matched to glob pattern '{}'", convertedFile.getName(), directoryPattern);
+      return false;
+    }
+    File original = new File(record.originalFile);
+    try {
+      String originalPath = original.getCanonicalPath();
+      String downloadCache =
+          new File(operatingCacheDirectory, ".download-cache/originals").getCanonicalPath();
+      if (LocalPaths.relativize(downloadCache, originalPath) != null) {
+        return globMatchedDownloads.contains(originalPath);
+      }
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException(
+          "Cannot resolve the source " + original + " of " + convertedFile, e);
+    }
+    return localSourceMatchesGlob(original);
   }
 
   /**
@@ -2056,6 +2172,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       // Convert xlsx, html, and other convertible files to JSON before processing
       // For local storage, convert directly from the data directory
       // For remote storage (S3, etc.), download and convert via storage provider
+      Set<String> globMatchedDownloads = Collections.emptySet();
       if ("local".equals(storageType) && baseDirectory != null) {
         File localSourceDir = new File(baseDirectory);
         if (localSourceDir.exists() && localSourceDir.isDirectory()) {
@@ -2063,12 +2180,12 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           convertLocalSupportedFilesToJson(localSourceDir);
         }
       } else if (storageProvider != null) {
-        convertStorageProviderFilesToJson();
+        globMatchedDownloads = convertStorageProviderFilesToJson();
       }
 
       // Process files from storage provider (includes converted JSON files)
       LOGGER.debug("[FileSchema.getTableMap] Using storage provider to process files");
-      processStorageProviderFiles(builder, tableNameCounts);
+      processStorageProviderFiles(builder, tableNameCounts, globMatchedDownloads);
     }
 
     // Process partitioned tables BEFORE views/materialized views
@@ -5007,6 +5124,15 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         .filter(this::isFileTypeSupported)
         .forEach(allFiles::add);
 
+    // Under a glob, a conversion is a file of the schema only when its source matches the glob,
+    // whichever run left it in conversions/ (see processConvertedFiles). Without a storage
+    // provider nothing was downloaded, so no download-cache conversion matches.
+    final ConversionMetadata converterRecords =
+        globFiltersSources() ? new ConversionMetadata(operatingCacheDirectory) : null;
+    final java.util.function.Predicate<File> conversionInSchema = converted ->
+        converterRecords == null
+            || conversionSourceMatchesGlob(converted, converterRecords, Collections.emptySet());
+
     // Also include converted files from base directory if it exists
     if (baseDirectory != null) {
       // Check for converted files in baseDirectory/conversions/
@@ -5016,6 +5142,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         File[] convertedFiles = conversionsDir.listFiles(file -> isFileTypeSupported(file));
         if (convertedFiles != null) {
           for (File file : convertedFiles) {
+            if (!conversionInSchema.test(file)) {
+              continue;
+            }
             allFiles.add(file);
             LOGGER.debug("[FileSchema] Added converted file: {}", file.getName());
           }
@@ -5030,6 +5159,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         File[] storageConvertedFiles = downloadCacheConversionsDir.listFiles(file -> isFileTypeSupported(file));
         if (storageConvertedFiles != null) {
           for (File file : storageConvertedFiles) {
+            if (!conversionInSchema.test(file)) {
+              continue;
+            }
             allFiles.add(file);
             LOGGER.debug("[FileSchema] Added storage provider converted file: {}", file.getName());
           }
@@ -5302,7 +5434,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * Process files from the configured storage provider.
    */
   private void processStorageProviderFiles(ImmutableMap.Builder<String, Table> builder,
-                                           Map<String, Integer> tableNameCounts) {
+                                           Map<String, Integer> tableNameCounts,
+                                           Set<String> globMatchedDownloads) {
     if (storageProvider == null) {
       return;
     }
@@ -5332,22 +5465,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
         return a.getName().compareTo(b.getName());
       });
 
-      // Create a glob matcher if a directory pattern is configured
-      final GlobMatcher globMatcher;
-      final GlobMatcher rootGlobMatcher;
-      if (directoryPattern != null && !directoryPattern.isEmpty()) {
-        boolean local = isLocal(storageProvider);
-        globMatcher = GlobMatcher.of(directoryPattern, local);
-        // Also match root-level files when pattern starts with **/
-        if (directoryPattern.startsWith("**/")) {
-          rootGlobMatcher = GlobMatcher.of(directoryPattern.substring(3), local);
-        } else {
-          rootGlobMatcher = null;
-        }
-      } else {
-        globMatcher = null;
-        rootGlobMatcher = null;
-      }
+      final boolean globFilters = globFiltersSources();
 
       // Create a virtual base source for relative path calculations
       final Source baseSource =
@@ -5397,18 +5515,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           }
 
           // Apply glob filter if configured
-          if (globMatcher != null) {
-            // Compute relative path from base for glob matching
-            String entryPath = entry.getPath();
-            String relativePath = LocalPaths.relativize(basePath, entryPath);
-            if (relativePath == null) {
-              relativePath = entryPath;
-            }
-            if (!globMatcher.matches(relativePath)
-                && (rootGlobMatcher == null || !rootGlobMatcher.matches(relativePath))) {
-              LOGGER.debug("Skipping file {} - does not match glob pattern '{}'", entry.getName(), directoryPattern);
-              continue;
-            }
+          if (globFilters && !matchesDirectoryPattern(relativeToStorageBase(basePath, entry))) {
+            LOGGER.debug("Skipping file {} - does not match glob pattern '{}'", entry.getName(), directoryPattern);
+            continue;
           }
           // Create source for this file
           Source source = new StorageProviderSource(entry, storageProvider);
@@ -5589,7 +5698,7 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
       // Process converted files from conversions directories (xlsx->JSON, html->JSON, etc.)
       // These are always local files, so use Sources.of() instead of StorageProviderSource
-      processConvertedFiles(builder, tableNameCounts);
+      processConvertedFiles(builder, tableNameCounts, globMatchedDownloads);
 
       LOGGER.debug("[FileSchema] Processed {} files from storage provider", entries.size());
 
@@ -5604,7 +5713,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
    * These are local JSON files created from xlsx, html, docx conversions.
    */
   private void processConvertedFiles(ImmutableMap.Builder<String, Table> builder,
-                                     Map<String, Integer> tableNameCounts) {
+                                     Map<String, Integer> tableNameCounts,
+                                     Set<String> globMatchedDownloads) {
     List<File> convertedFiles = new ArrayList<>();
 
     // Collect from conversions/ directory
@@ -5637,7 +5747,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
 
     LOGGER.debug("[processConvertedFiles] Processing {} converted files from conversions directories", convertedFiles.size());
 
+    // Under a glob, a conversion is a table only when its source matches the glob, whichever
+    // run left it in conversions/. The converters record conversions unnamespaced in the
+    // operating cache directory, so they are read from there.
+    final ConversionMetadata converterRecords =
+        globFiltersSources() ? new ConversionMetadata(operatingCacheDirectory) : null;
+
     for (File file : convertedFiles) {
+      if (converterRecords != null
+          && !conversionSourceMatchesGlob(file, converterRecords, globMatchedDownloads)) {
+        LOGGER.debug("[processConvertedFiles] Skipping {} - its source does not match glob "
+            + "pattern '{}'", file.getName(), directoryPattern);
+        continue;
+      }
       Source source;
       if (engineConfig.getEngineType() == ExecutionEngineConfig.ExecutionEngineType.PARQUET) {
         source = new DirectFileSource(file);
