@@ -1629,8 +1629,8 @@ partitionedTables:
     comment: >
       Clinical trial studies from clinicaltrials.gov, one row per nct_id (PK) with
       overall_status, study_type, phase, enrollment_count, lead_sponsor, funder_type,
-      and start/primary-completion/completion/update dates. Restricted by default to
-      studies with a last-update-post-date on or after 2020-01-01. Joins to
+      and start/primary-completion/completion/update dates. Covers the full registry
+      (all studies regardless of last-update date). Joins to
       clinical_trial_conditions and clinical_trial_interventions (both on nct_id); see
       the trial_full view for a pre-joined denormalized version.
 
@@ -1745,11 +1745,9 @@ partitionedTables:
       method: GET
       parameters:
         pageSize: "1000"
-        # clinicaltrials.gov v2 has no simple `field.gte` filter; the documented
-        # incremental filter is the AREA[..]RANGE[..,MAX] expression under filter.advanced.
-        # Default lower bound = 2020-01-01 keeps the cache bounded (~250MB) when
-        # no incremental window is exported by the worker.
-        filter.advanced: "AREA[LastUpdatePostDate]RANGE[${GOVDATA_SINCE_DATE:2020-01-01},MAX]"
+        # No filter: the full registry is loaded. A LastUpdatePostDate floor drops older trials
+        # selectively by whether the sponsor kept the record current, which biases completion and
+        # results-reporting rates.
       response:
         format: json
         dataPath: "studies"
@@ -1777,8 +1775,7 @@ partitionedTables:
     dimensions:
       type:
         - clinical_trials
-      # sinceDate/untilDate in the incremental block do not bust rawCache;
-      # month dimension ensures cache is invalidated each month.
+      # The month dimension busts rawCache so the full registry is re-fetched each month;
       month: ["${GOVDATA_CURRENT_MONTH:12}"]
 
     materialize:
@@ -1840,9 +1837,8 @@ partitionedTables:
       method: GET
       parameters:
         pageSize: "1000"
-        # Shares clinical_trials cache via sharedKey — must use the same filter
+        # Shares clinical_trials cache via sharedKey — must use the same (unfiltered)
         # parameter set as the parent so cache contents are consistent.
-        filter.advanced: "AREA[LastUpdatePostDate]RANGE[${GOVDATA_SINCE_DATE:2020-01-01},MAX]"
       response:
         format: json
         dataPath: "studies"
@@ -1941,9 +1937,8 @@ partitionedTables:
       method: GET
       parameters:
         pageSize: "1000"
-        # Shares clinical_trials cache via sharedKey — must use the same filter
+        # Shares clinical_trials cache via sharedKey — must use the same (unfiltered)
         # parameter set as the parent so cache contents are consistent.
-        filter.advanced: "AREA[LastUpdatePostDate]RANGE[${GOVDATA_SINCE_DATE:2020-01-01},MAX]"
       response:
         format: json
         dataPath: "studies"
