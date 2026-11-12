@@ -83,6 +83,22 @@ class HttpSourceTruncatedBodyRetryTest {
     assertTrue(shouldRetry(new IOException("HTTP 503: unavailable")));
   }
 
+  @Test void gatewayTimeoutIsRetriedWhenNotDeclared() throws Exception {
+    HttpSource source = new HttpSource(
+        HttpSourceConfig.builder().url("https://api.example.com/data").build());
+    Method m = HttpSource.class.getDeclaredMethod("shouldRetry", IOException.class,
+        HttpSourceConfig.RateLimitConfig.class);
+    m.setAccessible(true);
+    HttpSourceConfig.RateLimitConfig declared = HttpSourceConfig.RateLimitConfig.fromMap(
+        java.util.Collections.<String, Object>singletonMap("retryOn",
+            java.util.Arrays.asList(403, 429, 503)));
+    assertTrue((Boolean) m.invoke(source,
+        new IOException("HTTP 504: <title>504 Gateway Time-out</title>"), declared));
+    assertTrue((Boolean) m.invoke(source, new IOException("HTTP 502: bad gateway"), declared));
+    assertTrue((Boolean) m.invoke(source, new IOException("HTTP 403: Forbidden"), declared));
+    assertFalse((Boolean) m.invoke(source, new IOException("HTTP 404: nf"), declared));
+  }
+
   @Test void unrelatedFailureIsNotRetried() throws Exception {
     assertFalse(shouldRetry(new IOException("HTTP 404: not found")));
     assertFalse(shouldRetry(new IOException("Unexpected character in response")));
