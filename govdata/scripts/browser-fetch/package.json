@@ -1,0 +1,10 @@
+{
+  "name": "browser-fetch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headed-Chrome fetch helper for pages that refuse non-browser clients (ssa.gov)",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "puppeteer": "23.11.1"
+  }
+}
