@@ -675,6 +675,36 @@ class ClaimGroupsTest {
     assertNull(ClaimScoring.pinocchioProblem("No rating.", -1));
   }
 
+  /** Daily eval q15 (2026-11-11): 23 true, 1 mostly true and 1 partially false ("record price")
+   *  scored about 97 and was rated 0, though the piece had a named inaccuracy. */
+  @Test void aPartiallyFalseClaimRulesOutZeroPinocchios() {
+    ObjectNode central = author("Capacity prices rose tenfold", "true", null);
+    central.put("central", true);
+    ArrayNode claims = claims(central);
+    for (int i = 0; i < 22; i++) {
+      claims.add(author("Fact " + i, "true", null));
+    }
+    claims.add(author("Prices rose 2 percent", "mostly true", "neutral"));
+    ObjectNode record = author("Despite a record price", "partially false", "toward_thesis");
+    record.put("inaccuracy", "the claim says record; the price is below the prior two auctions");
+    claims.add(record);
+    assertEquals(1, ClaimScoring.pinocchios(claims));
+    String clause = ClaimScoring.verdictClause(
+        ClaimScoring.score(claims, ClaimScoring.headlineBlock(claims)));
+    assertTrue(clause.contains("mostly accurate"), clause);
+  }
+
+  @Test void aMostlyTrueClaimAloneStillAllowsZeroPinocchios() {
+    ObjectNode central = author("Deaths fell to 16,750", "true", null);
+    central.put("central", true);
+    ArrayNode claims = claims(central);
+    for (int i = 0; i < 10; i++) {
+      claims.add(author("Fact " + i, "true", null));
+    }
+    claims.add(author("Deaths fell 2.5 percent", "mostly true", "neutral"));
+    assertEquals(0, ClaimScoring.pinocchios(claims));
+  }
+
   @Test void tooFewCheckedClaimsEarnNoPinocchioRating() {
     ObjectNode central = author("Deaths fell", "true", null);
     central.put("central", true);

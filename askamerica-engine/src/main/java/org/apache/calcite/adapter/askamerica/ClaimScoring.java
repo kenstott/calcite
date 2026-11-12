@@ -282,6 +282,7 @@ final class ClaimScoring {
         double centralCredit = -1;
         int checked = 0;
         int unsupported = 0;
+        int inaccurate = 0;
         double checkedSum = 0;
         ArrayNode citejacked = MAPPER.createArrayNode();
         int n = 0;
@@ -311,6 +312,9 @@ final class ClaimScoring {
                 unsupported++;
             } else {
                 checked++;
+                if (credit <= 0.5) {
+                    inaccurate++;
+                }
                 checkedSum += credit;
                 creditSum += credit;
             }
@@ -348,6 +352,7 @@ final class ClaimScoring {
         }
         out.put("checked", checked);
         out.put("unsupported", unsupported);
+        out.put("inaccurate", inaccurate);
         if (checked > 0) {
             int accuracy = (int) Math.round(100 * checkedSum / checked);
             if (centralCredit >= 0 && !centralUnsupported) {
@@ -380,7 +385,8 @@ final class ClaimScoring {
             return "are too few to rate" + unsupportedNote(score);
         }
         int checked = score.path("accuracy_score").asInt();
-        String accuracy = checked >= 90 ? "accurate"
+        boolean inaccurate = score.path("inaccurate").asInt() > 0;
+        String accuracy = checked >= 90 && !inaccurate ? "accurate"
             : checked >= 75 ? "mostly accurate"
             : checked >= 50 ? "partly false"
             : checked >= 25 ? "mostly false" : "false";
@@ -402,7 +408,8 @@ final class ClaimScoring {
     /**
      * The Washington Post Fact Checker rating the headline's block earns, 0-4, from the same
      * accuracy score as the headline's verdict: accurate 0, mostly accurate 1, partly false 2,
-     * mostly false 3, false 4. -1 when no single party speaks for the piece or its checked
+     * mostly false 3, false 4. A block with any checked claim graded partially false or worse
+     * is never rated 0: 0 means no inaccuracy at all. -1 when no single party speaks for the piece or its checked
      * claims are too few to rate.
      */
     static int pinocchios(JsonNode claims) {
@@ -415,7 +422,8 @@ final class ClaimScoring {
             return -1;
         }
         int a = score.path("accuracy_score").asInt();
-        return a >= 90 ? 0 : a >= 75 ? 1 : a >= 50 ? 2 : a >= 25 ? 3 : 4;
+        boolean inaccurate = score.path("inaccurate").asInt() > 0;
+        return a >= 90 && !inaccurate ? 0 : a >= 75 ? 1 : a >= 50 ? 2 : a >= 25 ? 3 : 4;
     }
 
     private static final java.util.regex.Pattern PINOCCHIO_RATING =
