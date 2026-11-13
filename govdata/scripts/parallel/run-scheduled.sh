@@ -31,6 +31,8 @@ LOG_DIR="$SCRIPT_DIR/runs"
 ERROR_LOG="$LOG_DIR/errors.log"
 R2_LOG="$LOG_DIR/r2-sync.log"   # detailed R2 sync output — tailed by pool_status.py
 CATCHUP_LOG="$LOG_DIR/r2-catchup.log"  # comprehensive backstop sync output
+# Present while a daily window's pool and x-schema step are running; holds the window's end epoch.
+DAILY_BUSY_FILE="${GOVDATA_DAILY_BUSY_FILE:-$LOG_DIR/daily-busy}"
 PID_FILE="$LOG_DIR/pids/scheduled.pid"
 GOVDATA_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -380,6 +382,26 @@ prepare_sec_submissions_bulk() {
   done
 }
 
+# ── Daily-busy marker ─────────────────────────────────────────────────────────
+#
+# The R2 catchup walks every table's closure and reads the same disk MinIO serves the daily
+# workers from, so it starts only once the daily pool and x-schema step have ended. The marker
+# holds the window's end epoch: a runner that dies mid-window cannot hold the catchup past it.
+
+mark_daily_busy() { echo "$1" > "$DAILY_BUSY_FILE"; }
+clear_daily_busy() { rm -f "$DAILY_BUSY_FILE"; }
+
+# Seconds the catchup must still wait (0 = open). args: now
+catchup_hold_secs() {
+  local now="$1" end=""
+  [ -f "$DAILY_BUSY_FILE" ] && end=$(cat "$DAILY_BUSY_FILE" 2>/dev/null)
+  if [[ "$end" =~ ^[0-9]+$ ]] && [ "$end" -gt "$now" ]; then
+    echo $(( end - now ))
+  else
+    echo 0
+  fi
+}
+
 # ── Window runner ─────────────────────────────────────────────────────────────
 #
 # Runs the pool in the given mode for up to WINDOW_SECS.
@@ -399,6 +421,7 @@ run_window() {
   local attempt=0
   local restarts=0           # crash relaunches only (not completions/fills); capped by MAX_POOL_RESTARTS
   local current="$mode"      # mode currently running; may switch to fill_mode after an early finish
+  [ "$mode" = "daily" ] && mark_daily_busy "$window_end"
 
   {
     echo "[$(ts)] === Starting $mode window (until $(fmt_epoch "$window_end")) ==="
@@ -479,6 +502,7 @@ run_window() {
         if [ "$current" = "daily" ]; then
           run_x_schema_if_needed "$window_log"
           run_pre_daily_release_phase2 "$window_log"
+          clear_daily_busy
         fi
         current="$fill_mode"
         continue
@@ -537,6 +561,7 @@ run_window() {
   if [ "$mode" = "daily" ]; then
     run_x_schema_if_needed "$window_log"
     run_pre_daily_release_phase2 "$window_log"
+    clear_daily_busy
     run_daily_window_embedding "$window_log" "$window_end"
     run_orphan_dryrun_check "$window_log"
   fi
@@ -606,6 +631,7 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
   # leaves the fleet without the backstop for a day over a precondition bug that may
   # already be fixed by the time the next cycle would have fired anyway.
   CATCHUP_FASTFAIL_THRESHOLD="${GOVDATA_R2_CATCHUP_FASTFAIL_THRESHOLD:-60}"
+  CATCHUP_GATE_POLL="${GOVDATA_R2_CATCHUP_GATE_POLL:-60}"
   CATCHUP_FASTFAIL_RETRY="${GOVDATA_R2_CATCHUP_FASTFAIL_RETRY:-300}"
   (
     while true; do
@@ -615,6 +641,11 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
       _wait=$(( _last + CATCHUP_INTERVAL - $(date +%s) ))
       if [ "$_wait" -gt 0 ]; then
         sleep "$_wait"
+        continue
+      fi
+      _hold=$(catchup_hold_secs "$(date +%s)")
+      if [ "$_hold" -gt 0 ]; then
+        sleep "$CATCHUP_GATE_POLL"
         continue
       fi
       if [ -f "$CATCHUP_LOG" ] && [ "$(stat -c%s "$CATCHUP_LOG" 2>/dev/null || echo 0)" -gt 5242880 ]; then
