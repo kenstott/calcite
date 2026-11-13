@@ -12,6 +12,7 @@ package org.apache.calcite.adapter.file;
 
 import org.apache.calcite.adapter.file.converters.CrawlerConfiguration;
 import org.apache.calcite.adapter.file.converters.FileConversionManager;
+import org.apache.calcite.adapter.file.converters.JunitReportConverter;
 import org.apache.calcite.adapter.file.converters.SourceFileConversion;
 import org.apache.calcite.adapter.file.execution.ExecutionEngineConfig;
 import org.apache.calcite.adapter.file.format.csv.CsvTypeInferrer;
@@ -148,7 +149,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
           ".md", ".markdown",     // Markdown files
           ".docx",                 // Word documents
           ".pptx",                 // PowerPoint presentations
-          ".html", ".htm")));     // HTML files
+          ".html", ".htm",        // HTML files
+          ".xml")));               // XML files: JUnit reports only (see isXmlFile)
 
   /**
    * Set of file extensions that are native table source primitives.
@@ -1156,6 +1158,9 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       LOGGER.info("Total files to exclude: {}", alreadyProcessedFiles.size());
     }
 
+    // The schema's JUnit reports, converted together after the loop.
+    List<JunitReportConverter.Report> junitReports = new ArrayList<>();
+
     // Convert each file using FileConversionManager
     for (String filePath : matchingFiles) {
       File file = new File(filePath);
@@ -1169,6 +1174,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       if (globFiltersSources() && !localSourceMatchesGlob(file)) {
         LOGGER.debug("Not converting {} - does not match glob pattern '{}'", file.getName(),
             directoryPattern);
+        continue;
+      }
+
+      // An XML file is a table source only as a JUnit report; any other is not converted.
+      if (isXmlFile(file)) {
+        if (!isJunitReport(file)) {
+          continue;
+        }
+        String runKey = sourceDir.getAbsoluteFile().toPath().normalize()
+            .relativize(file.getAbsoluteFile().toPath().normalize()).toString()
+            .replace(File.separatorChar, '/');
+        junitReports.add(
+            new JunitReportConverter.Report(file, runKey, file.getAbsolutePath()));
         continue;
       }
 
@@ -1204,6 +1222,13 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
       } catch (Exception e) {
         LOGGER.warn("Failed to convert file {}: {}", file.getName(), e.getMessage());
       }
+    }
+
+    if (!junitReports.isEmpty()) {
+      SourceFileConversion conversion = sourceFileConversion();
+      convertJunitReports(junitReports,
+          conversion.outputDirectoryOf(junitReports.get(0).file()),
+          conversion.baseDirectory());
     }
 
     // Log conversion metadata after bulk conversion
@@ -1270,6 +1295,8 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     // Determine the base path for storage provider using baseDirectory (data directory)
     // not sourceDirectory (which may be the working directory)
     String basePath = storageBasePath();
+    // The schema's JUnit reports, converted together after the listing.
+    List<JunitReportConverter.Report> junitReports = new ArrayList<>();
 
     try {
       LOGGER.debug("Checking storage provider for convertible files at: {}", basePath);
@@ -1298,13 +1325,6 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
               globMatchedDownloads.add(cachedFile.getCanonicalPath());
             }
 
-            // Determine output directory for converted JSON files
-            // Use baseDirectory/.download-cache/conversions/
-            File conversionDir = new File(operatingCacheDirectory, ".download-cache/conversions");
-            if (!conversionDir.exists()) {
-              conversionDir.mkdirs();
-            }
-
             // Calculate relative path to preserve directory structure
             String relativePath = entry.getName();
             if (!basePath.equals("/")) {
@@ -1313,6 +1333,19 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
                 relativePath = underBase;
               }
             }
+
+            // An XML file is a table source only as a JUnit report; any other is not converted.
+            if (isXmlFile(cachedFile)) {
+              if (isJunitReport(cachedFile)) {
+                junitReports.add(
+                    new JunitReportConverter.Report(cachedFile, relativePath, entry.getPath()));
+              }
+              continue;
+            }
+
+            // Determine output directory for converted JSON files
+            // Use baseDirectory/.download-cache/conversions/
+            File conversionDir = downloadConversionDirectory();
 
             // Convert the cached file
             // Pass baseDirectory for metadata storage and relativePath for directory preservation
@@ -1337,7 +1370,46 @@ public class FileSchema extends AbstractSchema implements CommentableSchema, Aut
     } catch (Exception e) {
       LOGGER.error("Error processing storage provider files for conversion: {}", e.getMessage());
     }
+    if (!junitReports.isEmpty()) {
+      convertJunitReports(junitReports, downloadConversionDirectory(), operatingCacheDirectory);
+    }
     return globMatchedDownloads;
+  }
+
+  /** Where the files converted from storage-provider downloads go. */
+  private File downloadConversionDirectory() {
+    File conversionDir = new File(operatingCacheDirectory, ".download-cache/conversions");
+    if (!conversionDir.exists()) {
+      conversionDir.mkdirs();
+    }
+    return conversionDir;
+  }
+
+  private static boolean isXmlFile(File file) {
+    return file.getName().toLowerCase(Locale.ROOT).endsWith(".xml");
+  }
+
+  /** Whether {@code file}, an XML file, has the root element of a JUnit report. */
+  private static boolean isJunitReport(File file) {
+    try {
+      return JunitReportConverter.isJunitReport(file);
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException("Cannot read " + file, e);
+    }
+  }
+
+  /**
+   * Converts the schema's JUnit reports together to the tables
+   * {@value JunitReportConverter#RUNS_TABLE}, {@value JunitReportConverter#CASES_TABLE} and
+   * {@value JunitReportConverter#RESULTS_TABLE}; a malformed report fails the schema, naming it.
+   */
+  private static void convertJunitReports(List<JunitReportConverter.Report> reports,
+      File outputDir, @Nullable File metadataDirectory) {
+    try {
+      JunitReportConverter.convert(reports, outputDir, metadataDirectory);
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException(e.getMessage(), e);
+    }
   }
 
   /**

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.example.CalculatorTest" time="0.045" tests="3" errors="0" skipped="1" failures="1">
+  <properties>
+    <property name="java.version" value="17.0.9"/>
+    <property name="os.name" value="Linux"/>
+  </properties>
+  <testcase name="adds" classname="com.example.CalculatorTest" time="0.002"/>
+  <testcase name="divides" classname="com.example.CalculatorTest" time="0.004">
+    <failure message="expected: &lt;2&gt; but was: &lt;3&gt;" type="org.opentest4j.AssertionFailedError"><![CDATA[org.opentest4j.AssertionFailedError: expected: <2> but was: <3>
+	at com.example.CalculatorTest.divides(CalculatorTest.java:15)]]></failure>
+  </testcase>
+  <testcase name="subtracts" classname="com.example.CalculatorTest" time="0">
+    <skipped message="disabled"/>
+  </testcase>
+</testsuite>

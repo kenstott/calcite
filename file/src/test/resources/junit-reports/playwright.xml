@@ -1,0 +1,16 @@
+<testsuites id="" name="" tests="2" failures="1" skipped="0" errors="0" time="3.21">
+<testsuite name="login.spec.ts" timestamp="2026-11-13T10:30:00.000Z" hostname="chromium" tests="2" failures="1" skipped="0" time="2.9" errors="0">
+<testcase name="login › signs in" classname="login.spec.ts" time="1.2">
+</testcase>
+<testcase name="login › rejects a bad password" classname="login.spec.ts" time="1.7">
+<failure message="login.spec.ts:14:5 rejects a bad password" type="FAILURE">
+<![CDATA[  1) [chromium] › login.spec.ts:14:5 › login › rejects a bad password
+
+    Error: expect(received).toBe(expected)]]>
+</failure>
+<system-out>
+<![CDATA[[chromium] signing in]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>

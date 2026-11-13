@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="1" skipped="1" tests="4" time="0.125" timestamp="2026-11-13T10:15:30.123456+00:00" hostname="ci-runner-1"><properties><property name="build" value="1234" /><property name="branch" value="main" /></properties><testcase classname="tests.test_math" name="test_add" file="tests/test_math.py" line="3" time="0.001" /><testcase classname="tests.test_math" name="test_div" file="tests/test_math.py" line="7" time="0.002"><failure message="assert 1 == 2">def test_div():
+&gt;       assert 1 == 2
+E       assert 1 == 2
+
+tests/test_math.py:8: AssertionError</failure></testcase><testcase classname="tests.test_math" name="test_db" file="tests/test_math.py" line="11" time="0.000"><error message="failed on setup with &quot;ConnectionError: refused&quot;">@pytest.fixture
+def db():
+&gt;       raise ConnectionError("refused")
+E       ConnectionError: refused
+
+tests/test_math.py:13: ConnectionError</error></testcase><testcase classname="tests.test_math" name="test_slow" file="tests/test_math.py" line="19" time="0.000"><skipped type="pytest.skip" message="too slow">tests/test_math.py:20: too slow</skipped></testcase></testsuite></testsuites>
