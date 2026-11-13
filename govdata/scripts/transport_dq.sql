@@ -2,7 +2,7 @@
 -- U.S. Transportation Data Quality Checks
 -- Schema: transport
 -- Tables: vehicle_recalls, safety_complaints, fatal_crashes, airline_ontime,
---         airports, transit_ridership, t100_segments, vehicle_registrations
+--         airports, bridge_hazard_exposure, transit_ridership, t100_segments, vehicle_registrations
 -- All tables are Iceberg; reads via iceberg_scan (single-nested path).
 -- T4/T5 exclude partition columns ('type' for all; also 'year'/'month' where present).
 -- safety_complaints (dqRowLimit 200000), airline_ontime (dqRowLimit 100000),
@@ -212,6 +212,62 @@ INSERT INTO dq_results
 SELECT 'transport', 'airports', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL arpt_id rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/airports', allow_moved_paths := true) WHERE arpt_id IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: bridge_hazard_exposure (BTS NTAD ArcGIS snapshot; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T2_row_count',
+  CASE WHEN n >= 140000 THEN 'pass' ELSE 'fail' END, n, 140000, 'Expected >=140000 NHS bridges (147,633 confirmed live 13 Nov 2026)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true) LIMIT 3;
+
+-- sinkhole_max_susceptibility is legitimately null outside karst areas; fully-null still warns.
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL state_code/structure_number rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true)
+  WHERE state_code IS NULL OR structure_number IS NULL);
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T7_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (state_code, structure_number) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT state_code, structure_number, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true)
+  GROUP BY state_code, structure_number HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'transport', 'bridge_hazard_exposure', 'T8_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'SLOSH flags outside {Yes, No, No Data}, or no Category 1 Yes rows'
+FROM (SELECT
+  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true) WHERE surge_cat1_inundated NOT IN ('Yes','No','No Data'))
+  + (SELECT CASE WHEN COUNT(*) > 0 THEN 0 ELSE 1 END FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/bridge_hazard_exposure', allow_moved_paths := true) WHERE surge_cat1_inundated = 'Yes') AS n);
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: transit_ridership (FTA Socrata; partition cols: type, year, month)

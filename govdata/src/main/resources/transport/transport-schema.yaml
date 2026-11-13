@@ -880,6 +880,195 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # BRIDGE HAZARD EXPOSURE — BTS NTAD "Hazard Exposure: National Highway System Bridges"
+  # ---------------------------------------------------------------------------
+  - name: bridge_hazard_exposure
+    freshness:
+      type: etag
+    pattern: "type=bridge_hazard_exposure/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Natural-hazard exposure of National Highway System bridges (BTS/USDOT NTAD, BETA
+      layer, ~147.6k bridges, one row per bridge keyed by FHWA state FIPS + NBI structure
+      number; joins bridges.state_code/structure_number). Carries NOAA SLOSH hurricane
+      storm-surge inundation flags for Category 1-5 (Yes/No/No Data; SLOSH evaluates only
+      coastal bridges, ~19%, the rest are No Data), plus county-level FEMA National Risk
+      Index annualized event frequencies (riverine and coastal flooding, hurricane, wind,
+      tornado, hail, lightning, ice storm, winter weather, cold/heat wave, drought),
+      USDA wildfire burn probability and USGS sinkhole/landslide indices. The riverine
+      flooding field is a county-level frequency, NOT a per-bridge FEMA floodplain flag.
+      Snapshot of the current layer (no year dimension; the layer is not versioned, so
+      it is not a time series of flood-map updates). Source: services.arcgis.com/.../
+      NTAD_Hazard_Exposure_Bridges_National_Highway_System/FeatureServer/0 (BTS-owned;
+      data dictionary doi.org/10.21949/bsd7-6743).
+
+    dimensions:
+      type:
+        - bridge_hazard_exposure
+
+    columns:
+      - name: state_code
+        type: string
+        nullable: false
+        comment: FHWA state FIPS (NBI item 1; FK to geo.state_ref.state_fips) — PK part
+      - name: structure_number
+        type: string
+        nullable: false
+        comment: NBI structure number (item 8) — PK part; joins bridges.structure_number
+      - name: county_code
+        type: string
+        nullable: true
+        comment: 3-digit county FIPS (NBI item 3)
+      - name: county_fips
+        type: string
+        nullable: true
+        comment: 5-digit county FIPS (state_code || county_code; FK to geo.counties)
+      - name: features_intersected
+        type: string
+        nullable: true
+        comment: What the bridge crosses (NBI item 6A)
+      - name: facility_carried
+        type: string
+        nullable: true
+        comment: Route/facility carried (NBI item 7)
+      - name: surge_cat1_inundated
+        type: string
+        nullable: true
+        comment: NOAA SLOSH Category 1 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+      - name: surge_cat2_inundated
+        type: string
+        nullable: true
+        comment: NOAA SLOSH Category 2 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+      - name: surge_cat3_inundated
+        type: string
+        nullable: true
+        comment: NOAA SLOSH Category 3 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+      - name: surge_cat4_inundated
+        type: string
+        nullable: true
+        comment: NOAA SLOSH Category 4 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+      - name: surge_cat5_inundated
+        type: string
+        nullable: true
+        comment: NOAA SLOSH Category 5 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Latitude (decimal degrees)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Longitude (decimal degrees)
+      - name: riverine_flooding_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI riverine flooding annualized event frequency for the bridge's county (county-level, NOT a per-bridge floodplain flag)
+      - name: coastal_flooding_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI coastal flooding annualized event frequency (county-level)
+      - name: hurricane_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI hurricane annualized event frequency (county-level)
+      - name: strong_wind_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI strong-wind annualized event frequency (county-level)
+      - name: tornado_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI tornado annualized event frequency (county-level)
+      - name: hail_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI hail annualized event frequency (county-level)
+      - name: lightning_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI lightning annualized event frequency (county-level)
+      - name: ice_storm_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI ice-storm annualized event frequency (county-level)
+      - name: winter_weather_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI winter-weather annualized event frequency (county-level)
+      - name: cold_wave_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI cold-wave annualized event frequency (county-level)
+      - name: heat_wave_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI heat-wave annualized event frequency (county-level)
+      - name: drought_annual_freq
+        type: double
+        nullable: true
+        comment: FEMA NRI drought annualized event frequency (county-level)
+      - name: wildfire_max_burn_prob
+        type: double
+        nullable: true
+        comment: USDA Forest Service maximum burn probability near the bridge
+      - name: wildfire_mean_burn_prob
+        type: double
+        nullable: true
+        comment: USDA Forest Service mean burn probability near the bridge
+      - name: wildfire_min_burn_prob
+        type: double
+        nullable: true
+        comment: USDA Forest Service minimum burn probability near the bridge
+      - name: sinkhole_max_susceptibility
+        type: double
+        nullable: true
+        comment: USGS maximum sinkhole susceptibility index (null outside karst areas)
+      - name: landslide_max_index
+        type: double
+        nullable: true
+        comment: USGS maximum landslide index
+      - name: landslide_median_index
+        type: double
+        nullable: true
+        comment: USGS median landslide index
+
+    source:
+      type: http
+      url: "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_Hazard_Exposure_Bridges_National_Highway_System/FeatureServer/0/query?where=1%3D1&outFields=STATE_CODE_001,STRUCTURE_NUMBER_008,COUNTY_CODE_003,FEATURES_DESC_006A,FACILITY_CARRIED_007,LATDD,LONGDD,RiverineFlooding_NRI_AnnualFreq,CoastalFlooding_NRI_AnnualFreq,Hurricane_NRI_AnnualFreq,StrongWind_NRI_AnnualFreq,Tornado_NRI_AnnualFreq,Hail_NRI_AnnualFreq,Lightning_NRI_AnnualFreq,IceStorm_NRI_AnnualFreq,WinterWeather_NRI_AnnualFreq,ColdWave_NRI_AnnualFreq,HeatWave_NRI_AnnualFreq,Drought_NRI_AnnualFreq,Wildfire_USDA_MaxBurnProb,Wildfire_USDA_MeanBurnProb,Wildfire_USDA_MinBurnProb,Sinkhole_USGS_MaxSusceptibility,Landslide_USGS_Max,Landslide_USGS_Median,HurricaneCat1_SLOSH_Inundated,HurricaneCat2_SLOSH_Inundated,HurricaneCat3_SLOSH_Inundated,HurricaneCat4_SLOSH_Inundated,HurricaneCat5_SLOSH_Inundated&returnGeometry=false&orderByFields=OBJECTID&f=json"
+      method: GET
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          offsetParam: resultOffset
+          limitParam: resultRecordCount
+          pageSize: 2000
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.BridgeHazardExposureTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=bridge_hazard_exposure/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: bridge_hazard_exposure
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # FAA AIRPORTS — NTAD ArcGIS FeatureServer (snapshot, self-paginated JSON)
   # ---------------------------------------------------------------------------
   - name: airports
@@ -4937,6 +5126,14 @@ constraints:
         targetSchema: "${GEO_SCHEMA_NAME:geo}"
         targetTable: state_ref
         targetColumns: [state_abbr]
+
+  bridge_hazard_exposure:
+    primaryKey: [state_code, structure_number]
+    foreignKeys:
+      - columns: [state_code]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
   airports:
     primaryKey: [arpt_id]
