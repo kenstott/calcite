@@ -934,23 +934,23 @@ partitionedTables:
       - name: surge_cat1_inundated
         type: string
         nullable: true
-        comment: NOAA SLOSH Category 1 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+        comment: NOAA SLOSH Category 1 hurricane storm-surge inundation at the bridge — Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
       - name: surge_cat2_inundated
         type: string
         nullable: true
-        comment: NOAA SLOSH Category 2 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+        comment: NOAA SLOSH Category 2 hurricane storm-surge inundation at the bridge — Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
       - name: surge_cat3_inundated
         type: string
         nullable: true
-        comment: NOAA SLOSH Category 3 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+        comment: NOAA SLOSH Category 3 hurricane storm-surge inundation at the bridge — Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
       - name: surge_cat4_inundated
         type: string
         nullable: true
-        comment: NOAA SLOSH Category 4 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+        comment: NOAA SLOSH Category 4 hurricane storm-surge inundation at the bridge — Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
       - name: surge_cat5_inundated
         type: string
         nullable: true
-        comment: NOAA SLOSH Category 5 hurricane storm-surge inundation at the bridge: Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
+        comment: NOAA SLOSH Category 5 hurricane storm-surge inundation at the bridge — Yes / No / No Data (No Data = SLOSH did not evaluate the bridge, i.e. not a coastal bridge; only ~19% are evaluated)
       - name: latitude
         type: double
         nullable: true
