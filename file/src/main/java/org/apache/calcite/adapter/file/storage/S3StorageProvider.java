@@ -94,6 +94,9 @@ public class S3StorageProvider implements StorageProvider {
           .apiCallTimeout(Duration.ofSeconds(90))
           .build();
 
+  /** Attempts per put, part upload or HEAD before a transient failure is thrown. */
+  private static final int TRANSIENT_ATTEMPTS = 5;
+
   /** Attempts per LIST page; a timed-out page is requested again from the same continuation token. */
   private static final int LIST_PAGE_ATTEMPTS = 5;
 
@@ -101,6 +104,9 @@ public class S3StorageProvider implements StorageProvider {
 
   /** Base of the exponential wait between attempts at a timed-out LIST page. */
   long listRetryBackoffMillis = 2000L;
+
+  /** Base of the exponential wait between attempts at a put, part upload or HEAD. */
+  long transientRetryBackoffMillis = 2000L;
 
   // Persistent cache for restart-survivable caching
   private final PersistentStorageCache persistentCache;
@@ -615,8 +621,9 @@ public class S3StorageProvider implements StorageProvider {
   /** HEAD-based object existence check (v2 has no doesObjectExist). */
   private boolean objectExists(String bucket, String key) {
     try {
-      s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key)
-          .overrideConfiguration(METADATA_CALL_TIMEOUT).build());
+      HeadObjectRequest request = HeadObjectRequest.builder().bucket(bucket).key(key)
+          .overrideConfiguration(METADATA_CALL_TIMEOUT).build();
+      retryTransient("HEAD " + key, () -> s3Client.headObject(request));
       return true;
     // fallback-guard: allow catches only the SDK's canonical "definitely absent" signal; other exceptions still propagate, per exists() above
     } catch (NoSuchKeyException notFound) {
@@ -787,21 +794,12 @@ public class S3StorageProvider implements StorageProvider {
       requestBuilder.contentType(contentType);
     }
 
-    int maxRetries = 3;
-    for (int attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        s3Client.putObject(requestBuilder.build(), RequestBody.fromBytes(content));
-        return;
-      } catch (S3Exception e) {
-        if (isRetryableS3Error(e) && attempt < maxRetries - 1) {
-          long delay = 1000L * (1L << attempt);
-          LOGGER.warn("S3 write failed for {} (HTTP {}): {} — retrying in {}ms (attempt {}/{})",
-              path, e.statusCode(), errorCode(e), delay, attempt + 1, maxRetries);
-          sleepQuietly(delay);
-        } else {
-          throw new IOException("Failed to write file to S3: " + path, e);
-        }
-      }
+    PutObjectRequest request = requestBuilder.build();
+    try {
+      retryTransient("write " + path,
+          () -> s3Client.putObject(request, RequestBody.fromBytes(content)));
+    } catch (S3Exception | ApiCallTimeoutException | ApiCallAttemptTimeoutException e) {
+      throw new IOException("Failed to write file to S3: " + path, e);
     }
   }
 
@@ -833,7 +831,9 @@ public class S3StorageProvider implements StorageProvider {
       if (contentType != null) {
         pb.contentType(contentType);
       }
-      s3Client.putObject(pb.build(), RequestBody.fromBytes(new byte[0]));
+      PutObjectRequest emptyPut = pb.build();
+      retryTransient("write " + path,
+          () -> s3Client.putObject(emptyPut, RequestBody.fromBytes(new byte[0])));
       return;
     }
 
@@ -845,8 +845,10 @@ public class S3StorageProvider implements StorageProvider {
       if (contentType != null) {
         pb.contentType(contentType);
       }
-      s3Client.putObject(pb.build(),
-          RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, firstPartLen), firstPartLen));
+      PutObjectRequest smallPut = pb.build();
+      final int smallLen = firstPartLen;
+      retryTransient("write " + path, () -> s3Client.putObject(smallPut,
+          RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, smallLen), smallLen)));
       return;
     }
 
@@ -866,12 +868,14 @@ public class S3StorageProvider implements StorageProvider {
 
       // Upload first part
       int firstPart = partNumber++;
-      String firstETag = s3Client.uploadPart(
-          UploadPartRequest.builder()
-              .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
-              .partNumber(firstPart).contentLength((long) firstPartLen).build(),
-          RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, firstPartLen), firstPartLen))
-          .eTag();
+      final int firstLen = firstPartLen;
+      UploadPartRequest firstReq = UploadPartRequest.builder()
+          .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
+          .partNumber(firstPart).contentLength((long) firstLen).build();
+      String firstETag = retryTransient("upload part " + firstPart + " of " + path,
+          () -> s3Client.uploadPart(firstReq,
+              RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, firstLen), firstLen))
+              .eTag());
       completedParts.add(CompletedPart.builder().partNumber(firstPart).eTag(firstETag).build());
 
       // Stream remaining parts
@@ -883,12 +887,14 @@ public class S3StorageProvider implements StorageProvider {
         streamDone = partLen < partSize;
 
         int pn = partNumber++;
-        String etag = s3Client.uploadPart(
-            UploadPartRequest.builder()
-                .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
-                .partNumber(pn).contentLength((long) partLen).build(),
-            RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, partLen), partLen))
-            .eTag();
+        final int len = partLen;
+        UploadPartRequest partReq = UploadPartRequest.builder()
+            .bucket(s3Uri.bucket).key(s3Uri.key).uploadId(uploadId)
+            .partNumber(pn).contentLength((long) len).build();
+        String etag = retryTransient("upload part " + pn + " of " + path,
+            () -> s3Client.uploadPart(partReq,
+                RequestBody.fromInputStream(new ByteArrayInputStream(partBuf, 0, len), len))
+                .eTag());
         completedParts.add(CompletedPart.builder().partNumber(pn).eTag(etag).build());
       }
 
@@ -931,6 +937,40 @@ public class S3StorageProvider implements StorageProvider {
     return total;
   }
 
+  /** One S3 call that {@link #retryTransient} may repeat; every request body it sends is replayable. */
+  @FunctionalInterface
+  private interface S3Call<T> {
+    T call();
+  }
+
+  /**
+   * Runs {@code call}, repeating it with exponential backoff when it fails for a transient reason: a
+   * call or attempt timeout, or a retryable S3 error (throttling, 5xx, a truncated request body).
+   * A timeout says the store was slow, not that the request was wrong. Once the attempts are spent
+   * the last exception is thrown to the caller; any other failure is thrown at once.
+   */
+  private <T> T retryTransient(String what, S3Call<T> call) {
+    for (int attempt = 1;; attempt++) {
+      try {
+        return call.call();
+      } catch (ApiCallTimeoutException | ApiCallAttemptTimeoutException | S3Exception e) {
+        boolean transientFailure = !(e instanceof S3Exception) || isRetryableS3Error((S3Exception) e);
+        if (!transientFailure || attempt >= TRANSIENT_ATTEMPTS) {
+          throw e;
+        }
+        long wait = transientRetryBackoffMillis << (attempt - 1);
+        LOGGER.warn("S3 {} failed ({}); retrying in {} ms (attempt {}/{})",
+            what, e.getClass().getSimpleName(), wait, attempt, TRANSIENT_ATTEMPTS);
+        try {
+          Thread.sleep(wait);
+        } catch (InterruptedException ie) {
+          Thread.currentThread().interrupt();
+          throw e;
+        }
+      }
+    }
+  }
+
   /**
    * Returns whether an S3 error is transient and worth retrying.
    * Covers server errors (500, 502, 503, 504), throttling (429),
@@ -948,20 +988,13 @@ public class S3StorageProvider implements StorageProvider {
     return "InternalError".equals(code)
         || "NoSuchUpload".equals(code)
         || "RequestTimeout".equals(code)
+        || "IncompleteBody".equals(code)
         || "SlowDown".equals(code)
         || "ServiceUnavailable".equals(code);
   }
 
   private static String errorCode(S3Exception e) {
     return e.awsErrorDetails() != null ? e.awsErrorDetails().errorCode() : null;
-  }
-
-  private static void sleepQuietly(long millis) {
-    try {
-      Thread.sleep(millis);
-    } catch (InterruptedException ie) {
-      Thread.currentThread().interrupt();
-    }
   }
 
   @Override public void createDirectories(String path) throws IOException {
