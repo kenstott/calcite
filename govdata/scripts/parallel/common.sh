@@ -193,6 +193,10 @@ load_env() {
     local _saved_threads="${ETL_PARALLEL_THREADS:-}"
     local _saved_heap_min="${ETL_HEAP_MIN:-}"
     local _saved_heap_max="${ETL_HEAP_MAX:-}"
+    # COMTRADE_FLOWS_DAILY: .env.prod turns the econ daily's comtrade_flows off while the HS-6
+    # reprocess owns the Comtrade key; that reprocess exports it true so it can still fetch.
+    local _pre_comtrade_daily="${COMTRADE_FLOWS_DAILY+set}"
+    local _saved_comtrade_daily="${COMTRADE_FLOWS_DAILY:-}"
 
     # source_env_file is CRLF-tolerant: these files are often edited on Windows; sourcing CRLF
     # directly throws `$'\r': command not found` and appends \r to every value (corrupting
@@ -215,6 +219,7 @@ load_env() {
     [ "${_pre_threads}" = "set" ] && export ETL_PARALLEL_THREADS="$_saved_threads"
     [ "${_pre_heap_min}" = "set" ] && export ETL_HEAP_MIN="$_saved_heap_min"
     [ "${_pre_heap_max}" = "set" ] && export ETL_HEAP_MAX="$_saved_heap_max"
+    [ "${_pre_comtrade_daily}" = "set" ] && export COMTRADE_FLOWS_DAILY="$_saved_comtrade_daily"
   else
     echo "WARNING: $env_prod not found — credentials may be missing" >&2
   fi
