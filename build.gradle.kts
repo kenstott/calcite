@@ -666,6 +666,11 @@ allprojects {
                 // See https://github.com/diffplug/spotless/issues/468
                 format("markdown") {
                     filter.include("**/*.md")
+                    // news-check-results/** is machine output from the daily news-check run
+                    // (agent transcripts, e.g. agent.md without a final newline), not hand-written
+                    // docs. It is listed in .ratignore as recorded output; keep the markdown check
+                    // from failing main every day on files nobody edits by hand.
+                    filter.exclude("news-check-results/**")
                     // Flot is known to have trailing whitespace, so the files
                     // are kept in their original format (e.g. to simplify diff on library upgrade)
                     endWithNewline()
