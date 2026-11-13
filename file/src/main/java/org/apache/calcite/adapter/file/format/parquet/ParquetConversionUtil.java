@@ -476,7 +476,7 @@ public class ParquetConversionUtil {
         org.apache.parquet.example.data.Group group;
         try {
           group = groupFactory.newGroup();
-          LOGGER.debug("Created new group successfully");
+          LOGGER.trace("Created new group successfully");
         } catch (Exception e) {
           LOGGER.error("Failed to create new group: {}", e.getMessage(), e);
           throw e;
@@ -487,7 +487,7 @@ public class ParquetConversionUtil {
           String fieldName = field.getName();
           Object value = row[i];
 
-          LOGGER.debug("Processing field {}: {} = {} (type: {})", i, fieldName, value, field.getType().getSqlTypeName());
+          LOGGER.trace("Processing field {}: {} = {} (type: {})", i, fieldName, value, field.getType().getSqlTypeName());
 
           // For VARCHAR/CHAR fields, always preserve empty strings
           // blankStringsAsNull should only apply to non-string types
@@ -495,18 +495,18 @@ public class ParquetConversionUtil {
           if (value != null && (sqlType == org.apache.calcite.sql.type.SqlTypeName.VARCHAR ||
                sqlType == org.apache.calcite.sql.type.SqlTypeName.CHAR) && value instanceof String) {
             String stringValue = (String) value;
-            LOGGER.debug("Processing field {}: value='{}', blankStringsAsNull={}, isEmpty={}, trimIsEmpty={}",
+            LOGGER.trace("Processing field {}: value='{}', blankStringsAsNull={}, isEmpty={}, trimIsEmpty={}",
                 fieldName, stringValue, blankStringsAsNull, stringValue.isEmpty(), stringValue.trim().isEmpty());
             // Always preserve empty strings for VARCHAR/CHAR fields
             // blankStringsAsNull only affects non-string types
-            LOGGER.debug("Preserving string value as-is for field: {} (blankStringsAsNull does not apply to strings)", fieldName);
+            LOGGER.trace("Preserving string value as-is for field: {} (blankStringsAsNull does not apply to strings)", fieldName);
           }
 
           if (value != null) {
             // Add value directly to group
             try {
               addValueToParquetGroup(group, fieldName, value, sqlType, blankStringsAsNull);
-              LOGGER.debug("Successfully added value for field: {}", fieldName);
+              LOGGER.trace("Successfully added value for field: {}", fieldName);
             } catch (Exception e) {
               LOGGER.error("Failed to add value for field {}: {}", fieldName, e.getMessage(), e);
               throw e;
@@ -713,12 +713,12 @@ public class ParquetConversionUtil {
   private static void addValueToParquetGroup(org.apache.parquet.example.data.Group group,
       String fieldName, Object value, org.apache.calcite.sql.type.SqlTypeName sqlType, boolean blankStringsAsNull) {
 
-    LOGGER.info("[addValueToParquetGroup] Called with field={}, value={}, sqlType={}, blankStringsAsNull={}",
+    LOGGER.trace("[addValueToParquetGroup] Called with field={}, value={}, sqlType={}, blankStringsAsNull={}",
                 fieldName, (value == null ? "null" : "'" + value + "'"), sqlType, blankStringsAsNull);
 
     if (value == null) {
       // For null values, skip (Parquet handles null via absence)
-      LOGGER.debug("[addValueToParquetGroup] Value is null, skipping field: {}", fieldName);
+      LOGGER.trace("[addValueToParquetGroup] Value is null, skipping field: {}", fieldName);
       return;
     }
 
@@ -736,24 +736,24 @@ public class ParquetConversionUtil {
 
     // For VARCHAR/CHAR fields, always preserve empty strings regardless of blankStringsAsNull
     // The blankStringsAsNull setting only applies to non-string types
-    LOGGER.info("[addValueToParquetGroup] Checking if value is String: {}, sqlType: {}",
+    LOGGER.trace("[addValueToParquetGroup] Checking if value is String: {}, sqlType: {}",
                 value instanceof String, sqlType);
     if (value instanceof String &&
         (sqlType == org.apache.calcite.sql.type.SqlTypeName.VARCHAR ||
          sqlType == org.apache.calcite.sql.type.SqlTypeName.CHAR)) {
       String strValue = (String) value;
-      LOGGER.info("[addValueToParquetGroup] VARCHAR field '{}': value='{}', length={}, isEmpty={}",
+      LOGGER.trace("[addValueToParquetGroup] VARCHAR field '{}': value='{}', length={}, isEmpty={}",
                   fieldName, strValue, strValue.length(), strValue.isEmpty());
       if (strValue.isEmpty()) {
         // Always preserve empty strings for VARCHAR/CHAR fields
-        LOGGER.info("[addValueToParquetGroup] Preserving empty string for field '{}' (blankStringsAsNull does not apply to strings)", fieldName);
+        LOGGER.trace("[addValueToParquetGroup] Preserving empty string for field '{}' (blankStringsAsNull does not apply to strings)", fieldName);
         group.append(fieldName, "");
-        LOGGER.info("[addValueToParquetGroup] Successfully appended empty string to field '{}'", fieldName);
+        LOGGER.trace("[addValueToParquetGroup] Successfully appended empty string to field '{}'", fieldName);
         return;
       }
     }
 
-    LOGGER.debug("Adding value to Parquet group: field={}, value={}, sqlType={}, valueClass={}",
+    LOGGER.trace("Adding value to Parquet group: field={}, value={}, sqlType={}, valueClass={}",
                 fieldName, value, sqlType, value.getClass().getName());
 
     // Check if field exists in the schema to prevent "is not primitive" errors
@@ -763,7 +763,7 @@ public class ParquetConversionUtil {
         LOGGER.warn("Field '{}' not found in Parquet schema, skipping", fieldName);
         return;
       }
-      LOGGER.debug("Found field type in schema: {}", fieldType);
+      LOGGER.trace("Found field type in schema: {}", fieldType);
     } catch (Exception e) {
       LOGGER.warn("Field '{}' not found in Parquet schema: {}, skipping", fieldName, e.getMessage());
       return;
@@ -1086,7 +1086,7 @@ public class ParquetConversionUtil {
                 String strValue = rs.getString(i + 1);
                 // getString returns null for SQL NULL, but empty string for empty string
                 row[i] = strValue;
-                LOGGER.debug("TranslatableTableAdapter: Column {} ({}): value='{}' (null={})",
+                LOGGER.trace("TranslatableTableAdapter: Column {} ({}): value='{}' (null={})",
                             i, field.getName(), strValue, (strValue == null));
               } else {
                 // For other types, use getObject

@@ -33,6 +33,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -56,6 +57,9 @@ public class ConversionMetadata {
 
   private final File metadataFile;
   private final Map<String, ConversionRecord> conversions = new ConcurrentHashMap<>();
+
+  /** Keys this instance dropped on purpose, so a save does not bring them back from disk. */
+  private final Set<String> removedKeys = ConcurrentHashMap.newKeySet();
 
   // Optional warehouse-root namespace (e.g. "s3://govdata-parquet-v1"). When set, the
   // persisted .conversions.json is keyed at the top level by this root so the same operating
@@ -1116,6 +1120,7 @@ public class ConversionMetadata {
           // Original file was deleted or moved
           LOGGER.debug("Original source {} no longer exists", record.originalFile);
           conversions.remove(key);
+          removedKeys.add(key);
           saveMetadata();
         }
       }
@@ -1677,11 +1682,18 @@ public class ConversionMetadata {
   /**
    * Builds the object to persist: the flat record map when not namespaced, otherwise the full
    * namespaced map (preserving other warehouse roots already on disk) with this instance's
-   * records under its namespace.
+   * records under its namespace. Records another instance wrote to the file since this one
+   * loaded it are kept, except those this instance dropped on purpose.
    */
   private Object buildPersistedStructure() throws IOException {
+    Map<String, ConversionRecord> merged = new HashMap<>();
+    if (metadataFile.exists()) {
+      merged.putAll(readCurrentNamespaceRecords());
+      merged.keySet().removeAll(removedKeys);
+    }
+    merged.putAll(conversions);
     if (namespace == null) {
-      return conversions;
+      return merged;
     }
     Map<String, Map<String, ConversionRecord>> nested = new HashMap<>();
     if (metadataFile.exists()) {
@@ -1692,7 +1704,7 @@ public class ConversionMetadata {
       // A legacy flat file (or absent file) is replaced by the namespaced layout; records for
       // this root were already migrated into `conversions` on load.
     }
-    nested.put(namespace, new HashMap<>(conversions));
+    nested.put(namespace, merged);
     return nested;
   }
 
@@ -1752,6 +1764,7 @@ public class ConversionMetadata {
                 conversions.put(key, record);
               } else {
                 LOGGER.debug("Skipping stale conversion record: {}", key);
+                removedKeys.add(key);
                 needsCleanup = true;
               }
             }
@@ -1849,6 +1862,7 @@ public class ConversionMetadata {
    */
   public void clear() {
     conversions.clear();
+    removedKeys.clear();
     if (metadataFile.exists()) {
       metadataFile.delete();
     }

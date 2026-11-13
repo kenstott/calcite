@@ -120,7 +120,7 @@ public final class CsvTypeConverter {
   private @Nullable Object convertStrict(String value, SqlTypeName targetType,
       @Nullable DateTimeFormatter inferredFormatter) {
     // (see convert(...) for why callers never see the raised parse error)
-    LOGGER.debug("CsvTypeConverter.convert() called with value='{}' targetType={}", value, targetType);
+    LOGGER.trace("CsvTypeConverter.convert() called with value='{}' targetType={}", value, targetType);
     Object finalResult;
     switch (targetType) {
     case BOOLEAN:
@@ -182,11 +182,11 @@ public final class CsvTypeConverter {
       break;
     case DATE:
       if (isNullRepresentation(value)) {
-        LOGGER.debug("DATE conversion: value '{}' is null representation, returning null", value);
+        LOGGER.trace("DATE conversion: value '{}' is null representation, returning null", value);
         finalResult = null;
       } else {
         Object result = parseDate(value, inferredFormatter);
-        LOGGER.debug("DATE conversion: value '{}' converted to: {} (type: {})", value, result, result.getClass().getSimpleName());
+        LOGGER.trace("DATE conversion: value '{}' converted to: {} (type: {})", value, result, result.getClass().getSimpleName());
         finalResult = result;
       }
       break;
@@ -198,25 +198,25 @@ public final class CsvTypeConverter {
       }
       break;
     case TIMESTAMP:
-      LOGGER.debug("Processing {} field with value='{}'", targetType, value);
+      LOGGER.trace("Processing {} field with value='{}'", targetType, value);
       if (isNullRepresentation(value)) {
         finalResult = null;
-        LOGGER.debug("=== TIMESTAMPTZ DEBUG: Value is null representation for {} ===", targetType);
+        LOGGER.trace("=== TIMESTAMPTZ DEBUG: Value is null representation for {} ===", targetType);
       } else {
         // TIMESTAMP = wall clock time, no timezone conversion
         finalResult = parseTimestamp(value, inferredFormatter);
-        LOGGER.debug("=== TIMESTAMPTZ DEBUG: parseTimestamp returned {} for {} field ===", finalResult, targetType);
+        LOGGER.trace("=== TIMESTAMPTZ DEBUG: parseTimestamp returned {} for {} field ===", finalResult, targetType);
       }
       break;
     case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-      LOGGER.debug("Processing {} field with value='{}'", targetType, value);
+      LOGGER.trace("Processing {} field with value='{}'", targetType, value);
       if (isNullRepresentation(value)) {
         finalResult = null;
-        LOGGER.debug("=== TIMESTAMPTZ DEBUG: Value is null representation for {} ===", targetType);
+        LOGGER.trace("=== TIMESTAMPTZ DEBUG: Value is null representation for {} ===", targetType);
       } else {
         // TIMESTAMP_WITH_LOCAL_TIME_ZONE = timezone-aware, must convert to UTC
         finalResult = parseTimestampWithTimezone(value, inferredFormatter);
-        LOGGER.debug("=== TIMESTAMPTZ DEBUG: parseTimestampWithTimezone returned {} for {} field ===", finalResult, targetType);
+        LOGGER.trace("=== TIMESTAMPTZ DEBUG: parseTimestampWithTimezone returned {} for {} field ===", finalResult, targetType);
       }
       break;
     case VARCHAR:
@@ -230,7 +230,7 @@ public final class CsvTypeConverter {
       finalResult = value;
       break;
     }
-    LOGGER.debug("CsvTypeConverter.convert() final result: {} (type: {}) for value='{}' targetType={}",
+    LOGGER.trace("CsvTypeConverter.convert() final result: {} (type: {}) for value='{}' targetType={}",
                 finalResult, (finalResult != null ? finalResult.getClass().getSimpleName() : "null"), value, targetType);
     return finalResult;
   }
@@ -284,10 +284,10 @@ public final class CsvTypeConverter {
     if (inferredFormatter != null) {
       try {
         LocalDate localDate = LocalDate.parse(value, inferredFormatter);
-        LOGGER.debug("Successfully parsed date '{}' using inferred formatter, returning epoch day: {}", value, (int) localDate.toEpochDay());
+        LOGGER.trace("Successfully parsed date '{}' using inferred formatter, returning epoch day: {}", value, (int) localDate.toEpochDay());
         return Integer.valueOf((int) localDate.toEpochDay());
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse date '{}' with inferred formatter: {}", value, e.getMessage());
+        LOGGER.trace("Failed to parse date '{}' with inferred formatter: {}", value, e.getMessage());
       }
     }
 
@@ -295,10 +295,10 @@ public final class CsvTypeConverter {
     for (DateTimeFormatter dateFormatter : DATE_FORMATTERS) {
       try {
         LocalDate localDate = LocalDate.parse(value, dateFormatter);
-        LOGGER.debug("Successfully parsed date '{}' using built-in formatter, returning epoch day: {}", value, (int) localDate.toEpochDay());
+        LOGGER.trace("Successfully parsed date '{}' using built-in formatter, returning epoch day: {}", value, (int) localDate.toEpochDay());
         return Integer.valueOf((int) localDate.toEpochDay());
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse date '{}' with formatter {}: {}", value, dateFormatter, e.getMessage());
+        LOGGER.trace("Failed to parse date '{}' with formatter {}: {}", value, dateFormatter, e.getMessage());
       }
     }
 
@@ -312,10 +312,10 @@ public final class CsvTypeConverter {
         // Convert to milliseconds since midnight correctly
         // toNanoOfDay() gives nanoseconds, divide by 1_000_000 to get milliseconds
         int millisSinceMidnight = (int) (localTime.toNanoOfDay() / 1_000_000L);
-        LOGGER.debug("Successfully parsed time '{}' using inferred formatter, returning millis: {}", value, millisSinceMidnight);
+        LOGGER.trace("Successfully parsed time '{}' using inferred formatter, returning millis: {}", value, millisSinceMidnight);
         return Integer.valueOf(millisSinceMidnight);
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse time '{}' with inferred formatter: {}", value, e.getMessage());
+        LOGGER.trace("Failed to parse time '{}' with inferred formatter: {}", value, e.getMessage());
       }
     }
 
@@ -325,7 +325,7 @@ public final class CsvTypeConverter {
       LocalTime localTime = LocalTime.parse(value);
       // Convert to milliseconds since midnight correctly
       int millisSinceMidnight = (int) (localTime.toNanoOfDay() / 1_000_000L);
-      LOGGER.debug("Successfully parsed time '{}' using default formatter, returning millis: {}", value, millisSinceMidnight);
+      LOGGER.trace("Successfully parsed time '{}' using default formatter, returning millis: {}", value, millisSinceMidnight);
       return Integer.valueOf(millisSinceMidnight);
     } catch (DateTimeParseException e) {
       throw new CsvParseException(value, "TIME");
@@ -333,17 +333,17 @@ public final class CsvTypeConverter {
   }
 
   private Long parseTimestamp(String value, @Nullable DateTimeFormatter inferredFormatter) {
-    LOGGER.debug("=== TIMESTAMP DEBUG: parseTimestamp called with value='{}' ===", value);
+    LOGGER.trace("=== TIMESTAMP DEBUG: parseTimestamp called with value='{}' ===", value);
 
     if (inferredFormatter != null) {
       try {
         LocalDateTime ldt = LocalDateTime.parse(value, inferredFormatter);
         long millis = ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
-        LOGGER.debug("=== TIMESTAMP DEBUG: Parsed timestamp '{}' using inferred formatter, storing millis: {} ===",
+        LOGGER.trace("=== TIMESTAMP DEBUG: Parsed timestamp '{}' using inferred formatter, storing millis: {} ===",
             value, millis);
         return Long.valueOf(millis);
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse timestamp '{}' with inferred formatter: {}", value, e.getMessage());
+        LOGGER.trace("Failed to parse timestamp '{}' with inferred formatter: {}", value, e.getMessage());
       }
     }
 
@@ -355,11 +355,11 @@ public final class CsvTypeConverter {
         // Store the wall clock time as if it were UTC
         // This preserves the wall clock value regardless of the JVM's timezone
         long millis = ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
-        LOGGER.debug("=== TIMESTAMP DEBUG: Parsed timestamp '{}' as UTC wall clock (formatter={}), storing millis: {} ===",
+        LOGGER.trace("=== TIMESTAMP DEBUG: Parsed timestamp '{}' as UTC wall clock (formatter={}), storing millis: {} ===",
             value, formatter, millis);
         return Long.valueOf(millis);
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse timestamp '{}' with formatter {}: {}", value, formatter, e.getMessage());
+        LOGGER.trace("Failed to parse timestamp '{}' with formatter {}: {}", value, formatter, e.getMessage());
       }
     }
 
@@ -381,25 +381,25 @@ public final class CsvTypeConverter {
   }
 
   private Long parseTimestampWithTimezone(String value, @Nullable DateTimeFormatter inferredFormatter) {
-    LOGGER.debug("parseTimestampWithTimezone called with value='{}'", value);
+    LOGGER.trace("parseTimestampWithTimezone called with value='{}'", value);
 
     if (inferredFormatter != null) {
       try {
         OffsetDateTime odt = OffsetDateTime.parse(value, inferredFormatter);
         long utcMillis = odt.toInstant().toEpochMilli();
-        LOGGER.debug("=== TIMESTAMPTZ DEBUG: Parsed '{}' as OffsetDateTime using inferred formatter, UTC millis: {} ===",
+        LOGGER.trace("=== TIMESTAMPTZ DEBUG: Parsed '{}' as OffsetDateTime using inferred formatter, UTC millis: {} ===",
             value, utcMillis);
         return Long.valueOf(utcMillis);
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse '{}' as OffsetDateTime with inferred formatter: {}", value, e.getMessage());
+        LOGGER.trace("Failed to parse '{}' as OffsetDateTime with inferred formatter: {}", value, e.getMessage());
         try {
           ZonedDateTime zdt = ZonedDateTime.parse(value, inferredFormatter);
           long utcMillis = zdt.toInstant().toEpochMilli();
-          LOGGER.debug("=== TIMESTAMPTZ DEBUG: Parsed '{}' as ZonedDateTime using inferred formatter, UTC millis: {} ===",
+          LOGGER.trace("=== TIMESTAMPTZ DEBUG: Parsed '{}' as ZonedDateTime using inferred formatter, UTC millis: {} ===",
               value, utcMillis);
           return Long.valueOf(utcMillis);
         } catch (DateTimeParseException e2) {
-          LOGGER.debug("Failed to parse '{}' as ZonedDateTime with inferred formatter: {}", value, e2.getMessage());
+          LOGGER.trace("Failed to parse '{}' as ZonedDateTime with inferred formatter: {}", value, e2.getMessage());
         }
       }
     }
@@ -439,7 +439,7 @@ public final class CsvTypeConverter {
               LocalDateTime ldt = LocalDateTime.parse(timestampPart, DateTimeFormatter.ofPattern(pattern));
               OffsetDateTime odt = ldt.atOffset(ZoneOffset.UTC);
               long utcMillis = odt.toInstant().toEpochMilli();
-              LOGGER.debug("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed literal 'Z' as UTC: '{}' -> {} ===", value, utcMillis);
+              LOGGER.trace("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed literal 'Z' as UTC: '{}' -> {} ===", value, utcMillis);
               return Long.valueOf(utcMillis);
             } catch (DateTimeParseException e) {
               // Try next pattern
@@ -450,21 +450,21 @@ public final class CsvTypeConverter {
         // Try parsing as OffsetDateTime first
         OffsetDateTime odt = OffsetDateTime.parse(value, formatter);
         long utcMillis = odt.toInstant().toEpochMilli();
-        LOGGER.debug("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed '{}' as OffsetDateTime, UTC millis: {} ===",
+        LOGGER.trace("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed '{}' as OffsetDateTime, UTC millis: {} ===",
             value, utcMillis);
         return Long.valueOf(utcMillis);
       // fallback-guard: allow the shown return only fires on a nested ZonedDateTime parse's genuine success; a further failure falls through to the next formatter
       } catch (DateTimeParseException e) {
-        LOGGER.debug("Failed to parse as OffsetDateTime '{}' with formatter: {}", value, e.getMessage());
+        LOGGER.trace("Failed to parse as OffsetDateTime '{}' with formatter: {}", value, e.getMessage());
         try {
           // Try parsing as ZonedDateTime for timezone abbreviations
           ZonedDateTime zdt = ZonedDateTime.parse(value, formatter);
           long utcMillis = zdt.toInstant().toEpochMilli();
-          LOGGER.debug("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed '{}' as ZonedDateTime, UTC millis: {} ===",
+          LOGGER.trace("=== TIMESTAMPTZ DEBUG: SUCCESS! Parsed '{}' as ZonedDateTime, UTC millis: {} ===",
               value, utcMillis);
           return Long.valueOf(utcMillis);
         } catch (DateTimeParseException e2) {
-          LOGGER.debug("Failed to parse as ZonedDateTime '{}' with formatter: {}", value, e2.getMessage());
+          LOGGER.trace("Failed to parse as ZonedDateTime '{}' with formatter: {}", value, e2.getMessage());
         }
       }
     }
