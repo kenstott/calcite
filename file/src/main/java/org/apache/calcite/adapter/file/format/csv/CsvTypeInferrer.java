@@ -429,24 +429,24 @@ public class CsvTypeInferrer {
       }
 
       // Try temporal types
-      LOGGER.debug("Trying temporal types for value: '{}', inferTimestamps={}, inferDates={}, inferTimes={}", value, config.inferTimestamps, config.inferDates, config.inferTimes);
+      LOGGER.trace("Trying temporal types for value: '{}', inferTimestamps={}, inferDates={}, inferTimes={}", value, config.inferTimestamps, config.inferDates, config.inferTimes);
       if (config.inferTimestamps && tryParseDateTime(value)) {
-        LOGGER.debug("Successfully parsed '{}' as timestamp", value);
+        LOGGER.trace("Successfully parsed '{}' as timestamp", value);
         return;
       }
 
       if (config.inferDates && tryParseDate(value)) {
-        LOGGER.debug("Successfully parsed '{}' as date", value);
+        LOGGER.trace("Successfully parsed '{}' as date", value);
         return;
       }
 
       if (config.inferTimes && tryParseTime(value)) {
-        LOGGER.debug("Successfully parsed '{}' as time", value);
+        LOGGER.trace("Successfully parsed '{}' as time", value);
         return;
       }
 
       // Default to VARCHAR
-      LOGGER.debug("Defaulting value '{}' to VARCHAR", value);
+      LOGGER.trace("Defaulting value '{}' to VARCHAR", value);
       incrementType(SqlTypeName.VARCHAR);
     }
 
@@ -455,19 +455,19 @@ public class CsvTypeInferrer {
     }
 
     private boolean tryParseDate(String value) {
-      LOGGER.debug("tryParseDate called with: '{}'", value);
+      LOGGER.trace("tryParseDate called with: '{}'", value);
       for (DateTimeFormatter formatter : DATE_FORMATTERS) {
         try {
           LocalDate.parse(value, formatter);
-          LOGGER.debug("DATE parse SUCCESS for '{}' with formatter: {}", value, formatter);
+          LOGGER.trace("DATE parse SUCCESS for '{}' with formatter: {}", value, formatter);
           incrementType(SqlTypeName.DATE);
           dateTimeFormatters.putIfAbsent(SqlTypeName.DATE, formatter);
           return true;
         } catch (DateTimeParseException e) {
-          LOGGER.debug("DATE parse failed for '{}' with formatter: {} - {}", value, formatter, e.getMessage());
+          LOGGER.trace("DATE parse failed for '{}' with formatter: {} - {}", value, formatter, e.getMessage());
         }
       }
-      LOGGER.debug("No date parse success for: '{}'", value);
+      LOGGER.trace("No date parse success for: '{}'", value);
       return false;
     }
 
@@ -486,18 +486,18 @@ public class CsvTypeInferrer {
     }
 
     private boolean tryParseDateTime(String value) {
-      LOGGER.debug("tryParseDateTime called with: '{}'", value);
+      LOGGER.trace("tryParseDateTime called with: '{}'", value);
 
       // Try RFC formatted timestamps first (with timezone)
       for (DateTimeFormatter formatter : RFC_DATETIME_FORMATTERS) {
         try {
           formatter.parse(value);
-          LOGGER.debug("RFC parse SUCCESS for '{}' with formatter: {}", value, formatter);
+          LOGGER.trace("RFC parse SUCCESS for '{}' with formatter: {}", value, formatter);
           incrementType(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE);
           dateTimeFormatters.putIfAbsent(SqlTypeName.TIMESTAMP_WITH_LOCAL_TIME_ZONE, formatter);
           return true;
         } catch (DateTimeParseException e) {
-          LOGGER.debug("RFC parse failed for '{}' with formatter: {} - {}", value, formatter, e.getMessage());
+          LOGGER.trace("RFC parse failed for '{}' with formatter: {} - {}", value, formatter, e.getMessage());
         }
       }
 
@@ -505,16 +505,16 @@ public class CsvTypeInferrer {
       for (DateTimeFormatter formatter : DATETIME_FORMATTERS) {
         try {
           LocalDateTime.parse(value, formatter);
-          LOGGER.debug("LOCAL parse SUCCESS for '{}' with formatter: {}", value, formatter);
+          LOGGER.trace("LOCAL parse SUCCESS for '{}' with formatter: {}", value, formatter);
           incrementType(SqlTypeName.TIMESTAMP);
           dateTimeFormatters.putIfAbsent(SqlTypeName.TIMESTAMP, formatter);
           return true;
         } catch (DateTimeParseException e) {
-          LOGGER.debug("LOCAL parse failed for '{}' with formatter: {} - {}", value, formatter, e.getMessage());
+          LOGGER.trace("LOCAL parse failed for '{}' with formatter: {} - {}", value, formatter, e.getMessage());
         }
       }
 
-      LOGGER.debug("No datetime parse success for: '{}'", value);
+      LOGGER.trace("No datetime parse success for: '{}'", value);
       return false;
     }
 
