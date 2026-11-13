@@ -151,8 +151,7 @@ public class CsvConversionLogVolumeTest {
         @Override public void append(LogEvent event) {
           if (event.getLoggerName().startsWith(ADAPTER_LOGGERS)
               && event.getThreadName().equals(reader.getName())) {
-            count.merge(event.getLoggerName() + ": " + event.getMessage().getFormat(), 1,
-                Integer::sum);
+            count.merge(event.getLoggerName() + " " + event.getLevel(), 1, Integer::sum);
           }
         }
       };
