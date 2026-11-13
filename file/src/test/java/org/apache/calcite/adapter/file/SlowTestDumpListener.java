@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Diagnostic only: writes a full thread dump to a file under {@code file.test.dumpDir}
- * (flushed and closed at once, so it survives a hung or killed job) and to stderr, once, for every test that has been
+ * (flushed and closed at once, so it survives a hung or killed job), then to stderr, once, for every test that has been
  * running longer than {@code file.test.slowDumpMinutes} (default 5). It never interrupts or
  * fails a test. A CI job that later dies silently (issue #1112) then has the stacks of what
  * was running in its log.
@@ -99,11 +99,13 @@ public class SlowTestDumpListener implements TestExecutionListener {
     for (ThreadInfo ti : ManagementFactory.getThreadMXBean().dumpAllThreads(true, true)) {
       sb.append(ti);
     }
-    System.err.println(sb);
-    System.err.flush();
+    // The file first: when the test output pipeline is backed up, a write to stderr blocks,
+    // and a dump written after it never lands (the Windows job cancelled at 75m left none).
     if (DUMP_DIR != null) {
       writeFile(sb.toString());
     }
+    System.err.println(sb);
+    System.err.flush();
   }
 
   /** Writes the dump to its own file; the name carries a timestamp so dumps never overwrite. */
