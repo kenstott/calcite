@@ -97,9 +97,10 @@ public class XmlTableScanner {
   }
 
   /**
-   * Parse XML document from source.
+   * Parses an XML document from source, with DOCTYPE declarations and external entities
+   * refused.
    */
-  private static Document parseXmlDocument(Source source) throws Exception {
+  static Document parseXmlDocument(Source source) throws Exception {
     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
     factory.setNamespaceAware(true);
     // Security settings

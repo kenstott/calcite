@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" tests="2"><testcase classname="tests.test_math" name="test_add" time="0.001" /><testcase classname="tests.test_math" name="test_div"
