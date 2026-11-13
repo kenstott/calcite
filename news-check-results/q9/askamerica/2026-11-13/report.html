@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The 24/7 Wall St. article's claims about the Senate 73-25 permitting-bill vote, data center cost rules and utility ETFs are balanced and accurate; 2 claims could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The 24/7 Wall St. article's claims about the Senate 73-25 permitting-bill vote, data center cost rules and utility ETFs are balanced and accurate; 2 claims could not be confirmed.</h1>
+<p class="subtitle">Checked 2026-11-13. Overall: 1 Pinocchio. Warehouse sec.stock_prices ends 2026-05-29 for XLU/GRID, so Nov prices were checked on Yahoo Finance history pages.</p>
+<p class="under-review"><span>Article under review</span><a href="https://247wallst.com/investing/2026/11/10/the-senate-voted-73-25-to-start-debate-on-a-bill-making-data-centers-pay-their-own-power-bills/">https://247wallst.com/investing/2026/11/10/the-senate-voted-73-25-to-start-debate-on-a-bill-making-data-centers-pay-their-own-power-bills/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 446" width="460" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="460" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:13px">XLU year-to-date: article vs price and total-return b…</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:9px">XLU close 43.79 on 2026-11-09; year-start baselines from sec.stock_prices (close) and Y…</text>
+  <rect class="panel-edge" x="20" y="82" width="420" height="312" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="420" height="312" viewBox="0 0 420 312" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="420" height="312" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="210" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">XLU YTD change, percent</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="172" y1="56" x2="172" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="172" y="260" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.00%</text>
+      <line class="grid" x1="208.60" y1="56" x2="208.60" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="208.60" y="260" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1.00%</text>
+      <line class="grid" x1="245.20" y1="56" x2="245.20" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="245.20" y="260" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2.00%</text>
+      <line class="grid" x1="281.80" y1="56" x2="281.80" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="281.80" y="260" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3.00%</text>
+      <line class="grid" x1="318.40" y1="56" x2="318.40" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="318.40" y="260" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">4.00%</text>
+      <line class="grid" x1="355" y1="56" x2="355" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="355" y="260" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">5.00%</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="172" y1="56" x2="172" y2="244" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="172" y1="244" x2="355" y2="244" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-value-axis-title" class="axis-title" x="263.50" y="288" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">YTD %</text>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-article-claim" class="tick" x="164" y="91.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Article claim</text>
+      <text id="p1-xtick-total-return-adj-close-41-82" class="tick" x="164" y="154" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Total return (adj close 41.82)</text>
+      <text id="p1-xtick-price-only-close-42-69" class="tick" x="164" y="216.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Price only (close 42.69)</text>
+    </g>
+    <g id="p1-series-ytd" class="series">
+      <g class="hover">
+        <title>Article claim — YTD %: 4.71%</title>
+        <rect id="p1-mark-ytd-article-claim" class="bar" x="172" y="67.28" width="172.39" height="39.11" fill="#2563eb"/>
+        <rect class="hit" x="172" y="67.28" width="183" height="39.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-ytd-article-claim" class="value-label" x="348.39" y="91.33" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">4.71%</text>
+      <g class="hover">
+        <title>Total return (adj close 41.82) — YTD %: 4.71%</title>
+        <rect id="p1-mark-ytd-total-return-adj-close-41-82" class="bar" x="172" y="129.95" width="172.39" height="39.11" fill="#2563eb"/>
+        <rect class="hit" x="172" y="129.95" width="183" height="39.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-ytd-total-return-adj-close-41-82" class="value-label" x="348.39" y="154" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">4.71%</text>
+      <g class="hover">
+        <title>Price only (close 42.69) — YTD %: 2.58%</title>
+        <rect id="p1-mark-ytd-price-only-close-42-69" class="bar" x="172" y="192.61" width="94.43" height="39.11" fill="#2563eb"/>
+        <rect class="hit" x="172" y="192.61" width="183" height="39.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-ytd-price-only-close-42-69" class="value-label" x="270.43" y="216.67" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">2.58%</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:63635/a/7e1e5759a43cbca42dc663cd846c70de.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The article's core facts hold: the Senate voted 73-25 on Nov 9, 2026 to invoke cloture on the motion to proceed to the Bipartisan American Affordability and Jobs Act, and the piece correctly says this only opens debate. Bill provisions, sponsors, Cortez Masto, Jeffries and all three fund price claims (XLU $43.79, +1.53%, +5.75% month, +4.71% YTD; GRID $160.93, +$6.72) check out. Weak spots: the Brattle ($35B) and Rhodium ($50-$78) figures could not be found anywhere; the EEI endorsement and 30-hour debate figure are unsourced; and the Trump 'not fully agreed' framing conflicts with Reuters. Rating: <strong>1 Pinocchio</strong>.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 98/100 — honest</strong> &middot; <strong>Bias 0/100 — no consistent lean</strong></p><p>14 claims graded, 0 not gradable, 3 fell short. In this article only.</p></div>
+<p><strong>11</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>2</strong> unsupported &middot; <strong>14</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Senators voted 73-25 on the evening of November 9, 2026, to take up the Bipartisan American Affordability and Jobs Act. That cleared the 60-vote threshold with room to spare.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>14</td><td>the Edison Electric Institute, which represents investor-owned utilities, supports the bill.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>15</td><td>Up to 30 more hours of debate remain, and more Senate votes are expected later in the week of November 9.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>President Trump called the bill a “BIG WIN” in a Sunday post. On Monday, he said he would not approve wind turbines and that the bill was not fully agreed.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>2</td><td>The vote was cloture on the motion to proceed, a routine step that opens debate and passes nothing, and the bill still needs a final Senate vote, approval in the House, and President Trump’s signature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>3</td><td>Senators Shelley Moore Capito, Mike Lee, Martin Heinrich and Sheldon Whitehouse wrote the bill</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>4</td><td>The agency would have 90 days after passage. A bill summary from MLQ.ai says FERC must make data centers pay their share of the grid plus the new costs they cause.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a>; <a href="https://www.whitecase.com/insight-alert/senate-permitting-bill-bolsters-data-center-provisions-moves-full-vote">White &amp; Case (403 on fetch; excerpt via search)</a></td></tr><tr class="verdict-true"><td>5</td><td>FERC could also issue backstop permits for lines of 230 kV or more after one year of state inaction.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>6</td><td>The window to sue under NEPA, the federal environmental review law, would shrink from six years to 150 days.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>7</td><td>The State Street Utilities Select Sector SPDR ETF ( NYSEARCA:XLU ) closed at $43.79 on November 9, up 1.53%</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>8</td><td>The fund is up 5.75% over the past month and 4.71% year to date.</td><td><strong>true</strong></td><td>Checked against: <code>sec.stock_prices</code>; <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>12</td><td>Sen. Catherine Cortez Masto said she would vote against final passage if Title III stays in.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>13</td><td>House Democratic leader Hakeem Jeffries, who is expected to become speaker in January, said the bill falls short.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>16</td><td>The First Trust NASDAQ Clean Edge Smart Grid Infrastructure Index Fund ( NASDAQ:GRID ) is a more direct way to own transmission spending. It rose $6.72 to $160.93 on November 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/GRID/history/">Yahoo Finance GRID history</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>16</td><td>The First Trust NASDAQ Clean Edge Smart Grid Infrastructure Index Fund ( NASDAQ:GRID ) is a more direct way to own transmission spending. It rose $6.72 to $160.93 on November 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/GRID/history/">Yahoo Finance GRID history</a></td></tr><tr class="verdict-unsupported"><td>15</td><td>Up to 30 more hours of debate remain, and more Senate votes are expected later in the week of November 9.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>14</td><td>the Edison Electric Institute, which represents investor-owned utilities, supports the bill.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>13</td><td>House Democratic leader Hakeem Jeffries, who is expected to become speaker in January, said the bill falls short.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>12</td><td>Sen. Catherine Cortez Masto said she would vote against final passage if Title III stays in.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>President Trump called the bill a “BIG WIN” in a Sunday post. On Monday, he said he would not approve wind turbines and that the bill was not fully agreed.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>8</td><td>The fund is up 5.75% over the past month and 4.71% year to date.</td><td><strong>true</strong></td><td>Checked against: <code>sec.stock_prices</code>; <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>7</td><td>The State Street Utilities Select Sector SPDR ETF ( NYSEARCA:XLU ) closed at $43.79 on November 9, up 1.53%</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>6</td><td>The window to sue under NEPA, the federal environmental review law, would shrink from six years to 150 days.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>5</td><td>FERC could also issue backstop permits for lines of 230 kV or more after one year of state inaction.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>4</td><td>The agency would have 90 days after passage. A bill summary from MLQ.ai says FERC must make data centers pay their share of the grid plus the new costs they cause.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a>; <a href="https://www.whitecase.com/insight-alert/senate-permitting-bill-bolsters-data-center-provisions-moves-full-vote">White &amp; Case (403 on fetch; excerpt via search)</a></td></tr><tr class="verdict-true"><td>3</td><td>Senators Shelley Moore Capito, Mike Lee, Martin Heinrich and Sheldon Whitehouse wrote the bill</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>2</td><td>The vote was cloture on the motion to proceed, a routine step that opens debate and passes nothing, and the bill still needs a final Senate vote, approval in the House, and President Trump’s signature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>1</td><td>Senators voted 73-25 on the evening of November 9, 2026, to take up the Bipartisan American Affordability and Jobs Act. That cleared the 60-vote threshold with room to spare.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>5</td><td>FERC could also issue backstop permits for lines of 230 kV or more after one year of state inaction.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>13</td><td>House Democratic leader Hakeem Jeffries, who is expected to become speaker in January, said the bill falls short.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>President Trump called the bill a “BIG WIN” in a Sunday post. On Monday, he said he would not approve wind turbines and that the bill was not fully agreed.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>12</td><td>Sen. Catherine Cortez Masto said she would vote against final passage if Title III stays in.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>3</td><td>Senators Shelley Moore Capito, Mike Lee, Martin Heinrich and Sheldon Whitehouse wrote the bill</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>1</td><td>Senators voted 73-25 on the evening of November 9, 2026, to take up the Bipartisan American Affordability and Jobs Act. That cleared the 60-vote threshold with room to spare.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>4</td><td>The agency would have 90 days after passage. A bill summary from MLQ.ai says FERC must make data centers pay their share of the grid plus the new costs they cause.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a>; <a href="https://www.whitecase.com/insight-alert/senate-permitting-bill-bolsters-data-center-provisions-moves-full-vote">White &amp; Case (403 on fetch; excerpt via search)</a></td></tr><tr class="verdict-unsupported"><td>14</td><td>the Edison Electric Institute, which represents investor-owned utilities, supports the bill.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>16</td><td>The First Trust NASDAQ Clean Edge Smart Grid Infrastructure Index Fund ( NASDAQ:GRID ) is a more direct way to own transmission spending. It rose $6.72 to $160.93 on November 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/GRID/history/">Yahoo Finance GRID history</a></td></tr><tr class="verdict-true"><td>8</td><td>The fund is up 5.75% over the past month and 4.71% year to date.</td><td><strong>true</strong></td><td>Checked against: <code>sec.stock_prices</code>; <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>7</td><td>The State Street Utilities Select Sector SPDR ETF ( NYSEARCA:XLU ) closed at $43.79 on November 9, up 1.53%</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>2</td><td>The vote was cloture on the motion to proceed, a routine step that opens debate and passes nothing, and the bill still needs a final Senate vote, approval in the House, and President Trump’s signature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>6</td><td>The window to sue under NEPA, the federal environmental review law, would shrink from six years to 150 days.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-unsupported"><td>15</td><td>Up to 30 more hours of debate remain, and more Senate votes are expected later in the week of November 9.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>11</td><td>President Trump called the bill a “BIG WIN” in a Sunday post. On Monday, he said he would not approve wind turbines and that the bill was not fully agreed.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>2</td><td>The vote was cloture on the motion to proceed, a routine step that opens debate and passes nothing, and the bill still needs a final Senate vote, approval in the House, and President Trump’s signature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>3</td><td>Senators Shelley Moore Capito, Mike Lee, Martin Heinrich and Sheldon Whitehouse wrote the bill</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>4</td><td>The agency would have 90 days after passage. A bill summary from MLQ.ai says FERC must make data centers pay their share of the grid plus the new costs they cause.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a>; <a href="https://www.whitecase.com/insight-alert/senate-permitting-bill-bolsters-data-center-provisions-moves-full-vote">White &amp; Case (403 on fetch; excerpt via search)</a></td></tr><tr class="verdict-true"><td>5</td><td>FERC could also issue backstop permits for lines of 230 kV or more after one year of state inaction.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>6</td><td>The window to sue under NEPA, the federal environmental review law, would shrink from six years to 150 days.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>7</td><td>The State Street Utilities Select Sector SPDR ETF ( NYSEARCA:XLU ) closed at $43.79 on November 9, up 1.53%</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>8</td><td>The fund is up 5.75% over the past month and 4.71% year to date.</td><td><strong>true</strong></td><td>Checked against: <code>sec.stock_prices</code>; <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>12</td><td>Sen. Catherine Cortez Masto said she would vote against final passage if Title III stays in.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>13</td><td>House Democratic leader Hakeem Jeffries, who is expected to become speaker in January, said the bill falls short.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>16</td><td>The First Trust NASDAQ Clean Edge Smart Grid Infrastructure Index Fund ( NASDAQ:GRID ) is a more direct way to own transmission spending. It rose $6.72 to $160.93 on November 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/GRID/history/">Yahoo Finance GRID history</a></td></tr><tr class="verdict-true"><td>1</td><td>Senators voted 73-25 on the evening of November 9, 2026, to take up the Bipartisan American Affordability and Jobs Act. That cleared the 60-vote threshold with room to spare.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>14</td><td>the Edison Electric Institute, which represents investor-owned utilities, supports the bill.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>15</td><td>Up to 30 more hours of debate remain, and more Senate votes are expected later in the week of November 9.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>5</td><td>FERC could also issue backstop permits for lines of 230 kV or more after one year of state inaction.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>6</td><td>The window to sue under NEPA, the federal environmental review law, would shrink from six years to 150 days.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></td></tr><tr class="verdict-true"><td>4</td><td>The agency would have 90 days after passage. A bill summary from MLQ.ai says FERC must make data centers pay their share of the grid plus the new costs they cause.</td><td><strong>true</strong></td><td>Checked against: <a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a>; <a href="https://www.whitecase.com/insight-alert/senate-permitting-bill-bolsters-data-center-provisions-moves-full-vote">White &amp; Case (403 on fetch; excerpt via search)</a></td></tr><tr class="verdict-mostly-true"><td>11</td><td>President Trump called the bill a “BIG WIN” in a Sunday post. On Monday, he said he would not approve wind turbines and that the bill was not fully agreed.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>13</td><td>House Democratic leader Hakeem Jeffries, who is expected to become speaker in January, said the bill falls short.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></td></tr><tr class="verdict-true"><td>1</td><td>Senators voted 73-25 on the evening of November 9, 2026, to take up the Bipartisan American Affordability and Jobs Act. That cleared the 60-vote threshold with room to spare.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>14</td><td>the Edison Electric Institute, which represents investor-owned utilities, supports the bill.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-unsupported"><td>15</td><td>Up to 30 more hours of debate remain, and more Senate votes are expected later in the week of November 9.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>2</td><td>The vote was cloture on the motion to proceed, a routine step that opens debate and passes nothing, and the bill still needs a final Senate vote, approval in the House, and President Trump’s signature.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>3</td><td>Senators Shelley Moore Capito, Mike Lee, Martin Heinrich and Sheldon Whitehouse wrote the bill</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>12</td><td>Sen. Catherine Cortez Masto said she would vote against final passage if Title III stays in.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></td></tr><tr class="verdict-true"><td>8</td><td>The fund is up 5.75% over the past month and 4.71% year to date.</td><td><strong>true</strong></td><td>Checked against: <code>sec.stock_prices</code>; <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr><tr class="verdict-true"><td>16</td><td>The First Trust NASDAQ Clean Edge Smart Grid Infrastructure Index Fund ( NASDAQ:GRID ) is a more direct way to own transmission spending. It rose $6.72 to $160.93 on November 9.</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/GRID/history/">Yahoo Finance GRID history</a></td></tr><tr class="verdict-true"><td>7</td><td>The State Street Utilities Select Sector SPDR ETF ( NYSEARCA:XLU ) closed at $43.79 on November 9, up 1.53%</td><td><strong>true</strong></td><td>Checked against: <a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>2</strong> unsupported &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>9</td><td>Brattle Group estimates data centers would pay about $35 billion more over a decade than under current law.</td><td><strong>unsupported</strong></td></tr>
+<tr class="verdict-unsupported"><td>10</td><td>Rhodium Group projects household bills $50 to $78 a year lower in 2040.</td><td><strong>unsupported</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Senators voted 73-25 on the evening of November 9, 2026, to take up the Bipartisan American Affordability and Jobs Act. That cleared the 60-vote threshold with room to spare.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reuters: Senate voted 73-25 to invoke cloture on the motion to proceed, Monday Nov 9<ul class="claim-sources"><li><a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; The vote was cloture on the motion to proceed, a routine step that opens debate and passes nothing, and the bill still needs a final Senate vote, approval in the House, and President Trump’s signature.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reuters: vote to advance debate; if it passes the Senate it still needs House approval<ul class="claim-sources"><li><a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Senators Shelley Moore Capito, Mike Lee, Martin Heinrich and Sheldon Whitehouse wrote the bill</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reuters: Heinrich and Whitehouse co-authored with Republicans Capito and Lee<ul class="claim-sources"><li><a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The agency would have 90 days after passage. A bill summary from MLQ.ai says FERC must make data centers pay their share of the grid plus the new costs they cause.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Earthjustice: bill revises transmission pricing to charge data centers embedded and incremental costs; coverage reports a 90-day FERC deadline<ul class="claim-sources"><li><a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></li><li><a href="https://www.whitecase.com/insight-alert/senate-permitting-bill-bolsters-data-center-provisions-moves-full-vote">White &amp; Case (403 on fetch; excerpt via search)</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; FERC could also issue backstop permits for lines of 230 kV or more after one year of state inaction.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Earthjustice: section 2101 strengthens FERC backstop authority with state deadlines; search excerpts: 230 kV+ developers give the state one year (345 kV+ may file in parallel)<ul class="claim-sources"><li><a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; The window to sue under NEPA, the federal environmental review law, would shrink from six years to 150 days.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Search excerpts of bill coverage report the same six-years-to-150-days change; Earthjustice confirms the bill sharply limits NEPA litigation<ul class="claim-sources"><li><a href="https://earthjustice.org/feature/bipartisan-american-affordability-and-jobs-act-2026-impact-guide">Earthjustice BAAJA guide</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; The State Street Utilities Select Sector SPDR ETF ( NYSEARCA:XLU ) closed at $43.79 on November 9, up 1.53%</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Yahoo Finance history: Nov 9 close 43.79; Nov 6 close 43.13 (+1.53%)<ul class="claim-sources"><li><a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; The fund is up 5.75% over the past month and 4.71% year to date.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>XLU.US close 2025-12-31 = 42.69 (matches Yahoo close); adjusted close 41.82 on Yahoo <code>sec.stock_prices</code></dd>
+<dt>Independent evidence</dt><dd>Yahoo adjusted close basis gives 4.71% YTD and 5.75% one month<ul class="claim-sources"><li><a href="https://finance.yahoo.com/quote/XLU/history/">Yahoo Finance XLU history</a></li></ul></dd>
+<dt>Why</dt><dd>Matches on a total-return basis: 43.79/41.41 (Oct 9 close) = +5.75%; 43.79/41.82 (Dec 31 2025 adjusted close) = +4.71%. Price-only YTD from the warehouse close of 42.69 is +2.58%, which the article does not distinguish.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;, close FROM sec.stock_prices WHERE ticker='XLU.US' AND &quot;date&quot; IN ('2025-12-31','2026-01-02')</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#9 &middot; <strong>unsupported</strong> &mdash; Brattle Group estimates data centers would pay about $35 billion more over a decade than under current law.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></li></ul></dd>
+<dt>Why</dt><dd>No Brattle estimate of this size found in the catalog, web searches, or the Reuters copies read; the article links no source.</dd>
+<dt>No page loaded because</dt><dd>No page off the article's site mentioning this Brattle figure was found; Reuters/Finance &amp; Commerce and Spokesman pages were read and do not contain it.</dd>
+<dt>Warehouse searched for</dt><dd>Brattle Rhodium data center electricity cost household bills projection</dd>
+<dt>Web searches run</dt><dd>Brattle Group data centers $35 billion permitting bill</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#10 &middot; <strong>unsupported</strong> &mdash; Rhodium Group projects household bills $50 to $78 a year lower in 2040.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></li></ul></dd>
+<dt>Why</dt><dd>Not found. Reuters cites Rhodium for a different finding (data-center emissions 31%-90% lower under the bill); Rhodium's transmission report cites 2-3% lower prices in 2040. This is a projection and is not graded false.</dd>
+<dt>No page loaded because</dt><dd>Pages read (Reuters via Finance &amp; Commerce) state a different Rhodium result.</dd>
+<dt>Warehouse searched for</dt><dd>Brattle Rhodium data center electricity cost household bills projection</dd>
+<dt>Web searches run</dt><dd>Rhodium Group household bills $50 to $78 2040</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#11 &middot; <strong>mostly true</strong> &mdash; President Trump called the bill a “BIG WIN” in a Sunday post. On Monday, he said he would not approve wind turbines and that the bill was not fully agreed.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reuters: Trump endorsed the bill and posted Sunday urging passage; wind remark confirmed by Monday coverage<ul class="claim-sources"><li><a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says Trump said the bill was not fully agreed and used 'BIG WIN'; Reuters says he endorsed the bill and in a Sunday post highlighted its data center provisions, and Nevada coverage says he said he fully supported it while refusing new wind turbines.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; Sen. Catherine Cortez Masto said she would vote against final passage if Title III stays in.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reuters: Cortez Masto backed opening debate but would oppose final passage unless NHPA provisions are removed<ul class="claim-sources"><li><a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#13 &middot; <strong>true</strong> &mdash; House Democratic leader Hakeem Jeffries, who is expected to become speaker in January, said the bill falls short.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reuters: Jeffries told Politico Friday the bill falls short on environmental protections; expected to be speaker next year<ul class="claim-sources"><li><a href="https://finance-commerce.com/2026/11/senate-energy-bill-data-center-power-costs/">Reuters via Finance &amp; Commerce</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#14 &middot; <strong>unsupported</strong> &mdash; the Edison Electric Institute, which represents investor-owned utilities, supports the bill.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Reuters says energy companies and unions back the bill but names no EEI statement; none found.</dd>
+<dt>No page loaded because</dt><dd>Reuters pages read do not name EEI.</dd>
+<dt>Warehouse searched for</dt><dd>Edison Electric Institute position on permitting bill</dd>
+<dt>Web searches run</dt><dd>Edison Electric Institute supports Bipartisan American Affordability and Jobs Act</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#15 &middot; <strong>unsupported</strong> &mdash; Up to 30 more hours of debate remain, and more Senate votes are expected later in the week of November 9.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.spokesman.com/stories/2026/nov/09/senate-advances-energy-permitting-bill-opposed-by-/">Reuters via Spokesman-Review</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>A final vote expected in coming days is reported; the 30-hour figure was not found.</dd>
+<dt>No page loaded because</dt><dd>Pages read give no hour count.</dd>
+<dt>Warehouse searched for</dt><dd>Senate floor debate hours remaining BAAJA</dd>
+<dt>Web searches run</dt><dd>Senate permitting bill 30 hours debate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#16 &middot; <strong>true</strong> &mdash; The First Trust NASDAQ Clean Edge Smart Grid Infrastructure Index Fund ( NASDAQ:GRID ) is a more direct way to own transmission spending. It rose $6.72 to $160.93 on November 9.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Yahoo Finance history: Nov 9 close 160.93 (Nov 6 close implied 154.21)<ul class="claim-sources"><li><a href="https://finance.yahoo.com/quote/GRID/history/">Yahoo Finance GRID history</a></li></ul></dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>S&amp;P 500 7,610.80, Dow 52,396.70, Nasdaq 100 28,301.40, Russell 2000 2,804.32</strong> &mdash; Live ticker banner, not article text</li><li><strong>3 min read; 1:41 video</strong> &mdash; Page furniture</li></ul>
+</section>
+<section>
+<h2>Flags beyond individual facts</h2>
+<ul><li>Headline says the bill makes data centers 'pay their own power bills'. Reuters describes a requirement to bear more of the costs of grid upgrades; the body is more precise than the headline.</li><li>The 4.71% year-to-date figure is a total-return number (adjusted close 41.82 at year end); on price alone XLU is up 2.58%. The article does not say which.</li><li>The piece says 'the market barely responded' yet reports GRID up 4.3% and XLU up 1.5% the same day, while conceding no source tied the moves to the vote.</li><li>The Brattle and Rhodium estimates are the only quantified consumer-benefit claims and are unsourced; Rhodium work cited by Reuters concerns emissions (31%-90% cuts), not household bills.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>5 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 1910 ms</summary><pre><code>SELECT ticker, &quot;date&quot;, close, adjusted_close FROM sec.stock_prices WHERE ticker IN ('XLU','GRID') AND &quot;date&quot; &gt;= '2026-10-01' ORDER BY ticker, &quot;date&quot; DESC FETCH FIRST 40 ROWS ONLY</code></pre></details>
+<details class="sqltoggle"><summary>query — 311 ms</summary><pre><code>SELECT ticker, &quot;date&quot;, close FROM sec.stock_prices WHERE ticker IN ('XLU.US','GRID.US') AND &quot;date&quot; &gt;= '2026-11-05' AND &quot;date&quot; &lt;= '2026-11-12' ORDER BY ticker, &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 5493 ms</summary><pre><code>SELECT ticker, &quot;date&quot;, close FROM sec.stock_prices WHERE ticker IN ('XLU.US') AND (&quot;date&quot; IN ('2025-12-31','2026-10-09','2026-10-08','2026-10-12')) ORDER BY &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 5865 ms</summary><pre><code>SELECT &quot;date&quot;, close FROM sec.stock_prices WHERE ticker='XLU.US' AND (&quot;date&quot; &gt;= '2026-11-01' OR &quot;date&quot; IN ('2026-01-02','2026-10-09','2026-10-08','2026-10-12','2026-10-07')) ORDER BY &quot;date&quot;</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 16134 ms</summary><pre><code>SELECT max(&quot;date&quot;) AS mx FROM sec.stock_prices WHERE ticker IN ('XLU.US','GRID.US')</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">Overall rating: 1 Pinocchio (core legislative and market facts accurate; two attributed think-tank figures, an EEI endorsement and a debate-hours figure could not be verified; headline slightly overstates the bill).</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

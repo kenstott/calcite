@@ -1,0 +1,66 @@
+# Fact-check: ABC13 Bessent piece (Nov 3, 2026)
+
+Grade: 1 Pinocchio (piece); Bessent statements ~2.
+
+Summary: 6 of 12 claims confirmed, 3 partly true, 1 unsupported (1% real wage growth; BLS real AHE +0.2% Jan 2025-Sep 2026), 2 quote items not checkable (no transcript). Core inflation '3 of 4 months' true only on YoY (down Jun-Aug, up Sep); monthly pace accelerated 0.22/0.29/0.34% Jul-Sep. Headline CPI 3.7% YoY, energy +20.4%.
+
+- **Claim**: Interview Monday (Nov 2, 2026); economy 'not where the administration wants it'
+  - **Answer**: Not independently checkable (audio/transcript not accessed)
+  - **Key Values**: Bessent opinion; dated article Nov 3
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: low
+- **Claim**: Gas prices about a dollar higher than a year ago
+  - **Answer**: True
+  - **Key Values**: BLS avg price: Sep 2026 $4.482 vs $3.339 (+$1.14); Oct $4.454 vs $3.239 (+$1.22)
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: high
+- **Claim**: Interest rates are up
+  - **Answer**: True for market/mortgage rates; policy rate is lower
+  - **Key Values**: FRED: 30y mortgage 7.18% (Nov 5) vs 6.19% (Oct 23, 2025); 10y 4.95% vs ~3.98%; but fed funds 3.75% (Sep) vs 4.22% a year earlier
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: high
+- **Claim**: Egg prices down over past year
+  - **Answer**: True
+  - **Key Values**: BLS: $2.272 vs $3.488/doz Sep (-34.9%)
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: high
+- **Claim**: Unemployment down over past year
+  - **Answer**: True (small, 0.2 pt)
+  - **Key Values**: BLS LNS14000000: 4.2% Sep 2026 vs 4.4% Sep 2025 (Oct 2026 4.1%, released after the interview)
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: high
+- **Claim**: 'Manufacturing renaissance'; manufacturing and construction jobs returning
+  - **Answer**: Construction true; manufacturing partly (recovering but not above Jan 2025). 'Renaissance' is characterization
+  - **Key Values**: BLS CES: mfg 12,662k Sep 2026 vs 12,673k Jan 2025 (-11k), up from 12,580k low Dec 2025; construction 8,370k vs 8,264k (+106k)
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: medium
+- **Claim**: 1% real wage growth since taking office, better than prior administration
+  - **Answer**: Not supported by headline BLS series; may rest on a narrower measure (blue-collar) not shown
+  - **Key Values**: BLS real avg hourly earnings (CES0500000013): 11.24 Jan 2025 to 11.26 Sep 2026 (+0.2%); -0.5% YoY; nominal +5.6% vs CPI-U +6.1%. Treasury blue-collar series not located
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: medium
+- **Claim**: Once Iran conflict ends, oil supply improves and energy prices fall
+  - **Answer**: Context true; forecast uncheckable
+  - **Key Values**: Energy CPI +20.4% YoY Sep 2026, jump from Mar 2026; prediction, not verifiable
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: medium
+- **Claim**: Core inflation down 3 of past 4 months
+  - **Answer**: True only on the YoY reading; misleading on the monthly pace
+  - **Key Values**: Core CPI YoY: May 2.82, Jun 2.57, Jul 2.47, Aug 2.45, Sep 2.57 = down Jun, Jul, Aug, up Sep (3 of 4). Monthly core pace: Jun -0.02, Jul 0.22, Aug 0.29, Sep 0.34 (accelerating)
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: medium
+- **Claim**: Food price rate of increase dropped substantially; prices still rising
+  - **Answer**: True but 'substantially' is generous (~0.7 pt)
+  - **Key Values**: BLS food CPI YoY 3.2% Aug 2025, 3.1% Sep 2025 to 2.45% Sep 2026; index still rising
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: medium
+- **Claim**: Affordability top voter concern; polls split, few slightly favor Democrats
+  - **Answer**: Broadly consistent; 'slightly' understates Marist/Fox gaps
+  - **Key Values**: Marist Sep 14-15: Dems 42 vs GOP 34 on economy; Pew ~37/36; Third Way 38/38; Fox: Dems better on inflation
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: medium
+- **Claim**: Quotes: 'industrial renaissance, a manufacturing renaissance'; 'get to the other side of the Iran conflict'; core inflation quote
+  - **Answer**: Not checkable here (no transcript/video)
+  - **Key Values**: Only seen via a fetch tool summary; text not reproduced verbatim
+  - **Sources**: BLS API / FRED / polls (see agent-report.html)
+  - **Confidence**: low

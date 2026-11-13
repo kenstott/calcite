@@ -809,5 +809,131 @@
       "everyman": 3
     },
     "note": "engine-dev e9daf4f09b. Correct verdict 0; askamerica 0 (engine-set), expert 1, everyman 1. Payrolls, existing-home sales, sentiment and population checked in the warehouse; only arm to catch that 5.2M sales was 1999, not 2000. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "msnow-october-cpi-trump-inflation-solved",
+    "headline": "Consumer prices continue to climb, despite Trump's claims about having 'solved' inflation",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q1/askamerica/2026-11-13",
+    "pinocchios": 0,
+    "source_url": "https://www.ms.now/rachel-maddow-show/maddowblog/cpi-economy-inflation-consumer-prices-trump-white-house-federal-reserve",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "engine-dev built from main at eadc994f6b. Correct verdict 0; askamerica 0, everyman 0, expert 1. CPI +0.35% and core +0.30% computed from econ.fred_indicators (CPIAUCSL, CPILFESL); Trump quotes confirmed in Roll Call transcripts; bls.gov 403. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "abc13-bessent-economy-real-wages-core-inflation",
+    "headline": "U.S. Treasury Secretary Bessent says economy not where Trump admin wants to be, but points to encouraging metrics",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q2/askamerica/2026-11-13",
+    "pinocchios": 0,
+    "source_url": "https://abc13.com/story/us-treasury-secretary-bessent-says-economy-not-where-trump-admin-wants-points-encourgaing-metrics/20009465/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev built from main at eadc994f6b. Correct verdict 1; askamerica 0 (engine-set from the reporter's own claims; the agent's read was about 2), expert 1, everyman 2. askamerica ranked 2nd. Errors the judge found: graded Bessent's Nov 2 core-inflation claim false using a Jul-Oct window when October CPI was not yet public (true year over year for Jun-Aug), interpolated the unpublished Oct 2025 index, and used the post-interview October unemployment rate. First instance of grading a dated statement against data published after it; no recipe written on one instance. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "reuters-eia-power-demand-record-2026-2027-ai",
+    "headline": "US power demand to beat record highs in 2026 and 2027 as AI use surges, EIA says",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q4/askamerica/2026-11-13",
+    "pinocchios": 0,
+    "source_url": "https://boereport.com/2026/11/10/us-power-demand-to-beat-record-highs-in-2026-and-2027-as-ai-use-surges-eia-says/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev built from main at eadc994f6b. Correct verdict 0; all three arms gave 0; askamerica ranked 1st on breadth: third straight record year confirmed from energy.eia_electricity_prices sales history, 2025 generation shares from energy.eia_electricity_generation, forecasts from the STEO PDF. Noted EIA's November text names commercial demand, not data centers. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "yournews-mcca-homicides-down-15-2-jan-sep-2026",
+    "headline": "Homicides Drop 15.2% Across Major U.S. Cities as Violent Crime Declines Continue in 2026",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q3/askamerica/2026-11-13",
+    "pinocchios": 1,
+    "source_url": "https://yournews.com/2026/11/12/7263898/homicides-drop-15-2-across-major-u-s-cities-as-violent-crime",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "SEVERITY FLAG, UNRESOLVED: askamerica ranked 3rd, below everyman, in both judge passes. MCCA reissued its Jan-Sep 2026 report on Nov 12 with New York City's years corrected (homicides 239 in 2025, 192 in 2026; national -17.3%, not -15.2%); the article used the Nov 9 version. askamerica fetched the superseded PDF by direct link and graded NYC 192-to-239 true in both runs. Instruction rule c34ff88643 (grade against the publisher's current listed version) was installed for the rerun and ignored: the agent never opened the listing page. Run of record is the rerun (rated 1 on the under-Trump framing); first run (rated 0) at q3/askamerica-2026-11-13-pre-current-version-rule.bak. Judges put the correct verdict at 1 then 2. Needs a report-time gate, not built. crime.cde_reta has only partial 2026 rows. Not published as a study: the report grades the superseded New York City figure true. Run kept at q3/askamerica-2026-11-13-not-published so the run_subpath holds no content."
+  },
+  {
+    "topic_slug": "fortune-tariff-refund-class-action-166-billion",
+    "headline": "Despite Trump administration's efforts to limit tariff refunds, American importers are one step closer to receiving $166 billion in universal rebates",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q5/askamerica/2026-11-13",
+    "pinocchios": 1,
+    "source_url": "https://fortune.com/2026/11/12/tariff-refund-class-action-lawsuit-universal-tariff-refunds-trump-administration/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev built from main at c34ff88643. Correct verdict 2; all three arms gave 1; askamerica ranked 1st. Matched '>$115B disbursed as of August' to Treasury MTS customs refunds ($116.8B Apr-Aug); found the DOJ quote drops its finally-liquidated qualifier; graded the central 'whether or not they sued' claim partially false (class excludes separate filers). No customs-refund table in the warehouse (econ.usitc_tariffs ends 2025). Report headline carries two verdict clauses run together. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "cfr-2026-election-by-the-numbers",
+    "headline": "The 2026 Election by the Numbers",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q6/askamerica/2026-11-13",
+    "pinocchios": 1,
+    "source_url": "https://www.cfr.org/articles/2026-election-by-the-numbers",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "engine-dev built from main at c34ff88643. Correct verdict 1; askamerica 1, expert 1, everyman 2; askamerica ranked 1st. Only arm to catch the youngest-senator error (Talarico 37, not Ossoff, who will be 39), the Texas governorship gap (36 years, not 32) and the 1894 seat loss (125, not 127). Warehouse has no 2026 results; officials.house_race_results used for historical House margins. Page text cut off before the final paragraphs. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "outsourceaccelerator-challenger-october-2026-job-cuts",
+    "headline": "U.S. October job cuts hit 43,994, the lowest for the month since 2023",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q7/askamerica/2026-11-13",
+    "pinocchios": 0,
+    "source_url": "https://news.outsourceaccelerator.com/challenger-october-job-cuts/",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "engine-dev built from main at c34ff88643. Correct verdict 0; all three arms gave 0; askamerica ranked 1st on depth (Microsoft exclusion, reasons, base effect of an inflated Oct 2025). Private-firm figures: no warehouse table; graded from Challenger's release. econ.jolts_regional returned duplicated rows in the one warehouse query used (not yet verified as a defect). Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "fingerlakes1-recent-grad-unemployment-5-2-q3-2026",
+    "headline": "College graduate unemployment eases, but many still work in jobs that don't require degrees",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q8/askamerica/2026-11-13",
+    "pinocchios": 0,
+    "source_url": "https://www.fingerlakes1.com/2026/11/10/college-graduate-unemployment-eases-but-many-still-work-in-jobs-that-dont-require-degrees/",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "engine-dev built from main at c34ff88643. Correct verdict 0; askamerica 0, everyman 0 (tentative), expert 1; askamerica ranked 1st. No NY Fed recent-graduate series in the warehouse; graded from the Fed's pages. No dashboard. Severity invariant not triggered."
+  },
+  {
+    "topic_slug": "247wallst-senate-73-25-data-center-power-bills",
+    "headline": "The Senate Voted 73-25 to Start Debate on a Bill Making Data Centers Pay Their Own Power Bills",
+    "checked_date": "2026-11-13",
+    "run_subpath": "q9/askamerica/2026-11-13",
+    "pinocchios": 0,
+    "source_url": "https://247wallst.com/investing/2026/11/10/the-senate-voted-73-25-to-start-debate-on-a-bill-making-data-centers-pay-their-own-power-bills/",
+    "ranks": {
+      "everyman": 1,
+      "askamerica": 2,
+      "expert": 3
+    },
+    "note": "SEVERITY FLAG, NO CHANGE MADE: askamerica ranked 2nd, below everyman. Correct verdict 1; askamerica 0 (engine-set), everyman 1, expert 1. askamerica verified the most (sponsors, FERC/NEPA provisions, ETF closes) but its 0 sat beside its own findings: Brattle $35B and Rhodium $50-78 unsourced, EEI support unsupported, headline overstated, 'market barely responded' against GRID +4.3%. Cause: unsupported claims are left out of accuracy, so they cannot move a rating off 0. Not changed, because on 2026-11-12 (GAO interest story) a 0 with unsupported claims was the judged-correct rating. sec.stock_prices ends 2026-05-29 for XLU/GRID (not yet verified as a defect)."
   }
 ]
