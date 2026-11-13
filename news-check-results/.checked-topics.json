@@ -861,10 +861,10 @@
     "source_url": "https://yournews.com/2026/11/12/7263898/homicides-drop-15-2-across-major-u-s-cities-as-violent-crime",
     "ranks": {
       "expert": 1,
-      "everyman": 2,
-      "askamerica": 3
+      "askamerica": 2,
+      "everyman": 3
     },
-    "note": "SEVERITY FLAG, UNRESOLVED: askamerica ranked 3rd, below everyman, in both judge passes. MCCA reissued its Jan-Sep 2026 report on Nov 12 with New York City's years corrected (homicides 239 in 2025, 192 in 2026; national -17.3%, not -15.2%); the article used the Nov 9 version. askamerica fetched the superseded PDF by direct link and graded NYC 192-to-239 true in both runs. Instruction rule c34ff88643 (grade against the publisher's current listed version) was installed for the rerun and ignored: the agent never opened the listing page. Run of record is the rerun (rated 1 on the under-Trump framing); first run (rated 0) at q3/askamerica-2026-11-13-pre-current-version-rule.bak. Judges put the correct verdict at 1 then 2. Needs a report-time gate, not built. crime.cde_reta has only partial 2026 rows. Not published as a study: the report grades the superseded New York City figure true. Run kept at q3/askamerica-2026-11-13-not-published so the run_subpath holds no content."
+    "note": "engine-dev e43cde7e12. Severity flag RESOLVED by a report-time gate (enforceCitedDocumentCurrent): a claim citing a document is refused until a page on the document's own site was fetched, any later issue that page lists was fetched, and every claim citing the earlier issue also cites the later one. MCCA reissued its Jan-Sep 2026 report on Nov 12 with New York City's years corrected (homicides 239 in 2025, 192 in 2026; national -17.3%, not -15.2%); the article used the Nov 9 issue. Run of record grades the New York City claim false and the national totals partially false against the Nov 12 issue. Clean rejudge: correct verdict 2; expert 2, askamerica 1, everyman 1; severity invariant not triggered. Earlier runs: q3/askamerica-2026-11-13-pre-current-version-rule.bak (rated 0), q3/askamerica-2026-11-13-not-published.bak (instruction-only rule, ignored), q3/askamerica-2026-11-13-gate-v1.bak (gate read the later issue but New York City still graded on the earlier one). Judge noted the rating of 1 sits low against the run's own false and partially false grades. crime.cde_reta has only partial 2026 rows."
   },
   {
     "topic_slug": "fortune-tariff-refund-class-action-166-billion",
