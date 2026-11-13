@@ -554,6 +554,10 @@ log_error "INFO: Perpetual runner started (PID $$), first window: $MODE"
 # no new data copies nothing — the cost of a quiet pass is one local MinIO LIST. This keeps
 # R2 minutes-fresh instead of up to 24h stale, out-of-band so ETL is never blocked by it.
 if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
+  # The R2 mirror reads the same disk MinIO serves the ETL from. Run it at the lowest CPU and
+  # idle I/O priority so ETL S3 calls are served first; children (rclone, JVM scan) inherit it.
+  # The I/O class only takes effect when the device scheduler honours priorities (mq-deadline, bfq).
+  BG_IO=(nice -n 19 ionice -c3)
   R2_SYNC_INTERVAL="${GOVDATA_R2_SYNC_INTERVAL:-60}"
   (
     while true; do
@@ -565,7 +569,7 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
       # Full sync output goes to R2_LOG (pool_status.py tails it). The start/complete/FAILED
       # markers match the watcher's "R2 sync complete|FAILED" detection so it can tell active
       # from idle. errors.log gets only failures — at this cadence per-pass INFO would spam it.
-      if "$SCRIPT_DIR/sync-to-r2.sh" >> "$R2_LOG" 2>&1; then
+      if "${BG_IO[@]}" "$SCRIPT_DIR/sync-to-r2.sh" >> "$R2_LOG" 2>&1; then
         echo "[$(ts)] R2 sync complete" >> "$R2_LOG"
       else
         echo "[$(ts)] R2 sync FAILED (will retry next cycle)" >> "$R2_LOG"
@@ -618,7 +622,7 @@ if [ -n "${PROD_AWS_ACCESS_KEY_ID:-}" ]; then
       fi
       echo "[$(ts)] R2 catchup starting" >> "$CATCHUP_LOG"
       _start=$(date +%s)
-      if "$SCRIPT_DIR/catchup-sync-r2.sh" >> "$CATCHUP_LOG" 2>&1; then
+      if "${BG_IO[@]}" "$SCRIPT_DIR/catchup-sync-r2.sh" >> "$CATCHUP_LOG" 2>&1; then
         echo "[$(ts)] R2 catchup complete" >> "$CATCHUP_LOG"
         date +%s > "$CATCHUP_STAMP"
       else
