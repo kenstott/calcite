@@ -49,6 +49,63 @@ class ExternalCheckGateTest {
     @AfterEach void clearCallLog() throws Exception {
         callLog().clear();
         McpServer.FETCHED_TEXT.clear();
+        McpServer.DOCUMENT_LINKS.clear();
+    }
+
+    private static final String MCCA =
+        "https://majorcitieschiefs.com/wp-content/uploads/2026/11/";
+    private static final String FIRST_ISSUE =
+        MCCA + "MCCA-Violent-Crime-Report-2026-and-2025-Jan-to-Sept.pdf";
+    private static final String UPDATED_ISSUE =
+        MCCA + "MCCA-Violent-Crime-Report-2026-and-2025-Jan-to-Sept-Updated.pdf";
+    private static final String CLAIM_ON_FIRST_ISSUE = "[{\"assertion\":\"New York City "
+        + "reported 239 homicides, up from 192\",\"verdict\":\"true\",\"sources\":[{\"url\":\""
+        + FIRST_ISSUE + "\"}]}]";
+
+    private static void readHomePage() throws Exception {
+        String home = "https://majorcitieschiefs.com/";
+        String html = "<html><body><nav><a href='" + UPDATED_ISSUE + "'>MCCA Releases Updated "
+            + "Violent Crime Report Comparing January-September 2026 and 2025</a>"
+            + "<a href='" + MCCA + "2026-MCCA-Immigration-Policy.pdf'>MCCA Chiefs Update "
+            + "Immigration Policy</a></nav></body></html>";
+        McpServer.DOCUMENT_LINKS.put(McpServer.normalizeUrlForMatch(home),
+            McpServer.documentLinks(org.jsoup.Jsoup.parse(html, home)));
+        fetch(home, null);
+    }
+
+    /** The q3 shape of 2026-11-13: only the report's first issue was read. */
+    @Test void aDocumentGradedWithoutReadingItsPublishersSiteIsRefused() throws Exception {
+        fetch(FIRST_ISSUE, null);
+        String problem = McpServer.enforceCitedDocumentCurrent(
+            MAPPER.readTree(CLAIM_ON_FIRST_ISSUE), ARTICLE);
+        assertNotNull(problem);
+        assertTrue(problem.contains("no page on majorcitieschiefs.com was read"), problem);
+    }
+
+    @Test void aLaterIssueListedByThePublisherMustBeRead() throws Exception {
+        fetch(FIRST_ISSUE, null);
+        readHomePage();
+        String problem = McpServer.enforceCitedDocumentCurrent(
+            MAPPER.readTree(CLAIM_ON_FIRST_ISSUE), ARTICLE);
+        assertNotNull(problem);
+        assertTrue(problem.contains("Jan-to-Sept-Updated.pdf"), problem);
+        assertTrue(problem.contains("a later issue of"), problem);
+        assertTrue(!problem.contains("Immigration-Policy"), problem);
+        fetch(UPDATED_ISSUE, null);
+        String stillEarlier = McpServer.enforceCitedDocumentCurrent(
+            MAPPER.readTree(CLAIM_ON_FIRST_ISSUE), ARTICLE);
+        assertNotNull(stillEarlier);
+        assertTrue(stillEarlier.contains("claim(s) 1 cite"), stillEarlier);
+        assertNull(McpServer.enforceCitedDocumentCurrent(MAPPER.readTree(
+            CLAIM_ON_FIRST_ISSUE.replace("}]}]", "},{\"url\":\"" + UPDATED_ISSUE + "\"}]}]")),
+            ARTICLE));
+    }
+
+    @Test void aClaimThatCitesNoDocumentIsNotHeldToThePublishersSite() throws Exception {
+        fetch("https://newamerica.org/insights/dc-evictions", null);
+        assertNull(McpServer.enforceCitedDocumentCurrent(MAPPER.readTree(
+            "[{\"assertion\":\"Evictions rose\",\"verdict\":\"true\",\"sources\":[{\"url\":"
+            + "\"https://newamerica.org/insights/dc-evictions\"}]}]"), ARTICLE));
     }
 
     @SuppressWarnings("unchecked")

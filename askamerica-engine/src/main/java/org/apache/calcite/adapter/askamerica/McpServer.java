@@ -957,7 +957,8 @@ public class McpServer {
             + "also open the publisher's own page that lists that source and grade against "
             + "the version listed there as current; when it differs from the version the "
             + "piece used, the claim's `inaccuracy` MUST state both figures and the date of "
-            + "the correction. "
+            + "the correction. Any claim graded against a document is refused until a page on "
+            + "that document's own site was fetched and any later issue it lists was read. "
             + "`author_claims`: the piece's author asserts it in their own voice — "
             + "conclusions, causal statements, characterizations, framing, the headline. "
             + "`subject_claims`: a person or organization the piece covers asserts it; it MUST "
@@ -4821,6 +4822,8 @@ public class McpServer {
                             args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceReferencedSourcesRead(
                             args.path("source_url").asText(null)));
+                        addIfPresent(gateProblems, enforceCitedDocumentCurrent(claims,
+                            args.path("source_url").asText(null)));
                         addIfPresent(gateProblems, enforceArticleTextRead(claims,
                             args.path("source_url").asText(null),
                             args.path("article_copy_url").asText(null)));
@@ -7974,6 +7977,178 @@ public class McpServer {
             + unread.size() + " were never fetched: " + String.join(" , ", unread) + " . "
             + "web_fetch each one (a 403, 404 or timeout counts as fetched), check the claims "
             + "that rest on it against what it actually says, then publish again.";
+    }
+
+    /** A link whose path names a document file rather than a page. */
+    private static final java.util.regex.Pattern DOCUMENT_PATH = java.util.regex.Pattern
+        .compile("(?i)\\.(?:pdf|xlsx?|csv|docx?|pptx?)(?:$|\\?)");
+
+    /** A word that marks a document as replacing an earlier issue of itself. */
+    private static final java.util.regex.Pattern REVISION_WORD = java.util.regex.Pattern
+        .compile("(?i)(?<![a-z])(?:updated?|revised|revision|corrected|correction|erratum"
+            + "|errata|amended|superseded|supersedes)(?![a-z])");
+
+    /** Share of a cited document's file-name words a listed document must carry to count as
+     *  another issue of it. */
+    private static final double SAME_DOCUMENT_SHARE = 0.6;
+
+    /** Every document a fetched HTML page links, keyed by the page's normalized URL: the
+     *  document's address mapped to its link text. Taken from the whole page, navigation
+     *  included, because a publisher lists its current reports there. */
+    static final java.util.Map<String, java.util.Map<String, String>> DOCUMENT_LINKS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    static java.util.Map<String, String> documentLinks(org.jsoup.nodes.Document doc) {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        for (org.jsoup.nodes.Element a : doc.select("a[href]")) {
+            String abs = a.absUrl("href");
+            if (DOCUMENT_PATH.matcher(abs).find()) {
+                out.putIfAbsent(abs, a.text());
+            }
+        }
+        return out;
+    }
+
+    /** The words of a document's file name, lower-cased, extension and revision words left
+     *  out. */
+    private static java.util.Set<String> fileNameWords(String url) {
+        String path = url;
+        int q = path.indexOf('?');
+        if (q >= 0) {
+            path = path.substring(0, q);
+        }
+        String name = path.substring(path.lastIndexOf('/') + 1);
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            name = name.substring(0, dot);
+        }
+        java.util.Set<String> words = new java.util.LinkedHashSet<>();
+        for (String w : name.toLowerCase(java.util.Locale.ROOT).split("[^a-z0-9]+")) {
+            if (w.length() >= 3 && !REVISION_WORD.matcher(w).matches()) {
+                words.add(w);
+            }
+        }
+        return words;
+    }
+
+    /**
+     * A claim graded against a document (a PDF, a spreadsheet) is refused until a page on that
+     * document's own site was fetched this session, and until every document such a page lists
+     * as a revision of the cited one was fetched too. A listed document is a revision when its
+     * address or link text carries a revision word and its file name shares most of the cited
+     * document's words.
+     *
+     * <p>Measured live 2026-11-13 (daily eval q3, the MCCA violent crime survey): two runs
+     * graded New York City's homicide figures true against the report's first issue, three
+     * days after the publisher's home page had replaced it with an issue correcting them. The
+     * instruction to open the publisher's listing was installed for the second run and was
+     * not followed.
+     */
+    static String enforceCitedDocumentCurrent(JsonNode claims, String articleUrl) {
+        String article = articleUrl == null ? "" : normalizeUrlForMatch(articleUrl);
+        java.util.Set<String> fetched = new java.util.HashSet<>();
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if ("web_fetch".equals(e.path("tool").asText(""))) {
+                String url = e.path("args").path("url").asText("");
+                if (!url.isEmpty()) {
+                    fetched.add(normalizeUrlForMatch(url));
+                }
+            }
+        }
+        java.util.Map<String, String> cited = new java.util.LinkedHashMap<>();
+        for (JsonNode c : claims) {
+            for (JsonNode s : c.path("sources")) {
+                String url = s.path("url").asText("");
+                String norm = url.isEmpty() ? "" : normalizeUrlForMatch(url);
+                if (!url.isEmpty() && DOCUMENT_PATH.matcher(url).find() && !norm.equals(article)
+                        && fetched.contains(norm)) {
+                    cited.putIfAbsent(norm, url);
+                }
+            }
+        }
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, String> doc : cited.entrySet()) {
+            String host = hostOf(doc.getKey());
+            java.util.List<String> pages = new java.util.ArrayList<>();
+            for (String f : fetched) {
+                if (hostOf(f).equals(host) && !DOCUMENT_PATH.matcher(f).find()) {
+                    pages.add(f);
+                }
+            }
+            if (pages.isEmpty()) {
+                problems.add("claims are graded against " + doc.getValue() + " and no page on "
+                    + host + " was read. You MUST web_fetch the publisher's page that lists "
+                    + "this document (https://" + host + "/ when you know no other)");
+                continue;
+            }
+            java.util.Set<String> words = fileNameWords(doc.getValue());
+            for (String page : pages) {
+                java.util.Map<String, String> listed = DOCUMENT_LINKS.get(page);
+                if (listed == null) {
+                    continue;
+                }
+                for (java.util.Map.Entry<String, String> link : listed.entrySet()) {
+                    String norm = normalizeUrlForMatch(link.getKey());
+                    if (norm.equals(doc.getKey()) || !hostOf(norm).equals(host)) {
+                        continue;
+                    }
+                    String label = link.getKey() + " " + link.getValue();
+                    if (!REVISION_WORD.matcher(label).find()) {
+                        continue;
+                    }
+                    java.util.Set<String> other = fileNameWords(link.getKey());
+                    int shared = 0;
+                    for (String w : words) {
+                        if (other.contains(w)) {
+                            shared++;
+                        }
+                    }
+                    if (words.isEmpty() || shared < SAME_DOCUMENT_SHARE * words.size()) {
+                        continue;
+                    }
+                    if (fetched.contains(norm)) {
+                        java.util.List<String> earlierOnly = new java.util.ArrayList<>();
+                        int n = 0;
+                        for (JsonNode c : claims) {
+                            n++;
+                            boolean earlier = false;
+                            boolean later = false;
+                            for (JsonNode src : c.path("sources")) {
+                                String u = src.path("url").asText("");
+                                if (u.isEmpty()) {
+                                    continue;
+                                }
+                                String un = normalizeUrlForMatch(u);
+                                earlier |= un.equals(doc.getKey());
+                                later |= un.equals(norm);
+                            }
+                            if (earlier && !later) {
+                                earlierOnly.add(String.valueOf(n));
+                            }
+                        }
+                        if (!earlierOnly.isEmpty()) {
+                            String problem = "claim(s) " + String.join(", ", earlierOnly)
+                                + " cite " + doc.getValue() + " and not " + link.getKey()
+                                + ", the later issue of it. Each MUST be graded against the "
+                                + "later issue, with that issue in its `sources`; where a "
+                                + "figure differs, its `inaccuracy` MUST state both figures "
+                                + "and the date of the correction";
+                            if (!problems.contains(problem)) {
+                                problems.add(problem);
+                            }
+                        }
+                        continue;
+                    }
+                    problems.add(page + " lists " + link.getKey() + " (\"" + link.getValue()
+                        + "\"), a later issue of " + doc.getValue() + ". You MUST web_fetch "
+                        + "it and grade every claim that rests on this document against it; "
+                        + "where a figure differs, the claim's `inaccuracy` MUST state both "
+                        + "figures and the date of the correction");
+                }
+            }
+        }
+        return problems.isEmpty() ? null
+            : "validation refused: " + String.join(" ALSO: ", problems) + ". Then publish again.";
     }
 
     /**
@@ -15575,6 +15750,7 @@ public class McpServer {
         try {
             org.jsoup.nodes.Document doc =
                 org.jsoup.Jsoup.parse(new ByteArrayInputStream(bytes), null, urlStr);
+            DOCUMENT_LINKS.put(normalizeUrlForMatch(urlStr), documentLinks(doc));
             doc.select("script, style, nav, footer, header, noscript, iframe, svg, form")
                 .remove();
             java.util.List<String> referenced = referencedLinks(doc, urlStr);
