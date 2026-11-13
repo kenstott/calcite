@@ -1916,8 +1916,8 @@ public class FileSchemaDeepCoverageTest4 {
     com.google.common.collect.ImmutableMap.Builder<String, Table> builder =
         com.google.common.collect.ImmutableMap.builder();
     invokePrivate(schema, "processStorageProviderFiles",
-        new Class[]{com.google.common.collect.ImmutableMap.Builder.class, Map.class},
-        builder, new HashMap<>());
+        new Class[]{com.google.common.collect.ImmutableMap.Builder.class, Map.class, Set.class},
+        builder, new HashMap<>(), new HashSet<>());
   }
 
   // -----------------------------------------------------------------------

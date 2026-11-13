@@ -290,6 +290,15 @@ embed_daily_window_decision() {
   fi
 }
 
+# Read-only daily dry run of the Iceberg metadata/ orphan pass with a threshold alert. Detached and
+# time-bounded, and its outcome is never read here, so it cannot fail or delay the window.
+run_orphan_dryrun_check() {
+  local window_log="$1"
+  echo "[$(ts)] orphan dry run: launching detached (orphan-dryrun-check.sh)" >> "$window_log"
+  ( "$SCRIPT_DIR/orphan-dryrun-check.sh" "$LOG_DIR/orphan-dryrun.log" >/dev/null 2>&1 || true ) &
+  disown 2>/dev/null || true
+}
+
 run_daily_window_embedding() {
   local window_log="$1" window_end="$2"
   local margin="${EMBED_YIELD_MARGIN_SECS:-600}" complete=false decision secs
@@ -529,6 +538,7 @@ run_window() {
     run_x_schema_if_needed "$window_log"
     run_pre_daily_release_phase2 "$window_log"
     run_daily_window_embedding "$window_log" "$window_end"
+    run_orphan_dryrun_check "$window_log"
   fi
 
   echo "[$(ts)] === $mode window complete ===" | tee -a "$window_log"
