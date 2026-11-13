@@ -148,6 +148,9 @@ public class CsvConversionLogVolumeTest {
 
     CapturedLogs(Map<String, Integer> count, Thread reader) {
       appender = new AbstractAppender("log-volume", null, null, true, Property.EMPTY_ARRAY) {
+        // Message.getFormat() is deprecated, but it is the only way to read the unformatted
+        // message template; the test counts events per template, not per formatted text.
+        @SuppressWarnings("deprecation")
         @Override public void append(LogEvent event) {
           if (event.getLoggerName().startsWith(ADAPTER_LOGGERS)
               && event.getThreadName().equals(reader.getName())) {
