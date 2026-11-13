@@ -37,6 +37,7 @@ import java.util.zip.GZIPOutputStream;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -177,16 +178,16 @@ public class MixedFormatGlobTest extends BaseFileTest {
       CalciteConnection calciteConn = conn.unwrap(CalciteConnection.class);
       SchemaPlus schema = calciteConn.getRootSchema().getSubSchema("MIXED");
 
-      // Should see CSV and JSON files matching the glob pattern, plus converted HTML table
+      // The glob selects the schema's sources: a source it does not match (report.html) is not
+      // converted either, so no table is made from it.
       Set<String> tableNames = schema.getTableNames();
 
-      // Glob pattern *.{csv,json} matches 4 source files, plus 1 converted HTML table
-      assertEquals(5, tableNames.size());
+      assertEquals(4, tableNames.size());
       assertTrue(tableNames.contains("sales_2023"));
       assertTrue(tableNames.contains("sales_2024"));
       assertTrue(tableNames.contains("products"));
       assertTrue(tableNames.contains("inventory"));
-      assertTrue(tableNames.contains("report__t1")); // HTML file converted to JSON table
+      assertFalse(tableNames.contains("report__t1"), "report.html does not match the glob");
       // config.yaml should NOT match the glob pattern
     }
   }
