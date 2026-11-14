@@ -55,6 +55,9 @@ public final class DuckDBSqlRewriter {
     RESERVED_TO_ALIAS.put("regr_avgx", "agg_regr_avgx");
     RESERVED_TO_ALIAS.put("regr_avgy", "agg_regr_avgy");
     RESERVED_TO_ALIAS.put("regr_sxy", "agg_regr_sxy");
+    // date_diff fails to parse (DATE_DIFF is a parser-level BigQuery form); datediff is the
+    // same DuckDB function and is registered as a plain scalar.
+    RESERVED_TO_ALIAS.put("date_diff", "datediff");
   }
 
   /**
@@ -129,6 +132,18 @@ public final class DuckDBSqlRewriter {
         }
         final String lower = word.toLowerCase(java.util.Locale.ROOT);
         final boolean isCall = k < n && sql.charAt(k) == '(';
+        if (isCall && "timestampdiff".equals(lower)) {
+          int close = matchingParen(sql, k);
+          String rewritten = close > k
+              ? rewriteTimestampDiff(sql.substring(k + 1, close)) : null;
+          if (rewritten != null) {
+            out.append("duckdb_date_sub").append(sql, j, k).append('(')
+                .append(rewrite(rewritten)).append(')');
+            changed = true;
+            i = close + 1;
+            continue;
+          }
+        }
         String alias = isCall ? RESERVED_TO_ALIAS.get(lower) : null;
         if (alias != null) {
           out.append(alias);
@@ -155,6 +170,64 @@ public final class DuckDBSqlRewriter {
       i++;
     }
     return changed ? out.toString() : sql;
+  }
+
+  private static final java.util.Set<String> TIMESTAMPDIFF_UNITS =
+      new java.util.HashSet<>(java.util.Arrays.asList(
+          "microsecond", "second", "minute", "hour", "day", "week", "month", "quarter", "year"));
+
+  /**
+   * Turns the argument list of {@code TIMESTAMPDIFF(unit, start, end)} into the argument list
+   * of {@code duckdb_date_sub('unit', start, end)}: the bare unit keyword becomes a string
+   * literal. Returns null (leave the call alone) unless there are exactly three arguments and
+   * the first is a known unit, optionally written with the {@code SQL_TSI_} prefix.
+   */
+  private static String rewriteTimestampDiff(String args) {
+    java.util.List<String> parts = splitTopLevel(args);
+    if (parts.size() != 3) {
+      return null;
+    }
+    String unit = parts.get(0).trim().toLowerCase(java.util.Locale.ROOT);
+    if (unit.startsWith("sql_tsi_")) {
+      unit = unit.substring("sql_tsi_".length());
+    }
+    if (!TIMESTAMPDIFF_UNITS.contains(unit)) {
+      return null;
+    }
+    return "'" + unit + "', " + parts.get(1).trim() + ", " + parts.get(2).trim();
+  }
+
+  /** Splits on commas at paren depth zero and outside quotes. */
+  private static java.util.List<String> splitTopLevel(String args) {
+    java.util.List<String> parts = new java.util.ArrayList<>();
+    int depth = 0;
+    int start = 0;
+    for (int i = 0; i < args.length(); i++) {
+      char c = args.charAt(i);
+      if (c == '\'' || c == '"') {
+        char q = c;
+        i++;
+        while (i < args.length()) {
+          if (args.charAt(i) == q) {
+            if (i + 1 < args.length() && args.charAt(i + 1) == q) {
+              i++;
+            } else {
+              break;
+            }
+          }
+          i++;
+        }
+      } else if (c == '(') {
+        depth++;
+      } else if (c == ')') {
+        depth--;
+      } else if (c == ',' && depth == 0) {
+        parts.add(args.substring(start, i));
+        start = i + 1;
+      }
+    }
+    parts.add(args.substring(start));
+    return parts;
   }
 
   /**
