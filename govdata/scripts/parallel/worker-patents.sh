@@ -126,8 +126,8 @@ ENDJSON
 run_ungrouped_patents_tables() {
   local start="$1" end="$2" unassigned _t quoted=""
   unassigned="$(unassigned_schema_tables patents all \
-    "dated|patent_grants,patent_claims,patent_summaries,trademark_case_file,trademark_owner,trademark_classification,trademark_intl_class,trademark_statement" \
-    "forever|patent_locations,patent_abstracts,patent_applications,patent_figures,patent_assignees,patent_cpc_classes,patent_inventors")" || return 1
+    "dated|patent_grants,patent_publications,patent_claims,patent_summaries,trademark_case_file,trademark_owner,trademark_classification,trademark_intl_class,trademark_statement" \
+    "forever|patent_locations,patent_abstracts,patent_applications,patent_figures,patent_assignees,patent_cpc_classes,patent_inventors,patent_publication_cpc,patent_publication_applicants")" || return 1
 
   [ -n "$unassigned" ] || return 0
   IFS=',' read -ra _un <<< "$unassigned"
@@ -163,6 +163,9 @@ case "$MODE" in
     run_patents_model "patents-historical-grants" \
       '"patent_grants"' "$START" "$END"
 
+    run_patents_model "patents-historical-publications" \
+      '"patent_publications"' "$START" "$END"
+
     run_patents_model "patents-historical-claims" \
       '"patent_claims"' "$START" "$END"
 
@@ -189,6 +192,9 @@ case "$MODE" in
     # Current-year dated tables.
     run_patents_model "patents-daily-grants" \
       '"patent_grants"' "$START"
+
+    run_patents_model "patents-daily-publications" \
+      '"patent_publications"' "$START"
 
     run_patents_model "patents-daily-claims" \
       '"patent_claims"' "$START"
@@ -218,6 +224,12 @@ case "$MODE" in
 
     run_patents_model "patents-daily-cpc" \
       '"patent_cpc_classes"' "$START"
+
+    run_patents_model "patents-daily-publication-cpc" \
+      '"patent_publication_cpc"' "$START"
+
+    run_patents_model "patents-daily-publication-applicants" \
+      '"patent_publication_applicants"' "$START"
 
     run_patents_model "patents-daily-inventors" \
       '"patent_inventors"' "$START"
