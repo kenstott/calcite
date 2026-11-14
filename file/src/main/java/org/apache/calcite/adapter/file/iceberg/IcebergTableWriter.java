@@ -2007,9 +2007,9 @@ public class IcebergTableWriter {
           }
         } catch (ValidationException e) {
           throw e;
-        } catch (Throwable e) {
-          LOGGER.warn("Failed to compact partition {}: {}", partitionKey, e.getMessage());
-          fullySorted = false;
+        } catch (IOException | RuntimeException e) {
+          throw new IllegalStateException("Compaction of " + table.name() + " failed on partition "
+              + partitionKey, e);
         }
       } else {
         fullySorted = false;
@@ -2546,6 +2546,23 @@ public class IcebergTableWriter {
    * unknown keeps them, since the snapshot may already reference them.
    */
   private void commitCompactionRewrite(Set<DataFile> filesToDelete, List<DataFile> newFiles) {
+    long deletedRecords = 0;
+    for (DataFile f : filesToDelete) {
+      deletedRecords += f.recordCount();
+    }
+    long addedRecords = 0;
+    for (DataFile f : newFiles) {
+      addedRecords += f.recordCount();
+    }
+    if (addedRecords != deletedRecords) {
+      for (DataFile newFile : newFiles) {
+        table.io().deleteFile(newFile.path().toString());
+      }
+      throw new IllegalStateException("Compaction of " + table.name()
+          + " would replace " + deletedRecords + " records in " + filesToDelete.size()
+          + " files with " + addedRecords + " records in " + newFiles.size()
+          + " files; refusing to commit. Source files: " + filesToDelete);
+    }
     try {
       underCommitLock(() -> {
         RewriteFiles rewrite = table.newRewrite();
@@ -2563,8 +2580,24 @@ public class IcebergTableWriter {
     } catch (CommitStateUnknownException e) {
       throw e;
     } catch (RuntimeException e) {
+      // A commit that failed after reaching the catalog leaves the snapshot referencing the new
+      // files; only files the refreshed current snapshot does not reference are orphans.
+      table.refresh();
+      Set<String> referenced = new HashSet<>();
+      if (table.currentSnapshot() != null) {
+        try (CloseableIterable<FileScanTask> planned = table.newScan().planFiles()) {
+          for (FileScanTask task : planned) {
+            referenced.add(task.file().path().toString());
+          }
+        } catch (IOException io) {
+          throw new IllegalStateException("Cannot verify which compaction output files of "
+              + table.name() + " are referenced after a failed commit; leaving them in place", e);
+        }
+      }
       for (DataFile newFile : newFiles) {
-        table.io().deleteFile(newFile.path().toString());
+        if (!referenced.contains(newFile.path().toString())) {
+          table.io().deleteFile(newFile.path().toString());
+        }
       }
       throw e;
     }
@@ -2718,7 +2751,9 @@ public class IcebergTableWriter {
             }
           }
         } catch (Exception e) {
-          LOGGER.warn("Failed to read file {}: {}", dataFile.path(), e.getMessage());
+          throw new IllegalStateException("Compaction of " + table.name()
+              + " could not read source file " + dataFile.path()
+              + "; aborting before any commit", e);
         }
       }
 
