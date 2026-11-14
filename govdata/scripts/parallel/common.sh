@@ -536,6 +536,38 @@ wait_for_sec_workers() {
   done
 }
 
+# verify_closure_on_r2 <r2_remote> <bucket> <schema> <table> <files_list>
+# Existence gate run before any version-hint.text is written on R2: every path in <files_list>
+# (relative to the table directory) must be present on R2. `rclone copy --files-from` exits 0
+# when a listed file is absent from the source, so the copy's exit status proves nothing about
+# the closure. Lists the requested files on R2 (one lookup per file, no recursive listing) and
+# compares with the request. On any missing file, logs each at error level, appends it to
+# ${GOVDATA_R2_CLOSURE_MISSING_FILE:-$HOME/.r2-closure-missing} and returns 1.
+verify_closure_on_r2() {
+  local r2_remote=$1 bucket=$2 schema=$3 table=$4 files_list=$5
+  local present missing marker="${GOVDATA_R2_CLOSURE_MISSING_FILE:-$HOME/.r2-closure-missing}"
+  present=$(mktemp) || return 1
+  if ! rclone lsf "${r2_remote}:${bucket}/${schema}/${table}" --files-from "$files_list" \
+      -R --files-only --checkers 32 > "$present"; then
+    log_error "sync-to-r2: [$schema/$table] closure existence listing on R2 FAILED"
+    rm -f "$present"
+    return 1
+  fi
+  missing=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$files_list") <(LC_ALL=C sort -u "$present"))
+  rm -f "$present"
+  if [ -n "$missing" ]; then
+    local f n=0
+    while IFS= read -r f; do
+      n=$((n + 1))
+      log_error "sync-to-r2: [$schema/$table] closure file MISSING on R2: $f"
+      printf '%s\t%s/%s\t%s\n' "$(date -u +%FT%TZ)" "$schema" "$table" "$f" >> "$marker"
+    done <<< "$missing"
+    log_error "sync-to-r2: [$schema/$table] $n closure file(s) missing on R2 — version-hint.text NOT advanced"
+    return 1
+  fi
+  return 0
+}
+
 # sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
 # Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
 # single read of version-hint.text, then metadata.json + manifest-list + every manifest +
@@ -579,6 +611,10 @@ sync_iceberg_table_closure() {
       --files-from "$files_list" --transfers 16 --checkers 32 2>&1 \
       | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line" >&2; done; then
     log_error "sync-to-r2: [$schema/$table] closure copy FAILED — version-hint.text NOT advanced"
+    rm -f "$files_list"
+    return 1
+  fi
+  if ! verify_closure_on_r2 "$r2_remote" "$bucket" "$schema" "$table" "$files_list"; then
     rm -f "$files_list"
     return 1
   fi
