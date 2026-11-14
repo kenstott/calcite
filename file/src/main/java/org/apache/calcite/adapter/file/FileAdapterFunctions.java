@@ -127,6 +127,22 @@ public final class FileAdapterFunctions {
         LOGGER.warn("Failed to register duckdb string functions: {}", e.getMessage());
       }
     }
+    // DuckDB-native date differences (datediff, and date_sub under the alias
+    // duckdb_date_sub that the SQL rewriter gives TIMESTAMPDIFF). DuckDB engine ONLY.
+    if (duckDbEngine && root.getFunctions("datediff").isEmpty()) {
+      try {
+        for (java.lang.reflect.Method m
+            : org.apache.calcite.adapter.file.duckdb.DuckDBDateFunctions.class.getMethods()) {
+          if (m.getDeclaringClass() == Object.class) {
+            continue;
+          }
+          String name = m.getName().equals("datediff") ? "datediff" : "duckdb_date_sub";
+          root.add(name, org.apache.calcite.schema.impl.ScalarFunctionImpl.create(m));
+        }
+      } catch (Exception e) {
+        LOGGER.warn("Failed to register duckdb date functions: {}", e.getMessage());
+      }
+    }
     // Spatial ST_* are provided by Calcite's built-in SPATIAL library — connect
     // with fun=...,spatial. No schema registration is needed (and reflective
     // registration would duplicate the library operators).
