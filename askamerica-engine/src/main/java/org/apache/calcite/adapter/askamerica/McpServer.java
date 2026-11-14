@@ -771,10 +771,23 @@ public class McpServer {
 
     // ── MCP handlers ─────────────────────────────────────────────────────────
 
+    /** {@code serverInfo.version} reported by a jar that carries no release stamp. */
+    static final String LOCAL_BUILD_VERSION = "0.0.0+local";
+
+    /**
+     * The version this MCP server reports in {@code initialize}. The server ships inside the
+     * engine jar and has no release line of its own, so its version is the engine's:
+     * {@code stamped} is the jar's {@code AskAmerica-Engine-Version} (set by CI from the
+     * {@code engine-vX.Y.Z} tag). An unstamped jar is a local build and says so.
+     */
+    static String serverVersion(String stamped) {
+        return stamped == null || stamped.isEmpty() ? LOCAL_BUILD_VERSION : stamped;
+    }
+
     static ObjectNode handleInitialize(JsonNode id) {
         ObjectNode serverInfo = MAPPER.createObjectNode();
         serverInfo.put("name", "AskAmerica");
-        serverInfo.put("version", "1.0.0");
+        serverInfo.put("version", serverVersion(PgwireGovDataInstaller.ownEngineVersion()));
 
         ObjectNode capabilities = MAPPER.createObjectNode();
         capabilities.set("tools", MAPPER.createObjectNode());
