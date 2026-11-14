@@ -3187,6 +3187,101 @@ INSERT INTO dq_results
 SELECT 'health', 'medicaid_expenditures_by_state_quarter', 'T7_fiscal_year_quarters', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'quarter_end_date months inconsistent with fiscal_quarter (Dec=1, Mar=2, Jun=3, Sep=4)'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_expenditures_by_state_quarter', allow_moved_paths := true) WHERE fiscal_quarter <> CASE MONTH(quarter_end_date) WHEN 12 THEN 1 WHEN 3 THEN 2 WHEN 6 THEN 3 WHEN 9 THEN 4 END OR fiscal_quarter IS NULL);
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: va_claims_workload (new 14 Nov 2026)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true));
+
+-- T2: row_count (one fiscal year = ~52 weeks x ~25 lines)
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  n, 1000, 'Expected at least 1000 weekly line rows for one fiscal year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true) ORDER BY week_ending DESC LIMIT 3;
+
+-- T4: all_null_cols — ep_code is NULL by design on total rows, not fully null overall
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T5: all_same_value — line_type excluded: it has two values ('total','ep'); SUMMARIZE's approx_unique reports 1 for it
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type', 'year', 'line_type')
+  )
+);
+
+-- T6: pk_nulls (week_ending, line_type, line_description)
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL week_ending, line_type, or line_description rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true) WHERE week_ending IS NULL OR line_type IS NULL OR line_description IS NULL);
+
+-- T7: headline week 2026-09-26 — read from the live workbook at build time (670,845 pending, 74,448 over 125 days)
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T7_headline_pending_2026_09_26',
+  CASE WHEN n = 670845 THEN 'pass' ELSE 'fail' END,
+  n, 670845, 'Rating Bundle total pending for the week ending 2026-09-26'
+FROM (SELECT COALESCE(SUM(pending_claims), 0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true) WHERE week_ending = DATE '2026-09-26' AND line_type = 'total' AND line_description LIKE 'Compensation and Pension Rating Bundle%');
+
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T7_headline_backlog_2026_09_26',
+  CASE WHEN n = 74448 THEN 'pass' ELSE 'fail' END,
+  n, 74448, 'Rating Bundle total pending over 125 days for the week ending 2026-09-26'
+FROM (SELECT COALESCE(SUM(pending_over_125_days), 0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true) WHERE week_ending = DATE '2026-09-26' AND line_type = 'total' AND line_description LIKE 'Compensation and Pension Rating Bundle%');
+
+-- T7: over-125 never exceeds pending
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T7_backlog_le_pending',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows where pending_over_125_days > pending_claims'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true) WHERE pending_over_125_days > pending_claims);
+
+-- T8: pk_duplication guard (week_ending, line_type, line_description)
+INSERT INTO dq_results
+SELECT 'health', 'va_claims_workload', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (week_ending, line_type, line_description) keys'
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT week_ending, line_type, line_description
+    FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/va_claims_workload', allow_moved_paths := true)
+    GROUP BY week_ending, line_type, line_description
+    HAVING COUNT(*) > 1
+  )
+);
+
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
