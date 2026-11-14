@@ -1994,11 +1994,10 @@ partitionedTables:
       partition overwritten; history lives in Iceberg snapshots. No key required.
 
       **URL drift caveat**: BLM publishes each new fiscal year's file at a URL that
-      encodes the release month in the path (docs/2025-07/... for FY24 release,
-      docs/2026-04/... for FY25 release, and so on). Rather than chase that per year, this
-      table pins the URL to the FY24 file (published July 2025), whose combined XLSX
-      already carries FY 2001-2024 in one download. On next FY release, update the URL to
-      the newer file (whose combined XLSX will cover all years through the new one) —
+      encodes the release month in the path (docs/2025-07/... for the FY24 release,
+      docs/2026-04/... for the FY25 release). This table pins the URL to the FY25 file
+      (published April 2026), whose combined XLSX carries FY 2001-2025 in one download. On
+      each annual release, update the URL to the newer file —
       BLM's landing page at blm.gov/programs/energy-and-minerals/oil-and-gas/oil-and-gas-statistics
       is the authoritative index for locating the current URL.
 
@@ -2039,8 +2038,8 @@ partitionedTables:
 
     source:
       type: http
-      # Combined FY 2001-2024 file published July 2025 — see URL-drift caveat in table comment.
-      url: "https://www.blm.gov/sites/default/files/docs/2025-07/BLM-FY2024-Oil-and-Gas-Statistics-All-Fed-Oil-Gas-Statistics.xlsx"
+      # Combined FY 2001-2025 file published April 2026 — see URL-drift caveat in table comment.
+      url: "https://www.blm.gov/sites/default/files/docs/2026-04/All%20Fed%20O_G%20Statistics%20by%20Year%20by%20State_Web%20Stats_Tabs%20w%20Table%20Numbers_FY25.xlsx"
       method: GET
       response:
         format: TEXT   # BlmOilGasAcreageTransformer re-downloads the XLSX and emits JSON rows
