@@ -124,6 +124,10 @@ sync_iceberg_table() {
     rm -f "$files_list"
     return 1
   fi
+  if ! $DRY_RUN && ! verify_closure_on_r2 "$R2_REMOTE" "$BUCKET" "$schema" "$table" "$files_list"; then
+    rm -f "$files_list"
+    return 1
+  fi
   rm -f "$files_list"
 
   if $DRY_RUN; then
