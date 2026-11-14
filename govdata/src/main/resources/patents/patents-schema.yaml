@@ -520,6 +520,273 @@ partitionedTables:
         batchPartitionColumns: [quarter]
 
   # ---------------------------------------------------------------------------
+  # PATENT_PUBLICATIONS — USPTO pre-grant publications (published applications)
+  # ---------------------------------------------------------------------------
+  - name: patent_publications
+    pattern: "type=patent_publications/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      One row per USPTO pre-grant publication (published patent application, kind codes A1/A2/A9
+      etc.), with application_id, filing_date, published_date, patent_type (utility or plant),
+      filing_type, wipo_kind, series_code, application_title and a rule_47_flag. Faithful
+      recreation of PatentsView pg_published_application.tsv (ODP product PVPGPUBDIS), no joins,
+      year-partitioned by publication_year (the year of published_date). Publication is 18 months
+      after the earliest filing, so this leads patent_grants for the same filings. Counts of
+      applications by month, CPC code and title keyword are computed by joining pgpub_id to
+      patent_publication_cpc and grouping on published_date; applicants are in
+      patent_publication_applicants. Unlike patent_grants there is no patent_id: a published
+      application that is later granted maps to its patent through PatentsView's
+      pg_granted_pgpubs_crosswalk, which is not loaded here. Source data runs through the
+      PatentsView release's cutoff (quarterly, trailing the current date by one to three months).
+
+    dimensions:
+      type:
+        - patent_publications
+      # dataLag=0 like patent_grants: pg_published_application self-partitions by published_date.
+      year:
+        <<: *year_range
+        minYear: 2001  # first pre-grant publications were issued 2001-03-15
+        dataLag: 0
+      quarter: *current_quarter
+
+    columns:
+      - name: pgpub_id
+        type: string
+        comment: Publication document number (e.g., 20100158352); primary key
+      - name: publication_year
+        type: integer
+        nullable: false
+        comment: Calendar year of published_date; primary partition key
+      - name: application_id
+        type: string
+        nullable: true
+        comment: USPTO application serial number
+      - name: filing_date
+        type: string
+        nullable: true
+        comment: Date the application was filed (YYYY-MM-DD)
+      - name: published_date
+        type: string
+        nullable: true
+        comment: Date of publication (YYYY-MM-DD)
+      - name: patent_type
+        type: string
+        nullable: true
+        comment: utility or plant; pre-mid-2004 publications carry legacy status values instead
+      - name: filing_type
+        type: string
+        nullable: true
+        comment: Type of publication filing, e.g. us-republication-corrected; often empty
+      - name: wipo_kind
+        type: string
+        nullable: true
+        comment: WIPO kind code of the publication (A1, A2, A9, ...)
+      - name: series_code
+        type: string
+        nullable: true
+        comment: USPTO application series code
+      - name: application_title
+        type: string
+        nullable: true
+        comment: Title of the application
+      - name: rule_47_flag
+        type: boolean
+        nullable: true
+        comment: True when an inventor could not be contacted at filing (37 CFR 1.47)
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVPGPUBDIS/pg_published_application.tsv.zip"
+      method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentPublicationsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_publications/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        <<: *patents_iceberg_common
+        tableName: patent_publications
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+
+  - name: patent_publication_cpc
+    freshness:
+      type: last_modified
+    pattern: "type=patent_publication_cpc"
+    partitions: *snapshot_partitions
+    comment: >
+      Faithful recreation of pg_cpc_current.tsv — one row per publication-CPC code combination
+      (cpc_section, cpc_class, cpc_subclass such as G06N, cpc_group such as G06N3/0475, cpc_type
+      inventional or additional), keyed by pgpub_id; join to patent_publications on pgpub_id for the
+      publication date. A publication carries many CPC rows, so count DISTINCT pgpub_id when
+      counting applications in a CPC group. Loaded once per quarter as a full snapshot of all
+      publications since 2001 (broader than patent_publications when GOVDATA_START_YEAR is later).
+
+    dimensions:
+      type:
+        - patent_publication_cpc
+      quarter: *current_quarter
+
+    columns:
+      - name: pgpub_id
+        type: string
+        comment: Publication document number; FK to patent_publications.pgpub_id
+      - name: cpc_sequence
+        type: integer
+        nullable: true
+        comment: Order of the CPC code on the publication (0-based)
+      - name: cpc_section
+        type: string
+        nullable: true
+        comment: CPC section (A-H, Y)
+      - name: cpc_class
+        type: string
+        nullable: true
+        comment: CPC class (3 characters, e.g. G06)
+      - name: cpc_subclass
+        type: string
+        nullable: true
+        comment: CPC subclass (4 characters, e.g. G06N)
+      - name: cpc_group
+        type: string
+        nullable: true
+        comment: CPC group or subgroup (e.g. G06N3/0475)
+      - name: cpc_type
+        type: string
+        nullable: true
+        comment: inventional or additional
+      - name: cpc_version_indicator
+        type: string
+        nullable: true
+        comment: Date of the CPC scheme version the code was assigned under (YYYY-MM-DD)
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVPGPUBDIS/pg_cpc_current.tsv.zip"
+      method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentPublicationCpcTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_publication_cpc"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        <<: *patents_snapshot_iceberg_common
+        tableName: patent_publication_cpc
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [quarter]
+
+  - name: patent_publication_applicants
+    freshness:
+      type: last_modified
+    pattern: "type=patent_publication_applicants"
+    partitions: *snapshot_partitions
+    comment: >
+      Faithful recreation of pg_applicant_not_disambiguated.tsv — one row per applicant on a
+      publication as it appears in the source XML (raw, not disambiguated), keyed by pgpub_id:
+      applicant_organization for companies, applicant_name_first/last for individuals,
+      applicant_authority (assignee, inventor, legal-representative, ...) and rawlocation_id.
+      Names are unnormalized, so group company counts with care. Loaded once per quarter as a
+      full snapshot of all publications since 2001.
+
+    dimensions:
+      type:
+        - patent_publication_applicants
+      quarter: *current_quarter
+
+    columns:
+      - name: pgpub_id
+        type: string
+        comment: Publication document number; FK to patent_publications.pgpub_id
+      - name: applicant_sequence
+        type: integer
+        nullable: true
+        comment: Order of the applicant in the source XML (1-based)
+      - name: applicant_name_first
+        type: string
+        nullable: true
+        comment: First name when the applicant is an individual
+      - name: applicant_name_last
+        type: string
+        nullable: true
+        comment: Last name when the applicant is an individual
+      - name: applicant_organization
+        type: string
+        nullable: true
+        comment: Organization name when the applicant is an organization
+      - name: applicant_type
+        type: string
+        nullable: true
+        comment: Type of the party (applicant)
+      - name: applicant_designation
+        type: string
+        nullable: true
+        comment: Designation, e.g. us-only
+      - name: applicant_authority
+        type: string
+        nullable: true
+        comment: Interest in the rights - assignee, inventor, legal-representative, party-of-interest, obligated-assignee, or empty
+      - name: rawlocation_id
+        type: string
+        nullable: true
+        comment: Raw (undisambiguated) location id of the applicant
+
+    source:
+      type: http
+      url: "https://api.uspto.gov/api/v1/datasets/products/files/PVPGPUBDIS/pg_applicant_not_disambiguated.tsv.zip"
+      method: GET
+      headers:
+        X-Api-Key: "${USPTO_API_KEY}"
+      skipResponseBody: true
+      response:
+        format: JSON
+      rawCache: *raw_cache_enabled
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.patents.PatentPublicationApplicantsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=patent_publication_applicants"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        <<: *patents_snapshot_iceberg_common
+        tableName: patent_publication_applicants
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        batchPartitionColumns: [quarter]
+
+  # ---------------------------------------------------------------------------
   # PATENT_ABSTRACTS — Faithful g_patent_abstract.tsv snapshot
   # ---------------------------------------------------------------------------
   - name: patent_abstracts
