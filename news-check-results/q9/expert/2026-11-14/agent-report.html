@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Fact-check: Public Citizen $737M corporate spending report</title>
+<style>body{font-family:sans-serif;max-width:900px;margin:2em auto;padding:0 1em}img{max-width:100%}td,th{border:1px solid #999;padding:4px}table{border-collapse:collapse}</style></head><body>
+<h1>Fact-check: Public Citizen's "$737 Million" corporate-spending report</h1>
+<img src="agent-dashboard.png" alt="Fact-check board">
+<h2>Mostly accurate (1 Pinocchio): the arithmetic holds, but one headline figure contradicts itself and one donor is mislabeled</h2>
+<p>Public Citizen's October 29, 2026 report (Rick Claypool) says corporations have put $737.3 million into the 2026 midterms. Every ratio it derives recomputes correctly from its own numbers, and the named-donor claims I could check against press reporting hold up. Grade: <strong>1 Pinocchio</strong>, with the problems below.</p>
+<ul>
+<li><strong>Recomputed, correct:</strong> 737.3/461.5 = +59.8% ("60%"); 737.3/184.1 = 4.005x ("quadruple"); the chart's nine cycle values sum to $1,813.6M, so 2026 is 40.7% of "$1.8B"; sector sum 233+85.2+73.1 = $391.3M; $141M is 19.1% of $737.3M and 31.4% of MAGA Inc.'s $449M. FEC lists MAGA Inc. (C00892471) receipts of $449,433,545 through 2026-10-14, matching the $449M.</li>
+<li><strong>Internal contradiction:</strong> the Key Findings say Andreessen Horowitz gave $72 million; Table 2 says $76.2 million (50 + 23.8 + 2.4, which does sum). Table 2 is the better-supported figure; the headline text was not updated.</li>
+<li><strong>Misleading wording:</strong> "$391 million, over half (53%) of the 2026 corporate spending surge." 391.3 is 53.1% of the 2026 total, not of the surge. Against the 2024 increase ($275.8M) the three sectors are 142% of it; against 2022 they are 71%.</li>
+<li><strong>Methodology mismatch:</strong> the note says only for-profit corporations are counted, yet the "Elon Musk Revocable Trust" ($10M to Lone Star Liberty PAC) is in Table 2 and described as a "corporate entity". A trust is not a for-profit corporation. Also, 2010-2024 figures come from OpenSecrets and 2026 from raw FEC data (contributions of $5,000 or more), so the "record" comparison splices two sources with no overlap check. 2026 is a partial cycle, so the direction of the comparison is conservative.</li>
+<li><strong>Not fully checkable:</strong> the $141M corporate share of MAGA Inc., the sector totals and Table 2 itemization require FEC Schedule A itemization. The FEC API demo key returned HTTP 429 and OpenSecrets blocked fetching; I did not route around either. The unattended claims are marked unchecked, not wrong.</li>
+</ul>
+<h2>Claims and verdicts</h2>
+<table><tr><th>Claim</th><th>Verdict</th><th>Evidence</th></tr>
+<tr><td>$737.3M corporate, FEC through 10/23/2026</td><td>Not independently reproducible</td><td>Consistent internally; earlier reports in the series rose $517M, $646M/$650M, then $737M.</td></tr>
+<tr><td>+60% over $461M (2024)</td><td>True arithmetic</td><td>Chart shows $461.5M.</td></tr>
+<tr><td>$184.1M in 2022; quadruple</td><td>True arithmetic</td><td>4.005x.</td></tr>
+<tr><td>40% of $1.8B since Citizens United</td><td>True</td><td>40.7% of $1,813.6M.</td></tr>
+<tr><td>Crypto $233M, betting $85.2M, tech/AI $73.1M</td><td>Sums correctly; not itemized-checked</td><td>Table 1.</td></tr>
+<tr><td>MAGA Inc. $141M, 19% / 31% of $449M</td><td>Denominator verified, numerator unchecked</td><td>FEC totals API.</td></tr>
+<tr><td>a16z biggest corporate donor, $72M</td><td>Contradicted internally ($76.2M)</td><td>Press: Andreessen and Horowitz gave $25M to Leading the Future and ~$22M each to Fairshake; individual vs firm giving is unresolved.</td></tr>
+<tr><td>Soros used a corporation for $52M, over $100M total</td><td>Corroborated</td><td>Fortune (2026-10-02): ~$102M to Democracy PAC, about half from Geosor Corp.</td></tr>
+<tr><td>Musk $10M to Lone Star Liberty PAC, over $400M total</td><td>$10M corroborated; "over $400M" plausible</td><td>Press reports $276M in three months, $366M and $474M totals (NYT). The Washington Post article was blocked (HTTP 403).</td></tr>
+<tr><td>"The norm against direct engagement by Big Business is eroding"</td><td>Opinion, not a factual quote</td><td>Author's own framing, not an attributed quote. No attributed quotes in the piece.</td></tr>
+<tr><td>Totals undercount (dark money)</td><td>True by nature of disclosure law</td><td>Stated by the report.</td></tr></table>
+<h2>What is misleading even where facts check out</h2>
+<p>The source is an advocacy group; the report's conclusion that corporate money "crowds out" voters is opinion. The headline sums sectors, super PACs and wealthy individuals' vehicles together, and the "corporate" label stretches to a trust and a family investment company. Corporate donors giving to both parties' super PACs are counted as "corporate supremacist" spending without evidence of their aims.</p>
+<h2>Sources</h2>
+<ul><li>https://www.citizen.org/?p=128196 and the PDF https://www.citizen.org/wp-content/uploads/737-million-corporate-spending-2026-midterms.pdf</li>
+<li>https://www.fec.gov/data/committee/C00892471/ and https://api.open.fec.gov/v1/committee/C00892471/totals/ (DEMO_KEY, later rate-limited)</li>
+<li>https://fortune.com/2026/10/02/billionaire-george-soros-democrats-midterms/</li>
+<li>https://fortune.com/2026/07/27/billionaire-donors-republicans-elon-musk-george-soros-money-wins/</li>
+<li>NYT via https://thenightly.com.au/politics/world/the-new-york-times-inside-elon-musks-400-million-midterm-rescue-mission-for-republicans-c-23007749; https://wjla.com/news/nation-world/musk-gives-276-million-to-republican-super-pacs-over-3-months-for-midterms-president-trump-republicans-democrats-elections</li>
+<li>https://news.bgov.com/artificial-intelligence/andreessen-horowitz-boost-ai-super-pac-cash-to-over-50-million</li></ul>
+<p>Confidence: high on arithmetic and internal consistency; medium on press-corroborated donor claims; low on itemized totals.</p>
+</body></html>

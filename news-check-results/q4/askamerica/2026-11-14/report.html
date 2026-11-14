@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The KUOW/NPR article's claims about grocery prices, the 2026 midterm results and Democratic food-price proposals are mostly accurate, but its price framing outruns the data are very biased and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+#s2-t4-s1:checked ~ table tbody.s0{display:none}
+#s2-t4-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"]{color:var(--link)}
+#s2-t4-s1:checked ~ table label[for="s2-t4-s1"] .srtcue{opacity:1}
+#s2-t4-s1:checked ~ .srtreset{display:inline-block}
+#s2-t4-s2:checked ~ table tbody.s0{display:none}
+#s2-t4-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"]{color:var(--link)}
+#s2-t4-s2:checked ~ table label[for="s2-t4-s2"] .srtcue{opacity:1}
+#s2-t4-s2:checked ~ .srtreset{display:inline-block}
+#s2-t4-s3:checked ~ table tbody.s0{display:none}
+#s2-t4-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"]{color:var(--link)}
+#s2-t4-s3:checked ~ table label[for="s2-t4-s3"] .srtcue{opacity:1}
+#s2-t4-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The KUOW/NPR article's claims about grocery prices, the 2026 midterm results and Democratic food-price proposals are mostly accurate, but its price framing outruns the data are very biased and mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.kuow.org/npr-news/2026-11-09/democrats-won-big-can-they-lower-your-grocery-bill">https://www.kuow.org/npr-news/2026-11-09/democrats-won-big-can-they-lower-your-grocery-bill</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Food-at-home CPI, YoY %, 2026</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Food at home YoY % (BLS)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="38" y1="56" x2="38" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="38" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0</text>
+      <line class="grid" x1="96.67" y1="56" x2="96.67" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="96.67" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.5</text>
+      <line class="grid" x1="155.33" y1="56" x2="155.33" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="155.33" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1.0</text>
+      <line class="grid" x1="214" y1="56" x2="214" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="214" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1.5</text>
+      <line class="grid" x1="272.67" y1="56" x2="272.67" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="272.67" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2.0</text>
+      <line class="grid" x1="331.33" y1="56" x2="331.33" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="331.33" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2.5</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-6" class="tick" x="390" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3.0</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="38" y1="56" x2="38" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="38" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-jan" class="tick" x="30" y="72.22" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Jan</text>
+      <text id="p1-xtick-feb" class="tick" x="30" y="96.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Feb</text>
+      <text id="p1-xtick-mar" class="tick" x="30" y="121.11" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Mar</text>
+      <text id="p1-xtick-apr" class="tick" x="30" y="145.56" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Apr</text>
+      <text id="p1-xtick-may" class="tick" x="30" y="170" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">May</text>
+      <text id="p1-xtick-jun" class="tick" x="30" y="194.44" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Jun</text>
+      <text id="p1-xtick-jul" class="tick" x="30" y="218.89" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Jul</text>
+      <text id="p1-xtick-aug" class="tick" x="30" y="243.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Aug</text>
+      <text id="p1-xtick-sep" class="tick" x="30" y="267.78" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Sep</text>
+    </g>
+    <g id="p1-series-yoy" class="series">
+      <g class="hover">
+        <title>Jan — YoY %: 2.09</title>
+        <rect id="p1-mark-yoy-jan" class="bar" x="38" y="60.40" width="245.23" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="59.72" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Feb — YoY %: 2.45</title>
+        <rect id="p1-mark-yoy-feb" class="bar" x="38" y="84.84" width="287.47" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="84.17" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Mar — YoY %: 1.9</title>
+        <rect id="p1-mark-yoy-mar" class="bar" x="38" y="109.29" width="222.93" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="108.61" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Apr — YoY %: 2.89</title>
+        <rect id="p1-mark-yoy-apr" class="bar" x="38" y="133.73" width="339.09" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="133.06" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>May — YoY %: 2.74</title>
+        <rect id="p1-mark-yoy-may" class="bar" x="38" y="158.18" width="321.49" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="157.50" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jun — YoY %: 2.75</title>
+        <rect id="p1-mark-yoy-jun" class="bar" x="38" y="182.62" width="322.67" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="181.94" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jul — YoY %: 2.68</title>
+        <rect id="p1-mark-yoy-jul" class="bar" x="38" y="207.07" width="314.45" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="206.39" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Aug — YoY %: 2.19</title>
+        <rect id="p1-mark-yoy-aug" class="bar" x="38" y="231.51" width="256.96" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="230.83" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Sep — YoY %: 1.81</title>
+        <rect id="p1-mark-yoy-sep" class="bar" x="38" y="255.96" width="212.37" height="14.64" fill="#2563eb"/>
+        <rect class="hit" x="38" y="255.28" width="352" height="16" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:49727/a/450c1eacdc30a780555a02dc76705f96.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: 1 Pinocchio. Nearly every checkable fact holds. Issues: NCSL counted 12-13 chamber flips, not ten; and the framing that tariffs and the Iran war are main causes of out-of-control grocery prices outruns BLS data (food-at-home inflation 1.8-2.9% in 2026; table econ.food_cpi carries a row_fanout warning from annual M13 rows, which does not affect the month-matched figures) and NPR's own linked fertilizer piece.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 86/100 — mostly honest</strong> &middot; <strong>Bias +80/100 — very biased</strong></p><p>9 claims graded, 0 not gradable, 3 fell short. In this article only. <strong>Citejacking:</strong> #7 leans on cited evidence that does not carry it.</p></div>
+<p><strong>6</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>9</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>That economic strain helped Democrats win control of both houses of Congress on Tuesday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://news.wttw.com/node/55366">WTTW</a>; <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR Nov 4</a></td></tr><tr class="verdict-partially-false"><td>6</td><td>grocery prices are out of control.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <code>econ.food_cpi (CUUR0000SAF11)</code></td></tr><tr class="verdict-mostly-true"><td>7</td><td>Trump's tariffs and the war in Iran continued to drive up prices ... two of the main causes of high food prices.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Trump's immigration crackdown has led to those farm labor shortages.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#11 — supported<br>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-true"><td>2</td><td>Andrews defeated her Republican opponent, Sen. Darline Graham.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.foxcarolina.com/2026/11/04/annie-andrews-projected-win-us-senate-race-flipping-south-carolina-seat-blue/">Fox Carolina</a></td></tr><tr class="verdict-true"><td>3</td><td>At least 28 states will have Democratic governors beginning next year</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR</a></td></tr><tr class="verdict-true"><td>5</td><td>SNAP ... has seen a precipitous drop in participation since last summer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cbpp.org/blog/snap-participation-has-dropped-to-its-lowest-point-in-17-years-even-though-economic-conditions">CBPP (403)</a>; <a href="https://www.texastribune.org/2026/10/23/texas-snap-food-assistance-stamps-record-low/">Texas Tribune</a></td></tr><tr class="verdict-true"><td>10</td><td>Senate Democrats won't have a filibuster-proof majority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/nx-s1-6022216/midterms-democrats-trump-republicans-analysis">NPR Nov 4</a></td></tr><tr class="verdict-true"><td>12</td><td>There are labor shortages on U.S. farms.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>13</td><td>Trump's immigration crackdown has led to those farm labor shortages.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#11 — supported<br>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-true"><td>12</td><td>There are labor shortages on U.S. farms.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-true"><td>10</td><td>Senate Democrats won't have a filibuster-proof majority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/nx-s1-6022216/midterms-democrats-trump-republicans-analysis">NPR Nov 4</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>Trump's tariffs and the war in Iran continued to drive up prices ... two of the main causes of high food prices.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></td></tr><tr class="verdict-partially-false"><td>6</td><td>grocery prices are out of control.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <code>econ.food_cpi (CUUR0000SAF11)</code></td></tr><tr class="verdict-true"><td>5</td><td>SNAP ... has seen a precipitous drop in participation since last summer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cbpp.org/blog/snap-participation-has-dropped-to-its-lowest-point-in-17-years-even-though-economic-conditions">CBPP (403)</a>; <a href="https://www.texastribune.org/2026/10/23/texas-snap-food-assistance-stamps-record-low/">Texas Tribune</a></td></tr><tr class="verdict-true"><td>3</td><td>At least 28 states will have Democratic governors beginning next year</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR</a></td></tr><tr class="verdict-true"><td>2</td><td>Andrews defeated her Republican opponent, Sen. Darline Graham.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.foxcarolina.com/2026/11/04/annie-andrews-projected-win-us-senate-race-flipping-south-carolina-seat-blue/">Fox Carolina</a></td></tr><tr class="verdict-true"><td>1</td><td>That economic strain helped Democrats win control of both houses of Congress on Tuesday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://news.wttw.com/node/55366">WTTW</a>; <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR Nov 4</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>2</td><td>Andrews defeated her Republican opponent, Sen. Darline Graham.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.foxcarolina.com/2026/11/04/annie-andrews-projected-win-us-senate-race-flipping-south-carolina-seat-blue/">Fox Carolina</a></td></tr><tr class="verdict-true"><td>3</td><td>At least 28 states will have Democratic governors beginning next year</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR</a></td></tr><tr class="verdict-partially-false"><td>6</td><td>grocery prices are out of control.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <code>econ.food_cpi (CUUR0000SAF11)</code></td></tr><tr class="verdict-true"><td>10</td><td>Senate Democrats won't have a filibuster-proof majority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/nx-s1-6022216/midterms-democrats-trump-republicans-analysis">NPR Nov 4</a></td></tr><tr class="verdict-true"><td>5</td><td>SNAP ... has seen a precipitous drop in participation since last summer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cbpp.org/blog/snap-participation-has-dropped-to-its-lowest-point-in-17-years-even-though-economic-conditions">CBPP (403)</a>; <a href="https://www.texastribune.org/2026/10/23/texas-snap-food-assistance-stamps-record-low/">Texas Tribune</a></td></tr><tr class="verdict-true"><td>1</td><td>That economic strain helped Democrats win control of both houses of Congress on Tuesday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://news.wttw.com/node/55366">WTTW</a>; <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR Nov 4</a></td></tr><tr class="verdict-true"><td>12</td><td>There are labor shortages on U.S. farms.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Trump's immigration crackdown has led to those farm labor shortages.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#11 — supported<br>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>Trump's tariffs and the war in Iran continued to drive up prices ... two of the main causes of high food prices.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>7</td><td>Trump's tariffs and the war in Iran continued to drive up prices ... two of the main causes of high food prices.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></td></tr><tr class="verdict-mostly-true"><td>13</td><td>Trump's immigration crackdown has led to those farm labor shortages.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#11 — supported<br>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-partially-false"><td>6</td><td>grocery prices are out of control.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <code>econ.food_cpi (CUUR0000SAF11)</code></td></tr><tr class="verdict-true"><td>2</td><td>Andrews defeated her Republican opponent, Sen. Darline Graham.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.foxcarolina.com/2026/11/04/annie-andrews-projected-win-us-senate-race-flipping-south-carolina-seat-blue/">Fox Carolina</a></td></tr><tr class="verdict-true"><td>3</td><td>At least 28 states will have Democratic governors beginning next year</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR</a></td></tr><tr class="verdict-true"><td>5</td><td>SNAP ... has seen a precipitous drop in participation since last summer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cbpp.org/blog/snap-participation-has-dropped-to-its-lowest-point-in-17-years-even-though-economic-conditions">CBPP (403)</a>; <a href="https://www.texastribune.org/2026/10/23/texas-snap-food-assistance-stamps-record-low/">Texas Tribune</a></td></tr><tr class="verdict-true"><td>10</td><td>Senate Democrats won't have a filibuster-proof majority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/nx-s1-6022216/midterms-democrats-trump-republicans-analysis">NPR Nov 4</a></td></tr><tr class="verdict-true"><td>12</td><td>There are labor shortages on U.S. farms.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-true"><td>1</td><td>That economic strain helped Democrats win control of both houses of Congress on Tuesday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://news.wttw.com/node/55366">WTTW</a>; <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR Nov 4</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>13</td><td>Trump's immigration crackdown has led to those farm labor shortages.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#11 — supported<br>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-true"><td>5</td><td>SNAP ... has seen a precipitous drop in participation since last summer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.cbpp.org/blog/snap-participation-has-dropped-to-its-lowest-point-in-17-years-even-though-economic-conditions">CBPP (403)</a>; <a href="https://www.texastribune.org/2026/10/23/texas-snap-food-assistance-stamps-record-low/">Texas Tribune</a></td></tr><tr class="verdict-mostly-true"><td>7</td><td>Trump's tariffs and the war in Iran continued to drive up prices ... two of the main causes of high food prices.</td><td><strong>mostly true</strong> &middot; causal claim</td><td>#5 — overreach<br>Checked against: <a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></td></tr><tr class="verdict-true"><td>12</td><td>There are labor shortages on U.S. farms.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></td></tr><tr class="verdict-true"><td>1</td><td>That economic strain helped Democrats win control of both houses of Congress on Tuesday.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://news.wttw.com/node/55366">WTTW</a>; <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR Nov 4</a></td></tr><tr class="verdict-true"><td>10</td><td>Senate Democrats won't have a filibuster-proof majority.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/nx-s1-6022216/midterms-democrats-trump-republicans-analysis">NPR Nov 4</a></td></tr><tr class="verdict-partially-false"><td>6</td><td>grocery prices are out of control.</td><td><strong>partially false</strong> &middot; causal claim</td><td>Checked against: <code>econ.food_cpi (CUUR0000SAF11)</code></td></tr><tr class="verdict-true"><td>2</td><td>Andrews defeated her Republican opponent, Sen. Darline Graham.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.foxcarolina.com/2026/11/04/annie-andrews-projected-win-us-senate-race-flipping-south-carolina-seat-blue/">Fox Carolina</a></td></tr><tr class="verdict-true"><td>3</td><td>At least 28 states will have Democratic governors beginning next year</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Hakeem Jeffries — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>11</td><td>Jeffries: It was a tremendous victory for the American people and a strong rebuke of MAGA extremism.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.npr.org/2026/11/06/nx-s1-6030799/democrats-ran-on-affordability-how-will-the-party-make-it-happen">NPR Nov 6</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>3</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s0" checked><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s1"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s2"><input type="radio" name="s2-t4" class="srtbox" id="s2-t4-s3"><table><thead><tr><th><label class="srth" for="s2-t4-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t4-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t4-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>4</td><td>ten state legislative chambers flipped to Democrats, according to the National Conference of State Legislatures.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>8</td><td>Fertilizer costs also grew when the closure of the Strait of Hormuz cut off a significant portion of the global fertilizer trade.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>According to a poll released by the Kitchen Table Project and Global Strategy Group in September, nearly half of respondents said their most important goal was seeing their grocery bills lowered within six months.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>14</td><td>Talarico would push back against attacks on WIC and SNAP; Hamilton supports a national ban on dynamic pricing; Cooper vowed to block food industry mergers; Bottoms proposed letting municipalities suspend or eliminate local grocery sales tax; Hinojosa promised to outlaw surveillance pricing; Haaland would explore waiving permit fees like Albuquerque's.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>14</td><td>Talarico would push back against attacks on WIC and SNAP; Hamilton supports a national ban on dynamic pricing; Cooper vowed to block food industry mergers; Bottoms proposed letting municipalities suspend or eliminate local grocery sales tax; Hinojosa promised to outlaw surveillance pricing; Haaland would explore waiving permit fees like Albuquerque's.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>According to a poll released by the Kitchen Table Project and Global Strategy Group in September, nearly half of respondents said their most important goal was seeing their grocery bills lowered within six months.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>8</td><td>Fertilizer costs also grew when the closure of the Strait of Hormuz cut off a significant portion of the global fertilizer trade.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>ten state legislative chambers flipped to Democrats, according to the National Conference of State Legislatures.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>9</td><td>According to a poll released by the Kitchen Table Project and Global Strategy Group in September, nearly half of respondents said their most important goal was seeing their grocery bills lowered within six months.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>8</td><td>Fertilizer costs also grew when the closure of the Strait of Hormuz cut off a significant portion of the global fertilizer trade.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>14</td><td>Talarico would push back against attacks on WIC and SNAP; Hamilton supports a national ban on dynamic pricing; Cooper vowed to block food industry mergers; Bottoms proposed letting municipalities suspend or eliminate local grocery sales tax; Hinojosa promised to outlaw surveillance pricing; Haaland would explore waiving permit fees like Albuquerque's.</td><td><strong>true</strong></td></tr><tr class="verdict-mostly-true"><td>4</td><td>ten state legislative chambers flipped to Democrats, according to the National Conference of State Legislatures.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>4</td><td>ten state legislative chambers flipped to Democrats, according to the National Conference of State Legislatures.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-true"><td>8</td><td>Fertilizer costs also grew when the closure of the Strait of Hormuz cut off a significant portion of the global fertilizer trade.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>9</td><td>According to a poll released by the Kitchen Table Project and Global Strategy Group in September, nearly half of respondents said their most important goal was seeing their grocery bills lowered within six months.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>14</td><td>Talarico would push back against attacks on WIC and SNAP; Hamilton supports a national ban on dynamic pricing; Cooper vowed to block food industry mergers; Bottoms proposed letting municipalities suspend or eliminate local grocery sales tax; Hinojosa promised to outlaw surveillance pricing; Haaland would explore waiving permit fees like Albuquerque's.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s2-t4-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; That economic strain helped Democrats win control of both houses of Congress on Tuesday.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Outlets report Democrats captured House and Senate on Nov 3, 2026; NPR Nov 4 says Democrats retake Congress. The 'helped' causal reading is reasonable but unquantified.<ul class="claim-sources"><li><a href="https://news.wttw.com/node/55366">WTTW</a></li><li><a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR Nov 4</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Web searches run</dt><dd>2026 midterm results Democrats win House and Senate control governors</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Andrews defeated her Republican opponent, Sen. Darline Graham.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>AP/Fox projected Andrews beat interim Sen. Darline Graham, appointed after Lindsey Graham's death<ul class="claim-sources"><li><a href="https://www.foxcarolina.com/2026/11/04/annie-andrews-projected-win-us-senate-race-flipping-south-carolina-seat-blue/">Fox Carolina</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Annie Andrews defeats Lindsey Graham South Carolina Senate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; At least 28 states will have Democratic governors beginning next year</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NPR Nov 4: Democrats will hold at least 28 governorships<ul class="claim-sources"><li><a href="https://www.npr.org/2026/11/04/g-s1-151868/democratic-leaders-election-results-reactions-takeaways">NPR</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; ten state legislative chambers flipped to Democrats, according to the National Conference of State Legislatures.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NCSL: 12, later 13<ul class="claim-sources"><li><a href="https://www.ncsl.org/state-legislatures-news/details/2026-state-legislative-elections-the-results-and-what-they-mean">NCSL</a></li></ul></dd>
+<dt>Inaccuracy</dt><dd>The article says ten chambers flipped; NCSL said 12 as of Friday Nov 6 and a later NCSL quote says 13 (39 to 52 Democratic chambers). The engine fetch of the NCSL page returned no 'flipped' text, so 12/13 come from WebFetch and search summaries.</dd>
+<dt>Web searches run</dt><dd>NCSL 2026 state legislative elections chambers flipped Democrats</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; SNAP ... has seen a precipitous drop in participation since last summer.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CBPP via search excerpts: participation at lowest since 2009 in June 2026; over 3.5 million (nearly 9%) drop in seven months after the 2025 law.<ul class="claim-sources"><li><a href="https://www.cbpp.org/blog/snap-participation-has-dropped-to-its-lowest-point-in-17-years-even-though-economic-conditions">CBPP (403)</a></li><li><a href="https://www.texastribune.org/2026/10/23/texas-snap-food-assistance-stamps-record-low/">Texas Tribune</a></li></ul></dd>
+<dt>No page loaded because</dt><dd>CBPP returned HTTP 403 to engine fetch and WebFetch; graded on search excerpts and news coverage.</dd>
+<dt>Web searches run</dt><dd>SNAP participation lowest point in 17 years CBPP</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#6 &middot; <strong>partially false</strong> &mdash; grocery prices are out of control.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Food at home YoY 2026: Jan 2.09, Feb 2.45, Mar 1.90, Apr 2.89, May 2.74, Jun 2.75, Jul 2.68, Aug 2.19, Sep 1.81 percent. Caveat: the query's row_fanout warning comes from econ.food_cpi's annual M13 average rows sharing a year key; the month-matched joins used here are unaffected, but Oct 2025 is missing so Oct 2026 YoY is null. <code>econ.food_cpi (CUUR0000SAF11)</code></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The article says grocery prices are 'out of control'; BLS food-at-home CPI in the warehouse rose 1.8% to 2.9% year over year every month Jan-Sep 2026 (Sep 1.8%), moderate and not accelerating. The phrase is campaign rhetoric the article relays.</dd>
+<dt>Windows tested</dt><dd>Jan-Sep 2026 YoY: 1.8%-2.9%; 2025 YoY: 1.9%-2.7%</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT a.year,a.period,100*(a.value/b.value-1) FROM econ.food_cpi a JOIN econ.food_cpi b ON a.series=b.series AND a.period=b.period AND b.year=a.year-1 WHERE a.series='CUUR0000SAF11' AND a.year&gt;=2025</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; Trump's tariffs and the war in Iran continued to drive up prices ... two of the main causes of high food prices.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NPR fertilizer piece; BLS CPI<ul class="claim-sources"><li><a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#5</dd>
+<dt>What that evidence found</dt><dd>NPR's own July 3 piece (linked) is headlined 'High fertilizer costs unlikely to cause food price spikes' and cites TD Economics estimating a 0.1-0.5 point effect on 2027 food inflation; the US and Iran reached a deal in June to reopen the Strait.</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The article calls tariffs and the Iran war 'two of the main causes of high food prices'; NPR's own linked reporting says the fertilizer channel is unlikely to cause major grocery price hikes, and measured food-at-home inflation is about 2-3%.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Fertilizer costs also grew when the closure of the Strait of Hormuz cut off a significant portion of the global fertilizer trade.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NPR/UNCTAD: about one-third of the world's seaborne fertilizer passed through Hormuz<ul class="claim-sources"><li><a href="https://www.npr.org/2026/07/03/nx-s1-5877344/fertilizer-shortage-food-prices">NPR July 3</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>fertilizer prices Strait of Hormuz trade</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; According to a poll released by the Kitchen Table Project and Global Strategy Group in September, nearly half of respondents said their most important goal was seeing their grocery bills lowered within six months.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>KTP report text (read via the engine's PDF fetch): 49% say seeing savings within six months matters most. Publisher host static1.squarespace.com returned 403 on its root page.<ul class="claim-sources"><li><a href="https://static1.squarespace.com/static/6a0bb9dd86fb97615353fada/t/6abbba8a5ff1975b6ad8a3fe/1790687882431/KTP+Groceries+Report_9.29_to+website.pdf">KTP Groceries Report</a></li><li><a href="https://static1.squarespace.com/">squarespace root (403)</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>Kitchen Table Project grocery poll</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; Senate Democrats won't have a filibuster-proof majority.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NPR Nov 4 analysis says the same<ul class="claim-sources"><li><a href="https://www.npr.org/2026/11/04/nx-s1-6022216/midterms-democrats-trump-republicans-analysis">NPR Nov 4</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; Jeffries: It was a tremendous victory for the American people and a strong rebuke of MAGA extremism.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Hakeem Jeffries — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Quote appears in NPR Morning Edition transcript Nov 6 (accurately quoted; the characterization is partisan opinion).<ul class="claim-sources"><li><a href="https://www.npr.org/2026/11/06/nx-s1-6030799/democrats-ran-on-affordability-how-will-the-party-make-it-happen">NPR Nov 6</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; There are labor shortages on U.S. farms.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NPR Sept 28: Idaho dairies report labor shortage; evidence is Idaho dairy-specific.<ul class="claim-sources"><li><a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#13 &middot; <strong>mostly true</strong> &mdash; Trump's immigration crackdown has led to those farm labor shortages.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NPR Sept 28<ul class="claim-sources"><li><a href="https://www.npr.org/2026/09/28/nx-s1-5976810/trumps-immigration-idaho-dairy-industry">NPR Sept 28</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#11</dd>
+<dt>What that evidence found</dt><dd>NPR says the shortage is due in part to ICE's crackdown; evidence is Idaho dairy-specific.</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The article generalizes to U.S. farms; the linked reporting covers Idaho dairies and says 'in part'.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#14 &middot; <strong>true</strong> &mdash; Talarico would push back against attacks on WIC and SNAP; Hamilton supports a national ban on dynamic pricing; Cooper vowed to block food industry mergers; Bottoms proposed letting municipalities suspend or eliminate local grocery sales tax; Hinojosa promised to outlaw surveillance pricing; Haaland would explore waiving permit fees like Albuquerque's.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>All match candidate sites: Talarico, Hamilton, Cooper, Hinojosa pages; Bottoms and Haaland PDFs read (their root sites returned 308/limited text); ABQ Journal confirms the one-year Albuquerque permit fee waiver.<ul class="claim-sources"><li><a href="https://jamestalarico.com/issue/taxes-cost-of-living/">Talarico</a></li><li><a href="https://hamiltonforkansas.com/issues/">Hamilton</a></li><li><a href="https://roycooper.com/costless/groceries/">Cooper</a></li><li><a href="https://www.keishaforgovernor.com/klb-policy-groceries-1.pdf">Bottoms PDF</a></li><li><a href="https://keishaforgovernor.com/">Bottoms home (308)</a></li><li><a href="https://ginafortexas.com/priority/an-affordable-texas-that-works-for-everyone/">Hinojosa</a></li><li><a href="https://debhaaland.com/wp-content/uploads/2026/03/PDF-AN-AFFORDABLE-NEW-MEXICO.pdf">Haaland PDF</a></li><li><a href="https://debhaaland.com/">Haaland home</a></li><li><a href="https://www.abqjournal.com/business/albuquerque-waives-fees-eases-rules-to-bring-more-neighborhood-markets-to-food-deserts/2934711">ABQ Journal</a></li></ul></dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Brainard and Borick quotes</strong>: Expert quotes not checked against transcripts.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 23 rows — 1929 ms</summary><pre><code>SELECT a.&quot;year&quot;, a.period, a.value, b.value AS prior, 100*(a.value/b.value-1) AS yoy FROM econ.food_cpi a JOIN econ.food_cpi b ON a.series=b.series AND a.period=b.period AND b.&quot;year&quot;=a.&quot;year&quot;-1 WHERE a.series='CUUR0000SAF11' AND a.&quot;year&quot;&gt;=2025 ORDER BY a.&quot;year&quot;, a.period</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

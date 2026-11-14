@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The AI Weekly alert's claims about Q3 2026 lobbying spending by Nvidia, Anthropic, OpenAI and Meta are accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The AI Weekly alert's claims about Q3 2026 lobbying spending by Nvidia, Anthropic, OpenAI and Meta are accurate.</h1>
+<p class="subtitle">LDA.gov LD-2 filings via law.lobbying_filings (in-house expenses, Q3 2026); Semafor original read in full</p>
+<p class="under-review"><span>Article under review</span><a href="https://aiweekly.co/alerts/nvidia-anthropic-and-openai-set-q3-lobbying-records-at-22m-21m-and-15m-as">https://aiweekly.co/alerts/nvidia-anthropic-and-openai-set-q3-lobbying-records-at-22m-21m-and-15m-as</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Q3 2026 in-house lobbying expenses ($M)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Q3 2026 LD-2 in-house expenses</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="70" y1="56" x2="70" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="70" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.00</text>
+      <line class="grid" x1="123.33" y1="56" x2="123.33" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="123.33" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1.00</text>
+      <line class="grid" x1="176.67" y1="56" x2="176.67" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="176.67" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2.00</text>
+      <line class="grid" x1="230" y1="56" x2="230" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="230" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3.00</text>
+      <line class="grid" x1="283.33" y1="56" x2="283.33" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="283.33" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">4.00</text>
+      <line class="grid" x1="336.67" y1="56" x2="336.67" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="336.67" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">5.00</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="276" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-6" class="tick" x="390" y="292" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">6.00</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="70" y1="56" x2="70" y2="276" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="70" y1="276" x2="390" y2="276" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-meta" class="tick" x="62" y="75.71" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Meta</text>
+      <text id="p1-xtick-amazon" class="tick" x="62" y="107.14" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Amazon</text>
+      <text id="p1-xtick-google" class="tick" x="62" y="138.57" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Google</text>
+      <text id="p1-xtick-apple" class="tick" x="62" y="170" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Apple</text>
+      <text id="p1-xtick-nvidia" class="tick" x="62" y="201.43" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Nvidia</text>
+      <text id="p1-xtick-anthropic" class="tick" x="62" y="232.86" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Anthropic</text>
+      <text id="p1-xtick-openai" class="tick" x="62" y="264.29" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">OpenAI</text>
+    </g>
+    <g id="p1-series-m" class="series">
+      <g class="hover">
+        <title>Meta — $M: 5.88</title>
+        <rect id="p1-mark-m-meta" class="bar" x="70" y="61.66" width="313.60" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="61.66" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Amazon — $M: 4.49</title>
+        <rect id="p1-mark-m-amazon" class="bar" x="70" y="93.09" width="239.47" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="93.09" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Google — $M: 3.23</title>
+        <rect id="p1-mark-m-google" class="bar" x="70" y="124.51" width="172.27" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="124.51" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Apple — $M: 3.09</title>
+        <rect id="p1-mark-m-apple" class="bar" x="70" y="155.94" width="164.80" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="155.94" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Nvidia — $M: 2.15</title>
+        <rect id="p1-mark-m-nvidia" class="bar" x="70" y="187.37" width="114.67" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="187.37" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Anthropic — $M: 2.11</title>
+        <rect id="p1-mark-m-anthropic" class="bar" x="70" y="218.80" width="112.53" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="218.80" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>OpenAI — $M: 1.53</title>
+        <rect id="p1-mark-m-openai" class="bar" x="70" y="250.23" width="81.60" height="19.11" fill="#2563eb"/>
+        <rect class="hit" x="70" y="250.23" width="320" height="19.11" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:49994/a/bad88d93ba40a3323af8abede7daa6ac.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The alert is a short rewrite of a Semafor scoop. Its figures match LDA.gov filings in the AskAmerica warehouse (Nvidia $2.15M, Anthropic $2.11M, OpenAI $1.53M, Meta $5.88M in Q3 2026 in-house expenses) and each is a company record. One flaw: it says Anthropic 'backed' the CATS Act, but the filing only lists the bill; Semafor itself says forms do not show support or opposition. Rating: 1 Pinocchio.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 95/100 — honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>5 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>4</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Q3 2026 Senate filings show Nvidia at $2.2M, Anthropic at $2.1M, and OpenAI at $1.5M in lobbying spend</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Anthropic specifically backed the Collaboration on Adversarial Threats and Security Risks Act</td><td><strong>mostly true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>2</td><td>all record highs for each company</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>3</td><td>Meta still led Big Tech at $5.9M for the quarter.</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>4</td><td>OpenAI listed AI-security information-sharing with antitrust protections among its topics</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>5</td><td>Anthropic specifically backed the Collaboration on Adversarial Threats and Security Risks Act</td><td><strong>mostly true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>4</td><td>OpenAI listed AI-security information-sharing with antitrust protections among its topics</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>3</td><td>Meta still led Big Tech at $5.9M for the quarter.</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>2</td><td>all record highs for each company</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>1</td><td>Q3 2026 Senate filings show Nvidia at $2.2M, Anthropic at $2.1M, and OpenAI at $1.5M in lobbying spend</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>2</td><td>all record highs for each company</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>Anthropic specifically backed the Collaboration on Adversarial Threats and Security Risks Act</td><td><strong>mostly true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>3</td><td>Meta still led Big Tech at $5.9M for the quarter.</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>4</td><td>OpenAI listed AI-security information-sharing with antitrust protections among its topics</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>1</td><td>Q3 2026 Senate filings show Nvidia at $2.2M, Anthropic at $2.1M, and OpenAI at $1.5M in lobbying spend</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>5</td><td>Anthropic specifically backed the Collaboration on Adversarial Threats and Security Risks Act</td><td><strong>mostly true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>2</td><td>all record highs for each company</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>3</td><td>Meta still led Big Tech at $5.9M for the quarter.</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>4</td><td>OpenAI listed AI-security information-sharing with antitrust protections among its topics</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>1</td><td>Q3 2026 Senate filings show Nvidia at $2.2M, Anthropic at $2.1M, and OpenAI at $1.5M in lobbying spend</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>5</td><td>Anthropic specifically backed the Collaboration on Adversarial Threats and Security Risks Act</td><td><strong>mostly true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>4</td><td>OpenAI listed AI-security information-sharing with antitrust protections among its topics</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_activities</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>1</td><td>Q3 2026 Senate filings show Nvidia at $2.2M, Anthropic at $2.1M, and OpenAI at $1.5M in lobbying spend</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>2</td><td>all record highs for each company</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr><tr class="verdict-true"><td>3</td><td>Meta still led Big Tech at $5.9M for the quarter.</td><td><strong>true</strong></td><td>Checked against: <code>law.lobbying_filings</code>; <a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Q3 2026 Senate filings show Nvidia at $2.2M, Anthropic at $2.1M, and OpenAI at $1.5M in lobbying spend</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Nvidia 2,150,000; Anthropic 2,110,000; OpenAI 1,530,000 <code>law.lobbying_filings</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select client_name,sum(expenses) from law.lobbying_filings where filing_year=2026 and filing_period='third_quarter' group by client_name</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; all record highs for each company</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Prior max quarterly expenses since 2024: Nvidia 1.95M, Anthropic 1.97M, OpenAI 1.20M <code>law.lobbying_filings</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select client_name,filing_year,filing_period,sum(expenses) from law.lobbying_filings group by 1,2,3</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Meta still led Big Tech at $5.9M for the quarter.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Meta 5.88M vs Amazon 4.49M, Google 3.23M, Apple 3.09M <code>law.lobbying_filings</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>same table, Q3 2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; OpenAI listed AI-security information-sharing with antitrust protections among its topics</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Filing text: 'AI-security collaboration and information-sharing, including proposed antitrust protections' <code>law.lobbying_activities</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select description from law.lobbying_activities where description ilike '%antitrust%'</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; Anthropic specifically backed the Collaboration on Adversarial Threats and Security Risks Act</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>S.5105 listed in Anthropic Q3 activity text <code>law.lobbying_activities</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.semafor.com/article/10/21/2026/meta-tops-big-tech-lobbying-as-ai-labs-talk-antitrust">Semafor</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>Filing lists S.5105 as an issue lobbied on; LD-2 forms do not state support or opposition, as Semafor notes.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>same table</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>$7</strong> &mdash; Newsletter subscription advertising, not a factual claim about the story</li><li><strong>2,000</strong> &mdash; Subscription promo member cap, not a factual claim about the story</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>4 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 16 rows — 15498 ms</summary><pre><code>select client_name, filing_year, filing_period, filing_type, count(*) n, sum(coalesce(expenses,0)) exp_, sum(coalesce(income,0)) inc_ from law.lobbying_filings where (client_name ilike 'nvidia%' or client_name ilike 'anthropic%' or client_name ilike 'openai%' or client_name ilike 'meta platforms%') and filing_year=2026 and filing_period='third_quarter' group by client_name, filing_year, filing_period, filing_type order by 1,4</code></pre></details>
+<details class="sqltoggle"><summary>query — 65 rows — 2044 ms</summary><pre><code>select client_name, filing_year, filing_period, filing_type, sum(expenses) exp_ from law.lobbying_filings where expenses&gt;0 and filing_year&gt;=2024 and (client_name ilike 'nvidia%' or client_name ilike 'anthropic%' or client_name ilike 'openai%' or client_name ilike 'meta platforms%' or client_name ilike 'alphabet%' or client_name ilike 'google%' or client_name ilike 'amazon%' or client_name ilike 'apple inc%') group by client_name, filing_year, filing_period, filing_type order by client_name, filing_year, filing_period</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 29528 ms</summary><pre><code>select filing_year, max(expenses) mx from law.lobbying_filings where client_name ilike 'nvidia%' and expenses&gt;0 and filing_year&lt;2026 group by filing_year order by 1</code></pre></details>
+<details class="sqltoggle"><summary>query — 5 rows — 10941 ms</summary><pre><code>select f.client_name, a.description from law.lobbying_activities a join law.lobbying_filings f on f.filing_uuid=a.filing_uuid where f.year=2026 and a.year=2026 and f.filing_period='third_quarter' and f.client_name in ('ANTHROPIC','OPENAI OPCO, LLC') and (a.description ilike '%antitrust%' or a.description ilike '%Adversarial Threats%')</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
