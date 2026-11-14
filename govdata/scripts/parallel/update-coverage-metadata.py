@@ -429,6 +429,25 @@ def time_column_tables(resources_dir):
     return out
 
 
+def resolve_year_column(path, table):
+    """The column that carries a table's observation year: its declared timeColumn, else `year`
+    for a table with a `year=` partition. Anything else raises MeasureError naming the table."""
+    import yaml
+    with open(path, "r", encoding="utf-8") as f:
+        doc = yaml.safe_load(f)
+    for key in ("tables", "partitionedTables"):
+        for t in doc.get(key) or []:
+            if t.get("name") != table:
+                continue
+            if t.get("timeColumn"):
+                return t["timeColumn"]
+            if "year=" in (t.get("pattern") or ""):
+                return "year"
+            raise MeasureError(f"{table}: no timeColumn declared and no year= partition in its "
+                               f"pattern, so its year column cannot be resolved from {path}")
+    raise MeasureError(f"{table}: no such base table in {path}")
+
+
 def local_table_path(mirror_dir, schema, table):
     """The mirrored Iceberg table directory: flat <schema>/<table>, else <schema>/<schema>/<table>."""
     for parts in ((schema, table), (schema, schema, table)):
@@ -481,6 +500,8 @@ def main():
     p.add_argument("--mirror-dir", help="measure mode: directory holding the mc-mirrored tables")
     p.add_argument("--resources-dir", help="measure mode: govdata src/main/resources")
     p.add_argument("--tables", default="", help="measure mode: comma list of table or schema.table")
+    p.add_argument("--resolve-year-column", action="store_true",
+                   help="print the year column of --table in --file (its timeColumn, else year)")
     p.add_argument("--file")
     p.add_argument("--table")
     p.add_argument("--min-year", type=int)
@@ -494,6 +515,14 @@ def main():
                    help="table is readable but holds no rows; emit rowCount/checkedAt only")
     p.add_argument("--dry-run", action="store_true")
     args = p.parse_args()
+
+    if args.resolve_year_column:
+        try:
+            print(resolve_year_column(args.file, args.table))
+        except MeasureError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(4)
+        sys.exit(0)
 
     if args.measure:
         if not (args.mirror_dir and args.resources_dir):
