@@ -5625,6 +5625,156 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- GROSS INTEREST EXPENSE ON THE PUBLIC DEBT (TREASURY FISCAL DATA) ---
+  - name: treasury_interest_expense
+    pattern: "type=treasury_interest_expense/year=*/treasury_interest_expense.parquet"
+    # Treasury publishes this with the Monthly Treasury Statement cycle; reopen the 2 most
+    # recently published years so a lookback-window fetch picks up any prior-month restatement.
+    lookbackPeriods: 2
+    freshness:
+      type: hash
+    partitions: *standard_partitions
+    comment: >
+      Treasury Fiscal Data "Interest Expense on the Public Debt Outstanding"
+      (v2/accounting/od/interest_expense), monthly, by security type — GROSS interest on the
+      federal debt. One row per (record_date, src_line_nbr): about 38 security-type lines per
+      month-end, each with that month's expense (month_expense_amt) and the fiscal-year-to-date
+      cumulative (fytd_expense_amt), in dollars. expense_catg_desc splits "INTEREST EXPENSE ON
+      PUBLIC ISSUES" (interest owed to the public: bills, notes, bonds, TIPS, FRNs, savings
+      bonds; expense_group_desc = accrued interest, amortized discount/premium, savings bonds,
+      miscellaneous) from "INTEREST EXPENSE ON GOVT ACCOUNT SERIES" (interest credited to
+      federal trust funds and other intragovernmental accounts, e.g. Social Security and
+      Medicare trust funds). There is no total row — sum the lines yourself. Gross interest
+      (both categories) is NOT the same measure as the "Net Interest" line in
+      econ.mts_outlays_by_function (line_code_nbr '320'), which nets interest received by
+      trust funds and other federal offsets and is therefore smaller; and it differs from
+      public-issues-only interest, which excludes intragovernmental accounts. Check which
+      measure a claim quotes before comparing: confirmed live 2026-11-14, FY2026 (through
+      2026-09-30) fytd sums to 1.068T for public issues, 1.360T for both categories, versus
+      MTS net interest of 1.052T. Coverage starts at the first month Treasury published
+      (2010-05-31). The year partition is CALENDAR year of record_date; every row carries its
+      own record_fiscal_year/record_fiscal_quarter — filter on those for a fiscal-year query
+      (the fiscal year runs Oct-Sep, so October-December rows carry the next fiscal year).
+
+    dimensions:
+      type:
+        - treasury_interest_expense
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2010  # earliest year the source has data (observed 2026-11-14: first record 2010-05-31)
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        releaseMonth: 1  # Current year has partial-year data all year; no full-year release gate
+
+    columns:
+      - name: record_date
+        type: date
+        nullable: true
+        comment: Month-end date of this record (YYYY-MM-DD)
+      - name: expense_catg_desc
+        type: string
+        nullable: true
+        comment: >
+          Top-level category, verbatim from Treasury: "INTEREST EXPENSE ON PUBLIC ISSUES"
+          (owed to the public) or "INTEREST EXPENSE ON GOVT ACCOUNT SERIES" (intragovernmental
+          — trust funds and other federal accounts).
+      - name: expense_group_desc
+        type: string
+        nullable: true
+        comment: >
+          Expense group within the category, verbatim (e.g. "ACCRUED INTEREST EXPENSE",
+          "AMORTIZED DISCOUNT", "AMORTIZED PREMIUM", "SAVINGS BONDS", "CASH BASIS GAS PAYMENTS").
+      - name: expense_type_desc
+        type: string
+        nullable: true
+        comment: >
+          Security type or payment line, verbatim (e.g. "Treasury Notes", "Treasury Bills",
+          "Interest Payments"). The same label can appear under more than one group.
+      - name: month_expense_amt
+        type: double
+        nullable: true
+        comment: This single month's interest expense for the line, in dollars (negative where Treasury reports a credit).
+      - name: fytd_expense_amt
+        type: double
+        nullable: true
+        comment: >
+          Fiscal-year-to-date cumulative interest expense for the line through record_date, in
+          dollars — the figure to use for "how much so far this fiscal year".
+      - name: src_line_nbr
+        type: integer
+        nullable: true
+        comment: Treasury's own line number within the record_date; with record_date it identifies one row.
+      - name: record_fiscal_year
+        type: integer
+        nullable: true
+        comment: Federal fiscal year of this record (Oct-Sep; October-December dates carry the following year)
+      - name: record_fiscal_quarter
+        type: integer
+        nullable: true
+        comment: Federal fiscal quarter (1-4) of this record
+
+    download:
+      enabled: true
+      method: GET
+      baseUrl: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/interest_expense"
+      authentication:
+        type: none
+      queryParams:
+        filter:
+          type: expression
+          value: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort:
+          type: constant
+          value: "-record_date"
+        page[size]:
+          type: constant
+          value: "1000"
+      cachePattern: "type=treasury_interest_expense/year=*/interest_expense.json"
+
+    # A calendar-year filter returns every published month in one call (~420 rows/year, under
+    # the 1000 page size; confirmed live 2026-11-14).
+    source:
+      type: http
+      url: "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/interest_expense"
+      method: GET
+      parameters:
+        filter: "record_date:gte:{year}-01-01,record_date:lte:{year}-12-31"
+        sort: "-record_date"
+        page[size]: "1000"
+      response:
+        format: json
+        dataPath: "data"
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=treasury_interest_expense/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- FEDERAL OUTLAYS BY BUDGET FUNCTION ---
   - name: federal_outlays_by_function
     pattern: "type=federal_outlays_by_function/*.parquet"
