@@ -384,6 +384,57 @@ SELECT 'transport', 'vehicle_registrations', 'T6_pk_nulls',
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/vehicle_registrations', allow_moved_paths := true) WHERE state_fips IS NULL);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: tsa_checkpoint_daily (TSA checkpoint passenger volumes; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T2_row_count',
+  CASE WHEN n >= 365 THEN 'pass' ELSE 'fail' END, n, 365, 'Expected >=365 daily rows (at least one full year)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true) ORDER BY travel_date DESC LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL travel_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true) WHERE travel_date IS NULL);
+
+-- Daily screenings are bounded: the 2020 trough was ~87k (Apr 2020), records are ~3.1M.
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T7_value_range',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with passengers outside 50k..4M'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true)
+  WHERE passengers < 50000 OR passengers > 4000000);
+
+INSERT INTO dq_results
+SELECT 'transport', 'tsa_checkpoint_daily', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate travel_date rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT travel_date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/tsa_checkpoint_daily', allow_moved_paths := true)
+  GROUP BY travel_date HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: pavement_roughness (FHWA HM-64; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
