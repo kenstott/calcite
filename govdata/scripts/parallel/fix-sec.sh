@@ -360,8 +360,14 @@ log_info "fix-sec: scanning Iceberg for filings missing a table their form shoul
   echo "     AND NOT EXISTS (SELECT 1 FROM meta m2 WHERE m2.acc = i.acc AND m2.form = i.form)"
   echo "     AND ('${ONLY_TABLE}' = '' OR '${ONLY_TABLE}' = 'filing_metadata');"
   # Each gap accession is reprocessed through the pool slot that owns its form type.
-  echo "CREATE TEMP TABLE acc_form AS SELECT acc, any_value(form) AS form FROM"
-  echo "  (SELECT acc, form FROM meta UNION ALL SELECT acc, form FROM idx) GROUP BY acc;"
+  # EDGAR's indexed form decides the slot: a filing_metadata row can carry a wrong filing_type
+  # (e.g. UNKNOWN), and routing on it sends the repair to a slot that never produces the row.
+  # meta is consulted only for accessions the index pass did not read (a non-filing_metadata
+  # --table run skips the index), where it is the sole source of the form.
+  echo "CREATE TEMP TABLE acc_form AS"
+  echo "  SELECT acc, min(form) AS form FROM idx GROUP BY acc"
+  echo "  UNION ALL"
+  echo "  SELECT acc, min(form) FROM meta WHERE acc NOT IN (SELECT acc FROM idx) GROUP BY acc;"
   echo "COPY (SELECT DISTINCT g.acc FROM gaps g ORDER BY 1) TO '${ACC_FILE}' (HEADER false);"
   echo "COPY (SELECT DISTINCT g.acc || '|' || g.tbl FROM gaps g ORDER BY 1) TO '${ACC_FILE}.pairs' (HEADER false);"
   echo "COPY (SELECT g.acc, CASE"
