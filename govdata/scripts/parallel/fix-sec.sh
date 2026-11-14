@@ -349,7 +349,16 @@ log_info "fix-sec: scanning Iceberg for filings missing a table their form shoul
   echo "  UNION"
   echo "  SELECT i.acc, 'filing_metadata' FROM idx i JOIN matrix x ON x.form = i.form"
   echo "   WHERE x.tbl = 'filing_metadata'"
-  echo "     AND NOT EXISTS (SELECT 1 FROM present p WHERE p.tbl = 'filing_metadata' AND p.acc = i.acc);"
+  echo "     AND NOT EXISTS (SELECT 1 FROM present p WHERE p.tbl = 'filing_metadata' AND p.acc = i.acc)"
+  echo "  UNION"
+  # A row whose filing_type disagrees with the index is absent as far as every form-driven
+  # consumer is concerned: it is neither counted under its real form nor audited for that
+  # form's tables. Reprocessing rewrites the row with the indexed form.
+  echo "  SELECT i.acc, 'filing_metadata' FROM idx i JOIN meta m ON m.acc = i.acc"
+  echo "   JOIN matrix x ON x.form = i.form AND x.tbl = 'filing_metadata'"
+  echo "   WHERE i.form IN ('10-K','10-K/A','10-Q','10-Q/A') AND m.form IS DISTINCT FROM i.form"
+  echo "     AND NOT EXISTS (SELECT 1 FROM meta m2 WHERE m2.acc = i.acc AND m2.form = i.form)"
+  echo "     AND ('${ONLY_TABLE}' = '' OR '${ONLY_TABLE}' = 'filing_metadata');"
   # Each gap accession is reprocessed through the pool slot that owns its form type.
   echo "CREATE TEMP TABLE acc_form AS SELECT acc, any_value(form) AS form FROM"
   echo "  (SELECT acc, form FROM meta UNION ALL SELECT acc, form FROM idx) GROUP BY acc;"

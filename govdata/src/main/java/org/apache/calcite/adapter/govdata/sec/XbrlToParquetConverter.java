@@ -437,7 +437,10 @@ public class XbrlToParquetConverter implements FileConverter {
 
       // Extract filing metadata
       String cik = extractCik(doc, sourceFilePath);
-      String filingType = extractFilingType(doc, sourceFilePath);
+      // EDGAR's indexed form type is authoritative; the document's own DocumentType is only
+      // consulted when no form hint accompanies the filing.
+      String indexedForm = metadata != null ? metadata.getHint("form") : null;
+      String filingType = indexedForm != null ? indexedForm : extractFilingType(doc, sourceFilePath);
       String periodEndDate = extractPeriodEndDate(doc, sourceFilePath);
 
       // If JSoup fallback was used and found XBRL-like elements (context, cik, type)
