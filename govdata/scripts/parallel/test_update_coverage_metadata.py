@@ -184,6 +184,41 @@ class CoverageWindowTest(unittest.TestCase):
                 ucm.validate_window(bad)
 
 
+class ResolveYearColumnTest(unittest.TestCase):
+    def resolve(self, yaml_text, table):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        path = os.path.join(d, "s-schema.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(yaml_text)
+        return ucm.resolve_year_column(path, table)
+
+    DOC = """schemaName: s
+tables:
+  - name: fy
+    timeColumn: fiscal_year
+    pattern: "type=fy/*.parquet"
+  - name: parted
+    pattern: "type=parted/year=*/*.parquet"
+  - name: neither
+    pattern: "type=neither/*.parquet"
+"""
+
+    def test_declared_time_column_wins(self):
+        self.assertEqual(self.resolve(self.DOC, "fy"), "fiscal_year")
+
+    def test_year_partition_means_year(self):
+        self.assertEqual(self.resolve(self.DOC, "parted"), "year")
+
+    def test_unresolvable_table_fails_naming_it(self):
+        with self.assertRaisesRegex(ucm.MeasureError, "neither"):
+            self.resolve(self.DOC, "neither")
+
+    def test_unknown_table_fails(self):
+        with self.assertRaisesRegex(ucm.MeasureError, "nosuch"):
+            self.resolve(self.DOC, "nosuch")
+
+
 class EditYamlTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()

@@ -125,6 +125,8 @@ tables_with_year_partition() {
   ' "$yaml"
 }
 
+failed=false
+
 process_schema() {
   local schema="$1"
   local requested_tables="$2"
@@ -149,6 +151,14 @@ process_schema() {
     tbl="$(echo -n "$tbl" | xargs)"
     [[ -z "$tbl" ]] && continue
 
+    local ycol
+    if ! ycol="$(python3 "$PY_EDITOR" --resolve-year-column --file "$yaml" --table "$tbl" \
+                   --checked-at x 2>&1)"; then
+      echo "  ERROR $schema.$tbl — $ycol" >&2
+      failed=true
+      continue
+    fi
+
     local result duck_err
     duck_err="$(mktemp)"
     # A missing table, or one whose year dimension isn't literally a column named
@@ -161,8 +171,8 @@ process_schema() {
     # "not materialized" for what might really be a column-name mismatch.
     result="$(duckdb -json -c "
 $(duckdb_setup)
-SELECT MIN(year) mn, MAX(year) mx, COUNT(DISTINCT year) dc, COUNT(*) n,
-       array_agg(DISTINCT year ORDER BY year) yrs
+SELECT MIN(\"${ycol}\") mn, MAX(\"${ycol}\") mx, COUNT(DISTINCT \"${ycol}\") dc, COUNT(*) n,
+       array_agg(DISTINCT \"${ycol}\" ORDER BY \"${ycol}\") yrs
 FROM iceberg_scan('s3://${BUCKET}/${schema}/${tbl}', allow_moved_paths=true);
 " 2>"$duck_err" | tail -1)" || result=""
 
@@ -172,7 +182,8 @@ FROM iceberg_scan('s3://${BUCKET}/${schema}/${tbl}', allow_moved_paths=true);
       rm -f "$duck_err"
       if [[ -n "$first_err" ]]; then
         echo "  SKIP $tbl — query failed against s3://${BUCKET}/${schema}/${tbl}: ${first_err}"
-        echo "         (likely no 'year' column — this table may key on something else, e.g. congress/event_year/date; not auto-handled)"
+        echo "         (year column resolved from the YAML: ${ycol})"
+        failed=true
       else
         echo "  SKIP $tbl — not materialized in production (no data at s3://${BUCKET}/${schema}/${tbl})"
       fi
@@ -212,7 +223,7 @@ FROM iceberg_scan('s3://${BUCKET}/${schema}/${tbl}', allow_moved_paths=true);
       continue
     fi
     if ! [[ "$mn" =~ ^-?[0-9]+$ ]]; then
-      echo "  SKIP $tbl — 'year' column holds non-integer values (e.g. \"$mn\"); this table's"
+      echo "  SKIP $tbl — '${ycol}' column holds non-integer values (e.g. \"$mn\"); this table's"
       echo "         year partition is a composite label (e.g. YYYY:QN), not observedCoverage's plain year"
       continue
     fi
@@ -261,4 +272,9 @@ if $ALL_SCHEMAS; then
   done
 else
   process_schema "$SCHEMA" "$TABLES"
+fi
+
+if $failed; then
+  echo "FAILED: at least one table could not be measured (see ERROR/SKIP lines above)" >&2
+  exit 1
 fi
