@@ -2218,6 +2218,102 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  - name: billion_dollar_events
+    # NOAA retired the product in May 2025; the 1980-2024 event file is a closed archive, so the
+    # hash probe writes once and thereafter skips. snapshot makes a zero-row run fail loudly.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=billion_dollar_events/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      NOAA NCEI Billion-Dollar Weather and Climate Disasters, 1980-2024 — one row per U.S. event
+      whose damage reached $1 billion (403 events: 203 severe storm, 67 tropical cyclone, 45
+      flooding, 32 drought, 24 winter storm, 23 wildfire, 9 freeze). Carries event name, disaster
+      type, begin/end date, deaths, and cost in millions of dollars twice: cost_adjusted_musd is
+      CPI-adjusted to 2024 dollars (cost_dollar_year), cost_unadjusted_musd is in event-year
+      dollars. Use as the independent baseline for per-event damage claims (e.g. wildfire
+      totals); there is no state or county footprint in the file, so it does not join to FEMA or
+      storm_events by place. Event names are not unique (three repeat); (event_name, begin_date)
+      is. NOAA retired the product in May 2025 and the series stops at 2024 — later events (the
+      Climate Central continuation) are not included. Source: ncei.noaa.gov/access/billions, keyless.
+
+    dimensions:
+      type:
+        - billion_dollar_events
+
+    columns:
+      - name: event_name
+        type: string
+        nullable: false
+        comment: NCEI event name, usually with month/year, e.g. 'Hurricane Helene (September 2024)'
+      - name: disaster_type
+        type: string
+        nullable: false
+        comment: Severe Storm, Tropical Cyclone, Flooding, Drought, Winter Storm, Wildfire or Freeze
+      - name: begin_date
+        type: date
+        nullable: false
+        comment: First day of the event
+      - name: end_date
+        type: date
+        nullable: false
+        comment: Last day of the event (a full-year span for droughts and some wildfire seasons)
+      - name: begin_year
+        type: integer
+        nullable: false
+        comment: Calendar year of begin_date
+      - name: cost_adjusted_musd
+        type: double
+        nullable: false
+        comment: Event cost in millions of dollars, CPI-adjusted to cost_dollar_year
+      - name: cost_dollar_year
+        type: integer
+        nullable: false
+        comment: Dollar year of cost_adjusted_musd (2024 for every row)
+      - name: cost_unadjusted_musd
+        type: double
+        nullable: false
+        comment: Event cost in millions of nominal dollars of the event year
+      - name: deaths
+        type: integer
+        nullable: false
+        comment: Direct deaths attributed to the event
+
+    source:
+      type: http
+      url: "https://www.ncei.noaa.gov/access/billions/events-US-1980-2024.json"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.NceiBillionDollarEventsTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=billion_dollar_events/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: billion_dollar_events
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   - name: wildfire_risk_by_county
     # USFS Wildfire Risk to Communities (WRC) publishes one county-summary workbook per
     # release (~annually), not a continuous series — a freshness-gated snapshot re-fetched

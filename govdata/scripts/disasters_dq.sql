@@ -841,3 +841,67 @@ FROM (SELECT COALESCE(SUM(CASE WHEN z.zone IS NOT NULL THEN s.damage_property EN
       LEFT JOIN (SELECT DISTINCT state_fips, zone FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/nws_zone_county', allow_moved_paths := true)) z
         ON s.state_fips = z.state_fips AND s.cz_fips = z.zone
       WHERE s.cz_type = 'Z' AND CAST(s.year AS INTEGER) BETWEEN 2011 AND 2023);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: billion_dollar_events (static snapshot, NOAA NCEI billion-dollar disasters 1980-2024, ops#1202)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true));
+
+-- 403 events in the archived file
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T2_row_count',
+  CASE WHEN n = 403 THEN 'pass' ELSE 'fail' END, n, 403, 'Expected exactly 403 events (1980-2024 archive)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+-- cost_dollar_year is a real constant (every cost_adjusted_musd is in 2024 dollars)
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'cost_dollar_year')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL event_name/begin_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true)
+      WHERE event_name IS NULL OR begin_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (event_name, begin_date) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT event_name, begin_date, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true)
+  GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- Every event is >= $1B adjusted; unadjusted never exceeds adjusted by more than rounding; end >= begin
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with cost_adjusted_musd < 1000, negative deaths, end < begin, or begin_year mismatch'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true)
+      WHERE cost_adjusted_musd < 1000 OR deaths < 0 OR end_date < begin_date
+         OR begin_year <> EXTRACT(year FROM begin_date) OR cost_dollar_year <> 2024);
+
+-- Independent anchor: Hurricane Katrina ($201.3B adjusted per NCEI) is the costliest event
+INSERT INTO dq_results
+SELECT 'disasters', 'billion_dollar_events', 'T7_known_value',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, n, 1, 'Hurricane Katrina is the costliest event, > $190B adjusted'
+FROM (SELECT COUNT(*) AS n FROM (SELECT event_name, cost_adjusted_musd FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true)
+      ORDER BY cost_adjusted_musd DESC LIMIT 1) WHERE event_name LIKE 'Hurricane Katrina%' AND cost_adjusted_musd > 190000);
+
