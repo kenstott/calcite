@@ -1643,6 +1643,65 @@ FROM (
 );
 
 -- ============================================================================
+-- treasury_interest_expense (Treasury Fiscal Data interest_expense, new 14 Nov 2026)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_interest_expense', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true) LIMIT 1));
+
+-- ~35 lines x 12 months per calendar year (~430 observed); DQ scope covers the 3 most recent
+-- years (1,292 rows observed 2026-11-14), so the floor is set below that, not at full history
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_interest_expense', 'row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1000',
+  CASE WHEN n >= 1000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_interest_expense', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_interest_expense', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
+
+-- (record_date, src_line_nbr) identifies one row; any duplicate means a double-ingest
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_interest_expense', 'pk_duplicates',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (record_date, src_line_nbr) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT record_date, src_line_nbr
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true)
+  GROUP BY record_date, src_line_nbr HAVING COUNT(*) > 1));
+
+-- Gross interest (public issues + GAS) at every fiscal-year-end month (September) must be a
+-- positive figure between $100B and $3T; confirmed live 2026-11-14: FY2026 = $1.36T.
+INSERT INTO dq_results
+SELECT 'econ', 'treasury_interest_expense', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'September record_dates whose gross FYTD interest (sum of fytd_expense_amt) is outside $100B-$3T'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT record_date, SUM(fytd_expense_amt) AS gross
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true)
+  WHERE MONTH(record_date) = 9
+  GROUP BY record_date
+  HAVING SUM(fytd_expense_amt) NOT BETWEEN 1e11 AND 3e12));
+
+-- ============================================================================
 -- ces_revision_vintages (BLS CES vintage-data product, new 6 Sep 2026)
 -- ============================================================================
 

@@ -105,6 +105,11 @@ public class DuckDBFunctionMapping {
     // registered under DuckDB's native spelling.
     FUNCTION_MAP.put("STRING_SPLIT", "string_split");
 
+    // Date-difference declarations (see DuckDBDateFunctions); duckdb_date_sub is the
+    // non-keyword alias the SQL rewriter gives TIMESTAMPDIFF.
+    FUNCTION_MAP.put("DATEDIFF", "datediff");
+    FUNCTION_MAP.put("DUCKDB_DATE_SUB", "date_sub");
+
     // Vector similarity functions - map to DuckDB's native array functions
     FUNCTION_MAP.put("COSINE_SIMILARITY", "array_cosine_similarity");
     FUNCTION_MAP.put("COSINE_DISTANCE", "array_cosine_distance");

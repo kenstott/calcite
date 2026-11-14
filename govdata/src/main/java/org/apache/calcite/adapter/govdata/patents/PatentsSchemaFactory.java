@@ -55,7 +55,9 @@ public class PatentsSchemaFactory implements GovDataSubSchemaFactory {
       "trademark_intl_class", "trademark_statement",
       // Faithful append-only snapshot tables (loaded once in the snapshot pass).
       "patent_abstracts", "patent_applications", "patent_figures",
-      "patent_locations");
+      "patent_locations",
+      // Pre-grant publications (PatentsView PVPGPUBDIS).
+      "patent_publications", "patent_publication_cpc", "patent_publication_applicants");
 
   @Override public String getSchemaResourceName() {
     return "/patents/patents-schema.yaml";

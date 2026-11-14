@@ -142,6 +142,15 @@ dimension_values:
     dataLag: 2
     descending: true
 
+  # TSA checkpoint volumes: published from 2019-01-01 (pre-2019 daily counts are not public).
+  # Current year is served at the unsuffixed page; the transformer resolves prior years.
+  tsa_year_range: &tsa_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2019}"
+    minYear: 2019
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    descending: true
+
   # Full 12-month cadence: one fetch per (year, month) = one overwrite partition.
   all_months: &all_months
     type: list
@@ -3274,6 +3283,65 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
+        overwritePartitions: true
+
+  - name: tsa_checkpoint_daily
+    pattern: "type=tsa_checkpoint_daily/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Daily count of passengers screened at TSA security checkpoints nationwide, one row per
+      calendar day from 2019-01-01 to about two days before the latest run (TSA posts with a
+      ~1-2 day lag). The national daily air-travel volume series: baseline for "busiest day on
+      record" and holiday-period travel claims (Thanksgiving, July 4, Memorial Day), and a
+      current-year series that the monthly T-100 tables lag by months. Counts are TSA checkpoint
+      screenings, not airline-reported enplanements, covering U.S. airports. TSA may revise
+      recent days. Source:
+      tsa.gov/travel/passenger-volumes (HTML tables; prior years at /passenger-volumes/<year>).
+
+    dimensions:
+      type:
+        - tsa_checkpoint_daily
+      year: *tsa_year_range
+
+    columns:
+      - name: travel_date
+        type: date
+        nullable: false
+        comment: Calendar day of screening
+      - name: passengers
+        type: long
+        nullable: false
+        comment: Total passengers screened at TSA checkpoints nationwide that day
+
+    source:
+      type: http
+      url: "https://www.tsa.gov/travel/passenger-volumes"
+      method: GET
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.TsaCheckpointTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=tsa_checkpoint_daily/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: tsa_checkpoint_daily
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------

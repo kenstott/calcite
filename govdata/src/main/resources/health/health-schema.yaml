@@ -9183,6 +9183,129 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  # ---------------------------------------------------------------------------
+  # VBA MONDAY MORNING WORKLOAD REPORT — weekly national claims inventory / backlog
+  # ---------------------------------------------------------------------------
+  - name: va_claims_workload
+    timeColumn: week_ending  # observation date; the year partition is the VBA fiscal-year folder
+    # The index page is the one resource that changes when a new weekly workbook is posted, so
+    # hash its body: an unchanged week skips the workbook downloads and the commit.
+    freshness:
+      type: hash
+    pattern: "type=va_claims_workload/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: VARCHAR
+    comment: >
+      VA Veterans Benefits Administration Monday Morning Workload Report (MMWR) — the weekly
+      national count of Compensation and Pension claims pending, and how many of those have
+      been pending more than 125 days (VA's definition of the claims "backlog"). One row per
+      (week_ending, line): line_type 'total' rows are the headline and group subtotals
+      (line_description 'Compensation and Pension Rating Bundle' is the overall inventory;
+      'Original Entitlement' and 'Supplemental Entitlement' are its two main components) and
+      line_type 'ep' rows are individual End Product codes (ep_code '010' and '110' are
+      initial service-connected disability claims, '020' is increased evaluation / new
+      conditions, '040' is AMA supplemental claims). pct_pending_over_125_days is
+      pending_over_125_days / pending_claims. The "backlog" figure quoted in news is the
+      pending_over_125_days of the 'Compensation and Pension Rating Bundle' total row.
+
+      Covers weekly workbooks from fiscal year 2018 (October 2017) onward; VBA keeps files
+      from 2014 but the pre-2018 workbooks use a different layout (the 2014 files are legacy
+      .xls) and are not parsed. Not covered: claims processed per week, average days to
+      complete, and the regional-office and state breakdowns on the workbook's other sheets.
+      year is the VBA fiscal-year folder (FY2026 = October 2025 through September 2026), not
+      the calendar year of week_ending. Source: benefits.va.gov/reports/detailed_claims_data.asp
+      (public, no key). Each weekly workbook's own "Reporting through" date gives week_ending.
+
+    dimensions:
+      type:
+        - va_claims_workload
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2018
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        descending: true
+
+    columns:
+      - name: week_ending
+        type: date
+        nullable: false
+        expression: 'CAST(src."week_ending" AS DATE)'
+        comment: Saturday the weekly report runs through (workbook's "Reporting through" date)
+      - name: line_type
+        type: string
+        nullable: false
+        expression: 'src."line_type"'
+        comment: "'total' for the headline and group subtotal rows, 'ep' for one End Product code"
+      - name: ep_code
+        type: string
+        nullable: true
+        expression: 'src."ep_code"'
+        comment: VBA End Product code (e.g. 010, 110, 020, 040); null on total rows
+      - name: line_description
+        type: string
+        nullable: false
+        expression: 'src."line_description"'
+        comment: Group name on total rows, End Product description on ep rows
+      - name: pending_claims
+        type: long
+        nullable: false
+        expression: 'CAST(src."pending_claims" AS BIGINT)'
+        comment: Claims pending at week_ending
+      - name: pending_over_125_days
+        type: long
+        nullable: false
+        expression: 'CAST(src."pending_over_125_days" AS BIGINT)'
+        comment: Of pending_claims, those pending more than 125 days (the VA backlog)
+      - name: pct_pending_over_125_days
+        type: double
+        nullable: true
+        expression: 'CASE WHEN CAST(src."pending_claims" AS BIGINT) = 0 THEN NULL ELSE CAST(src."pending_over_125_days" AS DOUBLE) / CAST(src."pending_claims" AS DOUBLE) END'
+        comment: pending_over_125_days / pending_claims; null when nothing is pending
+
+    source:
+      type: http
+      # The index page lists the year's weekly workbooks; the transformer downloads and parses
+      # them. fy= is ignored by the server and only keeps each year's raw-cache key distinct.
+      url: "https://www.benefits.va.gov/reports/detailed_claims_data.asp?fy={year}"
+      method: GET
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.VbaClaimsWorkloadTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=va_claims_workload/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+
 # ============================================================================
 # Views
 # ============================================================================
@@ -9884,6 +10007,9 @@ constraints:
         targetTable: counties
         targetColumns: [county_fips]
         comment: Links AHRF county row to geographic data
+
+  va_claims_workload:
+    primaryKey: [week_ending, line_type, line_description]
 
   rxnorm_drugs:
     primaryKey: [type, rxcui]
