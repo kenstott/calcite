@@ -406,7 +406,7 @@
   },
   {
     "topic_slug": "newsweek-snap-enrollment-drops-300k-june-2026",
-    "headline": "SNAP Enrollment Drops 300k In Single Month\u2014Here Are Worst Impacted States",
+    "headline": "SNAP Enrollment Drops 300k In Single Month—Here Are Worst Impacted States",
     "checked_date": "2026-11-08",
     "run_subpath": "q4/askamerica/2026-11-08",
     "pinocchios": 1,
@@ -935,5 +935,145 @@
       "expert": 3
     },
     "note": "SEVERITY FLAG, NO CHANGE MADE: askamerica ranked 2nd, below everyman. Correct verdict 1; askamerica 0 (engine-set), everyman 1, expert 1. askamerica verified the most (sponsors, FERC/NEPA provisions, ETF closes) but its 0 sat beside its own findings: Brattle $35B and Rhodium $50-78 unsourced, EEI support unsupported, headline overstated, 'market barely responded' against GRID +4.3%. Cause: unsupported claims are left out of accuracy, so they cannot move a rating off 0. Not changed, because on 2026-11-12 (GAO interest story) a 0 with unsupported claims was the judged-correct rating. sec.stock_prices ends 2026-05-29 for XLU/GRID (not yet verified as a defect)."
+  },
+  {
+    "topic_slug": "aiweekly-ai-labs-q3-2026-lobbying-records",
+    "headline": "Nvidia, Anthropic and OpenAI Set Q3 Lobbying Records at $2.2M, $2.1M and $1.5M as Antitrust Talks Begin",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q1/askamerica/2026-11-14",
+    "pinocchios": 0,
+    "source_url": "https://aiweekly.co/alerts/nvidia-anthropic-and-openai-set-q3-lobbying-records-at-22m-21m-and-15m-as",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "askamerica 0, expert 1, everyman 1; correct verdict 0-1. All dollar figures matched law.lobbying_filings. Data defect filed: kenstott/govdata-ops#1198 (client quarters missing in law.lobbying_filings)."
+  },
+  {
+    "topic_slug": "fortune-cbo-october-deficit-100-billion-weekly",
+    "headline": "CBO October budget review: Treasury deficit running more than $100 billion a week",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q2/askamerica/2026-11-14",
+    "pinocchios": 2,
+    "source_url": "https://fortune.com/2026/11/10/cbo-october-budget-treasury-deficit-100-billion-weekly/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "All three arms 2; correct verdict 2. FY2026 deficit $2.0T not $1.9T; outlays +$386B not +$217B; $409B is about $92B a week. Sourcing gap filed: kenstott/govdata-ops#1199 (gross interest on the public debt)."
+  },
+  {
+    "topic_slug": "redstate-va-backlog-70-percent-47-clinics-veterans-day",
+    "headline": "Winning for Veterans: Trump-Era VA Cuts Backlog 70 Percent, Opens 47 Clinics Ahead of Veterans Day",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q3/askamerica/2026-11-14",
+    "pinocchios": 1,
+    "source_url": "https://redstate.com/wardclark/2026/11/11/winning-for-veterans-trump-era-va-cuts-backlog-70-opens-47-clinics-ahead-of-veterans-day-n2209277",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "All three arms 1; correct verdict 1. No warehouse table applied; askamerica graded from VA releases. Expert computed the backlog cut (-68.5%) from VA weekly workload reports. Sourcing gap filed: kenstott/govdata-ops#1201 (VA benefits data)."
+  },
+  {
+    "topic_slug": "npr-democrats-won-big-lower-grocery-bill",
+    "headline": "Democrats won big. Can they lower your grocery bill?",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q4/askamerica/2026-11-14",
+    "pinocchios": 1,
+    "source_url": "https://www.kuow.org/npr-news/2026-11-09/democrats-won-big-can-they-lower-your-grocery-bill",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "askamerica 1, expert 1, everyman 2 (provisional); correct verdict 1. Food-at-home CPI ran 1.8-2.9% YoY Jan-Sep 2026 against 'out of control'. askamerica graded SNAP from web excerpts without a catalog search. Report title garbled (double verdict clause)."
+  },
+  {
+    "topic_slug": "climatecentral-billion-dollar-wildfires-186-billion",
+    "headline": "Billion-Dollar U.S. Wildfires",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q5/askamerica/2026-11-14",
+    "pinocchios": 1,
+    "source_url": "https://www.climatecentral.org/climate-matters/billion-dollar-us-wildfires",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "askamerica 1, expert 1, everyman 0; correct verdict 1. askamerica found the Tubbs structures and Spokane acreage errors against outside sources. No warehouse table carries event cost; 7 claims unsupported. Sourcing gap filed: kenstott/govdata-ops#1202."
+  },
+  {
+    "topic_slug": "startbusinessbystate-generative-ai-patent-tracker",
+    "headline": "Generative AI Patent Tracker: Monthly Filings at the U.S. Patent Office",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q6/askamerica/2026-11-14",
+    "pinocchios": 0,
+    "source_url": "https://startbusinessbystate.com/?p=16687",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "askamerica 0 (engine-scored; arm's own read 1), everyman 0, expert 1. No arm reached USPTO application data; counts reproduce only from the publisher's CSV. everyman found recent months revised (Sep code count 375 to 526). Sourcing gap filed: kenstott/govdata-ops#1203 (published patent applications)."
+  },
+  {
+    "topic_slug": "reuters-wmo-2026-one-of-four-hottest-years",
+    "headline": "2026 set to be one of four hottest years on record, UN report says",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q7/askamerica/2026-11-14",
+    "pinocchios": 0,
+    "source_url": "https://cyprus-mail.com/2026/11/09/2026-set-to-be-one-of-four-hottest-year-on-record-un-report-says",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "askamerica 0, expert 0, everyman 1; correct verdict 0. Graded from the WMO release; no warehouse table applied. Only askamerica raised the El Nino timing point. Sourcing gap filed: kenstott/govdata-ops#1204 (global temperature series)."
+  },
+  {
+    "topic_slug": "abc-thanksgiving-2026-record-travelers-forecast",
+    "headline": "Thanksgiving travel forecast: Record number of travelers expected to fly, take trains",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q8/askamerica/2026-11-14",
+    "pinocchios": 1,
+    "source_url": "https://abc30.com/story/thanksgiving-travel-record-number-travelers-expected-fly-take-trains-drive-holiday/20032744/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "expert 2, askamerica 1, everyman 1; correct verdict 1-2. Hopper fares +31% not +39%; A4A's 29M is below last year's 31M forecast, so 'record' is unsupported for air. askamerica missed the A4A and United 2026 releases expert found. Sourcing gap filed: kenstott/govdata-ops#1205 (TSA daily passenger volumes)."
+  },
+  {
+    "topic_slug": "publiccitizen-corporate-737-million-2026-midterms",
+    "headline": "Corporations Pour Record-Smashing $737 Million Into 2026 Midterms",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q9/askamerica/2026-11-14",
+    "pinocchios": 0,
+    "source_url": "https://www.citizen.org/?p=128196",
+    "ranks": {
+      "expert": 1,
+      "everyman": 2,
+      "askamerica": 3
+    },
+    "note": "SEVERITY FLAG: askamerica ranked 3rd, below everyman. Correct verdict 1; askamerica 0 (engine-scored), everyman 1, expert 1. askamerica read only the first 6,000 characters (its own max_chars), missed the $72M vs $76.2M inconsistency in Table 2, and said donor-name queries were unsupported without trying. Cause of the second: a stale 'not supported' warning in the fec.individual_contributions table comment; corrected in fec-schema.yaml 2026-11-14, effective at the next govdata build. Live follow-up queries matched two of Table 2's three a16z components ($50M, $2.4M)."
+  },
+  {
+    "topic_slug": "lombardo-nevada-leads-job-growth-eleven-months",
+    "headline": "Nevada Leads Nation in Job Growth for Eleven Straight Months",
+    "checked_date": "2026-11-14",
+    "run_subpath": "q10/askamerica/2026-11-14",
+    "pinocchios": 0,
+    "source_url": "https://gov.nv.gov/press-releases/nevada-leads-nation-in-job-growth-for-eleven-straight-months",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "expert 1, askamerica 0 (engine-scored; arm's own read higher), everyman 1; correct verdict 1. Release dated June 23, 2026 (outside the 7-day window). Streak holds on payroll jobs Jul 2025-May 2026; askamerica alone found it fails on the household series the release links. askamerica graded the industry figures unsupported after using a wrong series-id pattern; the data exists. Series-id layout added to the econ.state_industry table comment 2026-11-14, effective at the next govdata build."
   }
 ]

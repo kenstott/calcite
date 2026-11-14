@@ -4958,6 +4958,10 @@ partitionedTables:
       several Class I railroads present; absence of a row means no Class I
       Railroads track passes through that county in this dataset, not that
       the county was unmeasured. Joins to geo.counties via county_fips.
+      This is the county-level rail infrastructure measure: use it for freight
+      rail access in industrial site selection, facility siting and county
+      infrastructure screens, alongside nhs_highway_county_access for highway
+      access.
       Source: services.arcgis.com/.../NTAD_North_American_Rail_Network_Lines_Class_I_Railroads/FeatureServer/0.
 
     dimensions:

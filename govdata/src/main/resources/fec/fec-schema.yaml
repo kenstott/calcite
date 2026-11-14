@@ -953,13 +953,15 @@ partitionedTables:
       committee_contributions/intercommittee_transactions, this table's column names match
       their roles. PERFORMANCE: always filter on the year partition first — this is the
       largest FEC table by row count and an unfiltered or non-partition-filtered aggregate
-      can exceed a 30s query timeout. Donor-name lookup ("what has this person given")
-      is NOT currently supported even with a year filter: contributor_name has no sort
-      order/clustering, so a name-filtered scan of one year's partition (tens of millions
-      of rows) still exceeds the 30s statement timeout in production — confirmed
-      2026-09-29 (see kenstott/govdata-ops#780). Do not attempt a name-filtered query
-      against this table until #780's remediation (a donor-summary table or sortOrder+
-      reprocess) lands.
+      can exceed a 30s query timeout. Donor-name lookup ("what has this donor given")
+      works with a year filter: each year's partition is sorted by contributor_name
+      (kenstott/govdata-ops#780, remediated 2026-10-06), and name-filtered year=2026
+      queries completed without a timeout on 2026-11-14. Names are stored upper-case as
+      filed, so match with ILIKE or an upper-case pattern, and expect one donor under
+      several spellings. NOT ONLY INDIVIDUALS: entity_type separates IND from ORG
+      (corporations, LLCs, unions and other organizations giving to super PACs), PAC, COM,
+      CAN, CCM and PTY. A corporate-donor question is answered from the ORG rows here
+      (2026: 15,491 ORG rows, $2.16B); do not report it as unavailable.
 
     columns:
       - *committee_id_column

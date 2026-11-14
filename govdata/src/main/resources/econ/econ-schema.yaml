@@ -2307,7 +2307,14 @@ partitionedTables:
       healthcare, government, and others) for all 53 U.S. jurisdictions (50 states + DC, Puerto
       Rico, Virgin Islands), from BLS SM series (not seasonally adjusted, statewide total nonfarm
       all-employees series). For the metro-area version of the same series, see metro_industry
-      (27 major metros).
+      (27 major metros). SERIES ID LAYOUT (20 characters): SM + seasonal(1) + state FIPS(2) +
+      area(5) + supersector(2) + industry(6) + datatype(2). The supersector is characters
+      11-12. Nevada examples: SMU32000000000000001 total nonfarm, SMU32000000500000001 total
+      private, SMU32000005000000001 information, SMU32000006000000001 professional and
+      business services, SMU32000006500000001 private education and health services. To
+      compare one supersector across states use series LIKE 'SMU__00000' || '<ss>' ||
+      '00000001'. One row per series, year and period; a self-join must match on series,
+      year and period or it fans out. Period M13 is the annual average.
 
     # Dimension definitions for iteration
     dimensions:
