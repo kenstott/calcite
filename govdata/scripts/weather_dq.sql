@@ -911,6 +911,76 @@ FROM (
 -- ============================================================
 -- ALL RESULTS
 -- ============================================================
+-- TABLE: gistemp_global_monthly (global monthly temperature anomaly, ops#1204)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'row_count', CASE WHEN n >= 1700 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1700', 'one row per published month since 1880'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true));
+
+SELECT 'gistemp_global_monthly' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (year, month) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows with month outside 1-12 or anomaly outside -3..4 C'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true) WHERE month NOT BETWEEN 1 AND 12 OR anomaly_c NOT BETWEEN -3 AND 4);
+
+INSERT INTO dq_results
+SELECT 'weather', 'gistemp_global_monthly', 'known_value', CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Feb 2016 anomaly above 1.2 C (GISTEMP record at the time)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/gistemp_global_monthly', allow_moved_paths=true) WHERE year = 2016 AND month = 2 AND anomaly_c > 1.2);
+
+-- ============================================================
+-- TABLE: noaa_global_temp_monthly (global monthly temperature anomaly, ops#1204)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'row_count', CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '2000', 'one row per published month since 1850'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true));
+
+SELECT 'noaa_global_temp_monthly' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (year, month) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, month FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows with month outside 1-12 or anomaly outside -3..4 C'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true) WHERE month NOT BETWEEN 1 AND 12 OR anomaly_c NOT BETWEEN -3 AND 4);
+
+INSERT INTO dq_results
+SELECT 'weather', 'noaa_global_temp_monthly', 'known_value', CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'Jan 1850 departure is -0.44 C (first NOAAGlobalTemp value)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/noaa_global_temp_monthly', allow_moved_paths=true) WHERE year = 1850 AND month = 1 AND anomaly_c = -0.44);
+
+-- ============================================================
 SELECT '=== ALL DQ RESULTS ===' AS section;
 SELECT * FROM dq_results ORDER BY tbl, test;
 

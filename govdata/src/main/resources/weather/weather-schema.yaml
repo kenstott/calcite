@@ -1926,6 +1926,156 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: gistemp_global_monthly
+    # The source file grows by a month at a time; hash freshness re-ingests whenever it changes.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=gistemp_global/*.parquet"
+    partitions: *type_only_partitions
+    comment: >
+      NASA GISS Surface Temperature Analysis (GISTEMP v4) global-mean land-ocean temperature
+      anomaly, one row per month from January 1880. Anomalies are in degrees Celsius relative
+      to the 1951-1980 mean, NOT to the 1850-1900 pre-industrial baseline that WMO/IPCC
+      "above pre-industrial" figures use; to approximate that baseline add about 0.3 degrees C
+      to the 1951-1980 value (the offset is a method choice, not published in this file, so
+      compare against pre-industrial claims only loosely). Months NASA has not yet published
+      are absent. Independent of noaa_global_temp_monthly, which uses a different method and the
+      1901-2000 baseline, so the two differ by a roughly constant offset plus method noise.
+      Source: data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv, keyless, public domain.
+
+    dimensions:
+      type:
+        - gistemp_global
+      # cache-busters only (not partition columns): the file grows monthly, so a new calendar
+      # month changes the raw-cache key and forces a fresh fetch
+      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12)
+      - name: anomaly_c
+        type: double
+        nullable: false
+        comment: Global mean land-ocean temperature anomaly in degrees Celsius relative to the 1951-1980 mean
+
+    source:
+      type: http
+      url: "https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.GistempGlobalTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=gistemp_global/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: gistemp_global_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  - name: noaa_global_temp_monthly
+    # The source file grows by a month at a time; hash freshness re-ingests whenever it changes.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=noaa_global_temp/*.parquet"
+    partitions: *type_only_partitions
+    comment: >
+      NOAA NCEI NOAAGlobalTemp global-mean land-ocean temperature departure, one row per month
+      from January 1850 (Climate at a Glance global time series). Values are in degrees Celsius
+      relative to the 1901-2000 average, NOT to the 1850-1900 pre-industrial baseline used by
+      WMO/IPCC "above pre-industrial" figures; NOAA's 1850-1900 mean sits roughly 0.4 degrees C
+      below its 1901-2000 mean in this series, so add about that to compare loosely with a
+      pre-industrial claim. The latest month is provisional and is revised in later releases.
+      Independent of gistemp_global_monthly (different method, 1951-1980 baseline).
+      Source: ncei.noaa.gov/access/monitoring/climate-at-a-glance, keyless, public domain.
+
+    dimensions:
+      type:
+        - noaa_global_temp
+      # cache-busters only (not partition columns): the file grows monthly, so a new calendar
+      # month changes the raw-cache key and forces a fresh fetch
+      end_year: ["${GOVDATA_CURRENT_YEAR}"]
+      fetch_month: ["${GOVDATA_CURRENT_MONTH}"]
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year
+      - name: month
+        type: integer
+        nullable: false
+        comment: Calendar month (1-12)
+      - name: anomaly_c
+        type: double
+        nullable: false
+        comment: Global mean land-ocean temperature anomaly in degrees Celsius relative to the 1901-2000 average
+
+    source:
+      type: http
+      url: "https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/global/time-series/globe/land_ocean/1/0/1850-{end_year}/data.csv"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.NoaaGlobalTempTransformer"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=noaa_global_temp/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: noaa_global_temp_monthly
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # VIEWS
 # ============================================================================
