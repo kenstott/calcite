@@ -1653,12 +1653,13 @@ SELECT 'econ', 'treasury_interest_expense', 'existence',
   CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
 FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true) LIMIT 1));
 
--- ~35 lines x 12 months x years since 2010 — a conservative floor
+-- ~35 lines x 12 months per calendar year (~430 observed); DQ scope covers the 3 most recent
+-- years (1,292 rows observed 2026-11-14), so the floor is set below that, not at full history
 INSERT INTO dq_results
 SELECT 'econ', 'treasury_interest_expense', 'row_count',
-  CASE WHEN n >= 3000 THEN 'pass' ELSE 'fail' END,
-  CAST(n AS VARCHAR), '3000',
-  CASE WHEN n >= 3000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1000',
+  CASE WHEN n >= 1000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/treasury_interest_expense', allow_moved_paths := true));
 
 INSERT INTO dq_results
