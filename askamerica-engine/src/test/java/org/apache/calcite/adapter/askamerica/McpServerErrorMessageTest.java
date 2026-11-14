@@ -202,4 +202,25 @@ class McpServerErrorMessageTest {
     String msg = "Cannot apply '-' to arguments of type '<VARCHAR(1)> - <INTEGER>'";
     assertEquals(msg, McpServer.compactErrorMessage(new RuntimeException(msg)));
   }
+
+  @Test @DisplayName("SignatureDoesNotMatch names expired session credentials, not the one table")
+  void signatureMismatchPointsAtExpiredSessionCredentials() {
+    String raw = "HTTP GET error reading 'https://acct.r2.cloudflarestorage.com/govdata-parquet-v1"
+        + "/econ/fred_indicators/metadata/version-hint.text' in region 'auto' (HTTP 403 Forbidden)"
+        + " SignatureDoesNotMatch: The request signature we calculated does not match";
+    String msg = McpServer.compactErrorMessage(new java.sql.SQLException(raw));
+    assertTrue(msg.contains("SignatureDoesNotMatch"), msg);
+    assertTrue(msg.contains("expired"), msg);
+    assertTrue(msg.contains("every table"), msg);
+    assertFalse(msg.contains("Retry once"), msg);
+    assertTrue(msg.contains(raw), msg);
+  }
+
+  @Test @DisplayName("a plain 403 keeps the generic object-store message")
+  void plainForbiddenKeepsGenericMessage() {
+    String msg = McpServer.compactErrorMessage(
+        new java.sql.SQLException("HTTP Error: HTTP 403 Forbidden s3://b/k"));
+    assertTrue(msg.contains("Retry once"), msg);
+    assertFalse(msg.contains("SignatureDoesNotMatch"), msg);
+  }
 }
