@@ -33,8 +33,8 @@ if [ "${MODE:-}" = one ]; then
     remote=minio
   fi
   out=$(java -Xmx1g -cp "$JAR" org.apache.calcite.adapter.file.iceberg.ClosureResolver \
-        --warehouse "s3://$BUCKET/$s" --table "$t" 2>&1) || {
-    echo "RESOLVE_FAIL $tgt $s.$t $(echo "$out" | tail -1)"; exit 0; }
+        --warehouse "s3://$BUCKET/$s" --table "$t" 2>/dev/null) || {
+    echo "RESOLVE_FAIL $tgt $s.$t"; exit 0; }
   ver=$(echo "$out" | grep '^VERSION ' | awk '{print $2}')
   l=$(mktemp); echo "$out" | grep -v '^VERSION ' | sort -u > "$l"
   p=$(mktemp)
