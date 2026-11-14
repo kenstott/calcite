@@ -479,11 +479,11 @@ partitionedTables:
       - name: cpc_class
         type: string
         nullable: true
-        comment: CPC class (2-char, e.g., H04)
+        comment: CPC class (3-char section+class, e.g., H04)
       - name: cpc_subclass
         type: string
         nullable: true
-        comment: CPC subclass (1-char, e.g., L)
+        comment: CPC subclass (4-char section+class+letter, e.g., H04L)
       - name: cpc_group
         type: string
         nullable: true

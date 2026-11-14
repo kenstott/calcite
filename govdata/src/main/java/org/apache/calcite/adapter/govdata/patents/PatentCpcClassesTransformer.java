@@ -76,15 +76,9 @@ public class PatentCpcClassesTransformer extends AbstractPatentsTransformer {
             row.put("cpc_sequence", intVal(getField(parts, hdr, "cpc_sequence")));
             row.put("cpc_type", strVal(getField(parts, hdr, "cpc_type")));
             row.put("cpc_group", strVal(cpcGroup));
-            row.put("cpc_section",
-                (cpcGroup != null && cpcGroup.length() >= 1)
-                    ? String.valueOf(cpcGroup.charAt(0)) : null);
-            row.put("cpc_class",
-                (cpcGroup != null && cpcGroup.length() >= 3)
-                    ? cpcGroup.substring(0, 3) : null);
-            row.put("cpc_subclass",
-                (cpcGroup != null && cpcGroup.length() >= 4)
-                    ? cpcGroup.substring(3, 4) : null);
+            row.put("cpc_section", strVal(getField(parts, hdr, "cpc_section")));
+            row.put("cpc_class", strVal(getField(parts, hdr, "cpc_class")));
+            row.put("cpc_subclass", strVal(getField(parts, hdr, "cpc_subclass")));
             count[0]++;
             pending = row;
             return;
