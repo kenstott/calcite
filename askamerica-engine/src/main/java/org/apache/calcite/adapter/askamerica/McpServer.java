@@ -5599,6 +5599,29 @@ public class McpServer {
             if (msg == null) {
                 continue;
             }
+            if (msg.contains("SignatureDoesNotMatch")) {
+                // R2 answers a request signed with an expired session token exactly like one
+                // signed with a wrong secret, on every path. It is not specific to the table
+                // named in the error: reads that are served from already-cached bytes, and row
+                // counts answered from stored statistics, keep working, which makes the fault
+                // look table-specific and the credential look healthy.
+                return "THIS DATA IS UNREACHABLE RIGHT NOW — the object store rejected the"
+                    + " request signature (HTTP 403 SignatureDoesNotMatch). The most likely cause"
+                    + " is that this server's short-lived R2 session credentials (issued for one"
+                    + " hour) have expired and were not replaced; R2 reports an expired session"
+                    + " token this way, for every table, not only the one named below. Tables"
+                    + " that still answer do so from cached data or stored row counts, so a"
+                    + " working COUNT(*) does not show the table is readable. This is an"
+                    + " INFRASTRUCTURE FAULT, not a statement about the data: the table is not"
+                    + " empty and the coverage window is unknown rather than absent. Retrying"
+                    + " the same query will not help until the server's credentials are"
+                    + " replaced (restarting the connector replaces them). DO NOT report this as"
+                    + " a coverage gap, and DO NOT quietly answer from web research as though"
+                    + " this corpus had been consulted; if you answer from other sources, SAY IN"
+                    + " THE ANSWER that the warehouse was unavailable and which figures came from"
+                    + " elsewhere. Call report_issue with the exact table and statement so the"
+                    + " fault is recorded. Original error: " + msg;
+            }
             boolean authShape = msg.contains("HTTP 403")
                 || msg.contains("403 Forbidden")
                 || msg.contains("Authentication Failure")
