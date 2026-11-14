@@ -2455,8 +2455,13 @@ partitionedTables:
       a lobbying firm reports receiving from the client and `expenses` is what an
       organization reports spending on in-house lobbying; each is set on only some filings,
       as reported (rounded by the filer). `filing_year`/`filing_period` is the reporting
-      period the filing covers. What was lobbied on is in lobbying_activities and the people
-      involved in lobbying_activity_lobbyists. Registrant contact names and telephone
+      period the filing covers. An amendment restates the whole report, so an original and its
+      amendments for the same client and period each carry `income`/`expenses`: summing them
+      counts the period more than once; keep one filing per client, registrant and period
+      (the latest `dt_posted`). A client appears under every name it filed with (for example
+      ANTHROPIC and ANTHROPIC, PBC), and a client that hires outside firms has `income` on
+      the registrants' filings and no `expenses`. What was lobbied on is in lobbying_activities
+      and the people involved in lobbying_activity_lobbyists. Registrant contact names and telephone
       numbers and the name of whoever posted a filing are deliberately not carried.
       Partitioned by `year` and `quarter`: the calendar quarter in which the filing was
       POSTED (Eastern time), not the period it reports on. A filing keeps its posting date,
