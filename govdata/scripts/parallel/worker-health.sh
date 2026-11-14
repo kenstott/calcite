@@ -168,6 +168,8 @@ YEAR_MODE_GROUPS=(
   # CMS ACA marketplace files (QHP landscape workbooks, OEP county zips) — own group since it is a
   # distinct source from every group above and the workbooks are 55-115 MB each.
   "health-aca|aca_qhp_county_premiums,aca_rate_review_products,aca_oep_county_plan_selections"
+  # VA VBA weekly claims workload — own group: one source (benefits.va.gov weekly workbooks), fiscal-year dimension.
+  "health-va-claims|va_claims_workload"
 )
 
 ONCE_MODE_GROUPS=(
