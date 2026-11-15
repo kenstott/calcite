@@ -3,8 +3,8 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. No original source (transcript, release or post) could be read for any statement, so all wording is as the outlet reported it.",
   "lede": [
     "Fifty-six statements by 15 officeholders appeared in two days of NPR and PBS NewsHour politics coverage. Most were about three things: the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war and talk of ending it, and what Democrats plan to do with the majorities they won on Nov. 3.",
-    "Seven of the 56 were factual claims that data or documents could test. Three were supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. Four were unsupported, meaning no evidence was found for them; that is not a finding that they are false. Two of those four are the secretary's reported account of the ground stop investigation, which differs from the FAA's own published account.",
-    "The other 49 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked. One of them, the Florida governor's statement about what state law requires, turns on how a statute is read; what the statute says is given beside it."
+    "Eight of the 56 were factual claims that data or documents could test. Three were supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. Three were unsettled: evidence was found but does not decide them. They are the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, and the transportation secretary's reported account of what caused the ground stop, where the FAA's published account differs and its investigation is still open. Two were unsupported, meaning no evidence was found for them; that is not a finding that they are false.",
+    "The other 48 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked."
   ],
   "stories": [
     {
@@ -120,8 +120,8 @@
         "url": null,
         "note": "No original transcript or post located."
       },
-      "kind": "opinion_or_prediction",
-      "result": null,
+      "kind": "factual",
+      "result": "unsettled",
       "finding": "This turns on how the statute is read. Florida's SB 1134, effective Jan. 1, 2027, bars a municipality from funding or promoting activities designed with reference to ethnicity, among other categories, and exempts content-neutral event permits and recognition of state and federal holidays. It names no parades and requires no cancellation.",
       "evidence": [
         {
@@ -1130,8 +1130,8 @@
         "note": "No original transcript or post located."
       },
       "kind": "factual",
-      "result": "unsupported",
-      "finding": "A 2024 GAO review rated 51 of the FAA's 138 air traffic control systems unsustainable and 54 potentially unsustainable. No age breakdown was found showing how much of the system is about 50 years old. GAO's own page could not be read directly; the figures are as reported by Government Executive.",
+      "result": "unsettled",
+      "finding": "A 2024 GAO review rated 51 of the FAA's 138 air traffic control systems unsustainable and 54 potentially unsustainable, and reported systems as old as 50 years. No breakdown was found showing how much of the system is that old, so the figures neither confirm nor rule out \"much\". GAO's own page could not be read directly; the figures are as reported by Government Executive.",
       "evidence": [
         {
           "label": "Government Executive on GAO-24-107001 (Sept. 2024)",
@@ -1250,7 +1250,7 @@
         "note": "Only the reporter's paraphrase was read; no original statement located."
       },
       "kind": "factual",
-      "result": "unsupported",
+      "result": "unsettled",
       "finding": "The FAA's own account differs. It says data from two sites, a radar site in Amarillo, Texas and a radio site in El Dorado, Arkansas, where L3Harris had deployed a new router, flooded the network; it attributes the instability to the legacy system, not to upgrade work, and says the root cause is still under investigation. L3Harris has not named a cause.",
       "evidence": [
         {
