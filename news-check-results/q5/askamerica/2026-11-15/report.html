@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fortune article's claims about the Fed, October CPI and the inflation 'forever war' are mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fortune article's claims about the Fed, October CPI and the inflation 'forever war' are mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://fortune.com/2026/11/14/federal-reserve-inflation-forever-war-iran-oil-prices-diesel-fed-rate-hikes/">https://fortune.com/2026/11/14/federal-reserve-inflation-forever-war-iran-oil-prices-diesel-fed-rate-hikes/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Fed inflation check</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="237" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="273" fill="#6b7280">Core CPI Oct m/m</text>
+  <text class="stat-value" x="36" y="303" fill="#1f2328">+0.30%</text>
+  <text class="stat-delta" x="36" y="323" fill="#059669">CPILFESL</text>
+  </g>
+  <rect class="panel-edge" x="448" y="64" width="412" height="454" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="454" viewBox="0 0 412 454" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="454" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">CPI y/y % 2026</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="38" y1="56" x2="38" y2="386" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-0" class="tick" x="38" y="402" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0</text>
+      <line class="grid" x1="108.40" y1="56" x2="108.40" y2="386" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-1" class="tick" x="108.40" y="402" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">1</text>
+      <line class="grid" x1="178.80" y1="56" x2="178.80" y2="386" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-2" class="tick" x="178.80" y="402" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2</text>
+      <line class="grid" x1="249.20" y1="56" x2="249.20" y2="386" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-3" class="tick" x="249.20" y="402" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">3</text>
+      <line class="grid" x1="319.60" y1="56" x2="319.60" y2="386" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-4" class="tick" x="319.60" y="402" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">4</text>
+      <line class="grid" x1="390" y1="56" x2="390" y2="386" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-5" class="tick" x="390" y="402" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">5</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="38" y1="56" x2="38" y2="386" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="38" y1="386" x2="390" y2="386" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-value-axis-title" class="axis-title" x="214" y="430" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle">percent</text>
+    <g id="p2-category-axis-labels">
+      <text id="p2-xtick-jan" class="tick" x="30" y="78.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Jan</text>
+      <text id="p2-xtick-feb" class="tick" x="30" y="115" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Feb</text>
+      <text id="p2-xtick-mar" class="tick" x="30" y="151.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Mar</text>
+      <text id="p2-xtick-apr" class="tick" x="30" y="188.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Apr</text>
+      <text id="p2-xtick-may" class="tick" x="30" y="225" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">May</text>
+      <text id="p2-xtick-jun" class="tick" x="30" y="261.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Jun</text>
+      <text id="p2-xtick-jul" class="tick" x="30" y="298.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Jul</text>
+      <text id="p2-xtick-aug" class="tick" x="30" y="335" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Aug</text>
+      <text id="p2-xtick-sep" class="tick" x="30" y="371.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Sep</text>
+    </g>
+    <g id="p2-series-cpi-y-y" class="series">
+      <g class="hover">
+        <title>Jan — CPI y/y: 2.39</title>
+        <rect id="p2-mark-cpi-y-y-jan" class="bar" x="38" y="62.60" width="168.26" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="62.60" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Feb — CPI y/y: 2.43</title>
+        <rect id="p2-mark-cpi-y-y-feb" class="bar" x="38" y="99.27" width="171.07" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="99.27" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Mar — CPI y/y: 3.29</title>
+        <rect id="p2-mark-cpi-y-y-mar" class="bar" x="38" y="135.93" width="231.62" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="135.93" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Apr — CPI y/y: 3.78</title>
+        <rect id="p2-mark-cpi-y-y-apr" class="bar" x="38" y="172.60" width="266.11" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="172.60" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>May — CPI y/y: 4.17</title>
+        <rect id="p2-mark-cpi-y-y-may" class="bar" x="38" y="209.27" width="293.57" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="209.27" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jun — CPI y/y: 3.46</title>
+        <rect id="p2-mark-cpi-y-y-jun" class="bar" x="38" y="245.93" width="243.58" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="245.93" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Jul — CPI y/y: 3.3</title>
+        <rect id="p2-mark-cpi-y-y-jul" class="bar" x="38" y="282.60" width="232.32" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="282.60" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Aug — CPI y/y: 3.35</title>
+        <rect id="p2-mark-cpi-y-y-aug" class="bar" x="38" y="319.27" width="235.84" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="319.27" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Sep — CPI y/y: 3.72</title>
+        <rect id="p2-mark-cpi-y-y-sep" class="bar" x="38" y="355.93" width="261.89" height="22.47" fill="#2563eb"/>
+        <rect class="hit" x="38" y="355.93" width="352" height="22.47" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:64070/a/1e924ea8af3397413eee83125cee01b6.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Overall rating: <strong>1 Pinocchio</strong> (mostly accurate). Every checkable figure matched: October core CPI +0.3% m/m (warehouse 0.296%), policy range 3.75-4.00% (FEDFUNDS Oct 3.88), the September SEP moving 2% inflation to 2029 from 2028, and the Goolsbee, Waller and Logan quotes (CNBC). Weak points are framing: the Iraq-war comparison is loose (OIF about 7.4 years to Aug 2010), Waller's trigger was core 'around 0.3' not '0.3% or more', and the Trump quote could not be found elsewhere.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 85/100 — mostly honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>5 claims graded, 0 not gradable, 2 fell short. In this article only. <strong>Citejacking:</strong> #5 leans on cited evidence that does not carry it.</p></div>
+<p><strong>3</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>This past week's consumer price index for October came in hotter than expected</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>That means the Fed could fall short on the price-stability portion of its dual mandate for eight straight years—or as long as Operation Iraqi Freedom lasted.</td><td><strong>mostly true</strong></td><td>#3, #4 — overreach<br>Checked against: <a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>GDP growth is running hot as the AI hyperscalers pour hundreds of billions of dollars a year into the economy</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee (AI demand overheating)</a></td></tr><tr class="verdict-true"><td>2</td><td>the current 3.75%-4.00% policy rate</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC</a></td></tr><tr class="verdict-true"><td>4</td><td>In a few months, the Federal Reserve will be able to count six years that inflation has been above its 2% target</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC (5.5 years)</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>10</td><td>GDP growth is running hot as the AI hyperscalers pour hundreds of billions of dollars a year into the economy</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee (AI demand overheating)</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>That means the Fed could fall short on the price-stability portion of its dual mandate for eight straight years—or as long as Operation Iraqi Freedom lasted.</td><td><strong>mostly true</strong></td><td>#3, #4 — overreach<br>Checked against: <a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP</a></td></tr><tr class="verdict-true"><td>4</td><td>In a few months, the Federal Reserve will be able to count six years that inflation has been above its 2% target</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC (5.5 years)</a></td></tr><tr class="verdict-true"><td>2</td><td>the current 3.75%-4.00% policy rate</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC</a></td></tr><tr class="verdict-true"><td>1</td><td>This past week's consumer price index for October came in hotter than expected</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>10</td><td>GDP growth is running hot as the AI hyperscalers pour hundreds of billions of dollars a year into the economy</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee (AI demand overheating)</a></td></tr><tr class="verdict-true"><td>4</td><td>In a few months, the Federal Reserve will be able to count six years that inflation has been above its 2% target</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC (5.5 years)</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>That means the Fed could fall short on the price-stability portion of its dual mandate for eight straight years—or as long as Operation Iraqi Freedom lasted.</td><td><strong>mostly true</strong></td><td>#3, #4 — overreach<br>Checked against: <a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP</a></td></tr><tr class="verdict-true"><td>2</td><td>the current 3.75%-4.00% policy rate</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC</a></td></tr><tr class="verdict-true"><td>1</td><td>This past week's consumer price index for October came in hotter than expected</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>5</td><td>That means the Fed could fall short on the price-stability portion of its dual mandate for eight straight years—or as long as Operation Iraqi Freedom lasted.</td><td><strong>mostly true</strong></td><td>#3, #4 — overreach<br>Checked against: <a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>GDP growth is running hot as the AI hyperscalers pour hundreds of billions of dollars a year into the economy</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee (AI demand overheating)</a></td></tr><tr class="verdict-true"><td>2</td><td>the current 3.75%-4.00% policy rate</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC</a></td></tr><tr class="verdict-true"><td>4</td><td>In a few months, the Federal Reserve will be able to count six years that inflation has been above its 2% target</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC (5.5 years)</a></td></tr><tr class="verdict-true"><td>1</td><td>This past week's consumer price index for October came in hotter than expected</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>5</td><td>That means the Fed could fall short on the price-stability portion of its dual mandate for eight straight years—or as long as Operation Iraqi Freedom lasted.</td><td><strong>mostly true</strong></td><td>#3, #4 — overreach<br>Checked against: <a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP</a></td></tr><tr class="verdict-true"><td>2</td><td>the current 3.75%-4.00% policy rate</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC</a></td></tr><tr class="verdict-true"><td>4</td><td>In a few months, the Federal Reserve will be able to count six years that inflation has been above its 2% target</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC (5.5 years)</a></td></tr><tr class="verdict-true"><td>1</td><td>This past week's consumer price index for October came in hotter than expected</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>GDP growth is running hot as the AI hyperscalers pour hundreds of billions of dollars a year into the economy</td><td><strong>mostly true</strong> &middot; causal claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee (AI demand overheating)</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Christopher Waller — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> mostly true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-mostly-true"><td>6</td><td>Hiking only 25 basis points would put our credibility at risk, a risk I am not eager to take.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/10/fed-governor-waller-sees-december-hike-likely.html">CNBC Waller</a></td></tr>
+</tbody></table>
+<h3>Claims by Austan Goolsbee — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>7</td><td>We've been above 2% for almost six years, and while it sometimes we were making progress, lately we're not making any progress, and if anything, it's going the wrong way.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee</a></td></tr>
+</tbody></table>
+<h3>Claims by Lorie Logan — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>8</td><td>it &quot;may be possible to move more rapidly&quot; than what September's quarter-point hike and October's hold have implied</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></td></tr>
+</tbody></table>
+<h3>Claims by Donald Trump — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>9</td><td>&quot;We're just keeping it the status quo,&quot; Trump told reporters on Monday.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.whitehouse.gov/briefings-statements/">White House briefings</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>3</td><td>In September, the Fed's summary of economic projections put down 2029 as the year when inflation is expected to fall back to 2%, pushing it back from a 2028 forecast made in June</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; This past week's consumer price index for October came in hotter than expected</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CPILFESL +0.296% m/m; CPIAUCSL +0.350% m/m <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd>CNBC: headline 0.4% vs 0.3% expected; core 0.3% vs 0.2%<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select series, date, value from econ.fred_indicators where series in ('CPIAUCSL','CPILFESL')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; the current 3.75%-4.00% policy rate</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>FEDFUNDS Oct 2026 = 3.88 <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd>CNBC: held at 3.75%-4% in 10-2 vote<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select * from econ.fred_indicators where series='FEDFUNDS'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; In September, the Fed's summary of economic projections put down 2029 as the year when inflation is expected to fall back to 2%, pushing it back from a 2028 forecast made in June</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Sept SEP PCE median 2.1 (2028), 2.0 (2029); June 2.0 in 2028<ul class="claim-sources"><li><a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP Sept 2026</a></li><li><a href="https://federalreserve.gov/">Federal Reserve Board home</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; In a few months, the Federal Reserve will be able to count six years that inflation has been above its 2% target</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>CPI y/y first above 2% Mar 2021 (2.6%); min y/y since = 2.31% <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC (5.5 years)</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>CPIAUCNS 12-month change 2021-2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; That means the Fed could fall short on the price-stability portion of its dual mandate for eight straight years—or as long as Operation Iraqi Freedom lasted.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Fed span Mar 2021 to 2029 is about 8 years (SEP); OIF 20 Mar 2003 to 31 Aug 2010 is about 7.4 years (DoD, from general knowledge, not fetched)<ul class="claim-sources"><li><a href="https://www.federalreserve.gov/monetarypolicy/files/fomcprojtabl20260916.pdf">Fed SEP</a></li></ul></dd>
+<dt>Rests on</dt><dd>#3, #4</dd>
+<dt>What that evidence found</dt><dd>Fed span 2021-2029 is about 8 years; OIF was Mar 2003-Aug 2010 (about 7.4 years)</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>OIF duration depends on end date; common end Aug 2010 gives about 7.4 years</dd>
+<dt>Web searches run</dt><dd>Operation Iraqi Freedom duration dates</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; Hiking only 25 basis points would put our credibility at risk, a risk I am not eager to take.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Christopher Waller — what they assert, as the piece reports it</dd>
+<dt>Article says</dt><dd>50 bp if core rose by 0.3% or more; core rose 0.3%</dd>
+<dt>Warehouse says</dt><dd>CPILFESL Oct +0.296% <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd>Verbatim in CNBC; core CPI +0.296%<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/10/fed-governor-waller-sees-december-hike-likely.html">CNBC Waller</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Quote verbatim, but trigger was core CPI 'around 0.3', not '0.3% or more' as Fortune paraphrases</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see claim 1</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; We've been above 2% for almost six years, and while it sometimes we were making progress, lately we're not making any progress, and if anything, it's going the wrong way.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Austan Goolsbee — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>CPI y/y min 2.31% since Mar 2021 <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd>Verbatim in CNBC Nov 13; warehouse CPI y/y min 2.31% since Mar 2021<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>see claim 4</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; it &quot;may be possible to move more rapidly&quot; than what September's quarter-point hike and October's hold have implied</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Lorie Logan — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>CNBC quotes 'It may be possible to move more rapidly this winter...'<ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/10/cpi-inflation-report-october-2026.html">CNBC CPI report</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#9 &middot; <strong>unsupported</strong> &mdash; &quot;We're just keeping it the status quo,&quot; Trump told reporters on Monday.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Donald Trump — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.whitehouse.gov/briefings-statements/">White House briefings</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Quote not found in searches or White House briefings page; Fortune is the only source</dd>
+<dt>No page loaded because</dt><dd>Search returned no matching page; White House briefings page lists no remarks transcript for Monday Nov 9</dd>
+<dt>Warehouse searched for</dt><dd>presidential remarks statements Iran policy quotes</dd>
+<dt>Web searches run</dt><dd>Trump keeping it the status quo Iran reporters Monday November 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; GDP growth is running hot as the AI hyperscalers pour hundreds of billions of dollars a year into the economy</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>GDPC1 24,408 (Q2) -&gt; 24,611 (Q3) <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cnbc.com/2026/11/13/chicago-feds-goolsbee-says-central-bank-has-definitely-got-work-to-do-on-inflation.html">CNBC Goolsbee (AI demand overheating)</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>Real GDP Q3 about +3.4% annualized but Q2 only +2.2%; capex amount not checked</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>select * from econ.fred_indicators where series='GDPC1'</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Detail</h2>
+<ul><li>Core CPI Oct: +0.296% m/m (CPILFESL 339.900 vs 338.896); headline +0.35%. CPI y/y first above 2% in March 2021 (2.6%), minimum since 2.31%.</li><li>FEDFUNDS Aug 3.63, Sep 3.75, Oct 3.88: consistent with September hike and October hold.</li><li>Fed SEP (Sept 2026 PDF read): median PCE 2.0% in 2029; June had 2.0% in 2028.</li><li>Real GDP Q3 about +3.4% annualized, Q2 +2.2%.</li><li>BLS published no y/y CPI for October (shutdown gap); the article does not mention it.</li><li>Goolsbee 'borderline disturbing' is real but from a different interview (secondary reports).</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Oil/diesel/Hormuz and AI capex dollar claims</strong>: Not independently verified; real GDP checked only as a proxy for 'running hot'.</li><li><strong>Swonk LinkedIn post and verbatim Trump 'status quo' quote</strong>: LinkedIn not fetched; Trump quote not found. Graded unsupported, not false.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>6 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 20 rows — 9711 ms</summary><pre><code>select a.series, a.date, a.value, a.value/b.value*100-100 as mom_pct, a.value/c.value*100-100 as yoy_pct from econ.fred_indicators a left join econ.fred_indicators b on b.series=a.series and b.date = a.date - interval '1' month left join econ.fred_indicators c on c.series=a.series and c.date = a.date - interval '12' month where a.series in ('CPIAUCSL','CPILFESL') and a.date &gt;= date '2026-01-01' order by a.series, a.date</code></pre></details>
+<details class="sqltoggle"><summary>query — 10 rows — 3131 ms</summary><pre><code>select series, date, value from econ.fred_indicators where series='FEDFUNDS' and date &gt;= date '2026-01-01' order by date</code></pre></details>
+<details class="sqltoggle"><summary>query — 16 rows — 4267 ms</summary><pre><code>select a.date, a.value/c.value*100-100 as yoy_pct from econ.fred_indicators a join econ.fred_indicators c on c.series=a.series and c.date = a.date - interval '12' month where a.series='PCEPI' and a.date &gt;= date '2020-10-01' and a.date&lt;=date '2022-01-01' order by a.date</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 5978 ms</summary><pre><code>select min(a.value/c.value*100-100) as min_yoy, count(*) n from econ.fred_indicators a join econ.fred_indicators c on c.series=a.series and c.type=a.type and c.date = a.date - interval '12' month where a.series='CPIAUCNS' and a.date &gt;= date '2021-03-01' and a.date&lt;=date '2026-09-01'</code></pre></details>
+<details class="sqltoggle"><summary>query — 21 rows — 6338 ms</summary><pre><code>select a.date, a.value/c.value*100-100 as yoy_pct from econ.fred_indicators a join econ.fred_indicators c on c.series=a.series and c.date = a.date - interval '12' month where a.series='PCEPI' and a.date &gt;= date '2025-01-01' order by a.date</code></pre></details>
+<details class="sqltoggle"><summary>query — 7 rows — 2749 ms</summary><pre><code>select &quot;date&quot;, &quot;value&quot; from econ.fred_indicators where series='GDPC1' and &quot;date&quot;&gt;=date '2025-01-01' order by &quot;date&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
