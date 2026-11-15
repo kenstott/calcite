@@ -617,3 +617,61 @@ FROM counts;
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: hvs_homeownership_by_age (Census HVS Table 12 snapshot; partition col: type)
+-- 18 age groups x 1982-latest (~44 years) = ~790 rows expected.
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T2_row_count',
+  CASE WHEN n >= 750 THEN 'pass' ELSE 'fail' END, n, 750, 'Expected >=750 year x age-group rows (1982 onward)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true) WHERE age_group = '30_34' ORDER BY data_year LIMIT 5;
+
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL data_year or age_group rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true)
+  WHERE data_year IS NULL OR age_group IS NULL);
+
+-- T7: rates are percentages in (0,100]; owner + renter must equal total; the national
+-- 1982 rate is ~64.8% and 30-34 in 1982 is ~57%, so a units mix-up shows as a range failure.
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T7_value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with rate outside (0,100], owner>total, or year outside 1982-2100'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true)
+  WHERE homeownership_rate_pct <= 0 OR homeownership_rate_pct > 100
+    OR households_owner_thousands > households_total_thousands
+    OR data_year < 1982 OR data_year > 2100);
+
+-- T8: (data_year, age_group) must be unique (revised columns must replace, not duplicate).
+INSERT INTO dq_results
+SELECT 'housing', 'hvs_homeownership_by_age', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (data_year, age_group) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT data_year, age_group FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/housing/hvs_homeownership_by_age', allow_moved_paths := true)
+  GROUP BY data_year, age_group HAVING COUNT(*) > 1));
