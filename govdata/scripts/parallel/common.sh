@@ -536,66 +536,154 @@ wait_for_sec_workers() {
   done
 }
 
-# verify_closure_on_r2 <r2_remote> <bucket> <schema> <table> <files_list>
-# Existence gate run before any version-hint.text is written on R2: every path in <files_list>
-# (relative to the table directory) must be present on R2. `rclone copy --files-from` exits 0
-# when a listed file is absent from the source, so the copy's exit status proves nothing about
-# the closure. Lists the requested files on R2 (one lookup per file, no recursive listing) and
-# compares with the request. On any missing file, logs each at error level, appends it to
-# ${GOVDATA_R2_CLOSURE_MISSING_FILE:-$HOME/.r2-closure-missing} and returns 1.
+# r2_rclone <timeout-seconds> <rclone args...>
+# Every rclone call against the R2 mirror or MinIO in the sync scripts goes through this: an
+# outer `timeout` plus rclone's own --timeout/--contimeout and bounded retries, so a stalled
+# endpoint fails the call instead of hanging it with zero I/O.
+r2_rclone() {
+  local secs=$1; shift
+  timeout --kill-after=30 "$secs" rclone \
+    --timeout "${GOVDATA_R2_SYNC_TIMEOUT:-2m}" --contimeout "${GOVDATA_R2_SYNC_CONTIMEOUT:-30s}" \
+    --retries 3 --low-level-retries 3 "$@"
+}
+
+# verify_closure_on_r2 <r2_remote> <bucket> <schema> <table> <sizes_list>
+# Existence-and-size gate run before any version-hint.text is written on R2. <sizes_list> holds
+# one "<path>TAB<bytes>" line per closure file (path relative to the table directory; bytes is
+# the size the manifests recorded, or -1 when none is recorded). `rclone copy --files-from`
+# exits 0 when a listed file is absent from the source, so the copy's exit status proves
+# nothing about the closure. This looks up each listed file on R2 (no recursive listing of the
+# table) and requires it to be present with the recorded size. On any shortfall it logs each
+# file at error level, appends it to ${GOVDATA_R2_CLOSURE_MISSING_FILE:-$HOME/.r2-closure-missing}
+# and returns 1.
 verify_closure_on_r2() {
-  local r2_remote=$1 bucket=$2 schema=$3 table=$4 files_list=$5
-  local present missing marker="${GOVDATA_R2_CLOSURE_MISSING_FILE:-$HOME/.r2-closure-missing}"
+  local r2_remote=$1 bucket=$2 schema=$3 table=$4 sizes_list=$5
+  local marker="${GOVDATA_R2_CLOSURE_MISSING_FILE:-$HOME/.r2-closure-missing}"
+  local paths present problems
+  paths=$(mktemp) || return 1
   present=$(mktemp) || return 1
-  if ! rclone lsf "${r2_remote}:${bucket}/${schema}/${table}" --files-from "$files_list" \
-      -R --files-only --checkers 32 > "$present"; then
-    log_error "sync-to-r2: [$schema/$table] closure existence listing on R2 FAILED"
-    rm -f "$present"
+  cut -f1 "$sizes_list" > "$paths"
+  if ! r2_rclone "${GOVDATA_R2_LOOKUP_TIMEOUT:-1800}" lsf "${r2_remote}:${bucket}/${schema}/${table}" \
+      --files-from "$paths" -R --files-only --format "ps" --separator $'\t' --checkers 32 > "$present"; then
+    log_error "sync-to-r2: [$schema/$table] closure existence lookup on R2 FAILED"
+    rm -f "$paths" "$present"
     return 1
   fi
-  missing=$(LC_ALL=C comm -23 <(LC_ALL=C sort -u "$files_list") <(LC_ALL=C sort -u "$present"))
-  rm -f "$present"
-  if [ -n "$missing" ]; then
-    local f n=0
-    while IFS= read -r f; do
+  # lsf prints "<path>TAB<size>". Emit "MISSING path" or "SIZE path want have" per problem.
+  problems=$(awk -F'\t' 'FILENAME == ARGV[1] { have[$1] = $2; next }
+      { if (!($1 in have)) print "MISSING\t" $1;
+        else if ($2 >= 0 && have[$1] != $2) print "SIZE\t" $1 "\twant " $2 " have " have[$1] }' \
+      "$present" "$sizes_list")
+  rm -f "$paths" "$present"
+  if [ -n "$problems" ]; then
+    local kind f detail n=0
+    while IFS=$'\t' read -r kind f detail; do
       n=$((n + 1))
-      log_error "sync-to-r2: [$schema/$table] closure file MISSING on R2: $f"
-      printf '%s\t%s/%s\t%s\n' "$(date -u +%FT%TZ)" "$schema" "$table" "$f" >> "$marker"
-    done <<< "$missing"
-    log_error "sync-to-r2: [$schema/$table] $n closure file(s) missing on R2 — version-hint.text NOT advanced"
+      log_error "sync-to-r2: [$schema/$table] closure file $kind on R2: $f ${detail:-}"
+      printf '%s\t%s/%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$schema" "$table" "$f" "$kind" >> "$marker"
+    done <<< "$problems"
+    log_error "sync-to-r2: [$schema/$table] $n closure file(s) missing or wrong size on R2 — version-hint.text NOT advanced"
     return 1
   fi
   return 0
 }
 
-# sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
-# Resolves exactly the files the table's CURRENT snapshot depends on (ClosureResolver: a
-# single read of version-hint.text, then metadata.json + manifest-list + every manifest +
-# every data/delete file it names), copies exactly that closure MinIO -> R2 (copy-only,
-# idempotent), then publishes the resolved version as R2's version-hint.text. Never advances
-# the pointer unless the whole closure copy already succeeded, so a caller never needs a
-# separate "verify this one file" step — the closure IS the complete dependency set a reader
-# needs, at every level (manifest-list, manifest, data file), not just the top of the chain.
-# Prints the resolved version to stdout on success; returns nonzero (nothing published) on
-# any failure, so R2's pointer is left at whatever it already named.
+# r2_pointer_guard <minio_remote> <r2_remote> <bucket> <schema> <table> <version>
+# Row-drop guard run before a pointer is published. Compares total-records of the candidate
+# version's current snapshot with that of the version R2 publishes now. Holds (returns 1, writes
+# <state>/held/<schema>__<table>.json, logs at error level) when
+#   - the candidate total is lower than the published total by more than GOVDATA_R2_ROWDROP_PCT
+#     percent (default 5), or
+#   - a replace/overwrite/delete snapshot between the two removed more records than it added by
+#     more than that percent of the published total.
+# The lead overrides one table with a file <state>/force-publish/<schema>__<table>, consumed by
+# the publish that uses it. A table with no pointer on R2 yet is a first publish: no guard. A
+# total that cannot be read is a hold too, never a pass.
+r2_pointer_guard() {
+  local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5 version=$6
+  local state="${GOVDATA_R2_SYNC_STATE_DIR:-$HOME/.r2-sync-state}"
+  local key="${schema}__${table}" pct="${GOVDATA_R2_ROWDROP_PCT:-5}"
+  local base="${bucket}/${schema}/${table}" cur cand_json pub_json reason
+  mkdir -p "$state/held" "$state/force-publish"
+
+  cur=$(r2_rclone 300 cat "${r2_remote}:${base}/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
+  if [ -z "$cur" ]; then
+    rm -f "$state/held/$key.json"
+    return 0
+  fi
+  cand_json=$(mktemp); pub_json=$(mktemp)
+  if ! r2_rclone 300 cat "${minio_remote}:${base}/metadata/v${version}.metadata.json" > "$cand_json" \
+     || ! r2_rclone 300 cat "${r2_remote}:${base}/metadata/v${cur}.metadata.json" > "$pub_json"; then
+    reason="cannot read metadata json of v${version} (MinIO) or v${cur} (R2)"
+  else
+    reason=$(jq -rn --slurpfile c "$cand_json" --slurpfile p "$pub_json" --argjson pct "$pct" '
+      def cur($m): ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0];
+      def tot($m): if $m."current-snapshot-id" == null or $m."current-snapshot-id" == -1 then 0
+                   else (cur($m).summary["total-records"] // null | if . == null then null else tonumber end) end;
+      ($c[0]) as $cm | ($p[0]) as $pm
+      | tot($cm) as $ct | tot($pm) as $pt
+      | if $ct == null or $pt == null then "total-records missing (candidate \($ct), published \($pt))"
+        elif $pt > 0 and $ct < $pt * (100 - $pct) / 100 then "total-records fell \($pt) -> \($ct)"
+        else
+          (cur($pm) | .["timestamp-ms"] // 0) as $pts
+          | [ ($cm.snapshots // [])[] | select(."timestamp-ms" > $pts)
+              | select(.summary.operation == "replace" or .summary.operation == "overwrite" or .summary.operation == "delete")
+              | select(((.summary["deleted-records"] // "0" | tonumber) - (.summary["added-records"] // "0" | tonumber)) > $pt * $pct / 100)
+              | "snapshot \(."snapshot-id") \(.summary.operation) deleted \(.summary["deleted-records"]) added \(.summary["added-records"])" ] | .[0] // ""
+        end' 2>&1) || reason="guard could not evaluate metadata: $reason"
+  fi
+  if [ -z "$reason" ]; then
+    rm -f "$cand_json" "$pub_json" "$state/held/$key.json"
+    return 0
+  fi
+  if [ -e "$state/force-publish/$key" ]; then
+    rm -f "$state/force-publish/$key" "$state/held/$key.json"
+    log_error "sync-to-r2: [$schema/$table] row-drop guard OVERRIDDEN by force-publish ($reason); publishing v${version} over v${cur}"
+    rm -f "$cand_json" "$pub_json"
+    return 0
+  fi
+  local ct pt
+  ct=$(jq -r '. as $m | ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0].summary["total-records"] // "n/a"' "$cand_json" 2>/dev/null || echo n/a)
+  pt=$(jq -r '. as $m | ($m.snapshots // []) | map(select(."snapshot-id" == $m."current-snapshot-id")) | .[0].summary["total-records"] // "n/a"' "$pub_json" 2>/dev/null || echo n/a)
+  rm -f "$cand_json" "$pub_json"
+  jq -n --arg t "$schema/$table" --arg r "$reason" --arg cv "$version" --arg pv "$cur" \
+        --arg ct "$ct" --arg pt "$pt" --arg at "$(date -u +%FT%TZ)" \
+        '{table:$t, reason:$r, candidate_version:$cv, published_version:$pv, candidate_total_records:$ct, published_total_records:$pt, held_at:$at}' \
+        > "$state/held/$key.json"
+  log_error "sync-to-r2: [$schema/$table] row-drop guard HELD pointer: $reason (candidate v${version} total ${ct}, published v${cur} total ${pt}); marker $state/held/$key.json"
+  return 1
+}
+
+# publish_r2_pointer <minio_remote> <r2_remote> <bucket> <schema> <table> <version>
+# The only place a version-hint.text is written on R2: the row-drop guard first, then the write.
+publish_r2_pointer() {
+  local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5 version=$6
+  r2_pointer_guard "$minio_remote" "$r2_remote" "$bucket" "$schema" "$table" "$version" || return 1
+  if ! printf '%s' "$version" | r2_rclone 300 rcat "${r2_remote}:${bucket}/${schema}/${table}/metadata/version-hint.text"; then
+    log_error "sync-to-r2: [$schema/$table] closure copied but version-hint.text write FAILED — R2 still on its prior version, retry next pass"
+    return 1
+  fi
+}
+
 # Runs ClosureResolver with stdout and stderr kept apart. stdout must be exactly one
-# "VERSION <n>" line followed by object paths; any other stdout line (a JVM warning, a log
-# line) would become a bogus --files-from entry, so it is a failure, not something to skip.
-# Output: resolved text on stdout. JVM diagnostics go to stderr via log_error on failure.
+# "VERSION <n>" line followed by "<object path>TAB<bytes>" lines (--sizes); any other stdout
+# line (a JVM warning, a log line) would become a bogus --files-from entry, so it is a failure,
+# not something to skip. Output: resolved text on stdout. JVM diagnostics go to log_error on failure.
 run_closure_resolver() {
   local jar=$1 warehouse=$2 table=$3 tag=$4
   local out err rc=0
   out=$(mktemp); err=$(mktemp)
-  java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -cp "$jar" \
+  timeout --kill-after=30 "${GOVDATA_R2_RESOLVE_TIMEOUT:-1800}" java \
+      -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -cp "$jar" \
       org.apache.calcite.adapter.file.iceberg.ClosureResolver \
-      --warehouse "$warehouse" --table "$table" >"$out" 2>"$err" || rc=$?
+      --warehouse "$warehouse" --table "$table" --sizes >"$out" 2>"$err" || rc=$?
   if [ "$rc" -ne 0 ]; then
     log_error "$tag closure resolution FAILED (rc=$rc):"
     tail -20 "$err" | while IFS= read -r line; do log_error "$tag   $line"; done
     rm -f "$out" "$err"; return 1
   fi
   local bad
-  bad=$(grep -vE '^(VERSION [0-9]+|[A-Za-z0-9_./=@+-]+)$' "$out" | head -5 || true)
+  bad=$(grep -vP '^(VERSION [0-9]+|[A-Za-z0-9_./=@+-]+\t-?[0-9]+)$' "$out" | head -5 || true)
   if [ -n "$bad" ]; then
     log_error "$tag resolver printed non-path lines on stdout; refusing to build a file list:"
     echo "$bad" | while IFS= read -r line; do log_error "$tag   $line"; done
@@ -605,72 +693,106 @@ run_closure_resolver() {
   rm -f "$out" "$err"
 }
 
+# sync_iceberg_table_closure <minio_remote> <r2_remote> <bucket> <schema> <table>
+# The single sync unit for one Iceberg table, used by the continuous sync and the true-up:
+# resolves exactly the files the table's CURRENT version depends on (ClosureResolver: one read
+# of version-hint.text, then metadata.json + manifest list + every manifest + every data/delete
+# file with its recorded size), asks R2 which of them are present with the right size, copies
+# only the rest from MinIO, re-verifies the whole closure on R2, and only then publishes the
+# version through publish_r2_pointer (row-drop guard, pointer last). With R2_SYNC_DRY_RUN=true
+# it reports what would be copied and published and writes nothing.
+# Prints the resolved version to stdout on success; returns nonzero (nothing published) on any
+# failure, so R2's pointer is left at whatever it already named.
 sync_iceberg_table_closure() {
   local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5
+  local tag="sync-to-r2: [$schema/$table]"
   local jar; jar=$(resolve_classpath) || return 1
   local warehouse="s3://${bucket}/${schema}"
 
   local resolved
-  if ! resolved=$(run_closure_resolver "$jar" "$warehouse" "$table" "sync-to-r2: [$schema/$table]"); then
+  if ! resolved=$(run_closure_resolver "$jar" "$warehouse" "$table" "$tag"); then
     return 1
   fi
 
   local version
   version=$(echo "$resolved" | grep '^VERSION ' | awk '{print $2}')
   if [ -z "$version" ]; then
-    log_error "sync-to-r2: [$schema/$table] no VERSION line in resolver output — treating as failure"
+    log_error "$tag no VERSION line in resolver output — treating as failure"
     return 1
   fi
 
-  local files_list
-  files_list=$(mktemp)
-  echo "$resolved" | grep -v '^VERSION ' > "$files_list"
+  local sizes_list paths_list present todo_list
+  sizes_list=$(mktemp); paths_list=$(mktemp); present=$(mktemp); todo_list=$(mktemp)
+  echo "$resolved" | grep -v '^VERSION ' > "$sizes_list"
+  cut -f1 "$sizes_list" > "$paths_list"
   local file_count
-  file_count=$(wc -l < "$files_list" | tr -d ' ')
+  file_count=$(wc -l < "$sizes_list" | tr -d ' ')
   # Everything but the version goes to stderr: the caller captures stdout as the version, and a
   # log line captured with it was being stamped as the "verified version" (garbage stamps).
-  log_info "sync-to-r2: [$schema/$table] resolved v$version, $file_count files in closure — verifying/copying" >&2
+  log_info "$tag resolved v$version, $file_count files in closure" >&2
 
-  if ! rclone copy "${minio_remote}:${bucket}/${schema}/${table}" "${r2_remote}:${bucket}/${schema}/${table}" \
-      --files-from "$files_list" --transfers 16 --checkers 32 2>&1 \
-      | while IFS= read -r line; do log_info "sync-to-r2: [$schema/$table] $line" >&2; done; then
-    log_error "sync-to-r2: [$schema/$table] closure copy FAILED — version-hint.text NOT advanced"
-    rm -f "$files_list"
+  # Which closure files R2 already has with the recorded size; copy only the others.
+  if ! r2_rclone "${GOVDATA_R2_LOOKUP_TIMEOUT:-1800}" lsf "${r2_remote}:${bucket}/${schema}/${table}" \
+      --files-from "$paths_list" -R --files-only --format "ps" --separator $'\t' --checkers 32 > "$present"; then
+    log_error "$tag closure existence lookup on R2 FAILED"
+    rm -f "$sizes_list" "$paths_list" "$present" "$todo_list"
     return 1
   fi
-  if ! verify_closure_on_r2 "$r2_remote" "$bucket" "$schema" "$table" "$files_list"; then
-    rm -f "$files_list"
+  awk -F'\t' 'FILENAME == ARGV[1] { have[$1] = $2; next }
+      { if (!($1 in have) || ($2 >= 0 && have[$1] != $2)) print $1 }' "$present" "$sizes_list" > "$todo_list"
+  local todo_count
+  todo_count=$(wc -l < "$todo_list" | tr -d ' ')
+  log_info "$tag $todo_count of $file_count closure files to copy" >&2
+
+  if [ "${R2_SYNC_DRY_RUN:-false}" = "true" ]; then
+    log_info "$tag DRY RUN — would copy $todo_count files and publish v$version" >&2
+    rm -f "$sizes_list" "$paths_list" "$present" "$todo_list"
+    echo "$version"
+    return 0
+  fi
+
+  if [ "$todo_count" -gt 0 ]; then
+    # --files-from paths are relative to the table directory, so the table directory is the
+    # copy root. A list that does not match the root copies nothing and exits 0; the
+    # verification below treats whatever is still missing as a failure.
+    if ! r2_rclone "${GOVDATA_R2_COPY_TIMEOUT:-3000}" copy "${minio_remote}:${bucket}/${schema}/${table}" \
+        "${r2_remote}:${bucket}/${schema}/${table}" \
+        --files-from "$todo_list" --transfers 16 --checkers 32 2>&1 \
+        | while IFS= read -r line; do log_info "$tag $line" >&2; done; then
+      log_error "$tag closure copy FAILED — version-hint.text NOT advanced"
+      rm -f "$sizes_list" "$paths_list" "$present" "$todo_list"
+      return 1
+    fi
+  fi
+  rm -f "$paths_list" "$present" "$todo_list"
+  if ! verify_closure_on_r2 "$r2_remote" "$bucket" "$schema" "$table" "$sizes_list"; then
+    rm -f "$sizes_list"
     return 1
   fi
-  rm -f "$files_list"
+  rm -f "$sizes_list"
 
   # Read-back verification gate, mirroring the writer's own gate (S3FileIOTableOperations#commit,
   # "a write returning without an exception is not proof the object is durably present and
   # readable"): rclone reporting the copy succeeded confirms the PUTs were accepted, not that R2
   # is already serving them back on a GET — S3-compatible stores can have a brief read-after-write
-  # gap. Confirmed live against R2 (2026-09-29, reported by peer session entity-resolution): a
-  # reader saw "Iceberg metadata file not found for table version" for a version whose pointer had
-  # just been published this way. Retry a short, bounded number of times rather than either
-  # trusting the copy blindly or failing outright on what is normally a sub-second window closing.
+  # gap. Retry a short, bounded number of times rather than either trusting the copy blindly or
+  # failing outright on what is normally a sub-second window closing.
   local metadata_rel="metadata/v${version}.metadata.json"
   local verified=false
   local _try
   for _try in 1 2 3 4 5; do
-    if rclone cat "${r2_remote}:${bucket}/${schema}/${table}/${metadata_rel}" >/dev/null 2>&1; then
+    if r2_rclone 300 cat "${r2_remote}:${bucket}/${schema}/${table}/${metadata_rel}" >/dev/null 2>&1; then
       verified=true
       break
     fi
     sleep 2
   done
   if ! $verified; then
-    log_error "sync-to-r2: [$schema/$table] closure copied but ${metadata_rel} still not readable on R2 after 5 retries — version-hint.text NOT advanced, retry next pass"
+    log_error "$tag closure copied but ${metadata_rel} still not readable on R2 after 5 retries — version-hint.text NOT advanced, retry next pass"
     return 1
   fi
 
-  if ! printf '%s' "$version" | rclone rcat "${r2_remote}:${bucket}/${schema}/${table}/metadata/version-hint.text"; then
-    log_error "sync-to-r2: [$schema/$table] closure copied but version-hint.text write FAILED — R2 still on its prior version, retry next pass"
-    return 1
-  fi
+  publish_r2_pointer "$minio_remote" "$r2_remote" "$bucket" "$schema" "$table" "$version" || return 1
   echo "$version"
 }
 

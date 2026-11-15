@@ -21,8 +21,8 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.io.CloseableIterable;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Resolves exactly the files a table's CURRENT snapshot depends on, pinned to whichever version
@@ -55,8 +55,13 @@ import java.util.Set;
  * <p>Usage:
  * <pre>{@code
  * java -cp sih-govdata.jar org.apache.calcite.adapter.file.iceberg.ClosureResolver \
- *   --warehouse s3://bucket/sec --table filing_metadata
+ *   --warehouse s3://bucket/sec --table filing_metadata [--sizes]
  * }</pre>
+ *
+ * <p>With {@code --sizes} every path line is {@code <path>TAB<bytes>}, where bytes is the size
+ * the manifest chain recorded for that file, or {@code -1} for the metadata json and manifest
+ * list, whose size no manifest records. A copy tool compares these with the destination's
+ * object sizes before it publishes a pointer.
  */
 public final class ClosureResolver {
 
@@ -65,6 +70,7 @@ public final class ClosureResolver {
   public static void main(String[] args) throws Exception {
     String warehouse = null;
     String tableName = null;
+    boolean withSizes = false;
     for (int i = 0; i < args.length; i++) {
       switch (args[i]) {
       case "--warehouse":
@@ -73,13 +79,16 @@ public final class ClosureResolver {
       case "--table":
         tableName = args[++i];
         break;
+      case "--sizes":
+        withSizes = true;
+        break;
       default:
         System.err.println("Unknown argument: " + args[i]);
         System.exit(1);
       }
     }
     if (warehouse == null || tableName == null) {
-      System.err.println("Usage: ClosureResolver --warehouse <path> --table <name>");
+      System.err.println("Usage: ClosureResolver --warehouse <path> --table <name> [--sizes]");
       System.exit(1);
     }
 
@@ -93,31 +102,33 @@ public final class ClosureResolver {
     int version = IcebergDirectLoader.currentVersion(conf, tablePath);
 
     Snapshot snapshot = table.currentSnapshot();
-    Set<String> relativePaths = new LinkedHashSet<>();
-    relativePaths.add("metadata/v" + version + ".metadata.json");
+    Map<String, Long> relativePaths = new LinkedHashMap<>();
+    relativePaths.put("metadata/v" + version + ".metadata.json", -1L);
 
     if (snapshot != null) {
       String manifestList = snapshot.manifestListLocation();
       if (manifestList != null) {
-        relativePaths.add(relativize(tableName, manifestList));
+        relativePaths.put(relativize(tableName, manifestList), -1L);
       }
       for (ManifestFile manifestFile : snapshot.allManifests(table.io())) {
-        relativePaths.add(relativize(tableName, manifestFile.path()));
+        relativePaths.put(relativize(tableName, manifestFile.path()), manifestFile.length());
       }
       try (CloseableIterable<FileScanTask> tasks = table.newScan().planFiles()) {
         for (FileScanTask task : tasks) {
           DataFile dataFile = task.file();
-          relativePaths.add(relativize(tableName, dataFile.path().toString()));
+          relativePaths.put(relativize(tableName, dataFile.path().toString()),
+              dataFile.fileSizeInBytes());
           for (DeleteFile deleteFile : task.deletes()) {
-            relativePaths.add(relativize(tableName, deleteFile.path().toString()));
+            relativePaths.put(relativize(tableName, deleteFile.path().toString()),
+                deleteFile.fileSizeInBytes());
           }
         }
       }
     }
 
     System.out.println("VERSION " + version);
-    for (String path : relativePaths) {
-      System.out.println(path);
+    for (Map.Entry<String, Long> entry : relativePaths.entrySet()) {
+      System.out.println(withSizes ? entry.getKey() + "\t" + entry.getValue() : entry.getKey());
     }
   }
 

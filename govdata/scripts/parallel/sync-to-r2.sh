@@ -187,7 +187,7 @@ _capture_pins() {
   local s=$1 t v
   while read -r t; do
     [ -z "$t" ] && continue
-    v=$(rclone cat "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
+    v=$(r2_rclone 300 cat "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
     if [[ "$v" =~ ^[0-9]+$ ]]; then printf '%s\t%s\n' "$t" "$v"; fi
   done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sed 's#/*$##' || true)
 }
@@ -212,7 +212,7 @@ _apply_pins() {
     # manifest-list itself references (the file whose absence surfaces to a reader as
     # "HTTP GET ... -m1.avro (404)") could still be missing, and would stay missing forever
     # once this cheap check started trusting an unverified match.
-    cur=$(rclone cat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
+    cur=$(r2_rclone 300 cat "${R2_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
     # (tail -n 1: stamps written before the closure function stopped leaking its log lines to
     # stdout hold log text above the version; each was written only after a successful publish,
     # so its last line is still the verified version.)
