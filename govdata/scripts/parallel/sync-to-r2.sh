@@ -165,6 +165,47 @@ BUFFER=120                                # overlap between slices so a file wri
 STATE_DIR="${HOME}/.r2-sync-state"
 mkdir -p "$STATE_DIR"
 
+# Legacy folders that are not Iceberg tables (no metadata/version-hint.text) and hold millions of small
+# per-accession directories. Listing one runs for an hour or more and saturates MinIO's metadata I/O, so no
+# listing or copy here ever enters them. Space-separated globs matched against "<schema>/<top-level dir>";
+# this is the single place the list lives. Override with GOVDATA_R2_SYNC_EXCLUDE.
+LEGACY_EXCLUDE="${GOVDATA_R2_SYNC_EXCLUDE:-sec/year=* sec/chunk-progress */type=*_bulk */vectorized_chunk_codes}"
+# Wall-clock cap on one directory listing. A listing that outlives it is logged and treated as empty/failed
+# by the caller's normal path; it never holds the pass.
+LIST_MAX="${GOVDATA_R2_SYNC_LIST_MAX:-120s}"
+
+# _is_excluded <schema> <dir> → 0 when <schema>/<dir> matches LEGACY_EXCLUDE.
+_is_excluded() {
+  local g
+  for g in $LEGACY_EXCLUDE; do
+    # shellcheck disable=SC2254
+    case "$1/$2" in $g) return 0 ;; esac
+  done
+  return 1
+}
+
+# _exclude_flags <schema> → rclone --exclude flags for every LEGACY_EXCLUDE glob that applies to <schema>.
+_exclude_flags() {
+  local g gs gd out=""
+  for g in $LEGACY_EXCLUDE; do
+    gs=${g%%/*}; gd=${g#*/}
+    # shellcheck disable=SC2254
+    case "$1" in $gs) out="$out --exclude /$gd/**" ;; esac
+  done
+  echo "$out"
+}
+
+# _lsf <rclone lsf args...> → rclone lsf under LIST_MAX; an expired or failed listing is logged, not hidden.
+_lsf() {
+  local rc=0
+  local cap="${LIST_CAP:-$LIST_MAX}"
+  timeout --kill-after=10 "$cap" rclone lsf --timeout "$cap" "$@" 2>/dev/null || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log_error "sync-to-r2: listing failed or exceeded ${LIST_CAP:-$LIST_MAX} (rc=$rc): rclone lsf $*" >&2
+    return "$rc"
+  fi
+}
+
 # ── Pointer pinning ────────────────────────────────────────────────────────────
 # A Hadoop-catalog Iceberg table publishes its current version through
 # <table>/metadata/version-hint.text, and that file is rewritten on EVERY commit. So
@@ -187,9 +228,10 @@ _capture_pins() {
   local s=$1 t v
   while read -r t; do
     [ -z "$t" ] && continue
+    _is_excluded "$s" "$t" && continue
     v=$(r2_rclone 300 cat "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$t/metadata/version-hint.text" 2>/dev/null | tr -dc '0-9' || true)
     if [[ "$v" =~ ^[0-9]+$ ]]; then printf '%s\t%s\n' "$t" "$v"; fi
-  done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sed 's#/*$##' || true)
+  done < <(_lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" | sed 's#/*$##' || true)
 }
 
 # _apply_pins <schema> <pins> → 0 if every pointer was published, 1 if any was held back.
@@ -290,19 +332,21 @@ _copy_split_schema() {
   local started copied=0 failed=0 skipped=0 paused=0 remaining=0 units=() reg
   started=$(date +%s)
   local deadline=$(( started + $(_secs "$SLICE_MAX") ))
-  local d c
+  local d c skipped_dirs=""
   while IFS= read -r d; do
     [ -n "$d" ] || continue
+    if _is_excluded "$s" "$d"; then skipped_dirs="$skipped_dirs $d"; continue; fi
     if [ -e "$STATE_DIR/.deep-$s-$d" ]; then
       # This directory hit UNIT_MAX on its own: copy its subdirectories (and the files directly in it) as units.
       while IFS= read -r c; do
         [ -n "$c" ] && units+=("$d/$c")
-      done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$d" 2>/dev/null | sed 's#/*$##')
+      done < <(_lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s/$d" | sed 's#/*$##')
       units+=("$d/_root")
     else
       units+=("$d")
     fi
-  done < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sed 's#/*$##')
+  done < <(_lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}/$s" | sed 's#/*$##')
+  [ -n "$skipped_dirs" ] && log_info "sync-to-r2: [$s] skipping non-Iceberg directories (LEGACY_EXCLUDE):$skipped_dirs"
   units+=("_root")
   mapfile -t units < <(for u in "${units[@]}"; do
     printf '%s\t%s\n' "$(stat -c %Y "$STATE_DIR/.unit-try-$s-$(_ukey "$u")" 2>/dev/null || echo 0)" "$u"
@@ -375,7 +419,7 @@ _now=$(date +%s)
 
 # Schemas = top-level prefixes in the bucket (each schema writes under <schema>/). Fail
 # loudly on an unreadable/empty source rather than silently syncing nothing.
-mapfile -t _schemas < <(rclone lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}" 2>/dev/null | sed 's#/*$##')
+mapfile -t _schemas < <(_lsf --dirs-only "${MINIO_REMOTE}:${BUCKETS[0]}" | sed 's#/*$##')
 if [ "${#_schemas[@]}" -eq 0 ]; then
   log_error "sync-to-r2: FATAL — no schemas (top-level prefixes) found under ${BUCKETS[0]}"
   exit 1
@@ -464,7 +508,16 @@ for s in "${_schemas[@]}"; do
     # NB: `| head -1` closes the pipe early → SIGPIPE(141) on sort; under set -o pipefail +
     # set -e that would abort the whole pass. Disable pipefail just for this probe (the
     # SIGPIPE is expected, not a failure) so a normal, non-empty listing yields the oldest.
-    _o=$( set +o pipefail; rclone lsf -R --files-only --format t "${MINIO_REMOTE}:${BUCKETS[0]}/$s" 2>/dev/null | sort | head -1 )
+    # A recursive probe walks every file, so it gets the slice cap rather than the directory-listing cap; one
+    # that expires is a failed pass for this schema, not an empty schema.
+    _probe="$STATE_DIR/.cold-probe-$s"
+    if ! LIST_CAP="$SLICE_MAX" _lsf -R --files-only --format t $(_exclude_flags "$s") "${MINIO_REMOTE}:${BUCKETS[0]}/$s" > "$_probe"; then
+      log_error "sync-to-r2: [$s] cold-start probe failed — schema skipped this pass"
+      _fail=1
+      continue
+    fi
+    _o=$( set +o pipefail; sort "$_probe" | head -1 )
+    rm -f "$_probe"
     if [ -z "$_o" ]; then
       log_info "sync-to-r2: [$s] no source files — skipping"
       continue
@@ -531,7 +584,7 @@ for s in "${_schemas[@]}"; do
         [ -n "$_pt" ] && _pause_ex+=(--exclude "/${_pt}/**")
       done < <(r2_paused_tables "$s")
       timeout --kill-after=60 "$SLICE_MAX" rclone copy "${MINIO_REMOTE}:${BUCKETS[0]}/$s" "${R2_REMOTE}:${BUCKETS[0]}/$s" \
-        --exclude "version-hint.text" ${_pause_ex[@]+"${_pause_ex[@]}"} $_slice_flags 2>&1 | while IFS= read -r line; do
+        --exclude "version-hint.text" $(_exclude_flags "$s") ${_pause_ex[@]+"${_pause_ex[@]}"} $_slice_flags 2>&1 | while IFS= read -r line; do
         log_info "sync-to-r2: [$s] $line"
       done
       _rc_data=${PIPESTATUS[0]}
