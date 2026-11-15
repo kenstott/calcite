@@ -10522,6 +10522,105 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- Section 301 additional-duty list membership (HTS Chapter 99 U.S. notes) ---
+  # Streamed by UsitcAdditionalDutyListsTransformer. The USITC JSON export carries the
+  # Chapter 99 headings but not which products each covers; that membership is only in
+  # the subchapter III U.S. notes of the Chapter 99 PDF. Like usitc_tariff_schedule there
+  # is no year fan-out: one fetch of the current revision, stamped with its revision year
+  # and replaced wholesale.
+  - name: usitc_additional_duty_lists
+    freshness:
+      type: last_modified
+    pattern: "type=usitc_additional_duty_lists/year=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+    comment: >
+      Section 301 (China) additional-duty list membership by HTS-8 code, from U.S. note 20
+      to HTS subchapter III of Chapter 99 in the current HTS revision: one row per
+      (hts8, Chapter 99 heading) for List 1 (9903.88.01), List 2 (9903.88.02), List 3
+      (9903.88.03) and List 4A (9903.88.15), with the additional ad valorem rate parsed
+      from the note text (25% for Lists 1-3, 7.5% for 4A). Join hts8 to
+      usitc_tariff_schedule.hts8 for statutory rates, or hs6 to trade_imports to compute
+      the share of China imports on a list. Product exclusions granted by USTR are
+      separate notes and are not netted out; List 4B (9903.88.16) is suspended and not
+      listed; Section 232 and IEEPA programs are not yet included. The HTS publishes
+      only the current list, so there is no effective/end date and no history; year is the
+      HTS revision year and hts_revision names the revision the lists were read from.
+    dimensions:
+      type:
+        - usitc_additional_duty_lists
+    columns:
+      - name: hts8
+        type: string
+        nullable: false
+        comment: HTS 8-digit subheading (digits only) covered by the list
+      - name: program
+        type: string
+        nullable: false
+        comment: Trade-remedy program; currently always 'Section 301'
+      - name: list_name
+        type: string
+        nullable: false
+        comment: Section 301 list (List 1, List 2, List 3, List 4A)
+      - name: chapter99_heading
+        type: string
+        nullable: false
+        comment: Chapter 99 heading imposing the duty (e.g. 9903.88.01)
+      - name: additional_rate_pct
+        type: double
+        nullable: false
+        comment: Additional ad valorem duty in percent, parsed from the U.S. note text
+      - name: note_ref
+        type: string
+        nullable: false
+        comment: U.S. note in subchapter III of Chapter 99 that enumerates the subheadings
+      - name: hts_revision
+        type: string
+        nullable: false
+        comment: HTS revision the lists were read from (e.g. Revision 23 (2026))
+      - name: year
+        type: integer
+        nullable: false
+        comment: HTS revision year (partition column; stamped from the PDF revision label)
+    source:
+      type: http
+      url: "https://hts.usitc.gov/reststop/file?release=currentRelease&filename=Chapter%2099"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 0.2
+        retryOn: [429, 503]
+        maxRetries: 3
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.UsitcAdditionalDutyListsTransformer"
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usitc_additional_duty_lists/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # --- USGS Mineral Commodity Summaries: per-commodity salient statistics -------
   # Discovered/streamed by org.apache.calcite.adapter.govdata.econ.UsgsMineralCommodityStatsProvider.
   # No year dimension (like pesticide_use_by_county): one run discovers every MCS Data
@@ -10836,6 +10935,18 @@ constraints:
 
   # USITC statutory HTS rate lines. Grain: one row per HTS-8 line of the current
   # revision. Intra-schema sibling of usitc_tariffs (statutory vs. realized).
+  usitc_additional_duty_lists:
+    primaryKey: [type, year, hts8, chapter99_heading]
+    foreignKeys:
+      - columns:
+          - hts8
+        targetSchema: "${SCHEMA_NAME:econ}"
+        targetTable: usitc_tariff_schedule
+        targetColumns:
+          - hts8
+        comment: >
+          HTS-8 list membership links to the statutory rate line. Metadata only.
+
   usitc_tariff_schedule:
     primaryKey: [type, year, hts8]
     foreignKeys:

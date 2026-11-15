@@ -1184,6 +1184,8 @@ WITH counts AS (
   UNION ALL
   SELECT 'trade_by_state'       , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/trade_by_state', allow_moved_paths := true) LIMIT 1))
   UNION ALL
+  SELECT 'usitc_additional_duty_lists', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true) LIMIT 1))
+  UNION ALL
   SELECT 'usitc_tariff_schedule', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariff_schedule', allow_moved_paths := true) LIMIT 1))
   UNION ALL
   SELECT 'usitc_tariffs'        , (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariffs', allow_moved_paths := true) LIMIT 1))
@@ -2311,3 +2313,46 @@ INSERT INTO dq_results
 SELECT 'econ', 'export_control_restricted_parties', 'entity_list_rows', 'fail', 'source_list', '>= 2000 EL rows', COUNT(*) || ' EL rows'
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) WHERE source_list = 'EL'
 HAVING COUNT(*) < 2000;
+
+-- usitc_additional_duty_lists: each Section 301 list is present at its published size (List 1 ~800+, List 2 ~280+, List 3 ~5,700+, List 4A ~2,900+ HTS-8 codes) and rate (25/25/25/7.5)
+INSERT INTO dq_results
+SELECT 'econ', 'usitc_additional_duty_lists', 'list_size_and_rate', 'fail', 'chapter99_heading',
+  'List 1 >=800 @25, List 2 >=250 @25, List 3 >=5500 @25, List 4A >=2800 @7.5',
+  chapter99_heading || ' rows=' || CAST(COUNT(*) AS VARCHAR) || ' rate=' || CAST(MIN(additional_rate_pct) AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true)
+GROUP BY chapter99_heading
+HAVING (chapter99_heading = '9903.88.01' AND (COUNT(*) < 800 OR MIN(additional_rate_pct) <> 25 OR MAX(additional_rate_pct) <> 25))
+    OR (chapter99_heading = '9903.88.02' AND (COUNT(*) < 250 OR MIN(additional_rate_pct) <> 25 OR MAX(additional_rate_pct) <> 25))
+    OR (chapter99_heading = '9903.88.03' AND (COUNT(*) < 5500 OR MIN(additional_rate_pct) <> 25 OR MAX(additional_rate_pct) <> 25))
+    OR (chapter99_heading = '9903.88.15' AND (COUNT(*) < 2800 OR MIN(additional_rate_pct) <> 7.5 OR MAX(additional_rate_pct) <> 7.5))
+    OR chapter99_heading NOT IN ('9903.88.01', '9903.88.02', '9903.88.03', '9903.88.15');
+
+-- usitc_additional_duty_lists: all four lists present
+INSERT INTO dq_results
+SELECT 'econ', 'usitc_additional_duty_lists', 'all_lists_present', 'fail', 'chapter99_heading', '4 distinct Section 301 headings',
+  'distinct headings=' || CAST(COUNT(DISTINCT chapter99_heading) AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true)
+HAVING COUNT(DISTINCT chapter99_heading) <> 4;
+
+-- usitc_additional_duty_lists: hts8 is 8 digits and is a real tariff line in usitc_tariff_schedule (a mis-parsed code would not join)
+INSERT INTO dq_results
+SELECT 'econ', 'usitc_additional_duty_lists', 'hts8_valid', 'fail', 'hts8', 'every hts8 = 8 digits and present in usitc_tariff_schedule',
+  CAST(COUNT(*) AS VARCHAR) || ' codes unmatched, e.g. ' || MIN(l.hts8)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true) l
+LEFT JOIN iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_tariff_schedule', allow_moved_paths := true) s ON s.hts8 = l.hts8
+WHERE length(l.hts8) <> 8 OR NOT regexp_matches(l.hts8, '^[0-9]{8}$') OR s.hts8 IS NULL
+HAVING COUNT(*) > 0;
+
+-- usitc_additional_duty_lists: primary key (hts8, chapter99_heading) is unique
+INSERT INTO dq_results
+SELECT 'econ', 'usitc_additional_duty_lists', 'pk_duplicates', 'fail', 'hts8, chapter99_heading', 'no duplicate keys',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT hts8, chapter99_heading FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true) GROUP BY hts8, chapter99_heading HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+-- usitc_additional_duty_lists: spot check against known facts — 8471.30.01 (laptops) is NOT on any list, 8486.20.00 (semiconductor equipment) is on List 2
+INSERT INTO dq_results
+SELECT 'econ', 'usitc_additional_duty_lists', 'known_values', 'fail', 'hts8', '84713001 absent; 84862000 on 9903.88.02',
+  'laptop rows=' || CAST(COUNT(*) FILTER (WHERE hts8 = '84713001') AS VARCHAR) || ' semi-equip List 2 rows=' || CAST(COUNT(*) FILTER (WHERE hts8 = '84862000' AND chapter99_heading = '9903.88.02') AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true)
+HAVING COUNT(*) FILTER (WHERE hts8 = '84713001') <> 0 OR COUNT(*) FILTER (WHERE hts8 = '84862000' AND chapter99_heading = '9903.88.02') <> 1;
