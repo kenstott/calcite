@@ -6582,9 +6582,10 @@ partitionedTables:
         end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
         dataLag: 0
         releaseMonth: 2  # FRED data typically available within days
-      # Full monthly cadence: one fetch per (year, month) = one overwrite partition, so the
-      # fetch unit equals the partition granularity (required for correct replace-partition
-      # refresh). Without this, a year-wide fetch always returns some rows for the current,
+      # Full monthly cadence: one fetch per (series, year, month); the partition is (type, year,
+      # month), so several series feed one partition. The writer defers commits to the end of the
+      # run and the pipeline reopens every series of a pending month (replace-partition refresh).
+      # Without a month dimension, a year-wide fetch always returns some rows for the current,
       # still-updating year, so IncrementalTracker marks the whole year complete after the
       # first run and never revisits it — freezing the current year at whatever FRED had
       # published the day it was first fetched. month-level partitions let past (closed)

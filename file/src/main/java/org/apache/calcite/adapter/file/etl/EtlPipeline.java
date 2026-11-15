@@ -883,6 +883,7 @@ public class EtlPipeline {
       // Wire per-row effective year/month fields from dimension config into Iceberg writer.
       if (writer instanceof IcebergMaterializationWriter) {
         IcebergMaterializationWriter icebergWriter = (IcebergMaterializationWriter) writer;
+        icebergWriter.setDeferCommitsToRunEnd(PartialPartitionGuard.applies(config));
         boolean effectiveYearWired = false;
         if (config.getDimensions() != null) {
           for (DimensionConfig dimConfig : config.getDimensions().values()) {

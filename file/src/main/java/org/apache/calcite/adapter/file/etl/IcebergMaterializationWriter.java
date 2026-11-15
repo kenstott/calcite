@@ -214,6 +214,14 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
   private boolean overwritePartitions = false;
 
   /**
+   * True when the partition key does not determine the fetch unit, so several units feed one
+   * partition and a partition's first commit replaces the rows its other units have not yet
+   * delivered. Nothing may then be committed before the run ends: an intermediate commit would
+   * leave the partitions holding only the units fetched so far if the run later fails.
+   */
+  private boolean deferCommitsToRunEnd = false;
+
+  /**
    * Under {@code overwritePartitions}, true while {@link #writeBatch} is inside one fetch unit.
    * A partition's first commit replaces the table's copy of it, so nothing a unit has written may
    * be committed until the unit has delivered every row: a commit part-way through would swap in
@@ -1015,6 +1023,16 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    * release the withheld files to the commit paths, and publish per partition or at the file
    * threshold.
    */
+  /**
+   * Withholds every commit until {@link #commit()} when partitions are fed by several fetch
+   * units; see {@link #deferCommitsToRunEnd}.
+   *
+   * @param defer whether commits wait for the end of the run
+   */
+  public void setDeferCommitsToRunEnd(boolean defer) {
+    this.deferCommitsToRunEnd = defer;
+  }
+
   private void completeUnit() throws IOException {
     List<String> keys = new ArrayList<String>(unitPartitionKeys);
     for (String key : keys) {
@@ -1025,6 +1043,9 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
       unitPartitionKeys.clear();
     }
     unitInFlight = false;
+    if (deferCommitsToRunEnd) {
+      return;
+    }
     if (commitPerPartition) {
       for (String key : keys) {
         List<org.apache.iceberg.DataFile> forPartition = filesByPartition.get(key);
@@ -1418,7 +1439,8 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
     partitionVarsMap.remove(partitionKey);
 
     // Intermediate commit to bound memory: commit pending data files when threshold exceeded
-    if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD && !unitInFlight) {
+    if (pendingDataFiles.size() >= COMMIT_FILE_THRESHOLD && !unitInFlight
+        && !deferCommitsToRunEnd) {
       intermediateCommit();
     }
   }
@@ -3103,6 +3125,11 @@ public class IcebergMaterializationWriter implements MaterializationWriter {
    */
   private void emergencyCommitOnShutdown() {
     if (committedSuccessfully.get()) {
+      return;
+    }
+    if (deferCommitsToRunEnd) {
+      LOGGER.warn("SIGTERM: not committing staged files — partitions are fed by several fetch "
+          + "units and a partial commit would drop the rest; the table keeps its previous contents");
       return;
     }
     List<org.apache.iceberg.DataFile> snapshot;

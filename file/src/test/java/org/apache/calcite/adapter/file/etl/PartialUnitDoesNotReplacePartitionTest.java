@@ -78,6 +78,23 @@ public class PartialUnitDoesNotReplacePartitionTest {
     assertEquals((long) ROWS_BEFORE_FAILURE, committedRecords());
   }
 
+  @Test public void deferredCommitsLeavePartitionIntactUntilRunEnds() throws Exception {
+    File warehouse = new File(tempDir, "warehouse_defer");
+    warehouse.mkdirs();
+    seed(warehouse, "t_defer", true);
+
+    writer = open(warehouse, "t_defer", true);
+    writer.setDeferCommitsToRunEnd(true);
+    writer.writeBatch(rows(3, false), partition());
+    assertEquals(5L, committedRecords(),
+        "a completed unit must not replace a partition its sibling units have yet to fill");
+
+    writer.writeBatch(rows(4, false), partition());
+    writer.commit();
+    assertEquals(7L, committedRecords(),
+        "the end-of-run commit publishes every unit's rows together");
+  }
+
   private void assertOldRowsSurvive(boolean commitPerPartition) throws Exception {
     File warehouse = new File(tempDir, "warehouse_fail_" + commitPerPartition);
     warehouse.mkdirs();
