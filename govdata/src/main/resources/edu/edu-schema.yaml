@@ -2595,6 +2595,268 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: district_special_ed_counts
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      Special-education child counts by school district (LEA) — IDEA Section 618 Part B Child
+      Count, U.S. Department of Education Office of Special Education Programs, one row per LEA
+      per school year (2022 = school year 2022-23; about 16,000-18,500 LEAs per year, 2020 through
+      the latest published year). total_children is the count of children ages 3-21 with a
+      disability served under IDEA Part B on the fall child count date; early_childhood_* columns
+      break it down by primary disability for ages 3-5 not in kindergarten, school_age_* for ages 5
+      in kindergarten through 21. This is the district-level special-education count that
+      ccd_districts.spec_ed_students no longer carries (that Urban Institute field is null for
+      every district from 2022). leaid joins ccd_districts.leaid and f33_district_finance.leaid.
+      The source's suppression codes (-8 small cell, -9 questionable data quality) are stored as
+      null, so a district's category counts need not sum to its total and a state sum of
+      total_children excludes suppressed districts. Counts are children served under IDEA, not
+      enrollment in special-education programs generally. Verified 2026-11-15: Texas total_children
+      sums to 635,327 for 2021 (equal to the CCD 2021 value), 703,051 for 2022, 774,855 for 2023
+      and 852,848 for 2024. English-learner counts are not in this table (no LEA-level source
+      found for 2022 onward). Source: one CSV per school year on data.ed.gov, located through
+      the Department's catalog at https://data.ed.gov/data.json (CC-BY).
+
+    columns:
+      - name: leaid
+        type: string
+        nullable: false
+        comment: >
+          NCES LEA ID (7-digit string, left-padded; the 2021-22 source file drops the leading zero) — PK component. FK to ccd_districts.leaid and f33_district_finance.leaid.
+      - name: year
+        type: int
+        nullable: false
+        comment: >
+          School year's starting calendar year (2022 = school year 2022-23) — PK component. Same convention as ccd_districts.year.
+      - name: state_fips
+        type: string
+        nullable: true
+        comment: >
+          2-digit state FIPS code — FK to geo.state_ref.state_fips.
+      - name: state_name
+        type: string
+        nullable: true
+        comment: >
+          State name as the source prints it (capitalization differs between years).
+      - name: lea_name
+        type: string
+        nullable: true
+        comment: >
+          LEA name as reported to OSEP.
+      - name: state_lea_id
+        type: string
+        nullable: true
+        comment: >
+          State-assigned LEA identifier, source column State LEA ID.
+      - name: total_children
+        type: long
+        nullable: true
+        comment: >
+          Children with disabilities ages 3-21 served under IDEA Part B (early childhood plus school age) in the LEA on the child count date. Null when the source suppressed it (-8 small cell, -9 questionable quality).
+      - name: early_childhood_all_disabilities
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B, all disability categories. Null when suppressed (-8/-9).
+      - name: early_childhood_autism
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: autism. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_deaf_blindness
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: deaf-blindness. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_developmental_delay
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: developmental delay. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_emotional_disturbance
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: emotional disturbance. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_hearing_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: hearing impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_intellectual_disability
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: intellectual disability. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_multiple_disabilities
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: multiple disabilities. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_orthopedic_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: orthopedic impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_other_health_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: other health impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_specific_learning_disability
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: specific learning disability. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_speech_language_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: speech or language impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_traumatic_brain_injury
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: traumatic brain injury. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_visual_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten served under IDEA Part B with primary disability: visual impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: early_childhood_missing
+        type: long
+        nullable: true
+        comment: >
+          Children ages 3-5 not in kindergarten with no disability category reported. Published only in the 2020-21 through 2022-23 files; null for 2023-24 onward. Null when suppressed.
+      - name: school_age_all_disabilities
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B, all disability categories. Null when suppressed (-8/-9).
+      - name: school_age_autism
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: autism. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_deaf_blindness
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: deaf-blindness. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_developmental_delay
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: developmental delay. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_emotional_disturbance
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: emotional disturbance. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_hearing_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: hearing impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_intellectual_disability
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: intellectual disability. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_multiple_disabilities
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: multiple disabilities. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_orthopedic_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: orthopedic impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_other_health_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: other health impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_specific_learning_disability
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: specific learning disability. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_speech_language_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: speech or language impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_traumatic_brain_injury
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: traumatic brain injury. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_visual_impairment
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 served under IDEA Part B with primary disability: visual impairment. Null when suppressed (-8 small cell, -9 questionable quality).
+      - name: school_age_missing
+        type: long
+        nullable: true
+        comment: >
+          Children ages 5 (in kindergarten) through 21 with no disability category reported. Published only in the 2020-21 through 2022-23 files; null for 2023-24 onward. Null when suppressed.
+
+    source:
+      type: http
+      # Nominal source; IdeaChildCountProvider resolves each school year's CSV (its URL carries a
+      # random resource UUID) from the data.ed.gov DCAT catalog and parses it directly.
+      url: "https://data.ed.gov/data.json"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.edu.IdeaChildCountProvider"
+
+    dimensions:
+      year:
+        type: yearRange
+        # dataLag: 2 -- the school year starting in calendar year Y is published the following
+        # summer (2024-25 extracted 2025-07-30), so the latest year with a file is real time
+        # minus 2 until mid-year. The dimension's start is applied before dataLag, so
+        # start/minYear 2022 yields school year 2020 (the earliest with an LEA file) as the
+        # first effective year — the same arrangement as f33_district_finance.
+        start: "${GOVDATA_START_YEAR:2022}"
+        minYear: 2022
+        dataLag: 2
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+        valueSource:
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   # ==========================================================================
   # DISTRICT ASSESSMENTS — NCES EDFacts state-assessment proficiency, district grain
   # Urban Institute API: school-districts/edfacts/assessments/{year}/{grade}/

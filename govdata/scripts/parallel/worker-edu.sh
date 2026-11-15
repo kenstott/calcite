@@ -132,6 +132,7 @@ run_ungrouped_edu_tables() {
     "ipeds|ipeds_institutions,ipeds_completions,ipeds_financials,ipeds_tuition" \
     "libraries|library_outlets" \
     "f33|f33_district_finance" \
+    "idea|district_special_ed_counts" \
     "scorecard|college_scorecard,college_scorecard_programs" \
     "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency")" || return 1
 
@@ -173,6 +174,9 @@ run_historical_cadence() {
 
   run_edu_model "edu-initial-f33" \
     '"f33_district_finance"' "$START" "$END"
+
+  run_edu_model "edu-initial-idea" \
+    '"district_special_ed_counts"' "$START" "$END"
 
   if [ -n "${API_DATA_GOV:-}" ]; then
     run_edu_model "edu-initial-scorecard" \
@@ -230,6 +234,11 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "f33_district_finance"; then
     run_edu_model "edu-annual-f33" \
       '"f33_district_finance"' "$START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "district_special_ed_counts"; then
+    run_edu_model "edu-annual-idea" \
+      '"district_special_ed_counts"' "$START"
   fi
 
   # fsa_pslf_discharge_summary: no releaseWindow (freshness: etag skips the re-fetch itself
