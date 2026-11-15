@@ -578,16 +578,40 @@ verify_closure_on_r2() {
 # needs, at every level (manifest-list, manifest, data file), not just the top of the chain.
 # Prints the resolved version to stdout on success; returns nonzero (nothing published) on
 # any failure, so R2's pointer is left at whatever it already named.
+# Runs ClosureResolver with stdout and stderr kept apart. stdout must be exactly one
+# "VERSION <n>" line followed by object paths; any other stdout line (a JVM warning, a log
+# line) would become a bogus --files-from entry, so it is a failure, not something to skip.
+# Output: resolved text on stdout. JVM diagnostics go to stderr via log_error on failure.
+run_closure_resolver() {
+  local jar=$1 warehouse=$2 table=$3 tag=$4
+  local out err rc=0
+  out=$(mktemp); err=$(mktemp)
+  java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -cp "$jar" \
+      org.apache.calcite.adapter.file.iceberg.ClosureResolver \
+      --warehouse "$warehouse" --table "$table" >"$out" 2>"$err" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    log_error "$tag closure resolution FAILED (rc=$rc):"
+    tail -20 "$err" | while IFS= read -r line; do log_error "$tag   $line"; done
+    rm -f "$out" "$err"; return 1
+  fi
+  local bad
+  bad=$(grep -vE '^(VERSION [0-9]+|[A-Za-z0-9_./=@+-]+)$' "$out" | head -5 || true)
+  if [ -n "$bad" ]; then
+    log_error "$tag resolver printed non-path lines on stdout; refusing to build a file list:"
+    echo "$bad" | while IFS= read -r line; do log_error "$tag   $line"; done
+    rm -f "$out" "$err"; return 1
+  fi
+  cat "$out"
+  rm -f "$out" "$err"
+}
+
 sync_iceberg_table_closure() {
   local minio_remote=$1 r2_remote=$2 bucket=$3 schema=$4 table=$5
   local jar; jar=$(resolve_classpath) || return 1
   local warehouse="s3://${bucket}/${schema}"
 
   local resolved
-  if ! resolved=$(java -cp "$jar" org.apache.calcite.adapter.file.iceberg.ClosureResolver \
-      --warehouse "$warehouse" --table "$table" 2>&1); then
-    log_error "sync-to-r2: [$schema/$table] closure resolution FAILED:"
-    echo "$resolved" | tail -20 | while IFS= read -r line; do log_error "sync-to-r2:   $line"; done
+  if ! resolved=$(run_closure_resolver "$jar" "$warehouse" "$table" "sync-to-r2: [$schema/$table]"); then
     return 1
   fi
 

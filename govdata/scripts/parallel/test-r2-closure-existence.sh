@@ -23,3 +23,21 @@ verify_closure_on_r2 "$R2" "$T/bkt" s t "$T/bad.txt" 2>"$T/err" \
 grep -q 'MISSING on R2: data/lost.parquet' "$T/err" || { echo "FAIL: file not named"; cat "$T/err"; exit 1; }
 grep -q 's/t	data/lost.parquet' "$T/marker" || { echo "FAIL: marker"; cat "$T/marker"; exit 1; }
 echo "PASS"
+
+# run_closure_resolver: stderr noise is dropped, a non-path stdout line is a failure.
+mkdir -p "$T/bin"
+cat > "$T/bin/java" <<'JEOF'
+#!/usr/bin/env bash
+echo "WARNING: A restricted method in java.lang.System" >&2
+echo "VERSION 7"
+echo "metadata/v7.metadata.json"
+[ -n "${STDOUT_NOISE:-}" ] && echo "[main] INFO something"
+exit 0
+JEOF
+chmod +x "$T/bin/java"
+out=$(PATH="$T/bin:$PATH" run_closure_resolver jar w t tag 2>/dev/null) \
+  || { echo "FAIL: resolver with stderr noise rejected"; exit 1; }
+[ "$out" = "$(printf 'VERSION 7\nmetadata/v7.metadata.json')" ] || { echo "FAIL: resolver output: $out"; exit 1; }
+STDOUT_NOISE=1 PATH="$T/bin:$PATH" run_closure_resolver jar w t tag >/dev/null 2>&1 \
+  && { echo "FAIL: stdout noise accepted"; exit 1; }
+echo "PASS"

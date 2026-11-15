@@ -94,10 +94,7 @@ sync_iceberg_table() {
   local warehouse="s3://${BUCKET}/${schema}"
 
   local resolved
-  if ! resolved=$(java -Dcalcite.file.staging.directory="${GOVDATA_TMPDIR:-/var/tmp/govdata}" -cp "$JAR" org.apache.calcite.adapter.file.iceberg.ClosureResolver \
-      --warehouse "$warehouse" --table "$table" 2>&1); then
-    log_error "catchup-sync-r2: [$schema/$table] closure resolution FAILED:"
-    echo "$resolved" | tail -20 | while IFS= read -r line; do log_error "catchup-sync-r2:   $line"; done
+  if ! resolved=$(run_closure_resolver "$JAR" "$warehouse" "$table" "catchup-sync-r2: [$schema/$table]"); then
     return 1
   fi
 
@@ -116,7 +113,7 @@ sync_iceberg_table() {
 
   log_info "catchup-sync-r2: [$schema/$table] pinned version $version, $file_count files in closure"
 
-  local flags="--files-from $files_list --transfers 16 --checkers 32"
+  local flags="--files-from $files_list --transfers 16 --checkers 32 --timeout ${GOVDATA_R2_SYNC_TIMEOUT:-30m} --contimeout ${GOVDATA_R2_SYNC_CONTIMEOUT:-2m} --retries 3"
   $DRY_RUN && flags="$flags --dry-run"
   if ! rclone copy "${MINIO_REMOTE}:${BUCKET}/${schema}/${table}" "${R2_REMOTE}:${BUCKET}/${schema}/${table}" \
       $flags 2>&1 | while IFS= read -r line; do log_info "catchup-sync-r2: [$schema/$table] $line"; done; then
