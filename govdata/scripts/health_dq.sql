@@ -3560,6 +3560,30 @@ FROM (SELECT
 
 
 
+-- ============================================================
+-- TABLE: medicaid_enrollment_by_eligibility_group — issue #1240
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_enrollment_by_eligibility_group', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_enrollment_by_eligibility_group', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_enrollment_by_eligibility_group', 'T2_row_count', CASE WHEN n >= 31000 THEN 'pass' ELSE 'fail' END, n, 31000, 'Source had 31164 rows at build time'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_enrollment_by_eligibility_group', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_enrollment_by_eligibility_group', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null state/period/group'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_enrollment_by_eligibility_group', allow_moved_paths := true) WHERE state_abbr IS NULL OR reporting_period IS NULL OR eligibility_group IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_enrollment_by_eligibility_group', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (state, period, group) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT state_abbr, reporting_period, eligibility_group FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_enrollment_by_eligibility_group', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'health', 'medicaid_enrollment_by_eligibility_group', 'T7_groups', CASE WHEN n = 7 THEN 'pass' ELSE 'fail' END, n, 7, 'Seven major eligibility groups'
+FROM (SELECT COUNT(DISTINCT eligibility_group) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_enrollment_by_eligibility_group', allow_moved_paths := true));
+
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;

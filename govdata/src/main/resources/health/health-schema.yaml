@@ -9271,6 +9271,127 @@ partitionedTables:
         runCompaction: true
 
   # --------------------------------------------------------------------------
+  # Medicaid and CHIP enrollment by major eligibility group, state and month — CMS T-MSIS
+  # Analytic Files (TAF) release on data.medicaid.gov, dataset ea9b7db3-db71-4663-b4e1-67e11d1d4fcc
+  # (DKAN datastore, JSON). Issue #1240.
+  # --------------------------------------------------------------------------
+  - name: medicaid_enrollment_by_eligibility_group
+    timeColumn: report_year  # observation year; this table has no column named 'year'
+    # The datastore has no Last-Modified; hash the response so an unchanged release is skipped
+    # and a new release (CMS republishes the whole file) re-materializes.
+    freshness:
+      type: hash
+    pattern: "type=medicaid_enrollment_by_eligibility_group"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS "Major Eligibility Group Information for Medicaid and CHIP Beneficiaries by Month" —
+      people enrolled in Medicaid and CHIP split by major eligibility group, one row per state
+      (50 plus DC, Puerto Rico, Virgin Islands), month and group, January 2016 to December 2022
+      in the current release (built from T-MSIS Analytic Files, so it lags the monthly
+      Performance Indicator table by years; 2026 figures are not in it). The groups
+      are Children, Adult, Adult expansion group, Aged, Persons with disabilities, COVID
+      newly-eligible and Unknown. The table to use for "how many Medicaid enrollees are aged or
+      disabled", "how many are expansion adults" and "who do work requirements reach".
+
+      **Caveats**: enrolled_count is NULL where CMS suppressed a cell (fewer than 11 people,
+      count_suppressed = true). Some state-months carry a DQ Atlas data-quality flag
+      (dq_flag High Concern or Unusable); exclude Unusable rows before summing. Counts are
+      Medicaid plus CHIP people in the month, not spending. For the current total enrollment
+      see medicaid_chip_enrollment_monthly.
+
+    columns:
+      - name: state_abbr
+        type: string
+        nullable: false
+        expression: "CASE src.\"state\" WHEN 'Alabama' THEN 'AL' WHEN 'Alaska' THEN 'AK' WHEN 'Arizona' THEN 'AZ' WHEN 'Arkansas' THEN 'AR' WHEN 'California' THEN 'CA' WHEN 'Colorado' THEN 'CO' WHEN 'Connecticut' THEN 'CT' WHEN 'Delaware' THEN 'DE' WHEN 'District of Columbia' THEN 'DC' WHEN 'Florida' THEN 'FL' WHEN 'Georgia' THEN 'GA' WHEN 'Hawaii' THEN 'HI' WHEN 'Idaho' THEN 'ID' WHEN 'Illinois' THEN 'IL' WHEN 'Indiana' THEN 'IN' WHEN 'Iowa' THEN 'IA' WHEN 'Kansas' THEN 'KS' WHEN 'Kentucky' THEN 'KY' WHEN 'Louisiana' THEN 'LA' WHEN 'Maine' THEN 'ME' WHEN 'Maryland' THEN 'MD' WHEN 'Massachusetts' THEN 'MA' WHEN 'Michigan' THEN 'MI' WHEN 'Minnesota' THEN 'MN' WHEN 'Mississippi' THEN 'MS' WHEN 'Missouri' THEN 'MO' WHEN 'Montana' THEN 'MT' WHEN 'Nebraska' THEN 'NE' WHEN 'Nevada' THEN 'NV' WHEN 'New Hampshire' THEN 'NH' WHEN 'New Jersey' THEN 'NJ' WHEN 'New Mexico' THEN 'NM' WHEN 'New York' THEN 'NY' WHEN 'North Carolina' THEN 'NC' WHEN 'North Dakota' THEN 'ND' WHEN 'Ohio' THEN 'OH' WHEN 'Oklahoma' THEN 'OK' WHEN 'Oregon' THEN 'OR' WHEN 'Pennsylvania' THEN 'PA' WHEN 'Puerto Rico' THEN 'PR' WHEN 'Rhode Island' THEN 'RI' WHEN 'South Carolina' THEN 'SC' WHEN 'South Dakota' THEN 'SD' WHEN 'Tennessee' THEN 'TN' WHEN 'Texas' THEN 'TX' WHEN 'Utah' THEN 'UT' WHEN 'Vermont' THEN 'VT' WHEN 'Virgin Islands' THEN 'VI' WHEN 'Virginia' THEN 'VA' WHEN 'Washington' THEN 'WA' WHEN 'West Virginia' THEN 'WV' WHEN 'Wisconsin' THEN 'WI' WHEN 'Wyoming' THEN 'WY' END"
+        comment: 2-letter state code (FK to geo.state_ref); 50 states plus DC, PR and VI
+      - name: state_name
+        type: string
+        nullable: false
+        expression: 'src."state"'
+        comment: State or territory name
+      - name: reporting_period
+        type: string
+        nullable: false
+        expression: 'src."month"'
+        comment: Month the counts describe, YYYYMM (e.g. 202212 = December 2022)
+      - name: report_year
+        type: integer
+        nullable: false
+        expression: 'CAST(SUBSTR(src."month", 1, 4) AS INTEGER)'
+        comment: Calendar year of reporting_period
+      - name: report_month
+        type: integer
+        nullable: false
+        expression: 'CAST(SUBSTR(src."month", 5, 2) AS INTEGER)'
+        comment: Calendar month 1-12 of reporting_period
+      - name: eligibility_group
+        type: string
+        nullable: false
+        expression: 'src."majoreligibility_group"'
+        comment: 'Major eligibility group: Children, Adult, Adult expansion group, Aged, Persons with disabilities, COVID newly-eligible, Unknown'
+      - name: enrolled_count
+        type: bigint
+        nullable: true
+        expression: 'TRY_CAST(REPLACE(src."countenrolled", '','', '''') AS BIGINT)'
+        comment: People enrolled in Medicaid or CHIP in that eligibility group and month; NULL when CMS suppressed the cell (count_suppressed)
+      - name: count_suppressed
+        type: boolean
+        nullable: false
+        expression: 'src."countenrolled" = ''DS'''
+        comment: True when CMS suppressed the count for confidentiality (group had fewer than 11 beneficiaries)
+      - name: dq_flag
+        type: string
+        nullable: true
+        expression: 'NULLIF(src."dunusable", '''')'
+        comment: 'CMS DQ Atlas assessment of the state-month eligibility-group coding: High Concern, Unusable, Not assessed; NULL when no concern. Drop Unusable before summing'
+
+    source:
+      type: http
+      url: "https://data.medicaid.gov/api/1/datastore/query/ea9b7db3-db71-4663-b4e1-67e11d1d4fcc/0"
+      method: GET
+      parameters:
+        limit: "2000"
+      response:
+        format: json
+        dataPath: "results"
+        pagination:
+          type: OFFSET
+          pageSize: 2000
+          limitParam: "limit"
+          offsetParam: "offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - medicaid_enrollment_by_eligibility_group
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # --------------------------------------------------------------------------
   # Medicaid medical-assistance spending by state and quarter — CMS-64 (MBES) quarterly
   # expenditures, data.medicaid.gov dataset 00505e90-f8ac-5921-b12f-5e23ba7ffcf3
   # ("Medicaid CMS-64 New Adult Group Expenditures"; DKAN datastore, JSON). Issue #1137.
