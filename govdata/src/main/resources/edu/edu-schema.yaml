@@ -2857,6 +2857,179 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: district_el_enrollment
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      English learner (EL) enrollment by school district (LEA) — U.S. Department of Education
+      Office for Civil Rights, Civil Rights Data Collection (CRDC), one row per LEA per collection
+      (year = school year's start: 2020 = 2020-21, 2021 = 2021-22; about 17,700 LEAs each). The
+      CRDC publishes no LEA-level EL file, so each figure is the sum of the LEA's school rows in the
+      school-level Enrollment file, grouped by LEAID. el_enrollment is the English learner count,
+      split by sex (el_male, el_female, el_nonbinary) and by race (el_hispanic through
+      el_two_or_more), with el_program_enrollment the EL students in a language instruction
+      program and total_enrollment the all-student denominator. This is the district-level EL count
+      that ccd_districts.english_language_learners no longer carries (that Urban Institute field is
+      null from 2022). leaid joins ccd_districts.leaid and f33_district_finance.leaid. The CRDC's
+      negative non-reported codes are dropped, so sums cover only the schools that reported:
+      schools_reporting_el against schools shows the coverage, and a district where no school
+      reported has null counts. A CRDC collection is a census of public schools in a single school
+      year, not an annual series: the next collection is added when published (2023-24 is not yet).
+      Verified 2026-11-15: Texas 2021-22 has 8,924 school rows in 1,203 LEAs summing to 1,107,116 EL
+      students. Source: one zip per collection at
+      https://civilrightsdata.ed.gov/assets/ocr/docs/{yyyy}-{yy}-crdc-data.zip, of which the
+      Enrollment CSV is read by HTTP range request.
+
+    columns:
+      - name: leaid
+        type: string
+        nullable: false
+        comment: >
+          NCES LEA ID (7-digit string) — PK component. FK to ccd_districts.leaid, f33_district_finance.leaid.
+      - name: year
+        type: int
+        nullable: false
+        comment: >
+          School year's starting calendar year (2021 = school year 2021-22) — PK component. Same convention as ccd_districts.year.
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: >
+          2-letter state abbreviation from the CRDC LEA_STATE column.
+      - name: state_name
+        type: string
+        nullable: true
+        comment: >
+          State name as the CRDC prints it (capitalization differs between collections: 'Texas' in 2020, 'TEXAS' in 2021).
+      - name: lea_name
+        type: string
+        nullable: true
+        comment: >
+          LEA name as reported to the CRDC (capitalization differs between collections: 'Aldine Isd' in 2020, 'ALDINE ISD' in 2021).
+      - name: schools
+        type: int
+        nullable: false
+        comment: >
+          Number of school rows the CRDC lists for the LEA, including justice facilities and schools that reported no EL data.
+      - name: schools_reporting_el
+        type: int
+        nullable: false
+        comment: >
+          Number of the LEA's schools whose EL enrollment was reported (at least one non-negative value). el_enrollment sums only these schools; compare with schools.
+      - name: total_enrollment
+        type: long
+        nullable: true
+        comment: >
+          Total enrollment summed over the LEA's schools (TOT_ENR male + female + nonbinary). Null when no school reported it.
+      - name: el_enrollment
+        type: long
+        nullable: true
+        comment: >
+          Students enrolled as English learners, summed over the LEA's reporting schools (SCH_ENR_EL male + female + nonbinary). Null when no school reported EL enrollment.
+      - name: el_male
+        type: long
+        nullable: true
+        comment: >
+          Male English learners, summed over reporting schools.
+      - name: el_female
+        type: long
+        nullable: true
+        comment: >
+          Female English learners, summed over reporting schools.
+      - name: el_nonbinary
+        type: long
+        nullable: true
+        comment: >
+          Nonbinary English learners, summed over reporting schools. The CRDC first collected this in 2021-22 (0 for every LEA that year); null for 2020.
+      - name: el_hispanic
+        type: long
+        nullable: true
+        comment: >
+          English learners of Hispanic/Latino ethnicity (any race), summed over reporting schools.
+      - name: el_american_indian
+        type: long
+        nullable: true
+        comment: >
+          American Indian or Alaska Native English learners (not Hispanic), summed over reporting schools.
+      - name: el_asian
+        type: long
+        nullable: true
+        comment: >
+          Asian English learners (not Hispanic), summed over reporting schools.
+      - name: el_pacific_islander
+        type: long
+        nullable: true
+        comment: >
+          Native Hawaiian or Pacific Islander English learners (not Hispanic), summed over reporting schools.
+      - name: el_black
+        type: long
+        nullable: true
+        comment: >
+          Black English learners (not Hispanic), summed over reporting schools.
+      - name: el_white
+        type: long
+        nullable: true
+        comment: >
+          White English learners (not Hispanic), summed over reporting schools.
+      - name: el_two_or_more
+        type: long
+        nullable: true
+        comment: >
+          English learners of two or more races (not Hispanic), summed over reporting schools.
+      - name: el_program_enrollment
+        type: long
+        nullable: true
+        comment: >
+          English learners enrolled in a language instruction educational program (TOT_ELPROGENR), summed over reporting schools.
+
+    source:
+      type: http
+      # Nominal source; CrdcDistrictElEnrollmentProvider reads the Enrollment CSV out of each
+      # collection's zip by HTTP range request and aggregates it by LEAID.
+      url: "https://civilrightsdata.ed.gov/assets/ocr/docs/{year}-crdc-data.zip"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.edu.CrdcDistrictElEnrollmentProvider"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2020}"
+        minYear: 2020
+        maxYear: 2021         # latest CRDC collection (2021-22); bump when 2023-24 publishes. The next collection's zip URL serves an HTML page, not a 404, so a year without a collection must not be requested.
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "year=*/"
+      partition:
+        columns: [year]
+        valueSource:
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
   # ==========================================================================
   # DISTRICT ASSESSMENTS — NCES EDFacts state-assessment proficiency, district grain
   # Urban Institute API: school-districts/edfacts/assessments/{year}/{grade}/

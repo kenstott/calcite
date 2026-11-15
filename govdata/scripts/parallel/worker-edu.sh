@@ -133,6 +133,7 @@ run_ungrouped_edu_tables() {
     "libraries|library_outlets" \
     "f33|f33_district_finance" \
     "idea|district_special_ed_counts" \
+    "crdc-el|district_el_enrollment" \
     "scorecard|college_scorecard,college_scorecard_programs" \
     "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency")" || return 1
 
@@ -177,6 +178,8 @@ run_historical_cadence() {
 
   run_edu_model "edu-initial-idea" \
     '"district_special_ed_counts"' "$START" "$END"
+  run_edu_model "edu-initial-crdc-el" \
+    '"district_el_enrollment"' "$START" "$END"
 
   if [ -n "${API_DATA_GOV:-}" ]; then
     run_edu_model "edu-initial-scorecard" \
@@ -272,6 +275,13 @@ run_biennial_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "district_assessments"; then
     run_edu_model "edu-biennial-district-assessments" \
       '"district_assessments"' "$BIENNIAL_START"
+  fi
+
+  # district_el_enrollment: CRDC collections (yearRange capped at maxYear:2021 in
+  # edu-schema.yaml; bump the cap when the next collection publishes).
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "district_el_enrollment"; then
+    run_edu_model "edu-biennial-crdc-el" \
+      '"district_el_enrollment"' "$BIENNIAL_START"
   fi
 
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "crdc_schools"; then

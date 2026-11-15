@@ -49,6 +49,7 @@ FROM (
   UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_special_ed_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'district_el_enrollment',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1)
@@ -96,6 +97,7 @@ FROM (
   UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
   UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
   UNION ALL SELECT 'district_special_ed_counts',           COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)  -- ~16,000-18,500 LEAs/year verified 2020-2024
+  UNION ALL SELECT 'district_el_enrollment',              COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)  -- ~17,700 LEAs/collection verified 2020-21 and 2021-22
   UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
   UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
   UNION ALL SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)  -- 4 portfolios x ~50 quarters x 7-8 statuses
@@ -121,6 +123,7 @@ SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_D
 SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1;
 SELECT 'f33_district_finance'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1;
 SELECT 'district_special_ed_counts' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1;
+SELECT 'district_el_enrollment'  AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true) LIMIT 1;
 SELECT 'district_assessments'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
@@ -234,6 +237,13 @@ SELECT 'edu', 'f33_district_finance', 'all_null_cols',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true))
 WHERE null_percentage = 100.0
   AND column_name NOT IN ('type', 'year');
+
+INSERT INTO dq_results
+SELECT 'edu', 'district_el_enrollment', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true))
+WHERE null_percentage = 100.0;
 
 INSERT INTO dq_results
 SELECT 'edu', 'district_assessments', 'all_null_cols',
@@ -373,6 +383,16 @@ SELECT 'edu', 'f33_district_finance', 'all_same_value',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0
   AND column_name NOT IN ('type', 'year');
+
+INSERT INTO dq_results
+SELECT 'edu', 'district_el_enrollment', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  -- el_nonbinary: null for 2020 (not collected) and 0 for every LEA in 2021 (the CRDC's first
+  -- nonbinary collection; verified live 2026-11-15) — a real constant, not a defect.
+  AND column_name <> 'el_nonbinary';
 
 INSERT INTO dq_results
 SELECT 'edu', 'district_assessments', 'all_same_value',
@@ -741,6 +761,26 @@ FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)
 );
 
+-- district_el_enrollment PK: leaid, year (one row per LEA per CRDC collection)
+INSERT INTO dq_results
+SELECT 'edu', 'district_el_enrollment', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(CASE WHEN leaid IS NULL OR year IS NULL OR length(leaid) <> 7 THEN 1 ELSE 0 END) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'district_el_enrollment', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT leaid, year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)
+  GROUP BY leaid, year HAVING COUNT(*) > 1
+);
+
 -- district_assessments PK: leaid, year, grade
 INSERT INTO dq_results
 SELECT 'edu', 'district_assessments', 'pk_nulls',
@@ -1097,6 +1137,34 @@ FROM (
     THEN 1 ELSE 0 END
   ) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
+);
+
+-- district_el_enrollment: counts are never negative (the CRDC's negative non-reported codes are
+-- dropped), EL never exceeds total enrollment, and reporting schools never exceed schools.
+INSERT INTO dq_results
+SELECT 'edu', 'district_el_enrollment', 'value_ranges',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(
+    CASE WHEN el_enrollment < 0 OR total_enrollment < 0 OR el_program_enrollment < 0
+       OR el_enrollment > total_enrollment
+       OR schools_reporting_el > schools OR schools_reporting_el < 0
+    THEN 1 ELSE 0 END
+  ) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)
+);
+
+-- district_el_enrollment: Texas 2021-22 reconciles to the CRDC source file (8,924 school rows in
+-- 1,203 LEAs summing to 1,107,116 EL students; verified live 2026-11-15).
+INSERT INTO dq_results
+SELECT 'edu', 'district_el_enrollment', 'texas_2021_reconciles',
+  CASE WHEN leas = 1203 AND schools = 8924 AND el = 1107116 THEN 'pass' ELSE 'fail' END,
+  leas || '/' || schools || '/' || el, '1203/8924/1107116', NULL
+FROM (
+  SELECT COUNT(*) AS leas, SUM(schools) AS schools, SUM(el_enrollment) AS el
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_el_enrollment', allow_moved_paths=true)
+  WHERE year = 2021 AND state_abbr = 'TX'
 );
 
 -- fsa_pslf_discharge_summary: section must be one of the three combined-report sheets
