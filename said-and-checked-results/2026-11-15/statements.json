@@ -3,8 +3,9 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. No original source (transcript, release or post) could be read for any statement, so all wording is as the outlet reported it.",
   "lede": [
     "Fifty-six statements by 15 officeholders appeared in two days of NPR and PBS NewsHour politics coverage. Most were about three things: the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war and talk of ending it, and what Democrats plan to do with the majorities they won on Nov. 3.",
-    "Eight of the 56 were factual claims that data or documents could test. Three were supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. Three were unsettled: evidence was found but does not decide them. They are the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, and the transportation secretary's reported account of what caused the ground stop, where the FAA's published account differs and its investigation is still open. Two were unsupported, meaning no evidence was found for them; that is not a finding that they are false.",
-    "The other 48 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked."
+    "Eleven of the 56 were checked. Eight were factual claims. Three were opinions or predictions resting on a factual premise, and for those the premise alone was rated. Five came out supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. Four were unsettled, meaning evidence was found but does not decide them: the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, the transportation secretary's reported account of what caused the ground stop, and the premise behind the secretary of state's statement about economic pressure on Iran. Two were unsupported, meaning no evidence was found for them; that is not a finding that they are false.",
+    "Three statements are linked to a direct counter-statement: two to a statement by another official on this page, and one to the FAA's own published account. A link shows that the two disagree on the same point. It is not a finding about which is right.",
+    "The other 45 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
   "stories": [
     {
@@ -257,12 +258,22 @@
         "url": null,
         "note": "No original transcript or post located."
       },
-      "kind": "opinion_or_prediction",
-      "result": null,
-      "finding": null,
-      "evidence": [],
+      "kind": "premised_prediction",
+      "result": "supported",
+      "finding": "About 15 million Medicaid enrollees have a disability, including 8.8 million working-age adults, by KFF's analysis of 2023 Census data, and the statute's definition of medically frail begins with people who are blind or disabled. No direct count of medically frail enrollees under the narrower federal test was found.",
+      "evidence": [
+        {
+          "label": "KFF, 5 Key Facts About Medicaid Coverage for People with Disabilities",
+          "url": "https://www.kff.org/medicaid/issue-brief/5-key-facts-about-medicaid-coverage-for-people-with-disabilities/"
+        },
+        {
+          "label": "KFF, The Medical Frailty Exemption from Medicaid Work Requirements",
+          "url": "https://www.kff.org/medicaid/the-medical-frailty-exemption-from-medicaid-work-requirements-key-takeaways-from-the-cms-interim-final-rule/"
+        }
+      ],
       "check_run": null,
-      "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, referring to the Boston federal court ruling on medically frail Medicaid enrollees."
+      "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, referring to the Boston federal court ruling on medically frail Medicaid enrollees.",
+      "premise": "Millions of medically frail people rely on Medicaid."
     },
     {
       "id": 8,
@@ -526,7 +537,10 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 interview, about Trump and the Iran war."
+      "context": "In a Nov. 13 interview at the Democrats' post-election gathering in Denver, about President Trump and the Iran war.",
+      "counter_statements": [
+        20
+      ]
     },
     {
       "id": 20,
@@ -543,12 +557,29 @@
         "url": null,
         "note": "No original transcript or post located."
       },
-      "kind": "opinion_or_prediction",
-      "result": null,
-      "finding": null,
-      "evidence": [],
+      "kind": "premised_prediction",
+      "result": "unsettled",
+      "finding": "IMF projections for 2026 show Iran's economy shrinking 7.6% with inflation averaging 78.6%, during a U.S. blockade of Iranian ports and added financial sanctions. No source read separates the damage done by economic measures from the damage done by seven months of war. The IMF figures were read through a summary of its data service, not the raw table.",
+      "evidence": [
+        {
+          "label": "IMF DataMapper, Iran real GDP growth",
+          "url": "https://www.imf.org/external/datamapper/api/v1/NGDP_RPCH/IRN"
+        },
+        {
+          "label": "IMF DataMapper, Iran inflation",
+          "url": "https://www.imf.org/external/datamapper/api/v1/PCPIPCH/IRN"
+        },
+        {
+          "label": "IBTimes, Iran's economy seven months into the conflict",
+          "url": "https://www.ibtimes.com/irans-economy-keeps-deteriorating-seven-months-conflict-us-sends-living-costs-soaring-3808011"
+        }
+      ],
       "check_run": null,
-      "context": "In a Nov. 13 speech to the Federalist Society, about U.S. economic pressure on Iran."
+      "context": "In a Nov. 13 speech to the Federalist Society, about U.S. economic pressure on Iran.",
+      "premise": "U.S. economic pressure is inflicting severe economic damage on Iran.",
+      "counter_statements": [
+        19
+      ]
     },
     {
       "id": 21,
@@ -1139,7 +1170,7 @@
         }
       ],
       "check_run": null,
-      "context": "In the same Nov. 15 social media post about the current air traffic control system."
+      "context": "In a Nov. 15 social media post about the air traffic control system, after the Nov. 13 nationwide ground stop."
     },
     {
       "id": 47,
@@ -1161,7 +1192,10 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In another Nov. 15 social media post, about the Biden administration's maintenance of the FAA and air traffic control system."
+      "context": "In a Nov. 15 social media post, about the Biden administration's maintenance of the FAA and air traffic control system.",
+      "counter_statements": [
+        49
+      ]
     },
     {
       "id": 48,
@@ -1200,12 +1234,21 @@
         "url": null,
         "note": "No original transcript or post located."
       },
-      "kind": "opinion_or_prediction",
-      "result": null,
-      "finding": null,
-      "evidence": [],
+      "kind": "premised_prediction",
+      "result": "supported",
+      "finding": "FAA capital appropriations were $2.10 billion in fiscal 1991, $2.67 billion in 2001, $2.94 billion in 2011 and $3.02 billion in 2021, according to the Eno Center for Transportation's tabulation: growth of about 1.6% a year across administrations and Congresses of both parties. FAA budget documents could not be read directly.",
+      "evidence": [
+        {
+          "label": "Eno Center for Transportation, FAA F&E and Operations appropriations 1991-2021",
+          "url": "https://enotrans.org/?p=15148"
+        }
+      ],
       "check_run": null,
-      "context": "On NBC's 'Meet the Press' on Nov. 15, about who is responsible for the air traffic control system's condition."
+      "context": "On NBC's 'Meet the Press' on Nov. 15, about who is responsible for the air traffic control system's condition.",
+      "premise": "Underinvestment in air traffic control spans administrations of both parties.",
+      "counter_statements": [
+        47
+      ]
     },
     {
       "id": 50,
@@ -1263,7 +1306,13 @@
         }
       ],
       "check_run": null,
-      "context": "AP's account of Duffy's statements on the cause of the nationwide ground stop; L3Harris is an FAA contractor."
+      "context": "AP's account of Duffy's statements on the cause of the nationwide ground stop; L3Harris is an FAA contractor.",
+      "counter_documents": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ]
     },
     {
       "id": 52,
