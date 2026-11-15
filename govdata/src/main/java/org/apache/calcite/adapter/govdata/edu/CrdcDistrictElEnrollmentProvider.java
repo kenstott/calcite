@@ -63,9 +63,6 @@ public class CrdcDistrictElEnrollmentProvider implements DataProvider {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(CrdcDistrictElEnrollmentProvider.class);
 
-  private static final String ZIP_URL =
-      "https://civilrightsdata.ed.gov/assets/ocr/docs/%d-%02d-crdc-data.zip";
-
   /** Race codes in the source's column names, with the output column suffix. */
   private static final String[][] RACES = {
       {"HI", "hispanic"},
@@ -90,7 +87,9 @@ public class CrdcDistrictElEnrollmentProvider implements DataProvider {
           + variables);
     }
     int yearInt = Integer.parseInt(year.trim());
-    String url = String.format(Locale.ROOT, ZIP_URL, yearInt, (yearInt + 1) % 100);
+    String url = String.format(Locale.ROOT,
+        "https://civilrightsdata.ed.gov/assets/ocr/docs/%d-%02d-crdc-data.zip",
+        yearInt, (yearInt + 1) % 100);
 
     byte[] csv = readEnrollmentCsv(url);
     List<Map<String, Object>> rows = aggregate(csv, yearInt, url);
