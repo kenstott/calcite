@@ -171,6 +171,64 @@ FROM (
 );
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: omb_budget_by_account (OMB budauth/outlays supplemental workbooks; new 15 Nov 2026)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (two measures x ~5000 account lines x decades of years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL measure, fiscal_year, amount_thousands or agency_code rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true)
+      WHERE measure IS NULL OR fiscal_year IS NULL OR amount_thousands IS NULL OR agency_code IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (measure, budget_vintage, source_row, fiscal_year, is_transition_quarter) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true)
+  GROUP BY measure, budget_vintage, source_row, fiscal_year, is_transition_quarter
+  HAVING COUNT(*) > 1
+));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T7_both_measures',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'Both budget_authority and outlays present'
+FROM (SELECT COUNT(DISTINCT measure) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T7_year_span',
+  CASE WHEN mn <= 1976 AND mx >= 2025 THEN 'pass' ELSE 'fail' END, mn, 1976, 'Fiscal years must span FY1976 through at least FY2025'
+FROM (SELECT MIN(fiscal_year) AS mn, MAX(fiscal_year) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'omb_budget_by_account', 'T7_faa_fe_known_values',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, n, 2, 'FAA Facilities and Equipment (account 8107, Discretionary) budget authority within 2% of published FY1991 $2.10B and FY2021 $3.02B'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT fiscal_year, SUM(amount_thousands) AS a FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/omb_budget_by_account', allow_moved_paths := true)
+  WHERE measure = 'budget_authority' AND agency_code = '021' AND bureau_code = '12' AND account_code = '8107' AND bea_category = 'Discretionary' AND is_transition_quarter = false AND fiscal_year IN (1991, 2021)
+  GROUP BY fiscal_year)
+  WHERE (fiscal_year = 1991 AND ABS(a - 2100000) / 2100000 < 0.02) OR (fiscal_year = 2021 AND ABS(a - 3020000) / 3020000 < 0.02));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: county_migration_flows (IRS SOI; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
