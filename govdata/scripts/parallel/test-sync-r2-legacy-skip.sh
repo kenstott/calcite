@@ -27,7 +27,10 @@ source "$T/helpers.sh"
 
 ok "sec/year=2020 is excluded"                     '_is_excluded sec year=2020'
 ok "sec/filing_metadata is not excluded"           '! _is_excluded sec filing_metadata'
-ok "any schema's type=*_bulk is excluded"          '_is_excluded econ type=qcew_bulk'
+ok "vectorized_chunk_codes is not excluded"        '! _is_excluded sec vectorized_chunk_codes'
+ok "type=*_bulk is not excluded by default"        '! _is_excluded econ type=qcew_bulk'
+ok "vectorized_chunk_codes has no exclude flag"    '[[ "$(_exclude_flags sec)" != *vectorized_chunk_codes* ]]'
+ok "a new file in vectorized_chunk_codes is listed" 'mkdir -p "$T/sec/vectorized_chunk_codes" && : > "$T/sec/vectorized_chunk_codes/new.parquet" && _lsf --files-only "minio:b/sec/vectorized_chunk_codes" | grep -q new.parquet'
 ok "exclude flags for sec name year=*"             '[[ "$(_exclude_flags sec)" == *"--exclude /year=*/**"* ]]'
 ok "exclude flags for another schema omit year=*"  '[[ "$(_exclude_flags econ)" != *"year=*"* ]]'
 ok "no listing inside an excluded folder"          'grep -q "/year=2020\$" "$STUB_LOG" && false || true'
