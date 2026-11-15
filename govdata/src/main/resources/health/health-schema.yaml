@@ -9559,6 +9559,200 @@ partitionedTables:
         runCompaction: true
         overwritePartitions: true
 
+  # ==========================================================================
+  # CMS NATIONAL HEALTH EXPENDITURE ACCOUNTS (NHEA) — national tables, 1960 onward
+  # ==========================================================================
+  - name: nhe_national
+    timeColumn: year
+    # The landing page carries the zip links; hashing the page body re-runs only when CMS
+    # republishes (new release year changes the zip filename in the page).
+    freshness:
+      type: hash
+    pattern: "type=nhe_national"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS Office of the Actuary National Health Expenditure Accounts: U.S. health spending
+      by type of service and source of funds, calendar years 1960 to the latest release
+      (2024 in the current release), in millions of current dollars. One row per
+      (service_category, payer_path, year). service_category is the spending block —
+      Total National Health Expenditures, Health Consumption Expenditures, Personal Health
+      Care, Total Hospital Expenditures, Total Physician and Clinical Expenditures, Dental,
+      Other Professional, Home Health, Non-Durable Medical Products, Prescription Drugs,
+      Durable Medical Equipment, Nursing Care Facilities and CCRCs, Other Health Residential
+      and Personal Care, Administration and Non-Medical Insurance, Public Health Activity,
+      Research, Structures and Equipment. payer_path is the source of funds as a
+      ' > '-joined path (e.g. 'Health Insurance > Medicaid (Title XIX) > Federal'; 'Out of
+      pocket'; 'Health Insurance > Private Health Insurance'; 'Other Third Party Payers and
+      Programs > Workers'' Compensation'); payer is its last element; depth is the path
+      length (0 for 'All payers'). The 'All payers' row (depth 0) is the category's own total across all
+      payers. Labels such as 'Federal' and 'State and Local' recur under several parents, so
+      always use payer_path, never payer alone. Not additive across depths: a parent row
+      already includes its children, so sum one depth at a time. Per-capita and share-of-GDP
+      series are in nhe_summary. Values are source figures; CMS revises history each release.
+      'Total CMS Programs (Medicaid, CHIP and Medicare)' is a memo line per category (depth 1,
+      overlaps the insurance rows). null amount_millions means CMS prints no value (a dash).
+      Source: cms.gov National Health Expenditure Data, Historical.
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year (1960 onward)
+      - name: service_category
+        type: string
+        nullable: false
+        comment: Spending block, e.g. 'Total Hospital Expenditures', 'Total Prescription Drug Expenditures' — PK part
+      - name: payer_path
+        type: string
+        nullable: false
+        comment: Source of funds as ' > '-joined path; 'All payers' = the category total — PK part
+      - name: payer
+        type: string
+        nullable: false
+        comment: Last element of payer_path ('All payers' for the category total)
+      - name: depth
+        type: integer
+        nullable: false
+        comment: Number of elements in payer_path (0 = category total)
+      - name: amount_millions
+        type: double
+        nullable: true
+        comment: Expenditure in millions of current (nominal) dollars
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "nhe_national"'
+
+    source:
+      type: http
+      url: "https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/historical"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.NheNationalTransformer"
+
+    dimensions:
+      type:
+        - nhe_national
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  - name: nhe_summary
+    timeColumn: year
+    freshness:
+      type: hash
+    pattern: "type=nhe_summary"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      CMS National Health Expenditure Accounts summary (Table 1), calendar years 1960 to the
+      latest release: total U.S. health spending, its three consumption components and
+      investment, with aggregate, per-capita, growth, distribution and share-of-GDP views.
+      One row per (measure, item, year). measure: amount_billions (billions of current
+      dollars; also carries 'U.S. Population' in millions and 'Gross Domestic Product' in
+      billions), annual_pct_change, pct_distribution (share of total NHE), per_capita_amount
+      (current dollars per person), pct_of_gdp (item is 'National Health Expenditures'; the
+      headline NHE share of GDP, e.g. about 18% in 2024). item: National Health Expenditures,
+      Health Consumption Expenditures, Personal Health Care, Government Administration and
+      Non-Medical Insurance Expenditures, Government Public Health Activities, Investment,
+      U.S. Population, Gross Domestic Product; depth is 0 for the totals, 1 for the
+      consumption/investment split and 2 for the consumption sub-components. The unit depends
+      on measure — never mix measures in one sum. Payer and service-type detail is in
+      nhe_national. Source: cms.gov NHE Historical, summary table including share of GDP.
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year (1960 onward)
+      - name: measure
+        type: string
+        nullable: false
+        comment: amount_billions | annual_pct_change | pct_distribution | per_capita_amount | pct_of_gdp — PK part
+      - name: item
+        type: string
+        nullable: false
+        comment: Spending aggregate (or U.S. Population / Gross Domestic Product) — PK part
+      - name: depth
+        type: integer
+        nullable: false
+        comment: 0 = total, 1 = consumption/investment, 2 = consumption sub-component
+      - name: value
+        type: double
+        nullable: true
+        comment: Value in the unit implied by measure; null where CMS prints none (annual change has no 1960 value)
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always "nhe_summary"'
+
+    source:
+      type: http
+      url: "https://www.cms.gov/data-research/statistics-trends-and-reports/national-health-expenditure-data/historical"
+      method: GET
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.NheSummaryTransformer"
+
+    dimensions:
+      type:
+        - nhe_summary
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
 # ============================================================================
 # Views
 # ============================================================================
@@ -10263,6 +10457,12 @@ constraints:
 
   va_claims_workload:
     primaryKey: [week_ending, line_type, line_description]
+
+  nhe_national:
+    primaryKey: [year, service_category, payer_path]
+
+  nhe_summary:
+    primaryKey: [year, measure, item]
 
   rxnorm_drugs:
     primaryKey: [type, rxcui]
