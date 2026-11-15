@@ -3,7 +3,7 @@
 -- Schema: officials
 -- Tables: members, nominations, federal_judges, committees, committee_membership,
 -- electoral_college_votes, presidential_election_results, house_election_results,
--- senate_election_results
+-- senate_election_results, federal_workforce_by_agency
 -- All tables are Iceberg; reads via iceberg_scan.
 -- No `year` dimension anywhere in this schema — members/nominations partition by
 -- `congress` (bounded by GOVDATA_START_CONGRESS/GOVDATA_END_CONGRESS, default 117-119,
@@ -48,6 +48,8 @@ FROM (
   SELECT 'committees',                COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/committees')
   UNION ALL
   SELECT 'committee_membership',      COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/committee_membership')
+  UNION ALL
+  SELECT 'federal_workforce_by_agency', COUNT(*) FROM iceberg_snapshots('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency')
 );
 
 -- ─────────────────────────────────────────────────────────────
@@ -1290,6 +1292,122 @@ SELECT 'officials', 'senate_election_results', 'T7_georgia_2020_first_rounds_not
   n, NULL, 'Georgia 2020 general-election rounds that are marked decisive although the 2021 runoffs decided them (expect 0)'
 FROM (SELECT COUNT(*) AS n FROM senate_race_results WHERE year = 2020 AND state_postal = 'GA' AND is_decisive);
 
+
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: federal_workforce_by_agency (OPM Federal Workforce Data, monthly Status snapshot)
+-- Grain: snapshot_month x agency_code x agency_subelement_code x agency_subelement x state_abbr x
+-- country_name. Two codes can share a name (IN26/IN27 in 2026-09), so the name alone is not a key (the
+-- code column agency_subelement_code is null on a few source cells; the source country code
+-- is not carried because OPM leaves it null on cells that still name the country).
+-- state_abbr/country_name carry the literal 'REDACTED' on records OPM withholds (about 47%
+-- of employees); that is source content, not a defect, so it is never a null check here.
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true));
+
+-- T2: row_count (one month aggregates to about 8,600 rows)
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Expected at least 5000 rows (one month is about 8,600)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T5: all_same_value (year is single-valued when the DQ run covers one year)
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL snapshot_month, agency_code, agency_subelement, state_abbr or country_name rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true)
+      WHERE snapshot_month IS NULL OR agency_code IS NULL OR agency_subelement IS NULL
+         OR state_abbr IS NULL OR country_name IS NULL);
+
+-- T6: pk_duplicates
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicated (snapshot_month, agency_code, agency_subelement_code, agency_subelement, state_abbr, country_name) keys (NULL codes compare equal)'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true)
+        GROUP BY snapshot_month, agency_code, agency_subelement_code, agency_subelement, state_abbr, country_name
+        HAVING COUNT(*) > 1));
+
+-- T7: headcount_positive (a cell exists only because at least one employee is in it)
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T7_headcount_positive',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with headcount NULL or below 1'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true) WHERE headcount IS NULL OR headcount < 1);
+
+-- T7: month_total_range (federal civilian headcount per snapshot month; the 2026-09 file
+-- sums to 2.02M and OPM flagged that month as incomplete for some components, so the floor
+-- is loose)
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T7_month_total_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Snapshot months whose total headcount is outside 1.0M-3.0M'
+FROM (SELECT COUNT(*) AS bad FROM (
+        SELECT snapshot_month, SUM(headcount) AS total FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true) GROUP BY snapshot_month)
+      WHERE total < 1000000 OR total > 3000000);
+
+-- T7: month_format
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T7_month_format',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'snapshot_month not YYYYMM or not in the row''s year partition'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true)
+      WHERE NOT regexp_matches(snapshot_month, '^[0-9]{6}$')
+         OR CAST(LEFT(snapshot_month, 4) AS INTEGER) <> year);
+
+-- T7: spot_va_2026_09 (September 2026 file: VA 448,850, Interior 59,498; ranges allow a
+-- republished version). Passes only when 2026 is loaded, which the DQ run for this table does.
+INSERT INTO dq_results
+SELECT 'officials', 'federal_workforce_by_agency', 'T7_spot_va_interior_2026_09',
+  CASE WHEN va BETWEEN 400000 AND 500000 AND doi BETWEEN 50000 AND 70000 THEN 'pass' ELSE 'fail' END,
+  va, NULL, 'VA headcount ~448,850 and Interior ~59,498 at 2026-09 (got VA=' || COALESCE(CAST(va AS VARCHAR), 'none') || ', Interior=' || COALESCE(CAST(doi AS VARCHAR), 'none') || ')'
+FROM (SELECT SUM(headcount) FILTER (WHERE agency_code = 'VA') AS va,
+             SUM(headcount) FILTER (WHERE agency_code = 'IN') AS doi
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/federal_workforce_by_agency', allow_moved_paths := true) WHERE snapshot_month = '202609');
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
