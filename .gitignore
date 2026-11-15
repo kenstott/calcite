@@ -153,3 +153,10 @@ comparative-test-results/
 
 # Pinned, immutable jar copies (govdata/scripts/pin-jar.sh)
 govdata/.jars/
+
+# Local working files that must not be published: scratch work, superseded eval-run
+# backups, connector logs and downloaded installers.
+/scratch/
+*.bak/
+/q.err
+*.pkg
