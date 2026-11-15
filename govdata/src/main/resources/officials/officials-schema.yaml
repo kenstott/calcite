@@ -1701,11 +1701,133 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # FEDERAL_WORKFORCE_BY_AGENCY — OPM Federal Workforce Data, monthly Status snapshot
+  # ---------------------------------------------------------------------------
+  - name: federal_workforce_by_agency
+    # One fetch per calendar year; the provider downloads that year's monthly files (about 52 MB
+    # parquet each, keyless, data.opm.gov) through rawCache and aggregates them with DuckDB. OPM
+    # republishes a month as a new version, so the aggregate is hashed and a version change
+    # rewrites the year.
+    freshness:
+      type: hash
+    pattern: "type=federal_workforce_by_agency/year=*/*.parquet"
+    partitions: *year_partition
+    comment: >
+      Federal civilian headcount by month, agency, sub-agency and duty-station state from OPM's
+      Federal Workforce Data (data.opm.gov), the EHRI Status snapshot of every active employee (in
+      pay or non-pay status) on the last day of each month, March 2005 to the latest published
+      month. One row per snapshot_month x agency_code x agency_subelement x state_abbr x
+      country_name with headcount; the 2M-row record-level cube OPM publishes is aggregated to
+      about 8,600 rows a month and occupation, grade, pay and demographic fields are not carried.
+      Use it for agency headcount change over time (for example Interior in March 2025 against
+      September 2026): SUM(headcount) over agency_code for a snapshot_month, never over months.
+      About 47 percent of employees carry state_abbr and country_name REDACTED, which OPM sets on
+      sensitive records under its data release policy; they count in every agency total and are
+      kept as published, so a state breakdown covers only the unredacted rest. Months OPM has not
+      yet received in full (a Department of War processing change affected September 2026) are
+      published as received and republished as a new version when complete. Accessions and
+      separations, which OPM publishes alongside, are not in this table. Source:
+      data.opm.gov/api/v1/files/employment.
+
+    dimensions:
+      type:
+        - federal_workforce_by_agency
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2005}"
+        minYear: 2005
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+
+    columns:
+      - name: snapshot_month
+        type: string
+        nullable: false
+        comment: "Snapshot month as YYYYMM (the last day of that month); PK component"
+      - name: department_code
+        type: string
+        nullable: false
+        comment: OPM department code (cabinet department or independent-agency grouping), e.g. IN
+      - name: department
+        type: string
+        nullable: false
+        comment: Department name as published, e.g. DEPARTMENT OF INTERIOR
+      - name: agency_code
+        type: string
+        nullable: false
+        comment: OPM agency code; PK component
+      - name: agency
+        type: string
+        nullable: false
+        comment: Agency name as published
+      - name: agency_subelement_code
+        type: string
+        nullable: true
+        comment: OPM agency sub-element (bureau/component) code; null where OPM reports no sub-element (agency_subelement is then NO DATA REPORTED)
+      - name: agency_subelement
+        type: string
+        nullable: false
+        comment: Agency sub-element name as published, e.g. VETERANS HEALTH ADMINISTRATION
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: "Duty-station state abbreviation as published; the literal REDACTED where OPM withholds the location of a sensitive record under its data release policy (about 47% of September 2026 employees)"
+      - name: state_name
+        type: string
+        nullable: false
+        comment: Duty-station state name as published; REDACTED where withheld
+      - name: country_name
+        type: string
+        nullable: false
+        comment: "Duty-station country name as published (UNITED STATES for US duty stations); REDACTED where withheld. The source's country code is not carried because OPM leaves it null on some cells that still name the country"
+      - name: headcount
+        type: long
+        nullable: false
+        comment: Federal civilian employees on the snapshot date in this agency sub-element and duty-station cell (sum of the source count column, in pay or non-pay status)
+      - name: year
+        type: integer
+        nullable: false
+        comment: Calendar year of snapshot_month; partition column
+
+    source:
+      type: http
+      # Placeholder URL: OpmFederalWorkforceProvider lists and downloads the monthly parquet files
+      # itself (the year comes from the dimension variable) and never uses HttpSource's fetch.
+      url: "https://data.opm.gov/api/v1/files/employment"
+      method: GET
+      response:
+        format: json  # ignored: OpmFederalWorkforceProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.officials.OpmFederalWorkforceProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=federal_workforce_by_agency/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: federal_workforce_by_agency
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
 
 constraints:
+  federal_workforce_by_agency:
+    primaryKey: [snapshot_month, agency_code, agency_subelement_code, agency_subelement, state_abbr, country_name]
   members:
     primaryKey: [bioguide_id, congress]
     foreignKeys:
