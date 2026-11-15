@@ -168,8 +168,9 @@ mkdir -p "$STATE_DIR"
 # Legacy folders that are not Iceberg tables (no metadata/version-hint.text) and hold millions of small
 # per-accession directories. Listing one runs for an hour or more and saturates MinIO's metadata I/O, so no
 # listing or copy here ever enters them. Space-separated globs matched against "<schema>/<top-level dir>";
-# this is the single place the list lives. Override with GOVDATA_R2_SYNC_EXCLUDE.
-LEGACY_EXCLUDE="${GOVDATA_R2_SYNC_EXCLUDE:-sec/year=* sec/chunk-progress */type=*_bulk */vectorized_chunk_codes}"
+# this is the single place the list lives. Override with GOVDATA_R2_SYNC_EXCLUDE. Only folders proven to be
+# unread legacy listings belong here: */vectorized_chunk_codes is read at query time and must keep syncing.
+LEGACY_EXCLUDE="${GOVDATA_R2_SYNC_EXCLUDE:-sec/year=*}"
 # Wall-clock cap on one directory listing. A listing that outlives it is logged and treated as empty/failed
 # by the caller's normal path; it never holds the pass.
 LIST_MAX="${GOVDATA_R2_SYNC_LIST_MAX:-120s}"
