@@ -144,11 +144,11 @@ partitionedTables:
       - name: spec_ed_students
         type: int
         nullable: true
-        comment: Students receiving special education services. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
+        comment: Students receiving special education services. Null for every LEA from year 2022 onward (the Urban Institute CCD directory API no longer publishes the field); populated 2013-2021. May carry a negative NCES CCD sentinel code (see table comment) instead of a real count.
       - name: english_language_learners
         type: int
         nullable: true
-        comment: English language learner students. May carry a negative NCES CCD sentinel code (see table comment, incl. -9) instead of a real count.
+        comment: English language learner students. Null for every LEA from year 2022 onward (the Urban Institute CCD directory API no longer publishes the field). May carry a negative NCES CCD sentinel code (see table comment, incl. -9) instead of a real count.
       - name: teachers_total_fte
         type: double
         nullable: true
