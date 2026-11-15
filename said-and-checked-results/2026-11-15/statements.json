@@ -1,11 +1,11 @@
 {
   "date": "2026-11-15",
-  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. No original source (transcript, release or post) could be read for any statement, so all wording is as the outlet reported it.",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements gathered from the transcripts are over the day's limit of 15 checks and are marked not yet checked.",
   "lede": [
-    "Fifty-six statements by 15 officeholders appeared in two days of NPR and PBS NewsHour politics coverage. Most were about three things: the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war and talk of ending it, and what Democrats plan to do with the majorities they won on Nov. 3.",
-    "Eleven of the 56 were checked. Eight were factual claims. Three were opinions or predictions resting on a factual premise, and for those the premise alone was rated. Five came out supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. One was contradicted: the transportation secretary's reported account of what caused the ground stop differs from the FAA's own published account, though the FAA says its investigation is still open. Four were unsettled, meaning evidence was found but does not decide them: the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, a congressman's statement that his party won in places it had never won, and the premise behind the secretary of state's statement about economic pressure on Iran. One was unsupported, meaning no evidence was found for it; that is not a finding that it is false.",
-    "Three statements are linked to a direct counter-statement: two to a statement by another official on this page, and one to the FAA's own published account. A link shows that the two disagree on the same point. It is not a finding about which is right.",
-    "The other 45 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked, and are folded under each speaker."
+    "This page lists 197 statements by 20 officeholders. Fifty-six appeared in two days of NPR and PBS NewsHour politics coverage; the other 141 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
+    "Eleven statements were checked, all from the news coverage. Eight were factual claims. Three were opinions or predictions resting on a factual premise, and for those the premise alone was rated. Five came out supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. One was contradicted: the transportation secretary's reported account of what caused the ground stop differs from the FAA's own published account, though the FAA says its investigation is still open. Four were unsettled, meaning evidence was found but does not decide them: the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, a congressman's statement that his party won in places it had never won, and the premise behind the secretary of state's statement about economic pressure on Iran. One was unsupported, meaning no evidence was found for it; that is not a finding that it is false.",
+    "Seven statements are linked to a direct counter-statement: six to a statement by another official on this page, and one to the FAA's own published account. A link shows that the two disagree on the same point. It is not a finding about which is right.",
+    "Ninety-nine factual statements from the Sunday shows are marked not yet checked: the page checks at most 15 statements a day. Where a guest made the same claim on more than one show, it is listed once with the other wordings beneath it; 19 claims were condensed this way, most of them the transportation secretary's, who appeared on all four shows. No two factual statements by the same speaker were found to contradict each other. The remaining 87 are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
   "stories": [
     {
@@ -103,6 +103,34 @@
       "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress",
       "headline": "Trump breaks silence on nationwide ground stop and demands more money from Congress",
       "published": "2026-11-15T11:32-05:00"
+    },
+    {
+      "outlet": "CBS Face the Nation",
+      "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+      "headline": "Full transcript of \"Face the Nation with Margaret Brennan,\" Nov. 15, 2026",
+      "published": "2026-11-15",
+      "transcript": true
+    },
+    {
+      "outlet": "NBC Meet the Press",
+      "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+      "headline": "Meet the Press - November 15, 2026",
+      "published": "2026-11-15",
+      "transcript": true
+    },
+    {
+      "outlet": "ABC This Week",
+      "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+      "headline": "'This Week' Transcript 11-15-26",
+      "published": "2026-11-15",
+      "transcript": true
+    },
+    {
+      "outlet": "CNN State of the Union",
+      "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+      "headline": "State of the Union transcript, Nov. 15, 2026",
+      "published": "2026-11-15",
+      "transcript": true
     }
   ],
   "statements": [
@@ -1468,6 +1496,4117 @@
       "evidence": [],
       "check_run": null,
       "context": "On the Nov. 15 Sunday show, about how long airlines need to recover from the ground stop."
+    },
+    {
+      "id": 57,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the two routers tied to Friday's nationwide ground stop.",
+      "quote": "We actually have both routers with L3Harris, who operates and owns our network. FAA is on site as well. FBI is offering support.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "We have it at a lab. It's an L3Harris lab in Florida. FAA is on board at that facility.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 58,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the investigation into the cause of Friday's nationwide ground stop.",
+      "quote": "I'm going to tell you and the American people what we find.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "And when I have that information, I will pass it along.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 59,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the work at the El Dorado, Arkansas, telecom site before Friday's ground stop.",
+      "quote": "So we were forced by the telecom provider to actually update that copper to fiber, and we brought in our routers and did the work.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "the work was being done in El Dorado, Arkansas. This was -- we were replacing an old copper wire, which, by the way, was going to be discontinued.",
+          "outlet": "ABC This Week",
+          "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+        },
+        {
+          "quote": "we had an old copper wire. The telecom provider was taking it out of service. It was obsolete.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 61,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, comparing the FAA's telecom network with those of other institutions and companies.",
+      "quote": "the rest of the world, every institution, every company, not just in the U.S., but around the world, they're – they've all switched over to digital and fiber. It's just the FAA is still using this really old telecom network that has to be updated, upgraded, and I think built brand new.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 62,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about who performs telecom work at FAA sites, after the aviation safety specialists' union said its technicians were not involved.",
+      "quote": "This union doesn't do any work on telecom, and it's our telecom contractor and providers, like L3Harris in this situation, they're the ones that actually do the work.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 64,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about why the FAA did the El Dorado, Arkansas, work in the middle of the day.",
+      "quote": "This has never happened. And so that's why, when you have a remote location like this, we felt comfortable doing it in the middle of the day, because it's been done thousands of times.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 65,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the FAA's practice of scheduling telecom work after Friday's nationwide ground stop.",
+      "quote": "We're going to have to reevaluate now when we do this work.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 66,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about when the FAA does maintenance at big airports versus remote sites.",
+      "quote": "Now, normally, if you have a big facility, a Newark or an Atlanta or an L.A., we have work to do, we do that at night. But, in a remote location, we can do it during the day because the risk historically has been very low.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 70,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the progress of the FAA's switch from copper to fiber and of radio replacements.",
+      "quote": "that's why I have already switched over 70 percent of copper to fiber without incident, without issue. Almost 470 radios have been switched over, new – new electronic flight strips and towers.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 72,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about how much money was given to the FAA in the past and how much work was done.",
+      "quote": "A lot of money was given. Not a lot of work was done.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 73,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the terms under which Congress provided $12.5 billion in the 2025 budget law.",
+      "quote": "they said, OK, we'll give you a partial funding, $12.5 billion, in One, Big Beautiful Bill. And they were very specific in how we spend it.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "And, by the way, the Congress gave me $12.5 billion.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        },
+        {
+          "quote": "The president was able to get $12.5 billion in One Big Beautiful Bill, a historic investment in aviation by the way.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 74,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the status of the $12.5 billion for radar and the delivery schedule.",
+      "quote": "So all that money hasn't been spent, but it's been obligated to radar.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [
+        78
+      ],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 75,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about when new radar will be delivered and deployed.",
+      "quote": "They'll start to deliver those radar to us in the spring. All of them will be deployed by the end of 2028.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 78,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about funding for air traffic control upgrades, after the transportation secretary asked for $50 billion.",
+      "quote": "This is not a Congress money problem. You pointed out that there was $50 billion sent in the Biden administration and $12.5 billion appropriated that has not been obligated.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [
+        74
+      ],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 79,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about whether more air traffic control money is the problem.",
+      "quote": "So this is not immediately a spending problem. It is a prioritization problem.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 80,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the effect of Elon Musk's government cost-cutting on FAA staffing.",
+      "quote": "part of that chain saw got 1,300 employees of the FAA to resign or to retire. They fired 400 probationary employees.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 81,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the cause of Friday's nationwide ground stop.",
+      "quote": "what you're seeing is the wages of what Elon Musk did, where he just gutted an entity that – that affected millions of Americans last Friday.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 82,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about a memo on Alice Huang, an executive linked to Nvidia chief Jensen Huang, and the Nvidia scandal.",
+      "quote": "it was March when – or March or April when the secretary of state, Marco Rubio, circulated a memo to all of the senior people, including presumably the White House, saying, we have concerns that this woman is a spy.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 83,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about whether Secretary of State Marco Rubio's memo on Alice Huang has been shared with the Gang of Eight.",
+      "quote": "That memo has not been shared.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 84,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about what Congress has been told about the Nvidia and Alice Huang matter at last week's Gang of Eight briefing.",
+      "quote": "The only information that has come our way was sort of a glancing, not-on-the-agenda discussion in that meeting.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 85,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about payments by Nvidia chief Jensen Huang to the White House ballroom project.",
+      "quote": "Jensen Huang is, you know, writing $25 million checks for the ballroom.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 86,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about President Trump, Commerce Secretary Howard Lutnick and Nvidia chief Jensen Huang.",
+      "quote": "the president and his buddy-buddies, and apparently Howard Lutnick, the commerce secretary, who has responsibility for keeping chips that could help build, you know, Chinese AI out of China, you know, these guys are palling around.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 87,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Megaspeed, the Singapore company once run by Alice Huang, and the Commerce Department's Entity List.",
+      "quote": "Lo and behold, Megaspeed was not on that Entity List.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 88,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the age of Megaspeed, the Singapore company once run by Alice Huang.",
+      "quote": "Megaspeed is an entity that sort of didn't exist 10 years ago in any meaningful way.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 89,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about his role in the congressional inquiry into Nvidia and Alice Huang.",
+      "quote": "I'm going to spend a lot of time getting to the bottom of this.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 90,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Commerce Secretary Howard Lutnick's role in Nvidia chip exports to China.",
+      "quote": "it looks like he has been the barrier inside the government to stopping the flow of these Nvidia chips to China.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 91,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about whether Nvidia's Jensen Huang will meet with House committees on Dec. 1.",
+      "quote": "Yes, he has. And also representatives from Nvidia. We are in the process of discussing exact dates.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 92,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Alice Huang, a Hong Kong resident formerly Megaspeed's chief executive, and chips her company accessed.",
+      "quote": "she's a Chinese national, set up a company that has been able to access over $12 billion of high-end chips. And there's an investigation as to whether those chips were illegally smuggled into China.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 93,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Nvidia chief Jensen Huang's relationship with Alice Huang.",
+      "quote": "for Jensen Huang to be in a relationship like that, knowing that every Chinese national can be pressured by the Chinese Communist Party to comply whatever directives they have from the intelligence, that was simply irresponsible and a direct threat to our national security.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 94,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about whether China uses its security laws to pressure individuals.",
+      "quote": "China has an all of society approach when it comes to their intelligence. They have national security laws in effect in Hong Kong.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 95,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the detention of Hong Kong publisher Jimmy Lai.",
+      "quote": "That's why Jimmy Lai is in prison right now for violating national security.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 96,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the treatment of people in China and Hong Kong who do not comply with the Chinese Communist Party.",
+      "quote": "So, anyone who doesn't comply with the CCP can be imprisoned, they or their family members.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 97,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about why President Trump brought Nvidia chief Jensen Huang on his trip to China.",
+      "quote": "I think he brought Jensen Huang to China because he felt like that would be a benefit for negotiations with whatever direction they wanted to head.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 98,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the Commerce Department's Entity List of restricted foreign companies.",
+      "quote": "we need to examine why the Commerce Department did not update their entity list for the past year.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 99,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about investigations into Megaspeed, the Singapore company once run by Alice Huang.",
+      "quote": "We know that Singapore wanted to investigate and now it appears that there may be a criminal investigation or some kind of Justice Department investigation.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 100,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Megaspeed, the Singapore company once run by Alice Huang, and Alibaba.",
+      "quote": "they were partnering with Alibaba, which is a designated, by Department of War, as a Chinese military company.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 101,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about which Nvidia chips the Trump administration has barred from sale to China.",
+      "quote": "you have the advanced, the Blackwells, the Rubens, which the Trump administration has prohibited sales of those.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 102,
+      "speaker": "John Moolenaar",
+      "office": "U.S. Representative from Michigan",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about his committee's plans on chip export controls in the next few weeks.",
+      "quote": "And it also raises the level of importance to getting export controls in the National Defense Authorization Act. And to me, that's going to be our focus for the next few weeks.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 104,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about his contact with the director of the Centers for Disease Control and Prevention.",
+      "quote": "So, I'm in regular contact with the CDC director.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 105,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about a broken flu shot locator link on a federal health website that he reported to the CDC director.",
+      "quote": "And then she texted back to say it's been broken for a year. And so she's working to fix it.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 106,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the time left in the congressional session for a public hearing on the CDC.",
+      "quote": "we've got about four weeks left and so there's a limited time to have a public hearing, but there's contact going on in the background.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 107,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Health Secretary Robert F. Kennedy Jr.'s remark that the Senate no longer has leverage over him.",
+      "quote": "he's obviously trying to provide cover for failure as secretary of Health and Human Services.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 108,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about the Health Secretary's record on ultra-processed foods.",
+      "quote": "He was supposed to be doing something positive on ultra-processed foods. That's what MAHA moms wanted. There's been minimal progress.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 109,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about measles under Health Secretary Robert F. Kennedy Jr.",
+      "quote": "And now we've lost our measles elimination status and we have infants dying from measles.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "And we're seeing children die from measles who are too young to be vaccinated.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 110,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about health care costs and coverage in the United States.",
+      "quote": "healthcare expenses are sky high. Going higher. Small businesses dropping coverage. Employees unable to afford their deductible.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 111,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about whether Health Secretary Robert F. Kennedy Jr. should remain in his post.",
+      "quote": "If I were president, I would choose someone else because there needs to be accountability for higher healthcare costs, more measles deaths, losing elimination status and no progress on processed foods.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 112,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about commitments to hold a Social Security hearing and markup, naming Senate Majority Leader John Thune and another leader.",
+      "quote": "I had a commitment from both Thune and from Mike Ccrepo to have a hearing and a markup on a Social Security bill.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 113,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about President Trump's position on his Social Security bill.",
+      "quote": "And the president actually has given me personal commitment that he would support it and his administration has been very helpful.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 114,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Senator Ron Wyden's stance on a hearing for his Social Security bill.",
+      "quote": "The ranking member on the Senate Finance Committee, Ron Wyden, has decided he does not want to be constructive.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 115,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, describing how his Social Security plan would be funded and invested.",
+      "quote": "we borrow $1.5 trillion, we put it in investment funds separate from Social Security trust fund, put it into the broader economy, and allow it to grow over six decades, at which point it paid for up to 70 percent of what we need to cover the debt for Social Security.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 116,
+      "speaker": "Bill Cassidy",
+      "office": "U.S. Senator from Louisiana",
+      "party": "R",
+      "context": "On CBS's Face the Nation on Nov. 15, 2026, about Senator Ron Wyden's past votes on investing retirement funds in markets.",
+      "quote": "He has voted for that exact same policy almost for the federal railroad retirement system under George W. Bush, and that's done fantastic. It's worked.",
+      "reported_by": {
+        "outlet": "CBS Face the Nation",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 117,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about whether it is safe to fly.",
+      "quote": "It is the safest air system in the world, bar none.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 118,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the ground stop issued Friday.",
+      "quote": "And we safely were able to land over 3,500 planes.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 120,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the work at the El Dorado, Arkansas, radio facility before the ground stop.",
+      "quote": "we were doing work in a remote location in El Dorado, Arkansas. It’s a remote radio facility.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 121,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about what happened when the El Dorado, Arkansas, facility was turned on.",
+      "quote": "And what we saw when we turned this facility on was that the router we used was flooding the rest of our network with data.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "And that's when we saw the – the flooding of the network.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 123,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about how service was restored after Friday's ground stop.",
+      "quote": "Once we were able to isolate that it was coming from El Dorado, we removed that system from the network. And everything came back online.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 124,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about why the FAA cannot end its contract with L3Harris.",
+      "quote": "L3Harris decades ago got the contract to run and own the network that operates communication for the FAA.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 127,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about whether Friday's ground stop involved a foreign actor.",
+      "quote": "No one has seen that or indications that this was a foreign actor or an attack on our network.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "we have no indication that this was -- was a hack.",
+          "outlet": "ABC This Week",
+          "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 131,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about his pace of work at the FAA and the Transportation Department.",
+      "quote": "I am moving at an incredible speed that no one has done at the FAA or the DOT in decades.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 132,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about fixing the air traffic control system with the president.",
+      "quote": "And President Trump and I are going to fix it.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 134,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about why Republicans lost in the Nov. 3 midterm elections.",
+      "quote": "I do believe, in many respects, our voters rejected President Trump’s embrace of protectionist tariffs, a $41 trillion national debt that continues to rise, the embrace of appeasement with regard to Russia and now even Iran, marginalizing the right to life.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 135,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about Republican voters in the Nov. 3 midterm elections.",
+      "quote": "As I traveled across country in the last week, I’m convinced our voters didn’t turn left. I think they were turned off.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 136,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about what Republicans must do to win in future elections.",
+      "quote": "if Republicans will turn back to our commitment to fiscal responsibility, a strong defense, traditional values, and carry that across the country, that just like we did in 2006, we can win it all back again.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 137,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about whether the Iran war caused Republican midterm losses, disagreeing with Vice President JD Vance.",
+      "quote": "Vice President Vance is wrong. We didn’t lose this midterm election because of the war.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 138,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the U.S. military campaign against Iran the previous year.",
+      "quote": "for inexplicable reasons, we stopped after five weeks. We sunk their navy, we had complete air superiority, took down 15,000 military sites in Iran.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 139,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about recent Iranian attacks on a U.S. base in Bahrain.",
+      "quote": "you need look no further than Bahrain in the last 24 hours, where Iran is still firing on U.S. targets, on our base there",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 140,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about China as a threat to the United States.",
+      "quote": "China is the greatest economic and strategic threat facing the United States of America.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 141,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about Nvidia's Jensen Huang and how Nvidia was permitted to transfer advanced chip technology.",
+      "quote": "Well, Jensen Huang had to go. But it can’t stop there.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 142,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about U.S. policy on China during the first Trump administration, in which he served as vice president.",
+      "quote": "We imposed $250 billion in a year in, in tariffs. We built up our military in the region.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 143,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the first Trump administration's statements on China's treatment of Uyghurs.",
+      "quote": "We called out the persecution of Muslim Uyghurs as the genocide that it was.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 144,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the current Trump administration's policy on TikTok and on weapons sales to Taiwan.",
+      "quote": "First it was allowing TikTok to continue to operate in the United States, even though it continues to be essentially controlled by the Chinese Communist Party. Also the delaying of weapons sales to Taiwan, where in our administration, we made those weapons available.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 145,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about China's long-term technology acquisition efforts.",
+      "quote": "China, for decades, has been engaging in espionage and intellectual property theft all in efforts to gain American technology",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 146,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the Trump family's cryptocurrency earnings.",
+      "quote": "And the fact that, that a large portion of the source of that, before the inauguration, came from foreign interests in the Arab world.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 147,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about Vice President JD Vance's record on Ukraine.",
+      "quote": "his opposition to the U.S. support for Ukraine while he was a senator and the way he’s celebrated the stops and starts of U.S. support for Ukraine during the course of the last two years",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 148,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the current Trump administration's tariffs and business policies.",
+      "quote": "not only broad-based tariffs on friend and foe alike, but nationalizing 41 American businesses, in part, price controls on pharmaceuticals and credit cards.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 149,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the current Trump administration's stance on state efforts to restrict mail-order abortion pills.",
+      "quote": "this is an administration that literally has not lifted a finger to support states that are trying to stem the flow of mail-order abortion pills around the country.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 150,
+      "speaker": "Mike Pence",
+      "office": "Former Vice President of the United States",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the Republican Party's path to winning the 2028 presidential election.",
+      "quote": "if we don’t get our party back to that traditional conservative agenda and values that’s defined the Republican movement for 50 years, it won’t matter who we nominate in 2028.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 151,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the routers in the national airspace system after Friday's ground stop.",
+      "quote": "we have 69 of these routers in the national airspace. We've stopped their ability to broadcast.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 152,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the router implicated in Friday's ground stop.",
+      "quote": "Once we shut the -- shut the ability to broadcast down on the routers, the issue is resolved.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 154,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the system in Amarillo, Texas, after the El Dorado, Arkansas, router was turned on.",
+      "quote": "When we turned that router on, we saw that in Amarillo, Texas, a system we had replaced about three weeks earlier, that started to flood our system as well.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 155,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about whether Friday's ground stop was a cyberattack.",
+      "quote": "We had DNI, NSA, CISA, FBI, like everybody was on a call together. And our intelligence partners were saying, listen, we're not seeing any of the chatter or the footprints that we would normally see if this was a cyberattack.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "So President Trump had a whole government approach. He brought on NSA, D&I, FBI, everybody was on a phone call together.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 157,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the person who installed the router at El Dorado, Arkansas, and whether sabotage is suspected.",
+      "quote": "Now, we know who did the install. A good American patriot, we believe, a veteran.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 158,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about whether the router installation at El Dorado, Arkansas, was sabotage.",
+      "quote": "So, we don't think that someone tried to sabotage the network on the install at all.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 159,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the history of investment in the FAA's infrastructure.",
+      "quote": "for decades, there's been underinvestment or no investment in the FAA and the architecture of our infrastructure.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "For decades, this work in our – in the FAA has not been done. It hasn't been done because it's hard.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        },
+        {
+          "quote": "We have to make investments into a network that has been neglected for decades.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        },
+        {
+          "quote": "Dana, there hasn't been investment in this network for decades.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 160,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the cost of operating the FAA's old network.",
+      "quote": "that by the way, costs hundreds of millions of dollars to operate because it's so obsolete",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 161,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about how often router work like Friday's has been done on the FAA network.",
+      "quote": "the work that was done on Friday, that's been done thousands of times by L3Harris in our network.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "So, just to clarify that, this – this was done appropriately, which, by the way, it's been done thousands of times by us, by others, and other companies.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        },
+        {
+          "quote": "this work is done thousands of times by our partners at L3Harris, but around the world, thousands, tens of thousands of times these transitions have been made.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 162,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the age of the routers that experienced problems during Friday's ground stop.",
+      "quote": "the routers that were experiencing issues, those routers were purchased in 2001, they were obsolete in 2006, and we still use them in 2026, just to underscore how old the network is.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "the routers in the system that was getting flooded, they were purchased in 2001. They were obsolete in 2006. And in 2026, we still used the routers that were giving us these issues in our network.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 163,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the status of the air traffic network after the El Dorado, Arkansas, facility was shut down on Friday.",
+      "quote": "as of Friday night, we had the network up and running.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 165,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about how Congress directed the $12.5 billion it provided for air traffic control.",
+      "quote": "They gave me money for tower -- for radios, money for radar, money for systems. But I don't have any money in that $12.5 billion for a new architecture for telecom.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "But what I don't have money for is a new telecom system. I don't have money for new software.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        },
+        {
+          "quote": "They didn’t give me money for telecom. They didn’t give me money for new software.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        },
+        {
+          "quote": "I have no money in that $12.5 billion that I can use for a new architecture for telecom.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 166,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about when the $12.5 billion provided by Congress will be spent.",
+      "quote": "By the way, the $12.5 billion will all be spent and deployed by the end of 2028.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "We’re going to spend that $12.5 billion by the end of 2028.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        },
+        {
+          "quote": "we are on track to have all of that $12.5 billion spent and deployed by the end of 2028.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 167,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On ABC's This Week on Nov. 15, 2026, about congressional support for air traffic control modernization.",
+      "quote": "this will be the one great bipartisan bill that can pass in an era of great partisanship.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "this is the most bipartisan thing in all of Washington. Democrats, Republicans, the president, everyone agrees on this.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 168,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Nvidia chief Jensen Huang's donation to the White House ballroom and chip exports to China.",
+      "quote": "Jensen Huang and NVIDIA gave $25 million for Donald Trump's gold-plated ballroom.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 169,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Nvidia chief Jensen Huang and President Trump's decisions on chip exports to China.",
+      "quote": "he has gotten the president to allow NVIDIA to send very high-end chips to China against the advice of folks in the national security arena.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 170,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Alice Huang, an executive linked to Nvidia chief Jensen Huang, and chips diverted to China.",
+      "quote": "And now we find out that he's had this relationship with a potential spy who's been part of an effort to actually divert these chips from Singapore, other places in Southeast China -- in Southeast Asia to China.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 171,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about whether to believe President Trump's denial that he knew of Jensen Huang's relationship with Alice Huang.",
+      "quote": "I do not, because this is a president who lies to the American public all the time.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 172,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about whether President Trump was briefed on Jensen Huang's relationship before a trip to China.",
+      "quote": "I do believe he was briefed. I think -- all the information that I've seen suggests that this would not have escaped the attention of the president of the United States.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 173,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Megaspeed, the Singapore company once run by Alice Huang, and the Commerce Department.",
+      "quote": "This is the company that was run by the woman that he had the relationship with.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 174,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the Commerce Department's handling of Megaspeed, the Singapore company once run by Alice Huang.",
+      "quote": "Commerce should have put that on the entities list as soon as they had this information.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 175,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Commerce Secretary Howard Lutnick and a Senate subcommittee investigation.",
+      "quote": "And I chair the subcommittee that oversees the Department of Commerce that helped expose his involvement with the -- with Epstein.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 176,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about whether Commerce Secretary Howard Lutnick should be fired over export controls on Megaspeed.",
+      "quote": "I think he should be fired.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 177,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about what President Trump will do about Jensen Huang and chip exports to China.",
+      "quote": "What he will do apparently is tell Jensen Huang to fight this effort. So essentially, what the president is doing is once again undermining our national security and giving a green light to the idea that we should send these very high-end chips to China.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 178,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about President Trump's coming meetings with Chinese President Xi Jinping and Russian President Vladimir Putin.",
+      "quote": "this is another example, in my view, of President Trump cozying up to authoritarian leaders.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 179,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the results of the Nov. 3 midterm elections and his bid to lead Senate Democrats.",
+      "quote": "I think the American people spoke loudly and clearly on Election Day. First of all, they rejected Trump's policy, his wars, his corruption, the high costs.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 180,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about the Democratic wins in the Nov. 3 midterm elections.",
+      "quote": "We won not just Senate seats and House seats, we won governor's races. We won legislative races.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 181,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Mississippi Senator-elect Scott Colom's campaign and support from Democrats in Washington.",
+      "quote": "he wasn't recruited or picked by anybody in Washington. And in fact, Washington was very late in the game to supporting that.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 182,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about fundraising in the Nov. 3 midterm elections.",
+      "quote": "Republicans in Washington raised twice as many funds.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 183,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Senate Majority Leader Chuck Schumer's team and the contest for Democratic leader.",
+      "quote": "The Schumer team's put out a lot of misinformation. They're essentially trying to instill fear in people who may say that they're going to support me as a new leader.",
+      "reported_by": {
+        "outlet": "ABC This Week",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 186,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the Government Accountability Office's statements on the air traffic control system.",
+      "quote": "the GAO has also said, and it said this for over five, seven years, that this system is going to start to show its age and it has to be modernized.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "the GAO has done a risk assessment on my network, on all of the old equipment",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 190,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the age of FAA systems and who left them to him.",
+      "quote": "I have systems that are from the '90s. I have radar that are from the '60s and '70s.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 191,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the age of the FAA's telecom network architecture.",
+      "quote": "And the architecture of our network is from 1980.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 192,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about what the Transportation Department is doing with the $12.5 billion from Congress.",
+      "quote": "I'm already replacing radar and radios. We're putting in voice switches. We're doing all of this work with the $12.5 billion.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "I'm – I have got – ordered new radar, new radios, new voice switches. We're doing all of that.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 193,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about companies ready to build a new air traffic control telecom system.",
+      "quote": "I have AT&T, Verizon and Lumen's all ready to go. We have the architecture ready to build a state-of-the-art telecom system that will give us resiliency.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "I have the architecture ready. These companies are ready to deploy tomorrow. All I need is the money to tell them to start.",
+          "outlet": "NBC Meet the Press",
+          "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+        },
+        {
+          "quote": "I have AT & T, Verizon and Lumens, the greatest telecom companies in the world. I have an architecture ready to go.",
+          "outlet": "ABC This Week",
+          "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 194,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the bill that provided $12.5 billion for air traffic control and what it covered.",
+      "quote": "I had money for radios, for radar, for telecom in my towers.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 195,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about radar manufacturing in the United States.",
+      "quote": "By the way, we haven't built radar in America for 30 years.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 198,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about conditions at air traffic control towers.",
+      "quote": "our air traffic controllers oftentimes don't have elevators or HVAC. They don't have -- they don't have air conditioning. Their roofs leak.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 199,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about whether $12.5 billion is enough to fix the air traffic control system.",
+      "quote": "$12.5 billion after decades of lack of investment is not nearly enough money to fix all the problems we have in the airspace.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 200,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about President Trump's engagement with modernizing air traffic control.",
+      "quote": "This is the first president we have ever had who cares this much about modernizing the airspace.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 201,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about President Trump's conversations with him on air traffic control modernization.",
+      "quote": "He talks to me about it all the time. We have a continual conversations. He wants to know where we're at, who we're contracting with, what technology we're using.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 202,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the funding President Trump is asking Congress to provide for air traffic control.",
+      "quote": "that's why he's asking Congress for the $50 billion, why he's pushing the Congress for the $50 billion.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "Let's make sure we keep the American people safe – yes, $50 billion.",
+          "outlet": "CBS Face the Nation",
+          "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 203,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about where he was and whom he spoke with when the ground stop was issued Friday.",
+      "quote": "I was in the Oval Office with Markwayne. We were talking to the president. The president told Stephen Miller, this is a whole-of-government approach.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 204,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about his contact with President Trump around Friday's press conference.",
+      "quote": "I talked to him before we did the press conference. I talked to him after the press conference.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 205,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about whether he will support an additional $50 billion for air traffic control.",
+      "quote": "I will support whatever level of money is necessary to fix this problem.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 206,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Transportation Secretary Sean Duffy's response to Friday's ground stop.",
+      "quote": "Unfortunately, Secretary Duffy's first response just the other day was to point fingers and blame Congress.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 207,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the $12.5 billion for air traffic control in the 2025 budget law.",
+      "quote": "But, in fact, Congress has met the Trump administration's requests, and it was Republicans who, in their so-called Big Beautiful Bill that put in the $12.5 billion, of which they have only spent one-third.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [
+        {
+          "quote": "So it's really rich to hear the secretary pointing the fingers at Congress, when Congress has given the administration what they asked for.",
+          "outlet": "CNN State of the Union",
+          "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+        }
+      ],
+      "self_contradictions": []
+    },
+    {
+      "id": 209,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about funding for the war in Iran in the government funding fight.",
+      "quote": "I also think we need to use all our powers right now to end this illegal war against Iran. And that means not one penny more.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 210,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Senate Majority Leader Chuck Schumer's position on funding the Iran war.",
+      "quote": "That's not the position of the current majority leader.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 211,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Senate Majority Leader Chuck Schumer's role in Democratic primaries.",
+      "quote": "He joined with AIPAC and crypto to try to defeat them.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 212,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about support among Senate Democrats for Chuck Schumer's list of backers in the leadership contest.",
+      "quote": "I can tell you that a number of those people on that list have actually committed to voting for me, and the others are very open to the idea of change.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 213,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the date of the Senate Democratic leadership election.",
+      "quote": "There are also reports that are credible that the Schumer team is trying to change the date of the election to try to move it up from December 1.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 214,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the government funding fight starting Dec. 11 and the Iran war.",
+      "quote": "He's going to keep their gas prices up, their diesel prices up, fertilizer prices up, home heating oil in the Northeast and other parts of the country.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 215,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about public reaction to earlier government shutdowns in President Trump's second term.",
+      "quote": "it's pretty clear that the American people sided with Congress when we were saying, we want to make sure that we protect health care benefits for people.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 216,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the Affordable Care Act tax credits during an earlier government shutdown.",
+      "quote": "what the president did was essentially cut off the extension of the Affordable Care Act tax credits.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 217,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the website for his leadership bid and the 2028 Senate candidates.",
+      "quote": "what I have on that Web site is the ability for people right now to begin to contribute to those candidates, not a dime for Van Hollen, 100 percent of those funds going to start our efforts in 2028",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 218,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Arkansas Republicans' results in the Nov. 3 elections.",
+      "quote": "Not only did I win my race with the -- one of the largest margins of any governor in the country, but Senator Tom Cotton won his race. We won every single one of our federal delegation seats, as well as all of our constitutional offices.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 219,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the results of the Nov. 3 elections for Republicans.",
+      "quote": "there's no question that election night was a bad night for Republicans across the board.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 220,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Arkansas education policy.",
+      "quote": "we made sure that our public schools had the largest investment in state history. We paid our teachers better. We opened up paid maternity leave, one of only two states in the country to do that for up to 12 weeks.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 221,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Arkansas's teacher bonus program.",
+      "quote": "We opened a Merit Incentive Fund where we have given $50 million in bonuses to our teachers over the course of the last 3.5 years.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 222,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Arkansas state taxes.",
+      "quote": "we have also cut taxes four times in the last four years, knocking 25 percent off of our state income tax.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 223,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about what Republicans should do after the Nov. 3 midterm losses.",
+      "quote": "I think we have to be much better at drawing those sharper contrasts, going on offense and preparing in a much better way to deliver a message that really impacts the people at the kitchen table.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 224,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about her plans for her term as governor.",
+      "quote": "And I look forward to holding this job for the next four years.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
+    },
+    {
+      "id": 225,
+      "speaker": "Sarah Huckabee Sanders",
+      "office": "Governor of Arkansas",
+      "party": "R",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about the end of her time as Arkansas governor.",
+      "quote": "my max-out is in four years. They're going to kick me out whether I like it or not.",
+      "reported_by": {
+        "outlet": "CNN State of the Union",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": "CNN State of the Union transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": null,
+      "premise": null,
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": []
     }
   ]
 }
