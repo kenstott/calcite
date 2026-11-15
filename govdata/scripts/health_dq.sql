@@ -638,6 +638,162 @@ SELECT 'health', 'cdc_county_overdose_deaths', 'T7_county_coverage',
 FROM (SELECT COUNT(DISTINCT fips) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_county_overdose_deaths', allow_moved_paths := true));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_ari_activity_state (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ari_activity_state', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ari_activity_state', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ari_activity_state', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Latest-week snapshot: one row per geography (56 at 2026-11-15)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ari_activity_state', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ari_activity_state', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ari_activity_state', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ari_activity_state', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ari_activity_state', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL week_end or geography or label'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ari_activity_state', allow_moved_paths := true)
+      WHERE week_end IS NULL OR geography IS NULL OR label IS NULL);
+
+-- T7: coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ari_activity_state', 'T7_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct geographies (states, DC, NYC, PR, nation)'
+FROM (SELECT COUNT(DISTINCT geography) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ari_activity_state', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_ili_activity_state_archive (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ili_activity_state_archive', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ili_activity_state_archive', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ili_activity_state_archive', 'T2_row_count',
+  CASE WHEN n >= 5000 THEN 'pass' ELSE 'fail' END,
+  n, 5000, 'Expected 5,775 rows (frozen archive)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ili_activity_state_archive', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ili_activity_state_archive', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ili_activity_state_archive', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ili_activity_state_archive', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ili_activity_state_archive', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL week_ending or state or activity_level'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ili_activity_state_archive', allow_moved_paths := true)
+      WHERE week_ending IS NULL OR state IS NULL OR activity_level IS NULL);
+
+-- T7: coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_ili_activity_state_archive', 'T7_coverage',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END,
+  n, 50, 'Distinct states/jurisdictions'
+FROM (SELECT COUNT(DISTINCT state) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_ili_activity_state_archive', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_resp_net_rates (data.cdc.gov Socrata; one paginated JSON artifact)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_resp_net_rates', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_resp_net_rates', allow_moved_paths := true));
+
+-- T2: row_count
+INSERT INTO dq_results
+SELECT 'health', 'cdc_resp_net_rates', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END,
+  n, 100000, 'Expected ~126,000 rows at 2026-11-15'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_resp_net_rates', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_resp_net_rates', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'health', 'cdc_resp_net_rates', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_resp_net_rates', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_resp_net_rates', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL surveillance_network or season or date'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_resp_net_rates', allow_moved_paths := true)
+      WHERE surveillance_network IS NULL OR season IS NULL OR date IS NULL);
+
+-- T7: coverage
+INSERT INTO dq_results
+SELECT 'health', 'cdc_resp_net_rates', 'T7_coverage',
+  CASE WHEN n >= 4 THEN 'pass' ELSE 'fail' END,
+  n, 4, 'Distinct surveillance networks (COVID-NET, RSV-NET, FluSurv-NET, Combined)'
+FROM (SELECT COUNT(DISTINCT surveillance_network) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_resp_net_rates', allow_moved_paths := true));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: cdc_places_county (data.cdc.gov Socrata swc5-untb; one paginated JSON artifact)
 -- ─────────────────────────────────────────────────────────────
 

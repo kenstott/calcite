@@ -5255,6 +5255,259 @@ partitionedTables:
         snapshotRetentionDays: 7
         runCompaction: true
 
+  - name: cdc_ari_activity_state
+    freshness:
+      type: etag
+    comment: >
+      Weekly acute respiratory illness (ARI) activity level for each state, DC, New York City, Puerto Rico and the nation, from CDC data.cdc.gov (dataset f3zz-zga5). Levels are Very Low, Low, Moderate, High and Very High. This ARI metric replaced the influenza-like-illness (ILI) activity indicator after the 2024-25 season, so it covers all respiratory viruses (influenza, RSV, COVID-19), not influenza alone; for the earlier ILI indicator see cdc_ili_activity_state_archive. The source publishes only the current week, so this table is a latest-week snapshot, not a history; each run replaces it. Updated Fridays; the week_end column is the Saturday ending the surveillance week. Answers questions such as which states are at high or very high respiratory activity this week.
+
+    columns:
+      - name: week_end
+        comment: "Saturday ending the surveillance week (ISO timestamp)"
+        type: VARCHAR
+        nullable: true
+      - name: geography
+        comment: "State, DC, New York City, Puerto Rico or national name"
+        type: VARCHAR
+        nullable: true
+      - name: label
+        comment: "Activity level: Very Low, Low, Moderate, High, Very High"
+        type: VARCHAR
+        nullable: true
+      - name: buildnumber
+        comment: "Timestamp of the CDC build that produced this snapshot"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_ari_activity_state"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/f3zz-zga5.json"
+      method: GET
+      parameters:
+        # Socrata pages stably only in a total order (see cdc_county_overdose_deaths).
+        "$order": ":id"
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_ari_activity_state
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+
+  - name: cdc_ili_activity_state_archive
+    freshness:
+      type: etag
+    comment: >
+      Archived weekly ILINet state influenza-like-illness (ILI) activity levels 1 to 13 (Minimal through Very High) by state and flu season, from the CDC Outpatient Respiratory Illness Activity Map (data.cdc.gov dataset 6svj-q4zv). Frozen: CDC stopped updating it on 2024-10-16 and the current indicator is cdc_ari_activity_state. Use it for state-level influenza activity history up to the start of the 2024-25 season. Level 0 means insufficient data.
+
+    columns:
+      - name: week_ending
+        comment: "Saturday ending the surveillance week"
+        type: VARCHAR
+        nullable: true
+      - name: week
+        comment: "MMWR week number"
+        type: VARCHAR
+        nullable: true
+      - name: season
+        comment: "Flu season, e.g. 2024-2025"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "State, DC, New York City, Puerto Rico or other jurisdiction name"
+        type: VARCHAR
+        nullable: true
+      - name: activity_level
+        comment: "ILI activity level, Level 0 (insufficient data) to Level 13"
+        type: VARCHAR
+        nullable: true
+      - name: activity_level_label
+        comment: "Minimal, Low, Moderate, High, Very High or Insufficient Data"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_ili_activity_state_archive"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/6svj-q4zv.json"
+      method: GET
+      parameters:
+        # Socrata pages stably only in a total order (see cdc_county_overdose_deaths).
+        "$order": ":id"
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_ili_activity_state_archive
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+
+  - name: cdc_resp_net_rates
+    freshness:
+      type: etag
+    comment: >
+      Hospitalization rates and clinical characteristics for laboratory-confirmed influenza (FluSurv-NET), COVID-19 (COVID-NET) and RSV (RSV-NET) from the CDC RESP-NET surveillance system (data.cdc.gov dataset kvib-3txy), by season, week, age category, race, sex and surveillance site, with weekly and cumulative rates per 100,000. Filter surveillance_network = 'FluSurv-NET' for influenza; 'Combined' holds the three-virus totals. Seasons run from 2016-17 (RSV-NET) and 2018-19 (FluSurv-NET). The estimate column is text and may carry non-numeric suppression markers. Updated weekly in season.
+
+    columns:
+      - name: surveillance_network
+        comment: "FluSurv-NET, COVID-NET, RSV-NET or Combined"
+        type: VARCHAR
+        nullable: true
+      - name: season
+        comment: "Surveillance season, e.g. 2025-26"
+        type: VARCHAR
+        nullable: true
+      - name: date_type
+        comment: "Kind of date in the date column, e.g. Week Ending Date"
+        type: VARCHAR
+        nullable: true
+      - name: date
+        comment: "Week-ending date or other period label"
+        type: VARCHAR
+        nullable: true
+      - name: age_category
+        comment: "Age group, e.g. 18-49 yr or Overall"
+        type: VARCHAR
+        nullable: true
+      - name: race
+        comment: "Race/ethnicity group or All"
+        type: VARCHAR
+        nullable: true
+      - name: sex
+        comment: "Sex or All"
+        type: VARCHAR
+        nullable: true
+      - name: state
+        comment: "Surveillance site state or Overall"
+        type: VARCHAR
+        nullable: true
+      - name: data_type
+        comment: "Cumulative Rate, Weekly Rate or a clinical-characteristic measure"
+        type: VARCHAR
+        nullable: true
+      - name: estimate_type
+        comment: "Unit, e.g. Rate per 100,000 or Percent"
+        type: VARCHAR
+        nullable: true
+      - name: rate_type
+        comment: "Observed or Adjusted"
+        type: VARCHAR
+        nullable: true
+      - name: estimate
+        comment: "Value; text, may be a suppression marker"
+        type: VARCHAR
+        nullable: true
+      - name: type
+        comment: "Constant record-type discriminator cdc_resp_net_rates"
+        type: VARCHAR
+        nullable: false
+
+    source:
+      type: http
+      url: "https://data.cdc.gov/resource/kvib-3txy.json"
+      method: GET
+      parameters:
+        # Socrata pages stably only in a total order (see cdc_county_overdose_deaths).
+        "$order": ":id"
+        "$limit": "1000"
+      response:
+        format: json
+        pagination:
+          type: OFFSET
+          pageSize: 1000
+          limitParam: "$limit"
+          offsetParam: "$offset"
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+        retryOn: [429, 503]
+      rawCache:
+        enabled: true
+
+    dimensions:
+      type:
+        - cdc_resp_net_rates
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        overwritePartitions: true
+
   - name: cdc_places_county
     freshness:
       type: etag
