@@ -890,7 +890,7 @@ partitionedTables:
         - name: category
           type: INTEGER
     comment: >
-      FRED series discovery/metadata catalog: series id, title, observation date range (observation_start/observation_end), frequency, units, seasonal adjustment, last-updated timestamp, and popularity scores — one row per series, partitioned by category (7 top-level FRED categories: Production & Business Activity, Population/Employment/Labor Markets, National Accounts, Prices, Discontinued/Legacy, Money/Banking/Finance, International Data; up to 1000 series fetched per category). This is a lookup/discovery catalog only, not observation data — see econ.fred_indicators for the curated ~48-series time series values (enumerated in that table's series column comment).
+      FRED series discovery/metadata catalog: series id, title, observation date range (observation_start/observation_end), frequency, units, seasonal adjustment, last-updated timestamp, and popularity scores — one row per series, partitioned by category (7 top-level FRED categories: Production & Business Activity, Population/Employment/Labor Markets, National Accounts, Prices, Discontinued/Legacy, Money/Banking/Finance, International Data; up to 1000 series fetched per category). This is a lookup/discovery catalog only, not observation data — see econ.fred_indicators for the curated ~51-series time series values (enumerated in that table's series column comment).
     columns:
       - name: series
         type: string
@@ -899,7 +899,7 @@ partitionedTables:
         comment: >
           Unique FRED series identifier (e.g. 'UNRATE', 'GDP'). This is the catalog of everything
           FRED publishes, so use it to decode or discover series; the econ.fred_indicators
-          observations table loads only a curated 48-series subset, enumerated in that table's
+          observations table loads only a curated 51-series subset, enumerated in that table's
           series column comment.
       - name: title
         type: string
@@ -1119,6 +1119,7 @@ partitionedTables:
         - "DGS30"
         - "DGS3MO"
         - "T10Y2Y"
+        - "T10Y3M"
         - "T10YIE"
         - "BAMLC0A0CM"
         - "M1SL"
@@ -1135,6 +1136,8 @@ partitionedTables:
         - "CCSA"
         - "IURSA"
         - "AWHMAN"
+        - "JTSJOL"
+        - "TEMPHELPS"
         - "CPIAUCSL"
         - "CPIAUCNS"
         - "CPILFESL"

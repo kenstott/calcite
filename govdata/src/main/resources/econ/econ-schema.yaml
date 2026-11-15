@@ -373,6 +373,7 @@ dimension_values:
     - "DGS30"
     - "DGS3MO"
     - "T10Y2Y"
+    - "T10Y3M"
     - "T10YIE"
     - "BAMLC0A0CM"
     # Monetary aggregates & Fed balance sheet
@@ -393,6 +394,8 @@ dimension_values:
     - "CCSA"
     - "IURSA"         # Insured unemployment rate (weekly, from 1971)
     - "AWHMAN"
+    - "JTSJOL"
+    - "TEMPHELPS"
     # Inflation
     - "CPIAUCSL"
     - "CPIAUCNS"      # CPI all items, not seasonally adjusted (FRED id; replaced invalid BLS CUUR0000SA0)
@@ -6485,7 +6488,8 @@ partitionedTables:
           bill yield, daily, percent; DGS2 = 2-year Treasury yield, daily, percent; DGS5 = 5-year
           Treasury yield, daily, percent; DGS10 = 10-year Treasury yield (long-term interest rate),
           daily, percent; DGS30 = 30-year Treasury yield, daily, percent; T10Y2Y = 10-year minus
-          2-year Treasury yield spread (yield curve inversion), daily, percentage points; T10YIE =
+          2-year Treasury yield spread (yield curve inversion), daily, percentage points; T10Y3M =
+          10-year minus 3-month Treasury yield spread (yield curve inversion), daily, percentage points; T10YIE =
           10-year breakeven inflation rate (market inflation expectations), daily, percent; BAMLC0A0CM
           = investment-grade corporate bond spread, daily, percent; M1SL = M1 money supply, monthly,
           billions of dollars, seasonally adjusted; M2SL = M2 money supply, monthly, billions of
@@ -6503,7 +6507,9 @@ partitionedTables:
           collecting benefits), weekly, seasonally adjusted; IURSA = insured unemployment rate
           (continuing claims as a share of covered employment), weekly, percent, seasonally
           adjusted, from 1971; AWHMAN = average weekly hours of
-          production workers in manufacturing, monthly; CPIAUCSL = consumer price index all items
+          production workers in manufacturing, monthly; JTSJOL = JOLTS job openings, total nonfarm,
+          monthly, thousands, seasonally adjusted, from 2000; TEMPHELPS = all employees in temporary help
+          services, monthly, thousands, seasonally adjusted, from 1990; CPIAUCSL = consumer price index all items
           (headline CPI inflation), monthly, index 1982-84=100, seasonally adjusted; CPIAUCNS =
           consumer price index all items, monthly, index 1982-84=100, not seasonally adjusted;
           CPILFESL = core CPI less food and energy (core inflation), monthly, index, seasonally
@@ -6596,6 +6602,7 @@ partitionedTables:
         - "DGS30"        # 30-year Treasury yield
         - "DGS3MO"       # 3-month Treasury yield
         - "T10Y2Y"       # 10Y-2Y yield spread
+        - "T10Y3M"       # 10Y-3M yield spread
         - "T10YIE"       # 10-year breakeven inflation rate
         - "BAMLC0A0CM"   # Investment-grade corporate bond spread
         # Monetary aggregates & Fed balance sheet
@@ -6615,6 +6622,8 @@ partitionedTables:
         - "CCSA"         # Continuing jobless claims
         - "IURSA"        # Insured unemployment rate (weekly, from 1971)
         - "AWHMAN"       # Average weekly hours: manufacturing
+        - "JTSJOL"       # JOLTS job openings, total nonfarm
+        - "TEMPHELPS"    # Employees, temporary help services
         # Inflation
         - "CPIAUCSL"     # CPI all items (seasonally adjusted)
         - "CPIAUCNS"     # CPI all items, not seasonally adjusted (FRED id; was BLS CUUR0000SA0 — invalid in FRED)
