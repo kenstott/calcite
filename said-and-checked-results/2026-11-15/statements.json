@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
     "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "106 statements have been checked: 30 supported, 60 unsettled, 12 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 5 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "111 statements have been checked: 32 supported, 63 unsettled, 12 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open.",
     "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
     "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -6017,9 +6017,22 @@
       "kind": "factual",
       "test": "True if Nov. 3, 2026 results show the governor's margin among the largest of any governor elected that day, Sen. Cotton re-elected, and Republicans winning every Arkansas congressional seat and constitutional office. False if any part is contradicted by reported results. Cannot be determined if results are not yet reported.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Unofficial returns compiled by the Green Papers show Sen. Cotton re-elected and Republicans winning all four Arkansas House seats and the statewide offices read. The governor's margin there is about 15 points (53.8 to 38.6 percent); governors in Wyoming (about 51 points), South Dakota (27) and Idaho (25) won by more, so whether hers is \"one of the largest\" depends on where the line is drawn. The state's official returns were not read.",
+      "evidence": [
+        {
+          "label": "Green Papers, Arkansas 2026 general election",
+          "url": "https://www.thegreenpapers.com/G26/AR"
+        },
+        {
+          "label": "Green Papers, 2026 gubernatorial vote",
+          "url": "https://www.thegreenpapers.com/G26/GovernorVoteByParty.phtml"
+        },
+        {
+          "label": "Ballotpedia, Arkansas gubernatorial election, 2026",
+          "url": "https://ballotpedia.org/Arkansas_gubernatorial_election,_2026"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -6073,9 +6086,18 @@
       "kind": "factual",
       "test": "True if Arkansas budget records show record public school funding and higher teacher pay, and state law provides up to 12 weeks of paid maternity leave for teachers, matched by only one other state. False if any part is contradicted by records. Cannot be determined on the two-state count if no comparison is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The only source read for these claims is the governor's own office, which says a 2023 law raised starting teacher pay from $36,000 to $50,000 and gave teachers up to 12 weeks of paid maternity leave, and which cites a teacher-policy group for the two-state count. That group's report page loaded without the figure, and no budget record on school funding was read.",
+      "evidence": [
+        {
+          "label": "Arkansas governor's office release, Jan. 20, 2026",
+          "url": "https://governor.arkansas.gov/news_post/national-council-on-teacher-quality-arkansas-one-of-only-two-states-offering-teachers-12-weeks-of-maternal-leave/"
+        },
+        {
+          "label": "National Council on Teacher Quality, paid parental leave",
+          "url": "https://www.nctq.org/research-insights/state-of-the-states-investing-in-teachers-and-families-through-paid-parental-leave/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -6101,9 +6123,14 @@
       "kind": "factual",
       "test": "True if Arkansas Department of Education records show about 50 million dollars paid in Merit Teacher Incentive Fund bonuses since 2023. False if the total is materially different. Cannot be determined if no total is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The only source read is the governor's own office, whose June 2026 release says the fund has awarded \"more than $50 million in merit pay for over 12,000 educators\" over three years. The state education department's page with the award totals could not be loaded, so no independent total was read.",
+      "evidence": [
+        {
+          "label": "Arkansas governor's office release, June 26, 2026",
+          "url": "https://governor.arkansas.gov/news_post/sanders-administration-awards-nearly-20-million-to-reward-teacher-excellence/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -6129,9 +6156,18 @@
       "kind": "factual",
       "test": "True if Arkansas law shows four income tax cuts since 2023 lowering the top rate by about 25 percent. False if the count or the reduction is materially different. Cannot be determined only if the rate history cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The state's economic development agency reports three cuts to the top income tax rate through June 2024, from 4.9 percent to 3.9 percent, and the Arkansas Senate reports a fourth, to 3.7 percent effective Jan. 1, 2026. From 4.9 to 3.7 percent is a reduction of 24.5 percent.",
+      "evidence": [
+        {
+          "label": "Arkansas Economic Development Commission on rate cuts",
+          "url": "https://www.arkansasedc.com/news-events/arkansas-inc-blog/post/active-blogs/2024/06/26/arkansas-reduces-personal-corporate-income-tax-rates"
+        },
+        {
+          "label": "Arkansas Senate on the 2026 special session",
+          "url": "https://senate.arkansas.gov/?p=12542"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -6213,9 +6249,18 @@
       "kind": "factual",
       "test": "True if the Arkansas Constitution limits a governor to two four-year terms, so a second term ending in January 2031 is her last. False if the constitution allows a third term. Cannot be determined only if the constitution cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Encyclopedia of Arkansas says Amendment 73 to the state constitution, approved in 1992, limits the governor to two four-year terms, and a University of Arkansas voter guide says the same amendment set term limits for officers such as the governor. The amendment's own text could not be read directly.",
+      "evidence": [
+        {
+          "label": "Encyclopedia of Arkansas, term limits",
+          "url": "https://encyclopediaofarkansas.net/entries/term-limits-8365/"
+        },
+        {
+          "label": "University of Arkansas Extension voter guide",
+          "url": "https://www.uaex.uada.edu/business-communities/voter-education/docs/Issue2_2020.pdf"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
