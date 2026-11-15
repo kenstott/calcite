@@ -109,16 +109,26 @@ dimension_values:
     dataLag: 2
     descending: true
 
-  # BTS On-Time PREZIP files run 1987-10 .. current-~2mo. dataLag 1 fetches only
-  # fully-complete prior years (all 12 months present), so the monthly fan-out
-  # never requests an unpublished month. Current partial year is picked up once
-  # it completes (acceptable: the table is a historical punctuality series).
+  # Monthly year range for sources fetched per (year, month); dataLag 1 fetches only
+  # fully-complete prior years, so the monthly fan-out never requests an unpublished month.
   ontime_year_range: &ontime_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
     minYear: 1987
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 1
+    descending: true
+
+  # BTS On-Time PREZIP publishes each month roughly three months after it closes
+  # (verified 2026-11-15: 2026-08 posted 2026-10-26, 2026-09 not yet posted). The
+  # current year is therefore requested; months not yet posted answer 404 and are
+  # marked unavailable and retried per errorHandling.notFoundRetryDays.
+  ontime_monthly_year_range: &ontime_monthly_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2010}"
+    minYear: 1987
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataMonthLag: 3
     descending: true
 
   # T-100 Domestic Segment: full monthly history; the DownLoad_Table.asp POST is
@@ -703,8 +713,9 @@ partitionedTables:
       BTS Reporting Carrier On-Time Performance — one row per scheduled domestic
       flight for the (year, month) with departure/arrival delays, cancellations,
       diversions, and delay-cause minutes. A curated subset of the 110-column
-      source is projected. Delta by (year, month); dataLag 1 keeps to complete
-      prior years so no unpublished month is requested. In DQ mode dqRowLimit
+      source is projected. Delta by (year, month); the current year is requested and
+      months BTS has not yet posted (about three months behind) answer 404 and are
+      retried on later runs. In DQ mode dqRowLimit
       caps each month. Source:
       transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{year}_{month}.zip.
     dqRowLimit: 100000
@@ -712,7 +723,7 @@ partitionedTables:
     dimensions:
       type:
         - airline_ontime
-      year: *ontime_year_range
+      year: *ontime_monthly_year_range
       month: *all_months
 
     columns:
