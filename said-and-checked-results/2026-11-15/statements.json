@@ -1,0 +1,1393 @@
+{
+  "date": "2026-11-15",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. No original source (transcript, release or post) could be read for any statement, so all wording is as the outlet reported it.",
+  "lede": [
+    "Fifty-six statements by 15 officeholders appeared in two days of NPR and PBS NewsHour politics coverage. Most were about three things: the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war and talk of ending it, and what Democrats plan to do with the majorities they won on Nov. 3.",
+    "Seven of the 56 were factual claims that data or documents could test. Three were supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. Four were unsupported, meaning no evidence was found for them; that is not a finding that they are false. Two of those four are the secretary's reported account of the ground stop investigation, which differs from the FAA's own published account.",
+    "The other 49 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked. One of them, the Florida governor's statement about what state law requires, turns on how a statute is read; what the statute says is given beside it."
+  ],
+  "stories": [
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/14/nx-s1-6040156/week-in-politics-battle-for-senate-leader-young-and-independent-midterm-turnout",
+      "headline": "Week in Politics: Battle for Senate leader; young and independent midterm turnout",
+      "published": "2026-11-14T07:40-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/14/nx-s1-6039286/legal-scholar-stephen-vladeck-on-texas-new-democratic-ag-and-federal-litigation",
+      "headline": "Legal scholar Stephen Vladeck on Texas' new Democratic AG and federal litigation",
+      "published": "2026-11-14T07:40-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/14/nx-s1-6034952/alaska-results-ranked-choice-voting-nonpartisan-primary",
+      "headline": "Alaska voters aren't ditching ranked choice voting, top-four primaries",
+      "published": "2026-11-14T08:08-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/jonathan-kreiss-tomkins-becomes-first-democrat-since-1998-elected-governor-in-alaska",
+      "headline": "Jonathan Kreiss-Tomkins becomes first Democrat since 1998 elected governor in Alaska",
+      "published": "2026-11-14T11:38-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention",
+      "headline": "WATCH: Rubio delivers keynote address at Federalist Society National Lawyers Convention",
+      "published": "2026-11-14T11:56-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/health/u-s-gives-states-another-6-months-before-they-have-to-remove-people-from-medicaid-for-not-working",
+      "headline": "U.S. gives states another 6 months before they have to remove people from Medicaid for not working",
+      "published": "2026-11-14T13:05-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/democrats-try-out-a-strange-new-emotion-at-post-midterms-whats-next-conference-hope",
+      "headline": "Democrats try out a strange new emotion at post-midterms What's Next conference: hope",
+      "published": "2026-11-14T13:19-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/alaska-voters-reject-ballot-measure-seeking-to-repeal-open-primaries-and-ranked-voting-system",
+      "headline": "Alaska voters reject ballot measure seeking to repeal open primaries and ranked voting system",
+      "published": "2026-11-14T13:43-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference",
+      "headline": "'We can't let them down' -- After midterm wins, Democrats turn to charting path ahead",
+      "published": "2026-11-14T14:13-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead",
+      "headline": "With shifting Iran rhetoric following U.S. elections, Trump leaves Middle East in limbo about path ahead",
+      "published": "2026-11-14T16:17-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/14/nx-s1-6041093/st-patricks-day-parade-canceled-florida-dei",
+      "headline": "Florida city cancels St. Patrick's Day parade, citing new anti-DEI law",
+      "published": "2026-11-14T19:03-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/14/nx-s1-6041152/judge-trump-golf-course-blocks",
+      "headline": "Judge temporarily blocks Trump from moving ahead on Washington public golf course redevelopment",
+      "published": "2026-11-14T23:28-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/15/nx-s1-6039175/midterms-legislatures-states-democrats-gop",
+      "headline": "Midterm voters ended the long-running GOP dominance in state legislatures",
+      "published": "2026-11-15T05:00-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/15/nx-s1-6040194/new-mexico-free-universal-childcare-families",
+      "headline": "New Mexico wanted free childcare for all. This is what's worked — and what hasn't",
+      "published": "2026-11-15T05:00-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/judge-temporarily-blocks-trump-from-moving-ahead-on-d-c-public-golf-course-redevelopment",
+      "headline": "Judge temporarily blocks Trump from moving ahead on D.C. public golf course redevelopment",
+      "published": "2026-11-15T11:20-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress",
+      "headline": "Trump breaks silence on nationwide ground stop and demands more money from Congress",
+      "published": "2026-11-15T11:32-05:00"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Ron DeSantis",
+      "office": "Governor of Florida",
+      "party": "R",
+      "quote": "What they are doing is not mandated by Florida law",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6041093/st-patricks-day-parade-canceled-florida-dei"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": "This turns on how the statute is read. Florida's SB 1134, effective Jan. 1, 2027, bars a municipality from funding or promoting activities designed with reference to ethnicity, among other categories, and exempts content-neutral event permits and recognition of state and federal holidays. It names no parades and requires no cancellation.",
+      "evidence": [
+        {
+          "label": "Florida Senate, enrolled CS/CS SB 1134 (2026)",
+          "url": "https://www.flsenate.gov/Session/Bill/2026/1134/BillText/er/HTML"
+        }
+      ],
+      "check_run": null,
+      "context": "In a message on X after Delray Beach, Florida, cancelled its St. Patrick's Day parade citing a new state law restricting government-funded diversity initiatives."
+    },
+    {
+      "id": 2,
+      "speaker": "Ron DeSantis",
+      "office": "Governor of Florida",
+      "party": "R",
+      "quote": "It's just an attempt to make a political point — a point that legacy media will no doubt try to amplify. We've seen these stunts throughout the years. Rinse and repeat.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6041093/st-patricks-day-parade-canceled-florida-dei"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same X message about Delray Beach's cancellation of its St. Patrick's Day parade, 'they' refers to the city."
+    },
+    {
+      "id": 3,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "quote": "This is about answering the call of the American people, because what I'm very afraid of is that their calls to end political corruption, their calls to end a rigged economic system will require that we organize the Senate in a different way.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6040156/week-in-politics-battle-for-senate-leader-young-and-independent-midterm-turnout"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an archived recording played on NPR on Nov. 14, about his bid to replace Chuck Schumer as Senate Democratic leader."
+    },
+    {
+      "id": 4,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "quote": "Reported as: In Pennsylvania, Democratic Gov. Josh Shapiro has promised to work with a newly Democratic legislature to raise the minimum wage to $15 an hour, strengthen abortion rights and increase affordable housing.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/15/nx-s1-6039175/midterms-legislatures-states-democrats-gop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "Only the reporter's paraphrase was read; no original statement located."
+      },
+      "kind": "promise",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "NPR's Nov. 15 account of Shapiro's pledges for working with Pennsylvania's newly Democratic-led legislature after the Nov. 3 election."
+    },
+    {
+      "id": 5,
+      "speaker": "Lisa Murkowski",
+      "office": "U.S. Senator from Alaska",
+      "party": "R",
+      "quote": "understands that governing requires listening to people with different perspectives and finding common ground to solve the problems all of us face.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/jonathan-kreiss-tomkins-becomes-first-democrat-since-1998-elected-governor-in-alaska"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In a statement endorsing Jonathan Kreiss-Tomkins for Alaska governor a week before the Nov. 3 election, as reported by the AP."
+    },
+    {
+      "id": 6,
+      "speaker": "Ron Wyden",
+      "office": "U.S. Senator from Oregon",
+      "party": "D",
+      "quote": "The practical reality is that this significant implementation issue may not be definitively resolved for months, creating untenable uncertainty for states that need a final resolution of this issue before going live with work reporting requirements,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/health/u-s-gives-states-another-6-months-before-they-have-to-remove-people-from-medicaid-for-not-working"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, asking to delay Medicaid work requirements; the 'issue' is a Boston federal court ruling on medical frailty."
+    },
+    {
+      "id": 7,
+      "speaker": "Ron Wyden",
+      "office": "U.S. Senator from Oregon",
+      "party": "D",
+      "quote": "The court ruling is an important victory for the millions of medically frail people who rely on Medicaid for their health care coverage.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/health/u-s-gives-states-another-6-months-before-they-have-to-remove-people-from-medicaid-for-not-working"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, referring to the Boston federal court ruling on medically frail Medicaid enrollees."
+    },
+    {
+      "id": 8,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "I think we have to recognize that people are struggling. There's no doubt about it,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In a Nov. 13 speech to the Federalist Society National Lawyers Convention in Washington, about the economy."
+    },
+    {
+      "id": 9,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "The health of our economy has nothing to do with the stock market. The health of their economy is whether they have enough money to be able to afford the things they need.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, comparing the stock market with household finances."
+    },
+    {
+      "id": 10,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "It's not easy to address these things because it's not popular to address them,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, about addressing high prices and the Iran war's costs; 'these things' are the economic pressures on Americans."
+    },
+    {
+      "id": 11,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "It's difficult. And oftentimes it inflicts, you know, pain, economic pain and otherwise. So we recognize that.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, continuing his remarks about addressing economic costs and the Iran war."
+    },
+    {
+      "id": 12,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "That's the challenge before us now, because I do think there's a legitimate fear that we will be the first generation to leave the next worse off, and that can't happen. That's un-American,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, about economic prosperity across generations."
+    },
+    {
+      "id": 13,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "We've heard the concept international law invoked against nearly every major foreign policy decision or action of this administration,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, criticizing the use of international law against Trump administration foreign policy."
+    },
+    {
+      "id": 14,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "They lecture us on the importance of sovereignty, even as they demand that nations surrender control of their borders and outsource their immigration laws to unelected international courts,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, describing the United Nations, International Criminal Court and others; 'they' refers to those critics."
+    },
+    {
+      "id": 15,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "They oppose, they say, all forms of imperialism, of conquest, of domination, but they seek to exercise authority over every country and every government on earth.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-rubio-delivers-keynote-address-at-federalist-society-national-lawyers-convention"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 Federalist Society speech, continuing his remarks about the same international critics."
+    },
+    {
+      "id": 16,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "Reported as: Then, at the start of this week, he huddled with Qatar's prime minister at the White House and afterward told reporters that he believed it was highly unlikely he'd need to order new major strikes on Iran, declaring that the war \"militarily is effectively over.\"",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "Only the reporter's paraphrase was read; no original statement located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "AP's account of Trump's comments to reporters after a meeting with Qatar's prime minister at the White House early the week of Nov. 9, about the Iran war."
+    },
+    {
+      "id": 17,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "If something does not work out, I would not hesitate",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "promise",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an interview with Hugh Hewitt on Nov. 12, about possible further U.S. military action against Iran."
+    },
+    {
+      "id": 18,
+      "speaker": "Cory Booker",
+      "office": "U.S. Senator from New Jersey",
+      "party": "D",
+      "quote": "President Trump is now acting like an arsonist who has set ablaze our foreign policy,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an interview Nov. 13 at the Democrats' post-election gathering in Denver, about President Trump's handling of the Iran war."
+    },
+    {
+      "id": 19,
+      "speaker": "Cory Booker",
+      "office": "U.S. Senator from New Jersey",
+      "party": "D",
+      "quote": "And now he just wants to walk away.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 13 interview, about Trump and the Iran war."
+    },
+    {
+      "id": 20,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "The economic pain that we are inflicting on that regime is so great that there's no need for military action because we've weakened them so much,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In a Nov. 13 speech to the Federalist Society, about U.S. economic pressure on Iran."
+    },
+    {
+      "id": 21,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "If there's a deal to be done, the president will be the first one to be in favor of it,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "Earlier in the week of Nov. 9, about whether the U.S. would accept a deal with Iran to end the war."
+    },
+    {
+      "id": 22,
+      "speaker": "Marco Rubio",
+      "office": "U.S. Secretary of State",
+      "party": "R",
+      "quote": "But it's not going to be a stupid deal. It's not going to be a bad deal.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/world/with-shifting-iran-rhetoric-following-u-s-elections-trump-leaves-middle-east-in-limbo-about-path-ahead"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "Earlier in the week of Nov. 9, continuing his remarks about the terms of any deal with Iran."
+    },
+    {
+      "id": 23,
+      "speaker": "Jason Crow",
+      "office": "U.S. Representative from Colorado",
+      "party": "D",
+      "quote": "We won races in places where we haven't won in a long time",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "factual",
+      "result": "supported",
+      "finding": "Senate returns for 1976-2024 show Texas last elected a Democratic senator in 1988, and 2026 coverage reports a Democratic win there, along with Kansas (reported as the first Democratic senator since 1932) and South Carolina (first in nearly 30 years). The 2026 results are from news reports, not certified returns.",
+      "evidence": [
+        {
+          "label": "WFTV/Cox, Election 2026 results (Nov. 4, 2026)",
+          "url": "https://www.wftv.com/news/trending/election-2026-democrats-capture-both-houses-congress/5ILOWTVABVDPZFYP7VBBCX4EWE/?outputType=amp"
+        },
+        {
+          "label": "MIT Election Data and Science Lab, U.S. Senate returns 1976-2024 (source of the warehouse table)",
+          "url": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/PEJ5QU"
+        }
+      ],
+      "check_run": null,
+      "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins."
+    },
+    {
+      "id": 24,
+      "speaker": "Jason Crow",
+      "office": "U.S. Representative from Colorado",
+      "party": "D",
+      "quote": "even in some places where we've never won.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "factual",
+      "result": "unsupported",
+      "finding": "No 2026 race was found in a place Democrats had never won before; every first identified was a first since an earlier win.",
+      "evidence": [
+        {
+          "label": "WFTV/Cox, Election 2026 results (Nov. 4, 2026)",
+          "url": "https://www.wftv.com/news/trending/election-2026-democrats-capture-both-houses-congress/5ILOWTVABVDPZFYP7VBBCX4EWE/?outputType=amp"
+        }
+      ],
+      "check_run": null,
+      "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins; the second half of the same sentence."
+    },
+    {
+      "id": 25,
+      "speaker": "Jason Crow",
+      "office": "U.S. Representative from Colorado",
+      "party": "D",
+      "quote": "And the message shouldn't be that [voters] are fully embracing the Democratic Party,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same interview at the 'What's Next' conference in Denver, about how Democrats should read the midterm results."
+    },
+    {
+      "id": 26,
+      "speaker": "Jason Crow",
+      "office": "U.S. Representative from Colorado",
+      "party": "D",
+      "quote": "It took us decades to dig ourselves in a hole and to push people away from us, and it's going to take us more than one cycle to earn that trust,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same interview at the 'What's Next' conference, about rebuilding voter trust in the Democratic Party."
+    },
+    {
+      "id": 27,
+      "speaker": "Hakeem Jeffries",
+      "office": "U.S. Representative from New York, House Democratic Leader",
+      "party": "D",
+      "quote": "Reported as: Presumptive next Speaker of the House Hakeem Jeffries told the audience he has plans to do just that, with a robust agenda that includes reversing Medicaid cuts, banning congressional stock trading and mid-decade redistricting, establishing a statutory right to abortion, and overturning the Supreme Court's Citizens United decision that did away with limits on political spending by corporations and unions.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "Only the reporter's paraphrase was read; no original statement located."
+      },
+      "kind": "promise",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "NPR's account of remarks to the audience at the 'What's Next' Democratic conference in Denver on Nov. 13, on his planned House agenda."
+    },
+    {
+      "id": 28,
+      "speaker": "Josh Shapiro",
+      "office": "Governor of Pennsylvania",
+      "party": "D",
+      "quote": "I do think it's important that whoever we hire to be the chief executive of this country knows how to run something, knows how to get stuff done, knows how to not just have a vision but knows how to deliver on it,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "To reporters at the 'What's Next' Democratic conference in Denver, about qualities of a future president."
+    },
+    {
+      "id": 29,
+      "speaker": "Elissa Slotkin",
+      "office": "U.S. Senator from Michigan",
+      "party": "D",
+      "quote": "If slapping Trump's name on it and putting it in gold letters would get it through — hell yes, I would do that,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "At the 'What's Next' Democratic conference in Denver on Nov. 13, about working with the Trump administration on legislation."
+    },
+    {
+      "id": 30,
+      "speaker": "Mikie Sherrill",
+      "office": "Governor of New Jersey",
+      "party": "D",
+      "quote": "The art of the deal to Trump is he figures out what you want, he leverages the you know what out of you, and keeps taking, taking, taking, and never delivers,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "personal_attack",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "At the 'What's Next' Democratic conference in Denver, about working with Trump; 'Sen. Talarico' is Texas Senator-elect James Talarico."
+    },
+    {
+      "id": 31,
+      "speaker": "Mikie Sherrill",
+      "office": "Governor of New Jersey",
+      "party": "D",
+      "quote": "My advice to Sen. Talarico is if Trump wants to work with us, we will lay out the agenda, and he can sign it.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/14/nx-s1-6037777/democrats-midterms-whats-next-conference"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "promise",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "At the same conference, addressing Texas Senator-elect James Talarico's call to work with Trump."
+    },
+    {
+      "id": 32,
+      "speaker": "Cory Booker",
+      "office": "U.S. Senator from New Jersey",
+      "party": "D",
+      "quote": "I think this is a wonderful thing that we have right now, that we're having a real discussion,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-try-out-a-strange-new-emotion-at-post-midterms-whats-next-conference-hope"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an interview at the 'What's Next' conference in Denver, about the Democratic Senate leadership contest."
+    },
+    {
+      "id": 33,
+      "speaker": "Cory Booker",
+      "office": "U.S. Senator from New Jersey",
+      "party": "D",
+      "quote": "At a conference like this you're seeing the future,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-try-out-a-strange-new-emotion-at-post-midterms-whats-next-conference-hope"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same interview at the 'What's Next' conference in Denver."
+    },
+    {
+      "id": 34,
+      "speaker": "Cory Booker",
+      "office": "U.S. Senator from New Jersey",
+      "party": "D",
+      "quote": "A new day is dawning in America.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-try-out-a-strange-new-emotion-at-post-midterms-whats-next-conference-hope"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same interview at the 'What's Next' conference in Denver, about the Democratic Party's outlook."
+    },
+    {
+      "id": 35,
+      "speaker": "Joe Neguse",
+      "office": "U.S. Representative from Colorado",
+      "party": "D",
+      "quote": "We have an ideological spectrum that covers virtually every element of Democratic thought,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-try-out-a-strange-new-emotion-at-post-midterms-whats-next-conference-hope"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an interview at the 'What's Next' conference in Denver, describing the Democratic Party."
+    },
+    {
+      "id": 36,
+      "speaker": "Joe Neguse",
+      "office": "U.S. Representative from Colorado",
+      "party": "D",
+      "quote": "And I think that's exciting.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/democrats-try-out-a-strange-new-emotion-at-post-midterms-whats-next-conference-hope"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same interview at the 'What's Next' conference in Denver, about the party's range of views."
+    },
+    {
+      "id": 37,
+      "speaker": "Michelle Lujan Grisham",
+      "office": "Governor of New Mexico",
+      "party": "D",
+      "quote": "I think childcare is a gamechanger for every single thing that a state ought to deliver for its families,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/15/nx-s1-6040194/new-mexico-free-universal-childcare-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an interview with NPR, about New Mexico's free universal childcare program launched in November 2025."
+    },
+    {
+      "id": 38,
+      "speaker": "Michelle Lujan Grisham",
+      "office": "Governor of New Mexico",
+      "party": "D",
+      "quote": "where I don't have a parent tell me that this is life-changing and transformative,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/15/nx-s1-6040194/new-mexico-free-universal-childcare-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same NPR interview, about parents' reactions to New Mexico's universal childcare program."
+    },
+    {
+      "id": 39,
+      "speaker": "Michelle Lujan Grisham",
+      "office": "Governor of New Mexico",
+      "party": "D",
+      "quote": "We need to keep growing,",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/15/nx-s1-6040194/new-mexico-free-universal-childcare-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same NPR interview, about the childcare program's capacity."
+    },
+    {
+      "id": 40,
+      "speaker": "Michelle Lujan Grisham",
+      "office": "Governor of New Mexico",
+      "party": "D",
+      "quote": "It is not a stagnant set of opportunities.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/15/nx-s1-6040194/new-mexico-free-universal-childcare-families"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same NPR interview, about the childcare program's capacity."
+    },
+    {
+      "id": 41,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "We are closing the East Potomac Golf Course Site as scheduled on November 15th in order to renovate and rebuild for Competitive (with other such projects!), Safety, Modernization, and Aesthetic reasons.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/judge-temporarily-blocks-trump-from-moving-ahead-on-d-c-public-golf-course-redevelopment"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "promise",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In an Oct. 26 social media post announcing the closure of the East Potomac Golf Course in Washington, D.C., for renovation."
+    },
+    {
+      "id": 42,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "doesn't want us to quickly and inexpensively fix up the Course which is, also, very dangerous.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/judge-temporarily-blocks-trump-from-moving-ahead-on-d-c-public-golf-course-redevelopment"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In a Nov. 14 social media post about U.S. District Judge Ana Reyes and the East Potomac golf course, reported by the AP."
+    },
+    {
+      "id": 43,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "Reported as: He said people who live in the Washington area would get a 50% discount on \"any and all Rates charged\" and that the redevelopment would \"evolve into something very special, something which the Judge will be able to take great pride in seeing!\"",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/judge-temporarily-blocks-trump-from-moving-ahead-on-d-c-public-golf-course-redevelopment"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "Only the reporter's paraphrase was read; no original post located."
+      },
+      "kind": "promise",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "AP's account of the same Nov. 14 social media post about discounts for Washington-area residents at the redeveloped East Potomac golf course."
+    },
+    {
+      "id": 44,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "If Congress approves the desperately needed money for Air Traffic Control, we can get it built quickly and efficiently,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In a Nov. 15 social media post about the nationwide flight ground stop that began Nov. 13 and funding for air traffic control."
+    },
+    {
+      "id": 45,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "It will be the BEST SYSTEM anywhere in the World.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In the same Nov. 15 social media post about a new air traffic control system."
+    },
+    {
+      "id": 46,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "Much of our current air control system is 50 years old - RIDICULOUS!",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "factual",
+      "result": "unsupported",
+      "finding": "A 2024 GAO review rated 51 of the FAA's 138 air traffic control systems unsustainable and 54 potentially unsustainable. No age breakdown was found showing how much of the system is about 50 years old. GAO's own page could not be read directly; the figures are as reported by Government Executive.",
+      "evidence": [
+        {
+          "label": "Government Executive on GAO-24-107001 (Sept. 2024)",
+          "url": "https://www.govexec.com/oversight/2024/09/nearly-40-faa-air-traffic-control-systems-need-urgent-updates-gao-reports/399753"
+        }
+      ],
+      "check_run": null,
+      "context": "In the same Nov. 15 social media post about the current air traffic control system."
+    },
+    {
+      "id": 47,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "quote": "old and broken system worse than when they began",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "In another Nov. 15 social media post, about the Biden administration's maintenance of the FAA and air traffic control system."
+    },
+    {
+      "id": 48,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "I can't apologize for what was passed on to us.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "On NBC's 'Meet the Press' on Nov. 15, about the nationwide ground stop and the state of air traffic control."
+    },
+    {
+      "id": 49,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "And I can't blame Republicans or Democrats, because it's all of them.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "On NBC's 'Meet the Press' on Nov. 15, about who is responsible for the air traffic control system's condition."
+    },
+    {
+      "id": 50,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "It goes back, 20, 25, 30 years of a lack of investment,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "factual",
+      "result": "supported",
+      "finding": "FAA capital (Facilities and Equipment) appropriations rose from $2.67 billion in fiscal 2001 to $3.02 billion in fiscal 2021, about 1.6% a year and below inflation, and fell $841 million short of authorized levels under the 2018 authorization, according to the Eno Center for Transportation's tabulation. FAA budget documents could not be read directly.",
+      "evidence": [
+        {
+          "label": "Eno Center for Transportation, FAA F&E and Operations appropriations 1991-2021",
+          "url": "https://enotrans.org/?p=15148"
+        }
+      ],
+      "check_run": null,
+      "context": "On NBC's 'Meet the Press' on Nov. 15, about the history of air traffic control investment."
+    },
+    {
+      "id": 51,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "Reported as: He has said the problem began when L3Harris was replacing a section of old copper wire with new fiber wire, somehow causing the system to overload.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "Only the reporter's paraphrase was read; no original statement located."
+      },
+      "kind": "factual",
+      "result": "unsupported",
+      "finding": "The FAA's own account differs. It says data from two sites, a radar site in Amarillo, Texas and a radio site in El Dorado, Arkansas, where L3Harris had deployed a new router, flooded the network; it attributes the instability to the legacy system, not to upgrade work, and says the root cause is still under investigation. L3Harris has not named a cause.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers (Nov. 15, 2026)",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        },
+        {
+          "label": "L3Harris statement on the Nov. 13 ground stop (Nov. 14, 2026)",
+          "url": "https://www.l3harris.com/newsroom/press-release/2026/11/l3harris-statement-nov-13-ground-stop"
+        }
+      ],
+      "check_run": null,
+      "context": "AP's account of Duffy's statements on the cause of the nationwide ground stop; L3Harris is an FAA contractor."
+    },
+    {
+      "id": 52,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "Reported as: In a post on the social media platform X, Duffy said contractor L3Harris Technologies Inc. had secured two routers from FAA facilities in Texas and Arkansas and was conducting \"deep diagnostics\" on the equipment.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "Only the reporter's paraphrase was read; no original post located."
+      },
+      "kind": "factual",
+      "result": "unsupported",
+      "finding": "The FAA names two sites, in Amarillo, Texas and El Dorado, Arkansas, and a new router at El Dorado, and says it and L3Harris are still investigating. Neither the FAA nor L3Harris says two routers were secured or that diagnostics are under way; the only source found for that is the secretary's post.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers (Nov. 15, 2026)",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        },
+        {
+          "label": "L3Harris statement on the Nov. 13 ground stop (Nov. 14, 2026)",
+          "url": "https://www.l3harris.com/newsroom/press-release/2026/11/l3harris-statement-nov-13-ground-stop"
+        }
+      ],
+      "check_run": null,
+      "context": "AP's account of Duffy's post on X about the investigation into the ground stop; L3Harris is an FAA contractor."
+    },
+    {
+      "id": 53,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "We didn't think that should or would happen,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "On ABC's 'This Week' on Nov. 15, about a problem at a facility in Amarillo, Texas, after an Arkansas router was turned on."
+    },
+    {
+      "id": 54,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "we have some delays in the airspace right now,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "factual",
+      "result": "supported",
+      "finding": "FlightAware's page for Sunday showed 3,798 delays and 1,635 cancellations within, into or out of the United States. It is a live count with no timestamp.",
+      "evidence": [
+        {
+          "label": "FlightAware, delays and cancellations (read Nov. 15, 2026)",
+          "url": "https://www.flightaware.com/live/cancelled/today"
+        }
+      ],
+      "check_run": null,
+      "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel after the nationwide ground stop."
+    },
+    {
+      "id": 55,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "we should be running at full capacity.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel through the end of the day and into Monday."
+    },
+    {
+      "id": 56,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "quote": "at full capacity and operation but we're well on our way.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": "No original transcript or post located."
+      },
+      "kind": "opinion_or_prediction",
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null,
+      "context": "On the Nov. 15 Sunday show, about how long airlines need to recover from the ground stop."
+    }
+  ]
+}
