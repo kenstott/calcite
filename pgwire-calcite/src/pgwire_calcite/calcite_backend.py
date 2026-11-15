@@ -505,6 +505,7 @@ class CalciteBackend:
 
     _ICEBERG_SCHEMA_CACHE = "-Diceberg.metadata.cache.directory="
     _STAGING_DIRECTORY = "-Dcalcite.file.staging.directory="
+    _VSS_LOCAL_DB = "-Dcalcite.vss.localDb="
 
     def _state_dir_arg(self, args: List[str], prefix: str, name: str) -> Optional[str]:
         """``prefix`` naming ``name`` under this server's state directory (or beside its model),
@@ -556,6 +557,12 @@ class CalciteBackend:
             staging = self._state_dir_arg(args, self._STAGING_DIRECTORY, "staging")
             if staging is not None:
                 args.append(staging)
+            # SEMANTIC_SEARCH searches a local copy of the codes; without this it re-reads every
+            # codes file from object storage on each query.
+            vss_db = self._state_dir_arg(args, self._VSS_LOCAL_DB, os.path.join("vss", "codes.duckdb"))
+            if vss_db is not None:
+                os.makedirs(os.path.dirname(vss_db[len(self._VSS_LOCAL_DB):]), exist_ok=True)
+                args.append(vss_db)
             jvm_path = bundled_jvm_path()
             log.info("[CALCITE] JVM library: %s", jvm_path or "found by JPype on the host")
             if jvm_path is None:

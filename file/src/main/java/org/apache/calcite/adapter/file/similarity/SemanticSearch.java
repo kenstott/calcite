@@ -635,7 +635,12 @@ public final class SemanticSearch {
         st.execute("SET s3_use_ssl=" + useSsl);
       }
       if (!localDb.isEmpty()) {
-        loadLocalCodes(nc);
+        try {
+          loadLocalCodes(nc);
+        } catch (SQLException e) {
+          nc.close();
+          throw e;
+        }
       }
       duck = nc;
       return nc;
@@ -652,11 +657,10 @@ public final class SemanticSearch {
    * retired files the local copy still carries, and that is a full reload rather than an append:
    * the merged file re-states every row it absorbed, so adding it alone would duplicate them.
    *
-   * <p>Failure here is not fatal. The local copy is an optimisation over reading object storage
-   * directly, so a load that cannot complete leaves {@link #localReady} false and searches fall
-   * back to scanning S3 — slower, and still correct.
+   * <p>A load that cannot complete throws: a configured local copy that is not ready must not
+   * silently turn every query into a scan of object storage.
    */
-  private static void loadLocalCodes(Connection c) {
+  private static void loadLocalCodes(Connection c) throws SQLException {
     List<String> globs = codesGlobs();
     try (Statement st = c.createStatement()) {
       st.execute("CREATE TABLE IF NOT EXISTS " + LOCAL_SOURCE_TABLE
@@ -712,11 +716,10 @@ public final class SemanticSearch {
       }
       loadCentroids(st);
       localReady = true;
-    } catch (Exception e) {
+    } catch (SQLException e) {
       localReady = false;
       centroidCount = 0;
-      LOGGER.warn("SEMANTIC_SEARCH could not load the codes locally; falling back to reading "
-          + "object storage on every query: {}", e.getMessage());
+      throw e;
     }
   }
 
