@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Flattens the ITA Consolidated Screening List bulk file
@@ -54,8 +56,8 @@ public class ConsolidatedScreeningListTransformer implements ResponseTransformer
       row.put("name", r.path("name").asText());
       putText(row, "entity_type", r.path("type"));
       putText(row, "federal_register_notice", r.path("federal_register_notice"));
-      putText(row, "start_date", r.path("start_date"));
-      putText(row, "end_date", r.path("end_date"));
+      putText(row, "start_date", isoDate(r.path("start_date")));
+      putText(row, "end_date", isoDate(r.path("end_date")));
       putText(row, "license_requirement", r.path("license_requirement"));
       putText(row, "license_policy", r.path("license_policy"));
       putText(row, "remarks", r.path("remarks"));
@@ -104,6 +106,26 @@ public class ConsolidatedScreeningListTransformer implements ResponseTransformer
           "consolidated_screening_list: no list code in source '" + source + "'");
     }
     return source.substring(open + 1, close);
+  }
+
+  private static final Pattern ISO = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+  private static final Pattern US = Pattern.compile("(\\d{1,2})/(\\d{1,2})/(\\d{4})");
+
+  /** Normalizes a list date to yyyy-MM-dd; the Denied Persons List prints M/D/YYYY with padding. */
+  static String isoDate(JsonNode v) {
+    if (v.isMissingNode() || v.isNull() || v.asText().trim().isEmpty()) {
+      return null;
+    }
+    String t = v.asText().trim();
+    if (ISO.matcher(t).matches()) {
+      return t;
+    }
+    Matcher m = US.matcher(t);
+    if (m.matches()) {
+      return String.format("%s-%02d-%02d", m.group(3), Integer.parseInt(m.group(1)),
+          Integer.parseInt(m.group(2)));
+    }
+    throw new IllegalStateException("consolidated_screening_list: unrecognised date '" + t + "'");
   }
 
   private static String join(Set<String> values, String sep) {
