@@ -4199,6 +4199,250 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ==========================================================================
+  # IPEDS STUDENT FINANCIAL AID — NCES SFA survey, one row per institution per academic year
+  # Source: nces.ed.gov/ipeds/datacenter/data/SFA{yy1}{yy2}.zip (keyless public CSV; 2015-16 onward
+  # probed 2026-11-15, SFA2223 latest, SFA2324 → 404). Gap: sourcing #1230.
+  # ==========================================================================
+  - name: ipeds_financial_aid
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS Student Financial Aid and Net Price survey (SFA). One row per
+      (unitid, year) for Title IV institutions: of the full-time first-time degree/certificate-
+      seeking undergraduates (ftft_cohort_n), how many and what percent were awarded any aid,
+      any grant, federal grants, Pell grants, state/local grants, institutional grants (the
+      college's own funds), any loans and federal loans, with total and average dollars per
+      recipient. *_pct columns are whole-number percents 0-100 (institutional_grant_pct = 100
+      means every student in the cohort got an institutional grant, i.e. nobody pays the
+      sticker price). Also average net price for Title IV aid recipients and for grant
+      recipients over three years (*_yr2 = the survey year, yr1/yr0 earlier). year is the
+      academic-year-ending vintage (2023 = 2022-23). Joins to ipeds_institutions via unitid;
+      sticker prices are in ipeds_tuition. Not by income band beyond net price — this table
+      carries no per-income-quintile breakdown. Source: SFA{yy1}{yy2}.zip (revised _rv file
+      preferred), published about 3 years in arrears.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: year
+        type: int
+        nullable: false
+        comment: Academic-year-ending vintage (2023 = 2022-23) — PK component; injected from effective_year
+      - name: ftft_cohort_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time degree/certificate-seeking undergraduates (the SFA cohort; denominator for the *_pct columns)
+      - name: ftft_cohort_pct_of_undergrad
+        type: int
+        nullable: true
+        comment: Full-time first-time cohort as a percent of all undergraduates
+      - name: any_aid_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded any financial aid
+      - name: any_aid_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded any financial aid (0-100; 100 = every student)
+      - name: any_grant_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded any grant or scholarship aid
+      - name: any_grant_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded any grant or scholarship aid (0-100; 100 = every student)
+      - name: any_grant_total
+        type: int
+        nullable: true
+        comment: Total dollars of any grant or scholarship aid awarded to the cohort
+      - name: any_grant_avg
+        type: int
+        nullable: true
+        comment: Average dollars of any grant or scholarship aid per recipient
+      - name: federal_grant_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded federal grants
+      - name: federal_grant_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded federal grants (0-100; 100 = every student)
+      - name: federal_grant_total
+        type: int
+        nullable: true
+        comment: Total dollars of federal grants awarded to the cohort
+      - name: federal_grant_avg
+        type: int
+        nullable: true
+        comment: Average dollars of federal grants per recipient
+      - name: pell_grant_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded Pell grants
+      - name: pell_grant_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded Pell grants (0-100; 100 = every student)
+      - name: pell_grant_total
+        type: int
+        nullable: true
+        comment: Total dollars of Pell grants awarded to the cohort
+      - name: pell_grant_avg
+        type: int
+        nullable: true
+        comment: Average dollars of Pell grants per recipient
+      - name: state_local_grant_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded state/local government grants
+      - name: state_local_grant_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded state/local government grants (0-100; 100 = every student)
+      - name: state_local_grant_total
+        type: int
+        nullable: true
+        comment: Total dollars of state/local government grants awarded to the cohort
+      - name: state_local_grant_avg
+        type: int
+        nullable: true
+        comment: Average dollars of state/local government grants per recipient
+      - name: institutional_grant_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded institutional grants (the institution's own funds)
+      - name: institutional_grant_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded institutional grants (the institution's own funds) (0-100; 100 = every student)
+      - name: institutional_grant_total
+        type: int
+        nullable: true
+        comment: Total dollars of institutional grants (the institution's own funds) awarded to the cohort
+      - name: institutional_grant_avg
+        type: int
+        nullable: true
+        comment: Average dollars of institutional grants (the institution's own funds) per recipient
+      - name: any_loan_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded student loans of any kind
+      - name: any_loan_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded student loans of any kind (0-100; 100 = every student)
+      - name: any_loan_total
+        type: int
+        nullable: true
+        comment: Total dollars of student loans of any kind awarded to the cohort
+      - name: any_loan_avg
+        type: int
+        nullable: true
+        comment: Average dollars of student loans of any kind per recipient
+      - name: federal_loan_n
+        type: int
+        nullable: true
+        comment: Number of full-time first-time undergraduates awarded federal student loans
+      - name: federal_loan_pct
+        type: int
+        nullable: true
+        comment: Percent of full-time first-time undergraduates awarded federal student loans (0-100; 100 = every student)
+      - name: federal_loan_total
+        type: int
+        nullable: true
+        comment: Total dollars of federal student loans awarded to the cohort
+      - name: federal_loan_avg
+        type: int
+        nullable: true
+        comment: Average dollars of federal student loans per recipient
+      - name: avg_net_price_title_iv_yr2
+        type: int
+        nullable: true
+        comment: Average net price for Title IV aid recipients, most recent year (in-state; Title IV institutions)
+      - name: avg_net_price_title_iv_yr1
+        type: int
+        nullable: true
+        comment: Average net price for Title IV aid recipients, one year earlier
+      - name: avg_net_price_title_iv_yr0
+        type: int
+        nullable: true
+        comment: Average net price for Title IV aid recipients, two years earlier
+      - name: avg_net_price_grant_aid_yr2
+        type: int
+        nullable: true
+        comment: Average net price for students awarded grant or scholarship aid, most recent year
+      - name: avg_net_price_grant_aid_yr1
+        type: int
+        nullable: true
+        comment: Average net price for students awarded grant or scholarship aid, one year earlier
+      - name: avg_net_price_grant_aid_yr0
+        type: int
+        nullable: true
+        comment: Average net price for students awarded grant or scholarship aid, two years earlier
+
+    source:
+      type: http
+      url: "https://nces.ed.gov/ipeds/datacenter/data/SFA{fiscal_yy1}{fiscal_yy2}.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        maxRetries: 3
+        retryOn: [500, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialAidResponseTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.edu.IpedsFinancialsDimensionResolver"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2016
+        # SFA2223 is the latest published file (SFA2324 → 404 on 2026-11-15); lag 3 as ipeds_financials.
+        dataLag: 3
+      fiscal_yy1:
+        type: custom
+        dataLag: 3   # IpedsFinancialsDimensionResolver derives the file-name pair from (year - dataLag)
+      fiscal_yy2:
+        type: custom
+        dataLag: 3
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+
 # ============================================================================
 # Views
 # ============================================================================

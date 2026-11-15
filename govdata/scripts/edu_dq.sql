@@ -45,6 +45,7 @@ FROM (
   UNION ALL SELECT 'ipeds_financials',       COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'ipeds_fall_enrollment', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'ipeds_admissions', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'ipeds_financial_aid',    COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'college_scorecard',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'college_scorecard_programs', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
@@ -96,6 +97,7 @@ FROM (
   UNION ALL SELECT 'ipeds_financials',                     COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true)
   UNION ALL SELECT 'ipeds_fall_enrollment', COUNT(*), 10000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=true)
   UNION ALL SELECT 'ipeds_admissions', COUNT(*), 1000 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=true)
+  UNION ALL SELECT 'ipeds_financial_aid',                  COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true)
   UNION ALL SELECT 'college_scorecard',                    COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true)
   UNION ALL SELECT 'college_scorecard_programs',           COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true)  -- dqRowLimit=3000/year
   UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
@@ -125,6 +127,7 @@ SELECT 'ipeds_tuition'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ
 SELECT 'ipeds_financials'         AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financials',       allow_moved_paths=true) LIMIT 1;
 SELECT 'ipeds_fall_enrollment' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_fall_enrollment', allow_moved_paths=True) LIMIT 1;
 SELECT 'ipeds_admissions' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_admissions', allow_moved_paths=True) LIMIT 1;
+SELECT 'ipeds_financial_aid'      AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard',      allow_moved_paths=true) LIMIT 1;
 SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/college_scorecard_programs', allow_moved_paths=true) LIMIT 1;
 SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
@@ -1122,6 +1125,65 @@ FROM (
   SELECT SUM(CASE WHEN tuition_fees_ft < 0 THEN 1 ELSE 0 END) AS n
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_tuition', allow_moved_paths=true)
   WHERE tuition_fees_ft IS NOT NULL
+);
+
+-- ipeds_financial_aid: all-null / all-same-value / PK nulls / PK duplicates / percent range
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_financial_aid', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_financial_aid', 'all_same_value',
+  CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
+  AND column_name NOT IN ('type', 'year', 'frequency', 'latest', 'table_name');
+
+-- ipeds_financial_aid PK: unitid, year
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_financial_aid', 'pk_nulls',
+  CASE WHEN total > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(total AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN n1 > 0 THEN 'unitid:' || n1 ELSE NULL END,
+    CASE WHEN n2 > 0 THEN 'year:'   || n2 ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN unitid IS NULL THEN 1 ELSE 0 END) AS n1,
+    SUM(CASE WHEN year   IS NULL THEN 1 ELSE 0 END) AS n2,
+    SUM(CASE WHEN unitid IS NULL OR year IS NULL THEN 1 ELSE 0 END) AS total
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true)
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_financial_aid', 'pk_duplicates',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM (
+    SELECT unitid, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true)
+    GROUP BY unitid, year HAVING COUNT(*) > 1
+  )
+);
+
+-- ipeds_financial_aid: *_pct columns are whole-number percents 0-100
+INSERT INTO dq_results
+SELECT 'edu', 'ipeds_financial_aid', 'pct_range',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(CASE WHEN any_aid_pct NOT BETWEEN 0 AND 100
+                    OR any_grant_pct NOT BETWEEN 0 AND 100
+                    OR institutional_grant_pct NOT BETWEEN 0 AND 100
+                    OR pell_grant_pct NOT BETWEEN 0 AND 100
+                    OR any_loan_pct NOT BETWEEN 0 AND 100 THEN 1 ELSE 0 END) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/ipeds_financial_aid', allow_moved_paths=true)
 );
 
 -- district_assessments: grade must be 3-12

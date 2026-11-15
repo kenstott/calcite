@@ -129,7 +129,7 @@ run_ungrouped_edu_tables() {
   unassigned="$(unassigned_schema_tables edu all \
     "k12|ccd_districts,ccd_schools" \
     "assessments|naep_scores,naep_achievement_levels,crdc_schools,district_assessments" \
-    "ipeds|ipeds_institutions,ipeds_completions,ipeds_financials,ipeds_tuition,ipeds_fall_enrollment,ipeds_admissions" \
+    "ipeds|ipeds_institutions,ipeds_completions,ipeds_financials,ipeds_financial_aid,ipeds_tuition,ipeds_fall_enrollment,ipeds_admissions" \
     "libraries|library_outlets" \
     "f33|f33_district_finance" \
     "idea|district_special_ed_counts" \
@@ -169,7 +169,7 @@ run_historical_cadence() {
     '"naep_scores", "naep_achievement_levels", "crdc_schools", "district_assessments"' "$START" "$END"
 
   run_edu_model "edu-initial-ipeds" \
-    '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_tuition", "ipeds_fall_enrollment", "ipeds_admissions"' "$START" "$END"
+    '"ipeds_institutions", "ipeds_completions", "ipeds_financials", "ipeds_financial_aid", "ipeds_tuition", "ipeds_fall_enrollment", "ipeds_admissions"' "$START" "$END"
 
   run_edu_model "edu-initial-libraries" \
     '"library_outlets"' "$START" "$END"
@@ -228,6 +228,11 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_financials"; then
     run_edu_model "edu-annual-ipeds-finance" \
       '"ipeds_financials"' "$START"
+  fi
+
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "ipeds_financial_aid"; then
+    run_edu_model "edu-annual-ipeds-financial-aid" \
+      '"ipeds_financial_aid"' "$START"
   fi
 
   # library_outlets' year dimension is a plain bounded range on GOVDATA_START_YEAR/END_YEAR
