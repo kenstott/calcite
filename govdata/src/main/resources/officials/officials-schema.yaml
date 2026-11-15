@@ -64,7 +64,8 @@ comment: >
   from the FEC, 2024 from the Clerk of the House) and `senate_election_results` (1976-2024, MIT) hold
   candidate-level election returns, with the views
   `house_race_results`, `senate_race_results` and `election_seats_won` giving winner, two-party
-  margin and seats won per cycle.
+  margin and seats won per cycle. `governor_election_results` (2006-2024, Cha and Kuriwaki,
+  Harvard Dataverse) holds governor returns by state, year and candidate.
 
 # ============================================================================
 # COLUMN TEMPLATES
@@ -1561,6 +1562,145 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ---------------------------------------------------------------------------
+  # GOVERNOR_ELECTION_RESULTS — statewide governor returns, Cha and Kuriwaki 2006-2024
+  # ---------------------------------------------------------------------------
+  - name: governor_election_results
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=governor_election_results/*.parquet"
+    partitions: *type_partition
+    comment: >
+      Governor general-election returns by state, year and candidate, 2006 to 2024 (1,012 rows,
+      50 states), the governor rows of "Candidates in American General Elections" by Jeremiah Cha
+      and Shiro Kuriwaki (Harvard and Yale; CC0; Harvard Dataverse doi:10.7910/DVN/DGDRDT, file
+      candidates_2006-2024.tab, found through the Dataverse API at each fetch so a new release is
+      picked up). One row per candidate per election: year, state, whether it is a special
+      election, the candidate, the party as a short code and as printed on the ballot, a
+      normalised D / R / OTHER field, the incumbent code, whether the candidate won, votes and
+      the race total. Coverage is every even-year cycle 2006 to 2022 and 2024 (36 states elect a
+      governor in 2006, 2010, 2014, 2018 and 2022, 11 in 2008, 2012, 2016, 2020 and 2024) plus the
+      off-year races of Kentucky, Louisiana, Mississippi, New Jersey and Virginia from 2007 to
+      2021 (2007 and 2011, 2015, 2019: KY, LA, MS; 2009, 2013, 2017, 2021: NJ, VA; West Virginia
+      2011 and Utah 2010 are specials). The 2023 off-year races (Kentucky, Louisiana,
+      Mississippi) and the 2025 races (New Jersey, Virginia) are not in the release; the 2026
+      cycle is not certified and is not included. Not covered: elections before 2006 and every
+      primary. Georgia (2006, 2010, 2014, 2018, 2022) and Louisiana
+      (2007, 2011, 2015, 2019) carry runoff_flag = false on their rows and no other state has the
+      flag. Joins:
+      state_fips to geo.state_ref.state_fips; a governor is a statewide office, so there is no
+      district. The candidate-level join to officials members is name matching and is not
+      attempted (no bioguide id; governors are not members of Congress). total_votes is the
+      race total as published and equals the sum of candidate_votes in every race. incumbent_code is the file's 'Candidate is incumbent'
+      variable: 0 for a challenger and 1, 2 or 3 for an incumbent coded by the release, whose
+      guide does not define 2 and 3; use incumbent_code > 0 for 'an incumbent' and do not read
+      the other values. Source:
+      https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DGDRDT.
+
+    dimensions:
+      type:
+        - governor_election_results
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: 'Calendar year of the election (even years, plus odd-year KY, LA, MS, NJ, VA); PK component'
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: '2-digit state FIPS code (FK to geo.state_ref.state_fips); PK component'
+      - name: state_name
+        type: string
+        nullable: false
+        comment: 'State name in title case (join key to geo.state_ref.state_name)'
+      - name: state_postal
+        type: string
+        nullable: false
+        comment: '2-letter postal abbreviation'
+      - name: special
+        type: boolean
+        nullable: false
+        comment: 'True for a special election (file type S: Utah 2010, West Virginia 2011, Oregon 2016); PK component'
+      - name: line_no
+        type: integer
+        nullable: false
+        comment: 'Position of the row within its (year, state, special) race in the published file, 1-based; makes the key unique; PK component'
+      - name: candidate
+        type: string
+        nullable: false
+        comment: 'Candidate name as published, upper case, LAST, FIRST form'
+      - name: party
+        type: string
+        nullable: false
+        comment: "Party short code as published: D, R, I (independent), Lbt, Grn, NPA, Other; the minor-party label is in party_formal"
+      - name: party_formal
+        type: string
+        nullable: true
+        comment: 'Party as printed on the ballot where the file records it (DFL, D,WF,Indep, Const, W-I, Liberty Union, ...); null for some rows'
+      - name: party_major
+        type: string
+        nullable: false
+        comment: "D when party is D (including Minnesota DFL), R when party is R, otherwise OTHER (independents and minor parties)"
+      - name: incumbent_code
+        type: integer
+        nullable: true
+        comment: 'The file''s incumbent variable: 0 challenger, 1 to 3 incumbent (2 and 3 are not defined in the release guide); null for one 2020 North Dakota row'
+      - name: won
+        type: boolean
+        nullable: false
+        comment: 'True for the candidate the file records as the winner (one per race)'
+      - name: runoff_flag
+        type: boolean
+        nullable: true
+        comment: 'The file''s runoff variable; false on every row where it is filled (Georgia and Louisiana), null elsewhere'
+      - name: nextup_year
+        type: integer
+        nullable: false
+        comment: 'The next year the winner will be up for election, as published'
+      - name: candidate_votes
+        type: long
+        nullable: false
+        comment: 'Votes the candidate received'
+      - name: total_votes
+        type: long
+        nullable: false
+        comment: 'Total votes cast in the race as published'
+      - name: source_release
+        type: string
+        nullable: false
+        comment: 'Dataverse dataset, version number and release date the row was read from'
+
+    source:
+      type: http
+      # Placeholder URL: GovernorElectionResultsProvider reads the Dataverse dataset API, finds the
+      # candidates file and downloads it through rawCache itself.
+      url: "https://dataverse.harvard.edu/api/datasets/:persistentId?persistentId=doi:10.7910/DVN/DGDRDT"
+      method: GET
+      response:
+        format: json  # ignored: GovernorElectionResultsProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.officials.GovernorElectionResultsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=governor_election_results/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: governor_election_results
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -1654,6 +1794,13 @@ constraints:
         targetTable: state_ref
         targetColumns: [state_fips]
     # No FK to members, as for house_election_results.
+  governor_election_results:
+    primaryKey: [year, state_fips, special, line_no]
+    foreignKeys:
+      - columns: [state_fips]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_fips]
 
 # ============================================================================
 # VIEWS

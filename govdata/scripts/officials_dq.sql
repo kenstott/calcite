@@ -1297,3 +1297,106 @@ FROM (SELECT COUNT(*) AS n FROM senate_race_results WHERE year = 2020 AND state_
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: governor_election_results
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true));
+
+-- T2: row_count (the Dataverse file had 1,012 governor rows at release v4; later releases only add)
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T2_row_count',
+  CASE WHEN n >= 1012 THEN 'pass' ELSE 'fail' END,
+  n, 1012, 'Row count at least the v4 release (1012 rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T5: all_same_value (source_release is one value by design; runoff_flag is false wherever the
+-- file fills it, Georgia and Louisiana, and null elsewhere)
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'source_release', 'runoff_flag')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL year, state_fips, special, line_no rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) WHERE year IS NULL OR state_fips IS NULL OR special IS NULL OR line_no IS NULL);
+
+-- T6: pk_duplicates
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate keys on year, state_fips, special, line_no'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) GROUP BY year, state_fips, special, line_no HAVING COUNT(*) > 1));
+
+-- T7: one_winner_per_race
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T7_one_winner_per_race',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Races (year, state_fips, special) without exactly one won candidate'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) GROUP BY year, state_fips, special HAVING SUM(CASE WHEN won THEN 1 ELSE 0 END) <> 1));
+
+-- T7: votes_within_total
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T7_votes_within_total',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Races whose candidate votes sum above total_votes'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) GROUP BY year, state_fips, special HAVING SUM(candidate_votes) > MAX(total_votes)));
+
+-- T7: party_major_values
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T7_party_major_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'party_major outside D, R, OTHER'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) WHERE party_major NOT IN ('D', 'R', 'OTHER'));
+
+-- T7: state_fips_format
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T7_state_fips_format',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'state_fips not a 2-digit code'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) WHERE NOT regexp_matches(state_fips, '^[0-9]{2}$'));
+
+-- T8: known_values (Georgia 2018: Kemp 1,978,408 over Abrams 1,923,685; Alaska 2006: Palin 114,697)
+INSERT INTO dq_results
+SELECT 'officials', 'governor_election_results', 'T8_known_values',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Kemp (GA 2018) and Palin (AK 2006) rows with the published votes and won = true'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/officials/governor_election_results', allow_moved_paths := true) WHERE won AND ((year = 2018 AND state_postal = 'GA' AND candidate = 'KEMP, BRIAN P.' AND candidate_votes = 1978408 AND total_votes = 3939328) OR (year = 2006 AND state_postal = 'AK' AND candidate = 'PALIN, SARAH H.' AND candidate_votes = 114697 AND total_votes = 236938)));
