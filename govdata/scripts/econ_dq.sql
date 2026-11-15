@@ -66,6 +66,7 @@ FROM (
   UNION ALL SELECT 'wage_growth',          (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',          allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'state_ui_claims',      (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'social_security_cola', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1) t)
+  UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'medicare_part_b_premiums', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'social_security_trustees_projections', (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1) t)
   UNION ALL SELECT 'regional_employment',  (SELECT COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',  allow_moved_paths := true) LIMIT 1) t)
@@ -130,6 +131,7 @@ FROM (
   UNION ALL SELECT 'wage_growth',           (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',           allow_moved_paths := true)), 10  -- recalibrated: BLS wage_growth yields ~15 rows for the DQ window; 50 was prod-scale
   UNION ALL SELECT 'state_ui_claims',       (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true)), 100000  -- 53 jurisdictions x ~40 years of weekly rows (~112k)
   UNION ALL SELECT 'social_security_cola',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true)), 50  -- one row per year 1975-2026
+  UNION ALL SELECT 'export_control_restricted_parties', (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)), 20000  -- CSL carries ~26,000 listings
   UNION ALL SELECT 'medicare_part_b_premiums',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true)), 20  -- one row per year 2005-2026
   UNION ALL SELECT 'social_security_trustees_projections',  (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true)), 30  -- 3 funds x reports 2016-2026
   UNION ALL SELECT 'regional_employment',   (SELECT COUNT(*) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',   allow_moved_paths := true)), 200
@@ -185,6 +187,7 @@ SELECT 'jolts_state'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_B
 SELECT 'wage_growth'            AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/wage_growth',            allow_moved_paths := true) LIMIT 1;
 SELECT 'state_ui_claims'        AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/state_ui_claims', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_cola'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_cola', allow_moved_paths := true) LIMIT 1;
+SELECT 'export_control_restricted_parties' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) LIMIT 1;
 SELECT 'medicare_part_b_premiums'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/medicare_part_b_premiums', allow_moved_paths := true) LIMIT 1;
 SELECT 'social_security_trustees_projections'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/social_security_trustees_projections', allow_moved_paths := true) LIMIT 1;
 SELECT 'regional_employment'    AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/regional_employment',    allow_moved_paths := true) LIMIT 1;
@@ -2280,3 +2283,31 @@ WHERE actuarial_balance_pct_payroll IS NULL
        OR actuarial_balance_pct_payroll <> -4.55))
    OR (report_year = 2026 AND fund = 'OASDI' AND (payable_benefits_pct_at_depletion <> 83 OR payable_benefits_pct_final_year <> 65
        OR actuarial_balance_pct_payroll <> -4.42));
+
+-- export_control_restricted_parties
+INSERT INTO dq_results
+SELECT 'econ', 'export_control_restricted_parties', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- export_control_restricted_parties PK uniqueness (source_list, id)
+INSERT INTO dq_results
+SELECT 'econ', 'export_control_restricted_parties', 'pk_duplicates', 'fail', 'source_list,id', '0 duplicates', COUNT(*) || ' duplicated keys'
+FROM (SELECT source_list, id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) GROUP BY 1,2 HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+-- export_control_restricted_parties known value: Huawei is on the Entity List under 84 FR 22961, effective 2019
+INSERT INTO dq_results
+SELECT 'econ', 'export_control_restricted_parties', 'known_value', 'fail', 'Huawei EL listing', 'present with 84 FR 22961, start_date 2019',
+  'Huawei Entity List listing missing or changed'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true)
+      WHERE source_list = 'EL' AND name LIKE 'Huawei Technologies%' AND federal_register_notice LIKE '%84 FR 22961%'
+        AND YEAR(start_date) = 2019)
+WHERE n = 0;
+
+-- export_control_restricted_parties the Entity List must be present at scale
+INSERT INTO dq_results
+SELECT 'econ', 'export_control_restricted_parties', 'entity_list_rows', 'fail', 'source_list', '>= 2000 EL rows', COUNT(*) || ' EL rows'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/export_control_restricted_parties', allow_moved_paths := true) WHERE source_list = 'EL'
+HAVING COUNT(*) < 2000;
