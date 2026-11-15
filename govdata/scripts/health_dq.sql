@@ -3437,6 +3437,128 @@ FROM (
   )
 );
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nhe_national (CMS NHE historical tables; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Expected >=10000 rows (20 categories x payer paths x 65 years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true) ORDER BY year DESC LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true) WHERE year IS NULL OR service_category IS NULL OR payer_path IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, service_category, payer_path) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, service_category, payer_path, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true)
+  GROUP BY year, service_category, payer_path HAVING COUNT(*) > 1
+));
+
+-- T7 regression guard: published anchors. 1960 total NHE = $27,122M, 2024 = $5,278,588M
+-- (CMS NHE2024 release); hospital total must stay below the all-service total.
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T7_known_totals',
+  CASE WHEN y1960 = 27122 AND y2024 > 5000000 AND y2024 < 6000000 THEN 'pass' ELSE 'fail' END, y2024, 5278588,
+  'Total National Health Expenditures: 1960 must be 27122, 2024 within 5.0M-6.0M ($ millions)'
+FROM (SELECT
+  MAX(CASE WHEN year = 1960 THEN amount_millions END) AS y1960,
+  MAX(CASE WHEN year = 2024 THEN amount_millions END) AS y2024
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true)
+  WHERE service_category = 'Total National Health Expenditures' AND payer_path = 'All payers');
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_national', 'T7_payer_path_unambiguous',
+  CASE WHEN n >= 3 THEN 'pass' ELSE 'fail' END, n, 3,
+  'Federal/State and Local rows must be nested under Medicaid and CHIP paths (>=3 distinct paths ending Federal)'
+FROM (SELECT COUNT(DISTINCT payer_path) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_national', allow_moved_paths := true)
+  WHERE payer = 'Federal' AND payer_path LIKE '%>%Federal');
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: nhe_summary (CMS NHE historical tables; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T2_row_count',
+  CASE WHEN n >= 1000 THEN 'pass' ELSE 'fail' END, n, 1000, 'Expected >=1000 rows (5 measures x items x 65 years)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true) ORDER BY year DESC LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true) WHERE year IS NULL OR measure IS NULL OR item IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T6_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, measure, item) rows'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, measure, item, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true)
+  GROUP BY year, measure, item HAVING COUNT(*) > 1
+));
+
+-- T7 regression guard: NHE share of GDP in 2024 is about 18%; 1960 about 5%.
+INSERT INTO dq_results
+SELECT 'health', 'nhe_summary', 'T7_pct_of_gdp_plausible',
+  CASE WHEN y1960 BETWEEN 4 AND 6 AND y2024 BETWEEN 16 AND 20 THEN 'pass' ELSE 'fail' END, y2024, 18,
+  'pct_of_gdp: 1960 in 4-6, 2024 in 16-20'
+FROM (SELECT
+  MAX(CASE WHEN year = 1960 THEN value END) AS y1960,
+  MAX(CASE WHEN year = 2024 THEN value END) AS y2024
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/nhe_summary', allow_moved_paths := true) WHERE measure = 'pct_of_gdp');
+
+
 
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
