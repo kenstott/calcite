@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
     "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "96 statements have been checked: 26 supported, 55 unsettled, 11 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 15 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "106 statements have been checked: 30 supported, 60 unsettled, 12 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 5 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
     "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
     "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -3654,9 +3654,14 @@
       "kind": "factual",
       "test": "True if official U.S. accounts show major combat operations against Iran ended after about five weeks, with Iran's navy sunk and about 15,000 sites struck. False if official accounts give materially different figures. Cannot be determined if no official figures are published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Defense News' report of the April 8, 2026 Pentagon briefing confirms a 38-day campaign, about five and a half weeks, ended by a ceasefire, with officials claiming 150 ships sunk. It gives no count of sites struck, and no official source for the 15,000 figure could be read.",
+      "evidence": [
+        {
+          "label": "Defense News on the April 8, 2026 Pentagon briefing",
+          "url": "https://www.defensenews.com/news/pentagon-congress/2026/04/08/us-forces-will-be-hanging-around-middle-east-after-iran-ceasefire-hegseth-says"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3682,9 +3687,14 @@
       "kind": "factual",
       "test": "True if the Defense Department or Central Command reported Iranian fire on the U.S. base in Bahrain on Nov. 14 or 15, 2026. False if they reported none. Cannot be determined if no official report exists.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Al Jazeera reported on Nov. 15 that Iran's Revolutionary Guard claimed a drone attack that day on a U.S. radar at a Bahrain air base, that Bahrain's military said it thwarted several attacks, and that the U.S. military \"has yet to comment\". No Defense Department or Central Command report for Nov. 14 or 15 was found.",
+      "evidence": [
+        {
+          "label": "Al Jazeera on the Bahrain attack claim",
+          "url": "https://www.aljazeera.com/news/2026/11/15/iran-says-it-targets-us-radar-in-bahrain-what-do-we-know"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3766,9 +3776,14 @@
       "kind": "factual",
       "test": "True if trade records show the 2017-2021 administration imposed tariffs on about 250 billion dollars of Chinese goods. False if the figure is materially different. Cannot be determined only if the records cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The U.S. Trade Representative's notice in the Federal Register of Aug. 20, 2019 says the tariff actions imposed an additional 25 percent duty on Chinese products with an annual trade value of approximately $250 billion. The figure is the value of goods covered, not the amount of duty collected.",
+      "evidence": [
+        {
+          "label": "Federal Register, modification of Section 301 action, Aug. 20, 2019",
+          "url": "https://www.federalregister.gov/documents/2019/08/20/2019-17865/notice-of-modification-of-section-301-action-chinas-acts-policies-and-practices-related-to"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3794,9 +3809,14 @@
       "kind": "factual",
       "test": "True if the State Department formally determined in January 2021 that China's treatment of Uyghurs was genocide. False if no such determination was made then. Cannot be determined only if the record cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The secretary of state's press statement of Jan. 19, 2021, read in a published copy, says: \"I have determined that the PRC, under the direction and control of the CCP, has committed genocide against the predominantly Muslim Uyghurs and other ethnic and religious minority groups\".",
+      "evidence": [
+        {
+          "label": "Determination of the Secretary of State on Atrocities in Xinjiang, Jan. 19, 2021 (GlobalSecurity copy)",
+          "url": "https://www.globalsecurity.org/wmd/library/news/china/2021/01/china-210119-state01.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3822,9 +3842,22 @@
       "kind": "factual",
       "test": "True if TikTok still operates in the United States under ownership tied to its Chinese parent, arms sales to Taiwan have been delayed under the current administration, and the 2017-2021 administration approved such sales. False if any of the three is contradicted by official records. Cannot be determined on control of TikTok if the ownership terms are not public.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "ABC News reported that the January 2026 joint venture left TikTok's Chinese parent with 19.9 percent; a news report of Senate testimony says arms sales to Taiwan are paused; and Al Jazeera reported the 2019 approval of F-16 sales to Taiwan. Those parts are confirmed through news reports. That the app is \"essentially controlled by the Chinese Communist Party\" is not shown by any record read.",
+      "evidence": [
+        {
+          "label": "ABC News, via ABC7, on the TikTok joint venture",
+          "url": "https://abc7news.com/post/tiktok-finalizes-deal-keep-operating-us/18451438/"
+        },
+        {
+          "label": "KTVU on Senate testimony about Taiwan arms sales",
+          "url": "https://www.ktvu.com/news/us-still-planning-arms-sale-taiwan-officials"
+        },
+        {
+          "label": "Al Jazeera on the 2019 F-16 sale",
+          "url": "https://www.aljazeera.com/amp/news/2019/8/21/us-approves-8bn-sale-of-66-f-16-fighters-to-taiwan"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3850,9 +3883,18 @@
       "kind": "factual",
       "test": "True if U.S. government reports (FBI, Justice Department, U.S. Trade Representative) document Chinese espionage and intellectual property theft over multiple decades. False if no such reports exist. Cannot be determined only if the reports cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The U.S. Trade Representative's 2018 findings say that \"for over a decade\" the Chinese government conducted and supported intrusions into U.S. commercial networks to take business information and technology. A 2020 Justice Department document says about 80 percent of its economic-espionage prosecutions allege conduct benefiting the Chinese state. The documents read cover roughly 2008 to 2020 in detail, so \"decades\" is the looser part.",
+      "evidence": [
+        {
+          "label": "U.S. Trade Representative, Section 301 findings, March 22, 2018",
+          "url": "https://ustr.gov/sites/default/files/Section%20301%20FINAL.PDF"
+        },
+        {
+          "label": "Justice Department, China Initiative compilation, July 29, 2020",
+          "url": "https://www.justice.gov/opa/page/file/1223496/download"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3878,8 +3920,8 @@
       "kind": "factual",
       "test": "True if financial disclosures or official records show a large share of the Trump family's cryptocurrency proceeds before the inauguration came from investors in Arab countries. False if records show otherwise. Cannot be determined if only press reports exist.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No financial disclosure or official record was found showing what share of the family's cryptocurrency proceeds before the inauguration came from investors in Arab countries. The search covered token sales before the inauguration, a $2 billion deal with an Abu Dhabi firm that was announced after it, and the warehouse catalog; a Reuters report could not be read.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -3906,9 +3948,14 @@
       "kind": "factual",
       "test": "True if the Senate record shows the vice president opposed Ukraine aid as a senator. False if he voted for it. The claim about celebrating later changes cannot be determined without his statements.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Senate's roll-call record for April 23, 2024 shows Sen. Vance voting Nay on the foreign-aid bill that included Ukraine aid. The second part, about celebrating later changes in U.S. support, was not tested.",
+      "evidence": [
+        {
+          "label": "Senate roll call vote 154, April 23, 2024",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1182/vote_118_2_00154.xml"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3934,9 +3981,18 @@
       "kind": "factual",
       "test": "True if official records show the federal government has taken ownership stakes in 41 U.S. companies and imposed price controls on pharmaceuticals and credit cards. False if the count or either price control is contradicted by official records. Cannot be determined if no official count exists.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No agency publishes a list of federal ownership stakes in companies. A 24/7 Wall St. article says private tallies run from 30 to 43, so 41 is within their range but is not an official figure, and the stakes are minority holdings. No primary document on price controls for pharmaceuticals or credit cards was read.",
+      "evidence": [
+        {
+          "label": "24/7 Wall St. on federal stakes in companies, Oct. 28, 2026",
+          "url": "https://247wallst.com/investing/2026/10/28/trumps-washington-is-now-a-shareholder-in-40-companies/"
+        },
+        {
+          "label": "Foreign Policy on federal equity stakes, Jan. 14, 2026",
+          "url": "https://foreignpolicy.com/2026/01/14/trump-state-capitalism-equity-stakes-list-companies/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3962,9 +4018,18 @@
       "kind": "factual",
       "test": "True if the administration has taken no regulatory or legal action restricting mail-order mifepristone. False if FDA or Justice Department has taken such an action. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FDA's own page says mifepristone \"may be dispensed in person or by mail\", with no restriction added, and KFF reports the administration defended the FDA's rules in court in 2026 while citing an internal safety review. No federal action restricting mail-order pills was found, which fits the statement; the safety review is open, and \"not lifted a finger\" is loose wording the record cannot settle.",
+      "evidence": [
+        {
+          "label": "FDA, information about mifepristone",
+          "url": "https://www.fda.gov/drugs/postmarket-drug-safety-information-patients-and-providers/information-about-mifepristone-medical-termination-pregnancy-through-ten-weeks-gestation"
+        },
+        {
+          "label": "KFF on Louisiana v. FDA, May 6, 2026",
+          "url": "https://www.kff.org/womens-health-policy/issue-brief/louisiana-v-fda-access-to-mifepristone-back-at-the-supreme-court/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
