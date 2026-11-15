@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
     "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "63 statements have been checked: 18 supported, 35 unsettled, 8 unsupported, 2 contradicted. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 48 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "79 statements have been checked: 20 supported, 46 unsettled, 9 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 32 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
     "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
     "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -4437,9 +4437,14 @@
       "kind": "factual",
       "test": "True if a public record (donor list, company statement, or reporting citing one) shows Nvidia or Jensen Huang gave 25 million dollars toward the White House ballroom. False if the record shows a materially different amount or no gift. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "A trade outlet's summary of a Washington Post report says a leaked fundraising list shows Nvidia at $25 million, and that Nvidia confirmed it made a donation without stating the amount. The figure rests on the leaked list as reported second-hand; no donor record or company statement of the amount was read, and nothing read shows a separate gift from Jensen Huang personally.",
+      "evidence": [
+        {
+          "label": "Implicator on the Washington Post's ballroom donor list",
+          "url": "https://www.implicator.ai/nvidia-and-apple-each-committed-25-million-to-trumps-ballroom-leaked-list-shows/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4465,9 +4470,14 @@
       "kind": "factual",
       "test": "True if export-control actions show the administration approved sales of advanced Nvidia chips to China, and a record shows national security officials advised against it. False if no such approval exists. Cannot be determined on the advice if it is not public.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Reuters reported in December 2025 that the president announced Nvidia's H200 chips could be exported to China with a 25 percent fee, which confirms the approval. The pages read show outside critics and senators objecting, but no record of serving national security officials advising against it.",
+      "evidence": [
+        {
+          "label": "Reuters, via Khaleej Times, on the H200 announcement",
+          "url": "https://www.khaleejtimes.com/business/tech/us-to-allow-nvidia-h200-chip-shipments-to-china-trump-says"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4493,9 +4503,18 @@
       "kind": "factual",
       "test": "True if official documents (charges, a Commerce or Justice Department statement, congressional findings) describe the person as a suspected intelligence agent involved in diverting chips to China. False if official documents clear her. Cannot be determined if only press reports exist.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No official document was read that describes the person as a suspected intelligence agent or charges her with anything. CNBC and CBS News report, citing the New York Times and unnamed sources, that U.S. officials hold that belief; CBS reports Singapore's inquiry concerns suspected false declarations on server purchases, and that Malaysia's prime minister said there was \"no indication\" of re-export to China.",
+      "evidence": [
+        {
+          "label": "CNBC on Megaspeed's response",
+          "url": "https://www.cnbc.com/2026/11/15/megaspeed-alice-huang-probe-nvidia-scandal.html"
+        },
+        {
+          "label": "CBS News on the Singapore investigation",
+          "url": "https://www.cbsnews.com/news/jensen-huang-nvidia-alice-huang-singapore-investigation-china-chips/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4577,9 +4596,18 @@
       "kind": "factual",
       "test": "True if corporate or official records show Megaspeed was run by the woman reported to have had a relationship with Jensen Huang. False if records show otherwise. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "CBS News calls her the then chief executive of Megaspeed, and CNBC, citing the company's own statement, says she was an executive who left on Aug. 30, 2025. That she is the person in the reported relationship rests on CBS's unnamed sources, not on any record.",
+      "evidence": [
+        {
+          "label": "CBS News on the Singapore investigation",
+          "url": "https://www.cbsnews.com/news/jensen-huang-nvidia-alice-huang-singapore-investigation-china-chips/"
+        },
+        {
+          "label": "CNBC on Megaspeed's response",
+          "url": "https://www.cnbc.com/2026/11/15/megaspeed-alice-huang-probe-nvidia-scandal.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4633,9 +4661,20 @@
       "kind": "factual",
       "test": "True if Senate records show the senator chairs the Appropriations subcommittee that funds the Commerce Department. False if someone else chairs it. The claim about what the subcommittee exposed cannot be determined without a public record of it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "false",
+      "finding": "The Senate Appropriations Committee's own page for its Commerce, Justice, Science subcommittee lists Jerry Moran as chair and Chris Van Hollen as ranking member, and AskAmerica's committee roster shows the same. Republicans hold the Senate majority until the new Congress is seated in January. The second part of the sentence, on what the subcommittee helped expose, was not checked: no page read addressed it.",
+      "evidence": [
+        {
+          "label": "officials.committee_membership (Senate Appropriations subcommittee chairs and ranking members)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#committee_membership-table",
+          "askamerica": true,
+          "sql": "SELECT c.committee_id, c.parent_committee_id, c.name, m.title, m.party, m.bioguide_id\nFROM officials.committees c\nJOIN officials.committee_membership m ON m.committee_id=c.committee_id\nWHERE c.committee_id LIKE 'SSAP%' AND m.title IS NOT NULL\nORDER BY c.committee_id"
+        },
+        {
+          "label": "Senate Appropriations Committee, Commerce, Justice, Science subcommittee",
+          "url": "https://www.appropriations.senate.gov/subcommittees/commerce-justice-science-and-related-agencies"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4773,9 +4812,18 @@
       "kind": "factual",
       "test": "True if certified or reported Nov. 3, 2026 results show Democrats gained U.S. Senate seats, U.S. House seats, governorships and state legislative seats. False if they lost ground in any of the four. Cannot be determined if results are not yet reported.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "Associated Press counts as of Nov. 14, as compiled by California Today, show Democrats flipping eight Republican-held Senate seats, gaining House seats, and going from 24 to 30 governorships. NPR reported Democrats gained legislative seats in nearly every state voting and flipped several chambers. Some races were still uncalled.",
+      "evidence": [
+        {
+          "label": "California Today compilation of AP results",
+          "url": "https://californiatoday.com/guides/elections/2026-midterm-election-results-master-guide/"
+        },
+        {
+          "label": "NPR on state legislatures",
+          "url": "https://www.npr.org/2026/11/15/nx-s1-6039175/midterms-legislatures-states-democrats-gop"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4801,9 +4849,18 @@
       "kind": "factual",
       "test": "True if public reporting or party statements show national Democratic committees did not recruit the candidate and began supporting him late in the race. False if records show early national party recruitment or spending. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Associated Press reported on Oct. 20 that the Senate Democrats' main super PAC entered the Mississippi race \"for the first time this year\" with a $1.2 million ad two weeks before the election, which fits \"late in the game\". No page read addresses whether national Democrats recruited the candidate, and earlier national spending was not tested.",
+      "evidence": [
+        {
+          "label": "Associated Press, via WCAX, on the first Mississippi ad",
+          "url": "https://www.wcax.com/news/2026/10/20/senate-democrats-launch-first-ad-mississippi-their-midterm-optimism-spreads-south/"
+        },
+        {
+          "label": "NPR interview with Rep. Bennie Thompson",
+          "url": "https://www.npr.org/2026/11/12/nx-s1-6037852/rep-bennie-thompson-discusses-the-u-s-senate-race-democrat-win-in-mississippi"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4829,9 +4886,26 @@
       "kind": "factual",
       "test": "True if Federal Election Commission data show Republican national party committees raised about twice what their Democratic counterparts raised in the 2026 cycle. False if the ratio is materially different. Cannot be determined if FEC data do not reach the period.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "contradicted",
+      "finding": "AskAmerica's Federal Election Commission data for the 2026 cycle show the three Republican national party committees with receipts of $843.1 million (RNC $341.5 million, NRCC $263.8 million, NRSC $237.8 million) against $725.5 million for the three Democratic committees (DNC $252.3 million, DCCC $256.8 million, DSCC $216.4 million): about 16 percent more, not twice. The FEC's own 18-month summary gives the same ratio. Still open: super PACs and other outside groups, which were not counted.",
+      "evidence": [
+        {
+          "label": "fec.committee_summaries (national party committee receipts, 2026 cycle)",
+          "url": "https://askamerica.ai/catalog/schemas/fec/#committee_summaries-table",
+          "askamerica": true,
+          "sql": "SELECT c.committee_id, c.committee_name, c.party, s.total_receipts\nFROM fec.committees c\nJOIN fec.committee_summaries s ON s.committee_id=c.committee_id AND s.year=c.year\nWHERE c.year=2026 AND (c.committee_name LIKE 'DEMOCRATIC NATIONAL COMM%' OR c.committee_name LIKE 'DCCC%' OR c.committee_name LIKE 'DSCC%' OR c.committee_name LIKE 'NRCC%' OR c.committee_name LIKE 'NRSC%' OR c.committee_name LIKE '%DEMOCRATIC CONGRESSIONAL CAMPAIGN%' OR c.committee_name LIKE '%DEMOCRATIC SENATORIAL CAMPAIGN%' OR c.committee_name LIKE '%NATIONAL REPUBLICAN CONGRESSIONAL%' OR c.committee_name LIKE '%NATIONAL REPUBLICAN SENATORIAL%' OR c.committee_name LIKE 'REPUBLICAN NATIONAL COMM%')\nORDER BY c.committee_name"
+        },
+        {
+          "label": "fec.committee_summaries (Democratic National Committee receipts, 2026 cycle)",
+          "url": "https://askamerica.ai/catalog/schemas/fec/#committee_summaries-table",
+          "askamerica": true,
+          "sql": "SELECT c.committee_id, c.committee_name, s.total_receipts\nFROM fec.committees c\nJOIN fec.committee_summaries s ON s.committee_id=c.committee_id AND s.year=c.year\nWHERE c.year=2026 AND (c.committee_name LIKE 'DNC%' OR c.committee_name LIKE '%DEMOCRATIC NATIONAL%')\nORDER BY s.total_receipts DESC\nFETCH FIRST 6 ROWS ONLY"
+        },
+        {
+          "label": "FEC statistical summary of 18-month campaign activity, 2025-2026",
+          "url": "https://www.fec.gov/updates/statistical-summary-of-18-month-campaign-activity-of-the-2025-2026-election-cycle/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4843,7 +4917,7 @@
       "speaker": "Chris Van Hollen",
       "office": "U.S. Senator from Maryland",
       "party": "D",
-      "context": "On ABC's This Week on Nov. 15, 2026, about Senate Majority Leader Chuck Schumer's team and the contest for Democratic leader.",
+      "context": "On ABC's This Week on Nov. 15, 2026, about Senate Democratic leader Chuck Schumer's team and the contest for Democratic leader.",
       "quote": "The Schumer team's put out a lot of misinformation. They're essentially trying to instill fear in people who may say that they're going to support me as a new leader.",
       "reported_by": {
         "outlet": "ABC This Week",
@@ -5400,9 +5474,18 @@
       "kind": "factual",
       "test": "True if the secretary's first public statements after the Nov. 13 ground stop attributed the problem to Congress or its funding. False if his first statements did not. Cannot be determined if the first statements cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "ABC's live coverage shows the secretary on Nov. 13 blaming old, overloaded equipment and asking Congress for emergency money (\"I want $50 billion\"). On Nov. 15 he said on NBC, \"I can't blame Republicans or Democrats because it's all of them.\" A request for money can be read as putting the problem on funding, so the record does not decide whether his first response blamed Congress.",
+      "evidence": [
+        {
+          "label": "ABC live coverage of the ground stop",
+          "url": "https://abc7news.com/live-updates/faa-ground-stop-live-updates-what-know-nationwide-flights-are-grounded/20038887/entry/20039427/"
+        },
+        {
+          "label": "NBC News on the secretary's remarks",
+          "url": "https://www.nbcnews.com/politics/trump-administration/transportation-secretary-apologize-nationwide-ground-stop-airports-rcna609397"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5428,9 +5511,18 @@
       "kind": "factual",
       "test": "True if the reconciliation law appropriated 12.5 billion dollars and official spending data show about one third of it spent, and the amount matched the administration's request. False if spending is materially different or the request was larger. Cannot be determined if spending data are not published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "GAO confirms the $12.5 billion appropriation and reports the FAA had obligated $1.8 billion of it as of March 2026; that is an earlier date and a measure of commitments, not spending, so \"one-third spent\" is neither confirmed nor ruled out. Whether the amount matched what the administration asked for was not established: the original request was not found.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        },
+        {
+          "label": "Public Law 119-21, Sec. 40003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5476,7 +5568,7 @@
       "speaker": "Chris Van Hollen",
       "office": "U.S. Senator from Maryland",
       "party": "D",
-      "context": "On CNN's State of the Union on Nov. 15, 2026, about Senate Majority Leader Chuck Schumer's position on funding the Iran war.",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Senate Democratic leader Chuck Schumer's position on funding the Iran war.",
       "quote": "That's not the position of the current majority leader.",
       "reported_by": {
         "outlet": "CNN State of the Union",
@@ -5488,11 +5580,20 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": "True if the Senate majority leader has not publicly committed to blocking further funding for the Iran war. False if he has publicly taken the same position as the speaker. Cannot be determined if he has made no public statement.",
+      "test": "True if the leader referred to has not publicly committed to blocking further funding for the Iran war. False if he has publicly taken that position. Cannot be determined if it is unclear which leader is meant or he has made no public statement.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The statement names \"the current majority leader\"; that title is held by John Thune, while the context is the contest with Chuck Schumer, the Democratic leader. Common Dreams reported Sen. Schumer saying \"Democrats will not go along\" and that the war would be ended through the power of the purse; WJLA reported Sen. Thune making no commitment to block war funding. Which leader is meant decides the claim.",
+      "evidence": [
+        {
+          "label": "Common Dreams on Sen. Schumer and war funding",
+          "url": "https://www.commondreams.org/news/schumer-defund-iran-war"
+        },
+        {
+          "label": "WJLA on the Senate defense bill vote",
+          "url": "https://wjla.com/news/nation-world/senate-democrats-block-defense-department-funding-bill-as-iran-war-escalates-president-trump-administration-republicans"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5504,7 +5605,7 @@
       "speaker": "Chris Van Hollen",
       "office": "U.S. Senator from Maryland",
       "party": "D",
-      "context": "On CNN's State of the Union on Nov. 15, 2026, about Senate Majority Leader Chuck Schumer's role in Democratic primaries.",
+      "context": "On CNN's State of the Union on Nov. 15, 2026, about Senate Democratic leader Chuck Schumer's role in Democratic primaries.",
       "quote": "He joined with AIPAC and crypto to try to defeat them.",
       "reported_by": {
         "outlet": "CNN State of the Union",
@@ -5516,11 +5617,26 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": "True if spending or endorsement records show the majority leader or his allied committees backed opponents of the candidates in question alongside AIPAC-linked and cryptocurrency-industry committees. False if records show he backed those candidates. Cannot be determined if no public record or official account addresses it.",
+      "test": "True if spending or endorsement records show the Senate Democratic leader or his allied committees backed opponents of the candidates in question alongside AIPAC-linked and cryptocurrency-industry committees. False if records show he backed those candidates. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's Federal Election Commission records show the AIPAC-affiliated United Democracy Project spent about $20.9 million opposing Abdul El-Sayed in Michigan, and the cryptocurrency group Fairshake spent about $9.9 million opposing Juliana Stratton in Illinois. No committee linked to Sen. Schumer appears as a spender in those races, and no record read shows him joining those groups; his reported preference for other candidates comes from news accounts.",
+      "evidence": [
+        {
+          "label": "fec.independent_expenditures_current (outside spending in 2026 Senate races, MI, MN, IL)",
+          "url": "https://askamerica.ai/catalog/schemas/fec/#independent_expenditures_current-view",
+          "askamerica": true,
+          "sql": "SELECT spender_name, candidate_name, candidate_state, support_oppose, SUM(amount) AS total, COUNT(*) AS n\nFROM fec.independent_expenditures_current\nWHERE amount_implausible IS NOT TRUE AND superseded_by_amendment IS NOT TRUE\n  AND \"year\" = '2026' AND candidate_office='S' AND candidate_state IN ('MI','MN','IL')\n  AND (UPPER(spender_name) LIKE '%UNITED DEMOCRACY%' OR UPPER(spender_name) LIKE '%FAIRSHAKE%' OR UPPER(spender_name) LIKE '%SENATE MAJORITY%' OR UPPER(spender_name) LIKE '%DSCC%' OR UPPER(spender_name) LIKE '%DEMOCRATIC SENATORIAL%')\nGROUP BY spender_name, candidate_name, candidate_state, support_oppose\nORDER BY total DESC"
+        },
+        {
+          "label": "CBS News on the leadership challenge",
+          "url": "https://www.cbsnews.com/news/chris-van-hollen-challenge-chuck-schumer-senate-majority-leader-democrat/"
+        },
+        {
+          "label": "Newsweek on Democrats opposing Sen. Schumer",
+          "url": "https://www.newsweek.com/full-list-democrats-rallying-against-chuck-schumer-senate-12315442"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5546,9 +5662,18 @@
       "kind": "factual",
       "test": "True if senators have publicly committed to voting for the speaker in the leadership election. False if those named have publicly committed to someone else. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Hill, via Yahoo News, and CBS News name four public backers of the challenge: Sens. Sanders and Merkley and Senators-elect El-Sayed and Flanagan. Sen. Schumer's team has released no list of its supporters, so whether people on it have committed elsewhere cannot be checked.",
+      "evidence": [
+        {
+          "label": "The Hill, via Yahoo News, on the leadership contest",
+          "url": "https://www.yahoo.com/news/politics/articles/van-hollen-disputes-schumer-claim-170044910.html"
+        },
+        {
+          "label": "CBS News on the leadership challenge",
+          "url": "https://www.cbsnews.com/news/chris-van-hollen-challenge-chuck-schumer-senate-majority-leader-democrat/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5574,9 +5699,14 @@
       "kind": "factual",
       "test": "True if credible published reports describe an effort to move the leadership election earlier than Dec. 1. False if the caucus has confirmed the date is unchanged and no such reports exist. Cannot be determined if reports conflict.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Hill, via Yahoo News and citing Politico, reports Senate Democrats have privately discussed holding the vote before the Thanksgiving recess instead of Dec. 1. The report does not attribute that effort to Sen. Schumer's team and says he has not publicly weighed in.",
+      "evidence": [
+        {
+          "label": "The Hill, via Yahoo News, on the leadership contest",
+          "url": "https://www.yahoo.com/news/politics/articles/van-hollen-disputes-schumer-claim-170044910.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5658,9 +5788,14 @@
       "kind": "factual",
       "test": "True if the enhanced Affordable Care Act premium tax credits expired without extension and the president opposed or blocked an extension. False if the credits were extended. Cannot be determined on the president's role if no record shows it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Associated Press reported on Jan. 1, 2026 that the enhanced premium tax credits expired at the start of 2026 without extension, which confirms that part. The same report says the president \"floated a way out, only to back off after conservative backlash\"; nothing read shows him cutting off an extension himself.",
+      "evidence": [
+        {
+          "label": "Associated Press, via ABC7, on the expiring health subsidies",
+          "url": "https://abc7news.com/post/health-subsidies-expire-launching-millions-americans-2026-steep-insurance-hikes/18339659/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5686,8 +5821,8 @@
       "kind": "factual",
       "test": "True if the website states that contributions go to 2028 candidates and none to the speaker's own campaign. False if the site's terms say otherwise. Cannot be determined if the site cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "The leadership-bid website loaded without readable text, so its terms on where contributions go could not be read, and no other page read states it. The search covered the site, fundraising pages and news reports.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
