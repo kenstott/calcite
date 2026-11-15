@@ -48,6 +48,7 @@ FROM (
   UNION ALL SELECT 'naep_achievement_levels',   COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'library_outlets',           COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'f33_district_finance',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'district_special_ed_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'district_assessments',      COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1)
@@ -94,6 +95,7 @@ FROM (
   UNION ALL SELECT 'naep_achievement_levels',              COUNT(*),    10       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true)
   UNION ALL SELECT 'library_outlets',                      COUNT(*),   100       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true)  -- dqRowLimit=50000/year
   UNION ALL SELECT 'f33_district_finance',                 COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true)  -- ~14,088 LEAs/year verified FY2023
+  UNION ALL SELECT 'district_special_ed_counts',           COUNT(*),  5000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)  -- ~16,000-18,500 LEAs/year verified 2020-2024
   UNION ALL SELECT 'district_assessments',                 COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true)  -- dqRowLimit=2000/(year,grade)
   UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
   UNION ALL SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)  -- 4 portfolios x ~50 quarters x 7-8 statuses
@@ -118,6 +120,7 @@ SELECT 'college_scorecard_programs' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_
 SELECT 'naep_achievement_levels'   AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/naep_achievement_levels',   allow_moved_paths=true) LIMIT 1;
 SELECT 'library_outlets'          AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets',          allow_moved_paths=true) LIMIT 1;
 SELECT 'f33_district_finance'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance',     allow_moved_paths=true) LIMIT 1;
+SELECT 'district_special_ed_counts' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true) LIMIT 1;
 SELECT 'district_assessments'     AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_assessments',    allow_moved_paths=true) LIMIT 1;
 
 -- ============================================================
@@ -352,6 +355,16 @@ SELECT 'edu', 'library_outlets', 'all_same_value',
 FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/library_outlets', allow_moved_paths=true))
 WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
   AND column_name NOT IN ('type', 'year');
+
+-- early_childhood_missing / school_age_missing exist only in the 2020-21..2022-23 source files; a
+-- run covering 2023 onward has them entirely null by design.
+INSERT INTO dq_results
+SELECT 'edu', 'district_special_ed_counts', 'all_null_cols',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type', 'year', 'early_childhood_missing', 'school_age_missing');
 
 INSERT INTO dq_results
 SELECT 'edu', 'f33_district_finance', 'all_same_value',
@@ -684,6 +697,48 @@ FROM (
   SELECT leaid, year
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/f33_district_finance', allow_moved_paths=true)
   GROUP BY leaid, year HAVING COUNT(*) > 1
+);
+
+-- district_special_ed_counts PK: leaid, year
+INSERT INTO dq_results
+SELECT 'edu', 'district_special_ed_counts', 'pk_nulls',
+  CASE WHEN null_leaid + null_year > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(null_leaid + null_year AS VARCHAR), '0',
+  CONCAT_WS(', ',
+    CASE WHEN null_leaid > 0 THEN 'leaid:' || null_leaid ELSE NULL END,
+    CASE WHEN null_year  > 0 THEN 'year:'  || null_year  ELSE NULL END
+  )
+FROM (
+  SELECT
+    SUM(CASE WHEN leaid IS NULL THEN 1 ELSE 0 END) AS null_leaid,
+    SUM(CASE WHEN year  IS NULL THEN 1 ELSE 0 END) AS null_year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)
+);
+
+-- district_special_ed_counts: one row per LEA per school year
+INSERT INTO dq_results
+SELECT 'edu', 'district_special_ed_counts', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT leaid, year
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)
+  GROUP BY leaid, year HAVING COUNT(*) > 1
+);
+
+-- district_special_ed_counts: the -8/-9 suppression codes must have become null, and the
+-- NCES LEA ID must be 7 digits (the 2021-22 source file drops the leading zero).
+INSERT INTO dq_results
+SELECT 'edu', 'district_special_ed_counts', 'suppression_or_id_anomaly',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END,
+  CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT SUM(
+    CASE WHEN total_children < 0 OR school_age_all_disabilities < 0
+       OR early_childhood_all_disabilities < 0 OR length(leaid) <> 7
+    THEN 1 ELSE 0 END
+  ) AS n
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/district_special_ed_counts', allow_moved_paths=true)
 );
 
 -- district_assessments PK: leaid, year, grade
