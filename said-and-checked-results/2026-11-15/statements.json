@@ -266,7 +266,8 @@
         {
           "label": "health.medicaid_chip_enrollment_monthly (January 2026)",
           "url": "https://askamerica.ai/catalog/schemas/health/#medicaid_chip_enrollment_monthly-table",
-          "askamerica": true
+          "askamerica": true,
+          "sql": "SELECT reporting_period,\n       SUM(total_medicaid_chip_enrollment) AS total,\n       SUM(adult_medicaid_enrollment) AS adults,\n       SUM(child_enrollment) AS kids\nFROM health.medicaid_chip_enrollment_monthly\nWHERE report_status = 'U' AND reporting_period = '202601'\nGROUP BY reporting_period"
         },
         {
           "label": "KFF, 5 Key Facts About Medicaid Coverage for People with Disabilities",
@@ -655,7 +656,8 @@
         {
           "label": "officials.senate_race_results (U.S. Senate returns, 1976-2024)",
           "url": "https://askamerica.ai/catalog/schemas/officials/#senate_race_results-view",
-          "askamerica": true
+          "askamerica": true,
+          "sql": "SELECT state_name, MAX(cycle_year) AS last_d_win, COUNT(*) n\nFROM officials.senate_race_results\nWHERE state_name IN ('Texas','Kansas','TEXAS','KANSAS')\n  AND leader_party_major = 'D' AND is_decisive\nGROUP BY state_name"
         },
         {
           "label": "WFTV/Cox, Election 2026 results (Nov. 4, 2026)",
@@ -688,12 +690,14 @@
         {
           "label": "officials.senate_race_results (U.S. Senate returns, 1976-2024)",
           "url": "https://askamerica.ai/catalog/schemas/officials/#senate_race_results-view",
-          "askamerica": true
+          "askamerica": true,
+          "sql": "SELECT state_postal,\n       sum(case when leader_party_major='D' then 1 else 0 end) d_wins,\n       max(case when leader_party_major='D' then year end) last_d,\n       sum(case when leader_party_major='OTHER' then 1 else 0 end) oth,\n       max(case when leader_party_major='OTHER' then year end) last_oth,\n       sum(case when leader_party_major is null then 1 else 0 end) nullp\nFROM officials.senate_race_results\nWHERE is_decisive\nGROUP BY state_postal\nORDER BY d_wins, state_postal"
         },
         {
           "label": "officials.house_race_results (U.S. House returns, 1976-2024)",
           "url": "https://askamerica.ai/catalog/schemas/officials/#house_race_results-view",
-          "askamerica": true
+          "askamerica": true,
+          "sql": "SELECT count(distinct state_postal) states,\n       count(distinct state_postal) FILTER (WHERE leader_party_major='D') dem_states\nFROM officials.house_race_results\nWHERE is_decisive"
         },
         {
           "label": "WFTV/Cox, Election 2026 results (Nov. 4, 2026)",
