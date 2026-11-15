@@ -406,7 +406,7 @@
   },
   {
     "topic_slug": "newsweek-snap-enrollment-drops-300k-june-2026",
-    "headline": "SNAP Enrollment Drops 300k In Single Month—Here Are Worst Impacted States",
+    "headline": "SNAP Enrollment Drops 300k In Single Month\u2014Here Are Worst Impacted States",
     "checked_date": "2026-11-08",
     "run_subpath": "q4/askamerica/2026-11-08",
     "pinocchios": 1,
@@ -1075,5 +1075,145 @@
       "everyman": 3
     },
     "note": "expert 1, askamerica 0 (engine-scored; arm's own read higher), everyman 1; correct verdict 1. Release dated June 23, 2026 (outside the 7-day window). Streak holds on payroll jobs Jul 2025-May 2026; askamerica alone found it fails on the household series the release links. askamerica graded the industry figures unsupported after using a wrong series-id pattern; the data exists. Series-id layout added to the econ.state_industry table comment 2026-11-14, effective at the next govdata build."
+  },
+  {
+    "topic_slug": "texastribune-vouchers-students-disabilities-fear",
+    "headline": "Parents of kids with disabilities fear losing Texas school voucher",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q1/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://texastribune.org/2026/11/13/texas-school-vouchers-students-disabilities-uncertainty",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "Engine 0, agent draft 1. Expert found disability share 17% vs 24-28% in comptroller-sourced reports. #1228 filed (spec_ed_students null 2022-2024)."
+  },
+  {
+    "topic_slug": "hechinger-free-tuition-promises-sticker-price",
+    "headline": "With free-tuition promises, some colleges try to untangle confusion over what they cost",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q2/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://hechingerreport.org/with-free-tuition-promises-some-colleges-try-to-untangle-confusion-over-what-they-cost/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Engine 0, agent call 1. 14 of 19 thresholds confirmed on school pages; three survey paraphrase shifts caught. #1230 filed (IPEDS SFA)."
+  },
+  {
+    "topic_slug": "icn-cop31-warming-warnings-cat-copernicus",
+    "headline": "Global Warming Remains Unchecked, Experts Warn at UN's COP31 Climate Summit",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q3/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://insideclimatenews.org/news/12112026/cop31-global-warming-warnings/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "SEVERITY (tie with everyman). All arms graded a summary (403). askamerica best on CAT scenarios; missed Copernicus 2042/2045 inconsistency and Thunberg wording."
+  },
+  {
+    "topic_slug": "cnbc-heating-oil-up-59-percent-maine",
+    "headline": "Heating oil prices are up 59% from last winter. The spike is 'crushing folks,' Maine nonprofit says",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q4/askamerica/2026-11-15",
+    "pinocchios": 1,
+    "source_url": "https://cnbc.com/2026/11/14/heating-oil-price-spike-household-budgets.html",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Key Points box misdates the price (Nov 2 vs Nov 9). Reserve action figures differ across arms (300k Nov 4 vs 315k Oct 21), unreconciled. #1231 filed."
+  },
+  {
+    "topic_slug": "fortune-fed-inflation-forever-war-eight-years",
+    "headline": "The Fed's battle against inflation risks turning into a forever war as Iran 'status quo' drags on",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q5/askamerica/2026-11-15",
+    "pinocchios": 1,
+    "source_url": "https://fortune.com/2026/11/14/federal-reserve-inflation-forever-war-iran-oil-prices-diesel-fed-rate-hikes/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "Replaced an ICN story the engine refused (article unloadable). Arms disagree on whether the Sept SEP has a 2029 column. Quote-checking depth again the margin."
+  },
+  {
+    "topic_slug": "icn-interior-plan-decrease-federal-estate",
+    "headline": "Federal Government Could Sell Off Untold Acres of Public Lands",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q6/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://insideclimatenews.org/news/13112026/federal-government-could-sell-off-untold-acres-of-public-lands/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "Engine 0, agent read 1. Expert: offshore 1.7B vs 3.2B acres, workforce net 9% vs 17%, IBLA judge not federal court. #1232 filed (OPM employment)."
+  },
+  {
+    "topic_slug": "ap-faa-nationwide-ground-stop-longest-25-years",
+    "headline": "US air travel should recover from ground stop by the end of Sunday, FAA says",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q7/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://www.wowt.com/2026/11/14/thousands-flights-canceled-airlines-work-dig-out-nationwide-ground-stop/",
+    "ranks": {
+      "askamerica": 1,
+      "everyman": 2,
+      "expert": 3
+    },
+    "note": "Narrow first over everyman, which found the shifting official cause and the later 50B request. #1233 filed (airline_ontime no 2026 rows)."
+  },
+  {
+    "topic_slug": "fortune-global-defense-spending-8-trillion-headline",
+    "headline": "Pete Hegseth's $1.5 trillion Pentagon budget request is DOA after Democrats swept midterms, but global defense spending could still hit $8 trillion",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q8/askamerica/2026-11-15",
+    "pinocchios": 2,
+    "source_url": "https://fortune.com/2026/11/15/pentagon-military-budget-in-jeopardy-global-defense-spending-hit-8-trillion",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "All three arms: headline 8T is a decade of additional G7 commitments, not annual global spending (SIPRI 2.887T). Warehouse: FY2026 defense outlays 966B."
+  },
+  {
+    "topic_slug": "ap-flu-season-early-start-seven-states",
+    "headline": "Flu season is off to a very early start. Here's where cases are surging right now",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q9/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://www.wowt.com/2026/11/15/flu-season-is-off-very-early-start-heres-where-cases-are-surging-right-now/",
+    "ranks": {
+      "everyman": 1,
+      "expert": 2,
+      "askamerica": 3
+    },
+    "note": "SEVERITY: below everyman, which read four CDC weekly reports and found 390k vs 380k hospitalizations. #1234 filed (FluView)."
+  },
+  {
+    "topic_slug": "cnbc-unions-democrats-2026-union-household-margin",
+    "headline": "Unions helped Democrats win big in 2026. Now they want action",
+    "checked_date": "2026-11-15",
+    "run_subpath": "q10/askamerica/2026-11-15",
+    "pinocchios": 0,
+    "source_url": "https://www.cnbc.com/2026/11/12/democrats-unions-midterms-2026.html",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "Highest-in-four-cycles compares CNBC poll to NEP series. Expert matched AFL-CIO figures to its release; askamerica left them uncheckable."
   }
 ]
