@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
     "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "87 statements have been checked: 21 supported, 51 unsettled, 11 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 24 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "96 statements have been checked: 26 supported, 55 unsettled, 11 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 15 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
     "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
     "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -2404,9 +2404,14 @@
       "kind": "factual",
       "test": "True if the committee or Nvidia has confirmed that Jensen Huang agreed to appear and dates are being arranged. False if either has said he declined. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "ABC News reported around Nov. 10 that Jensen Huang and Nvidia had not responded to the committee chairs' request for a closed-door briefing on Nov. 18. That predates the statement, so it neither confirms nor rules out a later agreement; no confirmation or refusal by the committee or the company was found.",
+      "evidence": [
+        {
+          "label": "ABC News, via ABC30, on the committees' request",
+          "url": "https://abc30.com/story/house-republicans-consider-issuing-subpoena-nvidia-ceo-jensen-huang/20030739/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2432,9 +2437,18 @@
       "kind": "factual",
       "test": "True if official or company records show the firm obtained more than 12 billion dollars of advanced chips and an investigation of diversion to China is open. False if the amount is materially different or no investigation exists. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "CNBC reports, citing Bloomberg, that the U.S. government is investigating whether the company moved Nvidia chips to China, which fits the second part. The \"over $12 billion\" figure was not found in any official or company record: the pages read give about $2 billion in purchases and $7.5 billion in related imports.",
+      "evidence": [
+        {
+          "label": "CNBC on Megaspeed, Nov. 9, 2026",
+          "url": "https://www.cnbc.com/2026/11/09/megaspeed-nvidia-jensen-huang-alice-huang.html"
+        },
+        {
+          "label": "CNBC on Megaspeed's response",
+          "url": "https://www.cnbc.com/2026/11/15/megaspeed-alice-huang-probe-nvidia-scandal.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2488,9 +2502,18 @@
       "kind": "factual",
       "test": "True if China's National Intelligence Law obliges organizations and citizens to support state intelligence work and a national security law is in force in Hong Kong. False if either law does not exist. Cannot be determined only if the laws cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "Article 7 of China's National Intelligence Law, as quoted by Wikipedia, says \"All organizations and citizens shall support, assist, and cooperate with national intelligence efforts in accordance with law\", and Hong Kong's national security law took effect on June 30, 2020. The statute's own text was not read directly.",
+      "evidence": [
+        {
+          "label": "Wikipedia, National Intelligence Law of the People's Republic of China",
+          "url": "https://en.wikipedia.org/wiki/National_Intelligence_Law_of_the_People%27s_Republic_of_China"
+        },
+        {
+          "label": "Wikipedia, 2020 Hong Kong national security law",
+          "url": "https://en.wikipedia.org/wiki/2020_Hong_Kong_national_security_law"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2516,9 +2539,14 @@
       "kind": "factual",
       "test": "True if court records or official statements show Jimmy Lai is imprisoned under Hong Kong's national security law. False if he is free or held on unrelated grounds. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "Wikipedia, citing CNN, CNBC and the Financial Times, reports that Hong Kong's High Court convicted Jimmy Lai in December 2025 of collusion with foreign forces, an offence under the national security law, and of sedition, and sentenced him to 20 years in February 2026. The court's judgment was not read directly.",
+      "evidence": [
+        {
+          "label": "Wikipedia, Jimmy Lai",
+          "url": "https://en.wikipedia.org/wiki/Jimmy_Lai"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2544,9 +2572,14 @@
       "kind": "factual",
       "test": "True if the law's text or documented cases show people and their relatives can be imprisoned for refusing to cooperate with Chinese authorities. False if the law provides no such penalty and no such cases are documented. The word 'anyone' cannot be determined exactly.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The law, as quoted by Wikipedia, requires cooperation with intelligence work, but commentary cited there says it has no enforcement mechanism. No page read documents a person or a relative imprisoned for refusing to cooperate, and \"anyone\" is loose wording.",
+      "evidence": [
+        {
+          "label": "Wikipedia, National Intelligence Law of the People's Republic of China",
+          "url": "https://en.wikipedia.org/wiki/National_Intelligence_Law_of_the_People%27s_Republic_of_China"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2600,9 +2633,14 @@
       "kind": "factual",
       "test": "True if the Federal Register shows no additions to the Entity List in the past year. False if it shows additions in that period. Cannot be determined only if the Federal Register cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Federal Register's listing of every Commerce export-control rule since Nov. 13, 2025 contains no additions to the Entity List. The only Entity List actions in that period, both on Aug. 24, 2026, were removals and a revision of two addresses.",
+      "evidence": [
+        {
+          "label": "Federal Register, Commerce export-control rules since Nov. 13, 2025",
+          "url": "https://www.federalregister.gov/api/v1/documents.json?conditions[agencies][]=industry-and-security-bureau&conditions[type][]=RULE&conditions[publication_date][gte]=2025-11-13&order=newest&per_page=50&fields[]=title&fields[]=publication_date"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2628,9 +2666,14 @@
       "kind": "factual",
       "test": "True if Singapore authorities announced an inquiry and a U.S. Justice Department investigation has been reported or confirmed. False if both are denied. Cannot be determined if neither government has commented.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "Wikipedia, citing the New York Times, Reuters and the BBC, reports that Singapore authorities opened an investigation of the company in February 2025 and raised it with the U.S. Justice Department and FBI in July 2025. CBS News reported that two law enforcement sources said the Justice Department's National Security Division is investigating. Neither government's own statement was read, and the Justice Department has announced nothing.",
+      "evidence": [
+        {
+          "label": "Wikipedia, Megaspeed",
+          "url": "https://en.wikipedia.org/wiki/Megaspeed"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2656,9 +2699,18 @@
       "kind": "factual",
       "test": "True if the Defense Department's list of Chinese military companies (Section 1260H) includes Alibaba. False if it does not. Cannot be determined only if the list cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Defense Department's list of Chinese military companies, as published in the Federal Register on June 10, 2026, names Alibaba Group Holding Limited, and the only later removal notice, on Nov. 10, removes a different company. Whether Megaspeed was partnering with Alibaba was not checked.",
+      "evidence": [
+        {
+          "label": "Federal Register, designation of Chinese military companies, June 10, 2026",
+          "url": "https://www.federalregister.gov/documents/2026/06/10/2026-11571/notice-of-availability-of-designation-of-chinese-military-companies"
+        },
+        {
+          "label": "Federal Register, removal notice, Nov. 10, 2026",
+          "url": "https://www.federalregister.gov/documents/2026/11/10/2026-22840/notice-of-removal-of-designated-chinese-military-company"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2684,9 +2736,14 @@
       "kind": "factual",
       "test": "True if current export rules bar sales of Nvidia's Blackwell and Rubin chips to China. False if the rules permit them. Cannot be determined only if the rules cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Commerce Department's Jan. 15, 2026 rule moves Nvidia's H200-class chips to case-by-case license review for China and keeps a presumption of denial for more advanced chips. It does not name Blackwell or Rubin, and a presumption of denial is not a flat prohibition.",
+      "evidence": [
+        {
+          "label": "Federal Register, license review policy for advanced computing, Jan. 15, 2026",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2026-01-15/html/2026-00789.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
