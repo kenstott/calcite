@@ -1,11 +1,11 @@
 {
   "date": "2026-11-15",
-  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements gathered from the transcripts are over the day's limit of 15 checks and are marked not yet checked.",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
-    "This page lists 197 statements by 20 officeholders. Fifty-six appeared in two days of NPR and PBS NewsHour politics coverage; the other 141 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "Eleven statements were checked, all from the news coverage. Eight were factual claims. Three were opinions or predictions resting on a factual premise, and for those the premise alone was rated. Five came out supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. One was contradicted: the transportation secretary's reported account of what caused the ground stop differs from the FAA's own published account, though the FAA says its investigation is still open. Four were unsettled, meaning evidence was found but does not decide them: the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, a congressman's statement that his party won in places it had never won, and the premise behind the secretary of state's statement about economic pressure on Iran. One was unsupported, meaning no evidence was found for it; that is not a finding that it is false.",
-    "Seven statements are linked to a direct counter-statement: six to a statement by another official on this page, and one to the FAA's own published account. A link shows that the two disagree on the same point. It is not a finding about which is right.",
-    "Ninety-nine factual statements from the Sunday shows are marked not yet checked: the page checks at most 15 statements a day. Where a guest made the same claim on more than one show, it is listed once with the other wordings beneath it; 19 claims were condensed this way, most of them the transportation secretary's, who appeared on all four shows. No two factual statements by the same speaker were found to contradict each other. The remaining 87 are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
+    "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
+    "53 statements have been checked: 16 supported, 29 unsettled, 6 unsupported, 2 contradicted. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 58 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
+    "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
   "stories": [
     {
@@ -1514,11 +1514,16 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an FAA, DOT or L3Harris account confirms L3Harris holds both routers with FAA staff on site and FBI support. False if an official account says otherwise. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A confirms L3Harris is the FAA's network service provider, was doing the El Dorado router work, and is investigating with the FAA. It does not say L3Harris holds both routers, that FAA staff are on site, or that the FBI is supporting.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1582,11 +1587,16 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an FAA, DOT or carrier account shows the telecom provider was retiring the copper line and required the move to fiber at that site. False if an official account says the change was the FAA's or contractor's own choice. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says copper wires are \"being disconnected due to their obsolescence\" in this type of work. It does not say the telecom provider retired the El Dorado line or required the move to fiber there. The Transportation Department's Nov. 14 briefing page could not be read.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1602,7 +1612,9 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [
+        226
+      ]
     },
     {
       "id": 61,
@@ -1621,11 +1633,20 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if public documents show the FAA's telecommunications network still relies largely on copper or legacy (TDM) circuits that carriers elsewhere have retired. False if FAA or GAO documents show the network is already mostly fiber or IP. The claim that every institution worldwide has switched cannot be determined.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "L3Harris's program profile shows the FAA network carries both internet-protocol and legacy services, and says a private optical backbone carries 100 percent of FAA internet-protocol traffic, so \"mostly legacy\" is not established. Whether every institution worldwide has switched cannot be determined.",
+      "evidence": [
+        {
+          "label": "L3Harris FAA network program profile (March 2025)",
+          "url": "https://www.l3harris.com/sites/default/files/2025-03/fti-program-profile-sell-sheet-l3harris-sas-mn.pdf"
+        },
+        {
+          "label": "AVweb on the FAA's AT&T network award",
+          "url": "https://avweb.com/aviation-news/faa-att-74-3-million-new-atc-network/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1649,11 +1670,20 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the FAA telecommunications contract assigns this work to the contractor and the technicians' union (PASS) does not perform it. False if union-represented FAA technicians perform this telecom work. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A confirms L3Harris is the network service provider and did the El Dorado work. Yahoo News reports, citing ABC, that the technicians' union said its members were not involved. Neither the telecom contract nor any record of whether union technicians do FAA telecom work could be read, so the general claim is undecided.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        },
+        {
+          "label": "Yahoo News live blog",
+          "url": "https://www.yahoo.com/news/us/live/faa-ground-stop-latest-updates-duffy-blames-contractor-l3harris-thousands-more-flights-canceled-saturday-no-sign-of-cyberattack-161329174.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1677,11 +1707,20 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no earlier network-wide flooding outage from such a transition is on record with the FAA, GAO or DOT Inspector General. False if such an earlier incident is on record. Cannot be determined beyond the public record.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Yahoo News reports, citing a Transportation Department Inspector General letter, that a 2009 fiber-switch outage disrupted 129 air traffic facilities after a contractor technician misconfigured a router. The Inspector General letter itself could not be read directly, and the 2009 cause was a configuration error, not data flooding, so whether it is the same kind of event is open.",
+      "evidence": [
+        {
+          "label": "Yahoo News live blog, citing the 2009 Inspector General letter",
+          "url": "https://www.yahoo.com/news/us/live/faa-ground-stop-latest-updates-duffy-blames-contractor-l3harris-thousands-more-flights-canceled-saturday-no-sign-of-cyberattack-161329174.html"
+        },
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1733,11 +1772,16 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an FAA order or published practice schedules such maintenance at night for large facilities and permits daytime work at remote ones. False if FAA policy requires otherwise. Cannot be determined if no policy is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's published Q&A says maintenance at major air traffic control facilities is typically done at night, and that the replacement at a remote facility \"has regularly been done for decades, without any impacts\" and was done during the day. This is a published statement of practice, not a formal order, and the FAA says it will now reevaluate the timing.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1761,11 +1805,24 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA or DOT published figures show about 70 percent of copper circuits converted to fiber and roughly 470 radios replaced. False if official figures differ materially. Cannot be determined if no official figures are published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No current FAA or Transportation Department figure for copper-to-fiber progress or radios replaced could be read; the FAA's progress tracker loaded without figures. Earlier published figures were lower: CBS News reported the tracker at 51 percent complete on copper and 18 percent on radio conversions. A rise to about 70 percent is plausible but unconfirmed, and no official count near 470 radios was found.",
+      "evidence": [
+        {
+          "label": "CBS News on the FAA modernization tracker",
+          "url": "https://www.cbsnews.com/news/air-traffic-control-system-modernization-website/"
+        },
+        {
+          "label": "AOPA on the secretary's April 2026 update",
+          "url": "https://www.aopa.org/news-and-media/all-news/2026/april/22/duffy-touts-atc-modernization-progress-path-forward"
+        },
+        {
+          "label": "FAA Modern Skies tracker",
+          "url": "https://modernskies.faa.gov"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1789,11 +1846,16 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if oversight reports show large sums appropriated for air traffic modernization (such as NextGen) with programs delivered late or short of plan. False if oversight reports find the programs delivered as planned. The words 'a lot' cannot be determined exactly.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "GAO's 2026 report says the FAA spent more than $14 billion on its NextGen modernization program from fiscal 2007 to 2022, that the program was planned for completion by 2025 and is not expected until at least 2030, and that it had significant cost overruns and delays. \"A lot\" is loose wording; the same report notes partial progress on the newer effort.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1817,11 +1879,16 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the 2025 reconciliation law (One Big Beautiful Bill Act) appropriated 12.5 billion dollars for air traffic control modernization with amounts designated by purpose. False if the law's amount or its designations differ. Cannot be determined only if the law's text cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "Section 40003 of Public Law 119-21 appropriates money to the FAA in itemized amounts by purpose, including $4.75 billion for telecommunications, $3 billion for radar replacement and $1.9 billion for a new air route traffic control center. The law states no total; the items add up to about $12.5 billion.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 40003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -1856,11 +1923,20 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA or DOT reporting, or federal spending data, shows the 12.5 billion dollars is largely unspent but obligated, including for radar. False if official data show most of it is not obligated. Cannot be determined if no obligation data are published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No primary obligation data from the FAA, the Transportation Department or federal spending records could be read. Secondary reports suggest the money is largely unspent, but none confirms how much is obligated or that it is obligated to radar; the law designates $3 billion for radar replacement.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 40003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        },
+        {
+          "label": "Nextgov, April 2026",
+          "url": "https://www.nextgov.com/modernization/2026/04/transportation-celebrates-air-traffic-control-modernization-asks-lawmakers-more-funding/413019/"
+        }
+      ],
       "counter_statements": [
         78
       ],
@@ -1914,7 +1990,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if federal records show about 50 billion dollars provided for aviation or the FAA during the Biden administration and that the 12.5 billion dollars has not been obligated. False if either figure is materially wrong, including if most of the 12.5 billion is obligated. Cannot be determined if obligation data are not published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -1972,7 +2048,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official figures show about 1,300 FAA employees resigned or retired under the 2025 reductions and about 400 probationary employees were fired. False if official figures differ materially. Cannot be determined if no official figures are published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2028,7 +2104,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official record or congressional statement confirms a March or April memo from the secretary of state raising concern that the woman was a spy. False if the State Department denies such a memo. Cannot be determined if only press reports exist.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2056,7 +2132,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no such memo has been provided to the House Intelligence Committee. False if the committee has received it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2084,7 +2160,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the committee's public statements show it received only an incidental briefing on the matter. False if records show a full briefing. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2112,7 +2188,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record shows Jensen Huang or Nvidia gave 25 million dollars toward the White House ballroom. False if the record shows a materially different amount or no gift. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2168,7 +2244,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Commerce Department's Entity List does not include Megaspeed. False if it does. Cannot be determined only if the list cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2196,7 +2272,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if corporate records show Megaspeed was founded or became active within the last 10 years. False if records show it operating at scale earlier. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2280,7 +2356,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the committee or Nvidia has confirmed that Jensen Huang agreed to appear and dates are being arranged. False if either has said he declined. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2308,7 +2384,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official or company records show the firm obtained more than 12 billion dollars of advanced chips and an investigation of diversion to China is open. False if the amount is materially different or no investigation exists. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2364,7 +2440,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if China's National Intelligence Law obliges organizations and citizens to support state intelligence work and a national security law is in force in Hong Kong. False if either law does not exist. Cannot be determined only if the laws cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2392,7 +2468,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if court records or official statements show Jimmy Lai is imprisoned under Hong Kong's national security law. False if he is free or held on unrelated grounds. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2420,7 +2496,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the law's text or documented cases show people and their relatives can be imprisoned for refusing to cooperate with Chinese authorities. False if the law provides no such penalty and no such cases are documented. The word 'anyone' cannot be determined exactly.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2476,7 +2552,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Federal Register shows no additions to the Entity List in the past year. False if it shows additions in that period. Cannot be determined only if the Federal Register cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2504,7 +2580,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Singapore authorities announced an inquiry and a U.S. Justice Department investigation has been reported or confirmed. False if both are denied. Cannot be determined if neither government has commented.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2532,7 +2608,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Defense Department's list of Chinese military companies (Section 1260H) includes Alibaba. False if it does not. Cannot be determined only if the list cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2560,7 +2636,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if current export rules bar sales of Nvidia's Blackwell and Rubin chips to China. False if the rules permit them. Cannot be determined only if the rules cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2616,7 +2692,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record shows regular contact between the senator and the CDC director. False if a record contradicts it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2644,7 +2720,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record shows the federal flu-shot locator link was broken for about a year. False if a record shows it worked. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2672,7 +2748,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate calendar shows about four weeks of session remaining in 2026. False if the calendar shows materially more or fewer. Cannot be determined if no calendar is published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2728,7 +2804,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if HHS and FDA have issued no final rule, standard or definition on ultra-processed foods. False if a final federal action on ultra-processed foods is on record. 'Minimal' cannot be determined exactly.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2756,7 +2832,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if CDC or PAHO records show the United States has lost measles elimination status and CDC data record infant deaths from measles in the current outbreak. False if elimination status stands or no infant deaths are recorded. Cannot be determined if the status decision is pending.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2790,7 +2866,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if federal data (CMS national health expenditures, BLS, KFF employer survey) show health costs rising and the share of small firms offering coverage falling. False if those data show costs flat or falling and small-firm offer rates rising. Cannot be determined if the data do not reach the period.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2846,7 +2922,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if public statements by Sen. Thune or Sen. Crapo confirm a commitment to a hearing and markup on the senator's Social Security bill. False if either has publicly denied it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2874,7 +2950,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public statement by the president or the White House supports the senator's Social Security proposal. False if the White House has publicly opposed it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2930,7 +3006,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the senator's published plan, or an actuarial analysis of it, has 1.5 trillion dollars borrowed and invested separately and projected to cover up to 70 percent of the Social Security shortfall. False if the plan or its analysis states materially different figures. Cannot be determined if no plan text or analysis is published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2958,7 +3034,7 @@
         "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if roll-call records show Sen. Wyden voted for the Railroad Retirement and Survivors' Improvement Act of 2001, which created an investment trust, and that trust's returns have been positive. False if he voted against it or was not in the Senate. Cannot be determined only if the roll call cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -2986,11 +3062,16 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if international accident statistics (ICAO, IATA, or comparable) show the United States with the lowest commercial aviation accident or fatality rate of any country or region. False if those statistics rank other countries or regions safer. Cannot be determined if the statistics do not rank systems.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "IATA's 2025 safety report gives North American carriers an all-accident rate of 1.68 per million flights and a fatality risk of 0.21, both higher than several other regions that year, including Europe (1.30) and North Asia (0.16). IATA reports by region of airline, not by country, and covers one year, so it does not rank the United States alone.",
+      "evidence": [
+        {
+          "label": "IATA 2025 safety report release",
+          "url": "https://www.iata.org/en/pressroom/2026-releases/2026-03-09-01/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3014,11 +3095,16 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA or flight-tracking data show more than 3,500 aircraft airborne at the time of the Nov. 13 ground stop landed without accident. False if official counts differ materially or an accident occurred. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's published Q&A answers the question of how many flights were in the air when the ground stop began: \"Approximately 3,500 aircraft safely landed, and every passenger arrived safely.\"",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3042,11 +3128,16 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA records show the work site was a remote communications (radio) facility in El Dorado, Arkansas. False if the FAA describes the site as a different kind of facility or place. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's published Q&A describes \"a radio communications site in El Dorado, Arkansas\" and \"a routine replacement at a remote facility\", which matches the statement.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3070,11 +3161,16 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official FAA account says a router at the El Dorado site flooded the network with data when the site was turned on. False if the FAA gives a different cause. Cannot be determined if the FAA's account is still open on the cause.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says data flooded its network and that L3Harris had deployed a new router at El Dorado. It names El Dorado and Amarillo only as \"two potential locations\" and says the root cause is still under investigation, so it has not said the El Dorado router flooded the network.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3104,11 +3200,16 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official FAA account says the network recovered after the El Dorado, Arkansas equipment was removed from it. False if the FAA attributes the recovery to something else. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says L3Harris blocked both the El Dorado and Amarillo locations, after which the network stabilized and the ground stop lifted at 8:15 p.m. on Nov. 13. That is close to the statement, but the FAA names two locations and does not say El Dorado alone restored service.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3132,11 +3233,20 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if contract records show L3Harris (or its predecessor Harris) was awarded the FAA Telecommunications Infrastructure contract and owns and operates that network. False if the contract holder or ownership differs. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "L3Harris's program profile says it is the prime contractor that operates the FAA network and owns the equipment, leasing the circuits. Nextgov reported the award to Harris in July 2002; the contract record itself was not read.",
+      "evidence": [
+        {
+          "label": "L3Harris FAA network program profile",
+          "url": "https://www.l3harris.com/sites/default/files/2025-03/fti-program-profile-sell-sheet-l3harris-sas-mn.pdf"
+        },
+        {
+          "label": "Nextgov, Harris wins FAA telecom deal (2002)",
+          "url": "https://nextgov.com/modernization/2002/07/harris-wins-faa-telecom-deal/201009"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3160,11 +3270,20 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if no U.S. agency has publicly reported indications of a foreign actor or attack in the Nov. 13 outage. False if an agency has reported such indications. Cannot be determined beyond what agencies have made public.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's published Q&A says \"Based on all available evidence, we have no indication that this was a cyberattack or an outside nefarious actor\", and CNBC reported the FAA administrator saying there was \"zero evidence\" of anything nefarious. No agency account read reports otherwise; the FAA says its investigation continues.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        },
+        {
+          "label": "CNBC on the ground stop",
+          "url": "https://www.cnbc.com/2026/11/14/faa-ground-stop-flights-resume-delays.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3362,7 +3481,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official U.S. accounts show major combat operations against Iran ended after about five weeks, with Iran's navy sunk and about 15,000 sites struck. False if official accounts give materially different figures. Cannot be determined if no official figures are published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3390,7 +3509,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Defense Department or Central Command reported Iranian fire on the U.S. base in Bahrain on Nov. 14 or 15, 2026. False if they reported none. Cannot be determined if no official report exists.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3474,7 +3593,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if trade records show the 2017-2021 administration imposed tariffs on about 250 billion dollars of Chinese goods. False if the figure is materially different. Cannot be determined only if the records cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3502,7 +3621,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the State Department formally determined in January 2021 that China's treatment of Uyghurs was genocide. False if no such determination was made then. Cannot be determined only if the record cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3530,7 +3649,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if TikTok still operates in the United States under ownership tied to its Chinese parent, arms sales to Taiwan have been delayed under the current administration, and the 2017-2021 administration approved such sales. False if any of the three is contradicted by official records. Cannot be determined on control of TikTok if the ownership terms are not public.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3558,7 +3677,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if U.S. government reports (FBI, Justice Department, U.S. Trade Representative) document Chinese espionage and intellectual property theft over multiple decades. False if no such reports exist. Cannot be determined only if the reports cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3586,7 +3705,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if financial disclosures or official records show a large share of the Trump family's cryptocurrency proceeds before the inauguration came from investors in Arab countries. False if records show otherwise. Cannot be determined if only press reports exist.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3614,7 +3733,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate record shows the vice president opposed Ukraine aid as a senator. False if he voted for it. The claim about celebrating later changes cannot be determined without his statements.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3642,7 +3761,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official records show the federal government has taken ownership stakes in 41 U.S. companies and imposed price controls on pharmaceuticals and credit cards. False if the count or either price control is contradicted by official records. Cannot be determined if no official count exists.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3670,7 +3789,7 @@
         "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the administration has taken no regulatory or legal action restricting mail-order mifepristone. False if FDA or Justice Department has taken such an action. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -3726,11 +3845,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official FAA or DOT account gives 69 as the number of these routers in the national airspace system and says their broadcast function was disabled. False if an official account gives a different number or says they were not disabled. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A confirms the broadcast function was disabled on the originating routers and, as a precaution, on \"approximately 60 similar routers.\" It does not give the figure 69, and an approximate 60 plus the originating routers does not rule it out.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3754,11 +3878,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official FAA account says the outage ended once the routers' broadcast function was shut off. False if the FAA attributes the recovery to a different action. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says it addressed the initial cause by disabling the function on the originating routers, and also that L3Harris blocked the Amarillo and El Dorado locations, after which the network stabilized. It does not attribute the recovery to the broadcast shutoff alone, and the root cause is still under investigation.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3782,11 +3911,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official account confirms a second site in Amarillo, Texas, replaced about three weeks earlier, also flooded the network. False if official accounts name only one site or a different one. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A names a radar site in Amarillo, Texas as one of two potential sources of the flooding, so a second site is part of the official account. It gives no date for when the Amarillo system was replaced, and the cause at both sites is still under investigation.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3810,11 +3944,20 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if an official account confirms ODNI, NSA, CISA and FBI took part in the response and found no sign of a cyberattack. False if an official account reports signs of an attack. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says \"we have no indication that this was a cyberattack or an outside nefarious actor\", which matches the second half of the statement. No page read names the intelligence agencies, the cybersecurity agency or the FBI as taking part in the response, so the first half is unconfirmed.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        },
+        {
+          "label": "CNBC on the ground stop",
+          "url": "https://www.cnbc.com/2026/11/14/faa-ground-stop-flights-resume-delays.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3844,10 +3987,10 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record identifies the installer as a military veteran. False if a public record says otherwise. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No public record identifying the installer, or describing the installer as a veteran, was found. The search covered the FAA's published Q&A, a CNBC report and web searches on the installer; an Arkansas newspaper article could not be read.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -3872,11 +4015,20 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official accounts say there is no evidence of sabotage in the installation. False if an official account reports evidence of sabotage. Cannot be determined while the investigation is open and nothing has been published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says there is no indication of an outside nefarious actor, and CNBC reported the FAA administrator saying there was \"zero evidence\" of anything nefarious. Neither addresses sabotage during the installation specifically, and the investigation is open.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        },
+        {
+          "label": "CNBC on the ground stop",
+          "url": "https://www.cnbc.com/2026/11/14/faa-ground-stop-flights-resume-delays.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3900,11 +4052,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if GAO, DOT Inspector General or budget records show FAA facilities-and-equipment funding below identified needs over multiple decades. False if records show funding met identified needs. Cannot be determined if the record does not speak to funding adequacy.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "GAO's 2026 report says it has reported on the FAA's air traffic control modernization challenges \"for over four decades\" and lists among the reasons that the \"FAA did not receive full funding for modernization efforts.\" The \"no investment\" wording is loose: the same report says the FAA received about $2.3 billion a year for these areas from 2020 to 2025.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3944,11 +4101,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA budget documents or GAO reports put the annual cost of operating the FAA's legacy telecommunications network in the hundreds of millions of dollars. False if published figures are well below 100 million dollars a year. Cannot be determined if no cost is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No current FAA budget document or GAO report giving the annual cost of operating the FAA's legacy network was found. The one figure read directly, about $52.6 million billed to the Transportation Department for legacy telecom contracts from October 2022 to December 2025 (GAO-26-107919), is department-wide and not specific to the FAA network.",
+      "evidence": [
+        {
+          "label": "GAO-26-107919",
+          "url": "https://files.gao.gov/reports/GAO-26-107919/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3972,11 +4134,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA, L3Harris or oversight documents show copper-to-fiber or comparable circuit transitions on the FAA network numbering in the thousands. False if records show the count is far lower. Cannot be determined if no count is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says this transition work \"has been going on for years\" and has been done for decades at remote sites, but no FAA, L3Harris or oversight document that could be read gives a count of transitions.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4011,10 +4178,10 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA, GAO or vendor records show the affected routers were bought in 2001 and reached end of life in 2006. False if records give materially different dates. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No FAA, GAO, vendor or news record was found giving a 2001 purchase date or a 2006 end-of-life date for the routers involved. The search covered the warehouse catalog and two web searches on the routers' purchase and obsolescence dates; FAA procurement records were not examined.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -4045,11 +4212,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA statements show the network was restored by the night of Friday, Nov. 13. False if FAA statements show the outage continued past that night. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's published Q&A says \"The system was made stable and air traffic resumed as of 8:15 p.m. that same day\", Friday, Nov. 13.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4073,11 +4245,16 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the reconciliation law's air traffic control appropriation designates no amount for telecommunications infrastructure. False if the law designates money for telecommunications. Cannot be determined only if the law's text cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "contradicted",
+      "finding": "Section 40003(a)(1) of Public Law 119-21 appropriates $4,750,000,000 \"for telecommunications infrastructure modernization and systems upgrades\", the largest single item in the $12.5 billion. Still open: whether that item can pay for a wholly new telecommunications architecture, as distinct from upgrades; the law's text does not say.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 40003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4190,7 +4367,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record (donor list, company statement, or reporting citing one) shows Nvidia or Jensen Huang gave 25 million dollars toward the White House ballroom. False if the record shows a materially different amount or no gift. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4218,7 +4395,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if export-control actions show the administration approved sales of advanced Nvidia chips to China, and a record shows national security officials advised against it. False if no such approval exists. Cannot be determined on the advice if it is not public.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4246,7 +4423,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if official documents (charges, a Commerce or Justice Department statement, congressional findings) describe the person as a suspected intelligence agent involved in diverting chips to China. False if official documents clear her. Cannot be determined if only press reports exist.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4330,7 +4507,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if corporate or official records show Megaspeed was run by the woman reported to have had a relationship with Jensen Huang. False if records show otherwise. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4386,7 +4563,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Senate records show the senator chairs the Appropriations subcommittee that funds the Commerce Department. False if someone else chairs it. The claim about what the subcommittee exposed cannot be determined without a public record of it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4526,7 +4703,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if certified or reported Nov. 3, 2026 results show Democrats gained U.S. Senate seats, U.S. House seats, governorships and state legislative seats. False if they lost ground in any of the four. Cannot be determined if results are not yet reported.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4554,7 +4731,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if public reporting or party statements show national Democratic committees did not recruit the candidate and began supporting him late in the race. False if records show early national party recruitment or spending. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4582,7 +4759,7 @@
         "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Federal Election Commission data show Republican national party committees raised about twice what their Democratic counterparts raised in the 2026 cycle. False if the ratio is materially different. Cannot be determined if FEC data do not reach the period.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -4638,11 +4815,20 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if GAO reports from roughly 2019 to 2021 onward said FAA air traffic control systems were aging and needed modernization. False if GAO first raised it later or did not say it. Cannot be determined only if GAO reports cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "GAO's 2026 report says it has reported on the FAA's modernization challenges for over four decades and that the FAA has had \"challenges with aging\" air traffic control systems \"over the past several decades\", which is longer than the five to seven years stated. GAO's 2024 finding that 76 percent of 138 systems were unsustainable or potentially unsustainable was read as quoted in later GAO reports.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        },
+        {
+          "label": "GAO-25-108502",
+          "url": "https://files.gao.gov/reports/GAO-25-108502/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4672,11 +4858,16 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if GAO or FAA inventories show systems dating from the 1990s and radars dating from the 1960s and 1970s still in service. False if the oldest in-service radars are materially newer. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "GAO's 2026 report confirms systems from the 1990s still in service (voice switches whose \"oldest technology [was] deployed in the 1990s\") and says radar components are past their planned 20-year life. It does not date any in-service radar to the 1960s or 1970s; its 1960s item is copper cabling.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4700,11 +4891,20 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA or GAO documents date the design of the FAA's network architecture to about 1980. False if they date it materially later. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsupported",
+      "finding": "No FAA or GAO document was found that dates the design of the FAA's network architecture to about 1980. The search covered the text of two GAO reports from 2025 and 2026 and two web searches; GAO's 2024 report on aging systems could not be read.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        },
+        {
+          "label": "GAO-25-108162",
+          "url": "https://files.gao.gov/reports/GAO-25-108162/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4728,11 +4928,20 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if FAA or DOT announcements or contract awards show radar, radio and voice-switch replacement under way with the 12.5 billion dollars. False if no such awards or work exist. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's January 2026 release announces radar contracts with RTX and Indra to replace up to 612 radars, with replacement beginning that quarter, and lists voice-switch installation among the initial priorities. CBS News reported the FAA tracker's plans for 27,000 radios and 450 voice switches. The FAA release does not itself say voice-switch installation is under way.",
+      "evidence": [
+        {
+          "label": "FAA radar contracts announcement",
+          "url": "https://www.faa.gov/newsroom/trumps-transportation-secretary-duffy-faa-administrator-bedford-announce-radar-contracts"
+        },
+        {
+          "label": "CBS News on the FAA modernization tracker",
+          "url": "https://www.cbsnews.com/news/air-traffic-control-system-modernization-website/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4762,11 +4971,16 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DOT or FAA has announced AT&T, Verizon and Lumen as partners for a new FAA telecommunications network. False if official announcements name different companies or none. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Nextgov reported in August 2026 that the FAA named AT&T as prime contractor for its new network, with Verizon in a supporting role, which fits two of the three companies named. No FAA or Transportation Department announcement naming Lumen was found, and the FAA award itself was not read directly.",
+      "evidence": [
+        {
+          "label": "Nextgov on the FAA's AT&T network award",
+          "url": "https://www.nextgov.com/modernization/2026/08/faa-brings-t-network-modernization-program/415417/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4801,11 +5015,16 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the reconciliation law's air traffic control appropriation designates amounts for radios, radar and telecommunications at towers or facilities. False if it designates none of these. Cannot be determined only if the law's text cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Section 40003 of Public Law 119-21 designates $4.75 billion for telecommunications infrastructure and $3 billion for radar replacement. It does not name radios, which may or may not fall within the telecommunications item, so two of the three parts are confirmed.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 40003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4829,11 +5048,16 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if industry or government records show no new air traffic surveillance radar has been manufactured in the United States for about 30 years. False if records show U.S.-built air traffic radars delivered within that period. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's January 2026 release quotes its administrator saying the radar purchases \"will bring production back to the U.S.\", which is consistent with the statement but gives no time span. No industry or government record of when a U.S.-built air traffic radar was last delivered was found.",
+      "evidence": [
+        {
+          "label": "FAA radar contracts announcement",
+          "url": "https://www.faa.gov/newsroom/trumps-transportation-secretary-duffy-faa-administrator-bedford-announce-radar-contracts"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4857,11 +5081,16 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if DOT Inspector General, GAO or FAA facility assessments document air traffic facilities with failing elevators, HVAC or leaking roofs. False if assessments find facilities in good repair. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "A December 2008 Transportation Department Inspector General audit, as reported by AVweb, found water leaks, mold and outdated heating and air conditioning at FAA air traffic facilities. It is 18 years old and does not show current conditions, and no recent assessment mentioning elevators or roofs could be read.",
+      "evidence": [
+        {
+          "label": "AVweb on the 2008 Inspector General facilities audit",
+          "url": "https://avweb.com/news/report-finds-faa-facilities-deteriorating/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4941,11 +5170,16 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if public records (readouts, schedules, statements) show frequent discussions between the president and the secretary on air traffic modernization. False if a record contradicts it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "CNN reported a White House official saying the president was receiving \"constant updates\" on the Nov. 13 outage. No readout, schedule or statement shows how often the president and the secretary discuss air traffic modernization or what the president asks about.",
+      "evidence": [
+        {
+          "label": "CNN live coverage of the ground stop",
+          "url": "https://www.cnn.com/2026/11/15/politics/live-news/trump-administration-ground-stop"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -4969,11 +5203,20 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the administration has formally or publicly asked Congress for about 50 billion dollars for air traffic control. False if the request on record is a materially different amount or none exists. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Fox Business and CNN reported that the secretary asked Congress for $50 billion on Nov. 13, up from an earlier $30 billion, and that the president posted that Congress must approve money quickly. The pages read do not show the president naming a $50 billion figure himself.",
+      "evidence": [
+        {
+          "label": "Fox Business on the $50 billion request",
+          "url": "https://www.foxbusiness.com/politics/duffy-sounds-alarm-over-aging-faa-system-after-nationwide-air-travel-shutdown"
+        },
+        {
+          "label": "CNN live coverage of the ground stop",
+          "url": "https://www.cnn.com/2026/11/15/politics/live-news/trump-administration-ground-stop"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -5003,10 +5246,10 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record places the secretary, Sen. or Secretary Markwayne Mullin and Stephen Miller in an Oval Office meeting on the outage. False if a record contradicts it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No independent source was found placing the secretary, Markwayne Mullin and Stephen Miller in an Oval Office meeting on the outage. The search covered CNN's live coverage, a Fox Business report, a New York Times article and a web search; presidential schedules are not public in that detail.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -5031,10 +5274,10 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if a public record shows the secretary spoke with the president before and after the Nov. 13 press conference. False if a record contradicts it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No independent record was found showing the secretary spoke with the president before and after the Nov. 13 press conference. The search covered CNN's live coverage, a Fox Business report and a New York Times article; the only related item is a White House official's remark that the president was getting \"constant updates\".",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -5087,7 +5330,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the secretary's first public statements after the Nov. 13 ground stop attributed the problem to Congress or its funding. False if his first statements did not. Cannot be determined if the first statements cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5115,7 +5358,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the reconciliation law appropriated 12.5 billion dollars and official spending data show about one third of it spent, and the amount matched the administration's request. False if spending is materially different or the request was larger. Cannot be determined if spending data are not published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5177,7 +5420,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Senate majority leader has not publicly committed to blocking further funding for the Iran war. False if he has publicly taken the same position as the speaker. Cannot be determined if he has made no public statement.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5205,7 +5448,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if spending or endorsement records show the majority leader or his allied committees backed opponents of the candidates in question alongside AIPAC-linked and cryptocurrency-industry committees. False if records show he backed those candidates. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5233,7 +5476,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if senators have publicly committed to voting for the speaker in the leadership election. False if those named have publicly committed to someone else. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5261,7 +5504,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if credible published reports describe an effort to move the leadership election earlier than Dec. 1. False if the caucus has confirmed the date is unchanged and no such reports exist. Cannot be determined if reports conflict.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5345,7 +5588,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the enhanced Affordable Care Act premium tax credits expired without extension and the president opposed or blocked an extension. False if the credits were extended. Cannot be determined on the president's role if no record shows it.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5373,7 +5616,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the website states that contributions go to 2028 candidates and none to the speaker's own campaign. False if the site's terms say otherwise. Cannot be determined if the site cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5401,7 +5644,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Nov. 3, 2026 results show the governor's margin among the largest of any governor elected that day, Sen. Cotton re-elected, and Republicans winning every Arkansas congressional seat and constitutional office. False if any part is contradicted by reported results. Cannot be determined if results are not yet reported.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5457,7 +5700,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Arkansas budget records show record public school funding and higher teacher pay, and state law provides up to 12 weeks of paid maternity leave for teachers, matched by only one other state. False if any part is contradicted by records. Cannot be determined on the two-state count if no comparison is published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5485,7 +5728,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Arkansas Department of Education records show about 50 million dollars paid in Merit Teacher Incentive Fund bonuses since 2023. False if the total is materially different. Cannot be determined if no total is published.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5513,7 +5756,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if Arkansas law shows four income tax cuts since 2023 lowering the top rate by about 25 percent. False if the count or the reduction is materially different. Cannot be determined only if the rate history cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5597,7 +5840,7 @@
         "note": "CNN State of the Union transcript, Nov. 15, 2026."
       },
       "kind": "factual",
-      "test": null,
+      "test": "True if the Arkansas Constitution limits a governor to two four-year terms, so a second term ending in January 2031 is her last. False if the constitution allows a third term. Cannot be determined only if the constitution cannot be read.",
       "premise": null,
       "result": "not_checked",
       "finding": null,
@@ -5607,6 +5850,41 @@
       "check_run": null,
       "also_said": [],
       "self_contradictions": []
+    },
+    {
+      "id": 226,
+      "speaker": "Sean Duffy",
+      "office": "U.S. Secretary of Transportation",
+      "party": "R",
+      "context": "On NBC's Meet the Press on Nov. 15, 2026, about the line being replaced at the El Dorado, Arkansas site before Friday's ground stop.",
+      "quote": "There was an old fiber line that was going to be decommissioned by our telecom provider.",
+      "reported_by": {
+        "outlet": "NBC Meet the Press",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
+      },
+      "kind": "factual",
+      "test": "True if an FAA or carrier account describes the line being retired at El Dorado as fiber. False if it describes that line as copper. Cannot be determined if no official account describes that line.",
+      "premise": null,
+      "result": "unsettled",
+      "finding": "The FAA's published Q&A says copper wires are \"being disconnected due to their obsolescence\" in this type of work, but it does not describe the El Dorado line itself.",
+      "evidence": [
+        {
+          "label": "FAA Nationwide Ground Stop Q&A",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
+      "counter_statements": [],
+      "counter_documents": [],
+      "check_run": null,
+      "also_said": [],
+      "self_contradictions": [
+        59
+      ]
     }
   ]
 }
