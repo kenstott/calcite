@@ -5071,6 +5071,165 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # OMB BUDGET BY ACCOUNT — whitehouse.gov budget supplemental materials
+  # (budauth_fyNNNN.xlsx and outlays_fyNNNN.xlsx), FY1976/FY1962 to the budget-year projection
+  # ---------------------------------------------------------------------------
+  - name: omb_budget_by_account
+    freshness:
+      type: last_modified
+    pattern: "type=omb_budget_by_account/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Federal budget authority and outlays for every budget account, one row per account line
+      (agency, bureau, Treasury account, subfunction, BEA category) per fiscal year, from the
+      supplemental tables published with the President's Budget. Budget authority runs from
+      FY1976 and outlays from FY1962, each through the budget-year projection. This is the
+      account-level series that federal_outlays_by_function and mts_outlays_by_function stop
+      short of: they end at budget function, this table breaks out individual accounts such
+      as the FAA's Operations (account 1301 and trust-fund share 8104) and Facilities and
+      Equipment (account 8107, formerly 1303/1308), so multi-decade capital-versus-operations
+      comparisons for one agency can be queried directly. Filter measure first: budget_authority
+      and outlays are different quantities. Amounts are nominal dollars in thousands, so any
+      real-terms comparison needs a deflator applied by the reader. The workbooks carry the
+      agency's accounts under the names current at publication; follow an account across
+      renames with account_code, and add up the rows of one account (discretionary and
+      mandatory, several subfunctions) for its total. Fiscal years after budget_vintage minus 2
+      are projections (is_estimate). The FY1976 transition quarter is its own row
+      (is_transition_quarter). Each run publishes the current vintage in the partition for the
+      run year and every vintage restates all prior years, so for a single series read the
+      partition with the highest budget_vintage rather than summing across partitions.
+      Source: whitehouse.gov/omb/information-resources/budget/supplemental-materials/, the
+      budauth and outlays Excel workbooks linked from that page. Does not cover agency-level
+      budget justifications (the FAA's own budget estimates), obligations, or account balances.
+
+    dimensions:
+      type:
+        - omb_budget_by_account
+      year:
+        type: yearRange
+        start: "${GOVDATA_CURRENT_YEAR}"
+        end: "${GOVDATA_CURRENT_YEAR}"
+      measure:
+        - budget_authority
+        - outlays
+
+    columns:
+      - name: agency_code
+        type: string
+        nullable: true
+        comment: "OMB 3-digit agency code (for example '021' Department of Transportation)"
+      - name: agency_name
+        type: string
+        nullable: true
+        comment: 'Agency name as published'
+      - name: bureau_code
+        type: string
+        nullable: true
+        comment: "OMB 2-digit bureau code within the agency ('12' = Federal Aviation Administration under agency 021)"
+      - name: bureau_name
+        type: string
+        nullable: true
+        comment: 'Bureau name as published'
+      - name: account_code
+        type: string
+        nullable: true
+        comment: '4- or 6-digit Treasury main account code; null on the receipts rows that have no account'
+      - name: account_name
+        type: string
+        nullable: true
+        comment: "Budget account title, for example 'Operations' or 'Facilities and Equipment (Airport and Airway Trust Fund)'. Titles change when an account is renamed or moved between funds, so follow an account by account_code"
+      - name: treasury_agency_code
+        type: string
+        nullable: true
+        comment: 'Treasury agency code of the account; null when the workbook leaves it blank'
+      - name: cgac_agency_code
+        type: string
+        nullable: true
+        comment: 'CGAC agency code of the account; null when the workbook leaves it blank'
+      - name: subfunction_code
+        type: string
+        nullable: true
+        comment: 'Budget subfunction code; an account split across subfunctions has one row per subfunction'
+      - name: subfunction_title
+        type: string
+        nullable: true
+        comment: 'Budget subfunction title'
+      - name: bea_category
+        type: string
+        nullable: true
+        comment: 'Budget Enforcement Act category: Discretionary, Mandatory or Net interest. Discretionary is the annual-appropriation money; a single account can carry both categories on separate rows'
+      - name: grant_split
+        type: string
+        nullable: true
+        comment: 'Grant or Nongrant. Published only in the outlays workbook, so null on every budget_authority row'
+      - name: on_off_budget
+        type: string
+        nullable: true
+        comment: 'On-budget or Off-budget'
+      - name: measure
+        type: string
+        nullable: false
+        comment: "'budget_authority' (the budauth workbook: appropriations and other new authority to obligate) or 'outlays' (actual cash paid out). The two differ in timing and in what they count, so never add them"
+      - name: source_row
+        type: integer
+        nullable: false
+        comment: '1-based spreadsheet row of the account line in its workbook. The workbooks repeat the same agency/bureau/account/subfunction/category key on separate lines with different amounts (for example account 3507 in agency 005), so this is what keeps those lines distinct; it identifies a line within one measure and one budget_vintage only and is not stable across vintages'
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: 'Federal fiscal year (October-September). For the transition-quarter row this is 1976'
+      - name: is_transition_quarter
+        type: boolean
+        nullable: false
+        comment: 'True for the July-September 1976 transition quarter published as its own TQ column between FY1976 and FY1977; false for every full fiscal year'
+      - name: is_estimate
+        type: boolean
+        nullable: false
+        comment: 'True for fiscal years the budget vintage projects (the current and budget years) rather than records as actuals; actuals run through budget_vintage minus 2'
+      - name: budget_vintage
+        type: integer
+        nullable: false
+        comment: 'Budget year of the OMB publication this row came from (the NNNN in budauth_fyNNNN.xlsx). Each workbook restates the whole history, so values for past years can be revised between vintages'
+      - name: amount_thousands
+        type: double
+        nullable: false
+        comment: 'Amount in thousands of current (nominal) dollars. Negative values are offsetting collections or negative budget authority. Not inflation-adjusted'
+    source:
+      type: http
+      # The landing page lists the current workbooks; the transformer picks the link for the
+      # measure dimension, so a new vintage's file name and upload path need no edit here.
+      url: "https://www.whitehouse.gov/omb/information-resources/budget/supplemental-materials/"
+      method: GET
+      response:
+        format: TEXT   # OmbBudgetByAccountTransformer reads the HTML for the link and downloads the workbook
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.fiscal.OmbBudgetByAccountTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=omb_budget_by_account/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: omb_budget_by_account
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # OMB APPORTIONMENTS — apportionment-public.max.gov (one JSON per account iteration)
   # ---------------------------------------------------------------------------
   - name: omb_apportionments
