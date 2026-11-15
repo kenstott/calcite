@@ -8696,6 +8696,139 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: meps_ic_employer_coverage
+    timeColumn: survey_year
+    # The HTML state tables are a closed archive (AHRQ's search page says tables are only
+    # available for 1996-2020); later years are PDF-only 3-year averages and are not loaded.
+    freshness:
+      type: hash
+    pattern: "type=meps_ic_employer_coverage/year=*/table_id=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+        - name: table_id
+          type: VARCHAR
+    comment: >
+      Employer-sponsored health insurance in private-sector establishments by firm size and
+      state - AHRQ Medical Expenditure Panel Survey Insurance Component (MEPS-IC) state summary
+      tables, survey years 2008-2020. Long format, one row per
+      survey year, measure, geography (United States or state) and firm-size column.
+      **measure** covers: number of establishments, employees and full-time employees; percent
+      of establishments that offer insurance and percent of employees in offering
+      establishments (the offer rates); average total premium and average employee contribution
+      per enrolled employee for single, family and employee-plus-one coverage (dollars per
+      year) and the employee share of premium; percent of enrolled employees in a plan with a
+      deductible and the average single-coverage deductible (dollars). Filter measure and
+      firm_size before aggregating; firm_size mixes six exclusive size bands with two
+      overlapping roll-ups (under 50, 50 or more).
+
+      **Coverage**: 2008-2020, all sixteen tables in every year. Not loaded: 1996-2006 (AHRQ's
+      older pages use other layouts; 2007 has no state tables), 2021 onward (AHRQ publishes those
+      only as 3-year-average PDFs), national industry/ownership tables, and the plan-level cost-sharing
+      detail beyond the single-coverage deductible. Estimates are survey-based - use std_error;
+      suppressed cells are NULL and cells AHRQ marks unreliable carry low_reliability.
+
+    dimensions:
+      type:
+        - meps_ic_employer_coverage
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2008}"
+        minYear: 2008
+        end: "2020"
+      table_id:
+        type: list
+        values: ["tiia1", "tiia2", "tiib1", "tiib2", "tiib3", "tiic1", "tiic2", "tiic3", "tiid1", "tiid2", "tiid3", "tiie1", "tiie2", "tiie3", "tiif1", "tiif2"]
+
+    columns:
+      - name: survey_year
+        type: integer
+        nullable: false
+        comment: "MEPS-IC survey year the table was published for"
+      - name: source_table
+        type: string
+        nullable: false
+        comment: "AHRQ table id within the state series (tiia2 = Table II.A.2); stable key for the measure"
+      - name: measure
+        type: string
+        nullable: false
+        comment: "What the estimate is: establishments, establishments_offering_pct, employees, employees_in_offering_establishments_pct, full_time_employees, single_premium, single_employee_contribution, single_employee_share_of_premium_pct, family_*, employee_plus_one_*, enrolled_with_deductible_pct, single_deductible"
+      - name: unit
+        type: string
+        nullable: false
+        comment: "count, percent (0-100) or dollars (per enrolled employee per year)"
+      - name: geo_level
+        type: string
+        nullable: false
+        comment: "national (the United States row) or state"
+      - name: state_name
+        type: string
+        nullable: true
+        comment: "State name as AHRQ prints it; NULL on the national row"
+      - name: state_abbr
+        type: string
+        nullable: true
+        comment: "2-letter USPS code (FK to geo.state_ref); NULL on the national row"
+      - name: census_division
+        type: string
+        nullable: true
+        comment: "Census division AHRQ groups the state under; NULL on the national row"
+      - name: firm_size
+        type: string
+        nullable: false
+        comment: "Firm-size column: Total, Less than 10 employees, 10-24 employees, 25-99 employees, 100-999 employees, 1000 or more employees, plus the overlapping Less than 50 employees and 50 or more employees roll-ups - do not sum all eight"
+      - name: estimate
+        type: double
+        nullable: true
+        comment: "The published estimate; NULL where AHRQ suppressed it (--) for high standard error"
+      - name: std_error
+        type: double
+        nullable: true
+        comment: "Standard error AHRQ publishes for the same cell, same unit as the estimate; NULL where suppressed"
+      - name: low_reliability
+        type: boolean
+        nullable: false
+        comment: "True when AHRQ flags the cell * (does not meet the standard of reliability or precision)"
+
+    source:
+      type: http
+      url: "https://meps.ahrq.gov/data_stats/summ_tables/insr/state/series_2/{year}/{table_id}.htm"
+      method: GET
+      response:
+        format: TEXT   # MepsIcStateTableTransformer fetches and parses the HTML itself
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.health.MepsIcStateTableTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=meps_ic_employer_coverage/year=*/table_id=*/"
+      partition:
+        columns: [type, year, table_id]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/health"
+        tableName: meps_ic_employer_coverage
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        batchPartitionColumns: [year, table_id]
+        incrementalKeys: [year, table_id]
+        overwritePartitions: true
+
   - name: aca_effectuated_enrollment_monthly
     timeColumn: benefit_year  # observation year; this table has no column named 'year'
     # data-api dataset has no Last-Modified; hash the response body so an unchanged CMS

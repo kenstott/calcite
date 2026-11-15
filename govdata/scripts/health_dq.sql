@@ -3583,6 +3583,73 @@ INSERT INTO dq_results
 SELECT 'health', 'medicaid_enrollment_by_eligibility_group', 'T7_groups', CASE WHEN n = 7 THEN 'pass' ELSE 'fail' END, n, 7, 'Seven major eligibility groups'
 FROM (SELECT COUNT(DISTINCT eligibility_group) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/medicaid_enrollment_by_eligibility_group', allow_moved_paths := true));
 
+-- ============================================================================
+-- TABLE: meps_ic_employer_coverage (new 15 Nov 2026) — issue #1249
+-- 13 survey years (2008-2020) x 16 tables x 52 geographies x 8 firm-size columns = 86,528 rows
+-- Excluded from T5 (all-same-value): none expected to be constant.
+-- ============================================================================
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T1_existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T2_row_count', CASE WHEN n >= 80000 THEN 'pass' ELSE 'fail' END, n, 86528, '13 years x 16 tables x 52 geographies x 8 size columns'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T4_all_null_cols', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'estimate/std_error/state_abbr/census_division entirely NULL'
+FROM (SELECT CASE WHEN COUNT(estimate) = 0 OR COUNT(std_error) = 0 OR COUNT(state_abbr) = 0 OR COUNT(census_division) = 0 THEN 1 ELSE 0 END AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T5_all_same_value', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'survey_year/source_table/measure/firm_size/estimate has a single distinct value'
+FROM (SELECT (CASE WHEN COUNT(DISTINCT survey_year)<2 THEN 1 ELSE 0 END)+(CASE WHEN COUNT(DISTINCT source_table)<2 THEN 1 ELSE 0 END)+(CASE WHEN COUNT(DISTINCT measure)<2 THEN 1 ELSE 0 END)+(CASE WHEN COUNT(DISTINCT firm_size)<2 THEN 1 ELSE 0 END)+(CASE WHEN COUNT(DISTINCT estimate)<2 THEN 1 ELSE 0 END) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T6_pk_nulls', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Null survey_year/source_table/measure/unit/geo_level/firm_size/low_reliability'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE survey_year IS NULL OR source_table IS NULL OR measure IS NULL OR unit IS NULL OR geo_level IS NULL OR firm_size IS NULL OR low_reliability IS NULL);
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T8_pk_duplicates', CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END, d, 0, 'Duplicate (survey_year, source_table, measure, geography, firm_size) keys'
+FROM (SELECT COUNT(*) AS d FROM (SELECT survey_year, source_table, measure, COALESCE(state_abbr,'US'), firm_size FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_years', CASE WHEN n = 13 THEN 'pass' ELSE 'fail' END, n, 13, 'Survey years 2008-2020'
+FROM (SELECT COUNT(DISTINCT survey_year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_tables', CASE WHEN n = 16 THEN 'pass' ELSE 'fail' END, n, 16, 'Sixteen AHRQ state tables per year'
+FROM (SELECT COUNT(DISTINCT source_table) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_geographies', CASE WHEN n = 52 THEN 'pass' ELSE 'fail' END, n, 52, 'United States + 50 states + DC'
+FROM (SELECT COUNT(DISTINCT COALESCE(state_abbr,'US')) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_firm_sizes', CASE WHEN n = 8 THEN 'pass' ELSE 'fail' END, n, 8, 'Six size bands + under-50 and 50-or-more roll-ups'
+FROM (SELECT COUNT(DISTINCT firm_size) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_pct_range', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'percent/share estimates outside 0-100'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE unit = 'percent' AND estimate IS NOT NULL AND (estimate < 0 OR estimate > 100));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_dollar_range', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'dollar estimates outside 0-40000'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE unit = 'dollars' AND estimate IS NOT NULL AND (estimate < 0 OR estimate > 40000));
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_us_offer_2020', CASE WHEN n BETWEEN 50.5 AND 51.7 THEN 'pass' ELSE 'fail' END, n, 51.1, 'US all-size share of establishments offering insurance, 2020 (AHRQ tiia2: 51.1)'
+FROM (SELECT COALESCE(MAX(estimate),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE survey_year=2020 AND measure='establishments_offering_pct' AND geo_level='national' AND firm_size='Total');
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_us_offer_2008', CASE WHEN n BETWEEN 55.9 AND 56.9 THEN 'pass' ELSE 'fail' END, n, 56.4, 'US all-size share of establishments offering insurance, 2008 (AHRQ tiia2: 56.4)'
+FROM (SELECT COALESCE(MAX(estimate),0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE survey_year=2008 AND measure='establishments_offering_pct' AND geo_level='national' AND firm_size='Total');
+
+INSERT INTO dq_results
+SELECT 'health', 'meps_ic_employer_coverage', 'T7_small_vs_large', CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Years where under-10 offer rate is not below the 1000+ offer rate (US)'
+FROM (SELECT COUNT(*) AS bad FROM (SELECT survey_year, MAX(CASE WHEN firm_size='Less than 10 employees' THEN estimate END) s, MAX(CASE WHEN firm_size='1000 or more employees' THEN estimate END) l FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE measure='establishments_offering_pct' AND geo_level='national' GROUP BY survey_year) WHERE s IS NULL OR l IS NULL OR s >= l);
+
 
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
