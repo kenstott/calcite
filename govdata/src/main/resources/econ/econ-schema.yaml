@@ -4735,6 +4735,154 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  - name: export_control_restricted_parties
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=export_control_restricted_parties/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      The U.S. Consolidated Screening List (CSL) from the International Trade Administration: one row
+      per listing across 12 export-control and sanctions lists, current as of the last refresh (a
+      snapshot of who is listed now; delisted parties are absent). source_list EL is the Commerce
+      Bureau of Industry and Security Entity List (about 3,400 rows; 15 CFR 744 Supplement 4), UVL the
+      Unverified List, MEU the Military End User List, DPL the Denied Persons List, DTC the State
+      Department ITAR debarred parties, SDN the Treasury OFAC Specially Designated Nationals (about
+      19,500 rows), plus SSI, CMIC, NS-MBS List, PLC, ACN and CAP. For BIS rows federal_register_notice
+      and start_date give the Federal Register citation and effective date of the listing, so it
+      answers "is this company on the Entity List", "which Chinese companies were added and when" and
+      "under which rule". Entities amended several times list every citation in one string. country
+      is the first address country; use countries for multi-country listings. Not a historical
+      record of additions and removals: removals and past states are in the Federal Register rules
+      (fedregister.fr_documents). Source: https://data.trade.gov/downloadable_consolidated_screening_list/v1/consolidated.json
+      (public domain, no key).
+
+    dimensions:
+      type:
+        - export_control_restricted_parties
+
+    columns:
+      - name: source_list
+        type: string
+        nullable: false
+        comment: >
+          Short list code: SDN, EL (Entity List), UVL (Unverified List), MEU (Military End User), DPL (Denied Persons), DTC (ITAR Debarred), SSI, ACN, PLC, CMIC, NS-MBS List, CAP; PK part.
+      - name: id
+        type: string
+        nullable: false
+        comment: >
+          Consolidated Screening List record id; unique only within source_list (a few entities on both SSI and NS-MBS share an id); PK part.
+      - name: source
+        type: string
+        nullable: false
+        comment: >
+          Full list name and administering agency, for example Entity List (EL) - Bureau of Industry and Security.
+      - name: name
+        type: string
+        nullable: false
+        comment: >
+          Listed party name as the list prints it.
+      - name: entity_type
+        type: string
+        nullable: true
+        comment: >
+          Party type for Treasury and State lists (Entity, Individual, Vessel, Aircraft); null for the Commerce BIS lists.
+      - name: federal_register_notice
+        type: string
+        nullable: true
+        comment: >
+          Federal Register citation(s) that added or amended the listing, for example 84 FR 22961 (Huawei Entity List additions), comma separated when several; BIS and State lists only, null for most Treasury rows.
+      - name: start_date
+        type: date
+        nullable: true
+        comment: >
+          Date the listing took effect (the Federal Register effective date for BIS Entity List rows); populated for about a fifth of rows, mostly BIS lists.
+      - name: end_date
+        type: date
+        nullable: true
+        comment: >
+          Date the listing ends or was set to end, where the list states one.
+      - name: license_requirement
+        type: string
+        nullable: true
+        comment: >
+          BIS license requirement text, for example For all items subject to the EAR. (See 744.11 of the EAR); BIS lists only.
+      - name: license_policy
+        type: string
+        nullable: true
+        comment: >
+          BIS license review policy, for example Presumption of denial; BIS lists only.
+      - name: remarks
+        type: string
+        nullable: true
+        comment: >
+          Free-text remarks carried by the list.
+      - name: country
+        type: string
+        nullable: true
+        comment: >
+          ISO country code of the first listed address; null when the listing has no address.
+      - name: countries
+        type: string
+        nullable: true
+        comment: >
+          All distinct address country codes, semicolon separated (an entity with addresses in CN and HK shows CN;HK).
+      - name: addresses
+        type: string
+        nullable: true
+        comment: >
+          All listed addresses, each as street, city, state, postal code, country, separated by ' | '.
+      - name: alt_names
+        type: string
+        nullable: true
+        comment: >
+          Aliases and alternate names, separated by ' | '.
+      - name: programs
+        type: string
+        nullable: true
+        comment: >
+          Sanctions programs the listing falls under, semicolon separated (Treasury lists); null for BIS lists.
+      - name: source_list_url
+        type: string
+        nullable: true
+        comment: >
+          URL of the agency page describing the list.
+
+    source:
+      type: http
+      url: "https://data.trade.gov/downloadable_consolidated_screening_list/v1/consolidated.json"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: TEXT
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.ConsolidatedScreeningListTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=export_control_restricted_parties/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 5000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        overwritePartitions: true
+        targetFileSizeBytes: 134217728
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
   - name: social_security_trustees_projections
     dataset_type: snapshot
     freshness:
