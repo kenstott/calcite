@@ -43,3 +43,11 @@ def test_an_operator_setting_is_kept(monkeypatch, tmp_path):
     monkeypatch.setenv("PGWIRE_CALCITE_STATE_DIR", str(tmp_path))
     mine = ["-Diceberg.metadata.cache.directory=/mine"]
     assert _backend(str(tmp_path / "model.json"))._iceberg_schema_cache_arg(mine) is None
+
+
+def test_the_vss_codes_copy_goes_under_the_state_directory(monkeypatch, tmp_path):
+    monkeypatch.setenv("PGWIRE_CALCITE_STATE_DIR", str(tmp_path / "state"))
+    arg = _backend(str(tmp_path / "model.json"))._state_dir_arg(
+        [], CalciteBackend._VSS_LOCAL_DB, os.path.join("vss", "codes.duckdb")
+    )
+    assert arg == "-Dcalcite.vss.localDb=" + os.path.join(str(tmp_path / "state"), "vss", "codes.duckdb")
