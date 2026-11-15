@@ -1234,9 +1234,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "paraphrased",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "The NBC Meet the Press transcript reads “passed off to us” where the story has “passed on to us”."
       },
       "kind": "opinion_or_prediction",
       "result": null,
@@ -1256,9 +1256,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "premised_prediction",
       "result": "supported",
@@ -1288,9 +1288,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "verbatim",
+        "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+        "note": "NBC Meet the Press transcript, Nov. 15, 2026."
       },
       "kind": "factual",
       "result": "supported",
@@ -1386,9 +1386,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "verbatim",
+        "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+        "note": "ABC This Week transcript, Nov. 15, 2026."
       },
       "kind": "opinion_or_prediction",
       "result": null,
@@ -1408,9 +1408,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "factual",
       "result": "supported",
@@ -1436,9 +1436,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "CBS Face the Nation transcript, Nov. 15, 2026."
       },
       "kind": "opinion_or_prediction",
       "result": null,
@@ -1458,9 +1458,9 @@
         "url": "https://www.pbs.org/newshour/politics/trump-breaks-silence-on-nationwide-ground-stop-and-demands-more-money-from-congress"
       },
       "source": {
-        "status": "not_found",
-        "url": null,
-        "note": "No original transcript or post located."
+        "status": "paraphrased",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": "The CBS Face the Nation transcript reads “at full capacity in operations, but we're well on our way”."
       },
       "kind": "opinion_or_prediction",
       "result": null,
