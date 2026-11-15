@@ -260,8 +260,13 @@
       },
       "kind": "premised_prediction",
       "result": "supported",
-      "finding": "About 15 million Medicaid enrollees have a disability, including 8.8 million working-age adults, by KFF's analysis of 2023 Census data, and the statute's definition of medically frail begins with people who are blind or disabled. No direct count of medically frail enrollees under the narrower federal test was found.",
+      "finding": "AskAmerica's Medicaid enrollment data shows 75.8 million people enrolled in Medicaid and CHIP in January 2026, 39.7 million of them adults, which bounds the figure. About 15 million Medicaid enrollees have a disability, including 8.8 million working-age adults, by KFF's analysis of 2023 Census data, and the statute's definition of medically frail begins with people who are blind or disabled. No direct count of medically frail enrollees under the narrower federal test was found.",
       "evidence": [
+        {
+          "label": "health.medicaid_chip_enrollment_monthly (January 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/health/#medicaid_chip_enrollment_monthly-table",
+          "askamerica": true
+        },
         {
           "label": "KFF, 5 Key Facts About Medicaid Coverage for People with Disabilities",
           "url": "https://www.kff.org/medicaid/issue-brief/5-key-facts-about-medicaid-coverage-for-people-with-disabilities/"
@@ -642,15 +647,16 @@
       },
       "kind": "factual",
       "result": "supported",
-      "finding": "Senate returns for 1976-2024 show Texas last elected a Democratic senator in 1988, and 2026 coverage reports a Democratic win there, along with Kansas (reported as the first Democratic senator since 1932) and South Carolina (first in nearly 30 years). The 2026 results are from news reports, not certified returns.",
+      "finding": "AskAmerica's Senate returns for 1976-2024 show Texas last elected a Democratic senator in 1988, and 2026 coverage reports a Democratic win there, along with Kansas (reported as the first Democratic senator since 1932) and South Carolina (first in nearly 30 years). The 2026 results are from news reports, not certified returns.",
       "evidence": [
+        {
+          "label": "officials.senate_race_results (U.S. Senate returns, 1976-2024)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#senate_race_results-view",
+          "askamerica": true
+        },
         {
           "label": "WFTV/Cox, Election 2026 results (Nov. 4, 2026)",
           "url": "https://www.wftv.com/news/trending/election-2026-democrats-capture-both-houses-congress/5ILOWTVABVDPZFYP7VBBCX4EWE/?outputType=amp"
-        },
-        {
-          "label": "MIT Election Data and Science Lab, U.S. Senate returns 1976-2024 (source of the warehouse table)",
-          "url": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/PEJ5QU"
         }
       ],
       "check_run": null,
