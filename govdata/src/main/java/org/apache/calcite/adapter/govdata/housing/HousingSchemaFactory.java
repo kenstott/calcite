@@ -65,6 +65,7 @@ public class HousingSchemaFactory implements GovDataSubSchemaFactory {
     Map<String, String> m = new HashMap<String, String>();
     m.put("house_price_index", "fhfa");
     m.put("county_house_price_index", "fhfa");
+    m.put("hvs_homeownership_by_age", "census");
     m.put("building_permits", "census");
     m.put("fair_market_rents", "hud");
     m.put("income_limits", "hud");

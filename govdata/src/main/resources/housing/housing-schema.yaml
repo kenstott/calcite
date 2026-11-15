@@ -1855,6 +1855,105 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # CENSUS HOUSING VACANCY SURVEY — Table 12, households by age of householder (snapshot, xlsx)
+  # ---------------------------------------------------------------------------
+  - name: hvs_homeownership_by_age
+    timeColumn: data_year  # observation year; this table has no column named 'year'
+    # Freshness gate: census.gov serves the static workbook without a usable validator for a
+    # conditional GET; a Content-Length probe skips the re-fetch when unchanged (a new year
+    # adds a column, so a refresh changes the length). Table-level, as county_house_price_index.
+    freshness:
+      type: size
+    pattern: "type=hvs_homeownership_by_age/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      Census Current Population Survey / Housing Vacancy Survey annual homeownership by age
+      of householder, 1982 to the latest published year (historical Table 12,
+      histtab12.xlsx). One row per (year, age group): total, owner and renter occupied
+      households in thousands plus homeownership_rate_pct = owner / total x 100. Age groups
+      are the eleven bands under_25, 25_29 ... 70_74, 75_plus (age_group_kind five_year) and
+      the five broad groups under_35, 35_44, 45_54, 55_64, 65_plus (broad), plus the
+      national total (total). This is the pre-2009 history that acs_housing_tenure_by_age
+      (ACS B25007, 2009 onward, 10-year bands) cannot give, so it supports same-age
+      comparisons across generations (e.g. ages 30-34 in 1982 against today). Where Census
+      publishes a revised column for a year (1993 revised to the 1990 Census, 2002 revised
+      to the 2000 Census) the revised value is kept and is_revised is true. Households with
+      no householder are excluded. Annual survey estimates carry sampling error that this
+      table does not publish. Snapshot table: the whole workbook is re-fetched and
+      overwritten each run. Source: census.gov/housing/hvs/data/histtab12.xlsx.
+
+    dimensions:
+      type:
+        - hvs_homeownership_by_age
+
+    columns:
+      - name: data_year
+        type: integer
+        nullable: false
+        comment: Survey year; part of the primary key with age_group
+      - name: age_group
+        type: string
+        nullable: false
+        comment: "Age of householder: total, under_25, 25_29, 30_34, 35_39, 40_44, 45_49, 50_54, 55_59, 60_64, 65_69, 70_74, 75_plus (five_year), under_35, 35_44, 45_54, 55_64, 65_plus (broad)"
+      - name: age_group_kind
+        type: string
+        nullable: false
+        comment: "total, five_year (5-year bands; 75_plus is open-ended) or broad (10-year groups, 65_plus open-ended); sum within one kind, never across kinds"
+      - name: households_total_thousands
+        type: double
+        nullable: false
+        comment: Occupied households in thousands
+      - name: households_owner_thousands
+        type: double
+        nullable: false
+        comment: Owner-occupied households in thousands
+      - name: households_renter_thousands
+        type: double
+        nullable: false
+        comment: Renter-occupied households in thousands (total minus owner)
+      - name: homeownership_rate_pct
+        type: double
+        nullable: false
+        comment: Homeownership rate, percent of occupied households that are owner-occupied
+      - name: is_revised
+        type: boolean
+        nullable: false
+        comment: True when the value comes from Census's revised column (1993, 2002) rather than the original
+
+    source:
+      type: http
+      url: "https://www.census.gov/housing/hvs/data/histtab12.xlsx"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.housing.HvsHomeownershipByAgeDataProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=hvs_homeownership_by_age/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/housing"
+        tableName: hvs_homeownership_by_age
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # HUD PICTURE OF SUBSIDIZED HOUSEHOLDS — county workbook (delta year, xlsx)
   # ---------------------------------------------------------------------------
   - name: hud_subsidized_county
