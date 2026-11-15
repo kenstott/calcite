@@ -160,7 +160,8 @@
       ],
       "check_run": null,
       "context": "In a message on X after Delray Beach, Florida, cancelled its St. Patrick's Day parade citing a new state law restricting government-funded diversity initiatives.",
-      "test": "True if the statute's text does not require a city to cancel such an event. False if it does. Cannot be determined if the text neither requires nor permits it and the answer depends on how a court or the state would read it."
+      "test": "True if the statute's text does not require a city to cancel such an event. False if it does. Cannot be determined if the text neither requires nor permits it and the answer depends on how a court or the state would read it.",
+      "topic": "State and local policy"
     },
     {
       "id": 2,
@@ -182,7 +183,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same X message about Delray Beach's cancellation of its St. Patrick's Day parade, 'they' refers to the city."
+      "context": "In the same X message about Delray Beach's cancellation of its St. Patrick's Day parade, 'they' refers to the city.",
+      "topic": "State and local policy"
     },
     {
       "id": 3,
@@ -204,7 +206,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an archived recording played on NPR on Nov. 14, about his bid to replace Chuck Schumer as Senate Democratic leader."
+      "context": "In an archived recording played on NPR on Nov. 14, about his bid to replace Chuck Schumer as Senate Democratic leader.",
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 4,
@@ -226,7 +229,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "NPR's Nov. 15 account of Shapiro's pledges for working with Pennsylvania's newly Democratic-led legislature after the Nov. 3 election."
+      "context": "NPR's Nov. 15 account of Shapiro's pledges for working with Pennsylvania's newly Democratic-led legislature after the Nov. 3 election.",
+      "topic": "State and local policy"
     },
     {
       "id": 5,
@@ -248,7 +252,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In a statement endorsing Jonathan Kreiss-Tomkins for Alaska governor a week before the Nov. 3 election, as reported by the AP."
+      "context": "In a statement endorsing Jonathan Kreiss-Tomkins for Alaska governor a week before the Nov. 3 election, as reported by the AP.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 6,
@@ -270,7 +275,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, asking to delay Medicaid work requirements; the 'issue' is a Boston federal court ruling on medical frailty."
+      "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, asking to delay Medicaid work requirements; the 'issue' is a Boston federal court ruling on medical frailty.",
+      "topic": "Health policy"
     },
     {
       "id": 7,
@@ -309,7 +315,8 @@
       "check_run": null,
       "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, referring to the Boston federal court ruling on medically frail Medicaid enrollees.",
       "premise": "Millions of medically frail people rely on Medicaid.",
-      "test": "True if published counts put the group in the millions under the statute's definition. False if they put it under one million. Cannot be determined if no count or bound exists."
+      "test": "True if published counts put the group in the millions under the statute's definition. False if they put it under one million. Cannot be determined if no count or bound exists.",
+      "topic": "Health policy"
     },
     {
       "id": 8,
@@ -331,7 +338,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In a Nov. 13 speech to the Federalist Society National Lawyers Convention in Washington, about the economy."
+      "context": "In a Nov. 13 speech to the Federalist Society National Lawyers Convention in Washington, about the economy.",
+      "topic": "Economy, prices and tariffs"
     },
     {
       "id": 9,
@@ -353,7 +361,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, comparing the stock market with household finances."
+      "context": "In the same Nov. 13 Federalist Society speech, comparing the stock market with household finances.",
+      "topic": "Economy, prices and tariffs"
     },
     {
       "id": 10,
@@ -375,7 +384,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, about addressing high prices and the Iran war's costs; 'these things' are the economic pressures on Americans."
+      "context": "In the same Nov. 13 Federalist Society speech, about addressing high prices and the Iran war's costs; 'these things' are the economic pressures on Americans.",
+      "topic": "Economy, prices and tariffs"
     },
     {
       "id": 11,
@@ -397,7 +407,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, continuing his remarks about addressing economic costs and the Iran war."
+      "context": "In the same Nov. 13 Federalist Society speech, continuing his remarks about addressing economic costs and the Iran war.",
+      "topic": "Economy, prices and tariffs"
     },
     {
       "id": 12,
@@ -419,7 +430,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, about economic prosperity across generations."
+      "context": "In the same Nov. 13 Federalist Society speech, about economic prosperity across generations.",
+      "topic": "Economy, prices and tariffs"
     },
     {
       "id": 13,
@@ -441,7 +453,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, criticizing the use of international law against Trump administration foreign policy."
+      "context": "In the same Nov. 13 Federalist Society speech, criticizing the use of international law against Trump administration foreign policy.",
+      "topic": "International law and institutions"
     },
     {
       "id": 14,
@@ -463,7 +476,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, describing the United Nations, International Criminal Court and others; 'they' refers to those critics."
+      "context": "In the same Nov. 13 Federalist Society speech, describing the United Nations, International Criminal Court and others; 'they' refers to those critics.",
+      "topic": "International law and institutions"
     },
     {
       "id": 15,
@@ -485,7 +499,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 13 Federalist Society speech, continuing his remarks about the same international critics."
+      "context": "In the same Nov. 13 Federalist Society speech, continuing his remarks about the same international critics.",
+      "topic": "International law and institutions"
     },
     {
       "id": 16,
@@ -507,7 +522,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "AP's account of Trump's comments to reporters after a meeting with Qatar's prime minister at the White House early the week of Nov. 9, about the Iran war."
+      "context": "AP's account of Trump's comments to reporters after a meeting with Qatar's prime minister at the White House early the week of Nov. 9, about the Iran war.",
+      "topic": "Iran war"
     },
     {
       "id": 17,
@@ -529,7 +545,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an interview with Hugh Hewitt on Nov. 12, about possible further U.S. military action against Iran."
+      "context": "In an interview with Hugh Hewitt on Nov. 12, about possible further U.S. military action against Iran.",
+      "topic": "Iran war"
     },
     {
       "id": 18,
@@ -551,7 +568,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an interview Nov. 13 at the Democrats' post-election gathering in Denver, about President Trump's handling of the Iran war."
+      "context": "In an interview Nov. 13 at the Democrats' post-election gathering in Denver, about President Trump's handling of the Iran war.",
+      "topic": "Iran war"
     },
     {
       "id": 19,
@@ -576,7 +594,8 @@
       "context": "In a Nov. 13 interview at the Democrats' post-election gathering in Denver, about President Trump and the Iran war.",
       "counter_statements": [
         20
-      ]
+      ],
+      "topic": "Iran war"
     },
     {
       "id": 20,
@@ -616,7 +635,8 @@
       "counter_statements": [
         19
       ],
-      "test": "True if figures show severe damage attributable to economic measures. False if they show little damage. Cannot be determined if damage is documented but cannot be separated from the effects of the war."
+      "test": "True if figures show severe damage attributable to economic measures. False if they show little damage. Cannot be determined if damage is documented but cannot be separated from the effects of the war.",
+      "topic": "Iran war"
     },
     {
       "id": 21,
@@ -638,7 +658,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "Earlier in the week of Nov. 9, about whether the U.S. would accept a deal with Iran to end the war."
+      "context": "Earlier in the week of Nov. 9, about whether the U.S. would accept a deal with Iran to end the war.",
+      "topic": "Iran war"
     },
     {
       "id": 22,
@@ -660,7 +681,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "Earlier in the week of Nov. 9, continuing his remarks about the terms of any deal with Iran."
+      "context": "Earlier in the week of Nov. 9, continuing his remarks about the terms of any deal with Iran.",
+      "topic": "Iran war"
     },
     {
       "id": 23,
@@ -694,7 +716,8 @@
       ],
       "check_run": null,
       "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins.",
-      "test": "True if Democrats won in 2026 where the record shows no Democratic win for decades. False if every such place had a recent Democratic win."
+      "test": "True if Democrats won in 2026 where the record shows no Democratic win for decades. False if every such place had a recent Democratic win.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 24,
@@ -734,7 +757,8 @@
       ],
       "check_run": null,
       "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins; this is the second half of a sentence that begins \"We won races in places where we haven't won in a long time\".",
-      "test": "False if every place Democrats won has a Democratic win on record. Cannot be determined where a place has none, because the record begins in 1976. True only with a full history showing no earlier win."
+      "test": "False if every place Democrats won has a Democratic win on record. Cannot be determined where a place has none, because the record begins in 1976. True only with a full history showing no earlier win.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 25,
@@ -756,7 +780,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same interview at the 'What's Next' conference in Denver, about how Democrats should read the midterm results."
+      "context": "In the same interview at the 'What's Next' conference in Denver, about how Democrats should read the midterm results.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 26,
@@ -778,7 +803,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same interview at the 'What's Next' conference, about rebuilding voter trust in the Democratic Party."
+      "context": "In the same interview at the 'What's Next' conference, about rebuilding voter trust in the Democratic Party.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 27,
@@ -800,7 +826,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "NPR's account of remarks to the audience at the 'What's Next' Democratic conference in Denver on Nov. 13, on his planned House agenda."
+      "context": "NPR's account of remarks to the audience at the 'What's Next' Democratic conference in Denver on Nov. 13, on his planned House agenda.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 28,
@@ -822,7 +849,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "To reporters at the 'What's Next' Democratic conference in Denver, about qualities of a future president."
+      "context": "To reporters at the 'What's Next' Democratic conference in Denver, about qualities of a future president.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 29,
@@ -844,7 +872,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "At the 'What's Next' Democratic conference in Denver on Nov. 13, about working with the Trump administration on legislation."
+      "context": "At the 'What's Next' Democratic conference in Denver on Nov. 13, about working with the Trump administration on legislation.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 30,
@@ -866,7 +895,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "At the 'What's Next' Democratic conference in Denver, about working with Trump; 'Sen. Talarico' is Texas Senator-elect James Talarico."
+      "context": "At the 'What's Next' Democratic conference in Denver, about working with Trump; 'Sen. Talarico' is Texas Senator-elect James Talarico.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 31,
@@ -888,7 +918,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "At the same conference, addressing Texas Senator-elect James Talarico's call to work with Trump."
+      "context": "At the same conference, addressing Texas Senator-elect James Talarico's call to work with Trump.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 32,
@@ -910,7 +941,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an interview at the 'What's Next' conference in Denver, about the Democratic Senate leadership contest."
+      "context": "In an interview at the 'What's Next' conference in Denver, about the Democratic Senate leadership contest.",
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 33,
@@ -932,7 +964,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same interview at the 'What's Next' conference in Denver."
+      "context": "In the same interview at the 'What's Next' conference in Denver.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 34,
@@ -954,7 +987,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same interview at the 'What's Next' conference in Denver, about the Democratic Party's outlook."
+      "context": "In the same interview at the 'What's Next' conference in Denver, about the Democratic Party's outlook.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 35,
@@ -976,7 +1010,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an interview at the 'What's Next' conference in Denver, describing the Democratic Party."
+      "context": "In an interview at the 'What's Next' conference in Denver, describing the Democratic Party.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 36,
@@ -998,7 +1033,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same interview at the 'What's Next' conference in Denver, about the party's range of views."
+      "context": "In the same interview at the 'What's Next' conference in Denver, about the party's range of views.",
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 37,
@@ -1020,7 +1056,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an interview with NPR, about New Mexico's free universal childcare program launched in November 2025."
+      "context": "In an interview with NPR, about New Mexico's free universal childcare program launched in November 2025.",
+      "topic": "State and local policy"
     },
     {
       "id": 38,
@@ -1042,7 +1079,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same NPR interview, about parents' reactions to New Mexico's universal childcare program."
+      "context": "In the same NPR interview, about parents' reactions to New Mexico's universal childcare program.",
+      "topic": "State and local policy"
     },
     {
       "id": 39,
@@ -1064,7 +1102,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same NPR interview, about the childcare program's capacity."
+      "context": "In the same NPR interview, about the childcare program's capacity.",
+      "topic": "State and local policy"
     },
     {
       "id": 40,
@@ -1086,7 +1125,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same NPR interview, about the childcare program's capacity."
+      "context": "In the same NPR interview, about the childcare program's capacity.",
+      "topic": "State and local policy"
     },
     {
       "id": 41,
@@ -1108,7 +1148,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In an Oct. 26 social media post announcing the closure of the East Potomac Golf Course in Washington, D.C., for renovation."
+      "context": "In an Oct. 26 social media post announcing the closure of the East Potomac Golf Course in Washington, D.C., for renovation.",
+      "topic": "East Potomac golf course"
     },
     {
       "id": 42,
@@ -1130,7 +1171,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In a Nov. 14 social media post about U.S. District Judge Ana Reyes and the East Potomac golf course, reported by the AP."
+      "context": "In a Nov. 14 social media post about U.S. District Judge Ana Reyes and the East Potomac golf course, reported by the AP.",
+      "topic": "East Potomac golf course"
     },
     {
       "id": 43,
@@ -1152,7 +1194,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "AP's account of the same Nov. 14 social media post about discounts for Washington-area residents at the redeveloped East Potomac golf course."
+      "context": "AP's account of the same Nov. 14 social media post about discounts for Washington-area residents at the redeveloped East Potomac golf course.",
+      "topic": "East Potomac golf course"
     },
     {
       "id": 44,
@@ -1174,7 +1217,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In a Nov. 15 social media post about the nationwide flight ground stop that began Nov. 13 and funding for air traffic control."
+      "context": "In a Nov. 15 social media post about the nationwide flight ground stop that began Nov. 13 and funding for air traffic control.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 45,
@@ -1196,7 +1240,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "In the same Nov. 15 social media post about a new air traffic control system."
+      "context": "In the same Nov. 15 social media post about a new air traffic control system.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 46,
@@ -1224,7 +1269,8 @@
       ],
       "check_run": null,
       "context": "In a Nov. 15 social media post about the air traffic control system, after the Nov. 13 nationwide ground stop.",
-      "test": "True if official figures show a large share of the system is about 50 years old. False if they show only a small part is. Cannot be determined if no age breakdown exists, because \"much\" has no fixed threshold."
+      "test": "True if official figures show a large share of the system is about 50 years old. False if they show only a small part is. Cannot be determined if no age breakdown exists, because \"much\" has no fixed threshold.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 47,
@@ -1249,7 +1295,8 @@
       "context": "In a Nov. 15 social media post, about the Biden administration's maintenance of the FAA and air traffic control system.",
       "counter_statements": [
         49
-      ]
+      ],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 48,
@@ -1271,7 +1318,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "On NBC's 'Meet the Press' on Nov. 15, about the nationwide ground stop and the state of air traffic control."
+      "context": "On NBC's 'Meet the Press' on Nov. 15, about the nationwide ground stop and the state of air traffic control.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 49,
@@ -1303,7 +1351,8 @@
       "counter_statements": [
         47
       ],
-      "test": "True if capital funding grew slowly under administrations of both parties. False if the shortfall is confined to one party's administrations."
+      "test": "True if capital funding grew slowly under administrations of both parties. False if the shortfall is confined to one party's administrations.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 50,
@@ -1331,7 +1380,8 @@
       ],
       "check_run": null,
       "context": "On NBC's 'Meet the Press' on Nov. 15, about the history of air traffic control investment.",
-      "test": "True if capital funding over 20 to 30 years grew more slowly than inflation or fell short of authorized levels. False if it kept pace with both."
+      "test": "True if capital funding over 20 to 30 years grew more slowly than inflation or fell short of authorized levels. False if it kept pace with both.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 51,
@@ -1369,7 +1419,8 @@
           "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
         }
       ],
-      "test": "True if the FAA or the contractor confirms that cause. False if a settled official finding gives a different cause. Contradicted if an official account says otherwise while the investigation is still open."
+      "test": "True if the FAA or the contractor confirms that cause. False if a settled official finding gives a different cause. Contradicted if an official account says otherwise while the investigation is still open.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 52,
@@ -1401,7 +1452,8 @@
       ],
       "check_run": null,
       "context": "AP's account of Duffy's post on X about the investigation into the ground stop; L3Harris is an FAA contractor.",
-      "test": "True if the FAA or the contractor confirms the routers were secured and are being examined. False if either denies it. Cannot be determined if neither addresses it."
+      "test": "True if the FAA or the contractor confirms the routers were secured and are being examined. False if either denies it. Cannot be determined if neither addresses it.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 53,
@@ -1423,7 +1475,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "On ABC's 'This Week' on Nov. 15, about a problem at a facility in Amarillo, Texas, after an Arkansas router was turned on."
+      "context": "On ABC's 'This Week' on Nov. 15, about a problem at a facility in Amarillo, Texas, after an Arkansas router was turned on.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 54,
@@ -1451,7 +1504,8 @@
       ],
       "check_run": null,
       "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel after the nationwide ground stop.",
-      "test": "True if flight-tracking counts for that day show delays. False if they show none."
+      "test": "True if flight-tracking counts for that day show delays. False if they show none.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 55,
@@ -1473,7 +1527,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel through the end of the day and into Monday."
+      "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel through the end of the day and into Monday.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 56,
@@ -1495,7 +1550,8 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "context": "On the Nov. 15 Sunday show, about how long airlines need to recover from the ground stop."
+      "context": "On the Nov. 15 Sunday show, about how long airlines need to recover from the ground stop.",
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 57,
@@ -1534,7 +1590,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 58,
@@ -1568,7 +1625,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 59,
@@ -1614,7 +1672,8 @@
       ],
       "self_contradictions": [
         226
-      ]
+      ],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 61,
@@ -1651,7 +1710,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 62,
@@ -1688,7 +1748,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 64,
@@ -1725,7 +1786,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 65,
@@ -1753,7 +1815,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 66,
@@ -1786,7 +1849,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 70,
@@ -1827,7 +1891,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 72,
@@ -1860,7 +1925,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 73,
@@ -1904,7 +1970,8 @@
           "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 74,
@@ -1943,7 +2010,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 75,
@@ -1971,7 +2039,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 78,
@@ -2010,7 +2079,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 79,
@@ -2038,7 +2108,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 80,
@@ -2075,7 +2146,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 81,
@@ -2103,7 +2175,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 82,
@@ -2140,7 +2213,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 83,
@@ -2168,7 +2242,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 84,
@@ -2196,7 +2271,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 85,
@@ -2229,7 +2305,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 86,
@@ -2257,7 +2334,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 87,
@@ -2294,7 +2372,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 88,
@@ -2327,7 +2406,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 89,
@@ -2355,7 +2435,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 90,
@@ -2383,7 +2464,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 91,
@@ -2416,7 +2498,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 92,
@@ -2453,7 +2536,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 93,
@@ -2481,7 +2565,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 94,
@@ -2518,7 +2603,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 95,
@@ -2551,7 +2637,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 96,
@@ -2584,7 +2671,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 97,
@@ -2612,7 +2700,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 98,
@@ -2645,7 +2734,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 99,
@@ -2678,7 +2768,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 100,
@@ -2715,7 +2806,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 101,
@@ -2748,7 +2840,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 102,
@@ -2776,7 +2869,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 104,
@@ -2804,7 +2898,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 105,
@@ -2832,7 +2927,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 106,
@@ -2865,7 +2961,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 107,
@@ -2893,7 +2990,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 108,
@@ -2926,7 +3024,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 109,
@@ -2979,7 +3078,8 @@
           "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 110,
@@ -3012,7 +3112,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 111,
@@ -3040,7 +3141,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 112,
@@ -3079,7 +3181,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Social Security"
     },
     {
       "id": 113,
@@ -3112,7 +3215,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Social Security"
     },
     {
       "id": 114,
@@ -3140,7 +3244,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Social Security"
     },
     {
       "id": 115,
@@ -3177,7 +3282,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Social Security"
     },
     {
       "id": 116,
@@ -3214,7 +3320,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Social Security"
     },
     {
       "id": 117,
@@ -3247,7 +3354,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 118,
@@ -3280,7 +3388,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 120,
@@ -3313,7 +3422,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 121,
@@ -3352,7 +3462,8 @@
           "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 123,
@@ -3385,7 +3496,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 124,
@@ -3422,7 +3534,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 127,
@@ -3465,7 +3578,8 @@
           "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 131,
@@ -3493,7 +3607,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 132,
@@ -3521,7 +3636,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 134,
@@ -3549,7 +3665,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 135,
@@ -3577,7 +3694,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 136,
@@ -3605,7 +3723,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 137,
@@ -3633,7 +3752,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Iran war"
     },
     {
       "id": 138,
@@ -3666,7 +3786,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Iran war"
     },
     {
       "id": 139,
@@ -3699,7 +3820,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Iran war"
     },
     {
       "id": 140,
@@ -3727,7 +3849,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 141,
@@ -3755,7 +3878,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 142,
@@ -3788,7 +3912,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 143,
@@ -3821,7 +3946,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 144,
@@ -3862,7 +3988,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 145,
@@ -3899,7 +4026,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 146,
@@ -3927,7 +4055,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Trump family cryptocurrency"
     },
     {
       "id": 147,
@@ -3960,7 +4089,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Ukraine"
     },
     {
       "id": 148,
@@ -3997,7 +4127,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Economy, prices and tariffs"
     },
     {
       "id": 149,
@@ -4034,7 +4165,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Health policy"
     },
     {
       "id": 150,
@@ -4062,7 +4194,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 151,
@@ -4095,7 +4228,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 152,
@@ -4128,7 +4262,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 154,
@@ -4161,7 +4296,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 155,
@@ -4204,7 +4340,8 @@
           "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 157,
@@ -4232,7 +4369,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 158,
@@ -4269,7 +4407,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 159,
@@ -4318,7 +4457,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 160,
@@ -4351,7 +4491,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 161,
@@ -4395,7 +4536,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 162,
@@ -4429,7 +4571,8 @@
           "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 163,
@@ -4462,7 +4605,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 165,
@@ -4511,7 +4655,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 166,
@@ -4550,7 +4695,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 167,
@@ -4584,7 +4730,8 @@
           "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 168,
@@ -4617,7 +4764,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 169,
@@ -4650,7 +4798,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 170,
@@ -4687,7 +4836,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 171,
@@ -4715,7 +4865,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 172,
@@ -4743,7 +4894,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 173,
@@ -4780,7 +4932,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 174,
@@ -4808,7 +4961,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 175,
@@ -4847,7 +5001,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 176,
@@ -4875,7 +5030,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 177,
@@ -4903,7 +5059,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 178,
@@ -4931,7 +5088,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "China and chip exports"
     },
     {
       "id": 179,
@@ -4959,7 +5117,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 180,
@@ -4996,7 +5155,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 181,
@@ -5033,7 +5193,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 182,
@@ -5078,7 +5239,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 183,
@@ -5106,7 +5268,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 186,
@@ -5149,7 +5312,8 @@
           "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 190,
@@ -5182,7 +5346,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 191,
@@ -5219,7 +5384,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 192,
@@ -5262,7 +5428,8 @@
           "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 193,
@@ -5306,7 +5473,8 @@
           "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 194,
@@ -5339,7 +5507,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 195,
@@ -5372,7 +5541,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 198,
@@ -5405,7 +5575,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 199,
@@ -5433,7 +5604,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 200,
@@ -5461,7 +5633,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 201,
@@ -5494,7 +5667,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 202,
@@ -5537,7 +5711,8 @@
           "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 203,
@@ -5565,7 +5740,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 204,
@@ -5593,7 +5769,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 205,
@@ -5621,7 +5798,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 206,
@@ -5658,7 +5836,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 207,
@@ -5701,7 +5880,8 @@
           "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01"
         }
       ],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Air traffic control and the ground stop"
     },
     {
       "id": 209,
@@ -5729,7 +5909,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Iran war"
     },
     {
       "id": 210,
@@ -5766,7 +5947,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 211,
@@ -5809,7 +5991,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 212,
@@ -5846,7 +6029,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 213,
@@ -5879,7 +6063,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 214,
@@ -5907,7 +6092,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Government funding fight"
     },
     {
       "id": 215,
@@ -5935,7 +6121,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Government funding fight"
     },
     {
       "id": 216,
@@ -5968,7 +6155,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Government funding fight"
     },
     {
       "id": 217,
@@ -5996,7 +6184,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Senate Democratic leadership race"
     },
     {
       "id": 218,
@@ -6037,7 +6226,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 219,
@@ -6065,7 +6255,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 220,
@@ -6102,7 +6293,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "State and local policy"
     },
     {
       "id": 221,
@@ -6135,7 +6327,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "State and local policy"
     },
     {
       "id": 222,
@@ -6172,7 +6365,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "State and local policy"
     },
     {
       "id": 223,
@@ -6200,7 +6394,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "Midterm results and party direction"
     },
     {
       "id": 224,
@@ -6228,7 +6423,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "State and local policy"
     },
     {
       "id": 225,
@@ -6265,7 +6461,8 @@
       "counter_documents": [],
       "check_run": null,
       "also_said": [],
-      "self_contradictions": []
+      "self_contradictions": [],
+      "topic": "State and local policy"
     },
     {
       "id": 226,
@@ -6300,7 +6497,8 @@
       "also_said": [],
       "self_contradictions": [
         59
-      ]
+      ],
+      "topic": "Air traffic control and the ground stop"
     }
   ]
 }
