@@ -37,6 +37,7 @@ org.apache.calcite.adapter.govdata.edu.CrdcSchoolsResponseTransformer
 org.apache.calcite.adapter.govdata.edu.IpedsInstitutionsResponseTransformer
 org.apache.calcite.adapter.govdata.edu.IpedsCompletionsResponseTransformer
 org.apache.calcite.adapter.govdata.edu.IpedsFinancialsResponseTransformer
+org.apache.calcite.adapter.govdata.edu.IpedsFinancialAidResponseTransformer
 org.apache.calcite.adapter.govdata.edu.IpedsTuitionResponseTransformer
 org.apache.calcite.adapter.govdata.edu.CollegeScorecardResponseTransformer
 org.apache.calcite.adapter.govdata.edu.CollegeScorecardProgramsResponseTransformer
