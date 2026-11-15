@@ -48,7 +48,6 @@
 # DEFERRED (documented, not yet built — see govdata/docs/data-plans/fiscal.md):
 #   - soi_national            — SOI historical XLS tables have non-uniform,
 #                               per-table layouts; needs a bespoke workbook parser.
-#   - usaspending_contracts   — contracts bulk archive (same mechanism as usaspending_assistance, ~31 GB zips).
 # ============================================================================
 
 schemaName: "${SCHEMA_NAME:fiscal}"
@@ -5845,7 +5844,7 @@ partitionedTables:
       fac_audits.auditee_uei (Single Audit filings) and cfda_number to fac_federal_awards (see
       the view fac_awards_vs_usaspending); recipient_duns joins the pre-UEI FAC years; there is
       no EIN in USAspending, so EIN reaches it through fac_audits. Individuals' awards carry a
-      masked recipient and no UEI. Contracts are not in this table. Source:
+      masked recipient and no UEI. Contracts are in usaspending_contracts. Source:
       files.usaspending.gov/award_data_archive (URL resolved through
       api.usaspending.gov/api/v2/bulk_download/list_monthly_files/).
 
@@ -6115,6 +6114,427 @@ partitionedTables:
       iceberg:
         warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
         tableName: usaspending_assistance
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
+  # USASPENDING CONTRACTS — award data archive, all-agency Full file per fiscal year
+  # ---------------------------------------------------------------------------
+  - name: usaspending_contracts
+    # The archive is rebuilt every month; each Full file holds its whole fiscal year with
+    # corrections already applied. Reopening the 2 newest years each run picks up the awards
+    # still accruing; refresh_month re-keys the raw cache so a reopened year re-downloads.
+    lookbackPeriods: 2
+    pattern: "type=usaspending_contracts/year=*/*.parquet"
+    partitions: *standard_partitions
+    dqRowLimit: 200000
+    comment: >
+      Every federal prime contract transaction (definitive contracts, purchase orders, delivery
+      and task orders, and indefinite-delivery vehicles) by federal fiscal year (Oct-Sep; year =
+      the fiscal year of action_date), one row per contract action (award x modification), from
+      USAspending's award data archive (all-agency Contracts Full files, FY2007 onward; the zips
+      run 1.2-1.9 GB per year). Carries the awarding and funding agency, sub-agency and office,
+      the recipient (UEI, DUNS, parent, name, address, county and congressional district), the
+      product or service code and NAICS industry, the description, the competition and set-aside
+      fields, place of performance, period of performance and dollars. federal_action_obligation
+      is additive across rows (sum it for obligations by year, agency, recipient or PSC);
+      total_dollars_obligated, current_total_value_of_award, potential_total_value_of_award and
+      total_outlayed_amount_for_overall_award are cumulative per award and repeated on every row
+      of that award, so take one row per contract_award_unique_key (the latest action_date)
+      before summing them. Orders against an indefinite-delivery vehicle name it in
+      parent_award_id_piid. recipient_uei joins fac_audits.auditee_uei and
+      usaspending_assistance.recipient_uei; recipient_duns joins the pre-UEI years. The
+      aggregate-only contract tables (usaspending_by_district, usaspending_contract_recipients_by_district
+      and the agency, state and county rollups) stay the cheap route for totals; this table is
+      for naming the award. Grants, loans and other assistance are in usaspending_assistance.
+      Source: files.usaspending.gov/award_data_archive (URL resolved through
+      api.usaspending.gov/api/v2/bulk_download/list_monthly_files/).
+
+    dimensions:
+      type:
+        - usaspending_contracts
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2007}"
+        minYear: 2007
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        descending: true
+      # Cache buster (see lookbackPeriods above). Deliberately a single value: a multi-value
+      # dimension with no partition column would multiply rows.
+      refresh_month: ["${GOVDATA_CURRENT_MONTH:12}"]
+
+    columns:
+      - name: contract_transaction_unique_key
+        type: string
+        nullable: false
+        comment: "Transaction identifier (PK): one row per contract action (award x modification)"
+      - name: contract_award_unique_key
+        type: string
+        nullable: true
+        comment: "USAspending contract (or IDV) award identifier; many transaction rows share one award"
+      - name: award_id_piid
+        type: string
+        nullable: true
+        comment: "Procurement Instrument Identifier (contract number) assigned by the awarding agency"
+      - name: modification_number
+        type: string
+        nullable: true
+        comment: "Modification number of this action (0 = original award)"
+      - name: transaction_number
+        type: string
+        nullable: true
+        comment: "Transaction number within the modification"
+      - name: parent_award_agency_id
+        type: string
+        nullable: true
+        comment: "Agency code of the parent IDV when this is an order against an indefinite-delivery vehicle"
+      - name: parent_award_agency_name
+        type: string
+        nullable: true
+        comment: "Agency name of the parent IDV"
+      - name: parent_award_id_piid
+        type: string
+        nullable: true
+        comment: "PIID of the parent IDV (task and delivery orders only)"
+      - name: federal_action_obligation
+        type: double
+        nullable: true
+        comment: "Dollars obligated by this action (additive: sum for obligations by year, recipient or agency; negative for de-obligations)"
+      - name: total_dollars_obligated
+        type: double
+        nullable: true
+        comment: "Cumulative dollars obligated on the whole award; repeated on every row of the award, so do not sum across rows"
+      - name: total_outlayed_amount_for_overall_award
+        type: double
+        nullable: true
+        comment: "Cumulative outlays on the whole award; repeated on every row of the award"
+      - name: base_and_exercised_options_value
+        type: double
+        nullable: true
+        comment: "Base plus exercised options value of this action"
+      - name: current_total_value_of_award
+        type: double
+        nullable: true
+        comment: "Current total value of the award (base plus exercised options), cumulative"
+      - name: base_and_all_options_value
+        type: double
+        nullable: true
+        comment: "Base plus all options value of this action"
+      - name: potential_total_value_of_award
+        type: double
+        nullable: true
+        comment: "Potential total value of the award if every option is exercised, cumulative"
+      - name: disaster_emergency_fund_codes
+        type: string
+        nullable: true
+        comment: "Disaster Emergency Fund codes funding the award (COVID-19, IIJA, etc.)"
+      - name: action_date
+        type: string
+        nullable: true
+        comment: "Date of the action (YYYY-MM-DD)"
+      - name: action_date_fiscal_year
+        type: string
+        nullable: true
+        comment: "Federal fiscal year (Oct-Sep) of action_date"
+      - name: period_of_performance_start_date
+        type: string
+        nullable: true
+        comment: "Period of performance start date"
+      - name: period_of_performance_current_end_date
+        type: string
+        nullable: true
+        comment: "Current period of performance end date"
+      - name: period_of_performance_potential_end_date
+        type: string
+        nullable: true
+        comment: "Potential period of performance end date including all options"
+      - name: solicitation_date
+        type: string
+        nullable: true
+        comment: "Solicitation date"
+      - name: awarding_agency_code
+        type: string
+        nullable: true
+        comment: "Awarding agency code"
+      - name: awarding_agency_name
+        type: string
+        nullable: true
+        comment: "Awarding department or agency"
+      - name: awarding_sub_agency_code
+        type: string
+        nullable: true
+        comment: "Awarding sub-agency code"
+      - name: awarding_sub_agency_name
+        type: string
+        nullable: true
+        comment: "Awarding sub-agency (for example Federal Aviation Administration under Transportation)"
+      - name: awarding_office_code
+        type: string
+        nullable: true
+        comment: "Awarding contracting office code"
+      - name: awarding_office_name
+        type: string
+        nullable: true
+        comment: "Awarding contracting office"
+      - name: funding_agency_code
+        type: string
+        nullable: true
+        comment: "Funding agency code"
+      - name: funding_agency_name
+        type: string
+        nullable: true
+        comment: "Funding department or agency"
+      - name: funding_sub_agency_code
+        type: string
+        nullable: true
+        comment: "Funding sub-agency code"
+      - name: funding_sub_agency_name
+        type: string
+        nullable: true
+        comment: "Funding sub-agency"
+      - name: funding_office_name
+        type: string
+        nullable: true
+        comment: "Funding office"
+      - name: federal_accounts_funding_this_award
+        type: string
+        nullable: true
+        comment: "Federal (Treasury) accounts funding the award; an award-level list repeated on each row"
+      - name: program_activities_funding_this_award
+        type: string
+        nullable: true
+        comment: "Program activities funding the award, award-level list"
+      - name: recipient_uei
+        type: string
+        nullable: true
+        comment: "Recipient Unique Entity Identifier (SAM.gov); joins fac_audits.auditee_uei"
+      - name: recipient_duns
+        type: string
+        nullable: true
+        comment: "Recipient DUNS number (empty from FY2022)"
+      - name: recipient_name
+        type: string
+        nullable: true
+        comment: "Recipient legal business name (standardised)"
+      - name: recipient_doing_business_as_name
+        type: string
+        nullable: true
+        comment: "Recipient doing-business-as name"
+      - name: cage_code
+        type: string
+        nullable: true
+        comment: "Commercial and Government Entity code"
+      - name: recipient_parent_uei
+        type: string
+        nullable: true
+        comment: "Ultimate parent Unique Entity Identifier"
+      - name: recipient_parent_duns
+        type: string
+        nullable: true
+        comment: "Ultimate parent DUNS number (empty from FY2022)"
+      - name: recipient_parent_name
+        type: string
+        nullable: true
+        comment: "Ultimate parent name"
+      - name: recipient_country_code
+        type: string
+        nullable: true
+        comment: "Recipient country code"
+      - name: recipient_address_line_1
+        type: string
+        nullable: true
+        comment: "Recipient street address"
+      - name: recipient_city_name
+        type: string
+        nullable: true
+        comment: "Recipient city"
+      - name: recipient_county_fips
+        type: string
+        nullable: true
+        comment: "Recipient county FIPS code"
+      - name: recipient_state_code
+        type: string
+        nullable: true
+        comment: "Recipient state code"
+      - name: recipient_zip_code
+        type: string
+        nullable: true
+        comment: "Recipient ZIP+4"
+      - name: recipient_congressional_district
+        type: string
+        nullable: true
+        comment: "Recipient congressional district (current boundaries)"
+      - name: pop_country_code
+        type: string
+        nullable: true
+        comment: "Place of performance country code"
+      - name: pop_city_name
+        type: string
+        nullable: true
+        comment: "Place of performance city"
+      - name: pop_county_fips
+        type: string
+        nullable: true
+        comment: "Place of performance county FIPS code"
+      - name: pop_county_name
+        type: string
+        nullable: true
+        comment: "Place of performance county"
+      - name: pop_state_fips
+        type: string
+        nullable: true
+        comment: "Place of performance state FIPS code"
+      - name: pop_state_code
+        type: string
+        nullable: true
+        comment: "Place of performance state code"
+      - name: pop_state_name
+        type: string
+        nullable: true
+        comment: "Place of performance state"
+      - name: pop_zip4
+        type: string
+        nullable: true
+        comment: "Place of performance ZIP+4"
+      - name: pop_congressional_district
+        type: string
+        nullable: true
+        comment: "Place of performance congressional district (current boundaries)"
+      - name: award_or_idv_flag
+        type: string
+        nullable: true
+        comment: "AWARD for a definitive contract or order, IDV for an indefinite-delivery vehicle"
+      - name: award_type_code
+        type: string
+        nullable: true
+        comment: "Award type code (A-D definitive contracts and purchase orders, delivery and task orders, IDV types)"
+      - name: award_type
+        type: string
+        nullable: true
+        comment: "Award type description"
+      - name: idv_type
+        type: string
+        nullable: true
+        comment: "IDV type (GWAC, IDC, FSS, BOA, BPA) when the row is an IDV"
+      - name: type_of_contract_pricing
+        type: string
+        nullable: true
+        comment: "Contract pricing type (firm fixed price, cost plus, time and materials, etc.)"
+      - name: transaction_description
+        type: string
+        nullable: true
+        comment: "Free-text description of the action as filed"
+      - name: prime_award_base_transaction_description
+        type: string
+        nullable: true
+        comment: "Description of the base award transaction"
+      - name: action_type
+        type: string
+        nullable: true
+        comment: "Action type (new, modification, termination, etc.)"
+      - name: product_or_service_code
+        type: string
+        nullable: true
+        comment: "Product or Service Code (PSC)"
+      - name: product_or_service_code_description
+        type: string
+        nullable: true
+        comment: "Product or Service Code description"
+      - name: naics_code
+        type: string
+        nullable: true
+        comment: "NAICS industry code"
+      - name: naics_description
+        type: string
+        nullable: true
+        comment: "NAICS industry description"
+      - name: dod_acquisition_program_code
+        type: string
+        nullable: true
+        comment: "DoD acquisition program code"
+      - name: dod_acquisition_program_description
+        type: string
+        nullable: true
+        comment: "DoD acquisition program"
+      - name: extent_competed
+        type: string
+        nullable: true
+        comment: "Extent competed (full and open, not competed, etc.)"
+      - name: solicitation_procedures
+        type: string
+        nullable: true
+        comment: "Solicitation procedures"
+      - name: type_of_set_aside
+        type: string
+        nullable: true
+        comment: "Small-business or other set-aside type"
+      - name: number_of_offers_received
+        type: string
+        nullable: true
+        comment: "Number of offers received"
+      - name: program_acronym
+        type: string
+        nullable: true
+        comment: "Program acronym"
+      - name: domestic_or_foreign_entity
+        type: string
+        nullable: true
+        comment: "Domestic or foreign entity"
+      - name: contracting_officers_determination_of_business_size
+        type: string
+        nullable: true
+        comment: "Contracting officer's determination of business size (small / other than small)"
+      - name: organizational_type
+        type: string
+        nullable: true
+        comment: "Recipient organizational type"
+      - name: usaspending_permalink
+        type: string
+        nullable: true
+        comment: "Link to the award on usaspending.gov"
+      - name: last_modified_date
+        type: string
+        nullable: true
+        comment: "When USAspending last changed this transaction"
+
+    source:
+      type: http
+      url: "https://files.usaspending.gov/award_data_archive/"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingContractsBulkProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_contracts/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_contracts
         runMaintenance: true
         snapshotRetentionDays: 7
         catalogType: hadoop
@@ -7062,6 +7482,9 @@ constraints:
 
   usaspending_assistance:
     primaryKey: [year, assistance_transaction_unique_key]
+
+  usaspending_contracts:
+    primaryKey: [year, contract_transaction_unique_key]
 
   fac_audits:
     primaryKey: [report_id]

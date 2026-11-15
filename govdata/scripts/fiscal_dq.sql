@@ -1552,6 +1552,64 @@ FROM (SELECT COUNT(*) AS n FROM (
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_assistance', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
+-- DUNS was retired in 2022: recipient_duns/recipient_parent_duns are empty from FY2022, and the
+-- DQ sample is FY2025-FY2026 only (they are populated FY2007-FY2021).
+-- usaspending_contracts (bulk download; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (DQ sample (dqRowLimit 200000 per year); full years carry 1-9 million rows)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'recipient_duns', 'recipient_parent_duns')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'recipient_duns', 'recipient_parent_duns')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL primary-key rows (contract_transaction_unique_key)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true)
+  WHERE contract_transaction_unique_key IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T7_expected_values',
+  CASE WHEN bad = 0 AND dollars > 0 THEN 'pass' ELSE 'fail' END, bad, 0,
+  'Rows with no award key, awarding agency, or action_date, or an unparsable date (bad), and positive obligations present (dollars=' || CAST(dollars AS VARCHAR) || ')'
+FROM (SELECT COUNT(*) FILTER (WHERE contract_award_unique_key IS NULL OR awarding_agency_name IS NULL
+        OR TRY_CAST(action_date AS DATE) IS NULL) AS bad,
+      COALESCE(SUM(federal_action_obligation) FILTER (WHERE federal_action_obligation > 0), 0) AS dollars
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_contracts', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, contract_transaction_unique_key) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, contract_transaction_unique_key, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- fac_audits (bulk download; partition cols: type)
 -- ─────────────────────────────────────────────────────────────
 

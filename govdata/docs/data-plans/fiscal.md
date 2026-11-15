@@ -18,7 +18,8 @@ deferral (not a shortfall).
 | `ssa_benefits_by_geography` | ✅ Delivered | `SsaBenefitsProvider` |
 | `sba_loan_approvals` | ✅ Delivered | `SbaLoansProvider` |
 | `soi_national` | ❌ **NOT BUILT** | absent from YAML; no provider/transformer exists — real gap |
-| `usaspending_assistance` | ✅ Delivered (assistance transactions) | `UsaSpendingAssistanceBulkProvider`; contracts not yet loaded |
+| `usaspending_assistance` | ✅ Delivered (assistance transactions) | `UsaSpendingAssistanceBulkProvider` |
+| `usaspending_contracts` | ✅ Delivered (prime contract transactions) | `UsaSpendingContractsBulkProvider`; same archive, Contracts Full files |
 | `fac_audits`, `fac_federal_awards`, `fac_audits_historic`, `fac_federal_awards_historic` | ✅ Delivered | `Fac*Provider` (Federal Audit Clearinghouse bulk CSVs, 1998-present) |
 
 **Extension views beyond the plan (delivered):** `ssa_benefits_by_geography_acs`,
