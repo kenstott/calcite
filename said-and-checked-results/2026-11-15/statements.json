@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. No original source (transcript, release or post) could be read for any statement, so all wording is as the outlet reported it.",
   "lede": [
     "Fifty-six statements by 15 officeholders appeared in two days of NPR and PBS NewsHour politics coverage. Most were about three things: the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war and talk of ending it, and what Democrats plan to do with the majorities they won on Nov. 3.",
-    "Eleven of the 56 were checked. Eight were factual claims. Three were opinions or predictions resting on a factual premise, and for those the premise alone was rated. Five came out supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. One was contradicted: the transportation secretary's reported account of what caused the ground stop differs from the FAA's own published account, though the FAA says its investigation is still open. Three were unsettled, meaning evidence was found but does not decide them: the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, and the premise behind the secretary of state's statement about economic pressure on Iran. Two were unsupported, meaning no evidence was found for them; that is not a finding that they are false.",
+    "Eleven of the 56 were checked. Eight were factual claims. Three were opinions or predictions resting on a factual premise, and for those the premise alone was rated. Five came out supported, including the transportation secretary's statement that air traffic control has seen decades of underinvestment. One was contradicted: the transportation secretary's reported account of what caused the ground stop differs from the FAA's own published account, though the FAA says its investigation is still open. Four were unsettled, meaning evidence was found but does not decide them: the president's statement that much of the air traffic control system is 50 years old, the Florida governor's statement about what a state law requires, a congressman's statement that his party won in places it had never won, and the premise behind the secretary of state's statement about economic pressure on Iran. One was unsupported, meaning no evidence was found for it; that is not a finding that it is false.",
     "Three statements are linked to a direct counter-statement: two to a statement by another official on this page, and one to the FAA's own published account. A link shows that the two disagree on the same point. It is not a finding about which is right.",
     "The other 45 are opinions, predictions, promises and one personal attack. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -131,7 +131,8 @@
         }
       ],
       "check_run": null,
-      "context": "In a message on X after Delray Beach, Florida, cancelled its St. Patrick's Day parade citing a new state law restricting government-funded diversity initiatives."
+      "context": "In a message on X after Delray Beach, Florida, cancelled its St. Patrick's Day parade citing a new state law restricting government-funded diversity initiatives.",
+      "test": "True if the statute's text does not require a city to cancel such an event. False if it does. Cannot be determined if the text neither requires nor permits it and the answer depends on how a court or the state would read it."
     },
     {
       "id": 2,
@@ -278,7 +279,8 @@
       ],
       "check_run": null,
       "context": "From a joint letter with Rep. Frank Pallone Jr. to the CMS administrator, referring to the Boston federal court ruling on medically frail Medicaid enrollees.",
-      "premise": "Millions of medically frail people rely on Medicaid."
+      "premise": "Millions of medically frail people rely on Medicaid.",
+      "test": "True if published counts put the group in the millions under the statute's definition. False if they put it under one million. Cannot be determined if no count or bound exists."
     },
     {
       "id": 8,
@@ -584,7 +586,8 @@
       "premise": "U.S. economic pressure is inflicting severe economic damage on Iran.",
       "counter_statements": [
         19
-      ]
+      ],
+      "test": "True if figures show severe damage attributable to economic measures. False if they show little damage. Cannot be determined if damage is documented but cannot be separated from the effects of the war."
     },
     {
       "id": 21,
@@ -660,7 +663,8 @@
         }
       ],
       "check_run": null,
-      "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins."
+      "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins.",
+      "test": "True if Democrats won in 2026 where the record shows no Democratic win for decades. False if every such place had a recent Democratic win."
     },
     {
       "id": 24,
@@ -678,16 +682,27 @@
         "note": "No original transcript or post located."
       },
       "kind": "factual",
-      "result": "unsupported",
-      "finding": "No 2026 race was found in a place Democrats had never won before; every first identified was a first since an earlier win.",
+      "result": "unsettled",
+      "finding": "AskAmerica's returns for 1976-2024 show a Democratic U.S. House win in all 50 states and a Democratic U.S. Senate win in 47. Of the three states with none (Idaho, Kansas, Utah), Democrats won only Kansas in 2026. Coverage reports their last Kansas Senate win was in 1932; that predates the record and was not read from a primary source. House districts and state legislative seats were not tested.",
       "evidence": [
+        {
+          "label": "officials.senate_race_results (U.S. Senate returns, 1976-2024)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#senate_race_results-view",
+          "askamerica": true
+        },
+        {
+          "label": "officials.house_race_results (U.S. House returns, 1976-2024)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#house_race_results-view",
+          "askamerica": true
+        },
         {
           "label": "WFTV/Cox, Election 2026 results (Nov. 4, 2026)",
           "url": "https://www.wftv.com/news/trending/election-2026-democrats-capture-both-houses-congress/5ILOWTVABVDPZFYP7VBBCX4EWE/?outputType=amp"
         }
       ],
       "check_run": null,
-      "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins; the second half of the same sentence."
+      "context": "In an interview at the 'What's Next' Democratic conference in Denver on Nov. 12-13, about the party's midterm wins; this is the second half of a sentence that begins \"We won races in places where we haven't won in a long time\".",
+      "test": "False if every place Democrats won has a Democratic win on record. Cannot be determined where a place has none, because the record begins in 1976. True only with a full history showing no earlier win."
     },
     {
       "id": 25,
@@ -1176,7 +1191,8 @@
         }
       ],
       "check_run": null,
-      "context": "In a Nov. 15 social media post about the air traffic control system, after the Nov. 13 nationwide ground stop."
+      "context": "In a Nov. 15 social media post about the air traffic control system, after the Nov. 13 nationwide ground stop.",
+      "test": "True if official figures show a large share of the system is about 50 years old. False if they show only a small part is. Cannot be determined if no age breakdown exists, because \"much\" has no fixed threshold."
     },
     {
       "id": 47,
@@ -1254,7 +1270,8 @@
       "premise": "Underinvestment in air traffic control spans administrations of both parties.",
       "counter_statements": [
         47
-      ]
+      ],
+      "test": "True if capital funding grew slowly under administrations of both parties. False if the shortfall is confined to one party's administrations."
     },
     {
       "id": 50,
@@ -1281,7 +1298,8 @@
         }
       ],
       "check_run": null,
-      "context": "On NBC's 'Meet the Press' on Nov. 15, about the history of air traffic control investment."
+      "context": "On NBC's 'Meet the Press' on Nov. 15, about the history of air traffic control investment.",
+      "test": "True if capital funding over 20 to 30 years grew more slowly than inflation or fell short of authorized levels. False if it kept pace with both."
     },
     {
       "id": 51,
@@ -1318,7 +1336,8 @@
           "label": "FAA, Nationwide Ground Stop: Questions and Answers",
           "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
         }
-      ]
+      ],
+      "test": "True if the FAA or the contractor confirms that cause. False if a settled official finding gives a different cause. Contradicted if an official account says otherwise while the investigation is still open."
     },
     {
       "id": 52,
@@ -1349,7 +1368,8 @@
         }
       ],
       "check_run": null,
-      "context": "AP's account of Duffy's post on X about the investigation into the ground stop; L3Harris is an FAA contractor."
+      "context": "AP's account of Duffy's post on X about the investigation into the ground stop; L3Harris is an FAA contractor.",
+      "test": "True if the FAA or the contractor confirms the routers were secured and are being examined. False if either denies it. Cannot be determined if neither addresses it."
     },
     {
       "id": 53,
@@ -1398,7 +1418,8 @@
         }
       ],
       "check_run": null,
-      "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel after the nationwide ground stop."
+      "context": "On CBS's 'Face the Nation' on Nov. 15, about air travel after the nationwide ground stop.",
+      "test": "True if flight-tracking counts for that day show delays. False if they show none."
     },
     {
       "id": 55,
