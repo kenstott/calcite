@@ -1406,6 +1406,109 @@ FROM (
 ) t;
 
 -- ============================================================
+-- eia_heating_fuel_prices
+-- ============================================================
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_heating_fuel_prices', 'T1_existence',
+  CASE WHEN COUNT(*) > 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'row count'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true);
+
+-- T2: row_count (heating season only: ~3,800 rows/yr; the DQ worker window is 2022-2026 = ~18,000)
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_heating_fuel_prices', 'T2_row_count',
+  CASE WHEN COUNT(*) >= 15000 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 15000, 'expected >= 15000 weekly heating fuel price rows in the 2022+ worker window'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true);
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_heating_fuel_prices', 'T4_all_null_cols',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, null_percentage
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true))
+  WHERE null_percentage = 100.0
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_heating_fuel_prices', 'T5_all_same_value',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'warn' END,
+  COUNT(*), 0,
+  STRING_AGG(column_name, ', ')
+FROM (
+  SELECT column_name, approx_unique
+  FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true))
+  WHERE approx_unique <= 1
+    AND column_name NOT IN ('type', 'year')
+) t;
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_heating_fuel_prices', 'T6_pk_nulls',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0,
+  'report_date IS NULL OR price_year IS NULL OR series_id IS NULL OR eia_area_code IS NULL OR process_code IS NULL'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true)
+WHERE report_date IS NULL OR price_year IS NULL OR series_id IS NULL OR eia_area_code IS NULL OR process_code IS NULL;
+
+-- T7: expected_values — price_dollars_per_gallon between 0.1 and 20 where not null
+INSERT INTO dq_results
+SELECT
+  'energy', 'eia_heating_fuel_prices', 'T7_expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'warn' END,
+  bad, 0,
+  'price_dollars_per_gallon outside 0.1..20'
+FROM (
+  SELECT COUNT(*) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true)
+  WHERE price_dollars_per_gallon IS NOT NULL AND (price_dollars_per_gallon < 0.1 OR price_dollars_per_gallon > 20)
+) t;
+
+-- T9: PK duplication guard (series_id, report_date)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_heating_fuel_prices', 'T9_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (series_id, report_date) groups'
+FROM (
+  SELECT series_id, report_date
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true)
+  GROUP BY series_id, report_date HAVING COUNT(*) > 1
+) d;
+
+-- T10: known published value. U.S. residential No 2 heating oil, week of 2026-11-09 was
+-- $5.915/gal (checked against the live EIA API 2026-11-15; matches the figure in news coverage).
+INSERT INTO dq_results
+SELECT 'energy', 'eia_heating_fuel_prices', 'T10_known_value',
+  CASE WHEN COUNT(*) = 1 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 1, 'W_EPD2F_PRS_NUS_DPG 2026-11-09 = 5.915'
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true)
+WHERE series_id = 'W_EPD2F_PRS_NUS_DPG' AND report_date = '2026-11-09'
+  AND price_dollars_per_gallon = 5.915;
+
+-- T8: worker coverage (weekly from 1990-10, current season published -> MAX >= 2025)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_heating_fuel_prices', 'T8_worker_coverage',
+  CASE WHEN MIN(price_year) <= 2024 AND MAX(price_year) >= 2025 THEN 'pass' ELSE 'fail' END,
+  MAX(price_year), 2025,
+  printf('MIN=%d MAX=%d | historical: MIN<=2024, weekly worker: MAX>=2025', MIN(price_year), MAX(price_year))
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true);
+
+-- ============================================================
 -- eia_natural_gas_price
 -- ============================================================
 
