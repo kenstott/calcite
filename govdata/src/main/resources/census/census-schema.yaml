@@ -7394,6 +7394,224 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # ---------------------------------------------------------------------------
+  # poverty_history_national - Census CPS ASEC historical national table
+  # ---------------------------------------------------------------------------
+  - name: poverty_history_national
+    timeColumn: year
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=poverty_history_national/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Official U.S. poverty rate and counts, 1959 to the latest Current Population Survey Annual
+      Social and Economic Supplement (CPS ASEC) year, national, all races: Census Bureau historical
+      poverty Table 2 (hstpov2.xlsx). This is the official measure (the poverty thresholds), not the
+      Supplemental Poverty Measure, which is not in this table, and not the ACS- or model-based
+      acs_poverty / saipe_poverty tables. One row per year and vintage; the survey year is the
+      calendar year the income refers to (collected the following March). Counts are in thousands of
+      people; rates are percent. The rate runs from 22.4 percent in 1959. Rows are split into all people,
+      people in families, people in families with a female householder and no spouse present, and
+      unrelated individuals; the female-householder counts are NULL for 1959-1964 where the source
+      prints N. Source: https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-poverty-people.html
+
+    dimensions:
+      type:
+        - poverty_history_national
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Survey year the poverty status refers to (calendar year of income)
+      - name: vintage
+        type: string
+        nullable: false
+        comment: "'primary' (first listing of the year, Census's current basis) or 'alternate' (second listing of the same year, published when processing or the income questions changed, 2013 and 2017). Filter vintage = 'primary' for one row per year."
+      - name: people_total
+        type: long
+        nullable: true
+        comment: All people in the poverty universe, thousands
+      - name: people_below_poverty
+        type: long
+        nullable: true
+        comment: All people below the poverty line, thousands
+      - name: poverty_rate_pct
+        type: double
+        nullable: true
+        comment: Official poverty rate for all people, percent
+      - name: family_people_total
+        type: long
+        nullable: true
+        comment: People in families, thousands
+      - name: family_people_below_poverty
+        type: long
+        nullable: true
+        comment: People in families below poverty, thousands
+      - name: family_people_poverty_rate_pct
+        type: double
+        nullable: true
+        comment: Poverty rate of people in families, percent
+      - name: female_householder_people_total
+        type: long
+        nullable: true
+        comment: People in families with a female householder and no spouse present, thousands. NULL 1959-1964 (source N)
+      - name: female_householder_people_below_poverty
+        type: long
+        nullable: true
+        comment: People in female-householder families below poverty, thousands
+      - name: female_householder_poverty_rate_pct
+        type: double
+        nullable: true
+        comment: Poverty rate of people in female-householder families, percent
+      - name: unrelated_individuals_total
+        type: long
+        nullable: true
+        comment: Unrelated individuals, thousands
+      - name: unrelated_individuals_below_poverty
+        type: long
+        nullable: true
+        comment: Unrelated individuals below poverty, thousands
+      - name: unrelated_individuals_poverty_rate_pct
+        type: double
+        nullable: true
+        comment: Poverty rate of unrelated individuals, percent
+
+    source:
+      type: http
+      # The page is fetched as text; the transformer reads the workbook link from it and
+      # downloads the xlsx itself.
+      url: "https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-poverty-people.html"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.CpsPovertyHistoryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=poverty_history_national/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: poverty_history_national
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
+  # ---------------------------------------------------------------------------
+  # household_income_history_national - Census CPS ASEC historical national table
+  # ---------------------------------------------------------------------------
+  - name: household_income_history_national
+    timeColumn: year
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=household_income_history_national/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    comment: >
+      Median and mean household income of the United States, 1967 to the latest CPS ASEC year,
+      all races, in BOTH current (nominal) dollars and constant dollars: Census Bureau historical
+      income Table H-5 (h05.xlsx). Use the *_current_dollars columns for the nominal figure as
+      published in each year; use the *_constant_dollars columns (C-CPI-U, with R-CPI-U-RS before
+      2000, expressed in constant_dollar_year dollars) to compare across years. Households are in
+      thousands. The survey year is the calendar year the income refers to. One row per year and
+      vintage. econ.fred_indicators carries the real series MEHOINUSA672N; this table is the Census
+      source with the nominal series. Source: https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-income-households.html
+
+    dimensions:
+      type:
+        - household_income_history_national
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Survey year the income refers to (calendar year)
+      - name: vintage
+        type: string
+        nullable: false
+        comment: "'primary' (first listing of the year, Census's current basis) or 'alternate' (second listing of the same year, published when processing or the income questions changed, 2013 and 2017). Filter vintage = 'primary' for one row per year."
+      - name: constant_dollar_year
+        type: integer
+        nullable: false
+        comment: Dollar year of the constant-dollar columns in the current release (for example 2025)
+      - name: households_thousands
+        type: long
+        nullable: true
+        comment: Households, thousands
+      - name: median_income_current_dollars
+        type: long
+        nullable: true
+        comment: Median household income, current (nominal) dollars of the survey year
+      - name: median_income_constant_dollars
+        type: long
+        nullable: true
+        comment: Median household income in constant_dollar_year dollars
+      - name: mean_income_current_dollars
+        type: long
+        nullable: true
+        comment: Mean household income, current (nominal) dollars
+      - name: mean_income_constant_dollars
+        type: long
+        nullable: true
+        comment: Mean household income in constant_dollar_year dollars
+
+    source:
+      type: http
+      # The page is fetched as text; the transformer reads the workbook link from it and
+      # downloads the xlsx itself.
+      url: "https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-income-households.html"
+      method: GET
+      response:
+        format: TEXT
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.census.CpsHouseholdIncomeHistoryTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=household_income_history_national/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/census"
+        tableName: household_income_history_national
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 
 # ============================================================================
 # SQL VIEWS
