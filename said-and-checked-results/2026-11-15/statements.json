@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
     "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "79 statements have been checked: 20 supported, 46 unsettled, 9 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 32 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "87 statements have been checked: 21 supported, 51 unsettled, 11 unsupported, 3 contradicted, 1 false. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 24 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
     "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
     "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -1926,15 +1926,15 @@
       "test": "True if FAA or DOT reporting, or federal spending data, shows the 12.5 billion dollars is largely unspent but obligated, including for radar. False if official data show most of it is not obligated. Cannot be determined if no obligation data are published.",
       "premise": null,
       "result": "unsettled",
-      "finding": "No primary obligation data from the FAA, the Transportation Department or federal spending records could be read. Secondary reports suggest the money is largely unspent, but none confirms how much is obligated or that it is obligated to radar; the law designates $3 billion for radar replacement.",
+      "finding": "GAO reports that as of March 2026 the FAA had obligated $1.8 billion, or 20 percent, of the $9 billion systems portion of the $12.5 billion, so most had not been obligated at that date; no later figure was found. The law designates $3 billion for radar replacement.",
       "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        },
         {
           "label": "Public Law 119-21, Sec. 40003",
           "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
-        },
-        {
-          "label": "Nextgov, April 2026",
-          "url": "https://www.nextgov.com/modernization/2026/04/transportation-celebrates-air-traffic-control-modernization-asks-lawmakers-more-funding/413019/"
         }
       ],
       "counter_statements": [
@@ -1992,9 +1992,18 @@
       "kind": "factual",
       "test": "True if federal records show about 50 billion dollars provided for aviation or the FAA during the Biden administration and that the 12.5 billion dollars has not been obligated. False if either figure is materially wrong, including if most of the 12.5 billion is obligated. Cannot be determined if obligation data are not published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "GAO reports that as of March 2026 the FAA had obligated $1.8 billion, or 20 percent, of the $9 billion systems portion of the $12.5 billion, so some had been obligated and most had not; no later figure was found. The $12.5 billion was appropriated in July 2025. The $50 billion figure for the previous administration was not confirmed: the FAA's page on the 2021 infrastructure law could not be read directly.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        },
+        {
+          "label": "Public Law 119-21, Sec. 40003",
+          "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm"
+        }
+      ],
       "counter_statements": [
         74
       ],
@@ -2050,9 +2059,18 @@
       "kind": "factual",
       "test": "True if official figures show about 1,300 FAA employees resigned or retired under the 2025 reductions and about 400 probationary employees were fired. False if official figures differ materially. Cannot be determined if no official figures are published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No official FAA count was found. Government Executive reported in May 2025 that more than 2,700 FAA staff signed up for the deferred-resignation program, and Yahoo News, citing the Wall Street Journal, reported an internal estimate of more than 1,200 departures. CNN reported in February 2025 that the number of probationary employees fired was not yet known.",
+      "evidence": [
+        {
+          "label": "Government Executive on FAA departures",
+          "url": "https://www.govexec.com/management/2025/05/trump-administration-staffing-parts-faa-its-also-incentivizing-thousands-departures-and-threatening-layoffs/405347"
+        },
+        {
+          "label": "Yahoo News on FAA departures",
+          "url": "https://www.yahoo.com/news/more-1-200-faa-employees-180704357.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2106,9 +2124,18 @@
       "kind": "factual",
       "test": "True if an official record or congressional statement confirms a March or April memo from the secretary of state raising concern that the woman was a spy. False if the State Department denies such a memo. Cannot be determined if only press reports exist.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Associated Press reported that, according to Axios, the commerce secretary received a classified memo \"this spring\", and another summary of press reports places it in May, drafted under the secretary of state. No official record or congressional statement confirming the memo or its date was found, and the reported May date differs from the March or April stated.",
+      "evidence": [
+        {
+          "label": "Associated Press, via Orlando Sentinel",
+          "url": "https://www.orlandosentinel.com/2026/11/13/nvidia-bessent-lutnick-commerce-department-china/"
+        },
+        {
+          "label": "Magica summary of press reports",
+          "url": "https://magica.com/news/bessent-lutnick-megaspeed-export-blacklist-dispute"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2134,8 +2161,8 @@
       "kind": "factual",
       "test": "True if no such memo has been provided to the House Intelligence Committee. False if the committee has received it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No official account or public record was found on whether the memo has been given to the House Intelligence Committee. The search covered an Associated Press report and web searches on the committee, congressional leaders and the memo.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -2162,8 +2189,8 @@
       "kind": "factual",
       "test": "True if the committee's public statements show it received only an incidental briefing on the matter. False if records show a full briefing. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No public statement from the House Intelligence Committee, or any official account, describing what the briefing covered was found. The search covered web searches on the committee and the briefing; briefings of this kind are classified.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -2190,9 +2217,14 @@
       "kind": "factual",
       "test": "True if a public record shows Jensen Huang or Nvidia gave 25 million dollars toward the White House ballroom. False if the record shows a materially different amount or no gift. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The Next Web, citing the Washington Post, reports that a leaked donor list shows Nvidia at $25 million for the White House ballroom, and that Nvidia said it was proud to give. The figure rests on press reports of a leaked list, not an official disclosure, and it is recorded as a company gift, not a personal check.",
+      "evidence": [
+        {
+          "label": "The Next Web on the ballroom donor list",
+          "url": "https://thenextweb.com/news/nvidia-apple-25m-trump-ballroom-donors"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2246,9 +2278,18 @@
       "kind": "factual",
       "test": "True if the Commerce Department's Entity List does not include Megaspeed. False if it does. Cannot be determined only if the list cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The current text of the Commerce Department's Entity List in the Code of Federal Regulations, read in full, contains no entry for Megaspeed, and a Federal Register search for the name returns no documents. The Associated Press reported the treasury secretary saying agencies had wanted the company added for months.",
+      "evidence": [
+        {
+          "label": "Entity List, 15 CFR Part 744, Supplement No. 4",
+          "url": "https://www.ecfr.gov/current/title-15/subtitle-B/chapter-VII/subchapter-C/part-744/appendix-Supplement%20No.%204%20to%20Part%20744"
+        },
+        {
+          "label": "Associated Press, via Orlando Sentinel",
+          "url": "https://www.orlandosentinel.com/2026/11/13/nvidia-bessent-lutnick-commerce-department-china/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2274,9 +2315,14 @@
       "kind": "factual",
       "test": "True if corporate records show Megaspeed was founded or became active within the last 10 years. False if records show it operating at scale earlier. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Tom's Hardware and another outlet, citing business filings, report the company was incorporated in 2015 under another name as a gaming business and renamed Megaspeed in March 2023, with reported assets rising from $33 million in 2023 to $3 billion in 2024. Whether the earlier business counts as existing \"in any meaningful way\" is a matter of reading; no corporate registry page was read.",
+      "evidence": [
+        {
+          "label": "Tom's Hardware on Megaspeed",
+          "url": "https://www.tomshardware.com/pc-components/gpus/nvidias-biggest-sea-customer-exposes-the-limits-of-us-ai-export-controls"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
