@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 14 or 15, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and every statement by an in-scope guest in the Nov. 15, 2026 transcripts of CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union, as read on Nov. 15. PBS NewsHour carries Associated Press reporting. Only what a guest said live on a show is included, not clips played by the host. A claim one speaker repeated in similar words is listed once, with the other wordings beneath it. Two NPR audio segments with no transcript were skipped. Quotes under five words were left out, and two entries that were a commentator's account of what an official said were removed. Statements from the feeds' stories are worded as the outlet reported them unless a transcript is linked. Factual statements not yet checked are marked so and are checked in turn.",
   "lede": [
     "This page lists 198 statements by 20 officeholders. 56 appeared in two days of NPR and PBS NewsHour politics coverage; the other 142 are from the Nov. 15 transcripts of four Sunday shows: CBS Face the Nation, NBC Meet the Press, ABC This Week and CNN State of the Union. Most were about the Nov. 13 nationwide ground stop and what it will cost to fix air traffic control, the Iran war, sales of advanced computer chips to China, and what the Nov. 3 election results mean.",
-    "53 statements have been checked: 16 supported, 29 unsettled, 6 unsupported, 2 contradicted. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 58 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
+    "63 statements have been checked: 18 supported, 35 unsettled, 8 unsupported, 2 contradicted. Unsettled means evidence was found but does not decide the claim. Unsupported means no evidence was found, which is not a finding that the statement is false. Contradicted means a primary source says otherwise on the specific point while some question remains open. 48 more factual statements are waiting for a check and are marked not yet checked; the page is updated as each speaker's checks finish.",
     "7 statements are linked to a direct counter-statement by another official on this page or to an official document that says otherwise. 2 statements are linked to a statement by the same speaker that cannot also be true. A link shows that two statements disagree on the same point. It is not a finding about which is right.",
     "Where a speaker made the same claim more than once, it is listed once with the other wordings beneath it; 19 claims were condensed this way. The remaining 87 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked, and are folded under each speaker."
   ],
@@ -2694,8 +2694,8 @@
       "kind": "factual",
       "test": "True if a public record shows regular contact between the senator and the CDC director. False if a record contradicts it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No page that could be read shows how often the senator and the CDC director are in contact. The search covered web searches on the two and the warehouse catalog, which holds no record of contacts between members and officials.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -2722,8 +2722,8 @@
       "kind": "factual",
       "test": "True if a public record shows the federal flu-shot locator link was broken for about a year. False if a record shows it worked. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No page that could be read says how long the federal flu-shot locator was broken or records the CDC director's reply. The search covered the vaccine locator site, the flu-shot locator and the CDC director; an NBC News page on the subject failed to load.",
       "evidence": [],
       "counter_statements": [],
       "counter_documents": [],
@@ -2750,9 +2750,14 @@
       "kind": "factual",
       "test": "True if the Senate calendar shows about four weeks of session remaining in 2026. False if the calendar shows materially more or fewer. Cannot be determined if no calendar is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Senate's tentative 2026 schedule lists no session on Nov. 23-27 and Dec. 21-31, leaving four session weeks after Nov. 15: Nov. 16-20, Nov. 30-Dec. 4, Dec. 7-11 and Dec. 14-18. The schedule is tentative.",
+      "evidence": [
+        {
+          "label": "Senate tentative 2026 legislative schedule",
+          "url": "https://www.senate.gov/legislative/2026_schedule.htm"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2806,9 +2811,14 @@
       "kind": "factual",
       "test": "True if HHS and FDA have issued no final rule, standard or definition on ultra-processed foods. False if a final federal action on ultra-processed foods is on record. 'Minimal' cannot be determined exactly.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "A trade outlet, Food Industry Executive, reported that the FDA and the health department sent a proposed definition of ultra-processed food to the White House budget office in August 2026 as a white paper, not a rule. No final rule, standard or definition was found, but the submission itself was not read, and \"minimal progress\" is a judgment the record cannot settle exactly.",
+      "evidence": [
+        {
+          "label": "Food Industry Executive on the ultra-processed food definition",
+          "url": "https://foodindustryexecutive.com/2026/08/the-fda-sent-its-upf-definition-to-omb-as-a-white-paper-not-a-rule/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2834,9 +2844,28 @@
       "kind": "factual",
       "test": "True if CDC or PAHO records show the United States has lost measles elimination status and CDC data record infant deaths from measles in the current outbreak. False if elimination status stands or no infant deaths are recorded. Cannot be determined if the status decision is pending.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's copy of CDC's weekly disease counts shows 4,991 measles cases in 2026 through week 44, against 1,872 in all of 2025. On elimination status, the Pan American Health Organization moved its U.S. review to its November 2026 meeting and no decision had been published. On deaths, Healio reported two infant measles deaths in early November, citing the Wisconsin and New York health departments; CDC's page lists six deaths in 2026 without ages.",
+      "evidence": [
+        {
+          "label": "health.cdc_nndss_weekly (measles cases, 2025 and 2026 to week 44)",
+          "url": "https://askamerica.ai/catalog/schemas/health/#cdc_nndss_weekly-table",
+          "askamerica": true,
+          "sql": "SELECT mmwr_year,\n       MAX(CAST(mmwr_week AS INTEGER)) AS last_week,\n       MAX(CAST(cumulative_ytd_current_year AS INTEGER)) AS ytd\nFROM health.cdc_nndss_weekly\nWHERE disease LIKE 'Measles%'\n  AND reporting_area = 'U.S. Residents'\n  AND cumulative_ytd_current_year IS NOT NULL\nGROUP BY mmwr_year\nORDER BY mmwr_year"
+        },
+        {
+          "label": "Pan American Health Organization on its review of U.S. measles elimination status",
+          "url": "https://www.paho.org/en/news/2-3-2026-update-review-measles-elimination-status"
+        },
+        {
+          "label": "Healio on state-reported measles deaths",
+          "url": "https://www.healio.com/news/infectious-disease/20261109/states-report-first-measles-deaths-in-decades-ahead-of-paho-meeting"
+        },
+        {
+          "label": "CDC measles data",
+          "url": "https://www.cdc.gov/measles/data-research/index.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2868,9 +2897,14 @@
       "kind": "factual",
       "test": "True if federal data (CMS national health expenditures, BLS, KFF employer survey) show health costs rising and the share of small firms offering coverage falling. False if those data show costs flat or falling and small-firm offer rates rising. Cannot be determined if the data do not reach the period.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "KFF's 2026 employer survey shows workers' family premium contributions up 9 percent to $7,471 and the average single-coverage deductible at $1,955, up from $1,886, and higher at small firms ($2,624). The cost parts are confirmed; a falling share of small businesses offering coverage was not found in the pages read.",
+      "evidence": [
+        {
+          "label": "KFF 2026 Employer Health Benefits Survey release",
+          "url": "https://www.kff.org/other-health/workers-now-pay-7471-on-average-annually-for-family-health-coverage-up-9-or-621-from-2025-benchmark-employer-health-benefits-survey-finds/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2924,9 +2958,20 @@
       "kind": "factual",
       "test": "True if public statements by Sen. Thune or Sen. Crapo confirm a commitment to a hearing and markup on the senator's Social Security bill. False if either has publicly denied it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "AskAmerica's bill records show the senator's S. 4979, the PROMISE Act of 2026, referred to the Finance Committee on July 14, 2026, with no markup recorded. Raw Story reported in August that the Finance chairman was among senators he met on the bill; it records no public commitment by either senator to a hearing and markup.",
+      "evidence": [
+        {
+          "label": "law.bills (S. 4979, PROMISE Act of 2026: latest action)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+          "askamerica": true,
+          "sql": "SELECT bill_type, bill_number, title, latest_action_date, latest_action_text\nFROM law.bills\nWHERE congress = 119 AND title ILIKE '%PROMISE Act%'\nFETCH FIRST 5 ROWS ONLY"
+        },
+        {
+          "label": "Raw Story on the Social Security bill",
+          "url": "https://www.rawstory.com/social-security-reform/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -2952,9 +2997,14 @@
       "kind": "factual",
       "test": "True if a public statement by the president or the White House supports the senator's Social Security proposal. False if the White House has publicly opposed it. Cannot be determined if no public record or official account addresses it.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Raw Story reported in August 2026 that a White House spokesperson declined to comment on the bill and that the president has vowed not to touch Social Security. That is neither public support nor public opposition, and no White House statement on the bill was found.",
+      "evidence": [
+        {
+          "label": "Raw Story on the Social Security bill",
+          "url": "https://www.rawstory.com/social-security-reform/"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3008,9 +3058,18 @@
       "kind": "factual",
       "test": "True if the senator's published plan, or an actuarial analysis of it, has 1.5 trillion dollars borrowed and invested separately and projected to cover up to 70 percent of the Social Security shortfall. False if the plan or its analysis states materially different figures. Cannot be determined if no plan text or analysis is published.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "An analysis by Boston College's Center for Retirement Research describes the plan as $1.5 trillion borrowed and held in a fund separate from the Social Security trust fund, which matches. The 70 percent figure is the senator's own estimate and no bill text or actuarial score was found; the Boston College simulation finds the fund repaying about 60 percent of the total borrowing at the median, on its own assumptions.",
+      "evidence": [
+        {
+          "label": "Boston College Center for Retirement Research analysis",
+          "url": "https://crr.bc.edu/wp-content/uploads/2026/05/Can-Equity-Investments-Help-Social-Securitys-Long-run-Financing.pdf"
+        },
+        {
+          "label": "Yahoo News on the investment fund proposal",
+          "url": "https://www.yahoo.com/news/articles/senators-pitch-1-5-trillion-100000909.html"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
@@ -3036,9 +3095,18 @@
       "kind": "factual",
       "test": "True if roll-call records show Sen. Wyden voted for the Railroad Retirement and Survivors' Improvement Act of 2001, which created an investment trust, and that trust's returns have been positive. False if he voted against it or was not in the Senate. Cannot be determined only if the roll call cannot be read.",
       "premise": null,
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Senate's roll-call record for Dec. 5, 2001 shows Sen. Wyden voting Yea on H.R. 10, the Railroad Retirement and Survivors' Improvement Act of 2001, which passed 90-9 and created an investment trust. The Railroad Retirement Board's June 30, 2026 report shows that trust holding $30.4 billion with assets up $45.8 billion since inception. Whether it is the \"exact same policy\" was not tested: that trust was not financed by borrowing.",
+      "evidence": [
+        {
+          "label": "Senate roll call vote 351, Dec. 5, 2001",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1071/vote_107_1_00351.xml"
+        },
+        {
+          "label": "Railroad Retirement Board investment trust report, June 30, 2026",
+          "url": "https://rrb.gov/sites/default/files/2026-07/qrtly063026.pdf"
+        }
+      ],
       "counter_statements": [],
       "counter_documents": [],
       "check_run": null,
