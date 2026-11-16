@@ -1,0 +1,619 @@
+{
+ "date": "2026-11-16",
+ "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 15 or 16, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Nov. 15, 2026 transcripts of CBS 60 Minutes, as read on Nov. 16 at about 9:00 ET, less the stories and transcripts the Nov. 15 page already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. A recorded clip of an official aired in a 60 Minutes report is treated as a quotation in a story. Quotes under five words were left out, as were commentators' accounts of what an official said and one reporter's summary of positions with no stated occasion. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
+ "lede": [
+  "This page lists 17 statements by 7 officeholders, drawn from seven NPR and PBS NewsHour stories and one CBS 60 Minutes report. They concern the Nov. 13 nationwide ground stop, the Iran war, a court order halting work at a public golf course in Washington, and what the parties plan after the Nov. 3 election. Two other 60 Minutes reports were read and quoted no officeholder in scope.",
+  "6 statements could be checked, and all 6 have been: 2 supported and 4 unsettled. Unsettled means evidence was found but does not decide the claim. The two supported statements are the transportation secretary's on the ground stop, and both rest on the FAA's published account, which describes its own findings as initial.",
+  "The four unsettled statements turn on records that are not public or on a judgment word. The Army's investigation of the March 1 drone strike in Kuwait has not been published, no official count of drones that got past U.S. defenses in the war's first days was found, and the condition of the golf course is documented only through a news account of a court filing.",
+  "The remaining 11 statements are opinions, predictions and promises. They are listed because they were said, not because they can be checked. No statement on this page is linked to a counter-statement or to a contradicting statement by the same speaker."
+ ],
+ "stories": [
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/15/nx-s1-6040041/politics-chat-duffy-calls-for-more-funding-democrats-plans-for-accountability",
+   "headline": "Politics chat: Duffy calls for more funding, Democrats plans for accountability",
+   "published": "2026-11-15T08:09-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/15/nx-s1-6040447/in-calling-for-an-end-to-the-iran-war-vance-walks-a-fine-line-with-trump",
+   "headline": "In calling for an end to the Iran War, Vance walks a fine line with Trump",
+   "published": "2026-11-15T08:11-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/trump-blasts-judges-2-week-halt-to-his-washington-golf-project-and-says-administration-will-appeal",
+   "headline": "Trump blasts judge's 2-week halt to his Washington golf project and says administration will appeal",
+   "published": "2026-11-15T12:39-05:00"
+  },
+  {
+   "outlet": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/politics/trumps-handpicked-party-chair-faces-a-rebellion-as-midterm-losses-challenge-presidents-grip-on-gop",
+   "headline": "Trump's handpicked party chair faces a rebellion as midterm losses challenge president's grip on GOP",
+   "published": "2026-11-15T17:43-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/13/nx-s1-6034941/affordability-childcare-midterms",
+   "headline": "Affordability was a key issue for midterm voters. It helped make childcare one, too",
+   "published": "2026-11-16T04:45-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/16/nx-s1-6041738/trump-xi-and-putin-china-nvidia",
+   "headline": "Trump heads to Asia to meet with Xi and Putin amid Nvidia fallout",
+   "published": "2026-11-16T05:00-05:00"
+  },
+  {
+   "outlet": "NPR",
+   "url": "https://www.npr.org/2026/11/16/g-s1-153841/up-first-newsletter-faa-ground-stop-democratic-leaders-congress-trump-asia-trip",
+   "headline": "FAA ground stop still affecting thousands of flights. And, Trump meets Xi, Putin in Asia",
+   "published": "2026-11-16T07:08-05:00"
+  },
+  {
+   "outlet": "CBS 60 Minutes",
+   "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/",
+   "headline": "60 Minutes Transcript: Families of U.S. military members killed in Iran war want answers from the Pentagon",
+   "published": "2026-11-15",
+   "transcript": true
+  },
+  {
+   "outlet": "CBS 60 Minutes",
+   "url": "https://www.cbsnews.com/news/kratom-60-minutes-transcript/",
+   "headline": "60 Minutes Transcript: Kratom, often sold as an herbal supplement, can pose serious health risks",
+   "published": "2026-11-15",
+   "transcript": true
+  },
+  {
+   "outlet": "CBS 60 Minutes",
+   "url": "https://www.cbsnews.com/news/john-malkovich-60-minutes-transcript/",
+   "headline": "60 Minutes Transcript: John Malkovich on the difference between acting on stage and in movies",
+   "published": "2026-11-15",
+   "transcript": true
+  }
+ ],
+ "statements": [
+  {
+   "id": 1,
+   "speaker": "Sean Duffy",
+   "office": "U.S. Secretary of Transportation",
+   "party": "R",
+   "context": "At a Nov. 14, 2026 press conference, about whether a cyberattack caused the nationwide FAA ground stop of Nov. 13.",
+   "topic": "FAA ground stop",
+   "quote": "We don't believe this was cyber at all.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/15/nx-s1-6040041/politics-chat-duffy-calls-for-more-funding-democrats-plans-for-accountability"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+    "note": "Played as a taped clip on NBC Meet the Press, Nov. 15, 2026."
+   },
+   "kind": "factual",
+   "also_said": [],
+   "test": "True if the FAA's or another U.S. agency's published account reports no indication of a cyberattack in the Nov. 13 ground stop. False if an agency's account reports that a cyberattack caused or contributed to it. Cannot be determined if no agency account addresses the question.",
+   "result": "supported",
+   "finding": "The FAA's published Q&A on the ground stop answers the question \"Was this a cyberattack?\" with: \"Based on all available evidence, we have no indication that this was a cyberattack or an outside nefarious actor.\" No agency account read reports otherwise. The FAA describes its findings as an initial investigation.",
+   "evidence": [
+    {
+     "label": "FAA, Nationwide Ground Stop: Questions and Answers (Nov. 15, 2026)",
+     "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+    }
+   ],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "check_run": null
+  },
+  {
+   "id": 2,
+   "speaker": "Sean Duffy",
+   "office": "U.S. Secretary of Transportation",
+   "party": "R",
+   "context": "NPR's account of what Duffy said was under way when the nationwide FAA ground stop of Nov. 13, 2026 began; L3Harris runs the FAA's communications network.",
+   "topic": "FAA ground stop",
+   "quote": "Reported as: U.S. Transportation Secretary Sean Duffy said L3Harris Technologies Inc., a federal contractor, was doing routine maintenance in at least one remote location, changing copper wire to fiber optics.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/16/g-s1-153841/up-first-newsletter-faa-ground-stop-democratic-leaders-congress-trump-asia-trip"
+   },
+   "source": {
+    "status": "paraphrased",
+    "url": "https://abcnews.com/Politics/week-transcript-11-15-26-transportation-secretary-sean/story?id=138148566",
+    "note": "On ABC This Week, Duffy said \"A contractor was doing routine maintenance to switch telecommunication lines from old copper wire, and they were bringing it over to fiber.\" NPR's sentence names the contractor and adds \"in at least one remote location\"."
+   },
+   "kind": "factual",
+   "also_said": [
+    {
+     "quote": "Speaking to reporters yesterday, Transportation Secretary Sean Duffy said communication systems work by a contractor was the culprit, not new AI tools or a cyberattack.",
+     "outlet": "NPR",
+     "url": "https://www.npr.org/2026/11/15/nx-s1-6040041/politics-chat-duffy-calls-for-more-funding-democrats-plans-for-accountability"
+    }
+   ],
+   "test": "True if the FAA or L3Harris confirms that L3Harris was doing routine maintenance replacing copper lines with fiber at a remote site when the outage began. False if a settled official finding says no such work was under way. Contradicted if an official account, read directly, says otherwise on that point while the investigation is open. Cannot be determined if no official account describes the work.",
+   "result": "supported",
+   "finding": "The FAA's published Q&A says L3 Harris \"had been doing work at the El Dorado site, including deployment of a new router\", calls it \"a routine replacement at a remote facility\", and says \"this type of work has been going on for years to transition from old copper wires\". It does not say in so many words that the El Dorado job was a copper-to-fiber change. The statement checked describes the work under way, not the cause, which the FAA says its initial investigation has not settled. The wording checked is NPR's.",
+   "evidence": [
+    {
+     "label": "FAA, Nationwide Ground Stop: Questions and Answers (Nov. 15, 2026)",
+     "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+    },
+    {
+     "label": "L3Harris statement on the Nov. 13 ground stop (Nov. 14, 2026)",
+     "url": "https://www.l3harris.com/newsroom/press-release/2026/11/l3harris-statement-nov-13-ground-stop"
+    }
+   ],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "check_run": null
+  },
+  {
+   "id": 3,
+   "speaker": "Sean Duffy",
+   "office": "U.S. Secretary of Transportation",
+   "party": "R",
+   "context": "At a Nov. 14, 2026 press conference, about the FAA communications system involved in the nationwide ground stop of Nov. 13.",
+   "topic": "FAA ground stop",
+   "quote": "This was an FAA system that didn't meet the moment.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/15/nx-s1-6040041/politics-chat-duffy-calls-for-more-funding-democrats-plans-for-accountability"
+   },
+   "source": {
+    "status": "paraphrased",
+    "url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+    "note": "Original on Meet the Press reads 'This was an FAA system that didn't meet - didn't meet the moment'; the story removes the repeated phrase."
+   },
+   "kind": "opinion_or_prediction",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 4,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a social media post in the week of Nov. 9, 2026, after Vice President Vance listed ending the Iran war first among steps for Republicans.",
+   "topic": "Iran war",
+   "quote": "we don't need a deal with Iran",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/15/nx-s1-6040447/in-calling-for-an-end-to-the-iran-war-vance-walks-a-fine-line-with-trump"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "opinion_or_prediction",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 5,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Sunday social media post, Trump described Judge Ana Reyes's two-week restraining order halting renovations at East Potomac Golf Links in Washington.",
+   "topic": "East Potomac golf course",
+   "quote": "highly destructive and political decision",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-blasts-judges-2-week-halt-to-his-washington-golf-project-and-says-administration-will-appeal"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "opinion_or_prediction",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 6,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Sunday social media post about the temporary restraining order on East Potomac Golf Links renovations, Trump said what his administration will do.",
+   "topic": "East Potomac golf course",
+   "quote": "immediately appeal, on an expedited basis",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-blasts-judges-2-week-halt-to-his-washington-golf-project-and-says-administration-will-appeal"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "promise",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 7,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Sunday social media post defending the East Potomac Golf Links redevelopment, Trump described the condition of the public golf course.",
+   "topic": "East Potomac golf course",
+   "quote": "It is in a terrible state of disrepair, as anybody can see by just looking at the pictures that are now circulating all over the Country, and in the Court",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-blasts-judges-2-week-halt-to-his-washington-golf-project-and-says-administration-will-appeal"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "factual",
+   "also_said": [],
+   "test": "True if a National Park Service or other official record (a condition assessment, deferred-maintenance figures, an audit, or a government court filing) documents substantial disrepair at East Potomac Golf Links. False if official records describe the course as in good condition. Cannot be determined if records show some disrepair but the answer turns on what counts as \"terrible\", or if no official condition record is found.",
+   "result": "unsettled",
+   "finding": "FOX 5 DC reports that a court filing by the superintendent of the National Mall and Memorial Parks says the former operator did not keep up agreed maintenance and found several areas of the course \"to either be deteriorating or needing work\". The filing itself could not be read directly, and no National Park Service condition assessment or deferred-maintenance figure for the course was found. Whether that amounts to a \"terrible state of disrepair\" is a judgment the record read does not settle.",
+   "evidence": [
+    {
+     "label": "FOX 5 DC, East Potomac Golf Links faces uncertain future",
+     "url": "https://www.fox5dc.com/news/east-potomac-golf-links-faces-uncertain-future-high-school-caddies-earn-prestigious-scholarship"
+    },
+    {
+     "label": "CourtListener docket, DC Preservation League v. Department of the Interior (1:26-cv-00477)",
+     "url": "https://www.courtlistener.com/docket/72278895/dc-preservation-league-v-department-of-interior/?order_by=desc"
+    }
+   ],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "check_run": null
+  },
+  {
+   "id": 8,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "In a Nov. 15, 2026 social media post about East Potomac Golf Links, the Washington public course Trump wants to redevelop.",
+   "topic": "East Potomac golf course",
+   "quote": "They don't call it Trash Island for no reason!",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trump-blasts-judges-2-week-halt-to-his-washington-golf-project-and-says-administration-will-appeal"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "premised_prediction",
+   "also_said": [],
+   "premise": "East Potomac Golf Links, or the park land it sits on, is called \"Trash Island\".",
+   "test": "True if the name \"Trash Island\" for East Potomac Park, Hains Point or its golf course appears in a published source that does not derive from the president's own posts. Cannot be determined if the name is found only in his posts or in coverage quoting them, or only for a different area. An absence of any use is unsupported, not false. Only the name is tested, not whether it is deserved.",
+   "result": "unsettled",
+   "finding": "City Cast DC reports that, according to an Oct. 9 Washington Post story, National Park Service crews had used the name for \"an overgrown central area of debris and invasive vegetation\" in the park; that Post story could not be read directly. City Cast also reports that the D.C. Public Library's People's Archive \"did not find a record where East Potomac Park had been referred to as 'Trash Island'\" and that a search of the Post's archive found no earlier use of the name for the park. Only the name was checked.",
+   "evidence": [
+    {
+     "label": "City Cast DC, on whether East Potomac Park is nicknamed \"Trash Island\"",
+     "url": "https://dc.citycast.fm/news/east-potomac-park-trump-trash-island"
+    },
+    {
+     "label": "Boston Globe, Oct. 23, 2026",
+     "url": "https://www.bostonglobe.com/2026/10/23/metro/trump-golf-east-potomac-washington/"
+    }
+   ],
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "check_run": null
+  },
+  {
+   "id": 9,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "At a White House meeting on Nov. 6, according to a senior White House official, Trump said what he would do if Republican National Committee members crossed him.",
+   "topic": "Republican National Committee leadership",
+   "quote": "Reported as: During a White House meeting Nov. 6, Trump threatened to punish the RNC if members crossed him and said he would refuse to help the organization, including appearing at fundraisers or allowing his name and image to be used in mail and digital solicitations.",
+   "reported_by": {
+    "outlet": "PBS NewsHour",
+    "url": "https://www.pbs.org/newshour/politics/trumps-handpicked-party-chair-faces-a-rebellion-as-midterm-losses-challenge-presidents-grip-on-gop"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "promise",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 10,
+   "speaker": "Donald Trump",
+   "office": "President of the United States",
+   "party": "R",
+   "context": "Last month, Trump said he was fine with Ukrainian President Zelenskyy not being present at a potential meeting with Russian President Putin about the war in Ukraine.",
+   "topic": "Russia-Ukraine war",
+   "quote": "Anything I can do to end the war, whether somebody's there or not",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/16/nx-s1-6041738/trump-xi-and-putin-china-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "opinion_or_prediction",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 11,
+   "speaker": "Katherine Clark",
+   "office": "U.S. Representative (D-MA), House Democratic Whip",
+   "party": "D",
+   "context": "Earlier this year, speaking about the Trump administration's changes to Head Start, Clark said what House Democrats would do if they won back the majority.",
+   "topic": "Childcare policy",
+   "quote": "Reported as: Speaking earlier this year about the changes to Head Start, House Democratic Whip Katherine Clark, who is expected to be the next majority leader, said Democrats would \"turn this ship around\" if they won back the majority in Congress.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/13/nx-s1-6034941/affordability-childcare-midterms"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "promise",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 12,
+   "speaker": "Chuck Schumer",
+   "office": "U.S. Senator (D-NY), Senate Minority Leader",
+   "party": "D",
+   "context": "Schumer has said childcare will be one of the Democratic Party's top five priorities when the new Congress convenes in January.",
+   "topic": "Childcare policy",
+   "quote": "Reported as: Senate Minority Leader Chuck Schumer has said childcare will be one of the party's top five priorities come January.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/13/nx-s1-6034941/affordability-childcare-midterms"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "promise",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 13,
+   "speaker": "Jamie Raskin",
+   "office": "U.S. Representative (D-MD)",
+   "party": "D",
+   "context": "Raskin, who is expected to lead House Democratic investigations once Democrats take the majority, described how he wants to approach those investigations.",
+   "topic": "House Democratic investigations",
+   "quote": "Reported as: Congressman Jamie Raskin, who will lead a lot of these investigations, says he wants to make a connection between corruption and high prices and also propose legislative fixes for the problems that the investigations uncover.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/15/nx-s1-6040041/politics-chat-duffy-calls-for-more-funding-democrats-plans-for-accountability"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "promise",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 14,
+   "speaker": "Howard Lutnick",
+   "office": "U.S. Secretary of Commerce",
+   "party": "R",
+   "context": "Last week, amid scrutiny over Nvidia CEO Jensen Huang's resignation and affair, Lutnick agreed to appear before the Senate Banking Committee.",
+   "topic": "China and chip exports",
+   "quote": "Reported as: Commerce Secretary Howard Lutnick agreed last week to appear in front of the Senate Banking Committee to answer further questions.",
+   "reported_by": {
+    "outlet": "NPR",
+    "url": "https://www.npr.org/2026/11/16/nx-s1-6041738/trump-xi-and-putin-china-nvidia"
+   },
+   "source": {
+    "status": "not_found",
+    "url": null,
+    "note": "No original transcript or post located."
+   },
+   "kind": "promise",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  },
+  {
+   "id": 15,
+   "speaker": "Pete Hegseth",
+   "office": "U.S. Secretary of Defense",
+   "party": "R",
+   "context": "At a March 2, 2026 Pentagon briefing, the day after an Iranian drone killed U.S. soldiers at a command post in Kuwait, about drones getting past air defenses.",
+   "topic": "Iran war",
+   "quote": "Every once in a while you might have one, unfortunately we call it a squirter that makes its way through.",
+   "reported_by": {
+    "outlet": "CBS 60 Minutes",
+    "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/",
+    "note": "CBS 60 Minutes transcript, Nov. 15, 2026, which aired a clip of the March 2, 2026 Pentagon briefing."
+   },
+   "kind": "factual",
+   "also_said": [],
+   "test": "True if official U.S. figures show that, as of March 2, 2026, only a small share of the Iranian drones and missiles launched at U.S. positions had got through defenses. False if official figures show penetrations were frequent as of that date. Cannot be determined if no official launch-and-intercept figures for those days are published, or if the answer turns on what \"every once in a while\" means.",
+   "result": "unsettled",
+   "finding": "No official count of how many Iranian drones and missiles got past U.S. defenses in the war's first days was found. At the same briefing the chairman of the Joint Chiefs said U.S. systems had \"intercepted hundreds of ballistic missiles\"; launch totals attributed to the head of U.S. Central Command (more than 2,000 drones and 500 ballistic missiles, as reported by DefenseScoop) come with no matching intercept count. Defense Department pages refused the fetch, so the briefing was read from a copy of the transcript.",
+   "evidence": [
+    {
+     "label": "Hegseth and Caine Pentagon briefing transcript (American Rhetoric copy)",
+     "url": "https://www.americanrhetoric.com/speeches/petehegsethdanecainopepicfurypresser.htm"
+    },
+    {
+     "label": "CNN transcript, March 2, 2026",
+     "url": "https://transcripts.cnn.com/show/cnc/date/2026-03-02/segment/03"
+    },
+    {
+     "label": "DefenseScoop, March 4, 2026",
+     "url": "https://defensescoop.com/2026/03/04/iranian-attack-drone-launches-decrease-operation-epic-fury/"
+    }
+   ],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "check_run": null
+  },
+  {
+   "id": 16,
+   "speaker": "Pete Hegseth",
+   "office": "U.S. Secretary of Defense",
+   "party": "R",
+   "context": "At a March 2, 2026 Pentagon briefing, about the U.S. Army command post at Port Shuaiba, Kuwait, struck by an Iranian drone the day before, killing U.S. soldiers.",
+   "topic": "Iran war",
+   "quote": "And in that particular case it happened to hit a tactical operations center that was fortified.",
+   "reported_by": {
+    "outlet": "CBS 60 Minutes",
+    "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/",
+    "note": "CBS 60 Minutes transcript, Nov. 15, 2026, which aired a clip of the March 2, 2026 Pentagon briefing."
+   },
+   "kind": "factual",
+   "also_said": [],
+   "test": "True if an official record (the Army's investigation, a Defense Department or Central Command statement, congressional testimony) describes the struck structure as a fortified tactical operations center. False if a settled official record, read directly, describes it as not fortified against the kind of attack that hit it. Cannot be determined if the only accounts are witnesses' and news reports', or if it turns on what \"fortified\" means.",
+   "result": "unsettled",
+   "finding": "No official description of the struck structure other than the secretary's own was found. CBS reports that the Army finished its investigation in June 2026 and that the Pentagon declined to say whether the unit was denied adequate force protection; no published report was found. In the CBS report a major from the unit says the protection there \"was to stop car bombs and threats like that\" with \"nothing there designed to protect from an aerial attack\", and describes the building as a \"quadruple-wide trailer\". Those are a witness's accounts, not an official record, and the answer may turn on what \"fortified\" covers.",
+   "evidence": [
+    {
+     "label": "CBS 60 Minutes transcript, Nov. 15, 2026",
+     "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/"
+    },
+    {
+     "label": "Hegseth and Caine Pentagon briefing transcript (American Rhetoric copy)",
+     "url": "https://www.americanrhetoric.com/speeches/petehegsethdanecainopepicfurypresser.htm"
+    }
+   ],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "check_run": null
+  },
+  {
+   "id": 17,
+   "speaker": "Pete Hegseth",
+   "office": "U.S. Secretary of Defense",
+   "party": "R",
+   "context": "At a March 2, 2026 Pentagon briefing, about the Iranian drones used against U.S. positions, the day after one killed U.S. soldiers in Kuwait.",
+   "topic": "Iran war",
+   "quote": "But these are powerful weapons.",
+   "reported_by": {
+    "outlet": "CBS 60 Minutes",
+    "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/"
+   },
+   "source": {
+    "status": "verbatim",
+    "url": "https://www.cbsnews.com/news/cost-of-war-iran-60-minutes-transcript/",
+    "note": "CBS 60 Minutes transcript, Nov. 15, 2026, which aired a clip of the March 2, 2026 Pentagon briefing."
+   },
+   "kind": "opinion_or_prediction",
+   "also_said": [],
+   "premise": null,
+   "counter_statements": [],
+   "counter_documents": [],
+   "self_contradictions": [],
+   "result": null,
+   "finding": null,
+   "evidence": [],
+   "check_run": null
+  }
+ ]
+}
