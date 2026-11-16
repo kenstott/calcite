@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Iterator;
@@ -106,7 +107,7 @@ public class UsaSpendingAccountBalancesProvider implements CachingDataProvider {
     final int fy = Integer.parseInt(year.trim());
     // A period's file changes as agencies certify later submissions, so the cache is keyed by
     // the calendar month: each month re-reads the year, within a month it is read once.
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
     String stamp = today.getYear() + "-" + today.getMonthValue();
     List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
     for (int period = FIRST_PERIOD; period <= LAST_PERIOD; period++) {
