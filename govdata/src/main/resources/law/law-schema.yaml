@@ -244,6 +244,17 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     dataLag: 0
 
+  # Calendar years of the chambers' own roll-call XML: the Senate's begins with the 101st Congress
+  # (1989) and the House Clerk's with 1990 (verified live 2026-11-15: clerk.house.gov/evs/1990/
+  # roll001.xml answers, 1989 does not). The House's 2001 files carry no bioguide id. The end
+  # follows GOVDATA_END_YEAR, else the current year, whose votes accrue continuously.
+  member_roll_call_votes_year_range: &member_roll_call_votes_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:1989}"
+    minYear: 1989  # earliest year the source has data (observed); GOVDATA_START_YEAR cannot reach below it
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 0
+
   # Filing years of the Senate eFD system's electronic reports. 2012-2013 are scanned paper only
   # (verified live 2026-10-09: every 2012-2013 listing row is a /search/view/paper/ page), and 2014
   # is the first year with HTML annual reports and PTRs. The year is the year a report was filed,
@@ -5219,6 +5230,128 @@ partitionedTables:
         catalogType: hadoop
         warehousePath: "${GOVDATA_PARQUET_DIR}/law"
         tableName: member_stock_transactions
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  - name: member_roll_call_votes
+    pattern: "type=member_roll_call_votes/year=*/*.parquet"
+    partitions: *scotus_year_partitions
+    dataset_type: delta
+    comment: >
+      How each member of the House and Senate voted on each roll call, one row per member per
+      vote, from the chambers' own roll-call XML (clerk.house.gov/evs for the House, 1990 onward;
+      senate.gov/legislative/LIS/roll_call_votes for the Senate, 1989 onward). Covers every roll
+      call — bills, amendments, nominations, treaties, motions, quorum calls and Speaker
+      elections — not only those cited by a bill. Joins to bill_recorded_votes on
+      chamber = vote_chamber, congress = vote_congress, session_number and roll_number (the
+      roll number restarts each session, so the join needs all four). `vote_cast` is the source's
+      own word: Yea, Nay, Present or Not Voting; the House's older files say Aye and No in place
+      of Yea and Nay. In a House Speaker election it is the name of the candidate the member voted for (so it is not a
+      closed set). `bioguide_id` is set on House rows only, and is absent from older House files
+      (about 28% of the House votes sampled across 1990-2025, concentrated in the earlier
+      years) — those rows still carry last name, party and state. `lis_member_id` is set on
+      Senate rows only and is the Senate's own member key, not a Bioguide id. `party` is the
+      member's party at the time of the vote (D, R, I; ID for an independent Democrat in the
+      Senate). A House `member_last_name` carries the state where two members share a surname
+      ("Thompson (MS)"), as the Clerk prints it. `year` is the calendar year of the vote; the
+      Congress and session follow from it.
+
+    dimensions:
+      type:
+        - member_roll_call_votes
+      year: *member_roll_call_votes_year_range
+
+    columns:
+      - <<: *partition_year
+      - name: chamber
+        type: string
+        nullable: false
+        comment: House or Senate; matches bill_recorded_votes.vote_chamber
+      - name: congress
+        type: integer
+        nullable: false
+        comment: Congress the vote was taken in; matches bill_recorded_votes.vote_congress
+      - name: session_number
+        type: integer
+        nullable: false
+        comment: Session of that Congress (1 or 2)
+      - name: roll_number
+        type: integer
+        nullable: false
+        comment: Roll-call number within the chamber and session (House numbering restarts each session too)
+      - name: vote_date
+        type: string
+        nullable: false
+        comment: Date of the vote (YYYY-MM-DD)
+      - name: vote_question
+        type: string
+        nullable: true
+        comment: What was put to the vote, as the source words it (e.g. On Passage, On the Nomination, On Motion to Recommit)
+      - name: vote_result
+        type: string
+        nullable: true
+        comment: Outcome of the whole vote as the source words it (e.g. Passed, Failed, Nomination Confirmed)
+      - name: legis_num
+        type: string
+        nullable: true
+        comment: The measure, nomination or document voted on as the source prints it (e.g. H R 7023, PN157); QUORUM for a quorum call
+      - name: member_last_name
+        type: string
+        nullable: false
+        comment: Member's last name as the chamber prints it
+      - name: member_first_name
+        type: string
+        nullable: true
+        comment: Member's first name; Senate rows only
+      - name: party
+        type: string
+        nullable: true
+        comment: Member's party at the time of the vote (D, R, I, ...)
+      - name: state
+        type: string
+        nullable: true
+        comment: Two-letter state postal code the member represents
+      - name: bioguide_id
+        type: string
+        nullable: true
+        comment: Bioguide id; House rows only, and absent from older House files
+      - name: lis_member_id
+        type: string
+        nullable: true
+        comment: Senate Legislative Information System member id (e.g. S354); Senate rows only
+      - name: vote_cast
+        type: string
+        nullable: false
+        comment: How the member voted, as the source words it (Yea, Nay, Present, Not Voting, or a Speaker candidate's name)
+      - name: source_url
+        type: string
+        nullable: false
+        comment: House Clerk or Senate roll-call XML this row was read from; matches bill_recorded_votes.url
+
+    source:
+      type: http
+      url: "https://clerk.house.gov/evs/{year}/roll001.xml"
+      method: GET
+      response:
+        format: json
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.law.MemberRollCallVotesProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=member_roll_call_votes/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/law"
+        tableName: member_roll_call_votes
         batchPartitionColumns: [year]
         incrementalKeys: [year]
         overwritePartitions: true
