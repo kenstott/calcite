@@ -445,7 +445,13 @@ case "$SCHEMA" in
   econ|crime|weather|energy|research)
     case "$MODE" in
       historical)
-        export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        # econ declares its history floor per table: each year dimension's own `start` default in
+        # the schema YAML. Forcing one global start here would override those floors, so a table
+        # rebuilt after a drop-and-recreate would be refilled from the forced year only. A caller
+        # that exports GOVDATA_START_YEAR still overrides every table. The other schemas keep 2010.
+        if [ "$SCHEMA" != "econ" ]; then
+          export GOVDATA_START_YEAR="${GOVDATA_START_YEAR:-2010}"
+        fi
         export GOVDATA_END_YEAR=$((INCREMENTAL_YEAR - 1))
         # For schemas with month cache-busters (crime, ref, health, research), use month=12
         # for historical runs. The month dimension serves as a pure cache-buster for
