@@ -7,6 +7,7 @@
 --         bill_action_committees, bill_recorded_votes, bill_titles, bill_summaries,
 --         bill_cbo_cost_estimates, bill_committee_reports, bill_notes, scotus_reports_cases,
 --         scotus_slip_opinions, scotus_dockets, scotus_docket_entries, member_stock_transactions,
+--         member_roll_call_votes,
 --         fd_filings, fd_assets, fd_income, fd_transactions, fd_liabilities, fd_gifts, fd_travel,
 --         fd_positions, fd_agreements, fd_compensation (Senate eFD financial disclosures)
 -- All tables are Iceberg; reads via iceberg_scan.
@@ -4928,6 +4929,130 @@ FROM (SELECT COUNT(*) AS n FROM (
         SELECT filing_id, row_seq
         FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/fd_compensation', allow_moved_paths := true)
         GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: member_roll_call_votes
+-- ─────────────────────────────────────────────────────────────
+-- Partitioned by year; one row per member per roll call, House and Senate. T4/T5 exclude partition
+-- column 'year'. A scoped run holds whole years of roll calls (House ~400-1,200 rolls x ~440
+-- members, Senate ~200-650 rolls x ~100 members).
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true));
+
+-- T2: row_count. One Senate year alone is tens of thousands of member votes.
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END,
+  n, 10000, 'Expected at least 10000 member-vote rows in a full year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true));
+
+-- T3: sample
+SELECT year, chamber, congress, session_number, roll_number, vote_date, vote_question, vote_result,
+       legis_num, member_last_name, party, state, bioguide_id, lis_member_id, vote_cast
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T5: all_same_value
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND null_percentage < 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T6: pk_nulls (every NOT NULL column)
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL chamber, congress, session_number, roll_number, vote_date, member_last_name, vote_cast or source_url rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true)
+      WHERE chamber IS NULL OR congress IS NULL OR session_number IS NULL OR roll_number IS NULL
+         OR vote_date IS NULL OR member_last_name IS NULL OR vote_cast IS NULL
+         OR source_url IS NULL);
+
+-- T6: a member appears once per roll call. Key is (chamber, session, roll, member); the member is
+-- the Senate lis_member_id or the House bioguide_id, falling back to last name + state on the House
+-- files that carry no bioguide id.
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T6_pk_unique',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Duplicate (chamber, year, session_number, roll_number, member) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT chamber, year, session_number, roll_number,
+               COALESCE(bioguide_id, lis_member_id, member_last_name || '|' || COALESCE(state, '')) AS member
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true)
+        GROUP BY 1, 2, 3, 4, 5 HAVING COUNT(*) > 1));
+
+-- T7: both chambers are present
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T7_both_chambers',
+  CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END,
+  n, 2, 'Distinct chambers (House and Senate expected)'
+FROM (SELECT COUNT(DISTINCT chamber) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true));
+
+-- T7: no roll call lists more members than the chamber could have (House 435 seats + vacancies
+-- and delegates ~445; Senate 100, 101 around a mid-vote seat change)
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T7_members_per_vote_bound',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Roll calls listing more members than the chamber has seats'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT chamber, year, session_number, roll_number, COUNT(*) AS c
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true)
+        GROUP BY 1, 2, 3, 4
+        HAVING (chamber = 'Senate' AND COUNT(*) > 101) OR (chamber = 'House' AND COUNT(*) > 450)));
+
+-- T7: roll numbers are contiguous from 1 within each chamber and year (a gap means a skipped file)
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T7_roll_numbers_contiguous',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Chamber-years where the roll numbers are not exactly 1..N'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT chamber, year
+        FROM (SELECT DISTINCT chamber, year, session_number, roll_number FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true))
+        GROUP BY 1, 2, session_number
+        HAVING MIN(roll_number) <> 1 OR MAX(roll_number) <> COUNT(*)));
+
+-- T7: Yea/Nay votes dominate; the unexpected values should be Speaker-election candidate names
+-- only, which occur on few rolls
+INSERT INTO dq_results
+SELECT 'law', 'member_roll_call_votes', 'T7_vote_cast_vocabulary',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END,
+  n, 0, 'Distinct roll calls whose vote_cast is outside Yea/Nay/Aye/No/Present/Not Voting and is not a Speaker-election vote'
+FROM (SELECT COUNT(*) AS n FROM (
+        SELECT DISTINCT chamber, year, session_number, roll_number
+        FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/law/member_roll_call_votes', allow_moved_paths := true)
+        WHERE vote_cast NOT IN ('Yea', 'Nay', 'Aye', 'No', 'Present', 'Not Voting')
+          AND COALESCE(legis_num, '') NOT IN ('QUORUM')
+          AND COALESCE(vote_question, '') NOT ILIKE '%Election of the Speaker%'));
 
 -- ─────────────────────────────────────────────────────────────
 -- Final results
