@@ -957,18 +957,24 @@ WHERE approx_unique <= 1 AND null_percentage < 100.0 AND column_name <> 'type'
 -- T7: EXPECTED VALUES — domain-specific sanity checks
 -- ============================================================================
 
--- MEHOINUSA672N real median household income: annual, must be present and a plausible
--- constant-dollar national figure (tens of thousands of dollars).
+-- MEHOINUSA672N real median household income: annual (one row per year dated Jan 1), must be present
+-- and a plausible constant-dollar national figure (tens of thousands of dollars). The row floor is
+-- relative to the span the run loaded: one row per loaded calendar year except the latest, which
+-- Census has not yet published (capped at 10 so a full-history run still needs real depth).
 INSERT INTO dq_results
 SELECT
   'econ', 'fred_indicators', 'expected_values',
-  CASE WHEN n >= 10 AND bad = 0 THEN 'pass' ELSE 'fail' END,
-  CAST(n AS VARCHAR) || ' rows, ' || CAST(bad AS VARCHAR) || ' out of range', '>=10 rows, 0 out of range',
+  CASE WHEN n >= min_rows AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR) || ' rows, ' || CAST(bad AS VARCHAR) || ' out of range',
+  '>=' || CAST(min_rows AS VARCHAR) || ' rows (loaded years ' || CAST(loaded_years AS VARCHAR) || ' - 1, max 10), 0 out of range',
   'MEHOINUSA672N present with values in [30000,150000]'
 FROM (
-  SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE value NOT BETWEEN 30000 AND 150000) AS bad
+  SELECT COUNT(*) FILTER (WHERE series = 'MEHOINUSA672N') AS n,
+         COUNT(*) FILTER (WHERE series = 'MEHOINUSA672N' AND value NOT BETWEEN 30000 AND 150000) AS bad,
+         COUNT(DISTINCT year(date)) FILTER (WHERE series = 'DFF') AS loaded_years,
+         LEAST(10, GREATEST(1, COUNT(DISTINCT year(date)) FILTER (WHERE series = 'DFF') - 1)) AS min_rows
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true)
-  WHERE series = 'MEHOINUSA672N'
+  WHERE series IN ('MEHOINUSA672N', 'DFF')
 );
 
 -- employment_statistics: CPS rate/ratio series values in [0, 100]
