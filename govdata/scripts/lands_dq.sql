@@ -1189,6 +1189,91 @@ FROM (SELECT COUNT(*) AS n
       WHERE state = 'Wyoming' AND fiscal_year >= 2020 AND leased_acres > 1000000);
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: nps_deferred_maintenance  (snapshot; one row per park unit)
+-- ─────────────────────────────────────────────────────────────
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T2_row_count',
+  CASE WHEN n >= 385 THEN 'pass' ELSE 'fail' END,
+  n, 385, 'Expected at least 385 park-unit fact sheets (index lists 393, 2 of them dead links)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type', 'year')
+  )
+);
+
+-- T5: all_same_value (fiscal_year is one value by design: a current-FY snapshot)
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true))
+    WHERE approx_unique <= 1
+      AND column_name NOT IN ('type', 'year', 'fiscal_year')
+  )
+);
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'NULL park_name or fiscal_year rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true) WHERE park_name IS NULL OR fiscal_year IS NULL);
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T7_pk_uniqueness',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  dups, 0, 'Duplicate (park_name, fiscal_year) pairs'
+FROM (SELECT COUNT(*) AS dups FROM (SELECT park_name, fiscal_year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T7_category_sum',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Rows whose nine category DM&R amounts differ from dmr_total_usd by more than 7% + $2K + half the last printed digit of the total (rounding tolerance)'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true)
+      WHERE ABS(dmr_buildings + dmr_trails + dmr_paved_roads + dmr_unpaved_roads + dmr_water_systems
+              + dmr_waste_water_systems + dmr_housing + dmr_campgrounds + dmr_other_assets - dmr_total_usd)
+            > dmr_total_usd * 0.07 + 2000
+              + CASE WHEN dmr_total_usd % 1000000 = 0 THEN 500000
+                     WHEN dmr_total_usd % 100000 = 0 THEN 50000 ELSE 0 END);
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T8_national_total',
+  CASE WHEN total BETWEEN 20e9 AND 28e9 THEN 'pass' ELSE 'fail' END,
+  total, 24237000000, 'Sum of dmr_total_usd; NPS reports about $24.2B system-wide for FY2025'
+FROM (SELECT SUM(dmr_total_usd) AS total FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'lands', 'nps_deferred_maintenance', 'T8_national_mall',
+  CASE WHEN n = 1 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'National Mall and Memorial Parks present with DM&R between $1B and $2B (fact sheet: $1.3B)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/lands/nps_deferred_maintenance', allow_moved_paths := true) WHERE park_name = 'National Mall and Memorial Parks' AND dmr_total_usd BETWEEN 1e9 AND 2e9);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail
