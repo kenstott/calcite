@@ -177,4 +177,29 @@ class McpServerErrorMessageTest {
     assertTrue(compact.contains("[message truncated at"), compact);
     assertFalse(compact.contains("CAST(x AS DOUBLE)) FROM t WHERE y = 1 AND z = 2...\n"), compact);
   }
+
+  @Test @DisplayName("a raw planner dump on date arithmetic names the form that works")
+  void translatesPlannerDump() {
+    String dump = "Unable to implement JdbcToEnumerableConverter(convention=[JDBC.x])\n"
+        + "  JdbcProject(lag=[-($0, $1)])\n    JdbcTableScan(table=[[disasters, d]])";
+    String compact = McpServer.compactErrorMessage(
+        new RuntimeException("Error while executing SQL", new RuntimeException(dump)));
+    assertTrue(compact.contains("TIMESTAMPDIFF(DAY"), "got: " + compact);
+    assertFalse(compact.contains("JdbcTableScan"), "the plan dump must not leak, got: " + compact);
+  }
+
+  @Test @DisplayName("DATE - DATE is rejected with the TIMESTAMPDIFF form")
+  void translatesDateMinusDate() {
+    String msg = "Cannot apply '-' to arguments of type '<DATE> - <DATE>'. Supported form(s): "
+        + "'<NUMERIC> - <NUMERIC>'";
+    String compact = McpServer.compactErrorMessage(new RuntimeException(msg));
+    assertTrue(compact.contains("TIMESTAMPDIFF(DAY"), "got: " + compact);
+    assertTrue(compact.contains(msg), "original error must be carried, got: " + compact);
+  }
+
+  @Test @DisplayName("an unrelated subtraction type error is left alone")
+  void leavesOtherSubtractionAlone() {
+    String msg = "Cannot apply '-' to arguments of type '<VARCHAR(1)> - <INTEGER>'";
+    assertEquals(msg, McpServer.compactErrorMessage(new RuntimeException(msg)));
+  }
 }

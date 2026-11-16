@@ -5622,6 +5622,33 @@ public class McpServer {
                     + " error: " + msg;
             }
         }
+        // DATE - DATE is rejected by the validator (subtraction is numeric-only), and the raw text
+        // is a type signature that does not say what to write instead.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && msg.contains("Cannot apply '-' to arguments of type")
+                && (msg.contains("<DATE> - <DATE>") || msg.contains("<TIMESTAMP(0)> - <TIMESTAMP(0)>")
+                    || msg.contains("<TIMESTAMP(3)> - <TIMESTAMP(3)>"))) {
+                return "Subtracting two dates with '-' is not supported by this SQL engine."
+                    + " For the number of whole days between them use"
+                    + " TIMESTAMPDIFF(DAY, start_col, end_col); other units (MONTH, YEAR, HOUR) work"
+                    + " the same way. Original error: " + msg;
+            }
+        }
+        // When no physical plan can be built for a date-arithmetic expression the planner throws
+        // a dump of its whole relational tree, which names nothing the caller can change.
+        for (Throwable t = e; t != null; t = safeCause(t)) {
+            String msg = t.getMessage();
+            if (msg != null && msg.contains("Unable to implement JdbcToEnumerableConverter")) {
+                return "The SQL engine could not build an execution plan for this query. The usual"
+                    + " cause is date or interval arithmetic it cannot push down to the database:"
+                    + " '+'/'-' on DATE or TIMESTAMP columns, INTERVAL expressions, or"
+                    + " EXTRACT/DATE_TRUNC over such an expression. Replace it with"
+                    + " TIMESTAMPDIFF(DAY, start_col, end_col) for a day count (MONTH, YEAR and HOUR"
+                    + " work the same way), or move the arithmetic out of the query and filter on"
+                    + " plain date literals. Planner detail: " + firstLine(msg);
+            }
+        }
         // Comma-form SUBSTR is not resolvable under this connection's function libraries in any
         // clause, and the raw signature error reads as though the position were at fault. It is
         // not rewritten to SUBSTRING mechanically: SUBSTR treats a zero or negative start
@@ -5736,6 +5763,12 @@ public class McpServer {
             msg = e.getClass().getSimpleName();
         }
         return truncateMessage(msg);
+    }
+
+    /** The first line of {@code msg}, which for a planner failure is its one-sentence summary. */
+    private static String firstLine(String msg) {
+        int nl = msg.indexOf('\n');
+        return nl < 0 ? msg : msg.substring(0, nl).trim();
     }
 
     /** {@code getCause()} on some exceptions returns itself; guards the cause-chain walk. */
