@@ -97,6 +97,16 @@ column_templates:
     columnDefinitions:
       - *partition_type
 
+  partition_basin: &partition_basin
+    name: basin
+    type: VARCHAR
+
+  hurdat_partitions: &hurdat_partitions
+    style: hive
+    columnDefinitions:
+      - *partition_type
+      - *partition_basin
+
   coops_datum_partitions: &coops_datum_partitions
     style: hive
     columnDefinitions:
@@ -2076,6 +2086,176 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  - name: tropical_cyclone_best_track
+    # NHC publishes a new reanalysis file once a year (name embeds the release date); the
+    # resolver picks the newest, hash freshness re-ingests when its content changes.
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=hurdat2_best_track/basin=*/*.parquet"
+    partitions: *hurdat_partitions
+    comment: >
+      NOAA National Hurricane Center HURDAT2 best-track database: one row per 6-hourly (plus
+      landfall and peak-intensity special) observation of every tropical and subtropical
+      cyclone in the Atlantic (basin=atlantic, from 1851; includes the Gulf of Mexico and
+      Caribbean) and the northeast / north-central Pacific (basin=nepac, from 1949). Each row
+      carries storm_id (ATCF id, e.g. AL092004), storm_name ('UNNAMED' before naming),
+      season (calendar year of the storm id), observation date and UTC time, status
+      (TD/TS/HU depression, storm, hurricane; EX extratropical; SS/SD subtropical; LO/WV/DB
+      remnant low, wave, disturbance), position, maximum sustained wind in knots, minimum
+      pressure in millibars and 34/50/64-kt wind radii by quadrant. Best-track values are
+      post-season reanalysis: the current season is not present until NHC re-issues the file
+      the following spring, so real-time season tallies need advisories instead. Pre-satellite
+      Atlantic years are incomplete. Use tropical_cyclone_season_summary for accumulated
+      cyclone energy (ACE) and named-storm / hurricane / major-hurricane counts per season.
+      Source: nhc.noaa.gov/data/hurdat, keyless, public domain.
+
+    dimensions:
+      type:
+        - hurdat2_best_track
+      basin:
+        type: list
+        values: ["atlantic", "nepac"]
+      # custom: the newest hurdat2 file for the basin (see HurdatReleaseDimensionResolver); a
+      # new release changes the raw-cache key so the file is re-fetched
+      release_file:
+        type: custom
+
+    columns:
+      - name: basin
+        type: string
+        nullable: false
+        comment: "Basin of the source file: atlantic (HURDAT2 Atlantic, 1851-) or nepac (northeast and north-central Pacific, 1949-)"
+      - name: storm_id
+        type: string
+        nullable: false
+        comment: "ATCF storm id: 2-letter basin (AL, EP, CP), 2-digit cyclone number in the season, 4-digit year (e.g., AL092004 = Ivan)"
+      - name: storm_name
+        type: string
+        nullable: false
+        comment: "Storm name, or UNNAMED for systems that never received one (all Atlantic storms before 1950 and most depressions)"
+      - name: season
+        type: integer
+        nullable: false
+        comment: Calendar year in the storm id (the season the storm is counted in)
+      - name: obs_date
+        type: string
+        nullable: false
+        comment: "Observation date, UTC, yyyy-MM-dd"
+      - name: obs_time_utc
+        type: string
+        nullable: false
+        comment: "Observation time, UTC, HHMM (0000/0600/1200/1800 are the synoptic times; other times are landfall or peak-intensity specials)"
+      - name: record_identifier
+        type: string
+        nullable: true
+        comment: "Special-record flag: L landfall, P minimum pressure, I peak wind, S status change, T additional track point, W max wind, C closest approach to land, G genesis; null for a regular record"
+      - name: status
+        type: string
+        nullable: false
+        comment: "Cyclone classification: TD, TS, HU, EX, SD, SS, LO, WV, DB"
+      - name: latitude
+        type: double
+        nullable: false
+        comment: Latitude in decimal degrees, north positive
+      - name: longitude
+        type: double
+        nullable: false
+        comment: Longitude in decimal degrees, west negative
+      - name: max_wind_kt
+        type: integer
+        nullable: true
+        comment: Maximum sustained wind in knots (1-minute average), null when not analysed
+      - name: min_pressure_mb
+        type: integer
+        nullable: true
+        comment: Minimum central pressure in millibars, null when not analysed
+      - name: wind_34kt_ne_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 34-kt winds in the NE quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_34kt_se_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 34-kt winds in the SE quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_34kt_sw_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 34-kt winds in the SW quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_34kt_nw_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 34-kt winds in the NW quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_50kt_ne_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 50-kt winds in the NE quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_50kt_se_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 50-kt winds in the SE quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_50kt_sw_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 50-kt winds in the SW quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_50kt_nw_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 50-kt winds in the NW quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_64kt_ne_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 64-kt winds in the NE quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_64kt_se_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 64-kt winds in the SE quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_64kt_sw_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 64-kt winds in the SW quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+      - name: wind_64kt_nw_nm
+        type: integer
+        nullable: true
+        comment: "Radius in nautical miles of 64-kt winds in the NW quadrant; null when not analysed (mostly pre-2004 and non-tropical records)"
+
+    source:
+      type: http
+      url: "https://www.nhc.noaa.gov/data/hurdat/{release_file}"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata"
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.weather.HurdatBestTrackTransformer"
+      dimensionResolver: "org.apache.calcite.adapter.govdata.weather.HurdatReleaseDimensionResolver"
+
+    materialize:
+      format: iceberg
+      options:
+        stagingMode: local
+      output:
+        pattern: "type=hurdat2_best_track/basin=*/"
+      partition:
+        columns: [type, basin]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/weather"
+        tableName: tropical_cyclone_best_track
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        overwritePartitions: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
 # ============================================================================
 # VIEWS
 # ============================================================================
@@ -2149,6 +2329,45 @@ tables:
       sea-level anomaly or river-flood setup at that gauge; values near 0 are normal. Both
       measures are meters above MLLW. One row per station per UTC day present in both
       tables. Join coops_stations on station_id for state_fips and coordinates.
+
+  # ---------------------------------------------------------------------------
+  # TROPICAL CYCLONE SEASON SUMMARY - ACE and storm counts per basin and season
+  # ---------------------------------------------------------------------------
+  - name: tropical_cyclone_season_summary
+    type: view
+    sql: >
+      SELECT
+        basin,
+        season,
+        COUNT(DISTINCT storm_id) AS storms_tracked,
+        COUNT(DISTINCT CASE WHEN peak_wind_kt >= 34 THEN storm_id END) AS named_storms,
+        COUNT(DISTINCT CASE WHEN peak_wind_kt >= 64 THEN storm_id END) AS hurricanes,
+        COUNT(DISTINCT CASE WHEN peak_wind_kt >= 96 THEN storm_id END) AS major_hurricanes,
+        SUM(ace) AS ace
+      FROM (
+        SELECT
+          basin,
+          season,
+          storm_id,
+          MAX(CASE WHEN status IN ('TS', 'HU', 'SS') THEN max_wind_kt END)
+            OVER (PARTITION BY basin, storm_id) AS peak_wind_kt,
+          CASE WHEN status IN ('TS', 'HU', 'SS')
+                AND max_wind_kt >= 34
+                AND obs_time_utc IN ('0000', '0600', '1200', '1800')
+               THEN max_wind_kt * max_wind_kt / 10000.0 ELSE 0 END AS ace
+        FROM weather.tropical_cyclone_best_track
+      ) t
+      GROUP BY basin, season
+    comment: >
+      Per-season roll-up of tropical_cyclone_best_track for each basin (atlantic, nepac):
+      accumulated cyclone energy (ACE, 10^4 kt^2: the sum of squared maximum sustained winds
+      over every 6-hourly 0000/0600/1200/1800 UTC fix at or above 34 kt while the system is
+      tropical or subtropical, TS/HU/SS, ignoring special-time records) and counts of named
+      storms (peak wind at least 34 kt as TS/HU/SS), hurricanes (at least 64 kt) and major
+      hurricanes (at least 96 kt). storms_tracked also counts depressions that never reached
+      storm strength. A storm counts in the season of its storm id. Counts follow the
+      best-track record, so they can differ by one from the operational tallies announced
+      during a season. Best-track data lag the current season until NHC re-issues the file.
 
 # ============================================================================
 # CONSTRAINTS
