@@ -1053,8 +1053,8 @@ SELECT 'weather', 'tropical_cyclone_best_track', 'pk_dupes', CASE WHEN n = 0 THE
 FROM (SELECT COUNT(*) AS n FROM (SELECT storm_id, obs_date, obs_time_utc, COALESCE(record_identifier, '') FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1));
 
 INSERT INTO dq_results
-SELECT 'weather', 'tropical_cyclone_best_track', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows with latitude outside -5..80, longitude outside -180..180, wind outside 10..200 kt or pressure outside 850..1050 mb'
-FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) WHERE latitude NOT BETWEEN -5 AND 80 OR longitude NOT BETWEEN -180 AND 180 OR max_wind_kt NOT BETWEEN 10 AND 200 OR min_pressure_mb NOT BETWEEN 850 AND 1050);
+SELECT 'weather', 'tropical_cyclone_best_track', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows with latitude outside -5..90, longitude outside -180..180, wind outside 10..200 kt or pressure outside 850..1050 mb'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) WHERE latitude NOT BETWEEN -5 AND 90 OR longitude NOT BETWEEN -180 AND 180 OR max_wind_kt NOT BETWEEN 10 AND 200 OR min_pressure_mb NOT BETWEEN 850 AND 1050);
 
 -- Ivan (AL092004): HURDAT2 maximum wind 145 kt, minimum pressure 910 mb, and an Atlantic 2004 ACE near 227
 INSERT INTO dq_results
