@@ -744,6 +744,24 @@ class ClaimGroupsTest {
     assertNull(ClaimScoring.pinocchioProblem("No rating.", -1));
   }
 
+  /** Daily eval 2026-11-16: four of ten published pages stated a rating the claim scores did
+   *  not give ("Two", "1", "2" and "about 1" against 0, 0, 1 and none). */
+  @Test void aPublishedPageMayNotStateARatingTheClaimScoresDidNotGive() {
+    assertNull(ClaimScoring.statedRatingProblem(
+        "<p>Rating: <strong>0 Pinocchios</strong>.</p>", 0));
+    assertNull(ClaimScoring.statedRatingProblem("<p>The claims hold up.</p>", 0));
+    assertNull(ClaimScoring.statedRatingProblem(null, 2));
+    String wrong = ClaimScoring.statedRatingProblem("<p>This earns Two Pinocchios.</p>", 0);
+    assertNotNull(wrong);
+    assertTrue(wrong.contains("\"Two Pinocchios\""), wrong);
+    assertTrue(wrong.contains("the engine's rating from the claim scores is 0 Pinocchios"), wrong);
+    assertNotNull(ClaimScoring.statedRatingProblem("<p>Rated 2 <em>Pinocchios</em>.</p>", 1));
+    String none = ClaimScoring.statedRatingProblem("<p>About 1 Pinocchio.</p>", -1);
+    assertNotNull(none);
+    assertTrue(none.contains("The report MUST NOT state one"), none);
+    assertNull(ClaimScoring.statedRatingProblem("<p>Rated on the 0-4 Pinocchio scale.</p>", 3));
+  }
+
   /** Daily eval q15 (2026-11-11): 23 true, 1 mostly true and 1 partially false ("record price")
    *  scored about 97 and was rated 0, though the piece had a named inaccuracy. */
   @Test void aPartiallyFalseClaimRulesOutZeroPinocchios() {
