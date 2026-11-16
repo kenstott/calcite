@@ -52,6 +52,7 @@ Commands:
 """
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -450,6 +451,7 @@ def _write_codes(con, ids, schemas, yrs, cids, W, I8, label):
         out = f"{codes_dataset_for(schema)}/codes-{label}-{schema}.parquet"
         con.execute(f"COPY _codes_out TO '{out}' (FORMAT parquet, COMPRESSION zstd)")
         con.unregister("_codes_out")
+        _write_manifest(codes_dataset_for(schema))
         print(f"[{label}] flushed {len(idx)} {schema} codes -> {out}", flush=True)
         touched.add(schema)
     return touched
@@ -524,6 +526,29 @@ def _run_label(prefix):
 def _rclone_path(s3path):
     """s3://bucket/key -> <remote>:bucket/key for rclone."""
     return f"{RCLONE_REMOTE}:{s3path[len('s3://'):]}"
+
+
+LIVE_MANIFEST = "_live.json"
+
+
+def _write_manifest(dataset, retiring=()):
+    """Publish <dataset>/_live.json: every parquet file under the dataset (paths relative to it)
+    except those about to be deleted. The loader reads this list rather than listing the store,
+    so a copy of the dataset that still holds retired files (R2 only ever receives copies) does
+    not feed them to a search. Written before the retired files are deleted, so a reader never
+    sees a manifest naming a file that is already gone. A listing or write failure raises."""
+    r = subprocess.run(["rclone", "lsf", "-R", "--files-only", _rclone_path(dataset) + "/"],
+                       capture_output=True, text=True)
+    if r.returncode not in (0, 3):  # 3 = directory not found: a dataset with no codes yet
+        raise RuntimeError(f"manifest: cannot list {dataset}: {r.stderr.strip()}")
+    skip = set(retiring)
+    files = sorted(f.strip() for f in r.stdout.splitlines()
+                   if f.strip().endswith(".parquet") and f.strip() not in skip)
+    w = subprocess.run(["rclone", "rcat", f"{_rclone_path(dataset)}/{LIVE_MANIFEST}"],
+                       input=json.dumps({"files": files}), capture_output=True, text=True)
+    if w.returncode != 0:
+        raise RuntimeError(f"manifest: cannot write {dataset}/{LIVE_MANIFEST}: {w.stderr.strip()}")
+    return len(files)
 
 
 def _list_code_files(dataset):
@@ -747,6 +772,7 @@ def cmd_compact(con=None, dataset=None, force=False, source_schema=None):
         print(f"[compact] merging {len(merging)} files -> {shape} ...", flush=True)
         t = time.time()
         con.execute(f"COPY ({deduped}) TO '{target}' ({opts})")
+        _write_manifest(dataset, retiring=files)
         base = _rclone_path(dataset)
         for f in files:
             subprocess.run(["rclone", "deletefile", f"{base}/{f}"], capture_output=True, text=True)
@@ -757,6 +783,14 @@ def cmd_compact(con=None, dataset=None, force=False, source_schema=None):
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
+def cmd_manifest():
+    """Write _live.json for every source schema, an empty list where no codes exist yet, so the
+    loader can treat a missing manifest as an error."""
+    for schema in CODES_SOURCE_SCHEMAS:
+        dataset = codes_dataset_for(schema)
+        print(f"[manifest] {schema}: {_write_manifest(dataset)} files", flush=True)
+
+
 def cmd_backlog(max_rows, max_seconds):
     """PRIMARY job: one queue over the WHOLE vc_staging table's un-coded delta (every
     source_schema together, in (updated_at, chunk_id) order), time-boxed and resumable via the
@@ -1002,6 +1036,8 @@ def main():
                       help="epoch seconds: run batch after batch until then (or until drained); "
                            "overrides --max-seconds")
     sub.add_parser("stats")
+    sub.add_parser("manifest",
+                   help="(re)write _live.json for every codes dataset from what MinIO holds")
     p_compact = sub.add_parser("compact")
     p_compact.add_argument("--source-schema", default="sec",
                            help="which codes dataset to compact (default: sec)")
@@ -1021,6 +1057,8 @@ def main():
         cmd_backlog(args.max_rows, args.max_seconds)
     elif args.cmd == "stats":
         cmd_stats()
+    elif args.cmd == "manifest":
+        cmd_manifest()
     elif args.cmd == "compact":
         cmd_compact(dataset=codes_dataset_for(args.source_schema),
                     source_schema=args.source_schema)
