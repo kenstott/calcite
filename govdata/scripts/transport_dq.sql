@@ -435,6 +435,59 @@ FROM (SELECT COUNT(*) AS n FROM (SELECT travel_date FROM iceberg_scan('s3://${GO
   GROUP BY travel_date HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: faa_atcscc_advisories (FAA ATCSCC advisories; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T2_row_count',
+  CASE WHEN n >= 10000 THEN 'pass' ELSE 'fail' END, n, 10000, 'Expected >=10000 advisories per year'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true) ORDER BY sent_time_utc DESC LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL PK rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true)
+  WHERE advisory_date IS NULL OR advisory_number IS NULL OR facility IS NULL OR sent_time_utc IS NULL);
+
+-- Known fact: 2026-11-13 had a nationwide ground stop advisory.
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T7_known_value',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'GROUND_STOP advisory with NATIONWIDE in subject on 2026-11-13'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true)
+  WHERE advisory_date = DATE '2026-11-13' AND advisory_type = 'GROUND_STOP' AND subject LIKE '%NATIONWIDE%');
+
+INSERT INTO dq_results
+SELECT 'transport', 'faa_atcscc_advisories', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate PK rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT advisory_date, advisory_number, facility, sent_time_utc
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/transport/faa_atcscc_advisories', allow_moved_paths := true)
+  GROUP BY 1,2,3,4 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: pavement_roughness (FHWA HM-64; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results
