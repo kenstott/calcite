@@ -251,6 +251,39 @@ public class SemanticSearchLocalCodesTest {
     assertEquals(160L, localRowCount(db), "a compacted set must reload, not double up");
   }
 
+  /** A mirror that only copies keeps files compaction retired, so the listing holds both the
+   *  originals and the merged file that re-states them. Each chunk must load once, on a fresh load
+   *  and when the merged file arrives after the originals were already loaded. */
+  @Test void countsEachChunkOnceWhenRetiredFilesRemainListed() throws Exception {
+    Path a = tmp.resolve("codes-a.parquet");
+    Path b = tmp.resolve("codes-b.parquet");
+    Path merged = tmp.resolve("codes-compact-1.parquet");
+    List<double[]> va = writeCodes(a, "a", 100, 1L);
+    writeCodes(b, "b", 60, 2L);
+    try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+         Statement st = c.createStatement()) {
+      st.execute("COPY (SELECT * FROM read_parquet(['" + a.toAbsolutePath() + "','"
+          + b.toAbsolutePath() + "'])) TO '" + merged.toAbsolutePath() + "' (FORMAT parquet)");
+    }
+    String fresh = tmp.resolve("fresh.duckdb").toAbsolutePath().toString();
+    System.setProperty("calcite.vss.localDb", fresh);
+    System.setProperty("calcite.vss.codes", codesArg(a, b, merged));
+    SemanticSearch.searchVector(va.get(0), 3);
+    SemanticSearch.resetForTesting();
+    assertEquals(160L, localRowCount(fresh), "a fresh load must not count retired files twice");
+
+    String incremental = tmp.resolve("incremental.duckdb").toAbsolutePath().toString();
+    System.setProperty("calcite.vss.localDb", incremental);
+    System.setProperty("calcite.vss.codes", codesArg(a, b));
+    SemanticSearch.searchVector(va.get(0), 3);
+    SemanticSearch.resetForTesting();
+    assertEquals(160L, localRowCount(incremental));
+    System.setProperty("calcite.vss.codes", codesArg(a, b, merged));
+    SemanticSearch.searchVector(va.get(0), 3);
+    SemanticSearch.resetForTesting();
+    assertEquals(160L, localRowCount(incremental), "an appended merged file must add no rows");
+  }
+
   /** The stage-1 width bounds what stage 2 can rerank, so pinning it to one candidate must yield
    *  exactly one hit however large k is. Proves {@code calcite.vss.prefilter} is still honoured
    *  now that the default is computed from the corpus rather than fixed. */
