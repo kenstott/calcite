@@ -15,8 +15,8 @@ Source: https://www.foxnews.com/politics/democrats-plot-massive-spending-spree-a
 - **CBO Medicaid pair ("$1.2 trillion" and "13 million fewer enrolled"): partially false.**
   - The $1.2T matches the House-passed bill's gross cut across Medicaid, CHIP and marketplace provisions.
   - KFF puts the enacted law's federal Medicaid reduction at about $911B after interactions.
-  - CBO's Medicaid enrollment loss was about 7.8M for the House version, and KFF's baseline gap is about 11M. 13M is not a CBO figure.
-  - I read these from search summaries. The KFF page returned 404.
+  - The 13 million matches the 13.1 million reduction in 2035 that Health Management Associates attributes to CBO's February 2026 baseline. CBO's earlier estimate for the enacted law was more than 11 million in 2034 (KFF).
+  - Read from the KFF and HMA pages. CBO's own documents could not be read.
 - **ACA credits: $350B over 2026-2035 and 3.8M more insured in 2035: true.** The source is CBO's September 2025 estimate, read via Roll Call and other search results.
 - **Annual path "$23B in 2026 to $44B in 2035": unsupported.** The CBO page returned 403 to both fetch tools, and no other source carried the annual figures.
 - **Cannon's "subsidies for people making up to $600,000": mostly true, but misleading.** It is a rare ceiling created by removing the 400%-of-poverty cap. The 8.5% contribution cap means most benefit goes to households under roughly $200,000.
