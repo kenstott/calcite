@@ -6306,6 +6306,115 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # --- WEEKLY CLAIMS VINTAGES, ALFRED (first print and every later revision) ---
+  - name: claims_revision_vintages
+    timeColumn: date  # observation time (week ending Saturday); this table has no column named 'year'
+    pattern: "type=claims_revision_vintages/series=*/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+        - name: series
+          type: VARCHAR
+    # Each series' whole real-time history is one request and changes every Thursday, so the
+    # hash check skips the write on days nothing new was published.
+    freshness:
+      type: hash
+    comment: >
+      Weekly unemployment-insurance claims vintages from ALFRED (the St. Louis Fed's archive of
+      FRED real-time periods) for five series: ICSA initial claims SA, ICNSA initial claims NSA,
+      CCSA continued claims SA, CCNSA continued claims NSA, IC4WSA four-week moving average of
+      initial claims SA (persons). econ.fred_indicators holds only the current, most-revised value
+      of these series; this table keeps what each Thursday DOL release published. One row per
+      (series, date, realtime_start): value is what ALFRED shows for the week ending Saturday
+      `date` from the release dated realtime_start until the day before realtime_end (realtime_end
+      9999-12-31 means still current). Only releases that changed the value get a row, so the FIRST
+      PRINT of a week is the row with the smallest realtime_start for that date, the next
+      realtime_start is its first revision, and the current value is the row with realtime_end
+      9999-12-31. Initial claims are revised the Thursday after first publication, and the annual
+      seasonal-factor update (spring) rewrites the whole seasonally adjusted history, so SA series
+      carry a burst of revision rows then. Vintages begin in 2009 (ICSA / ICNSA / IC4WSA 2009-05-28,
+      CCSA / CCNSA 2009-09-10): weeks before that appear once, stamped with that first realtime_start,
+      and are not true first prints, so restrict first-print analysis to dates after those days.
+      Continued claims lag initial claims by one week, so the newest ICSA week has no CCSA row yet.
+      Compute a revision as value minus the value at the week's smallest realtime_start.
+      value is NULL on six rows where ALFRED itself publishes no value (the 2018-11-21 and 2019-07-03
+      releases for ICSA / ICNSA / IC4WSA, each superseded within days).
+    dimensions:
+      type:
+        - claims_revision_vintages
+      series:
+        - ICSA
+        - ICNSA
+        - CCSA
+        - CCNSA
+        - IC4WSA
+
+    columns:
+      - name: series
+        type: string
+        nullable: false
+        comment: >
+          FRED series id (partition column). ICSA / ICNSA initial claims SA / NSA, CCSA / CCNSA
+          continued claims SA / NSA, IC4WSA four-week average of initial claims SA. Always filter on series.
+      - name: realtime_start
+        type: date
+        nullable: false
+        comment: First day this value was the published value for `date` (the Thursday DOL release date, or the day ALFRED first recorded it)
+      - name: realtime_end
+        type: date
+        nullable: false
+        comment: Last day this value was the published value; 9999-12-31 means it is still the current value
+      - *date_column
+      - name: value
+        type: double
+        nullable: true
+        comment: Number of claims (persons; IC4WSA is an average) for the week ending `date` as published from realtime_start to realtime_end
+
+    source:
+      type: http
+      url: "https://api.stlouisfed.org/fred/series/observations"
+      method: GET
+      parameters:
+        api_key: "{env:FRED_API_KEY}"
+        file_type: "json"
+        series_id: "{series}"
+        # output_type=1 = observations by real-time period: one row per (date, value interval);
+        # the whole vintage history of a series (<= 20k rows here) fits one page.
+        output_type: "1"
+        realtime_start: "1776-07-04"
+        realtime_end: "9999-12-31"
+        limit: "100000"
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 502, 503, 504]
+        maxRetries: 3
+      rawCache:
+        enabled: false
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=claims_revision_vintages/series=*/"
+      partition:
+        columns: [type, series]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: claims_revision_vintages
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- WORLD INDICATORS ---
   - name: world_indicators
     timeColumn: date  # observation time; this table has no column named 'year'
