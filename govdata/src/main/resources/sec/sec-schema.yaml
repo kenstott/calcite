@@ -395,8 +395,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 3986927
-      checkedAt: "2026-11-15T00:26:27Z"
+      rowCount: 4001179
+      checkedAt: "2026-11-16T00:51:12Z"
     partitions: *sec_partitions
 
     comment: >
@@ -532,8 +532,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 359154081
-      checkedAt: "2026-11-15T00:27:22Z"
+      rowCount: 359261488
+      checkedAt: "2026-11-16T00:52:31Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -669,8 +669,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 74284729
-      checkedAt: "2026-11-15T00:27:29Z"
+      rowCount: 77604036
+      checkedAt: "2026-11-16T00:52:46Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -789,8 +789,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 19111625
-      checkedAt: "2026-11-15T00:27:44Z"
+      rowCount: 19798713
+      checkedAt: "2026-11-16T00:53:27Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -890,8 +890,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 8262080
-      checkedAt: "2026-11-15T00:27:48Z"
+      rowCount: 9286757
+      checkedAt: "2026-11-16T00:53:48Z"
     partitions: *sec_partitions
     hooks:
       enabled: true
@@ -980,8 +980,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 18
       contiguous: true
-      rowCount: 354464715
-      checkedAt: "2026-11-15T00:27:49Z"
+      rowCount: 372159921
+      checkedAt: "2026-11-16T00:54:15Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1110,7 +1110,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 7464992
-      checkedAt: "2026-11-15T00:27:52Z"
+      checkedAt: "2026-11-16T00:54:22Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1253,7 +1253,7 @@ partitionedTables:
       distinctYears: 14
       contiguous: true
       rowCount: 118402816
-      checkedAt: "2026-11-15T00:28:01Z"
+      checkedAt: "2026-11-16T00:54:38Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1405,7 +1405,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 323538
-      checkedAt: "2026-11-15T00:28:10Z"
+      checkedAt: "2026-11-16T00:54:51Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1547,7 +1547,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 24036407
-      checkedAt: "2026-11-15T00:28:36Z"
+      checkedAt: "2026-11-16T00:55:22Z"
     partitions: *sec_partitions
     hooks:
       enabled: false
@@ -1652,7 +1652,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 23100354
-      checkedAt: "2026-11-15T00:28:38Z"
+      checkedAt: "2026-11-16T00:55:25Z"
     partitions:
       style: hive
       columnDefinitions:
