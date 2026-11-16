@@ -284,6 +284,36 @@ public class SemanticSearchLocalCodesTest {
     assertEquals(160L, localRowCount(incremental), "an appended merged file must add no rows");
   }
 
+  @Test void manifestNamesTheLiveFilesNotTheListing() throws Exception {
+    Path ds = tmp.resolve("ds");
+    java.nio.file.Files.createDirectories(ds);
+    Path live = ds.resolve("codes-live.parquet");
+    writeCodes(live, "live", 10, 1L);
+    writeCodes(ds.resolve("codes-retired.parquet"), "retired", 10, 2L);
+    java.nio.file.Files.write(ds.resolve("_live.json"),
+        "{\"files\": [\"codes-live.parquet\"]}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+         Statement st = c.createStatement();
+         java.sql.ResultSet rs = st.executeQuery(
+             SemanticSearch.manifestFilesSql(java.util.Collections.singletonList(
+                 ds.toAbsolutePath().toString())))) {
+      assertTrue(rs.next());
+      assertEquals(live.toAbsolutePath().toString(), rs.getString(1));
+      assertFalse(rs.next(), "the retired file is on disk but not in the manifest");
+    }
+  }
+
+  @Test void missingManifestIsAnError() throws Exception {
+    Path ds = tmp.resolve("empty-ds");
+    java.nio.file.Files.createDirectories(ds);
+    try (Connection c = DriverManager.getConnection("jdbc:duckdb:");
+         Statement st = c.createStatement()) {
+      org.junit.jupiter.api.Assertions.assertThrows(java.sql.SQLException.class,
+          () -> st.executeQuery(SemanticSearch.manifestFilesSql(
+              java.util.Collections.singletonList(ds.toAbsolutePath().toString()))));
+    }
+  }
+
   /** The stage-1 width bounds what stage 2 can rerank, so pinning it to one candidate must yield
    *  exactly one hit however large k is. Proves {@code calcite.vss.prefilter} is still honoured
    *  now that the default is computed from the corpus rather than fixed. */

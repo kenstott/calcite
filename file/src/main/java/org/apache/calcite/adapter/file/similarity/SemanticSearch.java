@@ -67,7 +67,7 @@ import java.util.List;
  * <p>No launcher config is required: S3 access is handed in by the file adapter via
  * {@link #configure} (it reuses the same credentials/endpoint the adapter already resolved), and
  * the codes locations default to every schema in {@link #DEFAULT_SOURCE_SCHEMAS} — each source
- * schema's codes live under its own bucket-rooted prefix (see {@link #defaultCodesGlobs}), so
+ * schema's codes live under its own bucket-rooted prefix (see {@link #defaultCodesDatasets}), so
  * search spans all of them, not just {@code sec}. All of the following are optional overrides
  * (system properties — file/ code must not read the environment):
  * <ul>
@@ -144,30 +144,57 @@ public final class SemanticSearch {
   // sec/vectorized_chunk_codes/source_schema=sec vs. ref/vectorized_chunk_codes/
   // source_schema=ref (see vss-local.py's codes_dataset_for()) -- not a shared parent
   // directory, so one glob cannot span multiple schemas.
-  private static List<String> defaultCodesGlobs() {
-    List<String> globs = new ArrayList<String>(DEFAULT_SOURCE_SCHEMAS.size() * 2);
+  private static List<String> defaultCodesDatasets() {
+    List<String> datasets = new ArrayList<String>(DEFAULT_SOURCE_SCHEMAS.size());
     for (String schema : DEFAULT_SOURCE_SCHEMAS) {
-      String dataset = "s3://govdata-parquet-v1/" + schema + "/vectorized_chunk_codes/"
-          + "source_schema=" + schema;
-      // Both shapes a codes dataset holds: the flat tail of recent embed flushes, and the
-      // centroid-partitioned set compaction folds them into (vss-local.py's cmd_compact).
-      // Reading only the first would silently lose everything already compacted.
-      globs.add(dataset + "/*.parquet");
-      globs.add(dataset + "/ivf/**/*.parquet");
+      datasets.add("s3://govdata-parquet-v1/" + schema + "/vectorized_chunk_codes/"
+          + "source_schema=" + schema);
     }
-    return globs;
+    return datasets;
+  }
+
+  /** The live-file manifest vss-local.py publishes next to each codes dataset: the files that
+   *  make up the current codes, whatever else an object store still lists there. */
+  private static final String LIVE_MANIFEST = "_live.json";
+
+  /** SQL yielding one {@code file} row per live codes file. With the {@code calcite.vss.codes}
+   *  override the operator names the file set, so it is globbed as given; otherwise each source
+   *  schema's {@value #LIVE_MANIFEST} is read, and a missing manifest fails the query. */
+  private static String liveCodesFilesSql() {
+    String override = System.getProperty("calcite.vss.codes");
+    StringBuilder sql = new StringBuilder();
+    if (override != null && !override.trim().isEmpty()) {
+      for (String g : codesGlobs()) {
+        if (sql.length() > 0) {
+          sql.append(" UNION ALL ");
+        }
+        sql.append("SELECT file FROM glob('").append(esc(g)).append("')");
+      }
+      return sql.toString();
+    }
+    return manifestFilesSql(defaultCodesDatasets());
+  }
+
+  static String manifestFilesSql(List<String> datasets) {
+    StringBuilder sql = new StringBuilder();
+    for (String dataset : datasets) {
+      if (sql.length() > 0) {
+        sql.append(" UNION ALL ");
+      }
+      sql.append("SELECT '").append(esc(dataset)).append("/' || f AS file FROM ")
+          .append("(SELECT unnest(files) AS f FROM read_json('").append(esc(dataset)).append('/').append(LIVE_MANIFEST)
+          .append("', columns={files: 'VARCHAR[]'}))");
+    }
+    return sql.toString();
   }
 
   /** The globs actually in force: the {@code calcite.vss.codes} override parsed back into
-   *  individual patterns when set, else {@link #defaultCodesGlobs}. The override is documented as
+   *  individual patterns when set, else the live-file manifests. The override is documented as
    *  a whole {@code read_parquet} argument, so it arrives either as one quoted glob or as a
    *  bracketed list of them; both forms are unwrapped here because the local load needs to see
    *  one file set per pattern, not an opaque argument string. */
   private static List<String> codesGlobs() {
     String override = System.getProperty("calcite.vss.codes");
-    if (override == null || override.trim().isEmpty()) {
-      return defaultCodesGlobs();
-    }
     String s = override.trim();
     if (s.startsWith("[")) {
       s = s.substring(1, s.endsWith("]") ? s.length() - 1 : s.length());
@@ -182,7 +209,7 @@ public final class SemanticSearch {
         globs.add(p);
       }
     }
-    return globs.isEmpty() ? defaultCodesGlobs() : globs;
+    return globs;
   }
 
   private static String quoted(List<String> paths) {
@@ -202,23 +229,19 @@ public final class SemanticSearch {
    * {@code read_parquet}, which errors the instant any one pattern in its list has no match.
    *
    * <p>Not every schema has reached the IVF-partitioned layout (or, before its first backlog run,
-   * even the flat one): {@link #defaultCodesGlobs} lists a fixed shape for every schema regardless
+   * even the flat one): {@link #defaultCodesDatasets} lists a fixed shape for every schema regardless
    * of what has actually been produced yet. Passing an as-yet-nonexistent pattern straight to
    * {@code read_parquet} fails that one call outright -- and since one call spans every schema at
    * once, a single schema still waiting on compaction breaks the search for all of them. Resolving
    * to real files first, and simply omitting a pattern with none, keeps every other schema
    * searchable regardless of where any one of them is in the pipeline.
    */
-  private static List<String> resolveCodesFiles(Connection c, List<String> globs)
-      throws SQLException {
+  private static List<String> resolveCodesFiles(Connection c) throws SQLException {
     List<String> files = new ArrayList<String>();
-    try (Statement st = c.createStatement()) {
-      for (String g : globs) {
-        try (ResultSet rs = st.executeQuery("SELECT file FROM glob('" + esc(g) + "')")) {
-          while (rs.next()) {
-            files.add(rs.getString(1));
-          }
-        }
+    try (Statement st = c.createStatement();
+         ResultSet rs = st.executeQuery(liveCodesFilesSql())) {
+      while (rs.next()) {
+        files.add(rs.getString(1));
       }
     }
     return files;
@@ -525,7 +548,7 @@ public final class SemanticSearch {
     try {
       long[] w = packBits(v);
       Connection c = connection();
-      String src = localReady ? LOCAL_TABLE : selectCodes(c, resolveCodesFiles(c, codesGlobs()));
+      String src = localReady ? LOCAL_TABLE : selectCodes(c, resolveCodesFiles(c));
       int prefilter = prefilterWidth(c, src);
 
       StringBuilder ham = new StringBuilder();
@@ -665,18 +688,10 @@ public final class SemanticSearch {
    * silently turn every query into a scan of object storage.
    */
   private static void loadLocalCodes(Connection c) throws SQLException {
-    List<String> globs = codesGlobs();
     try (Statement st = c.createStatement()) {
       st.execute("CREATE TABLE IF NOT EXISTS " + LOCAL_SOURCE_TABLE
           + "(file VARCHAR PRIMARY KEY)");
-      StringBuilder remote = new StringBuilder();
-      for (int i = 0; i < globs.size(); i++) {
-        if (i > 0) {
-          remote.append(" UNION ALL ");
-        }
-        remote.append("SELECT file FROM glob('").append(esc(globs.get(i))).append("')");
-      }
-      st.execute("CREATE OR REPLACE TEMP TABLE _vss_remote AS " + remote);
+      st.execute("CREATE OR REPLACE TEMP TABLE _vss_remote AS " + liveCodesFilesSql());
 
       boolean haveTable;
       try (ResultSet rs = st.executeQuery("SELECT count(*) FROM duckdb_tables() WHERE table_name="
