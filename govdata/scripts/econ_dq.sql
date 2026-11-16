@@ -2234,6 +2234,93 @@ FROM (SELECT COUNT(*) AS dups FROM (
         SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/ces_revision_vintages_alfred', allow_moved_paths := true)
         GROUP BY 1,2,3 HAVING COUNT(*) > 1));
 
+-- ============================================================================
+-- claims_revision_vintages (FRED/ALFRED real-time weekly claims vintages)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true) LIMIT 1));
+
+-- 5 series; ALFRED reports 7.8k (ICSA), 5.0k (ICNSA), 8.4k (CCSA), 5.5k (CCNSA), 8.3k (IC4WSA) rows.
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'row_count',
+  CASE WHEN n >= 30000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '30000',
+  CASE WHEN n >= 30000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');  -- single-table-type partition: type is expected constant
+
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows with series outside the 5 scoped FRED claims series'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true)
+      WHERE series NOT IN ('ICSA','ICNSA','CCSA','CCNSA','IC4WSA'));
+
+-- Claims are positive counts; a non-positive value is a parse defect.
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'expected_values',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'rows where value is not positive'
+FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true)
+      WHERE value <= 0);
+
+-- ALFRED publishes '.' (no value) for a few short-lived vintages (2018-11-21 and 2019-07-03 releases,
+-- 6 rows across ICSA/ICNSA/IC4WSA); these load as NULL by design. A jump in NULLs means a parse defect.
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'expected_values',
+  CASE WHEN n <= 20 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '<= 20',
+  'rows with NULL value (source-published missing values only)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true)
+      WHERE value IS NULL);
+
+-- Must carry recent weekly releases: latest ICSA realtime_start within the last 30 days.
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'expected_values',
+  CASE WHEN mx >= CURRENT_DATE - INTERVAL 30 DAY THEN 'pass' ELSE 'fail' END,
+  CAST(mx AS VARCHAR), '>= today - 30 days',
+  'latest ICSA realtime_start must be a recent Thursday release'
+FROM (SELECT MAX(realtime_start) AS mx FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true) WHERE series = 'ICSA');
+
+-- Revisions exist: most 2010+ ICSA weeks have more than one vintage (a weekly release revises the prior week; seasonal-factor rewrites add more).
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'expected_values',
+  CASE WHEN pct >= 0.5 THEN 'pass' ELSE 'fail' END,
+  CAST(pct AS VARCHAR), '>= 0.5',
+  'share of ICSA weeks since 2010 with more than one vintage'
+FROM (SELECT AVG(CASE WHEN c > 1 THEN 1.0 ELSE 0.0 END) AS pct FROM (
+        SELECT date, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true)
+        WHERE series = 'ICSA' AND date >= DATE '2010-01-01' GROUP BY date));
+
+-- PK shape: (series, date, realtime_start)
+INSERT INTO dq_results
+SELECT 'econ', 'claims_revision_vintages', 'pk_duplicates',
+  CASE WHEN dups = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(dups AS VARCHAR), '0',
+  'duplicate (series, date, realtime_start) keys'
+FROM (SELECT COUNT(*) AS dups FROM (
+        SELECT series, date, realtime_start FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/claims_revision_vintages', allow_moved_paths := true)
+        GROUP BY 1,2,3 HAVING COUNT(*) > 1));
+
 -- social_security_trustees_projections
 INSERT INTO dq_results
 SELECT 'econ', 'social_security_trustees_projections', 'all_null_cols', 'fail',
