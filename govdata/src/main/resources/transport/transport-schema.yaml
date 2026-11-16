@@ -161,6 +161,15 @@ dimension_values:
     end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
     descending: true
 
+  # FAA ATCSCC Advisories Database: daily advisory lists exist from 2000 (verified 2026-11-16:
+  # 1999 and earlier return no rows). Current year is rebuilt on each run.
+  faa_advisory_year_range: &faa_advisory_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2000}"
+    minYear: 2000
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    descending: true
+
   # Full 12-month cadence: one fetch per (year, month) = one overwrite partition.
   all_months: &all_months
     type: list
@@ -3362,6 +3371,96 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  - name: faa_atcscc_advisories
+    pattern: "type=faa_atcscc_advisories/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Every FAA Air Traffic Control System Command Center (ATCSCC) advisory since 2000, one row
+      per advisory: ground stops, ground delay programs (including proposed and cancellation
+      notices), airspace flow programs, reroutes, flow-constrained areas, airport delay and
+      closure notices, and equipment or telecommunications outage notices. The event-level
+      record for "has a nationwide ground stop happened before", "how many ground stops did
+      airport X have", and "how often do outages halt traffic". advisory_type is derived from the
+      subject line (GROUND_STOP, GROUND_DELAY_PROGRAM, OUTAGE, FLOW_PROGRAM,
+      ROUTE_OR_FLOW_AREA, AIRPORT_DELAY_OR_CLOSURE, OTHER); the subject is the FAA's own text,
+      e.g. "NATIONWIDE GROUND STOP". List-level only: program periods, rates, and impacting
+      condition (in each advisory's body text) are not extracted. Facility is the issuing
+      airport/ARTCC (e.g. SFO/ZOA) or DCC for national advisories; Canadian-originated
+      advisories appear with a Canadian facility code. advisory_number restarts at 001 each day,
+      so a row is identified by date + number + facility. Times are as published on the FAA list
+      page (UTC). Source: fly.faa.gov/adv/adv_list (ATCSCC advisories database, HTML, one
+      request per day).
+
+    dimensions:
+      type:
+        - faa_atcscc_advisories
+      year: *faa_advisory_year_range
+
+    columns:
+      - name: advisory_date
+        type: date
+        nullable: false
+        comment: Calendar day the advisory was issued
+      - name: advisory_number
+        type: string
+        nullable: false
+        comment: Advisory number within the day (restarts at 001 each day)
+      - name: facility
+        type: string
+        nullable: false
+        comment: Issuing facility, e.g. DCC (national), SFO/ZOA (airport/ARTCC)
+      - name: subject
+        type: string
+        nullable: false
+        comment: FAA advisory subject line, e.g. CDM GROUND STOP, NATIONWIDE GROUND STOP
+      - name: advisory_type
+        type: string
+        nullable: false
+        comment: Derived class of the advisory (GROUND_STOP, GROUND_DELAY_PROGRAM, OUTAGE, FLOW_PROGRAM, ROUTE_OR_FLOW_AREA, AIRPORT_DELAY_OR_CLOSURE, OTHER)
+      - name: is_cancellation
+        type: boolean
+        nullable: false
+        comment: True when the subject is a cancellation (CNX/CANCEL)
+      - name: is_proposed
+        type: boolean
+        nullable: false
+        comment: True when the subject is a proposed program
+      - name: sent_time_utc
+        type: timestamp
+        nullable: false
+        comment: Time the advisory was sent, as shown on the FAA list page
+
+    source:
+      type: http
+      url: "https://www.fly.faa.gov/adv/adv_list?whichAdvisories=ATCSCC&advisoryCategory=All&date={year}-01-01&airflow=true&ctop=true&gStop=true&gDelay=true&route=true&other=true"
+      method: GET
+      parallel: 1
+      response:
+        format: text
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 503]
+        maxRetries: 3
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.transport.FaaAtcscAdvisoriesTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=faa_atcscc_advisories/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/transport"
+        tableName: faa_atcscc_advisories
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
   # ---------------------------------------------------------------------------
   # NBI BRIDGES — FHWA National Bridge Inventory (delta by year, delimited zip)
   # ---------------------------------------------------------------------------
@@ -5362,6 +5461,9 @@ constraints:
 
   bts_port_teu:
     primaryKey: [type, port_code, report_date]
+
+  faa_atcscc_advisories:
+    primaryKey: [advisory_date, advisory_number, facility, sent_time_utc]
 
   bridges:
     primaryKey: [year, state_code, structure_number]
