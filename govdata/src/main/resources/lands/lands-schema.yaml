@@ -1754,6 +1754,169 @@ partitionedTables:
         incrementalKeys: [year]
 
   # ---------------------------------------------------------------------------
+  # NPS DEFERRED MAINTENANCE — park-level DM&R from NPS "Infrastructure by the Numbers"
+  # ---------------------------------------------------------------------------
+  - name: nps_deferred_maintenance
+    # The index CSV is replaced in place each fiscal year; probe its Last-Modified and skip
+    # re-ingest (~390 PDF downloads) while it is unchanged. year is a cache-buster only.
+    freshness:
+      type: last_modified
+    pattern: "type=nps_deferred_maintenance/*.parquet"
+    partitions: *static_partitions
+    comment: >
+      National Park Service deferred maintenance and repairs (DM&R) backlog by park unit,
+      with the real-property inventory it is measured against, from the park fact sheets on
+      nps.gov/subjects/infrastructure ("By the Numbers"), based on the Federal Real Property
+      Profile as of end of the stated fiscal year. One row per park unit (~390): total DM&R,
+      modeled annual routine maintenance, and DM&R split across nine asset categories
+      (buildings, trails, paved/unpaved roads, water, waste water, housing, campgrounds,
+      all other assets). Granularity stops at park unit and asset category: there is no
+      per-asset or per-facility record, so a single facility inside a unit (a golf course,
+      one building) cannot be looked up here; National Mall and Memorial Parks, for
+      example, reports its backlog mostly under 'all other assets' without naming the
+      facilities. Dollar figures are published rounded to two significant figures. Current-
+      fiscal-year snapshot only: NPS overwrites the index and fact sheets each year, so prior
+      years are not retained upstream (region-level FY2023-FY2025 totals are on the page but
+      not in this table). Source: NPS Infrastructure fact-sheet index CSV plus one PDF per
+      park, parsed by NpsDeferredMaintenanceTransformer, which cross-checks that the category
+      amounts sum to the printed total. As of 2026-11-16 the index links two parks whose fact sheet is
+      HTTP 404 (Kaloko-Honokohau NHP, National Park of American Samoa); they have no row here, so
+      absence means 'not published', not zero backlog.
+
+    dimensions:
+      type:
+        - nps_deferred_maintenance
+      year: ["${GOVDATA_CURRENT_YEAR}"]
+
+    columns:
+      - name: park_name
+        type: string
+        nullable: false
+        comment: 'NPS unit name as printed in the fact-sheet index (e.g. ''National Mall and Memorial Parks''). Matches nps_units.unit_name for most units but not all (the fact-sheet index drops some qualifiers), so a join to nps_units by name should be checked, not assumed'
+      - name: states
+        type: string
+        nullable: false
+        comment: 'Comma-separated full state names from the index (''Multiple'' trails list every state); not USPS codes'
+      - name: fiscal_year
+        type: integer
+        nullable: false
+        comment: 'Federal fiscal year the Federal Real Property Profile figures are as of (end of FY, e.g. 2025)'
+      - name: buildings
+        type: bigint
+        nullable: false
+        comment: 'Count of buildings in the real property inventory'
+      - name: trail_miles
+        type: double
+        nullable: false
+        comment: 'Miles of trails'
+      - name: unpaved_road_miles
+        type: double
+        nullable: false
+        comment: 'Miles of unpaved roads'
+      - name: paved_road_miles
+        type: double
+        nullable: false
+        comment: 'Miles of paved roads, including bridges and tunnels'
+      - name: water_systems
+        type: bigint
+        nullable: false
+        comment: 'Count of water systems'
+      - name: waste_water_systems
+        type: bigint
+        nullable: false
+        comment: 'Count of waste water systems'
+      - name: campgrounds
+        type: bigint
+        nullable: false
+        comment: 'Count of campgrounds'
+      - name: housing_units
+        type: bigint
+        nullable: false
+        comment: 'Employee housing units and trailer pads (iQMIS)'
+      - name: other_assets
+        type: bigint
+        nullable: false
+        comment: 'Count of other asset types (electrical, communication, maintained landscapes, trail bridges, amphitheaters, marina/waterfront, fuel, dam/levee)'
+      - name: dmr_total_usd
+        type: bigint
+        nullable: false
+        comment: 'Total deferred maintenance and repairs in US dollars: the cost to correct existing deficiencies only (no accessibility upgrades, code upgrades, expansion or recurring maintenance). Printed by NPS rounded to two significant figures (''$1.3 B''), so precision is about 5%'
+      - name: annual_routine_maintenance_usd
+        type: bigint
+        nullable: false
+        comment: 'Modeled minimum annual routine/preventive maintenance cost in US dollars; same two-significant-figure rounding'
+      - name: dmr_buildings
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to buildings, US dollars (0 when the fact sheet lists the category as having $0)'
+      - name: dmr_trails
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to trails, US dollars'
+      - name: dmr_paved_roads
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to paved roads, bridges and tunnels, US dollars'
+      - name: dmr_unpaved_roads
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to unpaved roads, US dollars'
+      - name: dmr_water_systems
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to water systems, US dollars'
+      - name: dmr_waste_water_systems
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to waste water systems, US dollars'
+      - name: dmr_housing
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to housing, US dollars'
+      - name: dmr_campgrounds
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to campgrounds, US dollars'
+      - name: dmr_other_assets
+        type: bigint
+        nullable: false
+        comment: 'DM&R attributed to ''All Other Assets'' (landscapes, electrical, dams, waterfront, historic landscape features, etc.), US dollars. At National Mall and Memorial Parks this is the dominant category. When a fact sheet names every other category (positive amounts or the "have $0" list) but not All Other Assets, this value is the printed total minus the named categories, not a printed figure'
+      - name: fact_sheet_url
+        type: string
+        nullable: false
+        comment: 'URL of the park fact sheet PDF this row was parsed from'
+      - name: type
+        type: string
+        nullable: false
+        comment: 'Always ''nps_deferred_maintenance'''
+
+    source:
+      type: http
+      url: "https://www.nps.gov/common/uploads/sortable_dataset/infrastructure/200BB9B9-04DB-1CE3-39B1E0967C744AE5/nri-DMParkFactSheettoConverttoaCSV2026v2.csv"
+      method: GET
+      response:
+        format: TEXT   # NpsDeferredMaintenanceTransformer re-downloads the index and each PDF
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.lands.NpsDeferredMaintenanceTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=nps_deferred_maintenance/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/lands"
+        tableName: nps_deferred_maintenance
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # BLM FIELD OFFICES — BLM administrative unit boundaries (static reference)
   # ---------------------------------------------------------------------------
   - name: blm_field_offices
@@ -2558,6 +2721,9 @@ constraints:
       - columns: [unit_code]
         targetTable: nps_units
         targetColumns: [unit_code]
+
+  nps_deferred_maintenance:
+    primaryKey: [park_name, fiscal_year]
 
   blm_field_offices:
     primaryKey: [office_code]
