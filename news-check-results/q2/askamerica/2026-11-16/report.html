@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The CNN State of the Union (Nov 15, 2026) transcript's claims about the FAA ground stop, air traffic control funding and the midterms are balanced and mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The CNN State of the Union (Nov 15, 2026) transcript's claims about the FAA ground stop, air traffic control funding and the midterms are balanced and mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01">https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:16px">Mississippi U.S. Senate general election votes, 2018-2024 (baseline for the 2026 flip)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="330" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="330" viewBox="0 0 412 330" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="330" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Mississippi Senate D vs R votes</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="91" y1="252" x2="390" y2="252" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="83" y="256" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="91" y1="219.33" x2="390" y2="219.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="83" y="223.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200,000</text>
+      <line class="grid" x1="91" y1="186.67" x2="390" y2="186.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="83" y="190.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">400,000</text>
+      <line class="grid" x1="91" y1="154" x2="390" y2="154" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="83" y="158" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">600,000</text>
+      <line class="grid" x1="91" y1="121.33" x2="390" y2="121.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="83" y="125.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">800,000</text>
+      <line class="grid" x1="91" y1="88.67" x2="390" y2="88.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="83" y="92.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1M</text>
+      <line class="grid" x1="91" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="83" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1.2M</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="91" y1="56" x2="91" y2="252" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="91" y1="252" x2="390" y2="252" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="154" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 154)">Votes</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2018" class="tick" x="140.83" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p1-xtick-2020" class="tick" x="240.50" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p1-xtick-2024" class="tick" x="340.17" y="270" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p1-series-republican" class="series">
+      <g class="hover">
+        <title>2018 — Republican: 1,034,388</title>
+        <rect id="p1-mark-republican-2018" class="bar" x="108.94" y="83.05" width="30.89" height="168.95" fill="#2563eb"/>
+        <rect class="hit" x="108.94" y="56" width="30.89" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Republican: 709,511</title>
+        <rect id="p1-mark-republican-2020" class="bar" x="208.61" y="136.11" width="30.89" height="115.89" fill="#2563eb"/>
+        <rect class="hit" x="208.61" y="56" width="30.89" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Republican: 763,420</title>
+        <rect id="p1-mark-republican-2024" class="bar" x="308.27" y="127.31" width="30.89" height="124.69" fill="#2563eb"/>
+        <rect class="hit" x="308.27" y="56" width="30.89" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-democratic" class="series">
+      <g class="hover">
+        <title>2018 — Democratic: 790,386</title>
+        <rect id="p1-mark-democratic-2018" class="bar" x="140.83" y="122.90" width="30.89" height="129.10" fill="#ea580c"/>
+        <rect class="hit" x="140.83" y="56" width="30.89" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2020 — Democratic: 578,691</title>
+        <rect id="p1-mark-democratic-2020" class="bar" x="240.50" y="157.48" width="30.89" height="94.52" fill="#ea580c"/>
+        <rect class="hit" x="240.50" y="56" width="30.89" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Democratic: 451,981</title>
+        <rect id="p1-mark-democratic-2024" class="bar" x="340.17" y="178.18" width="30.89" height="73.82" fill="#ea580c"/>
+        <rect class="hit" x="340.17" y="56" width="30.89" height="196" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-republican" x="122" y="296" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-republican" class="legend-label" x="138" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Republican</text>
+      <rect id="p1-legend-swatch-democratic" x="213" y="296" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-democratic" class="legend-label" x="229" y="305" fill="#1f2328" font-size="11" style="font-size:11px">Democratic</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:53555/a/33969371e9e2b19c1268e1af45fce816.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Overall: 1 Pinocchio. Most checkable statements hold (Colom's historic win, the $12.5B appropriation, the $50B ask, the GAO warning, Sanders's fourth tax cut). Problems: Duffy's 'no money for telecom' is overstated ($4.75B of the $12.5B is telecom), Van Hollen's 'one-third spent' conflates obligations with outlays, and Bash's reference to a shutdown in 2007-2008 is wrong (no federal shutdown then). The $4.3B/$1B figures and Sanders's maternity-leave and bonus claims could not be verified.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — mostly honest</strong> &middot; <strong>Bias 0/100 — no consistent lean</strong></p><p>6 claims graded, 0 not gradable, 4 fell short. In this article only.</p></div>
+<p><strong>2</strong> true &middot; <strong>3</strong> mostly true &middot; <strong>1</strong> mostly false &middot; <strong>6</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Mississippi, once the heart of Jim Crow oppression, just elected its first black senator since Reconstruction.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>officials.senate_election_results</code>; <a href="https://www.fox5atlanta.com/news/scott-colom-wins-senate-mississippi">Fox 5 Atlanta</a></td></tr><tr class="verdict-mostly-false"><td>5</td><td>Some Democrats remember, when that happened in 2007, 2008, and didn't go so well.</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://en.wikipedia.org/wiki/Government_shutdowns_in_the_United_States">Government shutdowns in the United States</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>There was a nationwide ground stop only for the second time since 9/11.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.inquirer.com/business/faa-smart-ai-system-ground-stop-20261116.html">Philadelphia Inquirer</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>In September, a GAO reported ... they were prioritizing 'speed at the risk of cost uncertainty and potential disruptions.'</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.gao.gov/products/gao-26-107992">GAO-26-107992</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Chris Van Hollen is mounting a challenge against Chuck Schumer for the chance to lead the U.S. Senate.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.scrippsnews.com/politics/congress/van-hollen-considers-challenge-to-schumer-for-senate-democratic-leader">AP via Scripps</a></td></tr><tr class="verdict-true"><td>3</td><td>Secretary Duffy wants an additional $50 billion in emergency funding.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>6</td><td>Chris Van Hollen is mounting a challenge against Chuck Schumer for the chance to lead the U.S. Senate.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.scrippsnews.com/politics/congress/van-hollen-considers-challenge-to-schumer-for-senate-democratic-leader">AP via Scripps</a></td></tr><tr class="verdict-mostly-false"><td>5</td><td>Some Democrats remember, when that happened in 2007, 2008, and didn't go so well.</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://en.wikipedia.org/wiki/Government_shutdowns_in_the_United_States">Government shutdowns in the United States</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>In September, a GAO reported ... they were prioritizing 'speed at the risk of cost uncertainty and potential disruptions.'</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.gao.gov/products/gao-26-107992">GAO-26-107992</a></td></tr><tr class="verdict-true"><td>3</td><td>Secretary Duffy wants an additional $50 billion in emergency funding.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>There was a nationwide ground stop only for the second time since 9/11.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.inquirer.com/business/faa-smart-ai-system-ground-stop-20261116.html">Philadelphia Inquirer</a></td></tr><tr class="verdict-true"><td>1</td><td>Mississippi, once the heart of Jim Crow oppression, just elected its first black senator since Reconstruction.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>officials.senate_election_results</code>; <a href="https://www.fox5atlanta.com/news/scott-colom-wins-senate-mississippi">Fox 5 Atlanta</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>6</td><td>Chris Van Hollen is mounting a challenge against Chuck Schumer for the chance to lead the U.S. Senate.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.scrippsnews.com/politics/congress/van-hollen-considers-challenge-to-schumer-for-senate-democratic-leader">AP via Scripps</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>In September, a GAO reported ... they were prioritizing 'speed at the risk of cost uncertainty and potential disruptions.'</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.gao.gov/products/gao-26-107992">GAO-26-107992</a></td></tr><tr class="verdict-true"><td>1</td><td>Mississippi, once the heart of Jim Crow oppression, just elected its first black senator since Reconstruction.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>officials.senate_election_results</code>; <a href="https://www.fox5atlanta.com/news/scott-colom-wins-senate-mississippi">Fox 5 Atlanta</a></td></tr><tr class="verdict-true"><td>3</td><td>Secretary Duffy wants an additional $50 billion in emergency funding.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr><tr class="verdict-mostly-false"><td>5</td><td>Some Democrats remember, when that happened in 2007, 2008, and didn't go so well.</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://en.wikipedia.org/wiki/Government_shutdowns_in_the_United_States">Government shutdowns in the United States</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>There was a nationwide ground stop only for the second time since 9/11.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.inquirer.com/business/faa-smart-ai-system-ground-stop-20261116.html">Philadelphia Inquirer</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>5</td><td>Some Democrats remember, when that happened in 2007, 2008, and didn't go so well.</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://en.wikipedia.org/wiki/Government_shutdowns_in_the_United_States">Government shutdowns in the United States</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>There was a nationwide ground stop only for the second time since 9/11.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.inquirer.com/business/faa-smart-ai-system-ground-stop-20261116.html">Philadelphia Inquirer</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>In September, a GAO reported ... they were prioritizing 'speed at the risk of cost uncertainty and potential disruptions.'</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.gao.gov/products/gao-26-107992">GAO-26-107992</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Chris Van Hollen is mounting a challenge against Chuck Schumer for the chance to lead the U.S. Senate.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.scrippsnews.com/politics/congress/van-hollen-considers-challenge-to-schumer-for-senate-democratic-leader">AP via Scripps</a></td></tr><tr class="verdict-true"><td>3</td><td>Secretary Duffy wants an additional $50 billion in emergency funding.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr><tr class="verdict-true"><td>1</td><td>Mississippi, once the heart of Jim Crow oppression, just elected its first black senator since Reconstruction.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>officials.senate_election_results</code>; <a href="https://www.fox5atlanta.com/news/scott-colom-wins-senate-mississippi">Fox 5 Atlanta</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>6</td><td>Chris Van Hollen is mounting a challenge against Chuck Schumer for the chance to lead the U.S. Senate.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.scrippsnews.com/politics/congress/van-hollen-considers-challenge-to-schumer-for-senate-democratic-leader">AP via Scripps</a></td></tr><tr class="verdict-mostly-false"><td>5</td><td>Some Democrats remember, when that happened in 2007, 2008, and didn't go so well.</td><td><strong>mostly false</strong></td><td>Checked against: <a href="https://en.wikipedia.org/wiki/Government_shutdowns_in_the_United_States">Government shutdowns in the United States</a></td></tr><tr class="verdict-true"><td>1</td><td>Mississippi, once the heart of Jim Crow oppression, just elected its first black senator since Reconstruction.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>officials.senate_election_results</code>; <a href="https://www.fox5atlanta.com/news/scott-colom-wins-senate-mississippi">Fox 5 Atlanta</a></td></tr><tr class="verdict-true"><td>3</td><td>Secretary Duffy wants an additional $50 billion in emergency funding.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr><tr class="verdict-mostly-true"><td>4</td><td>In September, a GAO reported ... they were prioritizing 'speed at the risk of cost uncertainty and potential disruptions.'</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.gao.gov/products/gao-26-107992">GAO-26-107992</a></td></tr><tr class="verdict-mostly-true"><td>2</td><td>There was a nationwide ground stop only for the second time since 9/11.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a>; <a href="https://www.inquirer.com/business/faa-smart-ai-system-ground-stop-20261116.html">Philadelphia Inquirer</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Two Democratic congressmen — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>2 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> unsupported &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>8</td><td>Fifteen months later, the administration obligated $4.3 billion, but only spent $1 billion.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://rollcall.com/2026/04/21/more-air-traffic-control-modernization-funding-needed-duffy-says/">Roll Call</a>; <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr>
+<tr class="verdict-true"><td>7</td><td>Congress approved $12.5 billion for the Department of Transportation to make necessary safety upgrades to our air traffic control system.</td><td><strong>true</strong></td><td>Checked against: <a href="https://rollcall.com/2026/04/21/more-air-traffic-control-modernization-funding-needed-duffy-says/">Roll Call</a>; <a href="https://aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going">AOPA</a></td></tr>
+</tbody></table>
+<h3>Claims by Sen. Chris Van Hollen — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 25/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> mostly false &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-mostly-false"><td>9</td><td>The $12.5 billion... of which they have only spent one-third.</td><td><strong>mostly false</strong> &middot; central claim</td><td>Checked against: <a href="https://rollcall.com/2026/04/21/more-air-traffic-control-modernization-funding-needed-duffy-says/">Roll Call</a></td></tr>
+</tbody></table>
+<h3>Claims by Sean Duffy — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 50/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> partially false &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-partially-false"><td>10</td><td>I have no money in that $12.5 billion that I can use for a new architecture for telecom.</td><td><strong>partially false</strong> &middot; central claim</td><td>Checked against: <a href="https://aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going">AOPA</a>; <a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></td></tr>
+</tbody></table>
+<h3>Claims by Gov. Sarah Huckabee Sanders — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>2 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> unsupported &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>11</td><td>This marks the fourth time we have cut taxes since I took office, in the last four years.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://arkadelphian.com/2026/05/06/arkansas-advocate-state-lawmakers-approve-192m-tax-cut-legislation-end-session/">Arkansas Advocate</a></td></tr>
+<tr class="verdict-unsupported"><td>12</td><td>We opened up paid maternity leave, one of only two states in the country to do that for up to 12 weeks. We opened a Merit Incentive Fund where we have given $50 million in bonuses to our teachers.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.arkansasonline.com/news/2026/nov/06/sanders-proposed-state-budget-includes-increased/">Arkansas Democrat-Gazette budget story</a></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Mississippi, once the heart of Jim Crow oppression, just elected its first black senator since Reconstruction.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Mississippi Senate 2024: R 763,420 vs D 451,981, so a 2026 Democratic win is a large swing; 2026 itself not in warehouse <code>officials.senate_election_results</code></dd>
+<dt>Independent evidence</dt><dd>Fox 5 Atlanta: Colom beat Hyde-Smith by 4,669 votes, first Black senator from Mississippi since Reconstruction.<ul class="claim-sources"><li><a href="https://www.fox5atlanta.com/news/scott-colom-wins-senate-mississippi">Fox 5 Atlanta</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, state_name, party_major, SUM(candidate_votes) FROM officials.senate_election_results WHERE state_name ILIKE 'miss%' AND year&gt;=2018 GROUP BY year,state_name,party_major</code></pre></details>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#2 &middot; <strong>mostly true</strong> &mdash; There was a nationwide ground stop only for the second time since 9/11.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Wired: five-hour ground stop, over 6,300 flights canceled.<ul class="claim-sources"><li><a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></li><li><a href="https://www.inquirer.com/business/faa-smart-ai-system-ground-stop-20261116.html">Philadelphia Inquirer</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Wired calls it the most disastrous nationwide ground stop since 9/11 but does not state it was only the second; the Jan 2023 outage is the likely other.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Secretary Duffy wants an additional $50 billion in emergency funding.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Wired: Duffy sent a $30.1B request letter, then said Friday 'I want $50 billion'.<ul class="claim-sources"><li><a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#4 &middot; <strong>mostly true</strong> &mdash; In September, a GAO reported ... they were prioritizing 'speed at the risk of cost uncertainty and potential disruptions.'</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>GAO-26-107992, September 2026, as quoted by Wired.<ul class="claim-sources"><li><a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></li><li><a href="https://www.gao.gov/products/gao-26-107992">GAO-26-107992</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>Wired quotes the Sept GAO report as 'could be prioritizing speed over costs and air traffic disruption'; Bash's wording differs and 'was' is stronger than 'could be'.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#5 &middot; <strong>mostly false</strong> &mdash; Some Democrats remember, when that happened in 2007, 2008, and didn't go so well.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Wikipedia list of government shutdowns in the United States.<ul class="claim-sources"><li><a href="https://en.wikipedia.org/wiki/Government_shutdowns_in_the_United_States">Government shutdowns in the United States</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>No federal shutdown occurred in 2007-2008; federal shutdowns were 1995-96, 2013, Jan 2018, 2018-19, 2025. Only state shutdowns (Michigan, Pennsylvania 2007) appear.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; Chris Van Hollen is mounting a challenge against Chuck Schumer for the chance to lead the U.S. Senate.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>AP via Scripps: Van Hollen considering challenge; Democrats may hold up to 56 seats.<ul class="claim-sources"><li><a href="https://www.scrippsnews.com/politics/congress/van-hollen-considers-challenge-to-schumer-for-senate-democratic-leader">AP via Scripps</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>AP describes him as considering a challenge as of the week after the election; by Nov 15 he said he was running.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Congress approved $12.5 billion for the Department of Transportation to make necessary safety upgrades to our air traffic control system.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Two Democratic congressmen — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>July 2025 reconciliation law provided $12.5B.<ul class="claim-sources"><li><a href="https://rollcall.com/2026/04/21/more-air-traffic-control-modernization-funding-needed-duffy-says/">Roll Call</a></li><li><a href="https://aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going">AOPA</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#8 &middot; <strong>unsupported</strong> &mdash; Fifteen months later, the administration obligated $4.3 billion, but only spent $1 billion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Two Democratic congressmen — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://rollcall.com/2026/04/21/more-air-traffic-control-modernization-funding-needed-duffy-says/">Roll Call</a></li><li><a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>No obligation/outlay report found in Roll Call, AOPA or Wired; Duffy disputed the framing, not the numbers.</dd>
+<dt>Evidence found and set aside because</dt><dd>The only '$1' hits in fetched pages (Fox: $1.2 million ad buy; AOPA: $1 billion TRACON line) are unrelated to amounts spent.</dd>
+<dt>No page loaded because</dt><dd>No DOT/FAA or congressional release carrying the obligation numbers surfaced in search.</dd>
+<dt>Warehouse searched for</dt><dd>FAA air traffic control modernization obligations outlays</dd>
+<dt>Web searches run</dt><dd>Democrats $12.5 billion air traffic control obligated $4.3 billion spent $1 billion Duffy</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#9 &middot; <strong>mostly false</strong> &mdash; The $12.5 billion... of which they have only spent one-third.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Sen. Chris Van Hollen — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Arithmetic on the figures read in the same segment, themselves unverified.<ul class="claim-sources"><li><a href="https://rollcall.com/2026/04/21/more-air-traffic-control-modernization-funding-needed-duffy-says/">Roll Call</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>Using the figures read on air, one-third fits obligations ($4.3B of $12.5B), not spending ($1B, 8%).</dd>
+<dt>Evidence found and set aside because</dt><dd>Roll Call confirms the $12.5B appropriation but contains no spending figure, so it does not change the grade, which rests on the on-air arithmetic.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#10 &middot; <strong>partially false</strong> &mdash; I have no money in that $12.5 billion that I can use for a new architecture for telecom.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Sean Duffy — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>$4.75B telecom line in the $12.5B (AOPA); Wired: AT&amp;T awarded $73M to build the new FTI.<ul class="claim-sources"><li><a href="https://aopa.org/news-and-media/all-news/2025/july/10/where-is-the-12-5-billion-for-atc-modernization-going">AOPA</a></li><li><a href="https://www.wired.com/story/the-faa-nationwide-ground-stop-is-over/">Wired</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>$4.75B of the $12.5B is designated for telecommunications modernization; only a wholly new architecture/software may be unfunded.</dd>
+<dt>Evidence found and set aside because</dt><dd>Roll Call's $12.5B passage supports the appropriation; AOPA's line items supply the contrary telecom figure.</dd>
+<dt>Windows tested</dt><dd>July 2025 law allocation: $4.75B telecom; Apr 2026 DOT briefing: nearly half of copper wire already replaced with fiber</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; This marks the fourth time we have cut taxes since I took office, in the last four years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Gov. Sarah Huckabee Sanders — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Arkansas Advocate, May 2026: fourth time income taxes lowered since she took office in 2023 (top rate 3.9% to 3.7%).<ul class="claim-sources"><li><a href="https://arkadelphian.com/2026/05/06/arkansas-advocate-state-lawmakers-approve-192m-tax-cut-legislation-end-session/">Arkansas Advocate</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#12 &middot; <strong>unsupported</strong> &mdash; We opened up paid maternity leave, one of only two states in the country to do that for up to 12 weeks. We opened a Merit Incentive Fund where we have given $50 million in bonuses to our teachers.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Gov. Sarah Huckabee Sanders — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.arkansasonline.com/news/2026/nov/06/sanders-proposed-state-budget-includes-increased/">Arkansas Democrat-Gazette budget story</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Neither figure appears in fetched coverage of her budget; no source located.</dd>
+<dt>Evidence found and set aside because</dt><dd>The '$50' hit in AOPA is $50M for remote towers, unrelated.</dd>
+<dt>No page loaded because</dt><dd>Axios page returned 403; the Democrat-Gazette page loaded but did not mention maternity leave or bonuses.</dd>
+<dt>Warehouse searched for</dt><dd>Arkansas paid maternity leave teacher bonuses</dd>
+<dt>Web searches run</dt><dd>Sarah Huckabee Sanders paid maternity leave state employees Merit Incentive Fund</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Disclosure of exclusions</h2>
+<p>My first warehouse query excluded rows where candidate was null (write-in aggregates) and returned no rows because of a state-name filter error. The figures reported come from a rerun without that exclusion, which sums every party line in Mississippi, so no units were dropped from the cited totals.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify every claim independently</strong>: The $4.3B/$1B obligation figures, the Sanders maternity-leave and bonus figures, and the Dec 11 deadline were not found in any page I could read; graded unsupported, not false.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 2130 ms</summary><pre><code>SELECT year, candidate, party_major, SUM(candidate_votes) AS votes FROM officials.senate_election_results WHERE state_name = 'MISSISSIPPI' AND year &gt;= 2018 AND stage = 'gen' AND candidate IS NOT NULL GROUP BY year, candidate, party_major ORDER BY year, votes DESC</code></pre></details>
+<details class="sqltoggle"><summary>query — 17 rows — 540 ms</summary><pre><code>SELECT &quot;year&quot;, state_name, party_major, SUM(candidate_votes) AS votes FROM officials.senate_election_results WHERE state_name ILIKE 'miss%' AND &quot;year&quot; &gt;= 2018 GROUP BY &quot;year&quot;, state_name, party_major ORDER BY &quot;year&quot;, votes DESC</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/PEJ5QU">officials.senate_election_results</a><details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, state_name, party_major, SUM(candidate_votes) AS votes FROM officials.senate_election_results WHERE state_name ILIKE 'miss%' AND year&gt;=2018 GROUP BY year, state_name, party_major</code></pre></details></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">Rush transcript. Warehouse lacks 2026 results and DOT obligation data; most grades rest on fetched news pages.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

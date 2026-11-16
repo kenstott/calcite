@@ -1215,5 +1215,145 @@
       "everyman": 3
     },
     "note": "Highest-in-four-cycles compares CNBC poll to NEP series. Expert matched AFL-CIO figures to its release; askamerica left them uncheckable."
+  },
+  {
+    "topic_slug": "cbs-face-the-nation-nov-15-2026-transcript",
+    "headline": "Full transcript of \"Face the Nation with Margaret Brennan,\" Nov. 15, 2026",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q1/askamerica/2026-11-16",
+    "pinocchios": 1,
+    "source_url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "Expert graded 23 claims to askamerica's 9 and caught the Megaspeed and Nvidia items askamerica left ungraded. Trustees table query failed not-found on the connector."
+  },
+  {
+    "topic_slug": "cnn-state-of-the-union-nov-15-2026-transcript",
+    "headline": "CNN State of the Union, Nov. 15, 2026: Sanders, Van Hollen and Duffy claims",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q2/askamerica/2026-11-16",
+    "pinocchios": 1,
+    "source_url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Askamerica separated obligated from spent on the ATC money and caught a nonexistent 2007-08 shutdown; the other two could not find the ground stop. Gap filed: govdata-ops#1257."
+  },
+  {
+    "topic_slug": "fox-democrats-spending-spree-after-midterm-rout",
+    "headline": "Democrats plot massive spending spree after midterm rout \u2014 and Trump could help them pull it off",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q3/askamerica/2026-11-16",
+    "pinocchios": 0,
+    "source_url": "https://www.foxnews.com/politics/democrats-plot-massive-spending-spree-after-midterm-rout-trump-could-help-them-pull-off",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Deficit, net interest and Medicaid enrollment confirmed from the warehouse. Askamerica wrongly called the 13M Medicaid figure not-CBO (CBO Feb 2026 baseline: 13.1M). Page rating text corrected from Two to engine score 0."
+  },
+  {
+    "topic_slug": "cbs-iie-foreign-students-down-9-percent",
+    "headline": "Fewer foreign students studying at U.S. universities due to Trump administration policies, study shows",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q4/askamerica/2026-11-16",
+    "pinocchios": 1,
+    "source_url": "https://www.cbsnews.com/news/us-universities-fewer-foreign-students-trump-administration-policies/",
+    "ranks": {
+      "expert": 1,
+      "askamerica": 2,
+      "everyman": 3
+    },
+    "note": "Expert matched all IIE figures to the release; askamerica left OPT and undergraduate figures unsupported but alone caught the Cleveland State inconsistency. Gaps filed: govdata-ops#1258, #1259. Claim grouping corrected after delivery."
+  },
+  {
+    "topic_slug": "fortune-colleges-summer-melt-yield",
+    "headline": "Priced out and unsure it pays off, more Gen Z students are getting in and not showing up\u2014so colleges are cutting prices",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q5/askamerica/2026-11-16",
+    "pinocchios": 0,
+    "source_url": "https://fortune.com/2026/11/16/colleges-summer-melt-yield-direct-admissions/",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Askamerica sourced the yield, BLS and Georgia State figures the others could not, but missed that the Common App line blends two cycles. Claim grouping and page rating corrected after delivery."
+  },
+  {
+    "topic_slug": "accuweather-2026-atlantic-hurricane-season-over",
+    "headline": "Is the 2026 Atlantic hurricane season over? El Ni\u00f1o suppressing late-season storm risk",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q6/askamerica/2026-11-16",
+    "pinocchios": 1,
+    "source_url": "https://www.yahoo.com/news/weather-news/articles/2026-atlantic-hurricane-season-over-191837658.html",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "All three found the 121-year record was a tie with 1905; askamerica checked the most detail. HURDAT2 gap already tracked (govdata-ops#1256). Page rating text corrected to engine score."
+  },
+  {
+    "topic_slug": "nbc-meet-the-press-nov-15-2026-transcript",
+    "headline": "Meet the Press \u2013 November 15, 2026",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q7/askamerica/2026-11-16",
+    "pinocchios": 0,
+    "source_url": "https://www.nbcnews.com/meet-the-press/transcripts/meet-press-november-15-2026-rcna609426",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Mississippi margin, federal debt and minimum wage confirmed from the warehouse; ground stop confirmed against the FAA's Q&A. Pence's $250B is imports covered, not tariffs collected."
+  },
+  {
+    "topic_slug": "vt-farmers-share-thanksgiving-meal",
+    "headline": "Expert explains why farmers earn less than you would think from Thanksgiving feasts",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q8/askamerica/2026-11-16",
+    "pinocchios": null,
+    "source_url": "https://news.vt.edu/articles/2026/11/thanksgiving-meal-farmer-share-earnings-price-meal-groceries-expenses-agriculture-supply-chain-turkey.html",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Engine gave no rating (too few scoreable claims). All three matched the farm shares to USDA's Food Dollar Series; askamerica added that the shares are gross farm returns, 6.7 cents value added. Gap filed: govdata-ops#1260."
+  },
+  {
+    "topic_slug": "newsweek-mamdani-snap-retailer-rule-delay",
+    "headline": "NYC's Mamdani makes deal with Trump to delay new SNAP rule nationwide",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q9/askamerica/2026-11-16",
+    "pinocchios": 1,
+    "source_url": "https://www.newsweek.com/zohran-mamdani-donald-trump-snap-benefits-cuts-nationwide-12714253",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Facts hold (36.09M on SNAP from the warehouse); the heading and URL call a retailer stocking rule a benefit cut, and Nov. 4 was not a cliff. Gap filed: govdata-ops#1261."
+  },
+  {
+    "topic_slug": "icaew-chart-of-the-week-us-federal-deficit-fy2026",
+    "headline": "Chart of the week: US federal deficit",
+    "checked_date": "2026-11-16",
+    "run_subpath": "q10/askamerica/2026-11-16",
+    "pinocchios": 0,
+    "source_url": "https://www.icaew.com/insights/viewpoints-on-the-news/2026/nov-2026/chart-of-the-week-us-federal-deficit",
+    "ranks": {
+      "askamerica": 1,
+      "expert": 2,
+      "everyman": 3
+    },
+    "note": "Deficit, debt and every line item reproduced from Treasury tables in the warehouse. One wrong number: CBO's 2036 debt is $56.2tn, not $46.7tn. Receipts and outlays are adjusted on different bases."
   }
 ]
