@@ -139,4 +139,31 @@ class CallLogRestartTest {
     String out = captured.toString("UTF-8");
     assertTrue(out.contains("unreadable"), out);
   }
+
+  /** Said and Checked, 2026-11-16: three statement checks ended without preview_report or
+   *  deliver_report and left no calls.jsonl to copy the cited SQL from. */
+  @Test void aRunWithoutAReportCanStillSaveItsCallLog(@TempDir Path dir) throws Exception {
+    ObjectNode query = call("query", 2, 1000L);
+    query.put("sql", "SELECT COUNT(*) FROM econ.mts_outlays_by_function");
+    callLog().add(call("search_catalog", 1, 2000L));
+    callLog().add(query);
+
+    String said = McpServer.saveCallLog(dir.toFile());
+
+    Path file = dir.resolve("calls.jsonl");
+    assertTrue(said.contains(file.toString()), said);
+    assertTrue(said.contains("(2 calls)"), said);
+    List<String> lines = java.nio.file.Files.readAllLines(file);
+    assertEquals(2, lines.size());
+    assertEquals("SELECT COUNT(*) FROM econ.mts_outlays_by_function",
+        MAPPER.readTree(lines.get(1)).path("sql").asText());
+    assertEquals(5, MAPPER.readTree(lines.get(1)).path("rows").asInt());
+  }
+
+  @Test void savingAnEmptyCallLogIsRefused(@TempDir Path dir) throws Exception {
+    IllegalArgumentException e = org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalArgumentException.class, () -> McpServer.saveCallLog(dir.toFile()));
+    assertTrue(e.getMessage().contains("recorded no tool calls"), e.getMessage());
+    assertTrue(!java.nio.file.Files.exists(dir.resolve("calls.jsonl")));
+  }
 }

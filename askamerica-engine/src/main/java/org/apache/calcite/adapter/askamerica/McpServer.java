@@ -3804,6 +3804,20 @@ public class McpServer {
                 + "once, when you are completely done, instead of writing a file. Also saves the "
                 + "most recent chart you produced in this session, if any.",
                 schema(deliverProps, new String[]{"run_subpath", "markdown"})));
+            ObjectNode callLogProps = MAPPER.createObjectNode();
+            callLogProps.set(
+                "run_subpath",
+                prop("string",
+                "Identifies this run as 'q<N>/<persona>/<yyyy-mm-dd>', e.g. "
+                + "'q201/askamerica/2026-11-16' — copy this exactly from your prompt. Must "
+                + "match that shape or the call is rejected."));
+            tools.add(
+                tool("save_call_log",
+                "Save this session's tool-call log (every call, with its SQL and row count) "
+                + "as calls.jsonl in the run's directory. For a run that ends without "
+                + "preview_report or deliver_report, which otherwise leaves no record of the "
+                + "queries behind its findings. Call it once, last.",
+                schema(callLogProps, new String[]{"run_subpath"})));
         }
 
         TOOL_DEFS = tools;
@@ -4022,6 +4036,16 @@ public class McpServer {
                     String markdown = args.path("markdown").asText();
                     log.println("[askamerica-mcp] tool=deliver_report run_subpath=" + runSubpath);
                     text = deliverReport(runSubpath, markdown);
+                    break;
+                }
+                case "save_call_log": {
+                    // Eval-only, like deliver_report above, and guarded the same way.
+                    if (!EVAL_MODE) {
+                        return errorResponse(id, -32602, "Unknown tool: " + name);
+                    }
+                    String runSubpath = args.path("run_subpath").asText();
+                    log.println("[askamerica-mcp] tool=save_call_log run_subpath=" + runSubpath);
+                    text = saveCallLog(resolveEvalRunDir(runSubpath));
                     break;
                 }
                 case "suggest_external_sources": {
@@ -6949,6 +6973,27 @@ public class McpServer {
         }
         java.io.File calls = writeCallLog(dir);
         return "Saved " + agentMd + chartNote + (calls == null ? "" : " and " + calls) + ".";
+    }
+
+    /**
+     * Writes the call log into {@code dir} for an eval run that ends without a report. A
+     * statement check (Said and Checked) is told not to call preview_report or deliver_report,
+     * the only other writers of calls.jsonl, and eval mode keeps no persistent call history;
+     * measured 2026-11-16, three such checks left no record of their queries.
+     *
+     * @throws IllegalArgumentException if this process has recorded no calls
+     */
+    static String saveCallLog(java.io.File dir) throws java.io.IOException {
+        java.io.File calls = writeCallLog(dir);
+        if (calls == null) {
+            throw new IllegalArgumentException("save_call_log refused: this session has "
+                + "recorded no tool calls, so there is nothing to save.");
+        }
+        int n;
+        synchronized (CALL_LOG) {
+            n = CALL_LOG.size();
+        }
+        return "Saved " + calls + " (" + n + (n == 1 ? " call" : " calls") + ").";
     }
 
     // ── Per-process tool-call log ─────────────────────────────────────────────
