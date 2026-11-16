@@ -4859,6 +4859,25 @@ public class McpServer {
                         addIfPresent(gateProblems, ClaimScoring.enforce(claims));
                         addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle));
                         if (gateProblems.isEmpty()) {
+                            // The page is what gets published, so a rating it states is held
+                            // to the claim scores here, not only in deliver_report. Checked
+                            // before the claims section is added: that section quotes the
+                            // article, which may carry a rating of its own.
+                            StringBuilder pageText = new StringBuilder();
+                            pageText.append(rTitle == null ? "" : rTitle).append('\n')
+                                .append(rSub == null ? "" : rSub).append('\n');
+                            for (ReportPage.Section pageSec : secs) {
+                                pageText
+                                    .append(pageSec.heading == null ? "" : pageSec.heading)
+                                    .append('\n')
+                                    .append(pageSec.html == null ? "" : pageSec.html)
+                                    .append('\n');
+                            }
+                            int enginePinocchios = ClaimScoring.pinocchios(claims);
+                            addIfPresent(gateProblems, ClaimScoring.statedRatingProblem(
+                                pageText.toString(), enginePinocchios));
+                        }
+                        if (gateProblems.isEmpty()) {
                             rTitle = ClaimScoring.headline(rTitle, claims);
                             LAST_PINOCCHIOS = ClaimScoring.pinocchios(claims);
                         }
