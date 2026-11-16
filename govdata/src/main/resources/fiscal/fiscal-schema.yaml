@@ -5075,7 +5075,6 @@ partitionedTables:
   - name: snap_authorized_retailers
     pattern: "type=snap_authorized_retailers/*.parquet"
     partitions: *static_partitions
-    dqRowLimit: 200000
     comment: >
       Every store authorized to accept SNAP benefits at any point in the last 20 calendar
       years (about 703,000 authorization spells; 2005-2025 edition), from the USDA Food and
@@ -5083,7 +5082,9 @@ partitionedTables:
       identified by (record_id, authorization_date): a store that lost and regained
       authorization has one row per spell under the same record_id. An empty end_date means
       the authorization is still active, so stores active on a date D are those with
-      authorization_date <= D and (end_date is null or end_date >= D). store_type is the FNS
+      authorization_date <= D and (end_date is null or end_date >= D). A few dozen spells (45
+      in the 2005-2025 edition) are published by FNS with end_date one day before
+      authorization_date; they are kept as published. store_type is the FNS
       category (Convenience Store, Combination Grocery/Other, Small/Medium/Large Grocery Store,
       Supermarket, Super Store, Farmers' Market, specialty meat/seafood/bakery/produce, Delivery
       Route, Food Buying Co-op, Military Commissary, Wholesaler). Carries store name, street
