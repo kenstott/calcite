@@ -30,6 +30,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
@@ -61,7 +62,7 @@ public class FaaAtcscAdvisoriesTransformer implements ResponseTransformer {
     if (!template.contains(marker)) {
       throw new IllegalStateException("faa_atcscc_advisories: url lacks " + marker + ": " + template);
     }
-    LocalDate today = LocalDate.now();
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
     ArrayNode out = MAPPER.createArrayNode();
     try {
       LocalDate day = LocalDate.of(wanted, 1, 1);
