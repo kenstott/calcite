@@ -504,9 +504,11 @@ public class DimensionConfig {
       builder.start(((Number) startObj).intValue());
     } else if (startObj instanceof String) {
       Integer resolved = VariableResolver.resolveInteger((String) startObj);
-      if (resolved != null) {
-        builder.start(resolved);
+      if (resolved == null) {
+        throw new IllegalArgumentException("Dimension start '" + startObj
+            + "' does not resolve to a year");
       }
+      builder.start(resolved);
     }
 
     Object endObj = map.get("end");
