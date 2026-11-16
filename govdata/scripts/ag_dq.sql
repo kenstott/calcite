@@ -672,3 +672,51 @@ FROM counts;
 
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results ORDER BY schema, tbl, test;
+
+-- ------------------------------------------------------------
+-- TABLE: food_dollar_series (partition cols: type, year)
+-- Headline cross-check vs the 2024 published figures: food-at-home farm share 18.5.
+-- ------------------------------------------------------------
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true));
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T2_row_count',
+  CASE WHEN n >= 100000 THEN 'pass' ELSE 'fail' END, n, 100000, 'Expected >=100000 rows (126,900 in the March 2026 release)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true));
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true) LIMIT 3;
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL key rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true)
+  WHERE account IS NULL OR series IS NULL OR unit IS NULL OR category IS NULL OR value_type IS NULL);
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T6_pk_dupes',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year,account,series,category,category_name,value_type,unit) keys'
+FROM (SELECT COUNT(*) AS n FROM (
+  SELECT year, account, series, category, category_name, value_type, unit, COUNT(*) AS c
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true)
+  GROUP BY 1,2,3,4,5,6,7 HAVING COUNT(*) > 1));
+INSERT INTO dq_results
+SELECT 'ag', 'food_dollar_series', 'T7_farm_share_2024',
+  CASE WHEN v = 18.5 THEN 'pass' ELSE 'fail' END, v, 18.5, '2024 food-at-home farm share, cents per food dollar'
+FROM (SELECT MAX(value) AS v FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/ag/food_dollar_series', allow_moved_paths := true)
+  WHERE year = 2024 AND channel = 'Food-at-home' AND aggregation = 'Channel total'
+    AND category_name = 'Farm share' AND unit = 'Cents per domestic food dollar');
