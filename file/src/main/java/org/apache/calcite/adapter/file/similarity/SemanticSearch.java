@@ -657,6 +657,10 @@ public final class SemanticSearch {
    * retired files the local copy still carries, and that is a full reload rather than an append:
    * the merged file re-states every row it absorbed, so adding it alone would duplicate them.
    *
+   * <p>Rows are deduplicated on chunk_id, preferring an assigned centroid over -1: a listing can
+   * still carry files compaction retired (the R2 mirror only copies), and a retired file holds the
+   * same code for a chunk as the file that replaced it.
+   *
    * <p>A load that cannot complete throws: a configured local copy that is not ready must not
    * silently turn every query into a scan of object storage.
    */
@@ -695,7 +699,8 @@ public final class SemanticSearch {
         st.execute("DROP TABLE IF EXISTS " + LOCAL_TABLE);
         st.execute("DELETE FROM " + LOCAL_SOURCE_TABLE);
         st.execute("CREATE TABLE " + LOCAL_TABLE + " AS SELECT * FROM "
-            + selectCodes(c, allFiles));
+            + selectCodes(c, allFiles)
+            + " QUALIFY row_number() OVER (PARTITION BY chunk_id ORDER BY centroid DESC) = 1");
         st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote");
         LOGGER.info("SEMANTIC_SEARCH loaded the codes locally ({} files)", allFiles.size());
       } else {
@@ -707,8 +712,9 @@ public final class SemanticSearch {
           }
         }
         if (!missing.isEmpty()) {
-          st.execute("INSERT INTO " + LOCAL_TABLE + " SELECT * FROM "
-              + selectCodes(c, missing));
+          st.execute("INSERT INTO " + LOCAL_TABLE + " SELECT * FROM " + selectCodes(c, missing)
+              + " QUALIFY row_number() OVER (PARTITION BY chunk_id ORDER BY centroid DESC) = 1"
+              + " AND chunk_id NOT IN (SELECT chunk_id FROM " + LOCAL_TABLE + ")");
           st.execute("INSERT INTO " + LOCAL_SOURCE_TABLE + " SELECT file FROM _vss_remote "
               + "WHERE file NOT IN (SELECT file FROM " + LOCAL_SOURCE_TABLE + ")");
           LOGGER.info("SEMANTIC_SEARCH added {} new codes files locally", missing.size());
