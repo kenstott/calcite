@@ -995,10 +995,15 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/s
 INSERT INTO dq_results
 SELECT 'fiscal', 'snap_authorized_retailers', 'T7_expected_values',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
-  'Rows with end_date before authorization_date, or a state outside 50 states/DC/GU/VI/PR'
+  'Rows with a state outside 50 states/DC/GU/VI/PR'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true)
-  WHERE end_date < authorization_date
-     OR state_abbr NOT IN ('AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','GU','VI','PR'));
+  WHERE state_abbr NOT IN ('AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','GU','VI','PR'));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T7b_reversed_spells',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'warn' END, n, 0,
+  'Rows with end_date before authorization_date; published that way by FNS (45 of 703441 in the 2005-2025 edition), kept as is'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true) WHERE end_date < authorization_date);
 
 INSERT INTO dq_results
 SELECT 'fiscal', 'snap_authorized_retailers', 'T8_pk_duplication',
