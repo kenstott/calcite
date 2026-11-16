@@ -7171,6 +7171,12 @@ constraints:
   scotus_reports_cases:
     primaryKey: [volume, first_page]
 
+  member_roll_call_votes:
+    # No primaryKey and no foreign key: older House files carry no bioguide_id, so a member is not
+    # identified by one column across the whole table, and bill_recorded_votes declares no primary
+    # key for the roll-call key (chamber, congress, session_number, roll_number) to target.
+    foreignKeys: []
+
   member_stock_transactions:
     # No foreign key to officials.members: the source index gives filer_last_name/state/district
     # as free text, not a bioguide_id, and name-matching across schemas is not done at ingest —
