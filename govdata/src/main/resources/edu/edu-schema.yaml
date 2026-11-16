@@ -4077,6 +4077,128 @@ partitionedTables:
         runMaintenance: true
         snapshotRetentionDays: 7
 
+  # ==========================================================================
+  # SEVIS ACTIVE STUDENT COUNTS — DHS Study in the States, SEVIS Data Mapping Tool feed.
+  # Monthly JSON replaced wholesale each ETL run; no year dimension.
+  # ==========================================================================
+  - name: sevis_student_counts
+    dataset_type: snapshot
+    freshness:
+      type: etag
+    pattern: "type=sevis_student_counts/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+    comment: >
+      Active F-1 and M-1 nonimmigrant student records in DHS's SEVIS (Student and Exchange Visitor
+      Information System), by country of citizenship, monthly from April 2014. Source is the data
+      feed behind the Study in the States SEVIS Data Mapping Tool
+      (studyinthestates.dhs.gov/sevis-data-mapping-tool, run by ICE's Student and Exchange Visitor
+      Program), refreshed by DHS every month. This is the federal count of international students
+      to set beside the IIE Open Doors survey, and the only monthly one. Sourced to close the gap
+      in #1259: no table carried any SEVIS counts.
+
+      Long grain: one row per (reporting_month, country_name, breakdown, category). `breakdown`
+      names what the count is split by: 'total' (category 'active', all active records for that
+      country), 'sex' (female, male), 'education_level' (associate, bachelors, masters, doctorate,
+      language_training, high_school, primary, secondary, flight_school, other_vocational_school,
+      other), 'state' (category is the USPS state or territory code of the school the student is
+      enrolled at), and, for the subset studying STEM fields, 'stem_sex' and
+      'stem_education_level' (same categories; the feed has STEM breakdowns for most months from
+      September 2015, none for April 2014-February 2015 or July 2016). Each breakdown partitions the total, so summing students over one
+      breakdown for a country and month gives the total, except where the source's own breakdowns
+      disagree by a few records in some early months. Zero counts are not emitted, so a missing
+      row means zero.
+
+      What it does NOT carry: Optional Practical Training (OPT), STEM OPT and Curricular Practical
+      Training authorizations. ICE publishes those only as annual 'SEVIS by the Numbers' PDF
+      tables, not in this feed, so OPT participation is not answerable from this table. The
+      active-student count is a record count at the snapshot date, not new enrollments, and it
+      covers F and M students only (not J exchange visitors). `students` for the same country
+      and month is not additive across breakdown values of different breakdowns.
+
+      Source anomalies kept as published: the September 2015 snapshot lists West Bank at 24,242
+      students (other months are in the hundreds), and the November 2023 total (1,086,510) equals
+      May 2023's exactly while October and December 2023 are about 12% higher. The series is
+      seasonal (low in summer, high from September), so compare the same month across years and
+      check a month against its neighbours before relying on it alone. Country codes are ISO alpha-2 but not unique (Gaza Strip and West Bank both PS,
+      Bassas da India and Tromelin Island both TF); country_name is the identity.
+
+      dataset_type: snapshot — the whole history is replaced on every successful fetch; the feed's
+      file name changes each month, so the transformer reads it from the tool page.
+    columns:
+      - name: reporting_month
+        type: date
+        nullable: false
+        comment: First day of the month named by the feed's reporting period label (e.g. 'April 2014' -> 2014-04-01); the SEVIS snapshot date within the month is not published
+      - name: country_name
+        type: string
+        nullable: false
+        comment: Country of citizenship as SEVIS names it, upper case (e.g. 'CHINA', 'INDIA')
+      - name: country_code
+        type: string
+        nullable: false
+        comment: ISO 3166 alpha-2 code from the feed; not unique (PS and TF each cover two entities)
+      - name: continent
+        type: string
+        nullable: false
+        comment: Continent group from the feed ('Asia', 'Africa', 'Europe', 'North America', 'South America', 'Australia&Pacific Islands'; '0', 'N/A' or '#N/A' for entities the feed does not place)
+      - name: region
+        type: string
+        nullable: false
+        comment: Sub-region from the feed (e.g. 'Eastern Asia', 'Southern Asia')
+      - name: breakdown
+        type: string
+        nullable: false
+        comment: "What the count is split by: 'total', 'sex', 'education_level', 'state', 'stem_sex' or 'stem_education_level'"
+      - name: category
+        type: string
+        nullable: false
+        comment: "Value within the breakdown: 'active' for total; 'female'/'male'; an education level; a USPS state or territory code; STEM breakdowns reuse the sex and education-level values"
+      - name: students
+        type: bigint
+        nullable: false
+        comment: Count of active F-1/M-1 SEVIS student records; always positive (zero counts are not emitted)
+
+    source:
+      type: http
+      url: "https://studyinthestates.dhs.gov/sevis-data-mapping-tool"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+      response:
+        format: TEXT   # SevisStudentCountsTransformer reads the data-json path from this page and fetches the JSON
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.SevisStudentCountsTransformer"
+
+    dimensions:
+      type:
+        - sevis_student_counts
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=sevis_student_counts/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/edu"
+        tableName: sevis_student_counts
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
 # ============================================================================
 # Views
 # ============================================================================

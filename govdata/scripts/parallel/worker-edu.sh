@@ -135,7 +135,8 @@ run_ungrouped_edu_tables() {
     "idea|district_special_ed_counts" \
     "crdc-el|district_el_enrollment" \
     "scorecard|college_scorecard,college_scorecard_programs" \
-    "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency")" || return 1
+    "fsa|fsa_pslf_discharge_summary,fsa_loan_portfolio_status,fsa_loan_delinquency" \
+    "sevis|sevis_student_counts")" || return 1
 
   [ -n "$unassigned" ] || return 0
   IFS=',' read -ra _un <<< "$unassigned"
@@ -193,6 +194,9 @@ run_historical_cadence() {
   # but run_edu_model always takes them.
   run_edu_model "edu-initial-fsa" \
     '"fsa_pslf_discharge_summary","fsa_loan_portfolio_status","fsa_loan_delinquency"' "$START" "$END"
+
+  # sevis_student_counts: snapshot of DHS's monthly SEVIS feed, no year dimension (same as fsa).
+  run_edu_model "edu-initial-sevis" '"sevis_student_counts"' "$START" "$END"
 
   run_ungrouped_edu_tables "$START" "$END"
 }
@@ -256,6 +260,13 @@ run_annual_cadence() {
   if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "fsa_loan_portfolio_status"; then
     run_edu_model "edu-annual-fsa-loans" \
       '"fsa_loan_portfolio_status","fsa_loan_delinquency"' "$START"
+  fi
+
+  # sevis_student_counts: DHS republishes the feed monthly; freshness: etag skips an unchanged
+  # page and the daily cadence picks up the new month.
+  if $FORCE || table_in_window "$EDU_SCHEMA_YAML" "sevis_student_counts"; then
+    run_edu_model "edu-annual-sevis" \
+      '"sevis_student_counts"' "$START"
   fi
 }
 
