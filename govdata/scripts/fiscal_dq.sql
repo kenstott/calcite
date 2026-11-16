@@ -1946,6 +1946,71 @@ FROM (SELECT COUNT(DISTINCT assistance_listing) AS n FROM (
   WHERE assistance_listing IN ('93.788', '93.959'));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: public_pension_funding (Public Plans Database API, plan x fiscal year; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true));
+
+-- ~250 plans per recent year; a scoped DQ run may cover one year, so the floor is 200 plan-years.
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T2_row_count',
+  CASE WHEN n >= 200 THEN 'pass' ELSE 'fail' END, n, 200, 'Expected >=200 plan-year rows (>=1 year, DQ-scoped)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true) LIMIT 3;
+
+-- Fully-null columns: funded_ratio_gasb67 is only populated from about FY2014, so a DQ run scoped
+-- to older years only would warn; a current-year run must not.
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Rows with a NULL key or plan_name/state_abbr'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true)
+  WHERE year IS NULL OR ppd_id IS NULL OR plan_name IS NULL OR state_abbr IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, ppd_id) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, ppd_id FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true) GROUP BY year, ppd_id HAVING COUNT(*) > 1));
+
+-- Reported funded ratio must agree with assets / liabilities; allow rounding and basis differences.
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T9_funded_ratio_consistent',
+  CASE WHEN n * 1.0 / NULLIF(d, 0) < 0.05 THEN 'pass' ELSE 'fail' END, n, d,
+  'Plan-years where |funded_ratio - assets/liabilities| > 0.02, out of plan-years with all three'
+FROM (SELECT COUNT(*) FILTER (WHERE ABS(funded_ratio - act_assets / act_liabilities) > 0.02) AS n, COUNT(*) AS d
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true) WHERE funded_ratio IS NOT NULL AND act_assets IS NOT NULL AND act_liabilities > 0);
+
+-- Known-value check (Public Plans Database FY2023 as pulled 2026-11-16): Illinois state and local plans
+-- together are about 51 percent funded with roughly $198B unfunded; a latest-year value outside 40-65 percent
+-- means the join, units or state mapping is wrong. Skipped (passes vacuously is NOT allowed): requires rows.
+INSERT INTO dq_results
+SELECT 'fiscal', 'public_pension_funding', 'T7_illinois_funded_ratio_sane',
+  CASE WHEN r BETWEEN 0.40 AND 0.65 THEN 'pass' ELSE 'fail' END, r, 0.51,
+  'Illinois sum(assets)/sum(liabilities) for FY2023 (expect 0.40-0.65)'
+FROM (SELECT SUM(act_assets) / SUM(act_liabilities) AS r FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/public_pension_funding', allow_moved_paths := true)
+  WHERE state_abbr = 'IL' AND year = 2023 AND act_assets IS NOT NULL AND act_liabilities IS NOT NULL);
+
+-- ─────────────────────────────────────────────────────────────
 -- Final results
 -- ─────────────────────────────────────────────────────────────
 SELECT schema, tbl, test, status, value, threshold, detail

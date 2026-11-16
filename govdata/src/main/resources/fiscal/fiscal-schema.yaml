@@ -253,6 +253,19 @@ dimension_values:
   # live 2026-09-06 the published range is 2016-2025 (time=2015 and time=2026 both
   # 204 no-content); 2025 is already posted, so dataLag: 1 off the current year
   # reaches it without a hardcoded end year.
+  # Public Plans Database: plan fiscal years FY2001 onward (confirmed live 2026-11-16,
+  # fy range 2001-2025). The whole panel is ~6,300 plan-years, so default to the full
+  # history rather than the 2010 default. dataLag 1: the current year has no rows yet (an empty response fails the
+  # batch), the prior year is the newest and is re-fetched every run (overwritePartitions)
+  # while plans are still publishing it.
+  ppd_year_range: &ppd_year_range
+    type: yearRange
+    start: "${GOVDATA_START_YEAR:2001}"
+    minYear: 2001
+    end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+    dataLag: 1
+    descending: true
+
   state_corp_tax_year_range: &state_corp_tax_year_range
     type: yearRange
     start: "${GOVDATA_START_YEAR:2010}"
@@ -7425,6 +7438,147 @@ partitionedTables:
         incrementalKeys: [year]
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # PUBLIC PLANS DATA — state and local public pension funding, plan x fiscal year
+  # ---------------------------------------------------------------------------
+  - name: public_pension_funding
+    pattern: "type=public_pension_funding/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      State and local government defined-benefit pension plans, one row per plan
+      x plan fiscal year, from the Public Plans Database (Center for Retirement
+      Research at Boston College with MissionSquare Research Institute and
+      NASRA; publicplansdata.org, keyless API). About 250 plans covering most
+      state and local pension assets, FY2001 onward, drawn from plans' annual
+      reports (ACFRs) and actuarial valuations. Carries the funding schedule:
+      actuarial assets and liabilities, unfunded actuarial liability (UAAL),
+      funded ratio (GASB basis and GASB 67 basis), net pension liability,
+      actuarially determined / required employer contribution, the share of the
+      required contribution actually paid, and covered payroll. Money columns
+      are in THOUSANDS of dollars, as published. year is the plan's fiscal year
+      (fy), not the release year; a plan's fiscal year can end June 30 or
+      another month, so cross-plan comparison within a year mixes year-ends.
+      Recent years are revised and back-filled as plans publish, and a plan with
+      no figure for a year keeps its row with NULL measures (data not yet
+      posted or not reported), never a zero. Plan-level totals only (the
+      source's per-employee-group and per-tier breakouts, EEGroupID/TierID
+      other than 0, are not included). Plans are not unique to a state's own
+      government: city and county systems (Chicago, Cook County, NYC, Los
+      Angeles) are included under their state, so summing by state_abbr gives
+      state plus local pension liabilities. Funded ratios are as plans report
+      them under their own discount rates and are not harmonised to a common
+      rate; compare with discount-rate caveats (the discount rate is in the
+      source's Assumptions dataset, not yet loaded here). Excludes federal and
+      private plans and municipal bond pricing. Roll up to states with
+      public_pension_funding_by_state_year.
+    dimensions:
+      type:
+        - public_pension_funding
+      year: *ppd_year_range
+
+    columns:
+      - name: ppd_id
+        type: integer
+        nullable: false
+        expression: 'TRY_CAST(src."ppd_id" AS INTEGER)'
+        comment: Public Plans Database plan identifier (stable across years)
+      - name: plan_name
+        type: string
+        nullable: false
+        expression: 'src."PlanName"'
+        comment: Plan short name as published (e.g. Illinois Teachers, Chicago (IL) Municipal)
+      - name: state_name
+        type: string
+        nullable: true
+        expression: 'src."StateName"'
+        comment: Name of the state the plan belongs to
+      - <<: *state_abbr_column
+        expression: 'src."StateAbbrev"'
+      - name: act_assets
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ActAssets_GASB" AS DOUBLE)'
+        comment: Actuarial value of assets, thousands of dollars
+      - name: act_liabilities
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ActLiabilities_GASB" AS DOUBLE)'
+        comment: Actuarial accrued liability, thousands of dollars
+      - name: unfunded_liability
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."UAAL_GASB" AS DOUBLE)'
+        comment: Unfunded actuarial accrued liability (liabilities minus assets; negative when overfunded), thousands of dollars
+      - name: funded_ratio
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ActFundedRatio_GASB" AS DOUBLE)'
+        comment: Actuarial assets divided by actuarial liabilities, as a fraction (0.65 = 65 percent), plan-reported basis
+      - name: funded_ratio_gasb67
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ActFundedRatio_GASB67" AS DOUBLE)'
+        comment: GASB 67/68 funded ratio (fiduciary net position over total pension liability), fraction; populated from about FY2014
+      - name: net_pension_liability
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."NetPensionLiability" AS DOUBLE)'
+        comment: GASB 67/68 net pension liability, thousands of dollars
+      - name: actuarially_determined_contribution
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."ADEC" AS DOUBLE)'
+        comment: Actuarially determined employer contribution (ADEC/ARC), thousands of dollars
+      - name: required_contribution
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."RequiredContribution" AS DOUBLE)'
+        comment: Required employer contribution under the plan's funding policy, thousands of dollars
+      - name: pct_required_contribution_paid
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."PercentReqContPaid" AS DOUBLE)'
+        comment: Contribution actually paid divided by the required contribution, fraction (1.0 = paid in full)
+      - name: covered_payroll
+        type: double
+        nullable: true
+        expression: 'TRY_CAST(src."payroll" AS DOUBLE)'
+        comment: Covered payroll, thousands of dollars
+
+    source:
+      type: http
+      url: "https://publicplansdata.org/api/?q=QVariables&variables=ppd_id,PlanName,StateName,StateAbbrev,fy,ActAssets_GASB,ActLiabilities_GASB,UAAL_GASB,ActFundedRatio_GASB,ActFundedRatio_GASB67,NetPensionLiability,ADEC,RequiredContribution,PercentReqContPaid,payroll&filterfystart={effective_year}&filterfyend={effective_year}&filterEEGroupID=0&format=csv"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=public_pension_funding/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: public_pension_funding
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
 # ============================================================================
 # CONSTRAINTS
 # ============================================================================
@@ -7589,6 +7743,14 @@ constraints:
       # state-level rows carry a non-county placeholder there, so a blanket FK
       # would misrepresent the contract for 5 of the 6 gov_type_code values.
 
+  public_pension_funding:
+    primaryKey: [year, ppd_id]
+    foreignKeys:
+      - columns: [state_abbr]
+        targetSchema: "${GEO_SCHEMA_NAME:geo}"
+        targetTable: state_ref
+        targetColumns: [state_abbr]
+
   state_corporate_income_tax_collections:
     primaryKey: [year, state_fips]
     foreignKeys:
@@ -7694,6 +7856,38 @@ views:
         GROUP BY c.year, c.state_abbr
       ) r
         ON r.year = s.year AND r.state_abbr = s.state_abbr
+
+  - name: public_pension_funding_by_state_year
+    # year passes through public_pension_funding.year, stored as text: served as INTEGER (GOV-075).
+    columnDefinitions:
+      - {name: year, type: INTEGER, storedDigits: 4}
+    comment: >
+      State rollup of public_pension_funding: state plus local pension plans
+      summed by state and plan fiscal year. Money is in THOUSANDS of dollars.
+      funded_ratio is SUM(act_assets) / SUM(act_liabilities) over plans that
+      report BOTH (so plans missing one side do not skew the ratio), on each
+      plan's own discount rate; unfunded_liability is liabilities minus assets
+      over the same plans, and plans_reporting is how many plans contribute.
+      Local systems (e.g. Chicago, Cook County, NYC) count under their state.
+      Not scaled by state GDP or population: join to the econ and census
+      tables for per-capita or share-of-GDP views. The source covers most but
+      not all plans, so totals understate each state's full public-pension
+      liability slightly, and years where only some plans have published are
+      partial.
+    sql: >
+      SELECT
+        p.year,
+        p.state_abbr,
+        p.state_name,
+        COUNT(*)                                  AS plans_reporting,
+        SUM(p.act_assets)                         AS act_assets,
+        SUM(p.act_liabilities)                    AS act_liabilities,
+        SUM(p.act_liabilities) - SUM(p.act_assets) AS unfunded_liability,
+        SUM(p.act_assets) / NULLIF(SUM(p.act_liabilities), 0) AS funded_ratio,
+        SUM(p.required_contribution)              AS required_contribution
+      FROM public_pension_funding p
+      WHERE p.act_assets IS NOT NULL AND p.act_liabilities IS NOT NULL
+      GROUP BY p.year, p.state_abbr, p.state_name
 
   - name: nonprofit_financials
     # year passes through exempt_org_990.year, stored as text: served as INTEGER (GOV-075).
