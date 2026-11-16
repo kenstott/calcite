@@ -955,6 +955,57 @@ SELECT 'fiscal', 'snap_participants_by_age', 'T8_pk_duplication',
 FROM (SELECT COUNT(*) AS n FROM (SELECT state_fips, year FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_participants_by_age', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
+-- TABLE: snap_authorized_retailers (USDA FNS Historical SNAP Retailer Locator; partition col: type)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T2_row_count',
+  CASE WHEN n >= 600000 THEN 'pass' ELSE 'fail' END, n, 600000, 'Expected >=600000 authorization spells (2005-2025 edition has about 703000)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL record_id or authorization_date rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true) WHERE record_id IS NULL OR authorization_date IS NULL);
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T7_expected_values',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0,
+  'Rows with end_date before authorization_date, or a state outside 50 states/DC/GU/VI/PR'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true)
+  WHERE end_date < authorization_date
+     OR state_abbr NOT IN ('AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','GU','VI','PR'));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'snap_authorized_retailers', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (record_id, authorization_date) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT record_id, authorization_date FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/snap_authorized_retailers', allow_moved_paths := true) GROUP BY 1, 2 HAVING COUNT(*) > 1));
+
+-- ─────────────────────────────────────────────────────────────
 -- TABLE: ssa_benefits_by_geography_acs (Census ACS derived; partition cols: type, year)
 -- ─────────────────────────────────────────────────────────────
 INSERT INTO dq_results

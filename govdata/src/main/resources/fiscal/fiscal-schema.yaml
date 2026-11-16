@@ -5070,6 +5070,133 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # SNAP AUTHORIZED RETAILERS — USDA FNS Historical SNAP Retailer Locator (zip of one CSV)
+  # ---------------------------------------------------------------------------
+  - name: snap_authorized_retailers
+    pattern: "type=snap_authorized_retailers/*.parquet"
+    partitions: *static_partitions
+    dqRowLimit: 200000
+    comment: >
+      Every store authorized to accept SNAP benefits at any point in the last 20 calendar
+      years (about 703,000 authorization spells; 2005-2025 edition), from the USDA Food and
+      Nutrition Service Historical SNAP Retailer Locator. One row per authorization spell,
+      identified by (record_id, authorization_date): a store that lost and regained
+      authorization has one row per spell under the same record_id. An empty end_date means
+      the authorization is still active, so stores active on a date D are those with
+      authorization_date <= D and (end_date is null or end_date >= D). store_type is the FNS
+      category (Convenience Store, Combination Grocery/Other, Small/Medium/Large Grocery Store,
+      Supermarket, Super Store, Farmers' Market, specialty meat/seafood/bakery/produce, Delivery
+      Route, Food Buying Co-op, Military Commissary, Wholesaler). Carries store name, street
+      address, city, state_abbr, zip_code, county (name, uppercase), and latitude/longitude
+      (null where FNS recorded 0,0 for an ungeocoded store). Full-snapshot table: every run
+      replaces the table with the file FNS currently publishes (data current to the end of the
+      last calendar year). Counts by store type, state and county answer how many convenience
+      stores or bodegas accept SNAP; pair with snap_benefits_by_geography for participation.
+      Source: fns.usda.gov/snap/retailer/historical-data (zip link read from that page).
+
+    dimensions:
+      type:
+        - snap_authorized_retailers
+
+    columns:
+      - name: record_id
+        type: string
+        nullable: false
+        comment: FNS retailer record id — with authorization_date forms the key
+      - name: store_name
+        type: string
+        nullable: true
+        comment: Store name as authorized
+      - name: store_type
+        type: string
+        nullable: true
+        comment: FNS store type (Convenience Store, Supermarket, Super Store, Farmers' Market, ...)
+      - name: street_number
+        type: string
+        nullable: true
+        comment: Street number
+      - name: street_name
+        type: string
+        nullable: true
+        comment: Street name
+      - name: additional_address
+        type: string
+        nullable: true
+        comment: Suite or other address line
+      - name: city
+        type: string
+        nullable: true
+        comment: City
+      - <<: *state_abbr_column
+      - name: zip_code
+        type: string
+        nullable: true
+        comment: 5-digit ZIP code
+      - name: zip4
+        type: string
+        nullable: true
+        comment: ZIP+4 extension
+      - name: county
+        type: string
+        nullable: true
+        comment: County name (uppercase, no state)
+      - name: latitude
+        type: double
+        nullable: true
+        comment: Latitude (null when FNS recorded 0,0)
+      - name: longitude
+        type: double
+        nullable: true
+        comment: Longitude (null when FNS recorded 0,0)
+      - name: authorization_date
+        type: date
+        nullable: false
+        comment: Date this authorization spell began
+      - name: end_date
+        type: date
+        nullable: true
+        comment: Date this authorization spell ended; null while still authorized
+
+    source:
+      type: http
+      url: "https://www.fns.usda.gov/snap/retailer/historical-data"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 0.5
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.SnapRetailersProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=snap_authorized_retailers/"
+      partition:
+        columns: [type]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: snap_authorized_retailers
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 3
+        incrementalTtlDays: 30
+        overwritePartitions: true
+
+
+  # ---------------------------------------------------------------------------
   # OMB BUDGET BY ACCOUNT — whitehouse.gov budget supplemental materials
   # (budauth_fyNNNN.xlsx and outlays_fyNNNN.xlsx), FY1976/FY1962 to the budget-year projection
   # ---------------------------------------------------------------------------

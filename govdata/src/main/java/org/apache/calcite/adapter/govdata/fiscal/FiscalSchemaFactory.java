@@ -64,6 +64,7 @@ public class FiscalSchemaFactory implements GovDataSubSchemaFactory {
     m.put("ssa_benefits_by_geography_acs", "ssa");
     m.put("snap_benefits_by_geography", "snap");
     m.put("snap_participants_by_age", "snap");
+    m.put("snap_authorized_retailers", "snap");
     TABLE_SOURCE = Collections.unmodifiableMap(m);
   }
 
