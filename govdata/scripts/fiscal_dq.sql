@@ -1585,7 +1585,10 @@ SELECT 'fiscal', 'usaspending_contracts', 'T5_all_same_value',
 FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
   FROM (SELECT column_name, approx_unique
     FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true))
-    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'recipient_duns', 'recipient_parent_duns')));
+    -- transaction_number and action_date_fiscal_year are constant only in the single-year DQ sample (FY2026);
+    -- full years carry transaction_number 0/1/14/16/... and the table spans many action_date_fiscal_year values.
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year', 'recipient_duns', 'recipient_parent_duns',
+      'transaction_number', 'action_date_fiscal_year')));
 
 INSERT INTO dq_results
 SELECT 'fiscal', 'usaspending_contracts', 'T6_pk_nulls',
@@ -1596,8 +1599,8 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/u
 INSERT INTO dq_results
 SELECT 'fiscal', 'usaspending_contracts', 'T7_expected_values',
   CASE WHEN bad = 0 AND dollars > 0 THEN 'pass' ELSE 'fail' END, bad, 0,
-  'Rows with no award key, awarding agency, or action_date, or an unparsable date (bad), and positive obligations present (dollars=' || CAST(dollars AS VARCHAR) || ')'
-FROM (SELECT COUNT(*) FILTER (WHERE contract_award_unique_key IS NULL OR awarding_agency_name IS NULL
+  'Rows with no award key, awarding agency code, or action_date, or an unparsable date (bad), and positive obligations present (dollars=' || CAST(dollars AS VARCHAR) || ')'
+FROM (SELECT COUNT(*) FILTER (WHERE contract_award_unique_key IS NULL OR awarding_agency_code IS NULL
         OR TRY_CAST(action_date AS DATE) IS NULL) AS bad,
       COALESCE(SUM(federal_action_obligation) FILTER (WHERE federal_action_obligation > 0), 0) AS dollars
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_contracts', allow_moved_paths := true));
