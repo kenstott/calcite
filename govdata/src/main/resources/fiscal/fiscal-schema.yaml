@@ -2811,6 +2811,164 @@ partitionedTables:
         overwritePartitions: true
 
   # ---------------------------------------------------------------------------
+  # USASPENDING ACCOUNT BALANCES — /api/v2/download/accounts/ (File A, by federal account)
+  # ---------------------------------------------------------------------------
+  - name: usaspending_account_balances
+    freshness:
+      type: hash
+    pattern: "type=usaspending_account_balances/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Budget authority, obligations incurred and gross outlays by federal account (Treasury
+      Account Symbol roll-up) x fiscal year x reporting period — the account-level view that
+      usaspending_by_agency (award obligations by agency) and omb_budget_by_account (annual OMB
+      budget authority and outlays) do not give. Answers how much of a specific appropriation,
+      for example the FAA Facilities and Equipment account 069-1308, has been obligated versus
+      actually outlaid so far in a year. Amounts are cumulative from the start of the fiscal year
+      (Oct-Sep) through fiscal_period; use fiscal_period 12 for the full-year figure. FY2017-FY2019
+      carry quarterly periods (3, 6, 9, 12), FY2020 onward monthly (2-12). Unpublished periods
+      of the current year are absent. Source: USAspending Account Balances (DATA Act File A),
+      api.usaspending.gov/api/v2/download/accounts/, account_level=federal_account.
+
+    dimensions:
+      type:
+        - usaspending_account_balances
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2017}"
+        minYear: 2017
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+        descending: true
+
+    columns:
+      - name: fiscal_period
+        type: integer
+        nullable: false
+        comment: "Reporting period within the fiscal year, 2-12 (period 2 = November, 12 = September). FY2017-FY2019 were reported quarterly, so only 3, 6, 9 and 12 exist for those years; the quarter number is converted to its closing period."
+      - name: submission_period
+        type: string
+        nullable: false
+        comment: "Source submission label, e.g. FY2025P12 (monthly) or FY2017Q4 (quarterly)"
+      - name: federal_account_symbol
+        type: string
+        nullable: false
+        comment: "Federal account code: agency identifier-main account code, e.g. 069-1308 (FAA Facilities and Equipment). Treasury accounts of one federal account are rolled up"
+      - name: federal_account_name
+        type: string
+        nullable: true
+        comment: "Federal account title including bureau and agency"
+      - name: owning_agency_name
+        type: string
+        nullable: true
+        comment: "Agency that owns the federal account"
+      - name: reporting_agency_name
+        type: string
+        nullable: true
+        comment: "Agency that reported the submission"
+      - name: agency_identifier_name
+        type: string
+        nullable: true
+        comment: "Agency named by the account's agency identifier"
+      - name: budget_function
+        type: string
+        nullable: true
+        comment: "OMB budget function, e.g. Transportation"
+      - name: budget_subfunction
+        type: string
+        nullable: true
+        comment: "OMB budget subfunction, e.g. Air transportation"
+      - name: unobligated_balance_brought_forward
+        type: double
+        nullable: true
+        comment: "Budget authority: unobligated balance brought forward from the prior year (USD)"
+      - name: adjustments_to_unobligated_balance_brought_forward
+        type: double
+        nullable: true
+        comment: "Adjustments to the unobligated balance brought forward (USD)"
+      - name: budget_authority_appropriated
+        type: double
+        nullable: true
+        comment: "Budget authority appropriated, cumulative through the period (USD)"
+      - name: borrowing_authority
+        type: double
+        nullable: true
+        comment: "Borrowing authority (USD)"
+      - name: contract_authority
+        type: double
+        nullable: true
+        comment: "Contract authority (USD)"
+      - name: spending_authority_from_offsetting_collections
+        type: double
+        nullable: true
+        comment: "Spending authority from offsetting collections (USD)"
+      - name: total_other_budgetary_resources
+        type: double
+        nullable: true
+        comment: "Total other budgetary resources (USD)"
+      - name: total_budgetary_resources
+        type: double
+        nullable: true
+        comment: "Total budgetary resources available to obligate: unobligated brought forward plus new budget authority (USD)"
+      - name: obligations_incurred
+        type: double
+        nullable: true
+        comment: "Obligations incurred, cumulative from the start of the fiscal year through the period (USD). Obligated is a commitment to pay, not cash out the door; see gross_outlays for spent"
+      - name: deobligations_recoveries_refunds
+        type: double
+        nullable: true
+        comment: "Deobligations, recoveries and refunds of prior-year obligations (USD)"
+      - name: unobligated_balance
+        type: double
+        nullable: true
+        comment: "Budgetary resources not yet obligated at period end (USD)"
+      - name: gross_outlays
+        type: double
+        nullable: true
+        comment: "Gross outlays (payments actually made), cumulative through the period (USD)"
+      - name: last_modified_date
+        type: string
+        nullable: true
+        comment: "Date the source row was last modified"
+
+    source:
+      type: http
+      url: "https://api.usaspending.gov/api/v2/download/accounts/"
+      method: POST
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 1.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.fiscal.UsaSpendingAccountBalancesProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=usaspending_account_balances/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/fiscal"
+        tableName: usaspending_account_balances
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # USASPENDING BY STATE — /api/v2/search/spending_by_geography/ (delta by FY)
   # ---------------------------------------------------------------------------
   - name: usaspending_by_state
@@ -7645,6 +7803,9 @@ constraints:
 
   usaspending_by_agency:
     primaryKey: [year, agency_name]
+
+  usaspending_account_balances:
+    primaryKey: [year, fiscal_period, federal_account_symbol]
 
   usaspending_by_state:
     primaryKey: [year, state_abbr]

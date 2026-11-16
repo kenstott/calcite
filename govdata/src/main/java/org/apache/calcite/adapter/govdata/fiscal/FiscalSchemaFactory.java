@@ -35,6 +35,7 @@ import java.util.Set;
  *       {@code exempt_org_master} (EO BMF regional shards),
  *       {@code exempt_org_990} (Form 990 e-file XML zips)</li>
  *   <li><b>USAspending</b> — {@code usaspending_by_agency},
+ *       {@code usaspending_account_balances} (account-data download),
  *       {@code usaspending_by_state} (POST-JSON aggregate API)</li>
  *   <li><b>SBA</b> — {@code sba_loan_approvals} (DKAN FOIA CSV)</li>
  * </ul>
@@ -58,6 +59,7 @@ public class FiscalSchemaFactory implements GovDataSubSchemaFactory {
     m.put("exempt_org_master", "irs");
     m.put("exempt_org_990", "irs");
     m.put("usaspending_by_agency", "usaspending");
+    m.put("usaspending_account_balances", "usaspending");
     m.put("usaspending_by_state", "usaspending");
     m.put("sba_loan_approvals", "sba");
     m.put("ssa_benefits_by_geography", "ssa");

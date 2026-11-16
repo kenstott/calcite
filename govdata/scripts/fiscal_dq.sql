@@ -3,6 +3,7 @@
 -- Schema: fiscal
 -- Tables: soi_income_by_zip, soi_income_by_county, county_migration_flows,
 --         exempt_org_master, exempt_org_990, usaspending_by_agency,
+--         usaspending_account_balances,
 --         usaspending_by_state, usaspending_by_district,
 --         usaspending_recipients_by_district,
 --         usaspending_contract_recipients_by_district,
@@ -474,6 +475,62 @@ INSERT INTO dq_results
 SELECT 'fiscal', 'usaspending_by_agency', 'T6_pk_nulls',
   CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL agency_name rows'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_by_agency', allow_moved_paths := true) WHERE agency_name IS NULL);
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: usaspending_account_balances (USAspending File A; partition cols: type, year)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T2_row_count',
+  CASE WHEN n >= 1500 THEN 'pass' ELSE 'fail' END, n, 1500, 'Expected >=1500 account rows per year-period'
+FROM (SELECT MAX(c) AS n FROM (SELECT COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true) GROUP BY year, fiscal_period));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T5_all_same_value',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No single-value columns' ELSE 'Single-value columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, approx_unique
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true))
+    WHERE approx_unique <= 1 AND column_name NOT IN ('type', 'year')));
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'NULL fiscal_period or federal_account_symbol rows'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true) WHERE fiscal_period IS NULL OR federal_account_symbol IS NULL);
+
+-- Identity check on a known account: FAA Facilities and Equipment (069-1308) must exist, and
+-- obligations and outlays can never exceed total budgetary resources.
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T7_known_account',
+  CASE WHEN n >= 1 AND bad = 0 THEN 'pass' ELSE 'fail' END, n, 1,
+  '069-1308 rows=' || n || ', rows with obligations/outlays > resources=' || bad
+FROM (SELECT COUNT(*) AS n,
+        COUNT(*) FILTER (WHERE obligations_incurred > total_budgetary_resources + 1
+                           OR gross_outlays > total_budgetary_resources + 1) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true)
+      WHERE federal_account_symbol = '069-1308');
+
+INSERT INTO dq_results
+SELECT 'fiscal', 'usaspending_account_balances', 'T8_pk_duplication',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, fiscal_period, federal_account_symbol) keys'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, fiscal_period, federal_account_symbol FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/fiscal/usaspending_account_balances', allow_moved_paths := true)
+  GROUP BY 1, 2, 3 HAVING COUNT(*) > 1));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: usaspending_by_state (USAspending; partition cols: type, year)
