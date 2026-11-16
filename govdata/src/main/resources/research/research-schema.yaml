@@ -182,7 +182,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 707
-      checkedAt: "2026-11-15T00:26:15Z"
+      checkedAt: "2026-11-16T00:50:50Z"
     partitions: *standard_partitions
     freshness:
       type: last_modified
@@ -266,7 +266,7 @@ partitionedTables:
       distinctYears: 1
       contiguous: true
       rowCount: 721
-      checkedAt: "2026-11-15T00:26:16Z"
+      checkedAt: "2026-11-16T00:50:52Z"
     partitions: *standard_partitions
     freshness:
       type: last_modified
@@ -571,7 +571,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 1237090
-      checkedAt: "2026-11-15T00:26:19Z"
+      checkedAt: "2026-11-16T00:50:56Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -738,7 +738,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 201273
-      checkedAt: "2026-11-15T00:26:20Z"
+      checkedAt: "2026-11-16T00:51:00Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -911,7 +911,7 @@ partitionedTables:
       distinctYears: 5
       contiguous: true
       rowCount: 2082597
-      checkedAt: "2026-11-15T00:26:22Z"
+      checkedAt: "2026-11-16T00:51:02Z"
     partitions:
       style: hive
       columnDefinitions:
@@ -1086,7 +1086,7 @@ partitionedTables:
       distinctYears: 17
       contiguous: true
       rowCount: 2792337
-      checkedAt: "2026-11-15T00:26:24Z"
+      checkedAt: "2026-11-16T00:51:05Z"
     partitions: *standard_partitions
     comment: >
       NSF NCSES Higher Education R&D (HERD) survey — R&D expenditure by academic
