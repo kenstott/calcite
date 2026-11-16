@@ -51,7 +51,8 @@ public class AgSchemaFactory implements GovDataSubSchemaFactory {
   ));
 
   private static final Set<String> ERS_TABLES = new HashSet<>(Arrays.asList(
-      "ers_farm_income"
+      "ers_farm_income",
+      "food_dollar_series"
   ));
 
   private static final Set<String> FSA_TABLES = new HashSet<>(Arrays.asList(

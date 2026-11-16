@@ -2375,6 +2375,140 @@ partitionedTables:
         incrementalKeys: [commodity]
 
   # ---------------------------------------------------------------------------
+  # FOOD_DOLLAR_SERIES — USDA ERS Food Dollar (farm share / marketing share)
+  # ---------------------------------------------------------------------------
+  # Live-verified 2026-11-16: the landing page links one linearized CSV
+  # (food-dollar-nominal.csv, 126,900 rows, 2007-2024, March 2026 "Ag-FEDS" model) in a zip
+  # whose media id rotates each November. ErsFoodDollarProvider scrapes the page, so the
+  # 2025 release scheduled for 2026-11-17 is picked up with no code change. Cross-check:
+  # 2024 food-at-home farm share 18.5 / marketing share 81.5, food-away-from-home 7.1 / 92.9.
+  - name: food_dollar_series
+    freshness:
+      type: last_modified
+    pattern: "type=food_dollar_series/year=*/*.parquet"
+    partitions: *nass_partitions
+    comment: >
+      USDA ERS Food Dollar Series (Ag-FEDS model): what share of US consumer food
+      spending goes to farms versus the rest of the supply chain, 2007-present, annual.
+      Tall — one row per year x account x series x category x value_type x unit, each
+      published in both cents per domestic food dollar and million US dollars (nominal,
+      not inflation-adjusted). channel splits All / Food-at-home / Food-away-from-home
+      (and the Alcohol equivalents under product_type = Alcohol); aggregation marks
+      Type total, Channel total, or Detail (one of ~40 food accounts such as Beef,
+      Dairy, Bakery products, full-service restaurants). series: Marketing bill carries
+      the headline Farm share / Marketing share (category 17/18) and Farm value /
+      Marketing value; Industry group bill splits the dollar across farm production,
+      processing, wholesale, retail, food services, transportation, energy, finance,
+      legal/accounting and advertising; Primary factor bill splits it into salary and
+      benefits, property income, output taxes and imported inputs; Industry group by
+      primary factor crosses the two; Total spending gives total, domestic and imported
+      food dollars. Example: farm_share for channel Food-at-home, aggregation Channel
+      total, unit "Cents per domestic food dollar". Real (inflation-adjusted) series
+      and 1993-2006 are published only under the superseded 2011 model and are not
+      loaded. Updated each November. Complements ers_farm_income (farm-sector
+      accounts) and the econ food price tables with the retail-dollar split.
+
+    dimensions:
+      type:
+        - food_dollar_series
+
+    columns:
+      - name: year
+        type: int
+        source: year
+        nullable: false
+        comment: Data year (partition column)
+      - name: product_type
+        type: string
+        source: product_type
+        nullable: true
+        comment: "Food or Alcohol"
+      - name: channel
+        type: string
+        source: channel
+        nullable: true
+        comment: "All, Food-at-home, Food-away-from-home, Alcohol-at-home, Alcohol-away-from-home"
+      - name: aggregation
+        type: string
+        source: aggregation
+        nullable: true
+        comment: "Type total, Channel total, or Detail (a single food account)"
+      - name: account
+        type: string
+        source: account
+        nullable: true
+        comment: "ERS account id, Xf + 4 digits; first two digits identify the channel"
+      - name: account_name
+        type: string
+        source: account_name
+        nullable: true
+        comment: "Account label, e.g. Food, Beef, Bakery products, Food at home"
+      - name: series
+        type: string
+        source: series
+        nullable: true
+        comment: "Marketing bill, Industry group bill, Primary factor bill, Industry group by primary factor, or Total spending"
+      - name: category
+        type: int
+        source: category
+        nullable: true
+        comment: ERS category number within the series (for example 17 = farm share/value, 18 = marketing share/value)
+      - name: category_name
+        type: string
+        source: category_name
+        nullable: true
+        comment: "Category label, e.g. Farm share, Marketing share, Food processing, Food retail, Energy"
+      - name: value_type
+        type: int
+        source: value_type
+        nullable: true
+        comment: "1 Total, 2 Salary and benefits, 3 Property income, 4 Output taxes, 5 Imported inputs"
+      - name: value_type_desc
+        type: string
+        source: value_type_desc
+        nullable: true
+        comment: Label for value_type
+      - name: unit
+        type: string
+        source: unit
+        nullable: true
+        comment: "Cents per domestic food dollar, or Million U.S. dollars (nominal)"
+      - name: value
+        type: double
+        source: value
+        nullable: true
+        comment: Value in the unit column; NULL where the source publishes NULL
+
+    source:
+      type: http
+      url: "https://www.ers.usda.gov/data-products/food-dollar-series/"
+      method: GET
+      headers:
+        User-Agent: "Mozilla/5.0 (compatible; govdata-etl/1.0)"
+      # The provider reads the discovered zip through this cache, keyed on its own URL; the
+      # landing page is not cached so a new release is discovered.
+      rawCache:
+        enabled: true
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.ag.ErsFoodDollarProvider"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=food_dollar_series/year=*/"
+      partition:
+        columns: [type, year]
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        # Cumulative full-file source re-fetched every run: replace each year partition.
+        <<: *nass_iceberg
+        overwritePartitions: true
+
+  # ---------------------------------------------------------------------------
   # PESTICIDE_USE_BY_COUNTY — USGS NAWQA county-level agricultural pesticide use
   # ---------------------------------------------------------------------------
   # Live-verified 2026-08-02 against water.usgs.gov/nawqa/pnsp/usage/maps/county-level/:
