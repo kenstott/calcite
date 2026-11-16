@@ -56,6 +56,7 @@ FROM (
   UNION ALL SELECT 'fsa_pslf_discharge_summary', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_loan_portfolio_status', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true) LIMIT 1)
   UNION ALL SELECT 'fsa_loan_delinquency', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true) LIMIT 1)
+  UNION ALL SELECT 'sevis_student_counts', COUNT(*) FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true) LIMIT 1)
 );
 
 -- ============================================================
@@ -80,7 +81,7 @@ INSERT INTO dq_results
 SELECT 'edu', tbl, 'row_count',
   CASE
     WHEN n >= thresh                     THEN 'pass'
-    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions','fsa_pslf_discharge_summary','fsa_loan_portfolio_status','fsa_loan_delinquency') THEN 'fail'
+    WHEN tbl IN ('ccd_schools','college_scorecard','college_scorecard_programs','ipeds_institutions','fsa_pslf_discharge_summary','fsa_loan_portfolio_status','fsa_loan_delinquency','sevis_student_counts') THEN 'fail'
     ELSE 'warn'
   END,
   CAST(n AS VARCHAR), CAST(thresh AS VARCHAR), NULL
@@ -106,6 +107,7 @@ FROM (
   UNION ALL SELECT 'fsa_pslf_discharge_summary',            COUNT(*),    30       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_pslf_discharge_summary', allow_moved_paths=true)  -- ~44 rows verified live 2026-09-27
   UNION ALL SELECT 'fsa_loan_portfolio_status',            COUNT(*),   500       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_portfolio_status', allow_moved_paths=true)  -- 4 portfolios x ~50 quarters x 7-8 statuses
   UNION ALL SELECT 'fsa_loan_delinquency',                 COUNT(*),   300       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/fsa_loan_delinquency', allow_moved_paths=true)  -- 3 portfolios x ~45 quarters x 6 buckets
+  UNION ALL SELECT 'sevis_student_counts',                 COUNT(*), 500000       FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)  -- ~72 months x ~229 countries x non-zero breakdown cells; ~844k rows verified 2026-11-16 (all non-zero cells of the feed)
 );
 
 -- ============================================================
@@ -1335,6 +1337,54 @@ FROM (
   WHERE fiscal_quarter NOT BETWEEN 1 AND 4 OR dollars_outstanding < 0 OR recipients < 0
      OR YEAR(period_end_date) NOT IN (fiscal_year, fiscal_year - 1)
 );
+
+-- sevis_student_counts: PK (reporting_month, country_name, breakdown, category) non-null and unique
+INSERT INTO dq_results
+SELECT 'edu', 'sevis_student_counts', 'pk_nulls',
+  CASE WHEN n > 0 THEN 'fail' ELSE 'pass' END, CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)
+  WHERE reporting_month IS NULL OR country_name IS NULL OR breakdown IS NULL OR category IS NULL OR students IS NULL
+);
+
+INSERT INTO dq_results
+SELECT 'edu', 'sevis_student_counts', 'pk_duplicates',
+  CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', NULL
+FROM (
+  SELECT reporting_month, country_name, breakdown, category FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)
+  GROUP BY reporting_month, country_name, breakdown, category HAVING COUNT(*) > 1
+);
+
+-- sevis_student_counts: counts positive, breakdown from the known set, month is the 1st
+INSERT INTO dq_results
+SELECT 'edu', 'sevis_student_counts', 'value_ranges',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', NULL
+FROM (
+  SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)
+  WHERE students <= 0 OR DAY(reporting_month) <> 1
+     OR breakdown NOT IN ('total','sex','education_level','state','stem_sex','stem_education_level')
+);
+
+-- sevis_student_counts: latest month's national total is plausible (source ~1.19M in Oct 2026)
+INSERT INTO dq_results
+SELECT 'edu', 'sevis_student_counts', 'latest_total_plausible',
+  CASE WHEN n BETWEEN 800000 AND 1800000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '800000-1800000', NULL
+FROM (
+  SELECT COALESCE(SUM(students), 0) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)
+  WHERE breakdown = 'total'
+    AND reporting_month = (SELECT MAX(reporting_month) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true))
+);
+
+-- sevis_student_counts: China and India are the two largest origins in the latest month
+INSERT INTO dq_results
+SELECT 'edu', 'sevis_student_counts', 'top_origins',
+  CASE WHEN COUNT(*) = 2 THEN 'pass' ELSE 'fail' END, CAST(COUNT(*) AS VARCHAR), '2', NULL
+FROM (
+  SELECT country_name FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true)
+  WHERE breakdown = 'total'
+    AND reporting_month = (SELECT MAX(reporting_month) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/edu/sevis_student_counts', allow_moved_paths=true))
+  ORDER BY students DESC LIMIT 2
+) WHERE country_name IN ('CHINA', 'INDIA');
 
 -- ============================================================
 -- ALL RESULTS
