@@ -1020,3 +1020,48 @@ SELECT
   END AS schema_result
 FROM dq_results
 GROUP BY schema;
+
+-- ============================================================
+-- TABLE: tropical_cyclone_best_track (NHC HURDAT2 best track, ops#1256)
+-- ============================================================
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'existence', CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '1', 'readable and non-empty'
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) LIMIT 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'row_count', CASE WHEN n >= 60000 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '60000', 'Atlantic alone has ~55k observations; both basins together over 100k'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true));
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'both_basins', CASE WHEN n = 2 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '2', 'distinct basin values (atlantic, nepac)'
+FROM (SELECT COUNT(DISTINCT basin) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true));
+
+SELECT 'tropical_cyclone_best_track' AS tbl, * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) LIMIT 3;
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'all_null_cols', CASE WHEN COUNT(*) > 0 THEN 'fail' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true))
+WHERE null_percentage = 100.0 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'all_same_value', CASE WHEN COUNT(*) > 0 THEN 'warn' ELSE 'pass' END, CAST(COUNT(*) AS VARCHAR), '0', COALESCE(STRING_AGG(column_name, ', '), '')
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true))
+WHERE approx_unique <= 1 AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'pk_dupes', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'duplicate (storm_id, obs_date, obs_time_utc, record_identifier) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT storm_id, obs_date, obs_time_utc, COALESCE(record_identifier, '') FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'value_ranges', CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, CAST(n AS VARCHAR), '0', 'rows with latitude outside -5..80, longitude outside -180..180, wind outside 10..200 kt or pressure outside 850..1050 mb'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) WHERE latitude NOT BETWEEN -5 AND 80 OR longitude NOT BETWEEN -180 AND 180 OR max_wind_kt NOT BETWEEN 10 AND 200 OR min_pressure_mb NOT BETWEEN 850 AND 1050);
+
+-- Ivan (AL092004): HURDAT2 maximum wind 145 kt, minimum pressure 910 mb, and an Atlantic 2004 ACE near 227
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'known_value_ivan', CASE WHEN w = 145 AND p = 910 THEN 'pass' ELSE 'fail' END, CAST(w AS VARCHAR) || '/' || CAST(p AS VARCHAR), '145/910', 'Ivan 2004 peak wind kt / min pressure mb'
+FROM (SELECT MAX(max_wind_kt) AS w, MIN(min_pressure_mb) AS p FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) WHERE storm_id = 'AL092004');
+
+INSERT INTO dq_results
+SELECT 'weather', 'tropical_cyclone_best_track', 'known_value_ace_2004', CASE WHEN ace BETWEEN 220 AND 235 THEN 'pass' ELSE 'fail' END, CAST(ROUND(ace, 1) AS VARCHAR), '220-235', 'Atlantic 2004 season ACE (NOAA ~227)'
+FROM (SELECT SUM(max_wind_kt * max_wind_kt / 10000.0) AS ace FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/weather/tropical_cyclone_best_track', allow_moved_paths=true) WHERE basin = 'atlantic' AND season = 2004 AND status IN ('TS', 'HU', 'SS') AND max_wind_kt >= 34 AND obs_time_utc IN ('0000', '0600', '1200', '1800'));
+
