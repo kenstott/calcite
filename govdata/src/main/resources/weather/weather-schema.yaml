@@ -2088,10 +2088,9 @@ partitionedTables:
 
   - name: tropical_cyclone_best_track
     # NHC publishes a new reanalysis file once a year (name embeds the release date); the
-    # resolver picks the newest, hash freshness re-ingests when its content changes.
-    dataset_type: snapshot
-    freshness:
-      type: hash
+    # resolver picks the newest and release_file is part of each combination's identity, so a
+    # new release is an unprocessed combination and replaces its basin partition. Not a
+    # snapshot table: snapshot + a custom dimension processes only the first basin partition.
     pattern: "type=hurdat2_best_track/basin=*/*.parquet"
     partitions: *hurdat_partitions
     comment: >
