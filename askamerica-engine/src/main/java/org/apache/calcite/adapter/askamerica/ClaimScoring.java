@@ -469,6 +469,34 @@ final class ClaimScoring {
             : "deliver_report refused: the verdict MUST state the engine's rating, " + want + ".";
     }
 
+    /**
+     * A published report page MUST NOT state a rating other than the engine's; null when it
+     * states none or only the engine's. Unlike {@link #pinocchioProblem}, stating the rating
+     * is not required here: the page carries the claim scores themselves. {@code engine} is
+     * -1 when the claim scores give no rating, and any stated rating is then refused.
+     *
+     * <p>Daily eval 2026-11-16: four of ten published pages stated a rating the claim scores
+     * did not give, because only {@code deliver_report} checked it.
+     */
+    static String statedRatingProblem(String pageText, int engine) {
+        String text = pageText == null ? "" : pageText.replaceAll("<[^>]+>", "");
+        java.util.regex.Matcher m = PINOCCHIO_RATING.matcher(text);
+        java.util.List<String> words = Arrays.asList("zero", "one", "two", "three", "four");
+        while (m.find()) {
+            String g = m.group(1).toLowerCase(Locale.ROOT);
+            int n = words.contains(g) ? words.indexOf(g) : Integer.parseInt(g);
+            if (n != engine) {
+                return "The report states \"" + m.group() + "\", and "
+                    + (engine < 0
+                        ? "the claim scores give no rating. The report MUST NOT state one."
+                        : "the engine's rating from the claim scores is " + engine
+                            + (engine == 1 ? " Pinocchio" : " Pinocchios")
+                            + ". The report MUST state that rating and no other.");
+            }
+        }
+        return null;
+    }
+
     private static String unsupportedNote(JsonNode score) {
         int unsupported = score.path("unsupported").asInt();
         return unsupported == 0 ? ""
