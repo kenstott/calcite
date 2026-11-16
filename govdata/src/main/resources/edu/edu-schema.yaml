@@ -1736,6 +1736,556 @@ partitionedTables:
         runCompaction: true
 
   # ==========================================================================
+  # IPEDS FALL ENROLLMENT — NCES EF survey (part A), enrollment by race/ethnicity,
+  # gender, attendance status and level of student. Source: NCES bulk CSV ZIPs.
+  # ==========================================================================
+  - name: ipeds_fall_enrollment
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS Fall Enrollment (EF part A): students enrolled in the fall, by institution,
+      level of student (undergraduate, graduate, degree/certificate-seeking, first-time),
+      attendance status (full/part time), race/ethnicity including U.S. nonresident (international
+      students) and gender. One row per (unitid, year, efalevel); pick one efalevel to avoid
+      double counting, e.g. efalevel=1 is total enrollment, efalevel=2 undergraduate total,
+      efalevel=12 graduate total. Race columns are efXXXXt (total), efXXXXm (men), efXXXXw (women);
+      nonresident = efnralt/m/w, grand total = eftotlt/m/w. Source:
+      nces.ed.gov/ipeds/datacenter/data/EF{effective_year}A.zip (revised _rv file preferred).
+      Fall 2010 onward; the latest published vintage lags ~3 years in the configured URL form.
+      Counts are institution-reported fall headcounts, not residency of origin by state.
+      Joins to ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: year
+        type: int
+        nullable: false
+        comment: Fall of the survey (e.g. 2023 = Fall 2023) — PK component; injected from the vintage dimension
+      - name: efalevel
+        type: int
+        nullable: false
+        comment: NCES EFALEVEL code (1-60) for level/attendance/degree-seeking slice — PK component; see efalevel_label
+      - name: efalevel_label
+        type: string
+        nullable: true
+        comment: Label for efalevel, e.g. "All students, Graduate" or "Full-time students, Undergraduate, Degree/certificate-seeking, First-time"
+      - name: attendance
+        type: string
+        nullable: true
+        comment: all | full_time | part_time — from the file SECTION column
+      - name: level_of_study
+        type: string
+        nullable: true
+        comment: all | undergraduate | graduate — from the file LSTUDY column
+      - name: eftotlt
+        type: int
+        nullable: true
+        comment: Enrolled students, Grand total (all races/ethnicities, incl. nonresident) — total
+      - name: eftotlm
+        type: int
+        nullable: true
+        comment: Enrolled students, Grand total (all races/ethnicities, incl. nonresident) — men
+      - name: eftotlw
+        type: int
+        nullable: true
+        comment: Enrolled students, Grand total (all races/ethnicities, incl. nonresident) — women
+      - name: efaiant
+        type: int
+        nullable: true
+        comment: Enrolled students, American Indian or Alaska Native — total
+      - name: efaianm
+        type: int
+        nullable: true
+        comment: Enrolled students, American Indian or Alaska Native — men
+      - name: efaianw
+        type: int
+        nullable: true
+        comment: Enrolled students, American Indian or Alaska Native — women
+      - name: efasiat
+        type: int
+        nullable: true
+        comment: Enrolled students, Asian — total
+      - name: efasiam
+        type: int
+        nullable: true
+        comment: Enrolled students, Asian — men
+      - name: efasiaw
+        type: int
+        nullable: true
+        comment: Enrolled students, Asian — women
+      - name: efbkaat
+        type: int
+        nullable: true
+        comment: Enrolled students, Black or African American — total
+      - name: efbkaam
+        type: int
+        nullable: true
+        comment: Enrolled students, Black or African American — men
+      - name: efbkaaw
+        type: int
+        nullable: true
+        comment: Enrolled students, Black or African American — women
+      - name: efhispt
+        type: int
+        nullable: true
+        comment: Enrolled students, Hispanic/Latino — total
+      - name: efhispm
+        type: int
+        nullable: true
+        comment: Enrolled students, Hispanic/Latino — men
+      - name: efhispw
+        type: int
+        nullable: true
+        comment: Enrolled students, Hispanic/Latino — women
+      - name: efnhpit
+        type: int
+        nullable: true
+        comment: Enrolled students, Native Hawaiian or Other Pacific Islander — total
+      - name: efnhpim
+        type: int
+        nullable: true
+        comment: Enrolled students, Native Hawaiian or Other Pacific Islander — men
+      - name: efnhpiw
+        type: int
+        nullable: true
+        comment: Enrolled students, Native Hawaiian or Other Pacific Islander — women
+      - name: efwhitt
+        type: int
+        nullable: true
+        comment: Enrolled students, White — total
+      - name: efwhitm
+        type: int
+        nullable: true
+        comment: Enrolled students, White — men
+      - name: efwhitw
+        type: int
+        nullable: true
+        comment: Enrolled students, White — women
+      - name: ef2mort
+        type: int
+        nullable: true
+        comment: Enrolled students, Two or more races — total
+      - name: ef2morm
+        type: int
+        nullable: true
+        comment: Enrolled students, Two or more races — men
+      - name: ef2morw
+        type: int
+        nullable: true
+        comment: Enrolled students, Two or more races — women
+      - name: efunknt
+        type: int
+        nullable: true
+        comment: Enrolled students, Race/ethnicity unknown — total
+      - name: efunknm
+        type: int
+        nullable: true
+        comment: Enrolled students, Race/ethnicity unknown — men
+      - name: efunknw
+        type: int
+        nullable: true
+        comment: Enrolled students, Race/ethnicity unknown — women
+      - name: efnralt
+        type: int
+        nullable: true
+        comment: Enrolled students, U.S. nonresident (nonresident alien; international students) — total
+      - name: efnralm
+        type: int
+        nullable: true
+        comment: Enrolled students, U.S. nonresident (nonresident alien; international students) — men
+      - name: efnralw
+        type: int
+        nullable: true
+        comment: Enrolled students, U.S. nonresident (nonresident alien; international students) — women
+
+    source:
+      type: http
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/EF{effective_year}A.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [429, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsFallEnrollmentResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2013  # EF vintages before 2010 use different level codes and race categories; first supported vintage is EF2010A (year-dataLag).
+        # NCES publishes EF ~3 years behind the calendar year in the form this
+        # table loads (probed 2026-11-16: EF2023A / ADM2023 exist, 2024 files return 404).
+        dataLag: 3
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
+  # IPEDS ADMISSIONS — NCES ADM survey: applicants, admitted, enrolled and test scores.
+  # Only institutions that report admissions data (selective, first-time undergraduate
+  # admissions; roughly 2,000 per year).
+  # ==========================================================================
+  - name: ipeds_admissions
+    releaseWindow:
+      months: [11]
+    pattern: "year={year}"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+
+    comment: >
+      NCES IPEDS Admissions (ADM) for first-time, degree/certificate-seeking undergraduates:
+      applicants (applcn), admitted (admssn) and enrolled (enrlt, with full/part-time splits
+      enrlft/enrlpt), each by gender (m, w; an/un splits from 2022-23), plus SAT/ACT submission
+      counts and 25th/75th (50th from 2022-23) percentile scores. admit_rate = admssn/applcn and
+      yield_rate = enrlt/admssn are derived. One row per (unitid, year); only institutions that
+      report admissions (about 2,000 per year, mostly four-year, many open-admission schools
+      report only partial fields). Source:
+      nces.ed.gov/ipeds/datacenter/data/ADM{effective_year}.zip (revised _rv file preferred).
+      Fall 2014 onward; latest vintage lags ~3 years in the configured URL form.
+      Joins to ipeds_institutions via unitid.
+
+    columns:
+      - name: unitid
+        type: int
+        nullable: false
+        comment: IPEDS unit ID — PK component; FK to ipeds_institutions.unitid
+      - name: year
+        type: int
+        nullable: false
+        comment: Admissions cycle fall year (e.g. 2023 = fall 2023 entering class) — PK component
+      - name: admcon1
+        type: int
+        nullable: true
+        comment: Admission consideration factor 1 (ADMCON1 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon2
+        type: int
+        nullable: true
+        comment: Admission consideration factor 2 (ADMCON2 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon3
+        type: int
+        nullable: true
+        comment: Admission consideration factor 3 (ADMCON3 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon4
+        type: int
+        nullable: true
+        comment: Admission consideration factor 4 (ADMCON4 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon5
+        type: int
+        nullable: true
+        comment: Admission consideration factor 5 (ADMCON5 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon6
+        type: int
+        nullable: true
+        comment: Admission consideration factor 6 (ADMCON6 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon7
+        type: int
+        nullable: true
+        comment: Admission consideration factor 7 (ADMCON7 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon8
+        type: int
+        nullable: true
+        comment: Admission consideration factor 8 (ADMCON8 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon9
+        type: int
+        nullable: true
+        comment: Admission consideration factor 9 (ADMCON9 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon10
+        type: int
+        nullable: true
+        comment: Admission consideration factor 10 (ADMCON10 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon11
+        type: int
+        nullable: true
+        comment: Admission consideration factor 11 (ADMCON11 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: admcon12
+        type: int
+        nullable: true
+        comment: Admission consideration factor 12 (ADMCON12 importance code reported by the institution, meaning per the NCES ADM data dictionary)
+      - name: applcn
+        type: int
+        nullable: true
+        comment: Applicants — total
+      - name: applcnm
+        type: int
+        nullable: true
+        comment: Applicants — men
+      - name: applcnw
+        type: int
+        nullable: true
+        comment: Applicants — women
+      - name: applcnan
+        type: int
+        nullable: true
+        comment: Applicants — another gender (another-gender/unknown splits reported from 2022-23 only)
+      - name: applcnun
+        type: int
+        nullable: true
+        comment: Applicants — gender unknown (another-gender/unknown splits reported from 2022-23 only)
+      - name: admssn
+        type: int
+        nullable: true
+        comment: Admitted — total
+      - name: admssnm
+        type: int
+        nullable: true
+        comment: Admitted — men
+      - name: admssnw
+        type: int
+        nullable: true
+        comment: Admitted — women
+      - name: admssnan
+        type: int
+        nullable: true
+        comment: Admitted — another gender (another-gender/unknown splits reported from 2022-23 only)
+      - name: admssnun
+        type: int
+        nullable: true
+        comment: Admitted — gender unknown (another-gender/unknown splits reported from 2022-23 only)
+      - name: enrlt
+        type: int
+        nullable: true
+        comment: Enrolled — total
+      - name: enrlm
+        type: int
+        nullable: true
+        comment: Enrolled — men
+      - name: enrlw
+        type: int
+        nullable: true
+        comment: Enrolled — women
+      - name: enrlan
+        type: int
+        nullable: true
+        comment: Enrolled — another gender (another-gender/unknown splits reported from 2022-23 only)
+      - name: enrlun
+        type: int
+        nullable: true
+        comment: Enrolled — gender unknown (another-gender/unknown splits reported from 2022-23 only)
+      - name: enrlft
+        type: int
+        nullable: true
+        comment: Enrolled full time — total
+      - name: enrlftm
+        type: int
+        nullable: true
+        comment: Enrolled full time — men
+      - name: enrlftw
+        type: int
+        nullable: true
+        comment: Enrolled full time — women
+      - name: enrlftan
+        type: int
+        nullable: true
+        comment: Enrolled full time — another gender (reported from 2022-23 only)
+      - name: enrlftun
+        type: int
+        nullable: true
+        comment: Enrolled full time — gender unknown (reported from 2022-23 only)
+      - name: enrlpt
+        type: int
+        nullable: true
+        comment: Enrolled part time — total
+      - name: enrlptm
+        type: int
+        nullable: true
+        comment: Enrolled part time — men
+      - name: enrlptw
+        type: int
+        nullable: true
+        comment: Enrolled part time — women
+      - name: enrlptan
+        type: int
+        nullable: true
+        comment: Enrolled part time — another gender (reported from 2022-23 only)
+      - name: enrlptun
+        type: int
+        nullable: true
+        comment: Enrolled part time — gender unknown (reported from 2022-23 only)
+      - name: satnum
+        type: int
+        nullable: true
+        comment: Number of enrolled first-time students submitting SAT scores
+      - name: satpct
+        type: int
+        nullable: true
+        comment: Percent of enrolled first-time students submitting SAT scores
+      - name: actnum
+        type: int
+        nullable: true
+        comment: Number of enrolled first-time students submitting ACT scores
+      - name: actpct
+        type: int
+        nullable: true
+        comment: Percent of enrolled first-time students submitting ACT scores
+      - name: satvr25
+        type: int
+        nullable: true
+        comment: SAT evidence-based reading/writing 25th percentile
+      - name: satvr50
+        type: int
+        nullable: true
+        comment: SAT evidence-based reading/writing 50th percentile (from 2022-23)
+      - name: satvr75
+        type: int
+        nullable: true
+        comment: SAT evidence-based reading/writing 75th percentile
+      - name: satmt25
+        type: int
+        nullable: true
+        comment: SAT math 25th percentile
+      - name: satmt50
+        type: int
+        nullable: true
+        comment: SAT math 50th percentile (from 2022-23)
+      - name: satmt75
+        type: int
+        nullable: true
+        comment: SAT math 75th percentile
+      - name: satwr25
+        type: int
+        nullable: true
+        comment: SAT writing 25th percentile (discontinued after 2015-16)
+      - name: satwr75
+        type: int
+        nullable: true
+        comment: SAT writing 75th percentile (discontinued after 2015-16)
+      - name: actcm25
+        type: int
+        nullable: true
+        comment: ACT composite 25th percentile
+      - name: actcm50
+        type: int
+        nullable: true
+        comment: ACT composite 50th percentile (from 2022-23)
+      - name: actcm75
+        type: int
+        nullable: true
+        comment: ACT composite 75th percentile
+      - name: acten25
+        type: int
+        nullable: true
+        comment: ACT English 25th percentile
+      - name: acten50
+        type: int
+        nullable: true
+        comment: ACT English 50th percentile (from 2022-23)
+      - name: acten75
+        type: int
+        nullable: true
+        comment: ACT English 75th percentile
+      - name: actmt25
+        type: int
+        nullable: true
+        comment: ACT math 25th percentile
+      - name: actmt50
+        type: int
+        nullable: true
+        comment: ACT math 50th percentile (from 2022-23)
+      - name: actmt75
+        type: int
+        nullable: true
+        comment: ACT math 75th percentile
+      - name: actwr25
+        type: int
+        nullable: true
+        comment: ACT writing 25th percentile (discontinued after 2015-16)
+      - name: actwr75
+        type: int
+        nullable: true
+        comment: ACT writing 75th percentile (discontinued after 2015-16)
+      - name: admit_rate
+        type: double
+        nullable: true
+        comment: Admitted / applicants (derived; null when applicants is null or 0)
+      - name: yield_rate
+        type: double
+        nullable: true
+        comment: Enrolled / admitted (derived; null when admitted is null or 0). Yield, the share of admitted students who enroll
+
+    source:
+      type: http
+      # {effective_year} (year - dataLag), NOT {year}: dataLag only shifts effective_year.
+      url: "https://nces.ed.gov/ipeds/datacenter/data/ADM{effective_year}.zip"
+      method: GET
+      response:
+        format: csv
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 2
+        retryOn: [429, 503]
+        skipOn: [404]
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.edu.IpedsAdmissionsResponseTransformer"
+
+    dimensions:
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2010}"
+        minYear: 2017  # ADM{year}.zip exists from 2014 (earlier admissions data lived in the IC survey file); first supported vintage is ADM2014 (year-dataLag).
+        # NCES publishes ADM ~3 years behind the calendar year in the form this
+        # table loads (probed 2026-11-16: EF2023A / ADM2023 exist, 2024 files return 404).
+        dataLag: 3
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: ""
+      partition:
+        columns: [year]
+        valueSource:
+          year: effective_year   # store under the vintage year (year - dataLag), not the publish year
+      options:
+        compression: snappy
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+
+  # ==========================================================================
   # IPEDS TUITION — NCES IC_AY survey, annual published tuition and fees
   # Urban Institute API: college-university/ipeds/academic-year-tuition/{year}/
   # ~17,000 rows/year (institution × level_of_study × tuition_type)
