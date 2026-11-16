@@ -298,7 +298,8 @@ public class SemanticSearchLocalCodesTest {
              SemanticSearch.manifestFilesSql(java.util.Collections.singletonList(
                  ds.toAbsolutePath().toString())))) {
       assertTrue(rs.next());
-      assertEquals(live.toAbsolutePath().toString(), rs.getString(1));
+      assertEquals(live.toAbsolutePath().toString().replace('\\', '/'),
+          rs.getString(1).replace('\\', '/'));
       assertFalse(rs.next(), "the retired file is on disk but not in the manifest");
     }
   }
