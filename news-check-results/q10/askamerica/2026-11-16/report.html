@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The ICAEW article's claims about the FY2026 US federal deficit, federal debt and CBO projections are accurate; 1 claim could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The ICAEW article's claims about the FY2026 US federal deficit, federal debt and CBO projections are accurate; 1 claim could not be confirmed.</h1>
+<p class="subtitle">ICAEW 'Chart of the week: US federal deficit', 12 Nov 2026; checked against Treasury MTS (econ.mts_outlays_by_function, econ.federal_debt) and CBO Feb 2026 baseline</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.icaew.com/insights/viewpoints-on-the-news/2026/nov-2026/chart-of-the-week-us-federal-deficit">https://www.icaew.com/insights/viewpoints-on-the-news/2026/nov-2026/chart-of-the-week-us-federal-deficit</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">FY2025 vs FY2026 US federal budget ($bn)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="298" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="298" viewBox="0 0 412 298" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="298" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Receipts, outlays, deficit ($bn)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="77" y1="220" x2="390" y2="220" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="69" y="224" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="199.50" x2="390" y2="199.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="69" y="203.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="179" x2="390" y2="179" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="69" y="183" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="77" y1="158.50" x2="390" y2="158.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="69" y="162.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3,000</text>
+      <line class="grid" x1="77" y1="138" x2="390" y2="138" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="69" y="142" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">4,000</text>
+      <line class="grid" x1="77" y1="117.50" x2="390" y2="117.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="69" y="121.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">5,000</text>
+      <line class="grid" x1="77" y1="97" x2="390" y2="97" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="69" y="101" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">6,000</text>
+      <line class="grid" x1="77" y1="76.50" x2="390" y2="76.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-7" class="tick" x="69" y="80.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">7,000</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-8" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">8,000</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="220" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="220" x2="390" y2="220" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="138" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 138)">$bn</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-receipts" class="tick" x="129.17" y="238" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Receipts</text>
+      <text id="p1-xtick-outlays" class="tick" x="233.50" y="238" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Outlays</text>
+      <text id="p1-xtick-deficit" class="tick" x="337.83" y="238" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">Deficit</text>
+    </g>
+    <g id="p1-series-fy2025" class="series">
+      <g class="hover">
+        <title>Receipts — FY2025: 5,235</title>
+        <rect id="p1-mark-fy2025-receipts" class="bar" x="95.78" y="112.68" width="32.39" height="107.32" fill="#2563eb"/>
+        <rect class="hit" x="95.78" y="56" width="32.39" height="164" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Outlays — FY2025: 7,010</title>
+        <rect id="p1-mark-fy2025-outlays" class="bar" x="200.11" y="76.30" width="32.39" height="143.70" fill="#2563eb"/>
+        <rect class="hit" x="200.11" y="56" width="32.39" height="164" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Deficit — FY2025: 1,775</title>
+        <rect id="p1-mark-fy2025-deficit" class="bar" x="304.45" y="183.61" width="32.39" height="36.39" fill="#2563eb"/>
+        <rect class="hit" x="304.45" y="56" width="32.39" height="164" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-series-fy2026" class="series">
+      <g class="hover">
+        <title>Receipts — FY2026: 5,403</title>
+        <rect id="p1-mark-fy2026-receipts" class="bar" x="129.17" y="109.24" width="32.39" height="110.76" fill="#ea580c"/>
+        <rect class="hit" x="129.17" y="56" width="32.39" height="164" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Outlays — FY2026: 7,396</title>
+        <rect id="p1-mark-fy2026-outlays" class="bar" x="233.50" y="68.38" width="32.39" height="151.62" fill="#ea580c"/>
+        <rect class="hit" x="233.50" y="56" width="32.39" height="164" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>Deficit — FY2026: 1,992</title>
+        <rect id="p1-mark-fy2026-deficit" class="bar" x="337.83" y="179.16" width="32.39" height="40.84" fill="#ea580c"/>
+        <rect class="hit" x="337.83" y="56" width="32.39" height="164" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-legend">
+      <rect id="p1-legend-swatch-fy2025" x="141" y="264" width="11" height="11" fill="#2563eb"/>
+      <text id="p1-legend-label-fy2025" class="legend-label" x="157" y="273" fill="#1f2328" font-size="11" style="font-size:11px">FY2025</text>
+      <rect id="p1-legend-swatch-fy2026" x="214" y="264" width="11" height="11" fill="#ea580c"/>
+      <text id="p1-legend-label-fy2026" class="legend-label" x="230" y="273" fill="#1f2328" font-size="11" style="font-size:11px">FY2026</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="24" y="375" fill="#6b7280">Treasury MTS Table 9, econ.mts_outlays_by_function, 2026-09-30</text>
+  <rect class="panel-edge" x="448" y="64" width="412" height="298" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="298" viewBox="0 0 412 298" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="298" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Debt held by public in 2036 ($tn)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="60" y1="244" x2="390" y2="244" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="52" y="248" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="212.67" x2="390" y2="212.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="52" y="216.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="181.33" x2="390" y2="181.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="52" y="185.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="60" y1="150" x2="390" y2="150" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="52" y="154" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30</text>
+      <line class="grid" x1="60" y1="118.67" x2="390" y2="118.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="52" y="122.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40</text>
+      <line class="grid" x1="60" y1="87.33" x2="390" y2="87.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="52" y="91.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-6" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">60</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="244" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="244" x2="390" y2="244" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="150" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 150)">$tn</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-icaew-article" class="tick" x="142.50" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">ICAEW article</text>
+      <text id="p2-xtick-cbo-feb-2026" class="tick" x="307.50" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">CBO Feb 2026</text>
+    </g>
+    <g id="p2-series-2036" class="series">
+      <g class="hover">
+        <title>ICAEW article — 2036: 46.7</title>
+        <rect id="p2-mark-2036-icaew-article" class="bar" x="89.70" y="97.67" width="104.60" height="146.33" fill="#2563eb"/>
+        <rect class="hit" x="89.70" y="56" width="104.60" height="188" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>CBO Feb 2026 — 2036: 56.2</title>
+        <rect id="p2-mark-2036-cbo-feb-2026" class="bar" x="254.70" y="67.91" width="104.60" height="176.09" fill="#2563eb"/>
+        <rect class="hit" x="254.70" y="56" width="104.60" height="188" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="caption" x="452" y="375" fill="#6b7280">CBO table (via CRFB): 2036 = $56.2tn; 2033 = $47.6tn</text>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="410" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="446" fill="#6b7280">Deficit FY2026</text>
+  <text class="stat-value" x="36" y="476" fill="#1f2328">$1,992bn</text>
+  <text class="stat-delta" x="36" y="496" fill="#059669">+$217bn</text>
+  </g>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:50843/a/79ff35b79adea09bb840dc07fc6ff3bb.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>The ICAEW piece is almost entirely accurate: Treasury's own Monthly Treasury Statement confirms the FY2026 deficit of $1,992bn (FY2025: $1,775bn), receipts of $5,403bn, outlays of about $7,396bn, and every line-item change in the decomposition reproduces. Engine rating: 0 Pinocchios. Caveat outside the scored author claims: the piece misstates CBO's 2036 debt held by the public as $46.7tn (CBO: $56.2tn, 120% of GDP), a material error in the source-audit block.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 98/100 — honest</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>11 claims graded, 0 not gradable, 2 fell short. In this article only. <strong>Citejacking:</strong> #9 leans on cited evidence that does not carry it.</p></div>
+<p><strong>9</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>1</strong> unsupported &middot; <strong>11</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>the US federal deficit of $1,775bn in the fiscal year ended 30 September 2025 (FY2025) increased to $1,992bn in the fiscal year ended 30 September 2026 (FY2026).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-unsupported"><td>9</td><td>mainly because of tax cuts ... mainly in cuts to the Environmental Protection Agency ... including cuts to food stamps and other support programmes</td><td><strong>unsupported</strong> &middot; causal claim</td><td>#6 — overreach<br>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-mostly-true"><td>10</td><td>a large increase in tariffs that were more than offset by refunds for tariffs ruled unconstitutional</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://www.ttnews.com/articles/us-budget-deficit-july-2026">TTNews: continuing tariff refunds after Supreme Court invalidation</a></td></tr><tr class="verdict-true"><td>2</td><td>Total receipts of $5,235bn in FY2025 (not shown in the chart) increased by $174bn for inflation and $122bn for economic growth and reduced by $128bn from tax cuts and other movements in receipts to reach $5,403bn in FY2026. Total outlays of $7,010bn in FY2025 increased by $233bn for inflation and $152bn in spending increases to reach $7,395bn in FY2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>3</td><td>bringing total debt to $40.2tn or 125% of GDP on 30 September 2026. Of this, $32.4tn or 101% of GDP is debt held by the public, while $7.8tn or 24% of GDP is intragovernmental debt</td><td><strong>true</strong></td><td>Checked against: <code>econ.federal_debt</code></td></tr><tr class="verdict-true"><td>4</td><td>The resulting deficit of $1,992bn is equivalent to 6.2% of GDP</td><td><strong>true</strong></td><td>Checked against: <a href="https://gvwire.com/2026/10/16/us-fiscal-2026-budget-deficit-rises-to-1-99-trillion-largest-in-5-years/">GV Wire / Reuters on FY2026 deficit (403 to fetch; summary via search)</a></td></tr><tr class="verdict-true"><td>5</td><td>Inflation of 3.3% contributed to a net $59bn of the increase, while the effect of economic growth of 2.3% on receipts reduced it by $122bn. Tax cuts, tariff refunds and other movements in receipts added $128bn, while spending increases added $152bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>6</td><td>a reduction in corporate income tax of $96bn, custom duties of $33bn, employment and retirement contributions of $27bn, and other taxes and receipts of $19bn. This was offset by a net increase after inflation and economic growth in individual income taxes of $39bn and estate and gift taxes of $8bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>7</td><td>The $152bn net increase after inflation included health programmes up $57bn, debt interest up $49bn, Social Security up $34bn, education, training, employment and social services up $34bn, veterans benefits and services up $27bn, justice up $22bn, defence up $18bn and other increases of $16bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>8</td><td>These were offset by spending reductions in natural resources and environment of $34bn, income security of $31bn, community and regional development of $25bn and other reductions of $15bn. Overall, spending increased by $11bn less than it would have been if it had risen in line with economic growth.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>14</td><td>the 120th Congress of the United States when it starts work on 3 January 2027.</td><td><strong>true</strong></td><td>Checked against: <a href="https://constitution.congress.gov/constitution/amendment-20/">Constitution Annotated, 20th Amendment</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>14</td><td>the 120th Congress of the United States when it starts work on 3 January 2027.</td><td><strong>true</strong></td><td>Checked against: <a href="https://constitution.congress.gov/constitution/amendment-20/">Constitution Annotated, 20th Amendment</a></td></tr><tr class="verdict-mostly-true"><td>10</td><td>a large increase in tariffs that were more than offset by refunds for tariffs ruled unconstitutional</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://www.ttnews.com/articles/us-budget-deficit-july-2026">TTNews: continuing tariff refunds after Supreme Court invalidation</a></td></tr><tr class="verdict-unsupported"><td>9</td><td>mainly because of tax cuts ... mainly in cuts to the Environmental Protection Agency ... including cuts to food stamps and other support programmes</td><td><strong>unsupported</strong> &middot; causal claim</td><td>#6 — overreach<br>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>8</td><td>These were offset by spending reductions in natural resources and environment of $34bn, income security of $31bn, community and regional development of $25bn and other reductions of $15bn. Overall, spending increased by $11bn less than it would have been if it had risen in line with economic growth.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>7</td><td>The $152bn net increase after inflation included health programmes up $57bn, debt interest up $49bn, Social Security up $34bn, education, training, employment and social services up $34bn, veterans benefits and services up $27bn, justice up $22bn, defence up $18bn and other increases of $16bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>6</td><td>a reduction in corporate income tax of $96bn, custom duties of $33bn, employment and retirement contributions of $27bn, and other taxes and receipts of $19bn. This was offset by a net increase after inflation and economic growth in individual income taxes of $39bn and estate and gift taxes of $8bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>5</td><td>Inflation of 3.3% contributed to a net $59bn of the increase, while the effect of economic growth of 2.3% on receipts reduced it by $122bn. Tax cuts, tariff refunds and other movements in receipts added $128bn, while spending increases added $152bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>4</td><td>The resulting deficit of $1,992bn is equivalent to 6.2% of GDP</td><td><strong>true</strong></td><td>Checked against: <a href="https://gvwire.com/2026/10/16/us-fiscal-2026-budget-deficit-rises-to-1-99-trillion-largest-in-5-years/">GV Wire / Reuters on FY2026 deficit (403 to fetch; summary via search)</a></td></tr><tr class="verdict-true"><td>3</td><td>bringing total debt to $40.2tn or 125% of GDP on 30 September 2026. Of this, $32.4tn or 101% of GDP is debt held by the public, while $7.8tn or 24% of GDP is intragovernmental debt</td><td><strong>true</strong></td><td>Checked against: <code>econ.federal_debt</code></td></tr><tr class="verdict-true"><td>2</td><td>Total receipts of $5,235bn in FY2025 (not shown in the chart) increased by $174bn for inflation and $122bn for economic growth and reduced by $128bn from tax cuts and other movements in receipts to reach $5,403bn in FY2026. Total outlays of $7,010bn in FY2025 increased by $233bn for inflation and $152bn in spending increases to reach $7,395bn in FY2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>1</td><td>the US federal deficit of $1,775bn in the fiscal year ended 30 September 2025 (FY2025) increased to $1,992bn in the fiscal year ended 30 September 2026 (FY2026).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>10</td><td>a large increase in tariffs that were more than offset by refunds for tariffs ruled unconstitutional</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://www.ttnews.com/articles/us-budget-deficit-july-2026">TTNews: continuing tariff refunds after Supreme Court invalidation</a></td></tr><tr class="verdict-true"><td>6</td><td>a reduction in corporate income tax of $96bn, custom duties of $33bn, employment and retirement contributions of $27bn, and other taxes and receipts of $19bn. This was offset by a net increase after inflation and economic growth in individual income taxes of $39bn and estate and gift taxes of $8bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>3</td><td>bringing total debt to $40.2tn or 125% of GDP on 30 September 2026. Of this, $32.4tn or 101% of GDP is debt held by the public, while $7.8tn or 24% of GDP is intragovernmental debt</td><td><strong>true</strong></td><td>Checked against: <code>econ.federal_debt</code></td></tr><tr class="verdict-true"><td>5</td><td>Inflation of 3.3% contributed to a net $59bn of the increase, while the effect of economic growth of 2.3% on receipts reduced it by $122bn. Tax cuts, tariff refunds and other movements in receipts added $128bn, while spending increases added $152bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-unsupported"><td>9</td><td>mainly because of tax cuts ... mainly in cuts to the Environmental Protection Agency ... including cuts to food stamps and other support programmes</td><td><strong>unsupported</strong> &middot; causal claim</td><td>#6 — overreach<br>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>7</td><td>The $152bn net increase after inflation included health programmes up $57bn, debt interest up $49bn, Social Security up $34bn, education, training, employment and social services up $34bn, veterans benefits and services up $27bn, justice up $22bn, defence up $18bn and other increases of $16bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>14</td><td>the 120th Congress of the United States when it starts work on 3 January 2027.</td><td><strong>true</strong></td><td>Checked against: <a href="https://constitution.congress.gov/constitution/amendment-20/">Constitution Annotated, 20th Amendment</a></td></tr><tr class="verdict-true"><td>4</td><td>The resulting deficit of $1,992bn is equivalent to 6.2% of GDP</td><td><strong>true</strong></td><td>Checked against: <a href="https://gvwire.com/2026/10/16/us-fiscal-2026-budget-deficit-rises-to-1-99-trillion-largest-in-5-years/">GV Wire / Reuters on FY2026 deficit (403 to fetch; summary via search)</a></td></tr><tr class="verdict-true"><td>1</td><td>the US federal deficit of $1,775bn in the fiscal year ended 30 September 2025 (FY2025) increased to $1,992bn in the fiscal year ended 30 September 2026 (FY2026).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>8</td><td>These were offset by spending reductions in natural resources and environment of $34bn, income security of $31bn, community and regional development of $25bn and other reductions of $15bn. Overall, spending increased by $11bn less than it would have been if it had risen in line with economic growth.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>2</td><td>Total receipts of $5,235bn in FY2025 (not shown in the chart) increased by $174bn for inflation and $122bn for economic growth and reduced by $128bn from tax cuts and other movements in receipts to reach $5,403bn in FY2026. Total outlays of $7,010bn in FY2025 increased by $233bn for inflation and $152bn in spending increases to reach $7,395bn in FY2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>10</td><td>a large increase in tariffs that were more than offset by refunds for tariffs ruled unconstitutional</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://www.ttnews.com/articles/us-budget-deficit-july-2026">TTNews: continuing tariff refunds after Supreme Court invalidation</a></td></tr><tr class="verdict-true"><td>2</td><td>Total receipts of $5,235bn in FY2025 (not shown in the chart) increased by $174bn for inflation and $122bn for economic growth and reduced by $128bn from tax cuts and other movements in receipts to reach $5,403bn in FY2026. Total outlays of $7,010bn in FY2025 increased by $233bn for inflation and $152bn in spending increases to reach $7,395bn in FY2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>3</td><td>bringing total debt to $40.2tn or 125% of GDP on 30 September 2026. Of this, $32.4tn or 101% of GDP is debt held by the public, while $7.8tn or 24% of GDP is intragovernmental debt</td><td><strong>true</strong></td><td>Checked against: <code>econ.federal_debt</code></td></tr><tr class="verdict-true"><td>4</td><td>The resulting deficit of $1,992bn is equivalent to 6.2% of GDP</td><td><strong>true</strong></td><td>Checked against: <a href="https://gvwire.com/2026/10/16/us-fiscal-2026-budget-deficit-rises-to-1-99-trillion-largest-in-5-years/">GV Wire / Reuters on FY2026 deficit (403 to fetch; summary via search)</a></td></tr><tr class="verdict-true"><td>5</td><td>Inflation of 3.3% contributed to a net $59bn of the increase, while the effect of economic growth of 2.3% on receipts reduced it by $122bn. Tax cuts, tariff refunds and other movements in receipts added $128bn, while spending increases added $152bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>6</td><td>a reduction in corporate income tax of $96bn, custom duties of $33bn, employment and retirement contributions of $27bn, and other taxes and receipts of $19bn. This was offset by a net increase after inflation and economic growth in individual income taxes of $39bn and estate and gift taxes of $8bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>7</td><td>The $152bn net increase after inflation included health programmes up $57bn, debt interest up $49bn, Social Security up $34bn, education, training, employment and social services up $34bn, veterans benefits and services up $27bn, justice up $22bn, defence up $18bn and other increases of $16bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>8</td><td>These were offset by spending reductions in natural resources and environment of $34bn, income security of $31bn, community and regional development of $25bn and other reductions of $15bn. Overall, spending increased by $11bn less than it would have been if it had risen in line with economic growth.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>14</td><td>the 120th Congress of the United States when it starts work on 3 January 2027.</td><td><strong>true</strong></td><td>Checked against: <a href="https://constitution.congress.gov/constitution/amendment-20/">Constitution Annotated, 20th Amendment</a></td></tr><tr class="verdict-true"><td>1</td><td>the US federal deficit of $1,775bn in the fiscal year ended 30 September 2025 (FY2025) increased to $1,992bn in the fiscal year ended 30 September 2026 (FY2026).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-unsupported"><td>9</td><td>mainly because of tax cuts ... mainly in cuts to the Environmental Protection Agency ... including cuts to food stamps and other support programmes</td><td><strong>unsupported</strong> &middot; causal claim</td><td>#6 — overreach<br>Checked against: <code>econ.mts_outlays_by_function</code></td></tr></tbody><tbody class="srt s4"><tr class="verdict-unsupported"><td>9</td><td>mainly because of tax cuts ... mainly in cuts to the Environmental Protection Agency ... including cuts to food stamps and other support programmes</td><td><strong>unsupported</strong> &middot; causal claim</td><td>#6 — overreach<br>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>14</td><td>the 120th Congress of the United States when it starts work on 3 January 2027.</td><td><strong>true</strong></td><td>Checked against: <a href="https://constitution.congress.gov/constitution/amendment-20/">Constitution Annotated, 20th Amendment</a></td></tr><tr class="verdict-true"><td>3</td><td>bringing total debt to $40.2tn or 125% of GDP on 30 September 2026. Of this, $32.4tn or 101% of GDP is debt held by the public, while $7.8tn or 24% of GDP is intragovernmental debt</td><td><strong>true</strong></td><td>Checked against: <code>econ.federal_debt</code></td></tr><tr class="verdict-true"><td>1</td><td>the US federal deficit of $1,775bn in the fiscal year ended 30 September 2025 (FY2025) increased to $1,992bn in the fiscal year ended 30 September 2026 (FY2026).</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>2</td><td>Total receipts of $5,235bn in FY2025 (not shown in the chart) increased by $174bn for inflation and $122bn for economic growth and reduced by $128bn from tax cuts and other movements in receipts to reach $5,403bn in FY2026. Total outlays of $7,010bn in FY2025 increased by $233bn for inflation and $152bn in spending increases to reach $7,395bn in FY2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>5</td><td>Inflation of 3.3% contributed to a net $59bn of the increase, while the effect of economic growth of 2.3% on receipts reduced it by $122bn. Tax cuts, tariff refunds and other movements in receipts added $128bn, while spending increases added $152bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>6</td><td>a reduction in corporate income tax of $96bn, custom duties of $33bn, employment and retirement contributions of $27bn, and other taxes and receipts of $19bn. This was offset by a net increase after inflation and economic growth in individual income taxes of $39bn and estate and gift taxes of $8bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>7</td><td>The $152bn net increase after inflation included health programmes up $57bn, debt interest up $49bn, Social Security up $34bn, education, training, employment and social services up $34bn, veterans benefits and services up $27bn, justice up $22bn, defence up $18bn and other increases of $16bn.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-true"><td>8</td><td>These were offset by spending reductions in natural resources and environment of $34bn, income security of $31bn, community and regional development of $25bn and other reductions of $15bn. Overall, spending increased by $11bn less than it would have been if it had risen in line with economic growth.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code></td></tr><tr class="verdict-mostly-true"><td>10</td><td>a large increase in tariffs that were more than offset by refunds for tariffs ruled unconstitutional</td><td><strong>mostly true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://www.ttnews.com/articles/us-budget-deficit-july-2026">TTNews: continuing tariff refunds after Supreme Court invalidation</a></td></tr><tr class="verdict-true"><td>4</td><td>The resulting deficit of $1,992bn is equivalent to 6.2% of GDP</td><td><strong>true</strong></td><td>Checked against: <a href="https://gvwire.com/2026/10/16/us-fiscal-2026-budget-deficit-rises-to-1-99-trillion-largest-in-5-years/">GV Wire / Reuters on FY2026 deficit (403 to fetch; summary via search)</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> partially false &middot; <strong>1</strong> unsupported &middot; <strong>3</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>11</td><td>The most recent 10-year fiscal projections from the Congressional Budget Office (CBO) in February 2026 were for a net deficit of $1,853bn or 5.8% of GDP in FY2026 and $1,887bn or 5.7% of GDP in FY2027, rising to $2,080bn or 6.0% of GDP in FY2028 and $3,115bn or 6.7% of GDP in 2036.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-partially-false"><td>12</td><td>These projections see debt held by the public rising from $32.1tn or 101% of GDP on 30 September 2026 to $46.7tn or 120% of GDP on 30 September 2036.</td><td><strong>partially false</strong></td></tr>
+<tr class="verdict-unsupported"><td>13</td><td>with the CBO working on a report to be released in December 2026 on options they might want to consider.</td><td><strong>unsupported</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; the US federal deficit of $1,775bn in the fiscal year ended 30 September 2025 (FY2025) increased to $1,992bn in the fiscal year ended 30 September 2026 (FY2026).</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Receipts 5,403.3 - outlays 7,395.8 = 1,992.5; FY2025 5,234.6 vs 7,010.0 = 1,775.4 ($bn) <code>econ.mts_outlays_by_function</code></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Web searches run</dt><dd>Treasury fiscal year 2026 deficit $1.99 trillion receipts outlays September 2026</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Total receipts of $5,235bn in FY2025 (not shown in the chart) increased by $174bn for inflation and $122bn for economic growth and reduced by $128bn from tax cuts and other movements in receipts to reach $5,403bn in FY2026. Total outlays of $7,010bn in FY2025 increased by $233bn for inflation and $152bn in spending increases to reach $7,395bn in FY2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Receipts 5,234.6 to 5,403.3; outlays 7,010.0 to 7,395.8; 3.3% x 5,235 = 173; 3.3% x 7,010 = 231 <code>econ.mts_outlays_by_function</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; bringing total debt to $40.2tn or 125% of GDP on 30 September 2026. Of this, $32.4tn or 101% of GDP is debt held by the public, while $7.8tn or 24% of GDP is intragovernmental debt</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Total $40.17tn; public $32.43tn; intragov $7.75tn <code>econ.federal_debt</code></dd>
+<dt>Why</dt><dd>GDP shares rest on ~$32tn GDP consistent with Treasury's 6.2% ratio; internally consistent.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT record_date, debt_held_public_amt, intragov_hold_amt, tot_pub_debt_out_amt FROM econ.federal_debt WHERE record_date='2026-09-30'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The resulting deficit of $1,992bn is equivalent to 6.2% of GDP</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Treasury's estimated FY2026 deficit-to-GDP ratio of 6.2% (an estimate)<ul class="claim-sources"><li><a href="https://gvwire.com/2026/10/16/us-fiscal-2026-budget-deficit-rises-to-1-99-trillion-largest-in-5-years/">GV Wire / Reuters on FY2026 deficit (403 to fetch; summary via search)</a></li></ul></dd>
+<dt>Why</dt><dd>Matches the estimate Treasury published; it is an estimate.</dd>
+<dt>Web searches run</dt><dd>Treasury fiscal year 2026 deficit $1.99 trillion receipts outlays September 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Inflation of 3.3% contributed to a net $59bn of the increase, while the effect of economic growth of 2.3% on receipts reduced it by $122bn. Tax cuts, tariff refunds and other movements in receipts added $128bn, while spending increases added $152bn.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>233-174=59; -122; +128; +152 sums to 217 = 1,992-1,775 <code>econ.mts_outlays_by_function</code></dd>
+<dt>Why</dt><dd>Arithmetic reconciles. The 3.3% and 2.3% parameters are ICAEW's assumptions; Sep 2026 CPI-U was 3.7% y/y, so not verifiable as a single published figure.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; a reduction in corporate income tax of $96bn, custom duties of $33bn, employment and retirement contributions of $27bn, and other taxes and receipts of $19bn. This was offset by a net increase after inflation and economic growth in individual income taxes of $39bn and estate and gift taxes of $8bn.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Corp 452.1 to 381.4 (-96 after baseline); customs 194.9 to 173.2 (-33); employment 1,685.6 to 1,754.3 (-26); individual +41; estate +8 <code>econ.mts_outlays_by_function</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('20','30','50','90','100')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; The $152bn net increase after inflation included health programmes up $57bn, debt interest up $49bn, Social Security up $34bn, education, training, employment and social services up $34bn, veterans benefits and services up $27bn, justice up $22bn, defence up $18bn and other increases of $16bn.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>After 3.3% inflation: health+Medicare +57.1, net interest +49.1, SS +34.4, education +34.2, veterans +26.6, justice +21.3, defence +18.3 <code>econ.mts_outlays_by_function</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr BETWEEN '140' AND '320'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; These were offset by spending reductions in natural resources and environment of $34bn, income security of $31bn, community and regional development of $25bn and other reductions of $15bn. Overall, spending increased by $11bn less than it would have been if it had risen in line with economic growth.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Natural Resources -34.1, Income Security -30.6, Community -24.9 after inflation; 152 vs 2.3% x 7,010 = 161 (about -9 to -11) <code>econ.mts_outlays_by_function</code></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('180','220','260')</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#9 &middot; <strong>unsupported</strong> &mdash; mainly because of tax cuts ... mainly in cuts to the Environmental Protection Agency ... including cuts to food stamps and other support programmes</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Natural Resources 88.3 to 57.1; Income Security 701.6 to 694.2; Corp tax 452.1 to 381.4 <code>econ.mts_outlays_by_function</code></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Rests on</dt><dd>#6</dd>
+<dt>What that evidence found</dt><dd>Treasury function totals show corporate tax, natural resources and income security declines but name no cause.</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Amounts reproduce but Treasury totals do not attribute them to tax cuts, EPA or food stamp cuts; searched, nothing found.</dd>
+<dt>Web searches run</dt><dd>fiscal 2026 Treasury statement natural resources and environment outlays down EPA cuts SNAP income security outlays</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; a large increase in tariffs that were more than offset by refunds for tariffs ruled unconstitutional</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>Customs duties net fell from $194.9bn to $173.2bn <code>econ.mts_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.ttnews.com/articles/us-budget-deficit-july-2026">TTNews: continuing tariff refunds after Supreme Court invalidation</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The Supreme Court held IEEPA does not authorize the tariffs (statutory ruling), not that they were unconstitutional.</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr='100'</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; The most recent 10-year fiscal projections from the Congressional Budget Office (CBO) in February 2026 were for a net deficit of $1,853bn or 5.8% of GDP in FY2026 and $1,887bn or 5.7% of GDP in FY2027, rising to $2,080bn or 6.0% of GDP in FY2028 and $3,115bn or 6.7% of GDP in 2036.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>CBO Feb 2026 deficits 1,853 / 1,887 / 2,080 / 3,115 ($bn); 5.8% 2026; 6.7% 2036<ul class="claim-sources"><li><a href="https://www.crfb.org/sites/default/files/media/documents/CRFB_CBO_February_2026_Budget_And_Economic_Outlook_5.pdf">CRFB table of CBO Feb 2026 outlook</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#12 &middot; <strong>partially false</strong> &mdash; These projections see debt held by the public rising from $32.1tn or 101% of GDP on 30 September 2026 to $46.7tn or 120% of GDP on 30 September 2036.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>CBO Feb 2026: debt held by public $56.2tn (120% of GDP) in 2036; $47.6tn in 2033<ul class="claim-sources"><li><a href="https://www.crfb.org/sites/default/files/media/documents/CRFB_CBO_February_2026_Budget_And_Economic_Outlook_5.pdf">CRFB table of CBO Feb 2026 outlook</a></li><li><a href="https://www.crfb.org/papers/cbos-february-2026-budget-and-economic-outlook">CRFB analysis of CBO Feb 2026 outlook</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>CBO projects $56.2tn in 2036, not $46.7tn; the 2026 figure ($32.1tn, 101%) and the 120% share are correct.</dd>
+<dt>Evidence found and set aside because</dt><dd>The 120% passage in CRFB supports the percentage, which the claim gets right; the error is only the dollar figure, which the same source puts at $56 trillion.</dd>
+<dt>Windows tested</dt><dd>2036: 56.2tn; 2033: 47.6tn</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#13 &middot; <strong>unsupported</strong> &mdash; with the CBO working on a report to be released in December 2026 on options they might want to consider.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbo.gov/">CBO home page (403)</a></li><li><a href="https://cbo.gov/publication/25147">CBO Options for Reducing the Deficit (earlier edition)</a></li></ul></dd>
+<dt>Why</dt><dd>No CBO page or announcement found; cbo.gov returned 403 to both fetch tools and a search found only earlier editions of the options report.</dd>
+<dt>No page loaded because</dt><dd>cbo.gov/ and cbo.gov publication pages returned HTTP 403; search results showed only earlier editions (2020-2025).</dd>
+<dt>Warehouse searched for</dt><dd>CBO options for reducing the deficit report December 2026</dd>
+<dt>Web searches run</dt><dd>CBO report December 2026 options for reducing the deficit new Congress</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#14 &middot; <strong>true</strong> &mdash; the 120th Congress of the United States when it starts work on 3 January 2027.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Twentieth Amendment fixes 3 January as the start of congressional terms; 119th Congress began 3 Jan 2025, so the 120th begins 3 Jan 2027<ul class="claim-sources"><li><a href="https://constitution.congress.gov/constitution/amendment-20/">Constitution Annotated, 20th Amendment</a></li></ul></dd>
+<dt>Web searches run</dt><dd>120th Congress convenes January 3 2027</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>3 January 2027</strong> &mdash; a date covered in the Congress claim</li></ul>
+</section>
+<section>
+<h2>Errors and framing issues</h2>
+<ul><li><strong>Material error:</strong> $46.7tn for 2036 debt; CBO gives $56.2tn ($47.6tn is 2033).</li><li>Tariffs were not 'ruled unconstitutional'; the Supreme Court held IEEPA does not authorize them (statutory).</li><li>Receipts adjusted for inflation and growth, outlays for inflation only; on the receipts baseline the '$152bn spending increase' would be about -$9bn.</li><li>EPA and food-stamp attribution unsupported; nominal customs duties fell ($195bn to $173bn).</li><li>CBO December 2026 options report not confirmed.</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>CBO and Treasury primary pages fetch</strong>: cbo.gov returned 403 to both fetchers; CBO numbers verified via CRFB's republished CBO table instead</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 33 rows — 728 ms</summary><pre><code>SELECT line_code_nbr, classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' ORDER BY CAST(line_code_nbr AS INTEGER)</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 800 ms</summary><pre><code>SELECT record_date, debt_held_public_amt, intragov_hold_amt, tot_pub_debt_out_amt FROM econ.federal_debt WHERE record_date='2026-09-30'</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">CBO and Treasury primary pages returned HTTP 403 to both fetch tools; CBO figures were read from CRFB's republished CBO table. Warehouse federal_debt/MTS figures are Treasury's own data.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a><span class="byline">Prepared 2026-11-16</span></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

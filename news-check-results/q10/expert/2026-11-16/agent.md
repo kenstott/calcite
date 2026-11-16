@@ -1,0 +1,3 @@
+# Fact-check: ICAEW US federal deficit chart (12 Nov 2026)
+
+Grade: 1 Pinocchio. Headline figures match Treasury (deficit $1,992bn; receipts $5,403bn; outlays $7,396bn; debt $40.17tn = $32.43tn public + $7.75tn intragov). Line-item changes (corp tax -96, customs -33, health +57, interest +49, SS +34, nat. res. -34, income sec. -31) match only in real terms (FY25 base x1.033); nominal MTS changes are -71, -22, +123, +81, +86, -31, -7. CBO Feb-2026 baseline ($1,853bn, 5.8%) confirmed but stale (actual +$139bn). Unverified: 3.3% inflation, 2.3% growth, GDP ratios, exact CBO 3,115/46.7tn, Dec CBO options report. Confidence high on MTS/MSPD, medium on reconstruction. Article read via summarised fetch. Full detail: agent-report.html

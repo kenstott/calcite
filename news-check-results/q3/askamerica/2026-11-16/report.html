@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fox News article's claims about Democratic post-midterm spending plans, CBO estimates and the deficit are accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+#s2-t9-s1:checked ~ table tbody.s0{display:none}
+#s2-t9-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t9-s1:checked ~ table label[for="s2-t9-s1"]{color:var(--link)}
+#s2-t9-s1:checked ~ table label[for="s2-t9-s1"] .srtcue{opacity:1}
+#s2-t9-s1:checked ~ .srtreset{display:inline-block}
+#s2-t9-s2:checked ~ table tbody.s0{display:none}
+#s2-t9-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t9-s2:checked ~ table label[for="s2-t9-s2"]{color:var(--link)}
+#s2-t9-s2:checked ~ table label[for="s2-t9-s2"] .srtcue{opacity:1}
+#s2-t9-s2:checked ~ .srtreset{display:inline-block}
+#s2-t9-s3:checked ~ table tbody.s0{display:none}
+#s2-t9-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t9-s3:checked ~ table label[for="s2-t9-s3"]{color:var(--link)}
+#s2-t9-s3:checked ~ table label[for="s2-t9-s3"] .srtcue{opacity:1}
+#s2-t9-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Fox News article's claims about Democratic post-midterm spending plans, CBO estimates and the deficit are accurate.</h1>
+<p class="subtitle">AskAmerica warehouse (Treasury MTS, CMS Medicaid enrollment) plus CBO, KFF, Cato, Penn Wharton sources via search; checked 2026-11-16</p>
+<p class="under-review"><span>Article under review</span><a href="https://www.foxnews.com/politics/democrats-plot-massive-spending-spree-after-midterm-rout-trump-could-help-them-pull-off">https://www.foxnews.com/politics/democrats-plot-massive-spending-spree-after-midterm-rout-trump-could-help-them-pull-off</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 274" width="1300" height="274" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="1300" height="274" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Fox News Democratic-spending article: key checks</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">Treasury MTS FY2026 through Sept 30; CMS Medicaid enrollment July 2026 (preliminary)</text>
+  <g id="p1-stat">
+  <rect class="panel-edge" x="20" y="82" width="409.33" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="118" fill="#6b7280">FY2026 deficit (warehouse)</text>
+  <text class="stat-value" x="36" y="148" fill="#1f2328">$1.99T</text>
+  </g>
+  <text class="caption" x="24" y="203" fill="#6b7280">outlays $7.396T minus receipts $5.403T; article: nearly $2T</text>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="445.33" y="82" width="409.33" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="461.33" y="118" fill="#6b7280">FY2026 net interest</text>
+  <text class="stat-value" x="461.33" y="148" fill="#1f2328">$1.052T</text>
+  </g>
+  <text class="caption" x="449.33" y="203" fill="#6b7280">article: over $1 trillion</text>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="870.67" y="82" width="409.33" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="886.67" y="118" fill="#6b7280">Medicaid-only enrollment, Jul 2026</text>
+  <text class="stat-value" x="886.67" y="148" fill="#1f2328">65.74M</text>
+  </g>
+  <text class="caption" x="874.67" y="203" fill="#6b7280">article: about 65.7M; with CHIP 72.9M</text>
+  <g id="brand">
+  <svg x="20" y="233" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="248" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:56019/a/e3744e585eeb6b294b1d6aba80470a0b.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: <strong>0 Pinocchios</strong> (the engine's score from the graded claims). Most hard numbers check out (deficit near $2 trillion, interest over $1 trillion, 65.7 million on Medicaid, the CBO $350 billion and 3.8 million figure for the ACA credits, the Cato DSA estimate, Sanders' and Hinojosa's proposals). The weakest fact is the CBO Medicaid pair ($1.2 trillion and 13 million fewer enrollees), which does not match published estimates for the enacted law. The piece is still materially misleading in framing, as listed below.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 95/100 — honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>5 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>4</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>1</td><td>With a resounding Election Night victory behind them, Democrats are getting to work by plotting a massive government spending expansion paired with tax adjustments to pay for it.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries post-election remarks (fetched)</a></td></tr><tr class="verdict-true"><td>2</td><td>The massive proposed spending hikes, if they are successful, would take place as the United States' annual deficit continues to grow, reaching nearly $2 trillion in fiscal 2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>3</td><td>Simply paying the interest on America's debt cost the federal government over $1 trillion during the 2026 fiscal year.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>4</td><td>As of publication, approximately 65.7 million people are enrolled in Medicaid.</td><td><strong>true</strong></td><td>Checked against: <code>health.medicaid_chip_enrollment_monthly</code>; <a href="https://data.medicaid.gov">CMS Medicaid and CHIP enrollment data</a></td></tr><tr class="verdict-true"><td>16</td><td>Even with sizable Democratic majorities in the House and Senate, the party lacks the numbers necessary to override a presidential veto.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/democrats-win-control-congress-2026-midterm-elections">KTVU balance of power</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>16</td><td>Even with sizable Democratic majorities in the House and Senate, the party lacks the numbers necessary to override a presidential veto.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/democrats-win-control-congress-2026-midterm-elections">KTVU balance of power</a></td></tr><tr class="verdict-true"><td>4</td><td>As of publication, approximately 65.7 million people are enrolled in Medicaid.</td><td><strong>true</strong></td><td>Checked against: <code>health.medicaid_chip_enrollment_monthly</code>; <a href="https://data.medicaid.gov">CMS Medicaid and CHIP enrollment data</a></td></tr><tr class="verdict-true"><td>3</td><td>Simply paying the interest on America's debt cost the federal government over $1 trillion during the 2026 fiscal year.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>2</td><td>The massive proposed spending hikes, if they are successful, would take place as the United States' annual deficit continues to grow, reaching nearly $2 trillion in fiscal 2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>With a resounding Election Night victory behind them, Democrats are getting to work by plotting a massive government spending expansion paired with tax adjustments to pay for it.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries post-election remarks (fetched)</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>4</td><td>As of publication, approximately 65.7 million people are enrolled in Medicaid.</td><td><strong>true</strong></td><td>Checked against: <code>health.medicaid_chip_enrollment_monthly</code>; <a href="https://data.medicaid.gov">CMS Medicaid and CHIP enrollment data</a></td></tr><tr class="verdict-true"><td>16</td><td>Even with sizable Democratic majorities in the House and Senate, the party lacks the numbers necessary to override a presidential veto.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/democrats-win-control-congress-2026-midterm-elections">KTVU balance of power</a></td></tr><tr class="verdict-true"><td>3</td><td>Simply paying the interest on America's debt cost the federal government over $1 trillion during the 2026 fiscal year.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>2</td><td>The massive proposed spending hikes, if they are successful, would take place as the United States' annual deficit continues to grow, reaching nearly $2 trillion in fiscal 2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>With a resounding Election Night victory behind them, Democrats are getting to work by plotting a massive government spending expansion paired with tax adjustments to pay for it.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries post-election remarks (fetched)</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>1</td><td>With a resounding Election Night victory behind them, Democrats are getting to work by plotting a massive government spending expansion paired with tax adjustments to pay for it.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries post-election remarks (fetched)</a></td></tr><tr class="verdict-true"><td>2</td><td>The massive proposed spending hikes, if they are successful, would take place as the United States' annual deficit continues to grow, reaching nearly $2 trillion in fiscal 2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>3</td><td>Simply paying the interest on America's debt cost the federal government over $1 trillion during the 2026 fiscal year.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>4</td><td>As of publication, approximately 65.7 million people are enrolled in Medicaid.</td><td><strong>true</strong></td><td>Checked against: <code>health.medicaid_chip_enrollment_monthly</code>; <a href="https://data.medicaid.gov">CMS Medicaid and CHIP enrollment data</a></td></tr><tr class="verdict-true"><td>16</td><td>Even with sizable Democratic majorities in the House and Senate, the party lacks the numbers necessary to override a presidential veto.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/democrats-win-control-congress-2026-midterm-elections">KTVU balance of power</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>2</td><td>The massive proposed spending hikes, if they are successful, would take place as the United States' annual deficit continues to grow, reaching nearly $2 trillion in fiscal 2026.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-true"><td>3</td><td>Simply paying the interest on America's debt cost the federal government over $1 trillion during the 2026 fiscal year.</td><td><strong>true</strong></td><td>Checked against: <code>econ.mts_outlays_by_function</code>; <a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></td></tr><tr class="verdict-mostly-true"><td>1</td><td>With a resounding Election Night victory behind them, Democrats are getting to work by plotting a massive government spending expansion paired with tax adjustments to pay for it.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries post-election remarks (fetched)</a></td></tr><tr class="verdict-true"><td>4</td><td>As of publication, approximately 65.7 million people are enrolled in Medicaid.</td><td><strong>true</strong></td><td>Checked against: <code>health.medicaid_chip_enrollment_monthly</code>; <a href="https://data.medicaid.gov">CMS Medicaid and CHIP enrollment data</a></td></tr><tr class="verdict-true"><td>16</td><td>Even with sizable Democratic majorities in the House and Senate, the party lacks the numbers necessary to override a presidential veto.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.ktvu.com/news/democrats-win-control-congress-2026-midterm-elections">KTVU balance of power</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Claims by Michael Cannon — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> mostly true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-mostly-true"><td>8</td><td>When we talk about enhanced subsidies, we're talking about subsidies for people making up to $600,000 per year.</td><td><strong>mostly true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.factcheck.org/2025/10/competing-claims-on-who-benefits-from-aca-subsidies/">FactCheck.org on who benefits from ACA subsidies</a></td></tr>
+</tbody></table>
+<h3>Claims by Rachel Greszler — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>9</td><td>Democratic Socialists want to go much further, with universal healthcare alone, which would cost between $40 trillion and $70 trillion, roughly $300,000 to $500,000 per household. The entire socialist agenda calls for an estimated $71 trillion to $212 trillion in new spending over the next decade, that's between $500,000 and $1,600,000 for every household in the US.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://nypost.com/2026/08/31/us-news/democratic-socialism-could-cost-the-us-a-staggering-200-trillion-report-reveals-closer-to-soviet-style-communism/">NY Post on the Cato report (fetched)</a></td></tr>
+</tbody></table>
+<h3>Claims by Gina Hinojosa — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>12</td><td>Texas Governor-elect Gina Hinojosa pledged on the campaign trail to tap $17 billion from the state's rainy day fund to send $1,500 checks to every Texas household, a proposal that would require legislative approval and has since been introduced in the state Senate.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.texastribune.org/2026/11/10/texas-1500-check-gina-hinojosa-bill/">Texas Tribune on the bill</a></td></tr>
+</tbody></table>
+<h3>Claims by Bernie Sanders — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>13</td><td>Independent Sen. Bernie Sanders argued that Democrats must use their resounding victory to demand a $12,000 payment to each working-class family of four, free tuition at public universities, universal free childcare, making Medicare available to 55-year-olds, increasing Social Security benefits by $2,400 a year and boosting teacher pay.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://singjupost.com/bernie-sanders-speaks-on-whats-next-after-the-midterms-transcript/">Sanders speech transcript, Singju Post</a></td></tr>
+</tbody></table>
+<h3>Claims by Olivia Wales (White House) — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 50/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> partially false &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-partially-false"><td>14</td><td>President Trump will continue to enact his commonsense, America First agenda that has delivered the most secure border ever, the largest working-class tax cut in history, the lowest murder rate since 1900, the sharpest drop in prescription drug prices in more than 60 years and a stock market that has hit record-highs.</td><td><strong>partially false</strong> &middot; central claim</td><td>Checked against: <a href="https://jasher.substack.com/p/when-has-murder-been-this-low">Jeff Asher, When Has Murder Been This Low?</a>; <a href="https://www.michiganpublic.org/2026-06-30/u-s-murder-rate-approaches-a-record-low">NPR via Michigan Public</a></td></tr>
+</tbody></table>
+<h3>Claims by Hakeem Jeffries — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias 0/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>15</td><td>During the first 100 days, House Democrats must act to reverse the Medicaid cuts, restore SNAP funding, extend the Affordable Care Act tax credits, eradicate the Trump tariffs and stop the reckless war of choice in Iran, House Minority Leader Hakeem Jeffries wrote in a manifesto published Nov. 4.</td><td><strong>unsupported</strong> &middot; central claim</td><td>Checked against: <a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries remarks Nov. 4 (fetched)</a>; <a href="https://www.pbs.org/newshour/amp/politics/heres-whats-on-house-democrats-agenda-if-they-sweep-to-power-in-midterm-elections">PBS NewsHour on House Democrats agenda (did not load)</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>1</strong> partially false &middot; <strong>1</strong> unsupported &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t9" class="srtbox" id="s2-t9-s0" checked><input type="radio" name="s2-t9" class="srtbox" id="s2-t9-s1"><input type="radio" name="s2-t9" class="srtbox" id="s2-t9-s2"><input type="radio" name="s2-t9" class="srtbox" id="s2-t9-s3"><table><thead><tr><th><label class="srth" for="s2-t9-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t9-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t9-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-partially-false"><td>5</td><td>The Congressional Budget Office estimated that the healthcare cuts in the One Big Beautiful Bill Act (OBBA) would reduce federal Medicaid spending by about $1.2 trillion between 2026 and 2035 at the cost of cutting enrollment in the program by about 13 million during that roughly 10-year period.</td><td><strong>partially false</strong></td></tr><tr class="verdict-true"><td>6</td><td>The Congressional Budget Office estimated that making the expanded tax credits permanent would add roughly $350 billion to federal deficits between 2026 and 2035, while helping approximately 3.8 million more Americans obtain health insurance in 2035.</td><td><strong>true</strong></td></tr><tr class="verdict-unsupported"><td>7</td><td>The annual impact on the federal deficit would also climb over time, from about $23 billion in 2026 to nearly $44 billion in 2035.</td><td><strong>unsupported</strong></td></tr><tr class="verdict-mostly-true"><td>10</td><td>The University of Pennsylvania estimated that the proposal would net the federal government roughly $264 billion over a decade, which is not enough to cover the extension of ACA subsidies.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>11</td><td>Democratic Sens. Ron Wyden and Elizabeth Warren recently introduced a bill that would raise the tax on corporate stock buybacks from 1% to 4%, which analysts at the Tax Foundation and the University of Pennsylvania predict would raise either $242 billion or $300 billion, respectively, over 10 years.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>11</td><td>Democratic Sens. Ron Wyden and Elizabeth Warren recently introduced a bill that would raise the tax on corporate stock buybacks from 1% to 4%, which analysts at the Tax Foundation and the University of Pennsylvania predict would raise either $242 billion or $300 billion, respectively, over 10 years.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>10</td><td>The University of Pennsylvania estimated that the proposal would net the federal government roughly $264 billion over a decade, which is not enough to cover the extension of ACA subsidies.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-unsupported"><td>7</td><td>The annual impact on the federal deficit would also climb over time, from about $23 billion in 2026 to nearly $44 billion in 2035.</td><td><strong>unsupported</strong></td></tr><tr class="verdict-true"><td>6</td><td>The Congressional Budget Office estimated that making the expanded tax credits permanent would add roughly $350 billion to federal deficits between 2026 and 2035, while helping approximately 3.8 million more Americans obtain health insurance in 2035.</td><td><strong>true</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>The Congressional Budget Office estimated that the healthcare cuts in the One Big Beautiful Bill Act (OBBA) would reduce federal Medicaid spending by about $1.2 trillion between 2026 and 2035 at the cost of cutting enrollment in the program by about 13 million during that roughly 10-year period.</td><td><strong>partially false</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-mostly-true"><td>11</td><td>Democratic Sens. Ron Wyden and Elizabeth Warren recently introduced a bill that would raise the tax on corporate stock buybacks from 1% to 4%, which analysts at the Tax Foundation and the University of Pennsylvania predict would raise either $242 billion or $300 billion, respectively, over 10 years.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-unsupported"><td>7</td><td>The annual impact on the federal deficit would also climb over time, from about $23 billion in 2026 to nearly $44 billion in 2035.</td><td><strong>unsupported</strong></td></tr><tr class="verdict-true"><td>6</td><td>The Congressional Budget Office estimated that making the expanded tax credits permanent would add roughly $350 billion to federal deficits between 2026 and 2035, while helping approximately 3.8 million more Americans obtain health insurance in 2035.</td><td><strong>true</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>The Congressional Budget Office estimated that the healthcare cuts in the One Big Beautiful Bill Act (OBBA) would reduce federal Medicaid spending by about $1.2 trillion between 2026 and 2035 at the cost of cutting enrollment in the program by about 13 million during that roughly 10-year period.</td><td><strong>partially false</strong></td></tr><tr class="verdict-mostly-true"><td>10</td><td>The University of Pennsylvania estimated that the proposal would net the federal government roughly $264 billion over a decade, which is not enough to cover the extension of ACA subsidies.</td><td><strong>mostly true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>10</td><td>The University of Pennsylvania estimated that the proposal would net the federal government roughly $264 billion over a decade, which is not enough to cover the extension of ACA subsidies.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-mostly-true"><td>11</td><td>Democratic Sens. Ron Wyden and Elizabeth Warren recently introduced a bill that would raise the tax on corporate stock buybacks from 1% to 4%, which analysts at the Tax Foundation and the University of Pennsylvania predict would raise either $242 billion or $300 billion, respectively, over 10 years.</td><td><strong>mostly true</strong></td></tr><tr class="verdict-partially-false"><td>5</td><td>The Congressional Budget Office estimated that the healthcare cuts in the One Big Beautiful Bill Act (OBBA) would reduce federal Medicaid spending by about $1.2 trillion between 2026 and 2035 at the cost of cutting enrollment in the program by about 13 million during that roughly 10-year period.</td><td><strong>partially false</strong></td></tr><tr class="verdict-true"><td>6</td><td>The Congressional Budget Office estimated that making the expanded tax credits permanent would add roughly $350 billion to federal deficits between 2026 and 2035, while helping approximately 3.8 million more Americans obtain health insurance in 2035.</td><td><strong>true</strong></td></tr><tr class="verdict-unsupported"><td>7</td><td>The annual impact on the federal deficit would also climb over time, from about $23 billion in 2026 to nearly $44 billion in 2035.</td><td><strong>unsupported</strong></td></tr></tbody></table><label class="srtreset" for="s2-t9-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-mostly-true"><summary>#1 &middot; <strong>mostly true</strong> &mdash; With a resounding Election Night victory behind them, Democrats are getting to work by plotting a massive government spending expansion paired with tax adjustments to pay for it.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Reported Jeffries agenda: reverse Medicaid cuts, restore ACA credits<ul class="claim-sources"><li><a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries post-election remarks (fetched)</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says a massive spending expansion is being plotted; the evidence shows a leadership agenda centered on reversing Medicaid cuts and restoring ACA credits, with the largest price tags coming from DSA and Sanders proposals that are not the caucus plan.</dd>
+<dt>Web searches run</dt><dd>Jeffries manifesto first 100 days reverse Medicaid cuts restore SNAP extend ACA tax credits Nov. 4</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; The massive proposed spending hikes, if they are successful, would take place as the United States' annual deficit continues to grow, reaching nearly $2 trillion in fiscal 2026.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>$1.99T (outlays 7.396T minus receipts 5.403T) <code>econ.mts_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd>n/a<ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / through 2026-09-30</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT record_date, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','320','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Simply paying the interest on America's debt cost the federal government over $1 trillion during the 2026 fiscal year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>$1.052T net interest FY2026 <code>econ.mts_outlays_by_function</code></dd>
+<dt>Independent evidence</dt><dd>n/a<ul class="claim-sources"><li><a href="https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/">Treasury Monthly Treasury Statement</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / through 2026-09-30</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT record_date, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','320','340')</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; As of publication, approximately 65.7 million people are enrolled in Medicaid.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>65,742,057 Medicaid-only, July 2026 preliminary <code>health.medicaid_chip_enrollment_monthly</code></dd>
+<dt>Independent evidence</dt><dd>n/a<ul class="claim-sources"><li><a href="https://data.medicaid.gov">CMS Medicaid and CHIP enrollment data</a></li></ul></dd>
+<dt>Vintage article / warehouse</dt><dd> / 202607 P</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT SUM(total_medicaid_enrollment) m, SUM(total_medicaid_chip_enrollment) t FROM health.medicaid_chip_enrollment_monthly WHERE reporting_period='202607' AND report_status='P'</code></pre></details>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#5 &middot; <strong>partially false</strong> &mdash; The Congressional Budget Office estimated that the healthcare cuts in the One Big Beautiful Bill Act (OBBA) would reduce federal Medicaid spending by about $1.2 trillion between 2026 and 2035 at the cost of cutting enrollment in the program by about 13 million during that roughly 10-year period.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>KFF about $911B after interactions; CBO 7.8M (House version); read via search summaries because the KFF page returned 404<ul class="claim-sources"><li><a href="https://www.kff.org/medicaid/how-has-projected-medicaid-spending-and-enrollment-changed-since-passage-of-the-2025-reconciliation-law/">KFF Medicaid projections since the law (search summary)</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The article says CBO put the Medicaid cut at $1.2 trillion and enrollment loss at 13 million; the sources found show $1.2T is the House bill's gross cut across Medicaid, CHIP and marketplace, about $911B for enacted Medicaid per KFF, and CBO's Medicaid enrollment loss at about 7.8M (House version).</dd>
+<dt>Windows tested</dt><dd>enacted law, 2025-2034: about $911B (KFF); House-passed gross health cuts, 10 years: about $1.2T</dd>
+<dt>Web searches run</dt><dd>CBO One Big Beautiful Bill Act Medicaid federal spending reduction 2026-2035 trillion enrollment million; CBO Medicaid $1.2 trillion 13 million fewer enrolled One Big Beautiful Bill 2026-2035</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; The Congressional Budget Office estimated that making the expanded tax credits permanent would add roughly $350 billion to federal deficits between 2026 and 2035, while helping approximately 3.8 million more Americans obtain health insurance in 2035.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>CBO Sept 2025: $350B (349.8B), 3.8M more insured in 2035<ul class="claim-sources"><li><a href="https://rollcall.com/2025/09/18/permanent-health-tax-credit-extension-would-insure-3-8-million-cbo/">Roll Call on CBO estimate</a></li></ul></dd>
+<dt>Web searches run</dt><dd>CBO extending enhanced premium tax credits permanently $350 billion 3.8 million more insured 2035</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#7 &middot; <strong>unsupported</strong> &mdash; The annual impact on the federal deficit would also climb over time, from about $23 billion in 2026 to nearly $44 billion in 2035.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.cbo.gov/publication/61734">CBO publication 61734 (HTTP 403)</a></li><li><a href="https://rollcall.com/2025/09/18/permanent-health-tax-credit-extension-would-insure-3-8-million-cbo/">Roll Call on CBO estimate</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Year-by-year path not found in any source read; the $350B ten-year total is consistent with it.</dd>
+<dt>No page loaded because</dt><dd>The CBO page returned HTTP 403 to both the engine fetch and the client WebFetch; search results carried only the ten-year total.</dd>
+<dt>Warehouse searched for</dt><dd>CBO cost estimate enhanced premium tax credits annual federal deficit effect</dd>
+<dt>Web searches run</dt><dd>CBO enhanced premium tax credits permanent extension annual cost 2026 2035</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#8 &middot; <strong>mostly true</strong> &mdash; When we talk about enhanced subsidies, we're talking about subsidies for people making up to $600,000 per year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Michael Cannon — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Cato and fact-checkers: almost $600,000 ceiling for rare cases<ul class="claim-sources"><li><a href="https://www.factcheck.org/2025/10/competing-claims-on-who-benefits-from-aca-subsidies/">FactCheck.org on who benefits from ACA subsidies</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The quote says the subsidies go to people making up to $600,000; the evidence shows $600,000 is a rare ceiling after removal of the 400%-of-poverty cap, and the 8.5% contribution cap means most benefit goes to households below about $200,000.</dd>
+<dt>Web searches run</dt><dd>enhanced ACA subsidies $600,000 income claim Cannon fact check</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; Democratic Socialists want to go much further, with universal healthcare alone, which would cost between $40 trillion and $70 trillion, roughly $300,000 to $500,000 per household. The entire socialist agenda calls for an estimated $71 trillion to $212 trillion in new spending over the next decade, that's between $500,000 and $1,600,000 for every household in the US.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Rachel Greszler — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Cato (Adam Michel): universal health care $39.9T-$75.4T, DSA platform $71T-$212T over a decade; read in the NY Post article on the report<ul class="claim-sources"><li><a href="https://nypost.com/2026/08/31/us-news/democratic-socialism-could-cost-the-us-a-staggering-200-trillion-report-reveals-closer-to-soviet-style-communism/">NY Post on the Cato report (fetched)</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Web searches run</dt><dd>Greszler $71 trillion $212 trillion democratic socialism cost report Advancing American Freedom</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#10 &middot; <strong>mostly true</strong> &mdash; The University of Pennsylvania estimated that the proposal would net the federal government roughly $264 billion over a decade, which is not enough to cover the extension of ACA subsidies.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>$264B figure found; separate relief cost about $1.37T<ul class="claim-sources"><li><a href="https://budgetmodel.wharton.upenn.edu/p/2026-03-16-working-americans-tax-cut-act-revenue-and-distributional-effects/">Penn Wharton Budget Model</a></li></ul></dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The article says the surtaxes net $264 billion; the Penn Wharton items found report $264B in added revenue but also a tax-relief half costing about $1.4T, a context the article omits.</dd>
+<dt>Web searches run</dt><dd>Penn Wharton Working Americans' Tax Cut Act $264 billion</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#11 &middot; <strong>mostly true</strong> &mdash; Democratic Sens. Ron Wyden and Elizabeth Warren recently introduced a bill that would raise the tax on corporate stock buybacks from 1% to 4%, which analysts at the Tax Foundation and the University of Pennsylvania predict would raise either $242 billion or $300 billion, respectively, over 10 years.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>Bill real, about $240B reported; no Penn figure found<ul class="claim-sources"><li><a href="https://virginiabusiness.com/senate-democrats-propose-raising-tax-stock-buybacks/">Virginia Business on Senate Democrats' buyback tax</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The article credits the Tax Foundation with $242 billion and Penn with $300 billion; reporting found shows the bill (Schumer, Wyden, Warren, 1% to 4%) and about $240 billion from one outlet, a Tax Foundation comment that was qualitative, and no Penn Wharton figure.</dd>
+<dt>Warehouse searched for</dt><dd>stock buyback excise tax revenue estimate</dd>
+<dt>Web searches run</dt><dd>Warren Wyden bill raise stock buyback tax 1% to 4% revenue estimate Tax Foundation Penn Wharton</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; Texas Governor-elect Gina Hinojosa pledged on the campaign trail to tap $17 billion from the state's rainy day fund to send $1,500 checks to every Texas household, a proposal that would require legislative approval and has since been introduced in the state Senate.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Gina Hinojosa — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Texas Tribune, KSAT, Fox 7 report $17B and $1,500 proposal, two-thirds legislative approval needed, bill filed<ul class="claim-sources"><li><a href="https://www.texastribune.org/2026/11/10/texas-1500-check-gina-hinojosa-bill/">Texas Tribune on the bill</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Web searches run</dt><dd>Gina Hinojosa $1,500 checks Texas households $17 billion rainy day fund</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#13 &middot; <strong>true</strong> &mdash; Independent Sen. Bernie Sanders argued that Democrats must use their resounding victory to demand a $12,000 payment to each working-class family of four, free tuition at public universities, universal free childcare, making Medicare available to 55-year-olds, increasing Social Security benefits by $2,400 a year and boosting teacher pay.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Bernie Sanders — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Sanders post-midterm speech: $12,000 payment, Medicare at 55, free tuition, child care confirmed; the $2,400 Social Security figure was not found but nothing contradicts it<ul class="claim-sources"><li><a href="https://singjupost.com/bernie-sanders-speaks-on-whats-next-after-the-midterms-transcript/">Sanders speech transcript, Singju Post</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Warehouse searched for</dt><dd>Sanders $12,000 payment working-class family free tuition proposals</dd>
+<dt>Web searches run</dt><dd>Bernie Sanders Democrats midterm victory demand $12,000 family of four free tuition Medicare at 55 Social Security $2,400</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-partially-false"><summary>#14 &middot; <strong>partially false</strong> &mdash; President Trump will continue to enact his commonsense, America First agenda that has delivered the most secure border ever, the largest working-class tax cut in history, the lowest murder rate since 1900, the sharpest drop in prescription drug prices in more than 60 years and a stock market that has hit record-highs.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Olivia Wales (White House) — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>Asher: lowest ever recorded; data reliable from 1960<ul class="claim-sources"><li><a href="https://jasher.substack.com/p/when-has-murder-been-this-low">Jeff Asher, When Has Murder Been This Low?</a></li><li><a href="https://www.michiganpublic.org/2026-06-30/u-s-murder-rate-approaches-a-record-low">NPR via Michigan Public</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The statement says the lowest murder rate since 1900 and credits the agenda; the evidence says 2025 was likely a record low but reliable national data begin about 1960, and the decline began before this administration.</dd>
+<dt>Windows tested</dt><dd>2025 versus 1960 onward: likely lowest; 2025 versus 1900: no reliable national data</dd>
+<dt>Web searches run</dt><dd>2025 murder rate lowest since 1900 Jeff Asher FBI homicide rate</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#15 &middot; <strong>unsupported</strong> &mdash; During the first 100 days, House Democrats must act to reverse the Medicaid cuts, restore SNAP funding, extend the Affordable Care Act tax credits, eradicate the Trump tariffs and stop the reckless war of choice in Iran, House Minority Leader Hakeem Jeffries wrote in a manifesto published Nov. 4.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Hakeem Jeffries — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.foxnews.com/video/6407915835112">Fox video of Jeffries remarks Nov. 4 (fetched)</a></li><li><a href="https://www.pbs.org/newshour/amp/politics/heres-whats-on-house-democrats-agenda-if-they-sweep-to-power-in-midterm-elections">PBS NewsHour on House Democrats agenda (did not load)</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Reporting found confirms Medicaid and ACA credit pledges in a 100-day agenda dated Oct. 14; the Nov. 4 document and SNAP wording were not located.</dd>
+<dt>No page loaded because</dt><dd>PBS and MSN copies of the agenda stories did not load; the Fox page cited a video dated Nov. 4 but carries no manifesto text.</dd>
+<dt>Warehouse searched for</dt><dd>House Democrats first 100 days agenda Jeffries</dd>
+<dt>Web searches run</dt><dd>Jeffries manifesto first 100 days reverse Medicaid cuts restore SNAP extend ACA tax credits Nov. 4</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#16 &middot; <strong>true</strong> &mdash; Even with sizable Democratic majorities in the House and Senate, the party lacks the numbers necessary to override a presidential veto.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Democrats won both chambers; Senate about 54-44, House 228+; two-thirds needs 67 Senate seats<ul class="claim-sources"><li><a href="https://www.ktvu.com/news/democrats-win-control-congress-2026-midterm-elections">KTVU balance of power</a></li></ul></dd>
+<dt>Web searches run</dt><dd>Democrats win Senate majority 2026 midterms results House seats Alaska Peltola</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Warehouse checks</h2>
+<ul><li>FY2026 deficit: econ.mts_outlays_by_function, record 2026-09-30, outlays $7.396T less receipts $5.403T = $1.99T. True.</li><li>Net interest FY2026: $1.052T. True.</li><li>Medicaid enrollment: health.medicaid_chip_enrollment_monthly, July 2026 preliminary Medicaid-only 65,742,057 (Medicaid plus CHIP 72.9M). True; the article does not say enrollment has fallen from 70.9M in June 2025.</li></ul>
+</section>
+<section>
+<h2>Materially misleading even where the facts hold</h2>
+<ul><li>It places Sanders and DSA price tags beside Jeffries' list as a 'Democratic spending agenda'; the $71T-$212T figure is Cato's estimate of the DSA platform, not the caucus plan.</li><li>The Medicaid pair is attributed to CBO but $1.2T is the House bill's gross cut across Medicaid, CHIP and marketplace (KFF: about $911B for enacted Medicaid) and 13M is not a CBO figure (7.8M for the House bill). Sourced from search summaries because the KFF page returned 404.</li><li>Cannon's $600,000 is a rare ceiling, not the typical beneficiary.</li><li>The headline thesis that Trump 'could help' rests on hedged remarks.</li><li>White House 'lowest murder rate since 1900': 2025 is very likely a record low but reliable national data start about 1960.</li><li>Not confirmed: Jeffries' Nov. 4 wording (coverage dates the 100-day agenda to Oct. 14), the annual CBO path, the Penn Wharton buyback figure, Sanders' $2,400 Social Security figure.</li></ul>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Every claim confirmed against a primary document</strong>: KFF, CBO and Cato figures come from search-result summaries and the NY Post summary of the Cato report; KFF returned 404 and CBO returned 403 to both fetch tools. The CBO annual path, the Jeffries Nov. 4 wording and the Penn Wharton buyback figure are unconfirmed.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>2 warehouse calls ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 3 rows — 855 ms</summary><pre><code>SELECT record_date, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_date='2026-09-30' AND line_code_nbr IN ('120','320','340')</code></pre></details>
+<details class="sqltoggle"><summary>query — 1 rows — 690 ms</summary><pre><code>SELECT SUM(total_medicaid_enrollment) m, SUM(total_medicaid_chip_enrollment) t FROM health.medicaid_chip_enrollment_monthly WHERE reporting_period='202607' AND report_status='P'</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
