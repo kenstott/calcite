@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
   "lede": [
     "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
-    "80 statements could be checked. 55 have been checked so far (25 supported, 25 unsettled, 5 unsupported); the other 25 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "80 statements could be checked. 69 have been checked so far (31 supported, 33 unsettled, 5 unsupported); the other 11 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
     "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
   ],
   "stories": [
@@ -2985,10 +2985,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A Pipeline & Gas Journal report of a Center for Western Priorities analysis of Bureau of Land Management records counts at least 17 proposed data center campuses on public lands in six western states (Arizona, Idaho, Nevada, Oregon, Utah, Wyoming), and more than 24,000 acres across all 35 data-center-related applications; acreage for the 17 campuses is not broken out, and the BLM records were not read directly.",
+      "evidence": [
+        {
+          "label": "Pipeline & Gas Journal, Oct. 2026",
+          "url": "https://www.pgjonline.com/news/2026/october/at-least-17-data-center-campuses-proposed-on-us-public-lands"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-17"
     },
     {
       "id": 84,
@@ -3014,10 +3019,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Senate substitute text says that when a court finds an authorization non-compliant, including under the National Historic Preservation Act provisions of title 54, the only remedy is remand 'without vacatur or issuance of an injunction,' with an exception for preliminary injunctions.",
+      "evidence": [
+        {
+          "label": "Substitute amendment to the Bipartisan American Affordability and Jobs Act (pp. 74-75, 480)",
+          "url": "https://www.heinrich.senate.gov/imo/media/doc/substitute_amendment_to_bipartisan_american_affordability_and_jobs_act.pdf"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-17"
     },
     {
       "id": 85,
@@ -3043,10 +3053,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The only two-acre provision found in the Senate substitute text covers Clean Water Act general permits for fill discharges into less than 2 acres of navigable waters, not a data center's site size; no provision tying data center size to a general permit was found, which leaves open a different text version or a legal reading.",
+      "evidence": [
+        {
+          "label": "Substitute amendment to the Bipartisan American Affordability and Jobs Act (pp. 133-134)",
+          "url": "https://www.heinrich.senate.gov/imo/media/doc/substitute_amendment_to_bipartisan_american_affordability_and_jobs_act.pdf"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-17"
     },
     {
       "id": 86,
@@ -3072,10 +3087,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "On the Nov. 9 cloture vote to proceed to H.R. 2347, Republicans voted 51 to 1, and on the Nov. 16 cloture vote on the substitute, 49 to 2. Both were procedural votes; final passage had not occurred.",
+      "evidence": [
+        {
+          "label": "Senate roll call vote 257 (Nov. 9, 2026)",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00257.xml"
+        },
+        {
+          "label": "Senate roll call vote 264 (Nov. 16, 2026)",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00264.xml"
+        }
+      ],
+      "check_run": "q219/askamerica/2026-11-17"
     },
     {
       "id": 87,
@@ -3101,10 +3125,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Rhodium Group's analysis of the bill projects household electricity bills $50 to $78 a year lower in 2040 than without it, about $4.20 to $6.50 a month.",
+      "evidence": [
+        {
+          "label": "Rhodium Group, Estimating the Energy System and Emissions Impacts of BAAJA (Nov. 2026)",
+          "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-17"
     },
     {
       "id": 88,
@@ -3136,10 +3165,15 @@
           "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
         }
       ],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A Brookings conference draft projects $10.3 trillion of investment in data center buildings, power, networking and chips from 2025 to 2032. It is a projection.",
+      "evidence": [
+        {
+          "label": "Brookings, Financing the AI Buildout",
+          "url": "https://www.brookings.edu/articles/financing-the-ai-buildout/"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-17"
     },
     {
       "id": 89,
@@ -3165,10 +3199,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Global Energy Monitor reported in August 2026 that gas-fired capacity in development to power data centers directly nearly doubled in the first half of the year, to 189 gigawatts (189,000 megawatts) across announced, pre-construction and construction stages.",
+      "evidence": [
+        {
+          "label": "Global Energy Monitor, Aug. 2026",
+          "url": "https://globalenergymonitor.org/research/us-gas-power-proposals-tied-data-centers-nearly-double-six-months"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-17"
     },
     {
       "id": 90,
@@ -3194,10 +3233,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Rhodium Group's modeling projects 2040 emissions about 4 percent below current policy in its low-emissions scenario, about 3 percent in its middle scenario and about 0 percent in its high scenario; no source read gives 3.8 percent, and the model covers only some of the bill's provisions.",
+      "evidence": [
+        {
+          "label": "Rhodium Group, Estimating the Energy System and Emissions Impacts of BAAJA (Nov. 2026)",
+          "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
+        }
+      ],
+      "check_run": "q220/askamerica/2026-11-17"
     },
     {
       "id": 91,
@@ -3223,10 +3267,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Rhodium Group's November 2026 analysis of the bill finds the modeled provisions reduce economywide emissions by 5 to 148 million metric tons; the earlier Rhodium model the speaker cites was not located, so an earlier finding of a 1 percent increase can be neither confirmed nor ruled out.",
+      "evidence": [
+        {
+          "label": "Rhodium Group, Estimating the Energy System and Emissions Impacts of BAAJA (Nov. 2026)",
+          "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-17"
     },
     {
       "id": 92,
@@ -3252,10 +3301,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Rhodium Group's analysis projects the bill adds 17 to 249 gigawatts of clean capacity through 2040; the low end is 17,000 megawatts.",
+      "evidence": [
+        {
+          "label": "Rhodium Group, Estimating the Energy System and Emissions Impacts of BAAJA (Nov. 2026)",
+          "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-17"
     },
     {
       "id": 93,
@@ -3287,10 +3341,21 @@
           "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
         }
       ],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "SEIA and Wood Mackenzie report 43.2 gigawatts (direct current) of U.S. solar installed in 2025, as reported by POWER magazine; SEIA's own report could not be read directly. AskAmerica's EIA data show 27,322 megawatts of utility-scale solar additions in 2025, a count that excludes rooftop and other small systems.",
+      "evidence": [
+        {
+          "label": "energy.eia_capacity_changes (EIA-860M solar additions, 2024-2025)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_capacity_changes-table",
+          "askamerica": true,
+          "sql": "SELECT change_year, SUM(nameplate_capacity_mw) mw, COUNT(*) n FROM (SELECT change_year, nameplate_capacity_mw FROM energy.eia_capacity_changes WHERE change_type='Addition' AND technology ILIKE '%solar%' AND change_year IN (2024,2025) QUALIFY ROW_NUMBER() OVER (PARTITION BY plant_id, generator_id, change_year ORDER BY snapshot_year DESC)=1) GROUP BY change_year"
+        },
+        {
+          "label": "POWER magazine, on the SEIA/Wood Mackenzie 2025 solar report",
+          "url": "https://www.powermag.com/solar-adds-43-gw-in-2025-fifth-straight-year-as-top-new-generation-source/"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-17"
     },
     {
       "id": 94,
@@ -3316,10 +3381,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Electrek, relaying Financial Times reporting from May 2026, puts the number of onshore wind projects frozen at about 165, and other reports give figures up to 250; no count of 400 was found, and what counts as 'blocked' is undefined.",
+      "evidence": [
+        {
+          "label": "Electrek, May 4, 2026",
+          "url": "https://electrek.co/2026/05/04/trump-just-blocked-165-us-wind-projects-heres-whats-behind-it/"
+        }
+      ],
+      "check_run": "q221/askamerica/2026-11-17"
     },
     {
       "id": 111,
@@ -3345,10 +3415,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AP reported total federal buyouts of offshore wind leases at nearly $4 billion after an August 2026 deal. The capacity figure is unconfirmed: the only total found is 19.2 gigawatts across 12 leases, from an industry summary, and no Interior Department or BOEM tally was read.",
+      "evidence": [
+        {
+          "label": "AP via WTOP, offshore wind lease buyback (Aug. 2026)",
+          "url": "https://wtop.com/national/2026/08/trump-administration-will-buy-back-companys-offshore-wind-leases-off-3-states-in-a-1-2b-deal/"
+        },
+        {
+          "label": "Dredgewire, on the federal offshore wind buyouts (Oct. 14, 2026)",
+          "url": "https://dredgewire.com/five-fast-facts-about-the-impacts-of-the-federal-offshore-wind-buyouts/"
+        }
+      ],
+      "check_run": "q222/askamerica/2026-11-17"
     },
     {
       "id": 95,
@@ -3374,10 +3453,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "No published estimate above $300 million in one year was found. The Sierra Club puts costs for six plants under 13 orders at about $235 million, and Consumers Energy puts its Campbell plant alone at $259 million over about 450 days; net and gross cost definitions differ.",
+      "evidence": [
+        {
+          "label": "Utility Dive, Sierra Club estimate of DOE emergency order costs",
+          "url": "https://www.utilitydive.com/news/doe-202c-cost-235m-coal-sierra-club/815045/"
+        },
+        {
+          "label": "Willkie Farr & Gallagher, on the D.C. Circuit's Section 202(c) ruling (Sept. 2026)",
+          "url": "https://www.willkie.com/publications/2026/09/dc-circuit-limits-does-section-202c-emergency-authority-to-keep-coal-generator-operational"
+        }
+      ],
+      "check_run": "q222/askamerica/2026-11-17"
     },
     {
       "id": 96,
