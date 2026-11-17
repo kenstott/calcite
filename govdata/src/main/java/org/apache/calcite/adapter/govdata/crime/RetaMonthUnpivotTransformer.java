@@ -39,6 +39,11 @@ import java.util.Map;
  * <p>This is a lossless structural reshape: collapsing the twelve identical month
  * column-groups into a month dimension turns a 1552-column table into a ~167-column one
  * without dropping any data. Offense/measure unpivoting is left to SQL views.
+ *
+ * <p>Monthly count fields (unfounded, actual, total cleared, cleared-under-18) carry
+ * negative adjustments as a signed overpunch: the last digit is replaced by a letter
+ * ({@code J}=-1 … {@code R}=-9, {@code }}=-0), so {@code 0000N} is -5. Those fields are
+ * decoded to a plain signed integer string here so they load as longs.
  */
 public class RetaMonthUnpivotTransformer implements RowTransformer {
 
@@ -55,6 +60,11 @@ public class RetaMonthUnpivotTransformer implements RowTransformer {
       MONTH_INDEX.put(MONTHS[i], i + 1);
     }
   }
+
+  /** Prefixes of the monthly count fields that use signed-overpunch encoding. */
+  private static final String[] COUNT_PREFIXES = {
+      "unfounded_", "actual_", "total_cleared_", "cleared_18_"
+  };
 
   /** Default constructor required for reflection-based instantiation. */
   public RetaMonthUnpivotTransformer() {
@@ -73,7 +83,12 @@ public class RetaMonthUnpivotTransformer implements RowTransformer {
       String key = entry.getKey();
       Integer month = monthOf(key);
       if (month != null) {
-        monthRows.get(month - 1).put(key.substring(4), entry.getValue());
+        String field = key.substring(4);
+        Object value = entry.getValue();
+        if (isCountField(field)) {
+          value = decodeOverpunch(value);
+        }
+        monthRows.get(month - 1).put(field, value);
       } else {
         header.put(key, entry.getValue());
       }
@@ -103,5 +118,44 @@ public class RetaMonthUnpivotTransformer implements RowTransformer {
       return null;
     }
     return MONTH_INDEX.get(key.substring(0, 3));
+  }
+
+  private static boolean isCountField(String field) {
+    for (String prefix : COUNT_PREFIXES) {
+      if (field.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Decodes a signed-overpunch count ({@code 0000N} to {@code -5}). A value whose last
+   * character is not an overpunch letter is returned unchanged.
+   */
+  static Object decodeOverpunch(Object value) {
+    if (!(value instanceof String)) {
+      return value;
+    }
+    String text = (String) value;
+    if (text.length() < 2) {
+      return value;
+    }
+    char last = text.charAt(text.length() - 1);
+    int digit;
+    if (last == '}') {
+      digit = 0;
+    } else if (last >= 'J' && last <= 'R') {
+      digit = last - 'J' + 1;
+    } else {
+      return value;
+    }
+    String leading = text.substring(0, text.length() - 1);
+    for (int i = 0; i < leading.length(); i++) {
+      if (!Character.isDigit(leading.charAt(i))) {
+        return value;
+      }
+    }
+    return "-" + leading + digit;
   }
 }
