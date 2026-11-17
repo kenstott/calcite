@@ -2113,6 +2113,107 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # ---------------------------------------------------------------------------
+  # WILDFIRE OCCURRENCE BY STATE x YEAR — NIFC WFIGS Incident Locations
+  # (server-side GROUP BY on the ArcGIS FeatureServer, one request per discovery year)
+  # ---------------------------------------------------------------------------
+  - name: wildfire_occurrence_by_state_year
+    pattern: "type=wildfire_occurrence_by_state_year/year=*/*.parquet"
+    partitions: *standard_partitions
+    comment: >
+      Wildfire and prescribed-fire OCCURRENCE counts and reported acres by state and discovery
+      year, including every small fire — one row per (year, point-of-origin state or province,
+      incident_type_category). Built from every incident record in the NIFC WFIGS Incident
+      Locations layer (~430k incidents), aggregated server-side, so fire_count answers "how many
+      fires has state X had this year versus a typical year" where wildfire_perimeters (only fires
+      with a mapped perimeter, complete from 2020) cannot. incident_type_category: WF = wildfire,
+      RX = prescribed burn, CX = complex. Filter incident_type_category = 'WF' for wildfires.
+      incident_acres is the SUM of reported IncidentSize (the current size of each incident, null
+      where the incident reported none, so it is a sum over reporting incidents only);
+      final_acres is the SUM of FinalAcres and is populated only for incidents with a certified
+      final report — it understates burned area, so prefer incident_acres. Discovery years
+      2015 onward are complete (about 20k-48k incidents a year); the layer starts mid-2014
+      (about 12.7k incidents) and earlier years hold only a handful, so none of those are loaded. country is
+      US for the 50 states, DC and territories; a few incidents originate in Canada (CA) or
+      Mexico (MX) provinces/states, whose state_abbr is the province code and state_fips is null.
+      The current year is year to date and refreshes with the daily run. Counts come from
+      interagency (federal, state and local) reporting to WFIGS and can differ from a state
+      forestry agency's own tally. Joins to geo.state_ref via state_fips.
+      Source: WFIGS_Incident_Locations/FeatureServer/0 (NIFC, services3.arcgis.com).
+
+    dimensions:
+      type:
+        - wildfire_occurrence_by_state_year
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:2015}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        dataLag: 0
+
+    columns:
+      - name: country
+        type: string
+        nullable: false
+        comment: ISO country prefix of the point-of-origin code (US, CA, MX) — PK component
+      - name: state_abbr
+        type: string
+        nullable: false
+        comment: Point-of-origin state/province code (2-letter USPS abbreviation for US) — PK component
+      - <<: *state_fips_column
+      - name: incident_type_category
+        type: string
+        nullable: false
+        comment: WF (wildfire), RX (prescribed burn), CX (complex) — PK component
+      - name: fire_count
+        type: integer
+        nullable: false
+        comment: Number of incident records discovered in the year for this state and category
+      - name: incident_acres
+        type: double
+        nullable: true
+        comment: Sum of reported incident size in acres over incidents that report one
+      - name: final_acres
+        type: double
+        nullable: true
+        comment: Sum of certified final acres; populated only for incidents with a final report
+
+    source:
+      type: http
+      # where = discovery date within {year}; group by POOState, IncidentTypeCategory; one
+      # page (about 150 groups), the transformer fails on exceededTransferLimit.
+      url: "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations/FeatureServer/0/query?where=FireDiscoveryDateTime%20%3E%3D%20DATE%20%27{year}-01-01%27%20AND%20FireDiscoveryDateTime%20%3C%3D%20TIMESTAMP%20%27{year}-12-31%2023%3A59%3A59%27&groupByFieldsForStatistics=POOState%2CIncidentTypeCategory&outStatistics=%5B%7B%22statisticType%22%3A%22count%22%2C%22onStatisticField%22%3A%22OBJECTID%22%2C%22outStatisticFieldName%22%3A%22fire_count%22%7D%2C%7B%22statisticType%22%3A%22sum%22%2C%22onStatisticField%22%3A%22IncidentSize%22%2C%22outStatisticFieldName%22%3A%22incident_acres%22%7D%2C%7B%22statisticType%22%3A%22sum%22%2C%22onStatisticField%22%3A%22FinalAcres%22%2C%22outStatisticFieldName%22%3A%22final_acres%22%7D%5D&f=json"
+      method: GET
+      response:
+        format: json
+      rateLimit:
+        requestsPerSecond: 2.0
+        retryOn: [429, 500, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.disasters.WfigsIncidentStateYearTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=wildfire_occurrence_by_state_year/year=*/"
+      partition:
+        columns: [type, year]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/disasters"
+        tableName: wildfire_occurrence_by_state_year
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        overwritePartitions: true
+
   - name: nws_zone_county
     # NWS republishes the zone-county correlation file a few times a year; the hash probe skips the
     # write when unchanged. snapshot makes a zero-row run fail loudly.

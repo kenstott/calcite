@@ -905,3 +905,49 @@ SELECT 'disasters', 'billion_dollar_events', 'T7_known_value',
 FROM (SELECT COUNT(*) AS n FROM (SELECT event_name, cost_adjusted_musd FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/billion_dollar_events', allow_moved_paths := true)
       ORDER BY cost_adjusted_musd DESC LIMIT 1) WHERE event_name LIKE 'Hurricane Katrina%' AND cost_adjusted_musd > 190000);
 
+
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: wildfire_occurrence_by_state_year (NIFC WFIGS incident locations, state x year, ops#1300)
+-- ─────────────────────────────────────────────────────────────
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END, n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true));
+
+-- one row per (year, country, state, category) per year: 2015-onward years each carry 50+ US states
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T2_row_count',
+  CASE WHEN n >= 50 THEN 'pass' ELSE 'fail' END, n, 50, 'Every loaded year must have at least 50 US state WF rows (min across years)'
+FROM (SELECT MIN(c) AS n FROM (SELECT year, COUNT(*) AS c FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true)
+  WHERE country = 'US' AND incident_type_category = 'WF' GROUP BY year));
+
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true) LIMIT 3;
+
+-- final_acres is null for incidents without a certified final report; a real source property, so excluded
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'warn' END, cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true))
+    WHERE null_percentage = 100.0 AND column_name NOT IN ('type', 'year', 'final_acres')));
+
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'No null PK components (year, country, state_abbr, incident_type_category)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true)
+  WHERE year IS NULL OR country IS NULL OR state_abbr IS NULL OR incident_type_category IS NULL);
+
+-- sanity: national WF count per year is in the tens of thousands from 2015 on
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T7_expected_range',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END, bad, 0, 'Years with national WF count outside 10k-80k'
+FROM (SELECT COUNT(*) AS bad FROM (SELECT year, SUM(fire_count) AS f FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true)
+  WHERE incident_type_category = 'WF' GROUP BY year) WHERE f < 10000 OR f > 80000);
+
+INSERT INTO dq_results
+SELECT 'disasters', 'wildfire_occurrence_by_state_year', 'T8_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'No duplicate (year, country, state_abbr, incident_type_category)'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, country, state_abbr, incident_type_category FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/disasters/wildfire_occurrence_by_state_year', allow_moved_paths := true)
+  GROUP BY 1, 2, 3, 4 HAVING COUNT(*) > 1));
