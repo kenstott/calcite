@@ -176,12 +176,13 @@ dimension_values:
     type: list
     values: ["hr", "s", "hjres", "sjres", "hconres", "sconres", "hres", "sres"]
 
-  # Cache buster for the current Congress, whose bill files change daily at the source.
-  # GovDataSchemaFactory sets GOVDATA_CURRENT_MONTH from today's date on every run, so each
-  # calendar month is a new fetch unit and the raw zip is downloaded again once a month; reruns
-  # within a month reuse the cached zip. Deliberately a single value: a multi-value dimension
-  # with no partition column would multiply rows.
-  bill_refresh_month: &bill_refresh_month ["${GOVDATA_CURRENT_MONTH:12}"]
+  # Cache buster for the current Congress, whose bill files change daily at the source
+  # (GovInfo regenerates each BILLSTATUS zip every day). GovDataSchemaFactory sets
+  # GOVDATA_CURRENT_DATE (yyyy-MM-dd) from today's date on every run, so each calendar day is a
+  # new fetch unit and the raw zip is downloaded again once a day; reruns within a day reuse the
+  # cached zip. Deliberately a single value: a multi-value dimension with no partition column
+  # would multiply rows.
+  bill_refresh_date: &bill_refresh_date ["${GOVDATA_CURRENT_DATE}"]
 
   # The Court term (the year its October term began) of the bound volumes of the United States
   # Reports on GovInfo: volume 2 (term 1781) through volume 583 (term 2017). GovInfo has no
@@ -576,7 +577,7 @@ partitionedTables:
       bill_subjects, bill_text_versions, bill_related_bills, bill_amendments,
       bill_recorded_votes, bill_titles, bill_summaries, bill_cbo_cost_estimates,
       bill_committee_reports, bill_notes, ...). The current
-      Congress changes daily at the source and is re-pulled monthly; completed Congresses are
+      Congress changes daily at the source and is re-pulled daily; completed Congresses are
       static. The source publishes the 108th Congress onward; the default GOVDATA_START_YEAR
       (2010) starts at the 111th.
 
@@ -585,7 +586,7 @@ partitionedTables:
         - bills
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -744,7 +745,7 @@ partitionedTables:
         - bill_actions
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -833,7 +834,7 @@ partitionedTables:
         - bill_cosponsors
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -923,7 +924,7 @@ partitionedTables:
         - bill_committees
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1011,7 +1012,7 @@ partitionedTables:
         - bill_committee_activities
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1085,7 +1086,7 @@ partitionedTables:
         - bill_subjects
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1154,7 +1155,7 @@ partitionedTables:
         - bill_text_versions
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1234,7 +1235,7 @@ partitionedTables:
         - bill_related_bills
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1331,7 +1332,7 @@ partitionedTables:
         - bill_amendments
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1491,7 +1492,7 @@ partitionedTables:
         - bill_amendment_actions
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1580,7 +1581,7 @@ partitionedTables:
         - bill_amendment_cosponsors
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1671,7 +1672,7 @@ partitionedTables:
         - bill_action_committees
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1748,7 +1749,7 @@ partitionedTables:
         - bill_recorded_votes
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1849,7 +1850,7 @@ partitionedTables:
         - bill_titles
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -1948,7 +1949,7 @@ partitionedTables:
         - bill_summaries
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -2033,7 +2034,7 @@ partitionedTables:
         - bill_cbo_cost_estimates
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -2103,7 +2104,7 @@ partitionedTables:
         - bill_committee_reports
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress
@@ -2161,7 +2162,7 @@ partitionedTables:
         - bill_notes
       congress: *congress_range
       bill_type: *bill_types
-      refresh_month: *bill_refresh_month
+      refresh_date: *bill_refresh_date
 
     columns:
       - <<: *partition_congress

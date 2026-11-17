@@ -885,6 +885,11 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
         ? String.valueOf(currentMonthObj) : String.format("%02d", today.getMonthValue());
     System.setProperty("GOVDATA_CURRENT_MONTH", currentMonth);
 
+    Object currentDateObj = operand.get("currentDate");
+    String currentDate = currentDateObj != null
+        ? String.valueOf(currentDateObj) : today.toString();
+    System.setProperty("GOVDATA_CURRENT_DATE", currentDate);
+
     Object currentYearObj = operand.get("currentYear");
     String currentYear = currentYearObj != null
         ? String.valueOf(currentYearObj) : String.valueOf(today.getYear());
@@ -900,8 +905,8 @@ public class GovDataSchemaFactory implements ConstraintCapableSchemaFactory {
     String currentQuarterToken = currentYear + "Q" + currentQuarter;
     System.setProperty("GOVDATA_CURRENT_QUARTER_TOKEN", currentQuarterToken);
 
-    LOGGER.debug("Calendar context: GOVDATA_CURRENT_MONTH={} YEAR={} QUARTER={} TOKEN={}",
-        currentMonth, currentYear, currentQuarter, currentQuarterToken);
+    LOGGER.debug("Calendar context: GOVDATA_CURRENT_DATE={} MONTH={} YEAR={} QUARTER={} TOKEN={}",
+        currentDate, currentMonth, currentYear, currentQuarter, currentQuarterToken);
 
     LOGGER.debug("Set cross-schema properties for {}", dataSource);
   }
