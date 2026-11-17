@@ -400,4 +400,27 @@ class NvdPublishedWindowResolverTest {
           "window " + w[0] + " predates the effective start year 2025");
     }
   }
+
+  @Test
+  void historyReachesBackToStartOfQuarterContainingTip() {
+    // today 2026-11-17, tip starts 2026-08-19 (Q3): startYear=2026 history begins 2026-01-01
+    // and the Q3 window is clamped to the tip boundary, so the tip's quarter is whole.
+    List<String[]> windows = NvdPublishedWindowDimensionResolver.buildWindowsForTesting(
+        2026, 90, 1, LocalDate.of(2026, 11, 17));
+    assertEquals("2026-01-01T00:00:00.000", windows.get(0)[0]);
+    assertEquals("2026-07-01T00:00:00.000", windows.get(2)[0]);
+    assertEquals("2026-08-18T23:59:59.000", windows.get(2)[1]);
+    assertEquals("2026-08-19T00:00:00.000", windows.get(3)[0]);
+  }
+
+  @Test
+  void historyBeginsInPriorYearWhenTipStraddlesYearBoundary() {
+    // today 2027-01-10, tip starts 2026-10-12 (Q4 2026): startYear=2027 must still cover
+    // 2026-10-01..2026-10-11 so the 2026 Q4 partition is rewritten whole.
+    List<String[]> windows = NvdPublishedWindowDimensionResolver.buildWindowsForTesting(
+        2027, 90, 1, LocalDate.of(2027, 1, 10));
+    assertEquals("2026-10-01T00:00:00.000", windows.get(0)[0]);
+    assertEquals("2026-10-11T23:59:59.000", windows.get(0)[1]);
+    assertEquals("2026-10-12T00:00:00.000", windows.get(1)[0]);
+  }
 }

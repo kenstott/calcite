@@ -205,11 +205,12 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
         + "tipChunkDays={} tipStart={} historyEnd={}",
         resolveDate, startYear, tipDays, tipChunkDays, tipStart, historyEnd);
 
-    buildHistoryWindows(startYear, historyEnd);
+    LocalDate historyBegin = historyBegin(startYear, tipStart);
+    buildHistoryWindows(historyBegin, historyEnd);
     buildTipWindows(tipStart, resolveDate, tipChunkDays);
 
     LOGGER.info("NvdPublishedWindow: built {} history windows + {} tip windows = {} total",
-        countHistoryWindows(startYear, historyEnd),
+        countHistoryWindows(historyBegin, historyEnd),
         countTipWindows(tipStart, resolveDate, tipChunkDays),
         startDates.size());
 
@@ -217,17 +218,33 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
   }
 
   /**
-   * Builds quarterly windows from {@code startYear}-Q1 through {@code historyEnd}.
-   * Each quarter window is at most 92 days (well within the NVD 120-day cap).
-   * Windows are added in chronological order (oldest first) so the tracker
+   * Returns the first day of the history range: January 1 of {@code startYear}, moved back
+   * to the start of the quarter containing {@code tipStart} when that quarter begins earlier.
+   * Every year/quarter partition the daily tip windows touch is replaced whole by the
+   * partition overwrite, so the history windows must cover the rest of that quarter.
+   */
+  private static LocalDate historyBegin(int startYear, LocalDate tipStart) {
+    LocalDate begin = LocalDate.of(startYear, 1, 1);
+    LocalDate tipQuarterStart =
+        quarterStart(tipStart.getYear(), (tipStart.getMonthValue() - 1) / 3 + 1);
+    return tipQuarterStart.isBefore(begin) ? tipQuarterStart : begin;
+  }
+
+  /**
+   * Builds quarterly windows from the quarter containing {@code historyBegin} through
+   * {@code historyEnd}. Each quarter window is at most 92 days (well within the NVD
+   * 120-day cap). Windows are added in chronological order (oldest first) so the tracker
    * progresses from earliest data forward.
    */
-  private void buildHistoryWindows(int startYear, LocalDate historyEnd) {
+  private void buildHistoryWindows(LocalDate historyBegin, LocalDate historyEnd) {
     int currentYear = resolveDate.getYear();
 
-    for (int year = startYear; year <= currentYear; year++) {
+    for (int year = historyBegin.getYear(); year <= currentYear; year++) {
       for (int quarter = 1; quarter <= 4; quarter++) {
         LocalDate qStart = quarterStart(year, quarter);
+        if (qStart.isBefore(historyBegin)) {
+          continue;
+        }
         LocalDate qEnd = quarterEnd(year, quarter);
 
         // Skip quarters that are entirely after the history cutoff
@@ -291,12 +308,15 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
   }
 
   /** Counts history windows for logging. */
-  private int countHistoryWindows(int startYear, LocalDate historyEnd) {
+  private int countHistoryWindows(LocalDate historyBegin, LocalDate historyEnd) {
     int count = 0;
     int currentYear = resolveDate.getYear();
-    for (int year = startYear; year <= currentYear; year++) {
+    for (int year = historyBegin.getYear(); year <= currentYear; year++) {
       for (int quarter = 1; quarter <= 4; quarter++) {
         LocalDate qStart = quarterStart(year, quarter);
+        if (qStart.isBefore(historyBegin)) {
+          continue;
+        }
         if (qStart.isAfter(historyEnd)) {
           break;
         }
@@ -381,7 +401,7 @@ public class NvdPublishedWindowDimensionResolver implements DimensionResolver {
     LocalDate tipStart = today.minusDays(cappedTipDays);
     LocalDate historyEnd = tipStart.minusDays(1);
 
-    r.buildHistoryWindows(startYear, historyEnd);
+    r.buildHistoryWindows(historyBegin(startYear, tipStart), historyEnd);
     r.buildTipWindows(tipStart, today, cappedChunkDays);
 
     List<String[]> result = new ArrayList<String[]>();
