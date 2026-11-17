@@ -2115,6 +2115,88 @@ SELECT 'energy', 'eia_coal_mines', 'T8_worker_coverage',
   printf('MIN=%d MAX=%d | historical: MIN<=2024, daily: MAX>=2023', MIN(report_year), MAX(report_year))
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_coal_mines', allow_moved_paths := true);
 
+-- EIA paged tables: the primary key must not repeat (unstable OFFSET paging repeats and drops rows)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_electricity_generation', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (geo_level, state_abbr, energy_source_code, sector_code, generation_year, generation_month) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_generation', allow_moved_paths := true)
+  GROUP BY geo_level, state_abbr, energy_source_code, sector_code, generation_year, generation_month HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_electricity_prices', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (state_abbr, sector_code, price_year, price_month) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices', allow_moved_paths := true)
+  GROUP BY state_abbr, sector_code, price_year, price_month HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_electricity_prices_monthly', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (state_abbr, sector_code, price_year, price_month) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_electricity_prices_monthly', allow_moved_paths := true)
+  GROUP BY state_abbr, sector_code, price_year, price_month HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_crude_oil_production', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (eia_area_code, fuel_type, process_code, production_year, production_month) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_crude_oil_production', allow_moved_paths := true)
+  GROUP BY eia_area_code, fuel_type, process_code, production_year, production_month HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_natural_gas_production', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (eia_area_code, process_code, production_year, production_month) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_natural_gas_production', allow_moved_paths := true)
+  GROUP BY eia_area_code, process_code, production_year, production_month HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_petroleum_stocks', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (eia_area_code, product_code, process_code, report_date) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_petroleum_stocks', allow_moved_paths := true)
+  GROUP BY eia_area_code, product_code, process_code, report_date HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_heating_fuel_prices', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (series_id, report_date) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_heating_fuel_prices', allow_moved_paths := true)
+  GROUP BY series_id, report_date HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_refinery_operations', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (eia_area_code, series_id, report_year, report_month) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_refinery_operations', allow_moved_paths := true)
+  GROUP BY eia_area_code, series_id, report_year, report_month HAVING COUNT(*) > 1
+) d;
+
+INSERT INTO dq_results
+SELECT 'energy', 'eia_drilling_activity', 'T10_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (series_id, period) groups'
+FROM (
+  SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_drilling_activity', allow_moved_paths := true)
+  GROUP BY series_id, period HAVING COUNT(*) > 1
+) d;
+
 -- Show T8 results separately for clear worker verification
 SELECT '=== WORKER COVERAGE (T8) ===' AS section;
 SELECT tbl, status, detail FROM dq_results WHERE test = 'T8_worker_coverage' ORDER BY tbl;
