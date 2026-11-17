@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
   "lede": [
     "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
-    "80 statements could be checked. 31 have been checked so far (12 supported, 16 unsettled, 3 unsupported); the other 49 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "80 statements could be checked. 46 have been checked so far (16 supported, 25 unsettled, 5 unsupported); the other 34 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
     "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
   ],
   "stories": [
@@ -1905,10 +1905,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Judiciary Committee's biography of its ranking member says Sen. Durbin has served on the committee for 28 years, including as chair from 2021 to 2025, a term that ran from Feb. 3, 2021 to Jan. 3, 2025.",
+      "evidence": [
+        {
+          "label": "Senate Judiciary Committee, About the Ranking Member",
+          "url": "https://www.judiciary.senate.gov/about/ranking"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-17"
     },
     {
       "id": 54,
@@ -1934,10 +1939,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The committee's hearings list shows nomination hearings on Nov. 10 and Nov. 18, eight days apart. The Nov. 10 hearing had five nominees and no November hearing with eight was found; the nominees' questionnaire receipt dates could not be read.",
+      "evidence": [
+        {
+          "label": "Senate Judiciary Committee, nominations hearing of Nov. 10, 2026",
+          "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-10-2026"
+        },
+        {
+          "label": "Senate Judiciary Committee, nominations hearing of Nov. 18, 2026",
+          "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-18-2026"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-17"
     },
     {
       "id": 55,
@@ -1963,10 +1977,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A nominations hearing is scheduled for Nov. 18, but its page lists no nominees and no record of their background investigations was found; whether an earlier hearing went ahead before background checks were complete was not determined.",
+      "evidence": [
+        {
+          "label": "Senate Judiciary Committee, nominations hearing of Nov. 18, 2026",
+          "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-18-2026"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-17"
     },
     {
       "id": 56,
@@ -2021,10 +2040,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No source giving the nominees' law school graduation or years of practice was found. The search covered the committee's Nov. 10 hearing page and two of the five nominees' questionnaires, which are scanned images with no readable text, plus a web search; the other three questionnaires and press coverage were not read.",
+      "evidence": [
+        {
+          "label": "Senate Judiciary Committee, nominations hearing of Nov. 10, 2026",
+          "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-10-2026"
+        }
+      ],
+      "check_run": "q212/askamerica/2026-11-17"
     },
     {
       "id": 58,
@@ -2050,10 +2074,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsupported",
+      "finding": "No comparison of these nominees' experience against all Biden and earlier Trump judicial nominees was found; the speaker's own Nov. 10 statement compares them with nominees heard by the committee in the last 10 years. The search covered the Congressional Record, the committee's Nov. 10 press release and coverage of that hearing; ABA ratings data and the Federal Judicial Center's biographical records were not searched.",
+      "evidence": [
+        {
+          "label": "Senate Judiciary Committee Democrats, press release of Nov. 10, 2026",
+          "url": "https://www.judiciary.senate.gov/press/dem/releases/durbin-calls-out-trump-judicial-nominees-for-their-inexperience-in-the-courtroom"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-17"
     },
     {
       "id": 59,
@@ -2079,10 +2108,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "One Nov. 10 nominee's questionnaire is quoted as saying she had not tried any case to verdict as sole, chief or associate counsel; another's is quoted only as not having served as sole counsel in a case tried to verdict, which is narrower than never having tried a case. The questionnaires are scanned images that could not be read directly; the quotations are as reported by Nomination Notes.",
+      "evidence": [
+        {
+          "label": "Nomination Notes, on the Nov. 10 nominations hearing",
+          "url": "https://nominationnotes.substack.com/p/judicial-nominees-wont-say-biden"
+        },
+        {
+          "label": "Senate Judiciary Committee Democrats, press release of Nov. 10, 2026",
+          "url": "https://www.judiciary.senate.gov/press/dem/releases/durbin-calls-out-trump-judicial-nominees-for-their-inexperience-in-the-courtroom"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-17"
     },
     {
       "id": 60,
@@ -2108,10 +2146,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Kentucky Judicial Conduct Commission's docket shows formal charges against Judge Daniel Ballou filed Oct. 23, 2026 and his answer filed Nov. 9; the matter is pending. Local news reported the charges on Nov. 10.",
+      "evidence": [
+        {
+          "label": "Kentucky Judicial Conduct Commission, formal proceedings against Judge Ballou",
+          "url": "https://www.kycourts.gov/Courts/JCC%20Actions%20Documents/2026_Ballouformalproceedings.pdf"
+        },
+        {
+          "label": "WKYT, Nov. 10, 2026",
+          "url": "https://www.wkyt.com/2026/11/10/federal-judge-nominee-receives-3-misconduct-charges-kentucky-judicial-commission/"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-17"
     },
     {
       "id": 61,
@@ -2137,10 +2184,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A 2011 newspaper report quotes the commission's agreed order publicly reprimanding Judge Ballou for emailing a U.S. Senate candidate's campaign materials to Kentucky circuit judges and others, in violation of rules against endorsing candidates and political activity. The commission's 2011 order itself was not read directly.",
+      "evidence": [
+        {
+          "label": "The News Journal, Sept. 21, 2011",
+          "url": "https://thenewsjournal.net/?p=12754"
+        },
+        {
+          "label": "Nomination Notes, Aug. 27, 2026",
+          "url": "https://nominationnotes.substack.com/p/kentucky-judicial-nominee-was-publicly"
+        }
+      ],
+      "check_run": "q213/askamerica/2026-11-17"
     },
     {
       "id": 62,
@@ -2166,10 +2222,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Kentucky Judicial Conduct Commission's notice of Oct. 23, 2026 lists three counts against Judge Ballou, all arising from an attorney's social-media video of his courtroom; he denied them on Nov. 9 and they are unadjudicated. The charges were filed 24 days before the speech and reported publicly around Nov. 10-11.",
+      "evidence": [
+        {
+          "label": "Kentucky Judicial Conduct Commission, formal proceedings against Judge Ballou",
+          "url": "https://www.kycourts.gov/Courts/JCC%20Actions%20Documents/2026_Ballouformalproceedings.pdf"
+        },
+        {
+          "label": "LEX18: judge denies misconduct allegations",
+          "url": "https://www.lex18.com/news/covering-kentucky/kentucky-judge-denies-misconduct-allegations-stemming-from-attorneys-courtroom-video"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-17"
     },
     {
       "id": 63,
@@ -2195,10 +2260,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Texas Supreme Court Justice James Sullivan lost his Nov. 3 race; Reuters reported on Thursday, Nov. 5 that a Senate Judiciary questionnaire named him for the Western District of Texas, and the President announced the nomination on Nov. 10. No source read says when he learned of it.",
+      "evidence": [
+        {
+          "label": "Texas Tribune: Sullivan tapped for federal bench",
+          "url": "https://www.texastribune.org/?p=252729"
+        },
+        {
+          "label": "IBTimes UK, citing Reuters (Nov. 5, 2026)",
+          "url": "https://www.ibtimes.co.uk/trump-considers-defeated-texas-justice-james-sullivan-federal-judgeship-1830609"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-17"
     },
     {
       "id": 64,
@@ -2224,10 +2298,25 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's federal judges records show 8 confirmed judges from Trump's first term rated 'Not Qualified' by the ABA, a count that leaves out nominees never confirmed. Ballotpedia counts 10 of 264 first-term nominees and FactCheck.org counted nine in November 2019; the ABA's own chart could not be read.",
+      "evidence": [
+        {
+          "label": "officials.federal_judges (ABA ratings of Trump first-term appointees)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#federal_judges-table",
+          "askamerica": true,
+          "sql": "SELECT aba_rating_1, count(*) AS n FROM officials.federal_judges WHERE appointing_president_1 = 'Donald J. Trump' AND nomination_date_1 < '2021-01-21' GROUP BY aba_rating_1 ORDER BY n DESC"
+        },
+        {
+          "label": "Ballotpedia, ABA ratings during the Trump administration",
+          "url": "https://ballotpedia.org/ABA_ratings_during_the_Trump_administration"
+        },
+        {
+          "label": "FactCheck.org, Nov. 2019",
+          "url": "https://www.factcheck.org/2019/11/trumps-exaggerated-judicial-boasts/"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-17"
     },
     {
       "id": 65,
@@ -2253,10 +2342,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The documented change was the Justice Department's May 2025 decision to end the ABA's special access to nominees, not a committee rule. The committee chairman's Nov. 10, 2026 statement discusses ABA 'Not Qualified' ratings of pending nominees, so the ratings still reach the committee; no committee rule on the point was read.",
+      "evidence": [
+        {
+          "label": "Senate Judiciary Committee, chairman's statement of Nov. 10, 2026",
+          "url": "https://www.judiciary.senate.gov/press/rep/releases/grassley-opens-executive-business-meeting-on-four-district-court-nominees"
+        }
+      ],
+      "check_run": "q214/askamerica/2026-11-17"
     },
     {
       "id": 66,
@@ -2288,10 +2382,19 @@
           "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
         }
       ],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The speaker's office releases of 2023 and 2024 say all 85 of Trump's first-term U.S. attorney nominees who cleared the Judiciary Committee were confirmed by unanimous consent, with no exception mentioned. No Senate vote record for the first term was read.",
+      "evidence": [
+        {
+          "label": "Sen. Durbin's office, release of Sept. 29, 2023",
+          "url": "https://www.durbin.senate.gov/newsroom/press-releases/senate-confirms-two-us-attorney-nominees-key-breakthrough-of-sen-vances-justice-department-hold"
+        },
+        {
+          "label": "Sen. Durbin's office, release of Sept. 11, 2024",
+          "url": "https://www.durbin.senate.gov/newsroom/press-releases/republicans-continue-to-block-durbins-attempt-to-confirm-us-attorney-nominations-on-the-senate-floor"
+        }
+      ],
+      "check_run": "q215/askamerica/2026-11-17"
     },
     {
       "id": 67,
@@ -2325,10 +2428,25 @@
           "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
         }
       ],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's nomination records show 66 U.S. attorney nominations in the 117th and 118th Congresses confirmed by voice vote and 4 confirmed otherwise; the records do not name who objected. The speaker's office releases describe a hold by then-Senator Vance, but no statement by Vance announcing it was read.",
+      "evidence": [
+        {
+          "label": "officials.nominations (U.S. attorney confirmations, 117th-118th Congress)",
+          "url": "https://askamerica.ai/catalog/schemas/officials/#nominations-table",
+          "askamerica": true,
+          "sql": "SELECT congress, CASE WHEN latest_action_text ILIKE '%voice vote%' THEN 'voice' WHEN latest_action_text ILIKE '%Confirmed by the Senate%' THEN 'rollcall_or_other_confirmed' ELSE 'other' END AS k, COUNT(*) AS n FROM officials.nominations WHERE description ILIKE '%United States Attorney%' AND congress IN (117,118) GROUP BY congress, CASE WHEN latest_action_text ILIKE '%voice vote%' THEN 'voice' WHEN latest_action_text ILIKE '%Confirmed by the Senate%' THEN 'rollcall_or_other_confirmed' ELSE 'other' END ORDER BY congress, k"
+        },
+        {
+          "label": "Sen. Durbin's office, release of Dec. 13, 2023",
+          "url": "https://www.durbin.senate.gov/newsroom/press-releases/junior-senator-from-ohio-continues-to-block-durbins-attempt-to-confirm-us-attorney-nominations-on-the-senate-floor-12-14-23"
+        },
+        {
+          "label": "Sen. Durbin's office, release of Sept. 29, 2023",
+          "url": "https://www.durbin.senate.gov/newsroom/press-releases/senate-confirms-two-us-attorney-nominees-key-breakthrough-of-sen-vances-justice-department-hold"
+        }
+      ],
+      "check_run": "q215/askamerica/2026-11-17"
     },
     {
       "id": 68,
@@ -2354,10 +2472,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "The speaker's Sept. 11, 2024 release says he had tried on seven previous occasions to confirm the held nominees, but some of those requests asked to schedule roll-call votes rather than to skip one, and the Congressional Record was not read request by request.",
+      "evidence": [
+        {
+          "label": "Sen. Durbin's office, release of Sept. 11, 2024",
+          "url": "https://www.durbin.senate.gov/newsroom/press-releases/republicans-continue-to-block-durbins-attempt-to-confirm-us-attorney-nominations-on-the-senate-floor"
+        },
+        {
+          "label": "Sen. Durbin's office, release of Dec. 13, 2023",
+          "url": "https://www.durbin.senate.gov/newsroom/press-releases/junior-senator-from-ohio-continues-to-block-durbins-attempt-to-confirm-us-attorney-nominations-on-the-senate-floor-12-14-23"
+        }
+      ],
+      "check_run": "q215/askamerica/2026-11-17"
     },
     {
       "id": 69,
