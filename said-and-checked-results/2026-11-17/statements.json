@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
   "lede": [
     "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
-    "80 statements could be checked. 11 have been checked so far (4 supported, 5 unsettled, 2 unsupported); the other 69 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "80 statements could be checked. 20 have been checked so far (8 supported, 10 unsettled, 2 unsupported); the other 60 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
     "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
   ],
   "stories": [
@@ -914,9 +914,22 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "GAO reports that as of March 2026 the FAA had obligated $1.8 billion, 20 percent, of the $9 billion systems portion; House Transportation Democrats put spending at about $1 billion of the $12.5 billion as of Nov. 14. No DOT, FAA or GAO figure for spending in mid-November 2026 was found, so the figures point to most of the money being unspent without settling it.",
+      "evidence": [
+        {
+          "label": "GAO-26-107992, air traffic control modernization funding",
+          "url": "https://files.gao.gov/reports/GAO-26-107992/index.html"
+        },
+        {
+          "label": "House Transportation Committee Democrats, statement of Nov. 14, 2026",
+          "url": "https://democrats-transportation.house.gov/news/press-releases/ranking-members-larsen-carson-statement-on-last-nights-nationwide-ground-stop"
+        },
+        {
+          "label": "CNN: Congress and the FAA funding request (Nov. 15, 2026)",
+          "url": "https://www.cnn.com/2026/11/15/politics/congress-additional-funding-request-faa-duffy"
+        }
+      ],
       "check_run": null
     },
     {
@@ -1146,10 +1159,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's Monthly Treasury Statement data give fiscal 2026 receipts of $5.403 trillion and outlays of $7.396 trillion, a deficit of about $1.99 trillion. The 6.2 percent of GDP figure is as reported by American Action Forum from CBO's review; CBO's own page could not be read directly.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (Monthly Treasury Statement, fiscal 2026 through Sept. 30)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "select record_date, line_code_nbr, classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt from econ.mts_outlays_by_function where record_fiscal_year=2026 and record_date='2026-09-30' and line_code_nbr in ('320','340') or (record_fiscal_year=2026 and record_date='2026-09-30' and classification_desc ilike 'Total%') order by line_code_nbr"
+        },
+        {
+          "label": "American Action Forum summary of CBO's fiscal 2026 budget review",
+          "url": "https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-17"
     },
     {
       "id": 33,
@@ -1175,10 +1199,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "In OMB's historical table (read from a secondary copy) the largest deficit from 1947 through 2008 was 5.9 percent of GDP, in 1983, but fiscal 1946 was 7.0 percent. The statement holds if the six decades start in 1947 and not if they start in 1946.",
+      "evidence": [
+        {
+          "label": "OMB Historical Table 1.3 (Tax Policy Center copy)",
+          "url": "https://taxpolicycenter.org/sites/default/files/statistics/pdf/fed_receipt_sum_3.pdf"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-17"
     },
     {
       "id": 34,
@@ -1204,10 +1233,23 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Deficits as a share of GDP for fiscal 2020 through 2026 were 14.7, 12.1, 5.4, 6.3, 6.4, 5.9 and 6.2 percent, so five of the seven years exceeded 6 percent. The 2020-2023 figures are from a secondary copy of OMB's table and 2024-2026 as reported by American Action Forum from CBO; no primary page was read directly.",
+      "evidence": [
+        {
+          "label": "OMB Historical Table 1.3 (Tax Policy Center copy)",
+          "url": "https://taxpolicycenter.org/sites/default/files/statistics/pdf/fed_receipt_sum_3.pdf"
+        },
+        {
+          "label": "American Action Forum summary of CBO's fiscal 2025 budget review",
+          "url": "https://www.americanactionforum.org/insight/cbo-fy-2025-budget-deficit-totaled-1-8-trillion/"
+        },
+        {
+          "label": "American Action Forum summary of CBO's fiscal 2026 budget review",
+          "url": "https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-17"
     },
     {
       "id": 35,
@@ -1233,10 +1275,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "A Federal Reserve Bank of San Francisco analysis estimates that pandemic fiscal support raised inflation by about 3 percentage points by the end of 2021, with considerable uncertainty; other studies attribute smaller shares or point to supply factors. The evidence concerns pandemic spending rather than persistent deficits and turns on model assumptions.",
+      "evidence": [
+        {
+          "label": "Federal Reserve Bank of San Francisco Economic Letter 2022-07",
+          "url": "https://www.frbsf.org/wp-content/uploads/sites/4/el2022-07.pdf"
+        }
+      ],
+      "check_run": "q208/askamerica/2026-11-17"
     },
     {
       "id": 36,
@@ -1262,10 +1309,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A Federal Reserve Bank of Boston study finds a 1-point rise in the deficit-to-GDP ratio raises the 10-year Treasury rate by about 8 basis points and 10-to-15-year corporate rates by about 7, with smaller estimates in other specifications. It does not measure mortgage or auto loan rates directly.",
+      "evidence": [
+        {
+          "label": "Federal Reserve Bank of Boston working paper on deficits and interest rates (2021)",
+          "url": "https://www.bostonfed.org/-/media/Documents/Workingpapers/PDF/2021/cpp20211223.pdf"
+        }
+      ],
+      "check_run": "q208/askamerica/2026-11-17"
     },
     {
       "id": 37,
@@ -1291,10 +1343,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "American Action Forum, citing CBO, reports net interest up $115 billion, 11 percent, in fiscal 2026, consistent with $1.14 trillion. AskAmerica's Treasury data show the narrower Monthly Treasury Statement 'Net Interest' line at $1.052 trillion, up 8.4 percent from $0.970 trillion; CBO's own figure could not be read directly, so which measure is meant decides it.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (Monthly Treasury Statement, fiscal 2026 through Sept. 30)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "select record_date, line_code_nbr, classification_desc, current_fytd_rcpt_outly_amt, prior_fytd_rcpt_outly_amt from econ.mts_outlays_by_function where record_fiscal_year=2026 and record_date='2026-09-30' and line_code_nbr in ('320','340') or (record_fiscal_year=2026 and record_date='2026-09-30' and classification_desc ilike 'Total%') order by line_code_nbr"
+        },
+        {
+          "label": "American Action Forum summary of CBO's fiscal 2026 budget review",
+          "url": "https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/"
+        }
+      ],
+      "check_run": "q207/askamerica/2026-11-17"
     },
     {
       "id": 38,
@@ -1320,10 +1383,17 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's Monthly Treasury Statement data for fiscal 2026 show the 'Net Interest' line at $1,051.8 billion, $86.6 billion above national defense ($965.2 billion) and $20.9 billion below Medicare ($1,072.6 billion). The speaker's gaps fit CBO's broader measure of about $1.14 trillion in interest on the public debt, whose defense and Medicare totals could not be read directly.",
+      "evidence": [
+        {
+          "label": "econ.mts_outlays_by_function (Monthly Treasury Statement, fiscal 2026 through Sept. 30)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#mts_outlays_by_function-table",
+          "askamerica": true,
+          "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_fiscal_year = 2026 AND record_date = DATE '2026-09-30' AND (classification_desc ILIKE '%Defense%' OR classification_desc ILIKE '%Medicare%' OR classification_desc ILIKE '%Net Interest%' OR line_code_nbr = '340') ORDER BY line_code_nbr"
+        }
+      ],
+      "check_run": "q208/askamerica/2026-11-17"
     },
     {
       "id": 39,
@@ -1349,10 +1419,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A Defense Department news story of Aug. 26, 2010 reports that Adm. Mike Mullen, then Joint Chiefs chairman, said the national debt is the single biggest threat to national security. The story gives this in the reporter's words; the exact quoted wording was not found in a transcript.",
+      "evidence": [
+        {
+          "label": "American Forces Press Service, 'National Debt Poses Security Threat, Mullen Says' (Aug. 26, 2010)",
+          "url": "https://www.dvidshub.net/news/printable/515187"
+        }
+      ],
+      "check_run": "q208/askamerica/2026-11-17"
     },
     {
       "id": 40,
