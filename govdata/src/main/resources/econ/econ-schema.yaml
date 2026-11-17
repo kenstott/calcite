@@ -6674,7 +6674,7 @@ partitionedTables:
           credit card plans, all accounts, quarterly, percent; FYFSGDA188S = federal budget surplus or
           deficit as a percent of GDP (federal deficit as share of GDP, deficit-to-GDP ratio), annual
           by federal fiscal year, one observation per fiscal year dated Jan 1 of the fiscal year,
-          negative = deficit, from 1929 (OMB Historical Table 1.2 via FRED; the latest fiscal year
+          negative = deficit, from 1929 (OMB Historical Table 1.2 via FRED, the latest fiscal year
           appears only after OMB/BEA publish GDP for it); FYFSD = federal budget surplus or deficit
           in millions of dollars (the dollar deficit), annual by fiscal year, dated the fiscal-year
           end (June 30 through 1976, September 30 after), negative = deficit, from 1901.
