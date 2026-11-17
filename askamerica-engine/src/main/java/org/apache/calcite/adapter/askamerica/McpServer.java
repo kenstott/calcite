@@ -1396,7 +1396,8 @@ public class McpServer {
             + "artifact or a local report page: both stay on the reader's machine and nothing "
             + "is uploaded. When there is more than one figure, call compose_dashboard first "
             + "and pass its panels through create_report_artifact's dashboard argument so "
-            + "board and narrative compose in one report. The ONLY step that needs the "
+            + "board and narrative compose in one report; a report resting on a warehouse "
+            + "result of two or more rows with no chart is REFUSED. The ONLY step that needs the "
             + "reader's yes is publish_report, which uploads the report to their Studies page. "
             + "You MUST offer it only AFTER the report is on screen, in one line — e.g. 'Want "
             + "a permanent link to this that you can send to someone?' — and MUST NOT call "
@@ -4935,6 +4936,7 @@ public class McpServer {
                     } else {
                         addIfPresent(gateProblems, enforceValidationHasClaims(args));
                         addIfPresent(gateProblems, enforceClaimsArrayPresence(secs));
+                        addIfPresent(gateProblems, enforceReportChart(boardSvg));
                     }
                     addIfPresent(gateProblems, enforceExclusionDisclosure(secs));
                     addIfPresent(gateProblems, enforceHighSeverityDisclosure(secs));
@@ -9221,6 +9223,47 @@ public class McpServer {
             + "series the claim is about), compose_dashboard the set and pass it as this "
             + "call's `dashboard`, then publish again. Claims graded purely from publications "
             + "need no chart.";
+    }
+
+    /**
+     * Refuses a report (not a validation) built on multi-row warehouse results that carries no
+     * chart: no {@code dashboard} on this call and no render_chart or compose_dashboard call
+     * for this report. A query returning two or more rows is a series or a comparison, which
+     * the delivery instructions say goes on a board; a report resting only on single-figure
+     * lookups needs none.
+     *
+     * <p>Measured 2026-11-17 (daily eval q167, auto delinquency against used-car prices, and
+     * q50, PILT per acre by state): both published with no chart. The only chart gate,
+     * {@link #enforceValidationChart}, runs only when the report carries {@code claims}, so a
+     * reference answer was never checked. Read from this report's calls, not
+     * {@link #CHART_RENDERED}, so a chart from an earlier conversation in the same process does
+     * not count.
+     */
+    private static String enforceReportChart(String boardSvg) {
+        if (boardSvg != null) {
+            return null;
+        }
+        int maxRows = 0;
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if (e.has("error")) {
+                continue;
+            }
+            String tool = e.path("tool").asText("");
+            if ("render_chart".equals(tool) || "compose_dashboard".equals(tool)) {
+                return null;
+            }
+            if (e.hasNonNull("sql")) {
+                maxRows = Math.max(maxRows, e.path("rows").asInt(0));
+            }
+        }
+        if (maxRows < 2) {
+            return null;
+        }
+        return "report refused: it rests on warehouse results of up to " + maxRows + " rows (a "
+            + "series or a comparison) but carries no chart. Chart the figures the answer rests "
+            + "on — the trend, the comparison, or, for a negative finding, what was checked and "
+            + "the bound or proxy found — with compose_dashboard panels passed as this call's "
+            + "`dashboard` (or render_chart first), then call this tool again.";
     }
 
     /** How close a disclosure word ("excluded", "dropped", ...) must sit to a mention of the
