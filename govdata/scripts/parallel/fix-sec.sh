@@ -60,6 +60,9 @@
 #     prefix, which is the filing agent's CIK rather than the subject company's.
 #
 # USAGE
+# EXIT CODES  0 ok | 1 real failure | 2 usage | 3 sec.gov cool-down | 4 gap closed but some
+#   accessions errored (named in *.failed files; a chain may continue)
+#
 #   fix-sec.sh                                  # report gaps, reprocess nothing
 #   fix-sec.sh --confirm                        # repair every gap, oldest year first
 #   fix-sec.sh --year 2026 --confirm            # repair one filing year
@@ -567,7 +570,9 @@ record_attempted() {
 }
 
 batches=0
+EXIT_ERRORED_ACCESSIONS=4  # gap closed, N accessions errored (0 ok, 1 real failure, 2 usage, 3 cool-down)
 failed=0
+errored=0   # accessions the ETL reported errored but whose batch otherwise completed
 for ys in $YEARS; do
   year="${ys%%:*}"
   slot="${ys##*:}"
@@ -638,7 +643,6 @@ for ys in $YEARS; do
     # successes, so the batch was re-offered, re-run for 94 minutes, and discarded again. Neither
     # year can reach zero that way. Split the batch on the outcome the ETL already reports.
     if [ -n "$_etlfailed" ] && [ "$_etlfailed" -gt 0 ]; then
-      failed=$((failed + 1))
       log_info "fix-sec: batch $batches — ${_etlfailed} of $n accessions errored" \
                "(${_processed:-?} processed)."
       log_info "  worker log: $_wlog"
@@ -655,8 +659,10 @@ for ys in $YEARS; do
         log_info "  could not name every failure (${_nfail} named, ${_etlfailed} reported) —" \
                  "recording nothing; list kept at $bf"
         rm -f "$bf.failed"
+        failed=$((failed + 1))
         continue
       fi
+      errored=$((errored + _nfail))
 
       grep -vxF -f "$bf.failed" "$bf" > "$bf.ok"
       _nok=$(wc -l < "$bf.ok")
@@ -668,10 +674,13 @@ for ys in $YEARS; do
       log_info "  failures kept at $bf.failed"
       rm -f "$bf.ok"
 
-      _429=$(grep -ac "HTTP 429" "$_wlog" 2>/dev/null || echo 0)
-      if [ "${_429:-0}" -gt 0 ]; then
+      # grep -c prints the count (0 included) and exits 1 on no match; || true keeps set -e
+      # happy without a second "0" being appended to the count.
+      _429=$(grep -ac "HTTP 429" "$_wlog" || true)
+      if [ "$_429" -gt 0 ]; then
         log_info "  ${_429} x HTTP 429 — SEC is rate-limiting. Stopping rather than escalating;" \
                  "re-run later and the attempted-list resumes from here."
+        failed=$((failed + 1))
         exit 1
       fi
       continue
@@ -708,5 +717,12 @@ if [ "$failed" -gt 0 ]; then
   echo "fix-sec: re-run to retry — the report is rebuilt from the tracker each time," >&2
   echo "  so anything genuinely repaired drops out and only real gaps remain." >&2
   exit 1
+fi
+if [ "$errored" -gt 0 ]; then
+  # Gap closed; only individual accessions errored. Distinct from a real failure (exit 1) so a
+  # year chain can continue. The named accessions are in the *.failed files listed above.
+  log_info "fix-sec: gap closed, but ${errored} accession(s) errored (lists kept at $WORK_DIR/*.batch.*.failed) —" \
+           "exit $EXIT_ERRORED_ACCESSIONS"
+  exit "$EXIT_ERRORED_ACCESSIONS"
 fi
 log_info "fix-sec: re-run without --confirm to confirm the gap is closed"
