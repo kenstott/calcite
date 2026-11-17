@@ -3651,6 +3651,72 @@ SELECT 'health', 'meps_ic_employer_coverage', 'T7_small_vs_large', CASE WHEN bad
 FROM (SELECT COUNT(*) AS bad FROM (SELECT survey_year, MAX(CASE WHEN firm_size='Less than 10 employees' THEN estimate END) s, MAX(CASE WHEN firm_size='1000 or more employees' THEN estimate END) l FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/meps_ic_employer_coverage', allow_moved_paths := true) WHERE measure='establishments_offering_pct' AND geo_level='national' GROUP BY survey_year) WHERE s IS NULL OR l IS NULL OR s >= l);
 
 
+-- ─────────────────────────────────────────────────────────────
+-- TABLE: cdc_maternal_mortality_provisional (data.cdc.gov e2d5-ggg7; national 12-month-ending series)
+-- ─────────────────────────────────────────────────────────────
+
+-- T1: existence
+INSERT INTO dq_results
+SELECT 'health', 'cdc_maternal_mortality_provisional', 'T1_existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  n, 1, 'Row count from iceberg_scan'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true));
+
+-- T2: row_count (870 upstream at 2026-11-17: 15 groups x 58 months)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_maternal_mortality_provisional', 'T2_row_count',
+  CASE WHEN n >= 800 THEN 'pass' ELSE 'fail' END,
+  n, 800, 'Expected ~870 rows (group/subgroup x 12-month-ending month since 2019-01)'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true));
+
+-- T3: sample
+SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true) LIMIT 3;
+
+-- T4: all_null_cols (footnote is null on unsuppressed rows only; it is legitimately non-null somewhere)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_maternal_mortality_provisional', 'T4_all_null_cols',
+  CASE WHEN cnt = 0 THEN 'pass' ELSE 'fail' END,
+  cnt, 0,
+  CASE WHEN cnt = 0 THEN 'No fully-null columns' ELSE 'Fully-null columns: ' || cols END
+FROM (
+  SELECT COUNT(*) AS cnt, STRING_AGG(column_name, ', ') AS cols
+  FROM (
+    SELECT column_name, null_percentage
+    FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true))
+    WHERE null_percentage = 100.0
+      AND column_name NOT IN ('type')
+  )
+);
+
+-- T6: pk_nulls
+INSERT INTO dq_results
+SELECT 'health', 'cdc_maternal_mortality_provisional', 'T6_pk_nulls',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END,
+  n, 0, 'Rows with NULL group, subgroup, year_of_death or month_of_death'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true)
+      WHERE "group" IS NULL OR subgroup IS NULL OR year_of_death IS NULL OR month_of_death IS NULL);
+
+-- T7: national total rate in a plausible range (Total/Total rows)
+INSERT INTO dq_results
+SELECT 'health', 'cdc_maternal_mortality_provisional', 'T7_total_rate_range',
+  CASE WHEN n > 0 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  bad, 0, 'Total/Total rows with rate outside 5-60 per 100,000, or no Total/Total rows'
+FROM (SELECT COUNT(*) AS n,
+        COUNT(*) FILTER (WHERE TRY_CAST(maternal_mortality_rate AS DOUBLE) < 5
+                            OR TRY_CAST(maternal_mortality_rate AS DOUBLE) > 60
+                            OR TRY_CAST(maternal_mortality_rate AS DOUBLE) IS NULL) AS bad
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true)
+      WHERE "group" = 'Total' AND subgroup = 'Total');
+
+-- T8: PK duplication guard
+INSERT INTO dq_results
+SELECT 'health', 'cdc_maternal_mortality_provisional', 'T8_pk_duplicates',
+  CASE WHEN d = 0 THEN 'pass' ELSE 'fail' END,
+  d, 0, 'Duplicate (group, subgroup, year_of_death, month_of_death) keys'
+FROM (SELECT COUNT(*) AS d FROM (
+        SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/health/cdc_maternal_mortality_provisional', allow_moved_paths := true)
+        GROUP BY "group", subgroup, year_of_death, month_of_death HAVING COUNT(*) > 1));
+
 SELECT schema, tbl, test, status, value, threshold, detail
 FROM dq_results
 ORDER BY schema, tbl, test;
