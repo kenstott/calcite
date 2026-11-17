@@ -432,7 +432,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={period_start}&end={period_end}&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content"
+      url: "https://api.eia.gov/v2/electricity/electric-power-operational-data/data?frequency=monthly&start={period_start}&end={period_end}&data[]=generation&data[]=total-consumption-btu&data[]=consumption-for-eg-btu&data[]=cost-per-btu&data[]=sulfur-content&data[]=ash-content&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=location&sort[1][direction]=asc&sort[2][column]=sectorid&sort[2][direction]=asc&sort[3][column]=fueltypeid&sort[3][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -539,7 +539,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=annual&start={effective_year}&end={effective_year}&data[]=price&data[]=revenue&data[]=sales&data[]=customers"
+      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=annual&start={effective_year}&end={effective_year}&data[]=price&data[]=revenue&data[]=sales&data[]=customers&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=stateid&sort[1][direction]=asc&sort[2][column]=sectorid&sort[2][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -651,7 +651,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=monthly&start={period_start}&end={period_end}&data[]=price&data[]=revenue&data[]=sales&data[]=customers"
+      url: "https://api.eia.gov/v2/electricity/retail-sales/data?frequency=monthly&start={period_start}&end={period_end}&data[]=price&data[]=revenue&data[]=sales&data[]=customers&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=stateid&sort[1][direction]=asc&sort[2][column]=sectorid&sort[2][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -2167,7 +2167,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/crd/crpdn/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -2276,7 +2276,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/natural-gas/prod/sum/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value"
+      url: "https://api.eia.gov/v2/natural-gas/prod/sum/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -2618,7 +2618,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/stoc/wstk/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/stoc/wstk/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -2862,7 +2862,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/pri/wfr/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/pri/wfr/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -3209,7 +3209,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/pnp/refp/data?frequency=monthly&start={period_start}&end={period_end}&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
@@ -3693,7 +3693,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/steo/data/?frequency=monthly&data[0]=value&facets[seriesId][]=RIGSPM&facets[seriesId][]=NWDPM&facets[seriesId][]=NWCPM&facets[seriesId][]=DUCSPM&facets[seriesId][]=RIGSBK&facets[seriesId][]=NWDBK&facets[seriesId][]=NWCBK&facets[seriesId][]=DUCSBK&facets[seriesId][]=RIGSEF&facets[seriesId][]=NWDEF&facets[seriesId][]=NWCEF&facets[seriesId][]=DUCSEF&facets[seriesId][]=RIGSAP&facets[seriesId][]=NWDAP&facets[seriesId][]=NWCAP&facets[seriesId][]=DUCSAP&facets[seriesId][]=RIGSHA&facets[seriesId][]=NWDHA&facets[seriesId][]=NWCHA&facets[seriesId][]=DUCSHA&facets[seriesId][]=RIGSR48&facets[seriesId][]=NWDR48&facets[seriesId][]=NWCR48&facets[seriesId][]=DUCSR48"
+      url: "https://api.eia.gov/v2/steo/data/?frequency=monthly&data[0]=value&facets[seriesId][]=RIGSPM&facets[seriesId][]=NWDPM&facets[seriesId][]=NWCPM&facets[seriesId][]=DUCSPM&facets[seriesId][]=RIGSBK&facets[seriesId][]=NWDBK&facets[seriesId][]=NWCBK&facets[seriesId][]=DUCSBK&facets[seriesId][]=RIGSEF&facets[seriesId][]=NWDEF&facets[seriesId][]=NWCEF&facets[seriesId][]=DUCSEF&facets[seriesId][]=RIGSAP&facets[seriesId][]=NWDAP&facets[seriesId][]=NWCAP&facets[seriesId][]=DUCSAP&facets[seriesId][]=RIGSHA&facets[seriesId][]=NWDHA&facets[seriesId][]=NWCHA&facets[seriesId][]=DUCSHA&facets[seriesId][]=RIGSR48&facets[seriesId][]=NWDR48&facets[seriesId][]=NWCR48&facets[seriesId][]=DUCSR48&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=seriesId&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
