@@ -9314,6 +9314,153 @@ partitionedTables:
         compactionTargetFileSizeBytes: 134217728
         compactionMinFiles: 5
 
+  # --- INPUT-OUTPUT ACCOUNTS (Use and Supply tables) ---
+  - name: input_output_accounts
+    # BEA revises the annual Input-Output accounts for several prior years in each annual update
+    # and again at each comprehensive revision; the lookback reopens the 6 most recently published
+    # years, the same window industry_gdp uses.
+    lookbackPeriods: 6
+    freshness:
+      type: hash
+    pattern: "type=input_output/year=*/input_output_accounts.parquet"
+    dimensions:
+      type:
+        - input_output
+      # BEA InputOutput TableID. 259 = Use of Commodities by Industries (Summary, 71 industries);
+      # 262 = Domestic Supply of Commodities by Industries (Summary), which carries the commodity
+      # import column (MCIF) and total product supply (T016) that imported-input shares need.
+      # The published Import Matrix is NOT in the BEA API (iTable-only), so it is derived in the
+      # input_output_imported_input_share view rather than loaded.
+      table_id:
+        - "259"
+        - "262"
+      year:
+        type: yearRange
+        start: "${GOVDATA_START_YEAR:1997}"
+        end: "${GOVDATA_END_YEAR:${GOVDATA_CURRENT_YEAR}}"
+        minYear: 1997
+        # BEA publishes annual I-O in arrears; a year not yet published answers "no data found",
+        # which BeaResponseTransformer maps to an empty period asked again on the next run.
+        dataLag: 1
+    partitions:
+      style: hive
+      columnDefinitions:
+        - name: type
+          type: VARCHAR
+        - name: year
+          type: INTEGER
+          storedDigits: 4
+    comment: >
+      BEA annual Input-Output accounts, summary level (71 industries), national, in millions of
+      current dollars, long format: one row per table_id x year x row_code x col_code. table_id
+      259 is the Use table: row_code is the COMMODITY consumed, col_code the consuming INDUSTRY
+      (col_type 'Industry'; codes starting T/F/V are totals, final-demand and value-added columns,
+      e.g. T001 total intermediate, T019 total use, F010 personal consumption, F040 exports,
+      V001 compensation, VABAS value added). table_id 262 is the Domestic Supply table: row_code
+      the commodity, col_code the producing industry, plus commodity-level columns T007 total
+      commodity output, MCIF imports (CIF), MDTY import duties, T013 total product supply (basic
+      prices), T016 total product supply (purchaser prices). A commodity row with no MCIF cell has
+      no imports (BEA omits the zero cell). value is null where BEA publishes a blank cell. Join
+      industries to NAICS via the BEA code (e.g. 334 Computer and electronic products, 3361MV
+      Motor vehicles). For the share of each industry's intermediate inputs that is imported
+      use input_output_imported_input_share (derived; BEA's published Import Matrix is not
+      available through the API).
+    columns:
+      - name: table_id
+        type: string
+        source: TableID
+        nullable: true
+        comment: BEA InputOutput table id; 259 Use (summary), 262 Domestic Supply (summary)
+      - name: row_code
+        type: string
+        source: RowCode
+        nullable: true
+        comment: BEA commodity code of the row (BEA summary-level I-O code, e.g. 334, 111CA, T005 total intermediate)
+      - name: row_description
+        type: string
+        source: RowDescr
+        nullable: true
+        comment: Name of the commodity in row_code
+      - name: row_type
+        type: string
+        source: RowType
+        nullable: true
+        comment: BEA row classification; 'Commodity' on both tables
+      - name: col_code
+        type: string
+        source: ColCode
+        nullable: true
+        comment: BEA industry code of the column on the Use table (T/F/V-prefixed codes are totals, final demand, value added); on the Supply table also commodity-level columns MCIF, MDTY, T007, T013, T016
+      - name: col_description
+        type: string
+        source: ColDescr
+        nullable: true
+        comment: Name of the industry or measure in col_code
+      - name: col_type
+        type: string
+        source: ColType
+        nullable: true
+        comment: BEA column classification; 'Industry' on both tables
+      - name: value
+        type: double
+        nullable: true
+        expression: "CAST(REPLACE(src.DataValue, ',', '') AS DOUBLE)"
+        comment: Cell value in millions of current dollars; null where BEA publishes a blank
+      - name: note_ref
+        type: string
+        source: NoteRef
+        nullable: true
+        comment: BEA footnote reference (the table id)
+
+    source:
+      type: http
+      url: "https://apps.bea.gov/api/data"
+      method: GET
+      parameters:
+        UserID: "{env:BEA_API_KEY}"
+        method: "GetData"
+        DataSetName: "InputOutput"
+        TableID: "{table_id}"
+        Year: "{effective_year}"
+        ResultFormat: "JSON"
+      response:
+        format: json
+        errorPath: "BEAAPI.Results.Error|BEAAPI.Error"
+      rateLimit:
+        requestsPerSecond: 1.5
+        retryOn: [429, 503]
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.BeaResponseTransformer"
+
+    materialize:
+      enabled: true
+      format: iceberg
+      output:
+        pattern: "type=input_output/year=*/"
+      partition:
+        columns: [type, year]
+        valueSource:
+          year: effective_year
+      options:
+        compression: snappy
+        batchSize: 50000
+        stagingMode: local
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        catalogType: hadoop
+        targetFileSizeBytes: 134217728
+        batchPartitionColumns: [year]
+        incrementalKeys: [year]
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        runCompaction: true
+        compactionTargetFileSizeBytes: 134217728
+        compactionMinFiles: 5
+
   # ---------------------------------------------------------------------------
   # INTERNATIONAL TRADE — Census intltrade HS-6 monthly (moved from census schema;
   # consolidated with the BEA trade/FDI tables so all trade data lives in econ).
@@ -11830,6 +11977,45 @@ tables:
 # ============================================================================
 
 views:
+
+  - name: input_output_imported_input_share
+    comment: >
+      Imported share of intermediate inputs by industry and year, derived from the BEA Use and
+      Domestic Supply tables in input_output_accounts (summary level, 71 industries). For each
+      industry, imported_intermediate_inputs = sum over commodities of Use[commodity, industry] x
+      imports[commodity] / total_product_supply[commodity] (Supply MCIF / T016), which is the
+      import-comparability (proportionality) assumption BEA's own Import Matrix rests on, applied
+      here at summary level. It is a DERIVED estimate and will differ somewhat from BEA's published
+      Import Matrix (applied at detail level before aggregation). imported_input_share =
+      imported_intermediate_inputs / intermediate_inputs_total. All values in millions of current
+      dollars; share is a fraction (0.25 = 25 percent). Use it for "which industries depend on
+      imported inputs / tariff exposure by industry" and join industry_code to NAICS via the BEA
+      summary code (334 Computer and electronic products, 3361MV Motor vehicles, 325 Chemical
+      products). Commodity rows with no MCIF cell have no imports and contribute zero.
+    sql: >
+      WITH sup AS (
+        SELECT year, row_code AS commodity_code,
+               MAX(CASE WHEN col_code = 'MCIF' THEN value END) AS imports,
+               MAX(CASE WHEN col_code = 'T016' THEN value END) AS total_supply
+        FROM input_output_accounts
+        WHERE table_id = '262'
+        GROUP BY year, row_code
+      )
+      SELECT
+        u.year,
+        u.col_code AS industry_code,
+        MAX(u.col_description) AS industry_description,
+        SUM(u.value) AS intermediate_inputs_total,
+        SUM(u.value * COALESCE(s.imports, 0) / s.total_supply) AS imported_intermediate_inputs,
+        SUM(u.value * COALESCE(s.imports, 0) / s.total_supply) / SUM(u.value) AS imported_input_share
+      FROM input_output_accounts u
+      JOIN sup s ON s.year = u.year AND s.commodity_code = u.row_code
+      WHERE u.table_id = '259'
+        AND u.row_code NOT LIKE 'T%' AND u.row_code NOT LIKE 'V%'
+        AND u.col_code NOT LIKE 'T%' AND u.col_code NOT LIKE 'F%' AND u.col_code NOT LIKE 'V%'
+        AND u.col_code NOT IN ('Other', 'Used')
+        AND s.total_supply > 0
+      GROUP BY u.year, u.col_code
 
   # --- International / UN feed views ----------------------------------------
   # These read the wip Comtrade/ILOSTAT tables; they resolve once those tables

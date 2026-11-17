@@ -2459,3 +2459,99 @@ SELECT 'econ', 'usitc_additional_duty_lists', 'known_values', 'fail', 'hts8', '8
   'laptop rows=' || CAST(COUNT(*) FILTER (WHERE hts8 = '84713001') AS VARCHAR) || ' semi-equip List 2 rows=' || CAST(COUNT(*) FILTER (WHERE hts8 = '84862000' AND chapter99_heading = '9903.88.02') AS VARCHAR)
 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/usitc_additional_duty_lists', allow_moved_paths := true)
 HAVING COUNT(*) FILTER (WHERE hts8 = '84713001') <> 0 OR COUNT(*) FILTER (WHERE hts8 = '84862000' AND chapter99_heading = '9903.88.02') <> 1;
+
+-- ============================================================================
+-- input_output_accounts (BEA InputOutput Use table 259 + Domestic Supply table 262, summary level)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true) LIMIT 1));
+
+-- one year of the Use table is ~5,250 rows and the Supply table ~1,770 (verified live for 2022)
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'row_count',
+  CASE WHEN n >= 6000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '6000',
+  CASE WHEN n >= 6000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true))
+WHERE null_percentage = 100.0;
+
+-- row_type / col_type are 'Commodity' / 'Industry' on every row, a constant of the source
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type', 'year', 'row_type', 'col_type');  -- a DQ run over one year has a constant year
+
+-- primary key (table_id, year, row_code, col_code) is unique
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'pk_duplicates', 'fail', 'table_id, year, row_code, col_code', 'no duplicate keys',
+  CAST(COUNT(*) AS VARCHAR) || ' duplicated keys'
+FROM (SELECT table_id, year, row_code, col_code FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true) GROUP BY table_id, year, row_code, col_code HAVING COUNT(*) > 1)
+HAVING COUNT(*) > 0;
+
+-- both tables present, and Use has the 71 summary industries
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'tables_present', 'fail', 'table_id', '259 and 262 present, 71 industry columns on 259',
+  'distinct table_ids=' || CAST(COUNT(DISTINCT table_id) AS VARCHAR) || ' use industries=' ||
+  CAST(COUNT(DISTINCT col_code) FILTER (WHERE table_id = '259' AND col_code NOT LIKE 'T%' AND col_code NOT LIKE 'F%' AND col_code NOT LIKE 'V%' AND col_code NOT IN ('Other', 'Used')) AS VARCHAR)
+FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true)
+HAVING COUNT(DISTINCT table_id) <> 2
+    OR COUNT(DISTINCT col_code) FILTER (WHERE table_id = '259' AND col_code NOT LIKE 'T%' AND col_code NOT LIKE 'F%' AND col_code NOT LIKE 'V%' AND col_code NOT IN ('Other', 'Used')) <> 71;
+
+-- accounting identity: for every industry, total intermediate (T005 row) equals the sum of its commodity inputs
+INSERT INTO dq_results
+SELECT 'econ', 'input_output_accounts', 'intermediate_sums', 'fail', 'value', 'T005 within 50 (cell rounding) of sum of commodity rows for every industry-year',
+  CAST(COUNT(*) AS VARCHAR) || ' industry-years off, e.g. ' || MIN(col_code)
+FROM (
+  SELECT year, col_code,
+         MAX(value) FILTER (WHERE row_code = 'T005') AS total,
+         SUM(value) FILTER (WHERE row_code NOT LIKE 'T%' AND row_code NOT LIKE 'V%') AS summed
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true)
+  WHERE table_id = '259' AND col_code NOT LIKE 'T%' AND col_code NOT LIKE 'F%' AND col_code NOT LIKE 'V%' AND col_code NOT IN ('Other', 'Used')
+  GROUP BY year, col_code
+)
+WHERE ABS(total - summed) > 50  -- cells are rounded to whole millions: up to 0.5 per commodity row x ~74 rows
+HAVING COUNT(*) > 0;
+
+-- derived imported-input share (view input_output_imported_input_share logic): shares lie in [0,1] and
+-- tradable-goods industries import more than services (computers 334 > legal/professional 5412OP)
+INSERT INTO dq_results
+WITH sup AS (
+  SELECT year, row_code AS commodity_code,
+         MAX(CASE WHEN col_code = 'MCIF' THEN value END) AS imports,
+         MAX(CASE WHEN col_code = 'T016' THEN value END) AS total_supply
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true)
+  WHERE table_id = '262'
+  GROUP BY year, row_code
+), sh AS (
+  SELECT u.year, u.col_code AS industry_code,
+         SUM(u.value * COALESCE(s.imports, 0) / s.total_supply) / SUM(u.value) AS share
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/input_output_accounts', allow_moved_paths := true) u
+  JOIN sup s ON s.year = u.year AND s.commodity_code = u.row_code
+  WHERE u.table_id = '259' AND u.row_code NOT LIKE 'T%' AND u.row_code NOT LIKE 'V%'
+    AND u.col_code NOT LIKE 'T%' AND u.col_code NOT LIKE 'F%' AND u.col_code NOT LIKE 'V%' AND u.col_code NOT IN ('Other', 'Used')
+    AND s.total_supply > 0
+  GROUP BY u.year, u.col_code
+)
+SELECT 'econ', 'input_output_accounts', 'imported_share_range',
+  CASE WHEN bad = 0 AND hi_ok = n_years THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR) || ' out of [0,1]; 334>5412OP in ' || CAST(hi_ok AS VARCHAR) || '/' || CAST(n_years AS VARCHAR) || ' years',
+  '0 out of range; 334 share > 5412OP share every year',
+  'derived imported-input shares are fractions and rank goods above services'
+FROM (
+  SELECT COUNT(*) FILTER (WHERE share < 0 OR share > 1) AS bad,
+         COUNT(DISTINCT year) AS n_years,
+         (SELECT COUNT(*) FROM sh a JOIN sh b ON a.year = b.year AND a.industry_code = '334' AND b.industry_code = '5412OP' WHERE a.share > b.share) AS hi_ok
+  FROM sh
+);
