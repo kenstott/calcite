@@ -122,11 +122,13 @@ final class SecFeedStore {
       return listing;
     }
     File f = store.fileFor(url);
-    if (f == null || !f.isFile()) {
+    // A zero-byte file is a document the feed carried without content, not a document that is
+    // empty at sec.gov; serving it would hand every parser an empty body, so it counts as not held.
+    if (f == null || !f.isFile() || f.length() == 0) {
       long n = store.misses.incrementAndGet();
       if (n <= MAX_MISS_LOGS) {
         LOGGER.info("EDGAR feed store: not held, fetched live ({}): {}",
-            store.holdsAccessionOf(url) ? "accession held, document missing" : "accession not held",
+            store.holdsAccessionOf(url) ? "accession held, document missing or empty" : "accession not held",
             url);
       }
       return null;
