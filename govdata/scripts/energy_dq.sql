@@ -1405,6 +1405,17 @@ FROM (
   WHERE price_dollars_per_gallon IS NOT NULL AND (price_dollars_per_gallon < 0.1 OR price_dollars_per_gallon > 20)
 ) t;
 
+-- T8: PK duplication guard (series_id, report_date)
+INSERT INTO dq_results
+SELECT 'energy', 'eia_retail_gasoline_prices', 'T8_pk_duplicates',
+  CASE WHEN COUNT(*) = 0 THEN 'pass' ELSE 'fail' END,
+  COUNT(*), 0, 'duplicate (series_id, report_date) groups'
+FROM (
+  SELECT series_id, report_date
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/energy/eia_retail_gasoline_prices', allow_moved_paths := true)
+  GROUP BY series_id, report_date HAVING COUNT(*) > 1
+) d;
+
 -- ============================================================
 -- eia_heating_fuel_prices
 -- ============================================================
