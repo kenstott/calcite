@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
   "lede": [
     "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
-    "80 statements could be checked. 46 have been checked so far (16 supported, 25 unsettled, 5 unsupported); the other 34 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "80 statements could be checked. 55 have been checked so far (25 supported, 25 unsettled, 5 unsupported); the other 25 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
     "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
   ],
   "stories": [
@@ -2568,10 +2568,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Institute for the Study of War's year-end assessment puts Russian gains in Ukraine in 2025 at 4,831 square kilometers, about 1,865 square miles, or 0.8 percent of Ukraine. Other trackers' tallies range from about 1,750 to 2,171 square miles.",
+      "evidence": [
+        {
+          "label": "ISW, Russian Offensive Campaign Assessment, Dec. 31, 2025",
+          "url": "https://www.criticalthreats.org/analysis/russian-offensive-campaign-assessment-december-31-2025"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-17"
     },
     {
       "id": 72,
@@ -2597,10 +2602,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "A report citing ISW figures gives Russia's net gain in Ukraine for January through October 2026 as 117.38 square kilometers, about 45 square miles, consistent with ISW's own monthly assessments. ISW's ten-month total itself was not read directly, and the Ukrainian DeepState project's tracking differs.",
+      "evidence": [
+        {
+          "label": "ISW, Russian Offensive Campaign Assessment, Nov. 1, 2026",
+          "url": "https://www.criticalthreats.org/analysis/russian-offensive-campaign-assessment-november-1-2026"
+        },
+        {
+          "label": "ilpoliticoweb, on ISW's 2026 figures",
+          "url": "https://www.ilpoliticoweb.it/en/ukraine-front-line-russia-territorial-gains-2026-isw/"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-17"
     },
     {
       "id": 73,
@@ -2626,10 +2640,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "ISW's assessments give Russia a net loss of 80.81 square kilometers (about 31 square miles) in September 2026 and 27.29 square kilometers (about 10.5 square miles) in October. ISW calls the September figure uncertain, and the DeepState project shows a net Russian gain in October.",
+      "evidence": [
+        {
+          "label": "ISW, Russian Offensive Campaign Assessment, Oct. 1, 2026",
+          "url": "https://www.criticalthreats.org/analysis/russian-offensive-campaign-assessment-october-1-2026"
+        },
+        {
+          "label": "ISW, Russian Offensive Campaign Assessment, Nov. 1, 2026",
+          "url": "https://www.criticalthreats.org/analysis/russian-offensive-campaign-assessment-november-1-2026"
+        }
+      ],
+      "check_run": "q216/askamerica/2026-11-17"
     },
     {
       "id": 74,
@@ -2655,10 +2678,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Ukraine's Defense Ministry, from General Staff data, reports Russian losses of 54,400 in October 2026, which it calls the highest of any month of the full-scale war. These are Ukrainian estimates; Britain and the U.S. publish no monthly series.",
+      "evidence": [
+        {
+          "label": "Ukraine Ministry of Defence, Russian casualties in October 2026",
+          "url": "https://mod.gov.ua/en/news/russian-casualties-in-october-2026-54-400-neutralized"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-17"
     },
     {
       "id": 75,
@@ -2684,10 +2712,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Ukrainian General Staff figures put Russian losses at 42,860 in July, 42,020 in August, 46,230 in September and 54,400 in October 2026, four consecutive months above 40,000. These are Ukrainian estimates.",
+      "evidence": [
+        {
+          "label": "Ukraine Ministry of Defence, Russian casualties in October 2026",
+          "url": "https://mod.gov.ua/en/news/russian-casualties-in-october-2026-54-400-neutralized"
+        },
+        {
+          "label": "Kyiv Independent, Russian losses in July 2026",
+          "url": "https://kyivindependent.com/russia-records-highest-monthly-losses-of-2026/"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-17"
     },
     {
       "id": 76,
@@ -2713,10 +2750,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Britain's Defence Ministry said on Sept. 10, 2026 that 1.5 million Russian personnel had been killed or wounded, as reported by Sahara Reporters; the British statement itself was not read directly. Ukraine's General Staff total was about 1.59 million by Nov. 1.",
+      "evidence": [
+        {
+          "label": "Sahara Reporters, on the UK Ministry of Defence estimate (Sept. 10, 2026)",
+          "url": "https://saharareporters.com/2026/09/10/uk-government-claims-russian-military-has-lost-15million-troops-ukraine-invasion"
+        },
+        {
+          "label": "Kyiv Independent, record Russian losses in October",
+          "url": "https://kyivindependent.com/russia-suffers-record-troop-losses-in-october-its-worst-month-since-full-scale-invasion-ukraine-says/"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-17"
     },
     {
       "id": 77,
@@ -2742,10 +2788,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Ukraine's president said in July that Russia had enlisted about 221,000 people in 2026 against about 225,500 losses, as reported by the Kyiv Independent; an independent economist estimates recruitment near 30,000 a month in mid-2026, below Ukrainian loss figures of 39,000 to 54,000 a month. The loss figures include wounded and are Ukrainian estimates.",
+      "evidence": [
+        {
+          "label": "Kyiv Independent, Russian losses and recruitment (July 2026)",
+          "url": "https://kyivindependent.com/russia-records-highest-monthly-losses-of-2026/"
+        },
+        {
+          "label": "Janis Kluge, Russianomics, on federal budget recruitment data",
+          "url": "https://janiskluge.substack.com/p/federal-budget-data-shows-71216-new"
+        }
+      ],
+      "check_run": "q217/askamerica/2026-11-17"
     },
     {
       "id": 78,
@@ -2771,10 +2826,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Ukrainska Pravda reported on Nov. 13, 2026 that Russia's refining capacity had fallen by about 30 percent since strikes began in late October; other published estimates range from about 20 to over 40 percent depending on method and period.",
+      "evidence": [
+        {
+          "label": "Ukrainska Pravda, Nov. 13, 2026",
+          "url": "https://www.pravda.com.ua/eng/news/2026/11/13/8062778/"
+        },
+        {
+          "label": "Ukrainska Pravda, citing the Financial Times (July 9, 2026)",
+          "url": "https://www.pravda.com.ua/eng/news/2026/07/09/8043293/"
+        }
+      ],
+      "check_run": "q218/askamerica/2026-11-17"
     },
     {
       "id": 79,
@@ -2800,10 +2864,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Ukraine's president said in March 2025 that Ukraine would support a 30-day pause in strikes on energy infrastructure, and Ukraine accepted a U.S. 30-day ceasefire proposal in Jeddah on March 11, 2025; a renewed energy-truce agreement in February 2026 is reported but was not read directly.",
+      "evidence": [
+        {
+          "label": "Kyiv Independent, March 19, 2025",
+          "url": "https://kyivindependent.com/kyiv-supports-energy-sector-ceasefire-expects-military-aid-to-continue-zelensky-says/"
+        }
+      ],
+      "check_run": "q218/askamerica/2026-11-17"
     },
     {
       "id": 80,
