@@ -181,7 +181,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Elections and Parties"
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "MD",
+      "about_states": []
     },
     {
       "id": 2,
@@ -211,7 +213,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MD",
+      "about_states": []
     },
     {
       "id": 3,
@@ -254,7 +258,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Elections and Parties"
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "MD",
+      "about_states": []
     },
     {
       "id": 4,
@@ -284,7 +290,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MD",
+      "about_states": []
     },
     {
       "id": 5,
@@ -314,7 +322,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Elections and Parties"
+      "broad_topic": "Elections and Parties",
+      "speaker_state": "MD",
+      "about_states": []
     },
     {
       "id": 6,
@@ -344,7 +354,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 7,
@@ -374,7 +386,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 8,
@@ -404,7 +418,9 @@
       "finding": "No official or independent account of 18 broken White House windows was found; the only sources for the figure are reports of this remark. The search covered AskAmerica's catalog (no table on White House building condition), the reporting story and news coverage; no White House, National Park Service or Secret Service record of window damage was found or read.",
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 9,
@@ -434,7 +450,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 10,
@@ -469,7 +487,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Defense and National Security"
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 11,
@@ -499,7 +519,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Defense and National Security"
+      "broad_topic": "Defense and National Security",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 12,
@@ -538,7 +560,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 13,
@@ -577,7 +601,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 14,
@@ -607,7 +633,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 15,
@@ -642,7 +670,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 16,
@@ -672,7 +702,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 17,
@@ -707,7 +739,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 18,
@@ -742,7 +776,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 19,
@@ -777,7 +813,11 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": [
+        "AR"
+      ]
     },
     {
       "id": 20,
@@ -807,7 +847,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 21,
@@ -844,7 +886,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 22,
@@ -879,7 +923,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 23,
@@ -909,7 +955,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 24,
@@ -954,7 +1002,9 @@
         }
       ],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": "CT",
+      "about_states": []
     },
     {
       "id": 25,
@@ -984,7 +1034,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Transportation and Infrastructure"
+      "broad_topic": "Transportation and Infrastructure",
+      "speaker_state": "CT",
+      "about_states": []
     },
     {
       "id": 26,
@@ -1014,7 +1066,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 27,
@@ -1044,7 +1098,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 28,
@@ -1074,7 +1130,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 29,
@@ -1104,7 +1162,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 30,
@@ -1134,7 +1194,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "AI and Technology"
+      "broad_topic": "AI and Technology",
+      "speaker_state": "NY",
+      "about_states": []
     },
     {
       "id": 31,
@@ -1164,7 +1226,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": null,
+      "about_states": []
     },
     {
       "id": 32,
@@ -1205,7 +1269,9 @@
         }
       ],
       "check_run": "q207/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 33,
@@ -1240,7 +1306,9 @@
         }
       ],
       "check_run": "q207/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 34,
@@ -1283,7 +1351,9 @@
         }
       ],
       "check_run": "q207/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 35,
@@ -1318,7 +1388,9 @@
         }
       ],
       "check_run": "q208/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 36,
@@ -1353,7 +1425,9 @@
         }
       ],
       "check_run": "q208/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 37,
@@ -1394,7 +1468,9 @@
         }
       ],
       "check_run": "q207/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 38,
@@ -1431,7 +1507,9 @@
         }
       ],
       "check_run": "q208/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 39,
@@ -1466,7 +1544,9 @@
         }
       ],
       "check_run": "q208/askamerica/2026-11-17",
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 40,
@@ -1496,7 +1576,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Congress and Government Spending"
+      "broad_topic": "Congress and Government Spending",
+      "speaker_state": "IA",
+      "about_states": []
     },
     {
       "id": 41,
@@ -1535,7 +1617,9 @@
         }
       ],
       "check_run": "q209/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 42,
@@ -1570,7 +1654,9 @@
         }
       ],
       "check_run": "q209/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 43,
@@ -1600,7 +1686,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 44,
@@ -1635,7 +1723,9 @@
         }
       ],
       "check_run": "q209/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 45,
@@ -1670,7 +1760,9 @@
         }
       ],
       "check_run": "q209/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 46,
@@ -1713,7 +1805,9 @@
         }
       ],
       "check_run": "q210/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 47,
@@ -1750,7 +1844,9 @@
         }
       ],
       "check_run": "q210/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 48,
@@ -1785,7 +1881,9 @@
         }
       ],
       "check_run": "q210/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 49,
@@ -1820,7 +1918,9 @@
         }
       ],
       "check_run": "q210/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 50,
@@ -1857,7 +1957,9 @@
         }
       ],
       "check_run": "q211/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 51,
@@ -1896,7 +1998,9 @@
         }
       ],
       "check_run": "q211/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 52,
@@ -1931,7 +2035,9 @@
         }
       ],
       "check_run": "q211/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "SD",
+      "about_states": []
     },
     {
       "id": 53,
@@ -1966,7 +2072,9 @@
         }
       ],
       "check_run": "q212/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 54,
@@ -2005,7 +2113,9 @@
         }
       ],
       "check_run": "q212/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 55,
@@ -2040,7 +2150,9 @@
         }
       ],
       "check_run": "q212/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 56,
@@ -2070,7 +2182,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 57,
@@ -2105,7 +2219,9 @@
         }
       ],
       "check_run": "q212/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 58,
@@ -2140,7 +2256,9 @@
         }
       ],
       "check_run": "q213/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 59,
@@ -2179,7 +2297,9 @@
         }
       ],
       "check_run": "q213/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 60,
@@ -2218,7 +2338,11 @@
         }
       ],
       "check_run": "q213/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": [
+        "KY"
+      ]
     },
     {
       "id": 61,
@@ -2257,7 +2381,11 @@
         }
       ],
       "check_run": "q213/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": [
+        "KY"
+      ]
     },
     {
       "id": 62,
@@ -2296,7 +2424,9 @@
         }
       ],
       "check_run": "q214/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 63,
@@ -2335,7 +2465,11 @@
         }
       ],
       "check_run": "q214/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": [
+        "TX"
+      ]
     },
     {
       "id": 64,
@@ -2380,7 +2514,9 @@
         }
       ],
       "check_run": "q214/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 65,
@@ -2415,7 +2551,9 @@
         }
       ],
       "check_run": "q214/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 66,
@@ -2460,7 +2598,9 @@
         }
       ],
       "check_run": "q215/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 67,
@@ -2513,7 +2653,9 @@
         }
       ],
       "check_run": "q215/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 68,
@@ -2552,7 +2694,9 @@
         }
       ],
       "check_run": "q215/askamerica/2026-11-17",
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 69,
@@ -2582,7 +2726,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Courts and Nominations"
+      "broad_topic": "Courts and Nominations",
+      "speaker_state": "IL",
+      "about_states": []
     },
     {
       "id": 70,
@@ -2612,7 +2758,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 71,
@@ -2647,7 +2795,9 @@
         }
       ],
       "check_run": "q216/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 72,
@@ -2686,7 +2836,9 @@
         }
       ],
       "check_run": "q216/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 73,
@@ -2725,7 +2877,9 @@
         }
       ],
       "check_run": "q216/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 74,
@@ -2760,7 +2914,9 @@
         }
       ],
       "check_run": "q217/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 75,
@@ -2799,7 +2955,9 @@
         }
       ],
       "check_run": "q217/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 76,
@@ -2838,7 +2996,9 @@
         }
       ],
       "check_run": "q217/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 77,
@@ -2877,7 +3037,9 @@
         }
       ],
       "check_run": "q217/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 78,
@@ -2916,7 +3078,9 @@
         }
       ],
       "check_run": "q218/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 79,
@@ -2951,7 +3115,9 @@
         }
       ],
       "check_run": "q218/askamerica/2026-11-17",
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 80,
@@ -2981,7 +3147,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 81,
@@ -3011,7 +3179,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 82,
@@ -3041,7 +3211,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "War and Foreign Affairs"
+      "broad_topic": "War and Foreign Affairs",
+      "speaker_state": "MS",
+      "about_states": []
     },
     {
       "id": 83,
@@ -3076,7 +3248,9 @@
         }
       ],
       "check_run": "q219/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 84,
@@ -3111,7 +3285,9 @@
         }
       ],
       "check_run": "q219/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 85,
@@ -3146,7 +3322,9 @@
         }
       ],
       "check_run": "q219/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 86,
@@ -3185,7 +3363,9 @@
         }
       ],
       "check_run": "q219/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 87,
@@ -3220,7 +3400,9 @@
         }
       ],
       "check_run": "q220/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 88,
@@ -3261,7 +3443,9 @@
         }
       ],
       "check_run": "q220/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 89,
@@ -3296,7 +3480,9 @@
         }
       ],
       "check_run": "q220/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 90,
@@ -3331,7 +3517,9 @@
         }
       ],
       "check_run": "q220/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 91,
@@ -3366,7 +3554,9 @@
         }
       ],
       "check_run": "q221/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 92,
@@ -3401,7 +3591,9 @@
         }
       ],
       "check_run": "q221/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 93,
@@ -3448,7 +3640,9 @@
         }
       ],
       "check_run": "q221/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 94,
@@ -3483,7 +3677,9 @@
         }
       ],
       "check_run": "q221/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 111,
@@ -3522,7 +3718,9 @@
         }
       ],
       "check_run": "q222/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 95,
@@ -3561,7 +3759,9 @@
         }
       ],
       "check_run": "q222/askamerica/2026-11-17",
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 96,
@@ -3591,7 +3791,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 97,
@@ -3621,7 +3823,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Energy"
+      "broad_topic": "Energy",
+      "speaker_state": "MA",
+      "about_states": []
     },
     {
       "id": 98,
@@ -3656,7 +3860,9 @@
         }
       ],
       "check_run": "q223/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 99,
@@ -3697,7 +3903,9 @@
         }
       ],
       "check_run": "q223/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 100,
@@ -3732,7 +3940,9 @@
         }
       ],
       "check_run": "q223/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 101,
@@ -3771,7 +3981,9 @@
         }
       ],
       "check_run": "q223/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 102,
@@ -3818,7 +4030,9 @@
         }
       ],
       "check_run": "q224/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 103,
@@ -3855,7 +4069,9 @@
         }
       ],
       "check_run": "q224/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 104,
@@ -3900,7 +4116,9 @@
         }
       ],
       "check_run": "q224/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 105,
@@ -3935,7 +4153,9 @@
         }
       ],
       "check_run": "q224/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 106,
@@ -3965,7 +4185,11 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": [
+        "CO"
+      ]
     },
     {
       "id": 107,
@@ -4004,7 +4228,9 @@
         }
       ],
       "check_run": "q225/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 108,
@@ -4043,7 +4269,9 @@
         }
       ],
       "check_run": "q225/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 109,
@@ -4078,7 +4306,9 @@
         }
       ],
       "check_run": "q225/askamerica/2026-11-17",
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     },
     {
       "id": 110,
@@ -4108,7 +4338,9 @@
       "finding": null,
       "evidence": [],
       "check_run": null,
-      "broad_topic": "Agriculture"
+      "broad_topic": "Agriculture",
+      "speaker_state": "CO",
+      "about_states": []
     }
   ]
 }

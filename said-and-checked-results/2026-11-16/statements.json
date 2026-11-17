@@ -106,7 +106,9 @@
    "counter_documents": [],
    "self_contradictions": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 2,
@@ -151,7 +153,9 @@
    "counter_documents": [],
    "self_contradictions": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 3,
@@ -180,7 +184,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 4,
@@ -209,7 +215,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "War and Foreign Affairs"
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 5,
@@ -238,7 +246,11 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ]
   },
   {
    "id": 6,
@@ -267,7 +279,11 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ]
   },
   {
    "id": 7,
@@ -306,7 +322,11 @@
    "counter_documents": [],
    "self_contradictions": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ]
   },
   {
    "id": 8,
@@ -345,7 +365,11 @@
    "counter_documents": [],
    "self_contradictions": [],
    "check_run": null,
-   "broad_topic": "Transportation and Infrastructure"
+   "broad_topic": "Transportation and Infrastructure",
+   "speaker_state": null,
+   "about_states": [
+    "DC"
+   ]
   },
   {
    "id": 9,
@@ -374,7 +398,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Elections and Parties"
+   "broad_topic": "Elections and Parties",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 10,
@@ -403,7 +429,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "War and Foreign Affairs"
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 11,
@@ -432,7 +460,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Housing and Communities"
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "MA",
+   "about_states": []
   },
   {
    "id": 12,
@@ -461,7 +491,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Housing and Communities"
+   "broad_topic": "Housing and Communities",
+   "speaker_state": "NY",
+   "about_states": []
   },
   {
    "id": 13,
@@ -490,7 +522,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "Congress and Government Spending"
+   "broad_topic": "Congress and Government Spending",
+   "speaker_state": "MD",
+   "about_states": []
   },
   {
    "id": 14,
@@ -519,7 +553,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "AI and Technology"
+   "broad_topic": "AI and Technology",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 15,
@@ -562,7 +598,9 @@
    "counter_documents": [],
    "self_contradictions": [],
    "check_run": null,
-   "broad_topic": "War and Foreign Affairs"
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 16,
@@ -601,7 +639,9 @@
    "counter_documents": [],
    "self_contradictions": [],
    "check_run": null,
-   "broad_topic": "War and Foreign Affairs"
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": []
   },
   {
    "id": 17,
@@ -630,7 +670,9 @@
    "finding": null,
    "evidence": [],
    "check_run": null,
-   "broad_topic": "War and Foreign Affairs"
+   "broad_topic": "War and Foreign Affairs",
+   "speaker_state": null,
+   "about_states": []
   }
  ]
 }
