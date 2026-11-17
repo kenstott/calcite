@@ -977,6 +977,28 @@ FROM (
   WHERE series IN ('MEHOINUSA672N', 'DFF')
 );
 
+-- FYFSGDA188S federal deficit as percent of GDP and FYFSD deficit in millions of dollars: annual fiscal-year
+-- series (one row per fiscal year), must be present with plausible values. Federal deficits never
+-- exceeded 30 percent of GDP (peak FY1943 about -30); the percent series stays within [-35, 35] and the
+-- dollar series within [-5000000, 5000000] million. Row floor scales with the loaded span (DFF years - 1).
+INSERT INTO dq_results
+SELECT
+  'econ', 'fred_indicators', 'expected_values',
+  CASE WHEN n_pct >= min_rows AND n_usd >= min_rows AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n_pct AS VARCHAR) || ' pct rows, ' || CAST(n_usd AS VARCHAR) || ' usd rows, ' || CAST(bad AS VARCHAR) || ' out of range',
+  '>=' || CAST(min_rows AS VARCHAR) || ' rows each (loaded years ' || CAST(loaded_years AS VARCHAR) || ' - 1, max 10), 0 out of range',
+  'FYFSGDA188S in [-35,35] and FYFSD in [-5000000,5000000] present'
+FROM (
+  SELECT COUNT(*) FILTER (WHERE series = 'FYFSGDA188S') AS n_pct,
+         COUNT(*) FILTER (WHERE series = 'FYFSD') AS n_usd,
+         COUNT(*) FILTER (WHERE (series = 'FYFSGDA188S' AND value NOT BETWEEN -35 AND 35)
+                             OR (series = 'FYFSD' AND value NOT BETWEEN -5000000 AND 5000000)) AS bad,
+         COUNT(DISTINCT year(date)) FILTER (WHERE series = 'DFF') AS loaded_years,
+         LEAST(10, GREATEST(1, COUNT(DISTINCT year(date)) FILTER (WHERE series = 'DFF') - 1)) AS min_rows
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fred_indicators', allow_moved_paths := true)
+  WHERE series IN ('FYFSGDA188S', 'FYFSD', 'DFF')
+);
+
 -- employment_statistics: CPS rate/ratio series values in [0, 100]
 -- Headline unemployment rate and LFPR plus the by-educational-attainment breakouts
 -- (unemployment rate LNS140276xx, LFPR LNS113276xx, emp-pop ratio LNS123276xx).

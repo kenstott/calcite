@@ -1179,6 +1179,8 @@ partitionedTables:
         - "DCOILWTICO"
         - "DTWEXBGS"
         - "USREC"
+        - "FYFSGDA188S"
+        - "FYFSD"
 
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.econ.FredResponseTransformer"

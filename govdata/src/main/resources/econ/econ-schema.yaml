@@ -447,6 +447,9 @@ dimension_values:
     - "DTWEXBGS"
     # Business cycle
     - "USREC"
+    # Federal budget (fiscal-year series; Treasury/OMB via FRED)
+    - "FYFSGDA188S"   # Federal surplus or deficit as percent of GDP, annual by fiscal year (negative = deficit), from 1929
+    - "FYFSD"         # Federal surplus or deficit, annual by fiscal year, millions of dollars (negative = deficit), from 1901
 
 # ============================================================================
 # BULK DOWNLOADS
@@ -6668,7 +6671,13 @@ partitionedTables:
           all commercial banks, quarterly, percent, seasonally adjusted annualized; REVOLSL =
           revolving consumer credit owned and securitized (mostly credit cards, Fed G.19), monthly,
           billions of dollars, seasonally adjusted; TERMCBCCALLNS = commercial bank interest rate on
-          credit card plans, all accounts, quarterly, percent.
+          credit card plans, all accounts, quarterly, percent; FYFSGDA188S = federal budget surplus or
+          deficit as a percent of GDP (federal deficit as share of GDP, deficit-to-GDP ratio), annual
+          by federal fiscal year, one observation per fiscal year dated Jan 1 of the fiscal year,
+          negative = deficit, from 1929 (OMB Historical Table 1.2 via FRED; the latest fiscal year
+          appears only after OMB/BEA publish GDP for it); FYFSD = federal budget surplus or deficit
+          in millions of dollars (the dollar deficit), annual by fiscal year, dated the fiscal-year
+          end (June 30 through 1976, September 30 after), negative = deficit, from 1901.
       - *date_column
       - name: value
         type: double
@@ -6773,6 +6782,8 @@ partitionedTables:
         - "DTWEXBGS"     # Trade-weighted US dollar index (broad)
         # Business cycle
         - "USREC"        # NBER recession indicator (1=recession, 0=expansion)
+        - "FYFSGDA188S"  # Federal surplus or deficit as percent of GDP, fiscal year
+        - "FYFSD"        # Federal surplus or deficit, fiscal year, millions of dollars
       rateLimit:  # API rate limiting
         minIntervalMs: 500  # Milliseconds between requests
         maxRetries: 5
