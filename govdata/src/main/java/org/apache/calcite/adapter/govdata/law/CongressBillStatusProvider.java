@@ -65,7 +65,7 @@ import javax.xml.stream.XMLStreamReader;
  * <p>One zip per (Congress, bill type) at
  * {@code https://www.govinfo.gov/bulkdata/BILLSTATUS/{congress}/{type}/BILLSTATUS-{congress}-{type}.zip}
  * holds one XML file per bill. Every table reads the same cached zip and differs only in which
- * rows it emits, so the raw download happens once per (Congress, bill type, refresh month).
+ * rows it emits, so the raw download happens once per (Congress, bill type, refresh date).
  *
  * <p>Streaming: the zip is read one entry at a time, each entry is parsed with a StAX pull parser,
  * and rows are handed to the pipeline lazily. Nothing larger than a single bill's rows is ever held
@@ -292,7 +292,7 @@ public class CongressBillStatusProvider implements StorageAwareDataProvider {
     }
     String congress = required(variables, "congress");
     String billType = required(variables, "bill_type");
-    String refresh = required(variables, "refresh_month");
+    String refresh = required(variables, "refresh_date");
 
     String url = VariableResolver.substitute(config.getSource().getUrl(), variables);
     StorageProvider sp = storageProvider();
