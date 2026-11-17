@@ -47,6 +47,16 @@ class CatalogSearchTest {
             + "window, was at position " + fecRank + ": " + hits);
   }
 
+  /** News q8, 2026-11-17: the failed-bank claims were checked only against the FDIC API. The
+   *  search the gate now requires for the central claim must land on banking.failures. */
+  @Test void bankFailureSearchesFindTheFailuresTable() {
+    for (String q : new String[]{"FDIC bank failures", "bank failures 2026",
+        "deposit insurance fund cost of bank failure", "FDIC failed bank list"}) {
+      int rank = rankOf(Catalog.search(q, 10), "banking.failures");
+      assertTrue(rank >= 0 && rank < 3, q + ": banking.failures at " + rank);
+    }
+  }
+
   @Test void stopwordAloneMatchesNothing() {
     ArrayNode hits = Catalog.search("by", 50);
     assertTrue(hits.size() == 0,

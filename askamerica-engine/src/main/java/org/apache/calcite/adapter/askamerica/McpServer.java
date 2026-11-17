@@ -1396,7 +1396,8 @@ public class McpServer {
             + "artifact or a local report page: both stay on the reader's machine and nothing "
             + "is uploaded. When there is more than one figure, call compose_dashboard first "
             + "and pass its panels through create_report_artifact's dashboard argument so "
-            + "board and narrative compose in one report. The ONLY step that needs the "
+            + "board and narrative compose in one report; a report resting on a warehouse "
+            + "result of two or more rows with no chart is REFUSED. The ONLY step that needs the "
             + "reader's yes is publish_report, which uploads the report to their Studies page. "
             + "You MUST offer it only AFTER the report is on screen, in one line — e.g. 'Want "
             + "a permanent link to this that you can send to someone?' — and MUST NOT call "
@@ -3004,9 +3005,9 @@ public class McpServer {
             + "list of web search queries you ran for it. A claim with neither is refused. "
             + "`measure`: the exact search_catalog query you ran for the statistic the claim "
             + "rests on, with its place ('Washington metro CPI', 'D.C. monthly unemployment "
-            + "rate', 'D.C. eviction filings'); REQUIRED on every claim graded 'not checkable "
-            + "here' or 'unsupported' that has no warehouse_value, and refused unless that query "
-            + "was run this session. "
+            + "rate', 'D.C. eviction filings'); REQUIRED on the central claim and on every claim "
+            + "graded 'not checkable here' or 'unsupported', when the claim has no "
+            + "warehouse_value, and refused unless that query was run this session. "
             + "`windows_tested`: array of {window, value}, at least two different windows, REQUIRED on "
             + "a claim of a change in a figure graded 'partially false', 'mostly false' or 'false' "
             + "when the claim names no year, month, quarter or fiscal year; a report without it is "
@@ -3818,7 +3819,8 @@ public class McpServer {
             tools.add(
                 tool("save_call_log",
                 "Save this session's tool-call log (every call, with its SQL and row count) "
-                + "as calls.jsonl in the run's directory. For a run that ends without "
+                + "to calls.jsonl in the run's directory, appended after any calls an earlier "
+                + "session of the same run already saved there. For a run that ends without "
                 + "preview_report or deliver_report, which otherwise leaves no record of the "
                 + "queries behind its findings. Call it once, last.",
                 schema(callLogProps, new String[]{"run_subpath"})));
@@ -4884,8 +4886,10 @@ public class McpServer {
                             args.path("source_url").asText(null), args.path("unclaimed")));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
-                        addIfPresent(gateProblems, ClaimScoring.enforce(claims));
-                        addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle));
+                        String claimsProblem = ClaimScoring.enforce(claims);
+                        addIfPresent(gateProblems, claimsProblem);
+                        addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle,
+                            claimsProblem == null ? ClaimScoring.headlineClause(claims) : null));
                         if (gateProblems.isEmpty()) {
                             // The page is what gets published, so a rating it states is held
                             // to the claim scores here, not only in deliver_report. Checked
@@ -4932,6 +4936,7 @@ public class McpServer {
                     } else {
                         addIfPresent(gateProblems, enforceValidationHasClaims(args));
                         addIfPresent(gateProblems, enforceClaimsArrayPresence(secs));
+                        addIfPresent(gateProblems, enforceReportChart(boardSvg));
                     }
                     addIfPresent(gateProblems, enforceExclusionDisclosure(secs));
                     addIfPresent(gateProblems, enforceHighSeverityDisclosure(secs));
@@ -7459,7 +7464,16 @@ public class McpServer {
             + "so they are on record.)";
     }
 
-    /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
+    /**
+     * Appends the call log as JSON lines to {@code dir}/calls.jsonl; null if there is nothing to
+     * write. Lines already in the file are kept: a resumed run is a new engine process with an
+     * empty log, and overwriting dropped every query the earlier session ran (2026-11-17 daily
+     * eval). A call already in the file — the same process writing again from preview_report,
+     * deliver_report or save_call_log — is not written twice; a call is identified by its seq,
+     * ts and tool.
+     *
+     * @throws IllegalStateException if an existing line is not a JSON object, naming the line
+     */
     private static java.io.File writeCallLog(java.io.File dir) throws java.io.IOException {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
@@ -7468,14 +7482,48 @@ public class McpServer {
         if (snapshot.isEmpty()) {
             return null;
         }
+        java.io.File f = new java.io.File(dir, "calls.jsonl");
+        java.util.Set<String> written = new java.util.HashSet<>();
+        if (f.exists()) {
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(f.toPath(),
+                java.nio.charset.StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                JsonNode prior;
+                try {
+                    prior = MAPPER.readTree(line);
+                } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                    throw new IllegalStateException(f + " line " + (i + 1)
+                        + " is not JSON, so the calls already saved there cannot be kept: "
+                        + ex.getOriginalMessage(), ex);
+                }
+                if (!prior.isObject()) {
+                    throw new IllegalStateException(f + " line " + (i + 1)
+                        + " is not a JSON object, so the calls already saved there cannot be "
+                        + "kept");
+                }
+                written.add(callKey(prior));
+            }
+        }
         StringBuilder sb = new StringBuilder();
         for (ObjectNode e : snapshot) {
-            sb.append(e.toString()).append('\n');
+            if (written.add(callKey(e))) {
+                sb.append(e.toString()).append('\n');
+            }
         }
-        java.io.File f = new java.io.File(dir, "calls.jsonl");
         java.nio.file.Files.write(f.toPath(),
-            sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         return f;
+    }
+
+    /** Identifies one recorded call across writes of calls.jsonl. */
+    private static String callKey(JsonNode e) {
+        return e.path("seq").asText("") + '|' + e.path("ts").asText("") + '|'
+            + e.path("tool").asText("");
     }
 
     private static final java.util.regex.Pattern DISCLOSURE_WORDS = java.util.regex.Pattern
@@ -8478,8 +8526,14 @@ public class McpServer {
         java.util.List<String> problems = new java.util.ArrayList<>();
         for (JsonNode c : claims) {
             String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            // The central claim is held to the search whatever its verdict. Measured 2026-11-17
+            // (news q8, 24/7 Wall St. on six FDIC bank failures): every bank-failure claim,
+            // the central one included, was graded 'true' from the FDIC API alone, and
+            // banking.failures, the top search_catalog hit for "FDIC bank failures", was never
+            // looked at.
             if (!("not checkable here".equals(verdict)
-                    || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict))
+                    || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict)
+                    || ClaimScoring.isCentral(c))
                     || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
                     || "attack".equals(c.path("kind").asText(""))
                     || ClaimScoring.isOpinion(c)) {
@@ -9169,6 +9223,47 @@ public class McpServer {
             + "series the claim is about), compose_dashboard the set and pass it as this "
             + "call's `dashboard`, then publish again. Claims graded purely from publications "
             + "need no chart.";
+    }
+
+    /**
+     * Refuses a report (not a validation) built on multi-row warehouse results that carries no
+     * chart: no {@code dashboard} on this call and no render_chart or compose_dashboard call
+     * for this report. A query returning two or more rows is a series or a comparison, which
+     * the delivery instructions say goes on a board; a report resting only on single-figure
+     * lookups needs none.
+     *
+     * <p>Measured 2026-11-17 (daily eval q167, auto delinquency against used-car prices, and
+     * q50, PILT per acre by state): both published with no chart. The only chart gate,
+     * {@link #enforceValidationChart}, runs only when the report carries {@code claims}, so a
+     * reference answer was never checked. Read from this report's calls, not
+     * {@link #CHART_RENDERED}, so a chart from an earlier conversation in the same process does
+     * not count.
+     */
+    private static String enforceReportChart(String boardSvg) {
+        if (boardSvg != null) {
+            return null;
+        }
+        int maxRows = 0;
+        for (ObjectNode e : recentCallLogSnapshot()) {
+            if (e.has("error")) {
+                continue;
+            }
+            String tool = e.path("tool").asText("");
+            if ("render_chart".equals(tool) || "compose_dashboard".equals(tool)) {
+                return null;
+            }
+            if (e.hasNonNull("sql")) {
+                maxRows = Math.max(maxRows, e.path("rows").asInt(0));
+            }
+        }
+        if (maxRows < 2) {
+            return null;
+        }
+        return "report refused: it rests on warehouse results of up to " + maxRows + " rows (a "
+            + "series or a comparison) but carries no chart. Chart the figures the answer rests "
+            + "on — the trend, the comparison, or, for a negative finding, what was checked and "
+            + "the bound or proxy found — with compose_dashboard panels passed as this call's "
+            + "`dashboard` (or render_chart first), then call this tool again.";
     }
 
     /** How close a disclosure word ("excluded", "dropped", ...) must sit to a mention of the
