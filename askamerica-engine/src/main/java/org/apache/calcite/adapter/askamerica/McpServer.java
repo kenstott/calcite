@@ -3818,7 +3818,8 @@ public class McpServer {
             tools.add(
                 tool("save_call_log",
                 "Save this session's tool-call log (every call, with its SQL and row count) "
-                + "as calls.jsonl in the run's directory. For a run that ends without "
+                + "to calls.jsonl in the run's directory, appended after any calls an earlier "
+                + "session of the same run already saved there. For a run that ends without "
                 + "preview_report or deliver_report, which otherwise leaves no record of the "
                 + "queries behind its findings. Call it once, last.",
                 schema(callLogProps, new String[]{"run_subpath"})));
@@ -7459,7 +7460,16 @@ public class McpServer {
             + "so they are on record.)";
     }
 
-    /** Writes the call log as JSON lines into {@code dir}; null if there is nothing to write. */
+    /**
+     * Appends the call log as JSON lines to {@code dir}/calls.jsonl; null if there is nothing to
+     * write. Lines already in the file are kept: a resumed run is a new engine process with an
+     * empty log, and overwriting dropped every query the earlier session ran (2026-11-17 daily
+     * eval). A call already in the file — the same process writing again from preview_report,
+     * deliver_report or save_call_log — is not written twice; a call is identified by its seq,
+     * ts and tool.
+     *
+     * @throws IllegalStateException if an existing line is not a JSON object, naming the line
+     */
     private static java.io.File writeCallLog(java.io.File dir) throws java.io.IOException {
         java.util.List<ObjectNode> snapshot;
         synchronized (CALL_LOG) {
@@ -7468,14 +7478,48 @@ public class McpServer {
         if (snapshot.isEmpty()) {
             return null;
         }
+        java.io.File f = new java.io.File(dir, "calls.jsonl");
+        java.util.Set<String> written = new java.util.HashSet<>();
+        if (f.exists()) {
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(f.toPath(),
+                java.nio.charset.StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                JsonNode prior;
+                try {
+                    prior = MAPPER.readTree(line);
+                } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+                    throw new IllegalStateException(f + " line " + (i + 1)
+                        + " is not JSON, so the calls already saved there cannot be kept: "
+                        + ex.getOriginalMessage(), ex);
+                }
+                if (!prior.isObject()) {
+                    throw new IllegalStateException(f + " line " + (i + 1)
+                        + " is not a JSON object, so the calls already saved there cannot be "
+                        + "kept");
+                }
+                written.add(callKey(prior));
+            }
+        }
         StringBuilder sb = new StringBuilder();
         for (ObjectNode e : snapshot) {
-            sb.append(e.toString()).append('\n');
+            if (written.add(callKey(e))) {
+                sb.append(e.toString()).append('\n');
+            }
         }
-        java.io.File f = new java.io.File(dir, "calls.jsonl");
         java.nio.file.Files.write(f.toPath(),
-            sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         return f;
+    }
+
+    /** Identifies one recorded call across writes of calls.jsonl. */
+    private static String callKey(JsonNode e) {
+        return e.path("seq").asText("") + '|' + e.path("ts").asText("") + '|'
+            + e.path("tool").asText("");
     }
 
     private static final java.util.regex.Pattern DISCLOSURE_WORDS = java.util.regex.Pattern
