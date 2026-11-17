@@ -1483,15 +1483,9 @@ public class HttpSource implements DataSource {
         if (shouldRetry(e, rateLimit)) {
           retries++;
           if (retries <= rateLimit.getMaxRetries()) {
-            long backoff;
-            if (e instanceof RetryableHttpException
-                && ((RetryableHttpException) e).retryAfterMs > 0L) {
-              // Server told us how long to wait (503/429 Retry-After) — honor it (capped). A
-              // zero hint is not a wait, so the configured exponential backoff applies.
-              backoff = ((RetryableHttpException) e).retryAfterMs;
-            } else {
-              backoff = rateLimit.getRetryBackoffMs() * (1L << (retries - 1));
-            }
+            long hintMs = e instanceof RetryableHttpException
+                ? ((RetryableHttpException) e).retryAfterMs : -1L;
+            long backoff = retryWaitMs(hintMs, rateLimit.getRetryBackoffMs(), retries);
             LOGGER.warn("Request failed, retrying in {}ms (attempt {}/{}): {}",
                 backoff, retries, rateLimit.getMaxRetries(), SecretRedaction.redact(e.getMessage()));
             try {
@@ -1554,6 +1548,18 @@ public class HttpSource implements DataSource {
       super(message);
       this.retryAfterMs = retryAfterMs;
     }
+  }
+
+  /**
+   * The wait before retry number {@code attempt} (1-based). A positive server Retry-After hint is
+   * honoured; an absent (negative) or zero hint is not a wait, so the configured exponential
+   * backoff applies.
+   */
+  static long retryWaitMs(long retryAfterHintMs, long retryBackoffMs, int attempt) {
+    if (retryAfterHintMs > 0L) {
+      return retryAfterHintMs;
+    }
+    return retryBackoffMs * (1L << (attempt - 1));
   }
 
   /** The circuit-breaker key for a request: the URL with the query string stripped. */
