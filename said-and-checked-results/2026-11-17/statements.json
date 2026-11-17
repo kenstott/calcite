@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
   "lede": [
     "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
-    "80 statements could be checked. None has been checked yet; all 80 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "80 statements could be checked. 11 have been checked so far (4 supported, 5 unsettled, 2 unsupported); the other 69 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
     "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
   ],
   "stories": [
@@ -235,9 +235,22 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "Reporting conflicts on whether Sen. Schumer publicly endorsed Rep. Haley Stevens against Abdul El-Sayed in Michigan (one outlet says he endorsed her; another says leadership had only a private preference). In Minnesota no public backing of Peggy Flanagan's opponent by Schumer, the DSCC or Senate Majority PAC was found, only reports of a private preference. Figures are as reported by news outlets; no official record covers private preferences.",
+      "evidence": [
+        {
+          "label": "Notus via Washington Sun: Senate Democratic leaders and the primaries",
+          "url": "https://washingtonsun.com/congress/senate-democratic-leaders-back-moderates-in-the-primaries-progressives-say-thats-a-mistake?redirected=notus_org"
+        },
+        {
+          "label": "FOX 11: dueling Michigan Senate endorsements",
+          "url": "https://fox11online.com/news/nation-world/dem-rift-intensifies-following-dueling-michigan-senate-endorsements-by-schumer-warren-haley-stevens-melat-kiros"
+        },
+        {
+          "label": "Roll Call: the Minnesota Senate election",
+          "url": "https://rollcall.com/2026/08/07/what-to-know-about-the-minnesota-senate-election/"
+        }
+      ],
       "check_run": null
     },
     {
@@ -380,8 +393,8 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
+      "result": "unsupported",
+      "finding": "No official or independent account of 18 broken White House windows was found; the only sources for the figure are reports of this remark. The search covered AskAmerica's catalog (no table on White House building condition), the reporting story and news coverage; no White House, National Park Service or Secret Service record of window damage was found or read.",
       "evidence": [],
       "check_run": null
     },
@@ -438,9 +451,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No charge or court filing against the woman was found. AP relays a New York Times report that U.S. intelligence concluded she was a Chinese agent; that conclusion is unpublished and could not be read directly, so whether an official finding exists is not settled.",
+      "evidence": [
+        {
+          "label": "AP via Baltimore Sun: Trump backs campaign to reinstate Huang",
+          "url": "https://www.baltimoresun.com/2026/11/16/campaign-to-reinstate-nvidia-ceo-jensen-huang/"
+        }
+      ],
       "check_run": null
     },
     {
@@ -496,9 +514,18 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Commerce Department's Jan. 13, 2026 rule moved only chips below a performance threshold (total processing performance under 21,000 and memory bandwidth under 6,500 GB/s, such as the H200) to case-by-case licensing for China; no license for a current-generation chip was found. 'Obsolete' is loose: the H200 is a high-end chip of the generation before Blackwell.",
+      "evidence": [
+        {
+          "label": "Bureau of Industry and Security press release (Jan. 13, 2026)",
+          "url": "https://bis.gov/press-release/department-commerce-revises-license-review-policy-semiconductors-exported-china"
+        },
+        {
+          "label": "Federal Register 2026-00789, license review policy for advanced computing items",
+          "url": "https://www.federalregister.gov/public-inspection/2026-00789/revision-to-license-review-policy-for-advanced-computing-commodities"
+        }
+      ],
       "check_run": null
     },
     {
@@ -525,9 +552,18 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The Jan. 13, 2026 rule allows case-by-case review only for chips below its performance thresholds and keeps a presumption of denial for the rest; it does not name Blackwell, and no source was found saying Blackwell sales to China were permitted. That Blackwell chips exceed the thresholds rests on their published specifications, not on the rule's text.",
+      "evidence": [
+        {
+          "label": "Federal Register 2026-00789, license review policy for advanced computing items",
+          "url": "https://www.federalregister.gov/public-inspection/2026-00789/revision-to-license-review-policy-for-advanced-computing-commodities"
+        },
+        {
+          "label": "Bureau of Industry and Security press release (Jan. 13, 2026)",
+          "url": "https://bis.gov/press-release/department-commerce-revises-license-review-policy-semiconductors-exported-china"
+        }
+      ],
       "check_run": null
     },
     {
@@ -583,9 +619,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The FAA's Nov. 15 account names both causes: it says the FAA's legacy equipment 'became unstable' and also names a router installed by contractor L3Harris at El Dorado, Ark., as one of two likely sources of the data flood. Its root-cause investigation with L3Harris is still open.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "check_run": null
     },
     {
@@ -641,9 +682,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's account says every aircraft landed safely and all passengers arrived safely, with about 3,500 aircraft landing during the ground stop; it records no injury, accident or crash. No NTSB record of an accident tied to the event was found.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "check_run": null
     },
     {
@@ -670,9 +716,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "No official average age for the systems involved was found. GAO's 2024 review lists ages for 17 unsustainable or at-risk systems ranging from 2 to 50 years, which does not decide an average for 'the system'; the GAO pages could not be read directly and the figures are as summarized from GAO's product page.",
+      "evidence": [
+        {
+          "label": "GAO-24-107001, Air Traffic Control: FAA actions are urgently needed to modernize aging systems",
+          "url": "https://www.gao.gov/products/gao-24-107001"
+        }
+      ],
       "check_run": null
     },
     {
@@ -699,9 +750,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "supported",
+      "finding": "The FAA's Nov. 15 account names a radio communications site in El Dorado, Ark., where contractor L3Harris was deploying a new router, and addresses why the replacement was done 'in the middle of the day and not at night,' calling it routine work at a remote facility.",
+      "evidence": [
+        {
+          "label": "FAA, Nationwide Ground Stop: Questions and Answers",
+          "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+        }
+      ],
       "check_run": null
     },
     {
@@ -759,9 +815,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsettled",
+      "finding": "The check found that Section 40003 of Public Law 119-21 lists $4.75 billion 'for telecommunications infrastructure modernization and systems upgrades' among its air traffic control items, but the law's text could not be read directly for this page, and DOT's spending plan for the money could not be read. Whether a 'new architecture for telecom' falls outside that line, or the money is already committed, remains open.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 40003 (congress.gov)",
+          "url": "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.htm"
+        }
+      ],
       "check_run": null
     },
     {
@@ -788,9 +849,14 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
+      "result": "unsupported",
+      "finding": "No official account read directly dates the FAA's core air traffic management software to the 1990s; the FAA's ground-stop Q&A and its new-system fact sheet do not give its age. The search covered those two FAA pages and web searches; DOT's modernization plan, reportedly referring to 1990s automation platforms, could not be read (access refused), and DOT inspector general and GAO reports were not read.",
+      "evidence": [
+        {
+          "label": "FAA, Brand New Air Traffic Control System fact sheet",
+          "url": "https://www.faa.gov/newsroom/brand-new-air-traffic-control-system-bnatcs-fact-sheet"
+        }
+      ],
       "check_run": null
     },
     {
