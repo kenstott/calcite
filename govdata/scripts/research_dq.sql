@@ -118,7 +118,7 @@ FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research
 
 INSERT INTO dq_results
 SELECT 'research', 'nsf_federal_rd_by_state', 'T2_row_count',
-  CASE WHEN n >= 700 THEN 'pass' ELSE 'fail' END, n, 700, 'Expected >=700 state/location x agency rows (61 locations x up to 12 agencies)'
+  CASE WHEN n >= 3800 THEN 'pass' ELSE 'fail' END, n, 3800, 'Expected >=3800 rows (FY2019-2024: ~60 locations x 11-12 agencies per year)'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true));
 
 SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) LIMIT 3;
@@ -150,6 +150,21 @@ INSERT INTO dq_results
 SELECT 'research', 'nsf_federal_rd_by_state', 'T7_all_locations_present',
   CASE WHEN n > 0 THEN 'pass' ELSE 'warn' END, n, 1, 'Presence of the All locations national-total row'
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) WHERE state_location = 'All locations');
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T8_years_covered',
+  CASE WHEN n >= 6 THEN 'pass' ELSE 'fail' END, n, 6, 'Distinct fiscal years (FY2019-2024 editions)'
+FROM (SELECT COUNT(DISTINCT year) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T9_pk_duplicates',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Duplicate (year, state_location, funding_agency) rows'
+FROM (SELECT COUNT(*) AS n FROM (SELECT year, state_location, funding_agency FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) GROUP BY ALL HAVING COUNT(*) > 1));
+
+INSERT INTO dq_results
+SELECT 'research', 'nsf_federal_rd_by_state', 'T10_footnote_labels_normalized',
+  CASE WHEN n = 0 THEN 'pass' ELSE 'fail' END, n, 0, 'Non-state labels with a trailing footnote letter'
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/research/nsf_federal_rd_by_state', allow_moved_paths := true) WHERE state_location IN ('Other areasa','Other areasb','Offices abroada','Offices abroadb','Offices abroadc','Undistributeda','Undistributedb','Undistributedc','Undistributedd'));
 
 -- ─────────────────────────────────────────────────────────────
 -- TABLE: nsf_rd_by_field
