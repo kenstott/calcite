@@ -2184,17 +2184,19 @@ partitionedTables:
       checkedAt: "2026-11-17T01:01:23Z"
     partitions: *standard_partitions
     comment: >
-      Monthly CPI-U New vehicles (SETA01) index level and its New cars (SS45011) / New
-      trucks (SS45021) subcomponents, U.S. city average only (area 0000), not seasonally
-      adjusted (base 1982-84=100). Two related Transportation item codes are
+      Monthly CPI-U vehicle price indexes, U.S. city average only (area 0000), base
+      1982-84=100: New vehicles (SETA01) with its New cars (SS45011) / New trucks (SS45021)
+      subcomponents (not seasonally adjusted), plus Used cars and trucks (SETA02, from 1953)
+      in both not-seasonally-adjusted (CUUR) and seasonally-adjusted (CUSR) forms — the
+      used-vehicle price series for collateral-value / auto-loan questions. Two related Transportation item codes are
       deliberately excluded: SS4501A (New cars and trucks) and SS45031 (New motorcycles)
       were both discontinued by BLS (last published 2022-03 and 2000-05 respectively) —
       loading them would add all-null tails, not real coverage. NATIONAL ONLY —
       confirmed against BLS's cu.series catalog, which does not publish new-vehicle item
       codes at the region or metro level (only the all-items aggregate SA0 is, in
       regional_cpi/metro_cpi). Values are index levels, not rates — compute inflation as
-      a period-over-period change. Note: the series CUUR0000SETA02 is Used cars and
-      trucks, not new vehicles — SETA01 is the correct new-vehicles code.
+      a period-over-period change. SETA02 is Used cars and trucks, NOT new vehicles —
+      filter on series (the table holds both new- and used-vehicle series).
 
     dimensions:
       type:
@@ -2208,9 +2210,10 @@ partitionedTables:
         nullable: true
         comment: >
           BLS CPI series identifier. This table is long-format: one row per (series, period), so
-          ALWAYS filter on series. The 3 series loaded are: CUUR0000SETA01 (New vehicles),
-          CUUR0000SS45011 (New cars), CUUR0000SS45021 (New trucks). All are index levels, not
-          rates — compute inflation as a period-over-period change.
+          ALWAYS filter on series. The 5 series loaded are: CUUR0000SETA01 (New vehicles),
+          CUUR0000SS45011 (New cars), CUUR0000SS45021 (New trucks), CUUR0000SETA02 (Used cars
+          and trucks, NSA) and CUSR0000SETA02 (Used cars and trucks, seasonally adjusted).
+          All are index levels, not rates — compute inflation as a period-over-period change.
         source: series_id
       - name: year
         type: integer
@@ -2255,13 +2258,13 @@ partitionedTables:
         maxRetries: 3
       rawCache:
         enabled: true
-      # National U.S. city average (area 0000) only, NSA (CUUR), New vehicles + the 2
-      # live subcomponents listed in the table comment. This bulk file also carries the
-      # rest of the Transportation major group (motor fuel, used vehicles, airfares,
-      # etc.), which is out of scope here.
+      # National U.S. city average (area 0000) only: NSA (CUUR) New vehicles + the 2
+      # live subcomponents, and Used cars and trucks SETA02 in NSA and SA (CUSR). This
+      # bulk file also carries the rest of the Transportation major group (motor fuel,
+      # airfares, etc.), which is out of scope here.
       rowFilter:
         column: series_id
-        pattern: '^CUUR0000(SETA01|SS45011|SS45021)$'
+        pattern: '^(CUUR0000(SETA01|SS45011|SS45021)|CU[US]R0000SETA02)$'
 
     # Materialization configuration
     materialize:

@@ -1936,13 +1936,13 @@ SELECT 'econ', 'new_vehicles_cpi', 'existence',
   CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
 FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true) LIMIT 1));
 
--- 3 series x full bulk-file history (SETA01/SS45011 begin 1935, SS45021 begins 1983) = 2545
--- rows confirmed live 17 Sep 2026; floor set a little below that.
+-- 3 new-vehicle series (2545 rows confirmed live 17 Sep 2026) + SETA02 NSA/SA (953 + 886 rows
+-- in the BLS bulk file, 17 Nov 2026) = ~4384; floor set a little below that.
 INSERT INTO dq_results
 SELECT 'econ', 'new_vehicles_cpi', 'row_count',
-  CASE WHEN n >= 2000 THEN 'pass' ELSE 'fail' END,
-  CAST(n AS VARCHAR), '2000',
-  CASE WHEN n >= 2000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+  CASE WHEN n >= 4000 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '4000',
+  CASE WHEN n >= 4000 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
 FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true));
 
 INSERT INTO dq_results
@@ -1969,14 +1969,24 @@ FROM (SELECT COUNT(*) AS bad
   FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true)
   WHERE series = 'CUUR0000SETA01' AND value IS NOT NULL AND value <= 0);
 
--- series must be one of the 3 loaded series (rowFilter should already guarantee this)
+-- series must be one of the 5 loaded series (rowFilter should already guarantee this)
 INSERT INTO dq_results
 SELECT 'econ', 'new_vehicles_cpi', 'expected_values',
   CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
   CAST(bad AS VARCHAR), '0',
-  'rows with series outside the 3 loaded new-vehicle series'
+  'rows with series outside the 5 loaded new/used-vehicle series'
 FROM (SELECT COUNT(*) AS bad FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true)
-      WHERE series NOT IN ('CUUR0000SETA01', 'CUUR0000SS45011', 'CUUR0000SS45021'));
+      WHERE series NOT IN ('CUUR0000SETA01', 'CUUR0000SS45011', 'CUUR0000SS45021', 'CUUR0000SETA02', 'CUSR0000SETA02'));
+
+-- Used cars and trucks (SETA02) must be present in both NSA and SA forms with positive values
+INSERT INTO dq_results
+SELECT 'econ', 'new_vehicles_cpi', 'expected_values',
+  CASE WHEN n = 2 AND bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR) || ' series, ' || CAST(bad AS VARCHAR) || ' non-positive', '2 series, 0 non-positive',
+  'SETA02 (Used cars and trucks) NSA+SA series present with value > 0'
+FROM (SELECT COUNT(DISTINCT series) AS n, COUNT(*) FILTER (WHERE value IS NOT NULL AND value <= 0) AS bad
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/new_vehicles_cpi', allow_moved_paths := true)
+  WHERE series IN ('CUUR0000SETA02', 'CUSR0000SETA02'));
 
 INSERT INTO dq_results
 SELECT 'econ', 'new_vehicles_cpi', 'pk_duplication',
