@@ -2740,7 +2740,7 @@ partitionedTables:
 
     source:
       type: http
-      url: "https://api.eia.gov/v2/petroleum/pri/gnd/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value"
+      url: "https://api.eia.gov/v2/petroleum/pri/gnd/data?frequency=weekly&start={year}-01-01&end={year}-12-31&data[]=value&sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=series&sort[1][direction]=asc"
       method: GET
       parameters:
         api_key: "${ENERGY_EIA_API_KEY:}"
