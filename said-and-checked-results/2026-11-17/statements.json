@@ -3,7 +3,7 @@
   "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
   "lede": [
     "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
-    "80 statements could be checked. 69 have been checked so far (31 supported, 33 unsettled, 5 unsupported); the other 11 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "80 statements could be checked, and all 80 have been: 38 supported, 2 contradicted, 35 unsettled, 5 unsupported. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false. The two contradicted statements concern farm income and the Iran war's support among Republicans; contradicted means a primary source read directly says otherwise on the point while a question remains open.",
     "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
   ],
   "stories": [
@@ -3549,10 +3549,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The 2018 farm bill expired in 2023 and its last extension lapsed on Sept. 30, 2026 with no new farm bill enacted; congressional leaders were still seeking passage in the lame-duck session as of Nov. 9. The extension history is as reported in news summaries; Congress.gov was not read directly.",
+      "evidence": [
+        {
+          "label": "Agri-Pulse, Nov. 9, 2026",
+          "url": "https://www.agri-pulse.com/articles/25480-thune-seeks-pathway-for-farm-bill-amid-lame-duck-time-squeeze"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-17"
     },
     {
       "id": 99,
@@ -3578,10 +3583,21 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "AskAmerica's EIA weekly data show the U.S. retail diesel price at $6.127 a gallon on Nov. 9, 2026, after a peak of $6.529 on Sept. 21; EIA's history shows the earlier record was $5.810 in June 2022. This is the retail on-highway price, used here in place of a farm diesel series.",
+      "evidence": [
+        {
+          "label": "energy.eia_retail_gasoline_prices (U.S. retail No. 2 diesel, weekly 2026)",
+          "url": "https://askamerica.ai/catalog/schemas/energy/#eia_retail_gasoline_prices-table",
+          "askamerica": true,
+          "sql": "SELECT report_date, price_dollars_per_gallon FROM energy.eia_retail_gasoline_prices WHERE series_id = 'EMD_EPD2D_PTE_NUS_DPG' ORDER BY report_date DESC FETCH FIRST 45 ROWS ONLY"
+        },
+        {
+          "label": "EIA, U.S. No. 2 diesel retail prices, weekly history",
+          "url": "https://www.eia.gov/dnav/pet/hist/LeafHandler.ashx?n=PET&s=emd_epd2d_pte_nus_dpg&f=W"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-17"
     },
     {
       "id": 100,
@@ -3607,10 +3623,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Two rounds of emergency aid are reported: $12 billion in Farmer Bridge Assistance announced in December 2025 and the $8 billion Harvest Fuel Relief program announced Oct. 19-20, 2026, which Gray News called the second relief package for farmers in 11 months. No USDA release was read directly.",
+      "evidence": [
+        {
+          "label": "Gray News via Fox8, Oct. 21, 2026",
+          "url": "https://www.fox8live.com/2026/10/21/trump-announces-8b-plan-provide-relief-farmers/"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-17"
     },
     {
       "id": 101,
@@ -3636,10 +3657,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "The Economist/YouGov poll of April 3-6, 2026 found 34 percent of Americans supporting the war and 53 percent opposed, with Democrats 9 to 84 against but Republicans 67 to 21 in favor. A post-election YouGov survey found 62 percent of 2026 voters calling the war the wrong decision; no current party breakdown was found, so whether Republican support has since fallen below a majority remains open.",
+      "evidence": [
+        {
+          "label": "Economist/YouGov poll, April 3-6, 2026",
+          "url": "https://yougov.com/en-us/articles/54484-us-war-with-iran-remains-unpopular-april-3-6-2026-economist-yougov-poll"
+        },
+        {
+          "label": "YouGov, how voters divided over the Iran war (Nov. 2026)",
+          "url": "https://yougov.com/en-us/articles/55935-how-voters-divided-over-the-iran-war-transgender-athletes-and-other-issues"
+        }
+      ],
+      "check_run": "q223/askamerica/2026-11-17"
     },
     {
       "id": 102,
@@ -3665,10 +3695,27 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "contradicted",
+      "finding": "USDA's Economic Research Service forecasts 2026 net farm income at $158.4 billion, above its 2006-25 average after inflation, and AskAmerica's ERS data show average net cash income per farm of $56,600 in 2025, about double 2010; the lowest-income group, residence farms, was not at a record low. One group, intermediate farms, hit a series low in 2024; farm household income was not read, and the 2025-26 figures are estimates and forecasts.",
+      "evidence": [
+        {
+          "label": "ag.ers_farm_income (net farm income and average net cash income per farm, 2010-2026)",
+          "url": "https://askamerica.ai/catalog/schemas/ag/#ers_farm_income-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", category, subcategory, amount, unit_desc, publication_date FROM ag.ers_farm_income WHERE state='US' AND ((category='Net income' AND subcategory IN ('Farm income','Cash income')) OR (category='Average net cash income' AND subcategory='All farms')) AND \"year\">=2010 ORDER BY category, subcategory, \"year\""
+        },
+        {
+          "label": "ag.ers_farm_income (average net cash income by farm type)",
+          "url": "https://askamerica.ai/catalog/schemas/ag/#ers_farm_income-table",
+          "askamerica": true,
+          "sql": "SELECT \"year\", variable_description_total, amount FROM ag.ers_farm_income WHERE state='US' AND category='Average net cash income' AND subcategory='Farm typology' AND variable_description_total IN ('Average net cash income, intermediate farms','Average net cash income, residence farms') AND \"year\" BETWEEN 1996 AND 2017 ORDER BY variable_description_total, \"year\""
+        },
+        {
+          "label": "USDA ERS, Farm Sector Income Forecast (Sept. 3, 2026)",
+          "url": "https://www.ers.usda.gov/topics/farm-economy/farm-sector-income-finances/farm-sector-income-forecast"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-17"
     },
     {
       "id": 103,
@@ -3694,10 +3741,17 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "AskAmerica's BLS data show total nonfarm payrolls rising from about 148.6 million in October 2021 to 158.5 million in September 2025, but no series counts jobs above a 'decent-paying' wage threshold, nationally or in rural areas, so the specific claim cannot be measured.",
+      "evidence": [
+        {
+          "label": "econ.fred_indicators (PAYEMS, total nonfarm payrolls, 2021 and 2025)",
+          "url": "https://askamerica.ai/catalog/schemas/econ/#fred_indicators-table",
+          "askamerica": true,
+          "sql": "SELECT \"date\", value FROM econ.fred_indicators WHERE series='PAYEMS' AND \"date\" IN (DATE '2021-08-01', DATE '2021-09-01', DATE '2021-10-01', DATE '2025-08-01', DATE '2025-09-01') ORDER BY \"date\""
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-17"
     },
     {
       "id": 104,
@@ -3723,10 +3777,25 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The 2025 reconciliation law (H.R. 1) passed the Senate on July 1, 2025 with every Democratic and independent senator voting no, and the House concurred July 3 with Democrats voting 0 yes and 212 no.",
+      "evidence": [
+        {
+          "label": "law.bill_recorded_votes (H.R. 1, 119th Congress recorded votes)",
+          "url": "https://askamerica.ai/catalog/schemas/law/#bill_recorded_votes-table",
+          "askamerica": true,
+          "sql": "SELECT vote_chamber, roll_number, vote_date, action_date, action_text, url FROM law.bill_recorded_votes WHERE vote_congress=119 AND bill_type='hr' AND bill_number=1 ORDER BY vote_date"
+        },
+        {
+          "label": "House roll call 190 (July 3, 2025)",
+          "url": "https://clerk.house.gov/evs/2025/roll190.xml"
+        },
+        {
+          "label": "Senate roll call vote 372 (July 1, 2025)",
+          "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00372.xml"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-17"
     },
     {
       "id": 105,
@@ -3752,10 +3821,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "Section 10105 of Public Law 119-21 requires states, starting in fiscal 2028, to pay a share of SNAP benefit costs of 0, 5, 10 or 15 percent depending on their payment error rates; SNAP benefits had been fully federally funded.",
+      "evidence": [
+        {
+          "label": "Public Law 119-21, Sec. 10105 (congress.gov)",
+          "url": "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.htm"
+        }
+      ],
+      "check_run": "q224/askamerica/2026-11-17"
     },
     {
       "id": 106,
@@ -3810,10 +3884,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The Senate Agriculture Committee advanced the farm bill 12 to 11 on Sept. 16, 2026 in a vote reported as party-line, after a 10-11 failure on Aug. 6; no report of a Democrat voting yes was found, though individual committee votes were not read.",
+      "evidence": [
+        {
+          "label": "KMPH, on the committee's 12-11 vote (Sept. 2026)",
+          "url": "https://kmph.com/news/nation-world/mcconnell-returns-to-back-senate-farm-bill-as-panel-advances-it-on-party-line-vote"
+        },
+        {
+          "label": "Valley News Live, Sept. 17, 2026",
+          "url": "https://www.valleynewslive.com/2026/09/17/senate-agriculture-committee-advances-farm-bill-amid-partisan-dispute/"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-17"
     },
     {
       "id": 108,
@@ -3839,10 +3922,19 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "supported",
+      "finding": "The National Governors Association and state legislative groups asked Congress in January 2026 to delay SNAP cost-sharing to fiscal 2030 for all states, a request NGA called bipartisan; the committee's bill delays it one year for most states, which the committee's ranking Democrat called a 'one-year fix.'",
+      "evidence": [
+        {
+          "label": "National Governors Association press release",
+          "url": "https://www.nga.org/news/press-releases/states-sound-alarm-over-ongoing-snap-threats/"
+        },
+        {
+          "label": "Senate Agriculture Committee Democrats, statement on the farm bill vote",
+          "url": "https://www.agriculture.senate.gov/newsroom/dem/press/release/klobuchar-statement-on-farm-bill-vote"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-17"
     },
     {
       "id": 109,
@@ -3868,10 +3960,15 @@
       "counter_documents": [],
       "self_contradictions": [],
       "also_said": [],
-      "result": "not_checked",
-      "finding": null,
-      "evidence": [],
-      "check_run": null
+      "result": "unsettled",
+      "finding": "Agri-Pulse, citing an IATP analysis of USDA data, reports about 24 percent of 118,377 EQIP applications and 37 percent of 29,353 CSP applications were funded in fiscal 2025, leaving tens of thousands unfunded nationally; no count for Colorado, where the speaker's remarks were focused, was found, and USDA's own data could not be read.",
+      "evidence": [
+        {
+          "label": "Agri-Pulse, on EQIP and CSP oversubscription in fiscal 2025",
+          "url": "https://www.agri-pulse.com/articles/24870-oversubscription-in-eqip-csp-increased-in-fiscal-2025-analysis-finds"
+        }
+      ],
+      "check_run": "q225/askamerica/2026-11-17"
     },
     {
       "id": 110,
