@@ -1,0 +1,3408 @@
+{
+  "date": "2026-11-17",
+  "selection_rule": "Every statement by an in-scope officeholder quoted in a story published on Nov. 16 or 17, 2026 in the NPR Politics and PBS NewsHour Politics feeds, and in the Senate floor speeches printed in the Nov. 16, 2026 Congressional Record, as read on Nov. 17 at about 7:20 ET, less the stories the Nov. 15 and Nov. 16 pages already used. PBS NewsHour carries Associated Press reporting. One NPR story listed in the feed had no readable text and was skipped. Quotes under five words were left out, as were commentators' accounts of what an official said. Statements are worded as the outlet reported them unless a transcript is linked; entries beginning \"Reported as\" are the reporter's wording.",
+  "lede": [
+    "This page lists 111 statements by 13 officeholders, drawn from NPR and PBS NewsHour stories and from Senate floor speeches printed in the Congressional Record for Nov. 16. They concern judicial and executive nominations, an energy permitting bill and data centers, the war in Ukraine, the farm bill, Nvidia and chip exports to China, the Nov. 13 nationwide air traffic ground stop, the federal deficit and the Senate Democratic leadership race.",
+    "80 statements could be checked. None has been checked yet; all 80 are marked not yet checked and will be updated as their checks return. Unsettled means evidence was found but does not decide the claim; unsupported means no evidence was found, not that the statement is false.",
+    "The remaining 31 statements are opinions, predictions, promises and personal attacks. They are listed because they were said, not because they can be checked. 2 pairs of statements by different officeholders are linked as counter-statements."
+  ],
+  "stories": [
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/16/nx-s1-6041687/chris-van-hollen-chuck-schumer-senate-leader",
+      "headline": "Chris Van Hollen says he can beat Chuck Schumer. Here's his case",
+      "published": "2026-11-16T06:39-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trumps-asia-reset-deals-in-manila-and-shenzhen-then-a-rare-nuclear-summit-with-xi-and-putin",
+      "headline": "Trump's Asia reset: Deals in Manila and Shenzhen, then a rare nuclear summit with Xi and Putin",
+      "published": "2026-11-16T09:38-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/16/nx-s1-5983473/clancy-trial-retrial-murder-charges",
+      "headline": "Lindsay Clancy to face a new trial in spring of 2027 over children's killing",
+      "published": "2026-11-16T11:28-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/16/nx-s1-6042432/nearly-two-million-people-are-behind-bars-in-the-us-how-did-we-get-here",
+      "headline": "Nearly two million people are behind bars in the US. How did we get here?",
+      "published": "2026-11-16T12:34-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/16/nx-s1-6042548/un-killer-robots-ai-weapons-drones",
+      "headline": "U.N. talks seek to rein in 'killer robots' as fears over AI weapons grow",
+      "published": "2026-11-16T13:04-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/16/nx-s1-6042883/nvidia-jensen-huang-commerce-department",
+      "headline": "U.S. tightens controls on remote access to AI technology amid Nvidia fallout",
+      "published": "2026-11-16T13:49-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/read-the-full-white-house-memo-requiring-agencies-to-get-approval-before-testifying-in-front-of-congress",
+      "headline": "Read the full White House memo requiring agencies to get approval before testifying in front of Congress",
+      "published": "2026-11-16T16:00-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/watch-you-never-notice-broken-windows-obviously-trump-tells-black-reporter",
+      "headline": "WATCH: 'You never notice broken windows, obviously,' Trump tells Black reporter",
+      "published": "2026-11-16T16:34-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/16/nx-s1-6042920/california-sues-openai-hugging-face-hacking-incident",
+      "headline": "California sues OpenAI over hacking risks",
+      "published": "2026-11-16T17:06-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-backs-campaign-to-reinstate-huang-as-ceo-of-nvidia",
+      "headline": "Trump backs campaign to reinstate Huang as CEO of Nvidia",
+      "published": "2026-11-16T18:25-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/tamara-keith-and-amy-walter-on-trumps-summit-with-xi-and-putin",
+      "headline": "Tamara Keith and Amy Walter on Trump's summit with Xi and Putin",
+      "published": "2026-11-16T18:35-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/u-s-works-to-close-loophole-that-let-china-access-advanced-ai-chips",
+      "headline": "U.S. works to close loophole that let China access advanced AI chips",
+      "published": "2026-11-16T18:40-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/what-went-wrong-with-air-traffic-control-and-will-more-faa-funding-fix-it",
+      "headline": "What went wrong with air traffic control and will more FAA funding fix it?",
+      "published": "2026-11-16T18:50-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop",
+      "headline": "Trump administration seeks to deflect responsibility for nationwide ground stop",
+      "published": "2026-11-16T18:55-05:00"
+    },
+    {
+      "outlet": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/politics/trump-appeals-to-state-and-federal-courts-to-erase-hush-money-criminal-conviction",
+      "headline": "Trump appeals to state and federal courts to erase hush money criminal conviction",
+      "published": "2026-11-16T19:48-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/2026/11/17/nx-s1-6043702/trump-arrives-philippines",
+      "headline": "Trump arrives in Philippines to kick off Asia trip",
+      "published": "2026-11-17T05:43-05:00"
+    },
+    {
+      "outlet": "NPR",
+      "url": "https://www.npr.org/sections/planet-money/2026/11/17/g-s1-153933/can-google-win-the-ai-race-without-killing-its-cash-cow",
+      "headline": "Can Google win the AI race without killing its cash cow?",
+      "published": "2026-11-17T06:30-05:00"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5701-3.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    },
+    {
+      "outlet": "Congressional Record",
+      "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+      "headline": "[Congressional Record Volume 172, Number 173 (Monday, November 16, 2026)]",
+      "published": "2026-11-16"
+    }
+  ],
+  "statements": [
+    {
+      "id": 1,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "Interviewed by NPR's Morning Edition on November 16 about his challenge to Senate Democratic leader Chuck Schumer.",
+      "topic": "Senate Democratic leadership race",
+      "quote": "Well, I'm the underdog, but we are really moving in the right direction here",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/16/nx-s1-6041687/chris-van-hollen-chuck-schumer-senate-leader"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 2,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "Interviewed by NPR on November 16 about U.S. military aid to Israel, which he has sought to restrict.",
+      "topic": "U.S. military aid to Israel",
+      "quote": "I certainly oppose the idea of an American taxpayer blank check to the government of Israel, regardless of its actions",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/16/nx-s1-6041687/chris-van-hollen-chuck-schumer-senate-leader"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 3,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "Interviewed by NPR on November 16, explaining why Democratic leaders should stay out of contested primaries won by Abdul El-Sayed and Peggy Flanagan.",
+      "topic": "Senate Democratic leadership race",
+      "quote": "We have two senators-elect who would not be there if the current majority leader had his way",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/16/nx-s1-6041687/chris-van-hollen-chuck-schumer-senate-leader"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Senate Majority PAC, Sen. Schumer or the Democratic Senatorial Campaign Committee publicly backed a primary opponent of both senators-elect Abdul El-Sayed and Peggy Flanagan. False if neither Schumer nor groups he led backed an opponent of either in their primaries. Cannot be determined if no record of Schumer's or his allies' primary positions is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 4,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "Interviewed by NPR on November 16 about Senate funding for the war with Iran.",
+      "topic": "Iran war",
+      "quote": "We should not be voting for one penny in mid-December to continue this war",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/16/nx-s1-6041687/chris-van-hollen-chuck-schumer-senate-leader"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 5,
+      "speaker": "Chris Van Hollen",
+      "office": "U.S. Senator from Maryland",
+      "party": "D",
+      "context": "Speaking to CNN's Dana Bash on November 15 about why he is challenging Senate Democratic leader Chuck Schumer.",
+      "topic": "Senate Democratic leadership race",
+      "quote": "This really is a response to the call of the voters, who clearly rejected Donald Trump and his awful policies, but they haven't fully hired the Democrats.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/tamara-keith-and-amy-walter-on-trumps-summit-with-xi-and-putin"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 6,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Responding on November 16 to NBC's Yamiche Alcindor, who asked about criticism that he focused on White House construction while the FAA ground stop halted flights.",
+      "topic": "Exchange with NBC reporter",
+      "quote": "Listen to me. I know you don't see dirt,",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-you-never-notice-broken-windows-obviously-trump-tells-black-reporter"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 7,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Responding on November 16 to NBC's Yamiche Alcindor, who asked about criticism that he focused on White House construction while the FAA ground stop halted flights.",
+      "topic": "Exchange with NBC reporter",
+      "quote": "You never notice broken windows, obviously, from where you come.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-you-never-notice-broken-windows-obviously-trump-tells-black-reporter"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 8,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Replying on November 16 to an NBC reporter's question about White House construction, after calling the White House flawless, Trump referred to broken windows.",
+      "topic": "Exchange with NBC reporter",
+      "quote": "But we had 18 broken windows.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/watch-you-never-notice-broken-windows-obviously-trump-tells-black-reporter"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official or published account reports that 18 White House windows were broken during or before the construction work in question. False if an official account gives a different count or reports no broken windows. Cannot be determined if no account of broken windows is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 9,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking to reporters on November 16 about whether Nvidia should reinstate Jensen Huang, who resigned as CEO after admitting an affair with a woman alleged to be a Chinese agent.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "big group of people that would like him to return",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-backs-campaign-to-reinstate-huang-as-ceo-of-nvidia"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 10,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking to reporters on November 16 about whether Nvidia should reinstate Jensen Huang, who resigned as CEO after admitting an affair with a woman alleged to be a Chinese agent.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "Nobody's proven that she's a spy.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-backs-campaign-to-reinstate-huang-as-ceo-of-nvidia"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if no court filing, charge or official finding has established that the woman linked to Jensen Huang is a Chinese agent. False if a charge, conviction or official finding has established it. Cannot be determined if the status of any proceeding cannot be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 11,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking to reporters on November 16 about whether Nvidia should reinstate Jensen Huang, who resigned as CEO after admitting an affair with a woman alleged to be a Chinese agent.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "any woman coming to the country — that's a beautiful woman that comes from China — they say she's a spy.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trump-backs-campaign-to-reinstate-huang-as-ceo-of-nvidia"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 12,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking to reporters on November 16 before leaving for China, asked about Nvidia chip sales to China and former Nvidia CEO Jensen Huang.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "the only thing he was able to sell to China were chips that were sort of obsolete, a little bit like our avionics, our aviation equipment.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/u-s-works-to-close-loophole-that-let-china-access-advanced-ai-chips"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the only Nvidia AI chips licensed for sale to China were older or reduced-capability models below its current generation. False if Nvidia was licensed to sell, or sold, its current-generation chips to China. Cannot be determined if the licensing record is not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 13,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking to reporters on November 16 before leaving for China, asked about Nvidia chip sales to China and former Nvidia CEO Jensen Huang.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "He wasn't allowed to sell them Blackwell or any of that, no.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/u-s-works-to-close-loophole-that-let-china-access-advanced-ai-chips"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if U.S. export rules or licences barred Nvidia from selling Blackwell chips to China. False if Nvidia was licensed or permitted to sell Blackwell chips to China. Cannot be determined if no record of the rules on Blackwell sales is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 14,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking to reporters on November 16 before leaving for China, asked about Nvidia chip sales to China and former Nvidia CEO Jensen Huang.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "I don't think you want to insult China just before you get there.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/u-s-works-to-close-loophole-that-let-china-access-advanced-ai-chips"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 15,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking on November 16 about the nationwide FAA ground stop of Friday, November 13, which officials attributed to a router installed by a contractor.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "Essentially, what you saw on Friday was very, very old equipment that had a heart attack.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the FAA's or DOT's account attributes the Nov. 13 ground stop to failure of aging equipment. False if the official account attributes it to something other than old equipment, such as new equipment or contractor work. Cannot be determined if no official account of the cause is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 16,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking on November 16 about the nationwide FAA ground stop of Friday, November 13, which officials attributed to a router installed by a contractor.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "They did a great job, Secretary Duffy. They acted incredibly.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 17,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking on November 16 about the nationwide FAA ground stop of Friday, November 13, which officials attributed to a router installed by a contractor.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "Everybody was safe. Nobody was hurt, no crashes, no nothing.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if no injuries, accidents or crashes connected to the Nov. 13 ground stop are recorded by the FAA or NTSB. False if any injury, accident or crash connected to it is recorded. Cannot be determined if no official account addresses safety outcomes.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 18,
+      "speaker": "Donald Trump",
+      "office": "President of the United States",
+      "party": "R",
+      "context": "Speaking on November 16 about the nationwide FAA ground stop of Friday, November 13, which officials attributed to a router installed by a contractor.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "they should have done this with a system that's probably, on average, 50 years old.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official or GAO account puts the average age of the relevant air traffic control systems at around 50 years. False if official figures put it far below that. Cannot be determined if no figure for average system age is found; 'probably' allows rough agreement.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 19,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "Explaining on November 16 why the FAA's work on a copper-to-fiber upgrade at a facility in southern Arkansas preceded the November 13 nationwide ground stop.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "This was a remote facility, in Arkansas, and we didn't anticipate that this could take down the system, which is why it was done during the day.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the FAA's account says the work preceding the ground stop was at a facility in Arkansas and was done during the day. False if the official account places it elsewhere or at night. Cannot be determined if no official account gives the facility or time.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 20,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "Speaking on November 16 about FAA procedures after the November 13 nationwide ground stop caused by a router installation.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "Well, we're going to review all the our whole procedures on when we do this work, how we do this work, so the system doesn't go down.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 21,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "Responding to Democratic questions about the $12.5 billion Congress appropriated in 2025 for air traffic control upgrades.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "I have no money in that $12.5 billion that I can use for a new architecture for telecom.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://transcripts.cnn.com/show/sotu/date/2026-11-15/segment/01",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the law appropriating the $12.5 billion, or DOT's spending plan for it, commits all of it to purposes other than new telecommunications architecture. False if the law or plan provides funds usable for a new telecommunications architecture. Cannot be determined if neither the law nor the plan can be read.",
+      "premise": null,
+      "counter_statements": [
+        24
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 22,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "Responding to Democratic questions about the $12.5 billion Congress appropriated in 2025 for air traffic control upgrades.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "I can't build new software to manage our airplanes in the airspace because it dates back to the 1990s.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official accounts say the FAA's core air traffic management software dates to the 1990s. False if they date it otherwise. Cannot be determined if no official account of the software's age is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 23,
+      "speaker": "Sean Duffy",
+      "office": "Secretary of Transportation",
+      "party": "R",
+      "context": "On November 16 Duffy said he would send lawmakers a breakdown of what his $50 billion request for air traffic control upgrades would pay for.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "Reported as: Secretary Duffy said he planned to send a breakdown to lawmakers as soon as today, detailing what his $50 billion ask would pay for.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 24,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "Speaking on CBS to Transportation Secretary Duffy about the $12.5 billion Congress appropriated in 2025 for air traffic control upgrades.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "that's sitting in your bank account right now?",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "Assesses only the premise, not the suggestion that funds be spent first. True if DOT, FAA or GAO figures show that most of the $12.5 billion was not yet spent (outlaid) by mid-November 2026. False if most had been spent. Cannot be determined if no spending figure is found.",
+      "premise": "Much of the $12.5 billion Congress appropriated in 2025 for air traffic control upgrades remained unspent in mid-November 2026.",
+      "counter_statements": [
+        21
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 25,
+      "speaker": "Jim Himes",
+      "office": "U.S. Representative from Connecticut",
+      "party": "D",
+      "context": "Speaking on CBS about Transportation Secretary Duffy's request for $50 billion more for air traffic control upgrades.",
+      "topic": "Nationwide FAA ground stop",
+      "quote": "How about if you spend that before we -- we put more money in that bank account?",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/show/trump-administration-seeks-to-deflect-responsibility-for-nationwide-ground-stop"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.cbsnews.com/news/face-the-nation-full-transcript-11-15-2026/",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 26,
+      "speaker": "Scott Bessent",
+      "office": "Secretary of the Treasury",
+      "party": "R",
+      "context": "Interviewed by Larry Kudlow on Fox News Channel on November 15 about Nvidia, its export-control compliance and the Commerce Department's handling of chip sales.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "leave the internal workings of the Commerce Department to the Commerce Department.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-asia-reset-deals-in-manila-and-shenzhen-then-a-rare-nuclear-summit-with-xi-and-putin"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 27,
+      "speaker": "Scott Bessent",
+      "office": "Secretary of the Treasury",
+      "party": "R",
+      "context": "Interviewed by Larry Kudlow on Fox News Channel on November 15 about Nvidia, its export-control compliance and the Commerce Department's handling of chip sales.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "I think what's more important here, Larry, is to examine whether Nvidia had a culture of compliance around the U.S. export restrictions",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-asia-reset-deals-in-manila-and-shenzhen-then-a-rare-nuclear-summit-with-xi-and-putin"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 28,
+      "speaker": "Scott Bessent",
+      "office": "Secretary of the Treasury",
+      "party": "R",
+      "context": "Interviewed by Larry Kudlow on Fox News Channel on November 15 about Nvidia, its export-control compliance and the Commerce Department's handling of chip sales.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "I think we're going to see answers.",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-asia-reset-deals-in-manila-and-shenzhen-then-a-rare-nuclear-summit-with-xi-and-putin"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 29,
+      "speaker": "Scott Bessent",
+      "office": "Secretary of the Treasury",
+      "party": "R",
+      "context": "Interviewed by Larry Kudlow on Fox News Channel on November 15 about Nvidia, its export-control compliance and the Commerce Department's handling of chip sales.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "Jensen Huang is an incredible innovator, but that does not abrogate their duties of compliance",
+      "reported_by": {
+        "outlet": "PBS NewsHour",
+        "url": "https://www.pbs.org/newshour/politics/trumps-asia-reset-deals-in-manila-and-shenzhen-then-a-rare-nuclear-summit-with-xi-and-putin"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 30,
+      "speaker": "Yvette Clarke",
+      "office": "U.S. Representative from New York",
+      "party": "D",
+      "context": "Speaking to NPR on November 16 about congressional investigations of the Nvidia scandal once Democrats take control of Congress in January 2027.",
+      "topic": "Nvidia, Huang and chip exports",
+      "quote": "We need to get the facts investigated, bring in individuals to give us as much information as possible under oath, so that we can get to the bottom of why this happened, how it occurred, and how we could prevent this type of compromise from happening again",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/16/nx-s1-6042883/nvidia-jensen-huang-commerce-department"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 31,
+      "speaker": "Marco Rubio",
+      "office": "Secretary of State",
+      "party": "R",
+      "context": "Warning in a keynote speech to the Federalist Society on the weekend of November 14-15 about reliance on international law.",
+      "topic": "International law and weapons rules",
+      "quote": "quoting laws to men with swords.",
+      "reported_by": {
+        "outlet": "NPR",
+        "url": "https://www.npr.org/2026/11/16/nx-s1-6042548/un-killer-robots-ai-weapons-drones"
+      },
+      "source": {
+        "status": "not_found",
+        "url": null,
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 32,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "The 2026 deficit came in at a stunning $2 trillion. That represents 6.2 percent of the Nation's gross domestic product.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if CBO or Treasury reports the fiscal 2026 federal deficit at about $2 trillion and about 6.2 percent of GDP. False if the reported figures differ materially. Cannot be determined if no fiscal 2026 figure is published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 33,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "Over the six decades spanning since the end of World War II, the deficit never once exceeded 6 percent of GDP.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the deficit stayed at or below 6 percent of GDP in every fiscal year of the six decades after World War II (fiscal 1946 through about 2008). False if any of those years exceeded 6 percent. Cannot be determined if the historical series cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 34,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "Yet over the past 7 years, annual deficits have exceeded 6 percent of GDP five times.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the deficit exceeded 6 percent of GDP in five of fiscal years 2020 through 2026. False if it did so in a different number of those years. Cannot be determined if the yearly figures cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 35,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "They have fanned inflation, driving up the cost of living.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official or peer-reviewed evidence attributes a measurable part of recent inflation to federal deficits. False if such evidence finds deficits had no inflationary effect. Cannot be determined if the evidence turns on contested economic models.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 36,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "Persistent large deficits have also pushed up interest rates, raising borrowing costs for home mortgages, auto loans, business loans, and almost any loan that you want to talk about.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official or peer-reviewed evidence finds persistent deficits raised interest rates. False if such evidence finds no effect. Cannot be determined if the evidence turns on contested economic models.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 37,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "In 2026, interest rates on the national debt totaled $1.14 trillion, up 11 percent over last year.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if fiscal 2026 net interest on the national debt was about $1.14 trillion and about 11 percent above fiscal 2025. False if the official figures differ materially. Cannot be determined if no fiscal 2026 figure is published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 38,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "Interest costs alone now exceed spending on the Department of national defense by $225 billion and even exceed Medicare expenses by $73 billion.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if fiscal 2026 net interest exceeded defense spending by about $225 billion and Medicare spending by about $73 billion. False if either gap differs materially or reverses. Cannot be determined if the fiscal 2026 figures are not published.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 39,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "That is why former Joint Chiefs of Staff Chairman Admiral Michael Mullen famously declared that ``debt is the single biggest threat to [our] national security.''",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Adm. Michael Mullen, as Joint Chiefs chairman, said the national debt is the single biggest threat to national security. False if no such statement is on record and he said something different. Cannot be determined if no record of his words is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 40,
+      "speaker": "Chuck Grassley",
+      "office": "U.S. Senator from Iowa",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the Congressional Budget Office's annual review of fiscal 2026.",
+      "topic": "Federal deficit and national debt",
+      "quote": "The Nation is on an unsustainable fiscal path.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5671-9.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 41,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "Judge Cook is the 57th Federal judge confirmed during this Congress, and later today, we will confirm our 58th.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Senate records show the 57th federal judge confirmed in the 119th Congress was confirmed on Nov. 16, 2026, with Judge Cook. False if the count differs. Cannot be determined if no confirmation count is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 42,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "we have already locked in floor votes for every available judicial nominee.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if cloture or votes had been scheduled on every judicial nominee then on the Senate executive calendar. False if any judicial nominee on the calendar had no vote scheduled. Cannot be determined if the calendar cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 43,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "We will also confirm more than 100 additional Presidential nominees before the end of the year.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "promise",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 44,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "we have confirmed 606 civilian nominees.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Senate records show 606 civilian nominees confirmed in the 119th Congress as of Nov. 16, 2026. False if the count differs materially. Cannot be determined if no count is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 45,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "That includes getting the President's Cabinet in place at the fastest pace in over 20 years, in half the time--half the time--it took to fill the Obama and first Trump administration Cabinets.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the second Trump Cabinet was confirmed faster than any Cabinet since 2005 and in about half the time of the Obama and first Trump Cabinets. False if a Cabinet since 2005 was faster or the ratio is far from half. Cannot be determined if no comparable measure is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 46,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "we are turning nominations into confirmations at the fastest pace since the Reagan administration.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the rate of confirmations in this Congress exceeds every Congress since the Reagan administration. False if a Congress after Reagan's had a higher rate. Cannot be determined if no comparable figures are found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 47,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "It took a year and a half before Democrats finally let a few nominees go by voice vote--something no other President has had to deal with.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Democrats allowed no voice-vote or unanimous-consent confirmations of President Trump's nominees for about 18 months and no earlier President faced such a period. False if voice-vote confirmations happened earlier or an earlier President faced a comparable blockade. Cannot be determined if records do not settle either point.",
+      "premise": null,
+      "counter_statements": [
+        67
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 48,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "98 percent for Presidents George H. W. Bush and Clinton--98 percent of the nominations they made for positions in the executive branch of our government were confirmed either by voice vote or unanimous consent here on the floor of the Senate--98 percent; 90 percent for Presidents George W. Bush and Barack Obama.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if published analyses show about 98 percent of executive nominations by George H. W. Bush and Clinton, and about 90 percent by George W. Bush and Obama, were confirmed by voice vote or unanimous consent. False if published figures differ materially. Cannot be determined if no such analysis is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 49,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "But even with this new level of partisanship, President Trump, in his first term, and President Biden each had more than half of their nominees approved by unanimous consent or voice vote here in the U.S. Senate.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if more than half of the confirmed nominees of Trump's first term and of Biden were confirmed by voice vote or unanimous consent. False if half or fewer were in either case. Cannot be determined if no such figure is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 50,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "Democrats had not allowed a single--single--nominee to be confirmed by voice or unanimous consent.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if, for the period Sen. Thune referred to, no Trump nominee was confirmed by voice vote or unanimous consent. False if any was. Cannot be determined if the records for that period cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 51,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "we cast more votes in 2025 than any Senate in history with one exception going back 80 years.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Senate cast more roll-call votes in 2025 than in any year of the past 80 except one. False if two or more years had more, or none did. Cannot be determined if the yearly counts are not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 52,
+      "speaker": "John Thune",
+      "office": "U.S. Senator from South Dakota (Senate Majority Leader)",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about the pace of Senate confirmations of judicial and executive nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "when Democrats take control of the Senate next year, our job is going to get a lot harder.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-2.htm",
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "Assesses only the premise, not the prediction that the job will get harder. True if official 2026 election results give Democrats a Senate majority for the Congress beginning January 2027. False if they do not. Cannot be determined if results are not yet final.",
+      "premise": "Democrats will hold the Senate majority in the Congress that begins in January 2027.",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 53,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "I have been a member of the Senate Judiciary Committee for nearly 30 years, and I have chaired the committee for a 4-year period of time.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Sen. Durbin has served on the Judiciary Committee for close to 30 years and chaired it for about four years. False if either figure is materially different. Cannot be determined if his committee record is not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 54,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "This month, Republicans are holding nominations hearings 8 days apart, holding hearings for nominees whose Senate Judiciary questionnaires were received just days beforehand, and holding hearings with as many as eight nominees.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Judiciary Committee's November 2026 nomination hearings were about eight days apart, some nominees' questionnaires were received days before, and a hearing had up to eight nominees. False if the committee's record differs on these points. Cannot be determined if the committee's record cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 55,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "This week, the Judiciary Committee will do something unprecedented: It will slate nominees for a hearing for these lifetime appointments to the Federal bench even if their background investigations haven't been completed and reviewed by the committee. That has never happened before.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the committee scheduled nominees for a hearing this week before their background investigations were completed and no earlier instance is on record. False if an earlier instance is on record or background checks were complete. Cannot be determined if neither point can be confirmed.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 56,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "This time, Republicans are setting new precedence to rush through unqualified MAGA nominees.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 57,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "we heard from two nominees who have been out of law school for just 8 years. One of them has practiced law for just 7 years; the other has only practiced for 5 years.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if two nominees at the prior week's hearing had graduated law school about eight years earlier and had practiced about seven and five years. False if their questionnaires show materially different figures. Cannot be determined if their records are not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 58,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "That is less experience than any Biden nominee or any prior Trump nominee.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if no Biden or prior Trump judicial nominee had as little legal experience as those nominees. False if any did. Cannot be determined if no comparison of nominee experience is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 59,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "two of the nominees in last week's hearings have never tried a case.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if two nominees at the prior week's hearing reported never having tried a case. False if their questionnaires show trials. Cannot be determined if their questionnaires are not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 60,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "It was revealed last week that Judge Ballou, who is currently a Kentucky State judge, is the subject of an outstanding judicial misconduct investigation.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a report or filing in the prior week disclosed a pending judicial misconduct investigation of Kentucky judge Daniel Ballou. False if no such investigation exists. Cannot be determined if no record is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 61,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Kentucky state judge Daniel Ballou, a federal district court nominee.",
+      "topic": "Judicial and executive nominations",
+      "quote": "In 2011, he was publicly reprimanded by Kentucky's nonpartisan judicial conduct commission for using his position as a judge to campaign for a political candidate.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Kentucky's Judicial Conduct Commission publicly reprimanded Judge Ballou in 2011 for campaigning for a political candidate. False if no such reprimand is on record or it differs. Cannot be determined if the commission's records are not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 62,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "Just days ago, the same commission filed three new misconduct charges against Judge Ballou for repeatedly belittling an attorney for posting a video on social media that Judge Ballou didn't personally like.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the commission recently filed three new misconduct charges against Judge Ballou over his treatment of an attorney about a social-media video. False if the charges differ. Cannot be determined if the charges are not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 63,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about a Texas Supreme Court justice who lost his Nov. 3 reelection race and was then named a federal district court nominee.",
+      "topic": "Judicial and executive nominations",
+      "quote": "He lost on Tuesday. On Wednesday, he learned that he is going to be a Federal district court nominee.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a Texas Supreme Court justice lost reelection on Nov. 3, 2026 and was named a federal district court nominee the next day. False if the dates or facts differ. Cannot be determined if no record is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 64,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "In Trump's first term in office, nine of his judicial nominees were found unqualified by the American Bar Association.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the ABA rated nine of Trump's first-term judicial nominees 'Not Qualified'. False if the count differs. Cannot be determined if no count is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 65,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Republican handling of judicial nominations before Democrats take control of the Senate.",
+      "topic": "Judicial and executive nominations",
+      "quote": "the Republican majority in the Senate Judiciary ended up eliminating the ABA recommendation altogether.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Senate Judiciary Republicans ended the committee's use of ABA ratings or recommendations. False if the committee still receives or uses them. Cannot be determined if no record of the change is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 66,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about how U.S. attorney nominees were confirmed during President Trump's first term.",
+      "topic": "Judicial and executive nominations",
+      "quote": "All of the nominees by President Trump in his first term were approved by the Senate by a voice vote--voice vote--with one exception.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if all but one of Trump's first-term U.S. attorney nominees were confirmed by voice vote. False if more than one required a roll-call vote. Cannot be determined if the confirmation records are not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "Historically, even in Donald Trump's first term, this was done by voice vote, not a rollcall vote.",
+          "outlet": "Congressional Record",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+        }
+      ],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 67,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about JD Vance, then a senator from Ohio, and roll-call votes on U.S. attorney nominees under President Biden.",
+      "topic": "Judicial and executive nominations",
+      "quote": "He determined that he would not allow any U.S. attorney to go forward under Joe Biden without a rollcall vote.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if then-Senator JD Vance announced he would block voice-vote confirmations of Biden's U.S. attorney nominees, forcing roll-call votes. False if no such hold is on record. Cannot be determined if records are unclear.",
+      "premise": null,
+      "counter_statements": [
+        47
+      ],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "It was JD Vance, the current Vice President, who authored this strategy.",
+          "outlet": "Congressional Record",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+        }
+      ],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 68,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about his requests to then-Senator JD Vance to allow U.S. attorney nominees to be confirmed without roll-call votes.",
+      "topic": "Judicial and executive nominations",
+      "quote": "I came to the floor on seven--seven--different occasions, asking him to give us a break and to let these nominees go forward without a record vote.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Congressional Record shows Sen. Durbin on seven occasions asking consent to confirm U.S. attorney nominees without a roll-call vote, against Vance's objection. False if the count is materially different. Cannot be determined if the record cannot be searched.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 69,
+      "speaker": "Dick Durbin",
+      "office": "U.S. Senator from Illinois",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about President Trump's choice of judicial nominees.",
+      "topic": "Judicial and executive nominations",
+      "quote": "His sole consideration is loyalty.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5672-3.htm",
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 70,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "Putin is likely the most inept military leader of our century.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 71,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "last year, Russia gained 1,874 square miles of territory or about 0.8 percent of Ukraine's territory.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published war-mapping estimate puts Russia's 2025 territorial gain in Ukraine at about 1,874 square miles, about 0.8 percent of Ukraine. False if published estimates differ materially. Cannot be determined if no estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 72,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "This year, Russia has managed a mere 46 square miles of territory gained in Ukraine.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if published estimates put Russia's net 2026 gain at about 46 square miles. False if they differ materially. Cannot be determined if no estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 73,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "In September and October, Russia actually lost ground--the tide is turning--with a net loss of 31 square miles in September and a net loss of 10 square miles in October.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if published estimates show Russian net losses of about 31 square miles in September and 10 in October 2026. False if they show gains or materially different figures. Cannot be determined if no estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 74,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "In October 2026, Russian forces experienced their highest monthly casualties of the entire war.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a Ukrainian, British or U.S. official estimate shows October 2026 as Russia's highest-casualty month of the war. False if official estimates show another month higher. Cannot be determined if no monthly estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 75,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "It was the fourth month in a row that Russia exceeded 40,000 casualties in 1 month.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official estimates show Russian casualties above 40,000 in each of July through October 2026. False if any of those months was lower. Cannot be determined if no monthly estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 76,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "1.5 million Russian casualties in his war",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official estimate puts total Russian casualties in the war at about 1.5 million. False if official estimates differ materially. Cannot be determined if no estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 77,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "At some points this year, Russia's casualty rate exceeded the recruitment rate.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an official estimate shows Russian casualties exceeding recruitment in some 2026 period. False if estimates show recruitment always exceeding casualties. Cannot be determined if no such comparison is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 78,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "But Ukraine has managed to put 30 percent of Russia's oil refining capacity offline.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published estimate puts the share of Russian refining capacity offline from Ukrainian strikes at about 30 percent. False if estimates differ materially. Cannot be determined if no estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 79,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "For years, President Zelenskyy has agreed to cease-fires.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Ukraine's president has accepted ceasefire proposals in past years. False if no ceasefire acceptance by Zelenskyy is on record. Cannot be determined if records are unclear.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 80,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "Putin has made it clear that he, not Ukraine, is the obstacle to peace.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 81,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "They are suffering under a war criminal, under a dictator who should not be entertained and feted in the palaces of this world and of democratic countries but should be in jail as a war criminal.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 82,
+      "speaker": "Roger Wicker",
+      "office": "U.S. Senator from Mississippi",
+      "party": "R",
+      "context": "Speaking on the Senate floor on November 16 about Russia's war on Ukraine.",
+      "topic": "Ukraine war",
+      "quote": "The world will be safer and Americans will be safer if we help Ukraine do just that--win their victory.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5675-2.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 83,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "There are 17 data centers getting proposed right now for construction on our public lands, covering more than 17,000 acres of public lands across six Western States.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if BLM or another federal record lists about 17 proposed data centers on federal public lands covering over 17,000 acres in six western states. False if the federal record differs materially. Cannot be determined if no such record is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 84,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "This bill eliminates the ability to vacate permits under the National Environmental Policy Act and the National Historic Preservation Act.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the bill's text bars courts from vacating permits under NEPA and the NHPA. False if the text preserves vacatur. Cannot be determined if the bill's text cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 85,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "under this bill, any data center that is less than two acres gets considered under a general permit, not a site-specific permit.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the bill's text puts data centers under two acres under a general permit rather than site-specific review. False if the text differs. Cannot be determined if the bill's text cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 86,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "Nearly every Republican in the Senate has voted for this bill so far.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if Senate roll-call votes on the bill show nearly all Republicans voting for it. False if a substantial share of Republicans voted against or no vote has occurred. Cannot be determined if the votes cannot be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 87,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "The permitting bill sells out those communities for the promise of electricity bills that might go down by between $4 to $6 a month in 2040.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published analysis of the bill projects household electricity bill savings of about $4 to $6 a month in 2040. False if the published projection differs materially. Cannot be determined if no projection is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 88,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "We are projected to spend more than $10 trillion on data centers and AI infrastructure in the next 8 years.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published projection puts U.S. data center and AI infrastructure spending above $10 trillion over about eight years. False if published projections are far lower. Cannot be determined if no projection is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "We are projected as a country to spend more than $10 trillion on data centers and AI infrastructure over the next 8 years, which is higher than any other expenditure in the history of our Nation.",
+          "outlet": "Congressional Record",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+        }
+      ],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 89,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "The number of proposed gas plants to power data centers doubled to 189,000 megawatts in the first of this year alone.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published tally shows proposed gas capacity for data centers doubling to about 189,000 megawatts in early 2026. False if the tally differs materially. Cannot be determined if no tally is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 90,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "this bill would bring economywide emissions down by 3.8 percent by 2040 compared to business as usual.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published model of the bill projects economywide emissions about 3.8 percent below baseline by 2040. False if the model's figure differs materially. Cannot be determined if no model is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 91,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "An earlier Rhodium--a private company--Rhodium model of this bill found it could even increase economywide emissions by 1 percent",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if an earlier Rhodium Group analysis found the bill could raise economywide emissions by about 1 percent. False if Rhodium's analysis differs. Cannot be determined if the analysis is not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 92,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "would get an additional 17,000 megawatts of clean energy built over the next 15 years.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published analysis projects about 17,000 megawatts of added clean energy over 15 years from the provision Sen. Markey described. False if it differs materially. Cannot be determined if no analysis is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 93,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "Last year, we deployed 50,000 megawatts of solar in the United States--50,000 new megawatts.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if EIA, SEIA or another official tally shows about 50,000 megawatts of U.S. solar installed in 2025. False if the tally differs materially. Cannot be determined if no 2025 tally is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [
+        {
+          "quote": "we last year produced 50,000 new megawatts of solar",
+          "outlet": "Congressional Record",
+          "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+        }
+      ],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 94,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Trump administration actions on onshore wind projects.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "Trump and his Cabinet have blocked 400 onshore wind projects",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published record shows the administration blocking or halting about 400 onshore wind projects. False if the count is far lower. Cannot be determined if no such count is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 111,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Trump administration payments to cancel offshore wind leases.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "spent $4 billion to buy out and cancel 21,000 megawatts of offshore wind",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if official records show about $4 billion paid to buy out or cancel about 21,000 megawatts of offshore wind. False if the figures differ materially. Cannot be determined if no official figures are found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 95,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about Trump administration emergency orders keeping coal plants running.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "They have abused executive authorities to keep coal plants running, costing ratepayers more than $300 million in just 1 year.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if a published estimate puts ratepayer costs of DOE emergency orders keeping coal plants open at over $300 million in one year. False if estimates are far lower. Cannot be determined if no estimate is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 96,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "The Trump administration has broken our energy system.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 97,
+      "speaker": "Ed Markey",
+      "office": "U.S. Senator from Massachusetts",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 against the energy permitting bill the Senate is set to consider.",
+      "topic": "Energy permitting bill and data centers",
+      "quote": "make that fossil fuel cartel that is disguised as a Cabinet",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5676.htm",
+        "note": ""
+      },
+      "kind": "personal_attack",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 98,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "Congress has missed its deadline for 3 years in a row now",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the farm bill has lapsed past its deadline in each of the last three years without a new full bill. False if a new farm bill was enacted in that period. Cannot be determined if records are unclear.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 99,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "The cost of farm diesel is at a near record high.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if EIA or USDA data show farm or off-road diesel prices near their record high in fall 2026. False if prices are well below the record. Cannot be determined if no current price series is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 100,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "The only real response from the Trump administration has been bailout after bailout to try to make up for the effects of their own blunders",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "premised_prediction",
+      "test": "Assesses only the premise, not the opinion that aid was the only response or that problems were the administration's blunders. True if USDA has announced more than one round of emergency aid payments to farmers under the current administration. False if there has been one or none. Cannot be determined if records are unclear.",
+      "premise": "The Trump administration has provided more than one round of emergency federal aid payments to farmers.",
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 101,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "the Iran war that is so deeply unpopular with the American people whether they are Republicans or Democrats.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if national polls show majorities of both Republicans and Democrats opposing the Iran war. False if polls show a majority of either party supporting it. Cannot be determined if polls split or turn on wording.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 102,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the income of farmers and ranchers amid record grocery prices.",
+      "topic": "Farm bill and rural economy",
+      "quote": "In fact, most of them are taking home even less than they ever have.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if USDA data show most farm households with farm income at or near a record low. False if farm income is near or above average. Cannot be determined if the data do not speak to the claim.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 103,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "there are fewer decent- paying jobs than there were 5 years ago in this country.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if BLS data show fewer jobs paying above a reasonable wage threshold than five years ago. False if such jobs have grown. Cannot be determined if 'decent-paying' has no measurable reading.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 104,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "Last year, Republicans passed a budget bill without a single Democratic vote.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the 2025 reconciliation (budget) law passed both chambers with no Democratic votes. False if any Democrat voted for it. Cannot be determined if the votes cannot be found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 105,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "For the first time, States will have to pay for SNAP food assistance.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the 2025 law requires states, for the first time, to pay part of SNAP benefit costs. False if states already paid benefit costs or the law does not require it. Cannot be determined if the law cannot be read.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 106,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "For Colorado and many others, that is going to mean billions of dollars a year",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 107,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "Even more recently, the Senate Agriculture Committee passed a version of the farm bill that was not supported by a single Democrat.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if the Senate Agriculture Committee reported a farm bill with no Democratic votes in favor. False if any Democrat on the committee voted for it. Cannot be determined if the committee vote is not found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 108,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "Governors and State legislators from both parties have asked Congress for two more years to prepare. The current bill provides only one.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if state governors and legislators of both parties asked for a two-year delay and the current bill provides one year. False if the bill provides two years or no such request is on record. Cannot be determined if neither point is found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 109,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "Hundreds of farmers and ranchers qualify for these programs but can't benefit because the funding runs out before they are able to get it.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "factual",
+      "test": "True if USDA data show hundreds of eligible farmers and ranchers unfunded in the programs Sen. Bennet named for lack of money. False if the programs funded all eligible applicants. Cannot be determined if no such data are found.",
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": "not_checked",
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    },
+    {
+      "id": 110,
+      "speaker": "Michael Bennet",
+      "office": "U.S. Senator from Colorado",
+      "party": "D",
+      "context": "Speaking on the Senate floor on November 16 about the farm bill and conditions facing farmers and rural communities.",
+      "topic": "Farm bill and rural economy",
+      "quote": "There is no reason we should not pass a bipartisan farm bill this year.",
+      "reported_by": {
+        "outlet": "Congressional Record",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm"
+      },
+      "source": {
+        "status": "verbatim",
+        "url": "https://www.govinfo.gov/content/pkg/CREC-2026-11-16/html/CREC-2026-11-16-pt1-PgS5702-2.htm",
+        "note": ""
+      },
+      "kind": "opinion_or_prediction",
+      "test": null,
+      "premise": null,
+      "counter_statements": [],
+      "counter_documents": [],
+      "self_contradictions": [],
+      "also_said": [],
+      "result": null,
+      "finding": null,
+      "evidence": [],
+      "check_run": null
+    }
+  ]
+}
