@@ -126,7 +126,7 @@ public final class EdgarFeedUnpacker {
       index.append("{\"name\":\"").append(json(d.filename)).append("\",\"type\":\"")
           .append(json(d.type == null ? "" : d.type)).append("\",\"size\":\"")
           .append(d.content == null ? 0 : d.content.length).append("\"}");
-      if (d.content != null && !isRenderingOnly(d.filename) && isRead(d.type)) {
+      if (d.content != null && d.content.length > 0 && !isRenderingOnly(d.filename) && isRead(d.type)) {
         File target = new File(accDir, d.filename);
         Files.createDirectories(target.getParentFile().toPath());
         Files.write(target.toPath(), d.content);
