@@ -3004,9 +3004,9 @@ public class McpServer {
             + "list of web search queries you ran for it. A claim with neither is refused. "
             + "`measure`: the exact search_catalog query you ran for the statistic the claim "
             + "rests on, with its place ('Washington metro CPI', 'D.C. monthly unemployment "
-            + "rate', 'D.C. eviction filings'); REQUIRED on every claim graded 'not checkable "
-            + "here' or 'unsupported' that has no warehouse_value, and refused unless that query "
-            + "was run this session. "
+            + "rate', 'D.C. eviction filings'); REQUIRED on the central claim and on every claim "
+            + "graded 'not checkable here' or 'unsupported', when the claim has no "
+            + "warehouse_value, and refused unless that query was run this session. "
             + "`windows_tested`: array of {window, value}, at least two different windows, REQUIRED on "
             + "a claim of a change in a figure graded 'partially false', 'mostly false' or 'false' "
             + "when the claim names no year, month, quarter or fiscal year; a report without it is "
@@ -8524,8 +8524,14 @@ public class McpServer {
         java.util.List<String> problems = new java.util.ArrayList<>();
         for (JsonNode c : claims) {
             String verdict = c.path("verdict").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            // The central claim is held to the search whatever its verdict. Measured 2026-11-17
+            // (news q8, 24/7 Wall St. on six FDIC bank failures): every bank-failure claim,
+            // the central one included, was graded 'true' from the FDIC API alone, and
+            // banking.failures, the top search_catalog hit for "FDIC bank failures", was never
+            // looked at.
             if (!("not checkable here".equals(verdict)
-                    || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict))
+                    || ClaimScoring.VERDICT_UNSUPPORTED.equals(verdict)
+                    || ClaimScoring.isCentral(c))
                     || nonBlank(c, "sql") || nonBlank(c, "warehouse_value")
                     || "attack".equals(c.path("kind").asText(""))
                     || ClaimScoring.isOpinion(c)) {

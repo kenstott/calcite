@@ -594,10 +594,17 @@ partitionedTables:
       checkedAt: "2026-11-17T00:57:19Z"
     partitions: *standard_partitions
     comment: >
-      Bank failure resolutions — resolution type, deposits/assets at failure, and the
-      acquiring institution (when any). One row per failure; PK is id. Windowed by
-      FAILYR. cert is nullable — some very old records have no CERT. Joins to
-      institutions by cert. Source: api.fdic.gov/banks/failures.
+      FDIC failed bank list — every FDIC-insured bank failure, one row per failure
+      (PK id): failed institution name, city and state, failure (closing) date,
+      FDIC resolution type code, total deposits and total assets at failure (USD
+      thousands), the acquiring institution's name, city and state (null for a
+      deposit payoff), and the estimated cost to the Deposit Insurance Fund
+      (cost_thousands; FDIC publishes 0 for some records, see that column).
+      Use it to count failures in a period, rank them by size or by insurance-fund
+      cost, and name acquirers. Fetched per failure year (FAILYR), so years with no
+      failure have no rows. cert is nullable — some very old records have no CERT;
+      joins to banking.institutions by cert. Source: api.fdic.gov/banks/failures,
+      the same data as fdic.gov's Failed Bank List.
 
     dimensions:
       type:

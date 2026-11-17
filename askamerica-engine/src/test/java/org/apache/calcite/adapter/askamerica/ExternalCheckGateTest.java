@@ -387,6 +387,29 @@ class ExternalCheckGateTest {
         assertNull(measureGate(claim));
     }
 
+    /** News q8, 2026-11-17: the central bank-failure claim was graded 'true' from the FDIC API
+     *  and banking.failures was never searched for. */
+    @Test void aCentralClaimGradedFromOutsideTheWarehouseNeedsASearchedMeasure()
+        throws Exception {
+        String bare = "[{\"assertion\":\"Six FDIC-insured banks failed in the past year\","
+            + "\"verdict\":\"true\",\"central\":true}]";
+        String problem = measureGate(bare);
+        assertNotNull(problem);
+        assertTrue(problem.contains("no `measure`"), problem);
+
+        String withMeasure = "[{\"assertion\":\"Six FDIC-insured banks failed in the past year\","
+            + "\"verdict\":\"true\",\"central\":true,\"measure\":\"FDIC bank failures\"}]";
+        problem = measureGate(withMeasure);
+        assertNotNull(problem);
+        assertTrue(problem.contains("never called with that query"), problem);
+        searched("FDIC bank failures");
+        assertNull(measureGate(withMeasure));
+
+        assertNull(measureGate("[{\"assertion\":\"Six FDIC-insured banks failed\","
+            + "\"verdict\":\"true\",\"central\":true,\"warehouse_value\":\"6 rows\"}]"),
+            "a central claim with a warehouse figure already used the warehouse");
+    }
+
     @Test void measureCheckLeavesWarehouseAndPositiveClaimsAlone() throws Exception {
         assertNull(measureGate("[{\"assertion\":\"a\",\"verdict\":\"not checkable here\","
             + "\"reason\":\"x\",\"warehouse_value\":\"4.12%\"},"
