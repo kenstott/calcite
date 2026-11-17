@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The IBTimes UK article's claims about NYC's record-low murders, NYPD crime figures and Mamdani credit are balanced and accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s1-t1-s1:checked ~ table tbody.s0{display:none}
+#s1-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"]{color:var(--link)}
+#s1-t1-s1:checked ~ table label[for="s1-t1-s1"] .srtcue{opacity:1}
+#s1-t1-s1:checked ~ .srtreset{display:inline-block}
+#s1-t1-s2:checked ~ table tbody.s0{display:none}
+#s1-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"]{color:var(--link)}
+#s1-t1-s2:checked ~ table label[for="s1-t1-s2"] .srtcue{opacity:1}
+#s1-t1-s2:checked ~ .srtreset{display:inline-block}
+#s1-t1-s3:checked ~ table tbody.s0{display:none}
+#s1-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"]{color:var(--link)}
+#s1-t1-s3:checked ~ table label[for="s1-t1-s3"] .srtcue{opacity:1}
+#s1-t1-s3:checked ~ .srtreset{display:inline-block}
+#s1-t2-s1:checked ~ table tbody.s0{display:none}
+#s1-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t2-s1:checked ~ table label[for="s1-t2-s1"]{color:var(--link)}
+#s1-t2-s1:checked ~ table label[for="s1-t2-s1"] .srtcue{opacity:1}
+#s1-t2-s1:checked ~ .srtreset{display:inline-block}
+#s1-t2-s2:checked ~ table tbody.s0{display:none}
+#s1-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t2-s2:checked ~ table label[for="s1-t2-s2"]{color:var(--link)}
+#s1-t2-s2:checked ~ table label[for="s1-t2-s2"] .srtcue{opacity:1}
+#s1-t2-s2:checked ~ .srtreset{display:inline-block}
+#s1-t2-s3:checked ~ table tbody.s0{display:none}
+#s1-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t2-s3:checked ~ table label[for="s1-t2-s3"]{color:var(--link)}
+#s1-t2-s3:checked ~ table label[for="s1-t2-s3"] .srtcue{opacity:1}
+#s1-t2-s3:checked ~ .srtreset{display:inline-block}
+#s1-t2-s4:checked ~ table tbody.s0{display:none}
+#s1-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s1-t2-s4:checked ~ table label[for="s1-t2-s4"]{color:var(--link)}
+#s1-t2-s4:checked ~ table label[for="s1-t2-s4"] .srtcue{opacity:1}
+#s1-t2-s4:checked ~ .srtreset{display:inline-block}
+#s1-t6-s1:checked ~ table tbody.s0{display:none}
+#s1-t6-s1:checked ~ table tbody.s1{display:table-row-group}
+#s1-t6-s1:checked ~ table label[for="s1-t6-s1"]{color:var(--link)}
+#s1-t6-s1:checked ~ table label[for="s1-t6-s1"] .srtcue{opacity:1}
+#s1-t6-s1:checked ~ .srtreset{display:inline-block}
+#s1-t6-s2:checked ~ table tbody.s0{display:none}
+#s1-t6-s2:checked ~ table tbody.s2{display:table-row-group}
+#s1-t6-s2:checked ~ table label[for="s1-t6-s2"]{color:var(--link)}
+#s1-t6-s2:checked ~ table label[for="s1-t6-s2"] .srtcue{opacity:1}
+#s1-t6-s2:checked ~ .srtreset{display:inline-block}
+#s1-t6-s3:checked ~ table tbody.s0{display:none}
+#s1-t6-s3:checked ~ table tbody.s3{display:table-row-group}
+#s1-t6-s3:checked ~ table label[for="s1-t6-s3"]{color:var(--link)}
+#s1-t6-s3:checked ~ table label[for="s1-t6-s3"] .srtcue{opacity:1}
+#s1-t6-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The IBTimes UK article's claims about NYC's record-low murders, NYPD crime figures and Mamdani credit are balanced and accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.ibtimes.co.uk/new-york-murders-record-low-2026-1831821">https://www.ibtimes.co.uk/new-york-murders-record-low-2026-1831821</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" width="880" height="446" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="446" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">NYPD Jan-Oct murders, FBI Return A</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">crime.cde_reta, ORI NY03030; 2021 holds no data in the table</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="312" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="312" viewBox="0 0 412 312" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="312" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">NYPD murders Jan-Oct (FBI Return A)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="67" y1="258" x2="390" y2="258" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="59" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="67" y1="207.50" x2="390" y2="207.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="59" y="211.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">100</text>
+      <line class="grid" x1="67" y1="157" x2="390" y2="157" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="59" y="161" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">200</text>
+      <line class="grid" x1="67" y1="106.50" x2="390" y2="106.50" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="59" y="110.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">300</text>
+      <line class="grid" x1="67" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="59" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">400</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="67" y1="56" x2="67" y2="258" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="67" y1="258" x2="390" y2="258" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="157" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 157)">Murders</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2017" class="tick" x="93.92" y="276" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2017</text>
+      <text id="p1-xtick-2018" class="tick" x="147.75" y="276" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2018</text>
+      <text id="p1-xtick-2019" class="tick" x="201.58" y="276" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p1-xtick-2022" class="tick" x="255.42" y="276" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="309.25" y="276" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="363.08" y="276" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p1-series-jan-oct-murders" class="series">
+      <g class="hover">
+        <title>2017 — Jan-Oct murders: 244</title>
+        <rect id="p1-mark-jan-oct-murders-2017" class="bar" x="76.69" y="134.78" width="33.45" height="123.22" fill="#2563eb"/>
+        <rect class="hit" x="76.69" y="56" width="33.45" height="202" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2018 — Jan-Oct murders: 259</title>
+        <rect id="p1-mark-jan-oct-murders-2018" class="bar" x="130.52" y="127.21" width="33.45" height="130.80" fill="#2563eb"/>
+        <rect class="hit" x="130.52" y="56" width="33.45" height="202" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2019 — Jan-Oct murders: 282</title>
+        <rect id="p1-mark-jan-oct-murders-2019" class="bar" x="184.36" y="115.59" width="33.45" height="142.41" fill="#2563eb"/>
+        <rect class="hit" x="184.36" y="56" width="33.45" height="202" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2022 — Jan-Oct murders: 371</title>
+        <rect id="p1-mark-jan-oct-murders-2022" class="bar" x="238.19" y="70.65" width="33.45" height="187.36" fill="#2563eb"/>
+        <rect class="hit" x="238.19" y="56" width="33.45" height="202" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2023 — Jan-Oct murders: 335</title>
+        <rect id="p1-mark-jan-oct-murders-2023" class="bar" x="292.02" y="88.82" width="33.45" height="169.18" fill="#2563eb"/>
+        <rect class="hit" x="292.02" y="56" width="33.45" height="202" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2024 — Jan-Oct murders: 272</title>
+        <rect id="p1-mark-jan-oct-murders-2024" class="bar" x="345.86" y="120.64" width="33.45" height="137.36" fill="#2563eb"/>
+        <rect class="hit" x="345.86" y="56" width="33.45" height="202" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="brand">
+  <svg x="20" y="405" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="420" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:52710/a/cebd533264782c3007f7f2f5fa88308c.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s0" checked><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s1"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s2"><input type="radio" name="s1-t1" class="srtbox" id="s1-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s1-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s1-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — honest</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>4 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>4</strong> true &middot; <strong>4</strong> assertions checked</p>
+<input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s0" checked><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s1"><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s2"><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s3"><input type="radio" name="s1-t2" class="srtbox" id="s1-t2-s4"><table><thead><tr><th><label class="srth" for="s1-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s1-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>9</td><td>They establish that murders fell in his first ten months, not that any single policy or administration was responsible.</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#1, #5 — supported<br>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>6</td><td>Detectives carried out 26 gang-related takedowns in 2026 and seized more than 4,500 illegal guns, the department said.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></td></tr><tr class="verdict-true"><td>7</td><td>Transit crime rose 2.2% in the first ten months, while shooting incidents increased 4.4% and shooting victims rose 5.8% in October year on year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a>; <a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></td></tr><tr class="verdict-true"><td>8</td><td>Mamdani took office on 1 January, meaning the figures cover his first ten months as mayor.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>9</td><td>They establish that murders fell in his first ten months, not that any single policy or administration was responsible.</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#1, #5 — supported<br>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>8</td><td>Mamdani took office on 1 January, meaning the figures cover his first ten months as mayor.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>7</td><td>Transit crime rose 2.2% in the first ten months, while shooting incidents increased 4.4% and shooting victims rose 5.8% in October year on year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a>; <a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></td></tr><tr class="verdict-true"><td>6</td><td>Detectives carried out 26 gang-related takedowns in 2026 and seized more than 4,500 illegal guns, the department said.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>6</td><td>Detectives carried out 26 gang-related takedowns in 2026 and seized more than 4,500 illegal guns, the department said.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></td></tr><tr class="verdict-true"><td>8</td><td>Mamdani took office on 1 January, meaning the figures cover his first ten months as mayor.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>9</td><td>They establish that murders fell in his first ten months, not that any single policy or administration was responsible.</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#1, #5 — supported<br>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>7</td><td>Transit crime rose 2.2% in the first ten months, while shooting incidents increased 4.4% and shooting victims rose 5.8% in October year on year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a>; <a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-true"><td>6</td><td>Detectives carried out 26 gang-related takedowns in 2026 and seized more than 4,500 illegal guns, the department said.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></td></tr><tr class="verdict-true"><td>7</td><td>Transit crime rose 2.2% in the first ten months, while shooting incidents increased 4.4% and shooting victims rose 5.8% in October year on year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a>; <a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></td></tr><tr class="verdict-true"><td>8</td><td>Mamdani took office on 1 January, meaning the figures cover his first ten months as mayor.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>9</td><td>They establish that murders fell in his first ten months, not that any single policy or administration was responsible.</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#1, #5 — supported<br>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-true"><td>9</td><td>They establish that murders fell in his first ten months, not that any single policy or administration was responsible.</td><td><strong>true</strong> &middot; causal claim &middot; central claim</td><td>#1, #5 — supported<br>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr><tr class="verdict-true"><td>6</td><td>Detectives carried out 26 gang-related takedowns in 2026 and seized more than 4,500 illegal guns, the department said.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></td></tr><tr class="verdict-true"><td>7</td><td>Transit crime rose 2.2% in the first ten months, while shooting incidents increased 4.4% and shooting victims rose 5.8% in October year on year.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a>; <a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></td></tr><tr class="verdict-true"><td>8</td><td>Mamdani took office on 1 January, meaning the figures cover his first ten months as mayor.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr></tbody></table><label class="srtreset" for="s1-t2-s0">reset order</label>
+<h3>Claims by Jessica Tisch — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only. <strong>Citejacking:</strong> #10 leans on cited evidence that does not carry it.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>10</td><td>Police Commissioner Jessica Tisch attributed the results to the NYPD's data-driven strategy, including identifying drivers of violence, removing illegal guns and targeting gangs.</td><td><strong>unsupported</strong> &middot; causal claim &middot; central claim</td><td>#6 — overreach<br>Checked against: <a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a>; <a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></td></tr>
+</tbody></table>
+<h3>Claims by Unnamed social media poster — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty no checkable claims</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>1 claims graded, 0 not gradable, 1 fell short. In this article only.</p></div>
+<p><strong>1</strong> unsupported &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-unsupported"><td>11</td><td>Gee, turns out when you help regular people pay their bills, crime goes down</td><td><strong>unsupported</strong> &middot; causal claim &middot; central claim</td><td>Checked against: <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr>
+</tbody></table>
+<h3>Claims by Unnamed commenter — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>1 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>12</td><td>One commenter noted that murders had been falling since 2022, before he became mayor.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <code>crime.cde_reta</code>; <a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>5</strong> true &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s1-t6" class="srtbox" id="s1-t6-s0" checked><input type="radio" name="s1-t6" class="srtbox" id="s1-t6-s1"><input type="radio" name="s1-t6" class="srtbox" id="s1-t6-s2"><input type="radio" name="s1-t6" class="srtbox" id="s1-t6-s3"><table><thead><tr><th><label class="srth" for="s1-t6-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s1-t6-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s1-t6-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>The New York Police Department said on 9 November that 230 murders were recorded between 1 January and 31 October, below the previous first-ten-months record of 244, set in 2017.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The total was 15.7% lower than the 273 murders recorded during the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>There were 536 shooting incidents, down 10.4% from 598 in the same period last year, and 649 shooting victims, a 13% fall from 746.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Major crime declined 6.5% year on year, from 102,726 incidents to 96,059. October major crime fell 8.6% compared with October 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>The department reported 391 murders in 2023 and 377 in 2024. Its 2025 year-end announcement subsequently used 382 as the 2024 comparison figure, reporting 305 murders that year, a 20.2% decline.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>5</td><td>The department reported 391 murders in 2023 and 377 in 2024. Its 2025 year-end announcement subsequently used 382 as the 2024 comparison figure, reporting 305 murders that year, a 20.2% decline.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Major crime declined 6.5% year on year, from 102,726 incidents to 96,059. October major crime fell 8.6% compared with October 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>There were 536 shooting incidents, down 10.4% from 598 in the same period last year, and 649 shooting victims, a 13% fall from 746.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The total was 15.7% lower than the 273 murders recorded during the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>The New York Police Department said on 9 November that 230 murders were recorded between 1 January and 31 October, below the previous first-ten-months record of 244, set in 2017.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>4</td><td>Major crime declined 6.5% year on year, from 102,726 incidents to 96,059. October major crime fell 8.6% compared with October 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>The department reported 391 murders in 2023 and 377 in 2024. Its 2025 year-end announcement subsequently used 382 as the 2024 comparison figure, reporting 305 murders that year, a 20.2% decline.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>1</td><td>The New York Police Department said on 9 November that 230 murders were recorded between 1 January and 31 October, below the previous first-ten-months record of 244, set in 2017.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The total was 15.7% lower than the 273 murders recorded during the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>There were 536 shooting incidents, down 10.4% from 598 in the same period last year, and 649 shooting victims, a 13% fall from 746.</td><td><strong>true</strong></td></tr></tbody><tbody class="srt s3"><tr class="verdict-true"><td>1</td><td>The New York Police Department said on 9 November that 230 murders were recorded between 1 January and 31 October, below the previous first-ten-months record of 244, set in 2017.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>2</td><td>The total was 15.7% lower than the 273 murders recorded during the same period in 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>3</td><td>There were 536 shooting incidents, down 10.4% from 598 in the same period last year, and 649 shooting victims, a 13% fall from 746.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>4</td><td>Major crime declined 6.5% year on year, from 102,726 incidents to 96,059. October major crime fell 8.6% compared with October 2025.</td><td><strong>true</strong></td></tr><tr class="verdict-true"><td>5</td><td>The department reported 391 murders in 2023 and 377 in 2024. Its 2025 year-end announcement subsequently used 382 as the 2024 comparison figure, reporting 305 murders that year, a 20.2% decline.</td><td><strong>true</strong></td></tr></tbody></table><label class="srtreset" for="s1-t6-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The New York Police Department said on 9 November that 230 murders were recorded between 1 January and 31 October, below the previous first-ten-months record of 244, set in 2017.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>FBI Return A NYPD Jan-Oct murders: 2017 = 244; 2018 = 259; 2019 = 282; 2022 = 371; 2023 = 335; 2024 = 272 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>NYPD 9 Nov 2026 release: 230 murders, previous record low 244 in 2017<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, SUM(CASE WHEN month&lt;=10 THEN actual_murder ELSE 0 END) FROM crime.cde_reta WHERE ori='NY03030' GROUP BY year</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; The total was 15.7% lower than the 273 murders recorded during the same period in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NYPD: 230 vs 273, -15.7%<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; There were 536 shooting incidents, down 10.4% from 598 in the same period last year, and 649 shooting victims, a 13% fall from 746.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NYPD: 536 vs 598 (-10.4%); 649 vs 746 (-13%)<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Major crime declined 6.5% year on year, from 102,726 incidents to 96,059. October major crime fell 8.6% compared with October 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Independent evidence</dt><dd>NYPD: 96,059 vs 102,726 (-6.5%); October 9,750 vs 10,670 (-8.6%)<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; The department reported 391 murders in 2023 and 377 in 2024. Its 2025 year-end announcement subsequently used 382 as the 2024 comparison figure, reporting 305 murders that year, a 20.2% decline.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>FBI Return A annual murders (lagging NYPD): 2022 = 438, 2023 = 397, 2024 = 325, same downward direction <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>NYPD 6 Jan 2026 release: 305 vs 382, -20.2%; Jan 2025 release: 377 in 2024, 14 fewer than 2023<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; Detectives carried out 26 gang-related takedowns in 2026 and seized more than 4,500 illegal guns, the department said.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NYPD release: 26 gang-related takedowns; 4,500+ illegal guns seized<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; Transit crime rose 2.2% in the first ten months, while shooting incidents increased 4.4% and shooting victims rose 5.8% in October year on year.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NYPD: transit 1,825 vs 1,786 (+2.2%); October shootings 47 vs 45 (+4.4%), victims 55 vs 52 (+5.8%)<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li><li><a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; Mamdani took office on 1 January, meaning the figures cover his first ten months as mayor.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NYPD 6 Jan 2026 release quotes Mayor Zohran Mamdani; the 9 Nov release window is 1 Jan-31 Oct 2026<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; They establish that murders fell in his first ten months, not that any single policy or administration was responsible.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>NYPD counts are descriptive and the decline predates January 2026<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Rests on</dt><dd>#1, #5</dd>
+<dt>What that evidence found</dt><dd>NYPD releases report counts only; year-end series shows murders falling 2023-2025 before Mamdani took office.</dd>
+<dt>Evidence support</dt><dd>supported — the evidence's own finding carries the claim</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#10 &middot; <strong>unsupported</strong> &mdash; Police Commissioner Jessica Tisch attributed the results to the NYPD's data-driven strategy, including identifying drivers of violence, removing illegal guns and targeting gangs.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Jessica Tisch — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></li><li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD release</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Rests on</dt><dd>#6</dd>
+<dt>What that evidence found</dt><dd>The release counts takedowns and gun seizures (activity) but contains no analysis isolating their effect on murders.</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>The statement was made (NYPD release and NY1 both quote it), but no evidence found tests the causal link between the strategy and the murder decline.</dd>
+<dt>Warehouse searched for</dt><dd>NYPD murders New York City crime</dd>
+<dt>Web searches run</dt><dd>NYPD October 2026 crime statistics 230 murders record low first ten months</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#11 &middot; <strong>unsupported</strong> &mdash; Gee, turns out when you help regular people pay their bills, crime goes down</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Unnamed social media poster — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Why</dt><dd>No evidence found linking Mamdani's affordability policies to the decline, which began in 2023 before he took office; NYPD figures do not measure it. The poster is unnamed, so no page about them exists.</dd>
+<dt>No page loaded because</dt><dd>Poster is anonymous in the article; NYPD releases and NY1 were read instead and contain nothing on affordability policy.</dd>
+<dt>Warehouse searched for</dt><dd>NYPD murders New York City crime</dd>
+<dt>Web searches run</dt><dd>NYPD year-end 2025 murders 305 20.2% decline 382 in 2024</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; One commenter noted that murders had been falling since 2022, before he became mayor.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by Unnamed commenter — what they assert, as the piece reports it</dd>
+<dt>Warehouse says</dt><dd>FBI Return A NYPD annual murders: 2022 = 438, 2023 = 397, 2024 = 325 <code>crime.cde_reta</code></dd>
+<dt>Independent evidence</dt><dd>NYPD year-end murders: 391 (2023), 377/382 (2024), 305 (2025)<ul class="claim-sources"><li><a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD year-end 2025</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, SUM(actual_murder) FROM crime.cde_reta WHERE ori='NY03030' GROUP BY year</code></pre></details>
+</details>
+
+</section>
+<section>
+<h2>Figures in the article not graded as claims</h2>
+<ul><li><strong>$47</strong> &mdash; Appears only in a sidebar headline about Iran war costs, not in the article body under test</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 10 rows — 988 ms</summary><pre><code>SELECT &quot;year&quot;, SUM(actual_murder) AS murders_all, SUM(CASE WHEN month&lt;=10 THEN actual_murder ELSE 0 END) AS jan_oct FROM crime.cde_reta WHERE ori='NY03030' GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+
+</section>
+<section class="sources">
+<h2>Sources</h2>
+<ol>
+<li><a href="https://www.nyc.gov/site/nypd/news/PR017/nypd-fewest-shooting-incidents-shooting-victims-murders-recorded-history-the">NYPD 9 Nov 2026 release</a></li>
+<li><a href="https://www.nyc.gov/site/nypd/news/PR001/nypd-safest-year-ever-gun-violence-fewest-shooting-incidents-shooting-victims">NYPD 6 Jan 2026 year-end release</a></li>
+<li><a href="https://ny1.com/nyc/all-boroughs/public-safety/2026/11/09/nypd-october-2026-crime-statistics-murders-shootings-record-lows">NY1</a></li>
+</ol>
+</section>
+<footer>
+<p class="footnote">NYPD figures are preliminary. FBI Return A lags NYPD counts and has a zero for 2021.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

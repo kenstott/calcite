@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The 24/7 Wall St. article's claims about the six failed banks, their sizes and insurance-fund costs are mostly accurate, with one self-contradicting cost claim (1 Pinocchio) are mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The 24/7 Wall St. article's claims about the six failed banks, their sizes and insurance-fund costs are mostly accurate, with one self-contradicting cost claim (1 Pinocchio) are mostly accurate.</h1>
+<p class="subtitle">Checked 2026-11-17 against FDIC failed-bank list and API, FDIC Nano Banc and Tioga-Franklin releases, FRED DRCCLACBS, FDIC/SIPC coverage pages</p>
+<p class="under-review"><span>Article under review</span><a href="https://247wallst.com/personal-finance/2026/11/15/six-fdic-insured-banks-failed-in-the-past-year-heres-each-one-ranked-by-size-led-by-irvines-nano-banc/">https://247wallst.com/personal-finance/2026/11/15/six-fdic-insured-banks-failed-in-the-past-year-heres-each-one-ranked-by-size-led-by-irvines-nano-banc/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 590" width="880" height="590" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="590" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Failed banks: FDIC cost estimates, Nov 2025-Nov 2026</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">FDIC API and press releases; Nano Banc and Tioga-Franklin are preliminary</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">Estimated cost to Deposit Insurance Fund ($M)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="149" y1="56" x2="149" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-0" class="tick" x="149" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0</text>
+      <line class="grid" x1="182.33" y1="56" x2="182.33" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-1" class="tick" x="182.33" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">20.0</text>
+      <line class="grid" x1="215.67" y1="56" x2="215.67" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-2" class="tick" x="215.67" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">40.0</text>
+      <line class="grid" x1="249" y1="56" x2="249" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-3" class="tick" x="249" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">60.0</text>
+      <line class="grid" x1="282.33" y1="56" x2="282.33" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-4" class="tick" x="282.33" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">80.0</text>
+      <line class="grid" x1="315.67" y1="56" x2="315.67" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-5" class="tick" x="315.67" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">100.0</text>
+      <line class="grid" x1="349" y1="56" x2="349" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-value-tick-6" class="tick" x="349" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">120.0</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="149" y1="56" x2="149" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="149" y1="246" x2="349" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p1-category-axis-labels">
+      <text id="p1-xtick-nano-banc" class="tick" x="141" y="75.83" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Nano Banc</text>
+      <text id="p1-xtick-community-b-t-west-ga" class="tick" x="141" y="107.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Community B&amp;T West GA</text>
+      <text id="p1-xtick-metropolitan-capital" class="tick" x="141" y="139.17" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Metropolitan Capital</text>
+      <text id="p1-xtick-small-business-bank" class="tick" x="141" y="170.83" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Small Business Bank</text>
+      <text id="p1-xtick-tioga-franklin" class="tick" x="141" y="202.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Tioga-Franklin</text>
+      <text id="p1-xtick-kentland-fs-la" class="tick" x="141" y="234.17" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Kentland FS&amp;LA</text>
+    </g>
+    <g id="p1-series-cost-m" class="series">
+      <g class="hover">
+        <title>Nano Banc — Cost $M: 114.0</title>
+        <rect id="p1-mark-cost-m-nano-banc" class="bar" x="149" y="61.70" width="190" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="61.70" width="200" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-cost-m-nano-banc" class="value-label" x="343" y="75.83" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">114.0</text>
+      <g class="hover">
+        <title>Community B&amp;T West GA — Cost $M: 97.3</title>
+        <rect id="p1-mark-cost-m-community-b-t-west-ga" class="bar" x="149" y="93.37" width="162.14" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="93.37" width="200" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-cost-m-community-b-t-west-ga" class="value-label" x="315.14" y="107.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">97.3</text>
+      <g class="hover">
+        <title>Metropolitan Capital — Cost $M: 19.6</title>
+        <rect id="p1-mark-cost-m-metropolitan-capital" class="bar" x="149" y="125.03" width="32.75" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="125.03" width="200" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-cost-m-metropolitan-capital" class="value-label" x="185.75" y="139.17" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">19.6</text>
+      <g class="hover">
+        <title>Small Business Bank — Cost $M: 5.7</title>
+        <rect id="p1-mark-cost-m-small-business-bank" class="bar" x="149" y="156.70" width="9.45" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="156.70" width="200" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-cost-m-small-business-bank" class="value-label" x="162.45" y="170.83" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">5.7</text>
+      <g class="hover">
+        <title>Tioga-Franklin — Cost $M: 5.5</title>
+        <rect id="p1-mark-cost-m-tioga-franklin" class="bar" x="149" y="188.37" width="9.17" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="188.37" width="200" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-cost-m-tioga-franklin" class="value-label" x="162.17" y="202.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">5.5</text>
+      <g class="hover">
+        <title>Kentland FS&amp;LA — Cost $M: 1.2</title>
+        <rect id="p1-mark-cost-m-kentland-fs-la" class="bar" x="149" y="220.03" width="1.99" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="220.03" width="200" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-cost-m-kentland-fs-la" class="value-label" x="154.99" y="234.17" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">1.2</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="82" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="82" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">Estimated cost as % of total assets</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="149" y1="56" x2="149" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-0" class="tick" x="149" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">0.0</text>
+      <line class="grid" x1="178.71" y1="56" x2="178.71" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-1" class="tick" x="178.71" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">5.0</text>
+      <line class="grid" x1="208.43" y1="56" x2="208.43" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-2" class="tick" x="208.43" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">10.0</text>
+      <line class="grid" x1="238.14" y1="56" x2="238.14" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-3" class="tick" x="238.14" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">15.0</text>
+      <line class="grid" x1="267.86" y1="56" x2="267.86" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-4" class="tick" x="267.86" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">20.0</text>
+      <line class="grid" x1="297.57" y1="56" x2="297.57" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-5" class="tick" x="297.57" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">25.0</text>
+      <line class="grid" x1="327.29" y1="56" x2="327.29" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-6" class="tick" x="327.29" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">30.0</text>
+      <line class="grid" x1="357" y1="56" x2="357" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-value-tick-7" class="tick" x="357" y="262" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">35.0</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="149" y1="56" x2="149" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="149" y1="246" x2="357" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <g id="p2-category-axis-labels">
+      <text id="p2-xtick-community-b-t-west-ga" class="tick" x="141" y="75.83" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Community B&amp;T West GA</text>
+      <text id="p2-xtick-kentland-fs-la" class="tick" x="141" y="107.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Kentland FS&amp;LA</text>
+      <text id="p2-xtick-nano-banc" class="tick" x="141" y="139.17" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Nano Banc</text>
+      <text id="p2-xtick-tioga-franklin" class="tick" x="141" y="170.83" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Tioga-Franklin</text>
+      <text id="p2-xtick-small-business-bank" class="tick" x="141" y="202.50" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Small Business Bank</text>
+      <text id="p2-xtick-metropolitan-capital" class="tick" x="141" y="234.17" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">Metropolitan Capital</text>
+    </g>
+    <g id="p2-series-of-assets" class="series">
+      <g class="hover">
+        <title>Community B&amp;T West GA — % of assets: 31.8</title>
+        <rect id="p2-mark-of-assets-community-b-t-west-ga" class="bar" x="149" y="61.70" width="188.98" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="61.70" width="208" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-of-assets-community-b-t-west-ga" class="value-label" x="341.98" y="75.83" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">31.8</text>
+      <g class="hover">
+        <title>Kentland FS&amp;LA — % of assets: 31.4</title>
+        <rect id="p2-mark-of-assets-kentland-fs-la" class="bar" x="149" y="93.37" width="186.61" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="93.37" width="208" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-of-assets-kentland-fs-la" class="value-label" x="339.61" y="107.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">31.4</text>
+      <g class="hover">
+        <title>Nano Banc — % of assets: 15.5</title>
+        <rect id="p2-mark-of-assets-nano-banc" class="bar" x="149" y="125.03" width="92.11" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="125.03" width="208" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-of-assets-nano-banc" class="value-label" x="245.11" y="139.17" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">15.5</text>
+      <g class="hover">
+        <title>Tioga-Franklin — % of assets: 8.0</title>
+        <rect id="p2-mark-of-assets-tioga-franklin" class="bar" x="149" y="156.70" width="47.54" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="156.70" width="208" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-of-assets-tioga-franklin" class="value-label" x="200.54" y="170.83" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">8.0</text>
+      <g class="hover">
+        <title>Small Business Bank — % of assets: 7.8</title>
+        <rect id="p2-mark-of-assets-small-business-bank" class="bar" x="149" y="188.37" width="46.35" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="188.37" width="208" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-of-assets-small-business-bank" class="value-label" x="199.35" y="202.50" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">7.8</text>
+      <g class="hover">
+        <title>Metropolitan Capital — % of assets: 7.5</title>
+        <rect id="p2-mark-of-assets-metropolitan-capital" class="bar" x="149" y="220.03" width="44.57" height="19.27" fill="#2563eb"/>
+        <rect class="hit" x="149" y="220.03" width="208" height="19.27" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p2-value-of-assets-metropolitan-capital" class="value-label" x="197.57" y="234.17" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600">7.5</text>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="p3-stat">
+  <rect class="panel-edge" x="20" y="398" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="36" y="434" fill="#6b7280">Overall rating</text>
+  <text class="stat-value" x="36" y="464" fill="#1f2328">1 Pinocchio</text>
+  </g>
+  <text class="caption" x="24" y="519" fill="#6b7280">Facts match primary sources; one headline-box claim contradicts the</text>
+  <text class="caption" x="24" y="532" fill="#6b7280">article's own table</text>
+  <g id="brand">
+  <svg x="20" y="549" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="564" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:57060/a/e536d7190b061e8489cb93cb251802f4.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p><strong>Rating: 1 Pinocchio (Washington Post 0-4 scale).</strong> Every table row (closing dates, acquirers, assets, deposits, FDIC costs) matches the FDIC failed-bank list, FDIC API and FDIC press releases, and the Fed delinquency series matches. The one real error is the repeated claim that Community Bank and Trust - West Georgia carries the &quot;largest published&quot; cost estimate ($97.3M): the article's own table lists Nano Banc at $114M, which the FDIC published on Sept. 25.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 92/100 — honest</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>12 claims graded, 0 not gradable, 1 fell short. In this article only. <strong>Citejacking:</strong> #6 leans on cited evidence that does not carry it.</p></div>
+<p><strong>11</strong> true &middot; <strong>1</strong> mostly false &middot; <strong>12</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-true"><td>1</td><td>Six FDIC-insured banks failed between Nov. 14, 2025 and Nov. 14, 2026, according to the FDIC's list of failed banks.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>Community Bank and Trust - West Georgia carries the largest published insurance fund cost estimate at $97 million, despite ranking second by size.</td><td><strong>mostly false</strong></td><td>#1 — contradicted<br>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>2</td><td>Nano Banc was larger than the other five failures combined, which together held $712,100,000 in assets.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>3</td><td>Regulators closed it on Sept. 25, 2026, and Sunwest Bank took over.</td><td><strong>true</strong></td><td>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>4</td><td>Assets and deposits in the table: Nano Banc $736,172,000 / $685,846,000; West Georgia $305,716,000 / $296,420,000; Metropolitan Capital $261,185,000 / $212,152,000; Small Business Bank $72,947,000 / $68,773,000; Tioga-Franklin $68,444,000 / $66,571,000; Kentland $3,808,000 / $3,656,000, with the closing dates and acquirers shown.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC failed bank list</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>5</td><td>Estimated costs to the insurance fund: Nano Banc $114,000,000; West Georgia $97,284,000; Metropolitan $19,647,000; Small Business Bank $5,671,000; Tioga-Franklin $5,500,000; Kentland $1,194,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>7</td><td>The pending cost estimates for Nano Banc and Tioga-Franklin are the next figures to look for on the FDIC's list.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>8</td><td>The credit card delinquency rate across commercial banks fell to 2.85% in the second quarter of 2026, down from 3.08% in late 2024.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://fred.stlouisfed.org/series/DRCCLACBS">FRED DRCCLACBS</a>; <a href="https://247wallst.com/investing/2026/09/29/retirement-nightmare-serious-credit-card-delinquencies-for-seniors-hit-15-year-high/">24/7 Wall St. linked piece on card delinquencies (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>9</td><td>FDIC insurance covers $250,000 per depositor, per bank, per ownership category; on joint accounts each co-owner is insured up to $250,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/deposit-insurance/understanding-deposit-insurance/index.html">FDIC Understanding Deposit Insurance</a>; <a href="https://247wallst.com/personal-finance/savings-accounts/2026/07/05/how-fdic-insurance-works-and-how-to-protect-more-than-250000/">24/7 Wall St. linked explainer (fetched, not evidence)</a>; <a href="https://247wallst.com/personal-finance/2026/08/02/your-bank-insures-250000-a-married-couple-can-insure-1-million-at-the-same-bank-without-opening-an-account-anywhere-else/">24/7 Wall St. linked couple piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>10</td><td>Trust accounts are insured up to $250,000 per beneficiary, for up to five beneficiaries.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/system/files/2024-05/trust-accounts.pdf">FDIC trust accounts guide</a></td></tr><tr class="verdict-true"><td>11</td><td>SIPC protection is capped at $500,000, including $250,000 in cash, per customer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sipc.org/for-investors/what-sipc-protects">SIPC what SIPC protects</a>; <a href="https://247wallst.com/personal-finance/2026/11/01/at-67-hell-move-400000-from-his-bank-to-a-brokerage-for-a-better-yield-the-insurance-there-isnt-the-fdic-and-it-protects-against-something-different/">24/7 Wall St. linked brokerage piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>12</td><td>All six failures on this list had an acquirer, from Sunwest Bank in California to Kentland Bank in Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-true"><td>12</td><td>All six failures on this list had an acquirer, from Sunwest Bank in California to Kentland Bank in Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-true"><td>11</td><td>SIPC protection is capped at $500,000, including $250,000 in cash, per customer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sipc.org/for-investors/what-sipc-protects">SIPC what SIPC protects</a>; <a href="https://247wallst.com/personal-finance/2026/11/01/at-67-hell-move-400000-from-his-bank-to-a-brokerage-for-a-better-yield-the-insurance-there-isnt-the-fdic-and-it-protects-against-something-different/">24/7 Wall St. linked brokerage piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>10</td><td>Trust accounts are insured up to $250,000 per beneficiary, for up to five beneficiaries.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/system/files/2024-05/trust-accounts.pdf">FDIC trust accounts guide</a></td></tr><tr class="verdict-true"><td>9</td><td>FDIC insurance covers $250,000 per depositor, per bank, per ownership category; on joint accounts each co-owner is insured up to $250,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/deposit-insurance/understanding-deposit-insurance/index.html">FDIC Understanding Deposit Insurance</a>; <a href="https://247wallst.com/personal-finance/savings-accounts/2026/07/05/how-fdic-insurance-works-and-how-to-protect-more-than-250000/">24/7 Wall St. linked explainer (fetched, not evidence)</a>; <a href="https://247wallst.com/personal-finance/2026/08/02/your-bank-insures-250000-a-married-couple-can-insure-1-million-at-the-same-bank-without-opening-an-account-anywhere-else/">24/7 Wall St. linked couple piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>8</td><td>The credit card delinquency rate across commercial banks fell to 2.85% in the second quarter of 2026, down from 3.08% in late 2024.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://fred.stlouisfed.org/series/DRCCLACBS">FRED DRCCLACBS</a>; <a href="https://247wallst.com/investing/2026/09/29/retirement-nightmare-serious-credit-card-delinquencies-for-seniors-hit-15-year-high/">24/7 Wall St. linked piece on card delinquencies (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>7</td><td>The pending cost estimates for Nano Banc and Tioga-Franklin are the next figures to look for on the FDIC's list.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>Community Bank and Trust - West Georgia carries the largest published insurance fund cost estimate at $97 million, despite ranking second by size.</td><td><strong>mostly false</strong></td><td>#1 — contradicted<br>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>5</td><td>Estimated costs to the insurance fund: Nano Banc $114,000,000; West Georgia $97,284,000; Metropolitan $19,647,000; Small Business Bank $5,671,000; Tioga-Franklin $5,500,000; Kentland $1,194,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>4</td><td>Assets and deposits in the table: Nano Banc $736,172,000 / $685,846,000; West Georgia $305,716,000 / $296,420,000; Metropolitan Capital $261,185,000 / $212,152,000; Small Business Bank $72,947,000 / $68,773,000; Tioga-Franklin $68,444,000 / $66,571,000; Kentland $3,808,000 / $3,656,000, with the closing dates and acquirers shown.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC failed bank list</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>3</td><td>Regulators closed it on Sept. 25, 2026, and Sunwest Bank took over.</td><td><strong>true</strong></td><td>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>2</td><td>Nano Banc was larger than the other five failures combined, which together held $712,100,000 in assets.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>1</td><td>Six FDIC-insured banks failed between Nov. 14, 2025 and Nov. 14, 2026, according to the FDIC's list of failed banks.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-true"><td>12</td><td>All six failures on this list had an acquirer, from Sunwest Bank in California to Kentland Bank in Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-true"><td>4</td><td>Assets and deposits in the table: Nano Banc $736,172,000 / $685,846,000; West Georgia $305,716,000 / $296,420,000; Metropolitan Capital $261,185,000 / $212,152,000; Small Business Bank $72,947,000 / $68,773,000; Tioga-Franklin $68,444,000 / $66,571,000; Kentland $3,808,000 / $3,656,000, with the closing dates and acquirers shown.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC failed bank list</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-mostly-false"><td>6</td><td>Community Bank and Trust - West Georgia carries the largest published insurance fund cost estimate at $97 million, despite ranking second by size.</td><td><strong>mostly false</strong></td><td>#1 — contradicted<br>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>5</td><td>Estimated costs to the insurance fund: Nano Banc $114,000,000; West Georgia $97,284,000; Metropolitan $19,647,000; Small Business Bank $5,671,000; Tioga-Franklin $5,500,000; Kentland $1,194,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>9</td><td>FDIC insurance covers $250,000 per depositor, per bank, per ownership category; on joint accounts each co-owner is insured up to $250,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/deposit-insurance/understanding-deposit-insurance/index.html">FDIC Understanding Deposit Insurance</a>; <a href="https://247wallst.com/personal-finance/savings-accounts/2026/07/05/how-fdic-insurance-works-and-how-to-protect-more-than-250000/">24/7 Wall St. linked explainer (fetched, not evidence)</a>; <a href="https://247wallst.com/personal-finance/2026/08/02/your-bank-insures-250000-a-married-couple-can-insure-1-million-at-the-same-bank-without-opening-an-account-anywhere-else/">24/7 Wall St. linked couple piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>2</td><td>Nano Banc was larger than the other five failures combined, which together held $712,100,000 in assets.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>3</td><td>Regulators closed it on Sept. 25, 2026, and Sunwest Bank took over.</td><td><strong>true</strong></td><td>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>11</td><td>SIPC protection is capped at $500,000, including $250,000 in cash, per customer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sipc.org/for-investors/what-sipc-protects">SIPC what SIPC protects</a>; <a href="https://247wallst.com/personal-finance/2026/11/01/at-67-hell-move-400000-from-his-bank-to-a-brokerage-for-a-better-yield-the-insurance-there-isnt-the-fdic-and-it-protects-against-something-different/">24/7 Wall St. linked brokerage piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>1</td><td>Six FDIC-insured banks failed between Nov. 14, 2025 and Nov. 14, 2026, according to the FDIC's list of failed banks.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-true"><td>8</td><td>The credit card delinquency rate across commercial banks fell to 2.85% in the second quarter of 2026, down from 3.08% in late 2024.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://fred.stlouisfed.org/series/DRCCLACBS">FRED DRCCLACBS</a>; <a href="https://247wallst.com/investing/2026/09/29/retirement-nightmare-serious-credit-card-delinquencies-for-seniors-hit-15-year-high/">24/7 Wall St. linked piece on card delinquencies (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>7</td><td>The pending cost estimates for Nano Banc and Tioga-Franklin are the next figures to look for on the FDIC's list.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>10</td><td>Trust accounts are insured up to $250,000 per beneficiary, for up to five beneficiaries.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/system/files/2024-05/trust-accounts.pdf">FDIC trust accounts guide</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-false"><td>6</td><td>Community Bank and Trust - West Georgia carries the largest published insurance fund cost estimate at $97 million, despite ranking second by size.</td><td><strong>mostly false</strong></td><td>#1 — contradicted<br>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>2</td><td>Nano Banc was larger than the other five failures combined, which together held $712,100,000 in assets.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>3</td><td>Regulators closed it on Sept. 25, 2026, and Sunwest Bank took over.</td><td><strong>true</strong></td><td>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>4</td><td>Assets and deposits in the table: Nano Banc $736,172,000 / $685,846,000; West Georgia $305,716,000 / $296,420,000; Metropolitan Capital $261,185,000 / $212,152,000; Small Business Bank $72,947,000 / $68,773,000; Tioga-Franklin $68,444,000 / $66,571,000; Kentland $3,808,000 / $3,656,000, with the closing dates and acquirers shown.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC failed bank list</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>5</td><td>Estimated costs to the insurance fund: Nano Banc $114,000,000; West Georgia $97,284,000; Metropolitan $19,647,000; Small Business Bank $5,671,000; Tioga-Franklin $5,500,000; Kentland $1,194,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>7</td><td>The pending cost estimates for Nano Banc and Tioga-Franklin are the next figures to look for on the FDIC's list.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>8</td><td>The credit card delinquency rate across commercial banks fell to 2.85% in the second quarter of 2026, down from 3.08% in late 2024.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://fred.stlouisfed.org/series/DRCCLACBS">FRED DRCCLACBS</a>; <a href="https://247wallst.com/investing/2026/09/29/retirement-nightmare-serious-credit-card-delinquencies-for-seniors-hit-15-year-high/">24/7 Wall St. linked piece on card delinquencies (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>9</td><td>FDIC insurance covers $250,000 per depositor, per bank, per ownership category; on joint accounts each co-owner is insured up to $250,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/deposit-insurance/understanding-deposit-insurance/index.html">FDIC Understanding Deposit Insurance</a>; <a href="https://247wallst.com/personal-finance/savings-accounts/2026/07/05/how-fdic-insurance-works-and-how-to-protect-more-than-250000/">24/7 Wall St. linked explainer (fetched, not evidence)</a>; <a href="https://247wallst.com/personal-finance/2026/08/02/your-bank-insures-250000-a-married-couple-can-insure-1-million-at-the-same-bank-without-opening-an-account-anywhere-else/">24/7 Wall St. linked couple piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>10</td><td>Trust accounts are insured up to $250,000 per beneficiary, for up to five beneficiaries.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/system/files/2024-05/trust-accounts.pdf">FDIC trust accounts guide</a></td></tr><tr class="verdict-true"><td>11</td><td>SIPC protection is capped at $500,000, including $250,000 in cash, per customer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sipc.org/for-investors/what-sipc-protects">SIPC what SIPC protects</a>; <a href="https://247wallst.com/personal-finance/2026/11/01/at-67-hell-move-400000-from-his-bank-to-a-brokerage-for-a-better-yield-the-insurance-there-isnt-the-fdic-and-it-protects-against-something-different/">24/7 Wall St. linked brokerage piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>12</td><td>All six failures on this list had an acquirer, from Sunwest Bank in California to Kentland Bank in Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-true"><td>1</td><td>Six FDIC-insured banks failed between Nov. 14, 2025 and Nov. 14, 2026, according to the FDIC's list of failed banks.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-false"><td>6</td><td>Community Bank and Trust - West Georgia carries the largest published insurance fund cost estimate at $97 million, despite ranking second by size.</td><td><strong>mostly false</strong></td><td>#1 — contradicted<br>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>7</td><td>The pending cost estimates for Nano Banc and Tioga-Franklin are the next figures to look for on the FDIC's list.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>8</td><td>The credit card delinquency rate across commercial banks fell to 2.85% in the second quarter of 2026, down from 3.08% in late 2024.</td><td><strong>true</strong></td><td>Checked against: <code>econ.fred_indicators</code>; <a href="https://fred.stlouisfed.org/series/DRCCLACBS">FRED DRCCLACBS</a>; <a href="https://247wallst.com/investing/2026/09/29/retirement-nightmare-serious-credit-card-delinquencies-for-seniors-hit-15-year-high/">24/7 Wall St. linked piece on card delinquencies (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>4</td><td>Assets and deposits in the table: Nano Banc $736,172,000 / $685,846,000; West Georgia $305,716,000 / $296,420,000; Metropolitan Capital $261,185,000 / $212,152,000; Small Business Bank $72,947,000 / $68,773,000; Tioga-Franklin $68,444,000 / $66,571,000; Kentland $3,808,000 / $3,656,000, with the closing dates and acquirers shown.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC failed bank list</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>2</td><td>Nano Banc was larger than the other five failures combined, which together held $712,100,000 in assets.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>5</td><td>Estimated costs to the insurance fund: Nano Banc $114,000,000; West Georgia $97,284,000; Metropolitan $19,647,000; Small Business Bank $5,671,000; Tioga-Franklin $5,500,000; Kentland $1,194,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a>; <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a>; <a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></td></tr><tr class="verdict-true"><td>1</td><td>Six FDIC-insured banks failed between Nov. 14, 2025 and Nov. 14, 2026, according to the FDIC's list of failed banks.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-true"><td>12</td><td>All six failures on this list had an acquirer, from Sunwest Bank in California to Kentland Bank in Indiana.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></td></tr><tr class="verdict-true"><td>3</td><td>Regulators closed it on Sept. 25, 2026, and Sunwest Bank took over.</td><td><strong>true</strong></td><td>Checked against: <a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></td></tr><tr class="verdict-true"><td>10</td><td>Trust accounts are insured up to $250,000 per beneficiary, for up to five beneficiaries.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/system/files/2024-05/trust-accounts.pdf">FDIC trust accounts guide</a></td></tr><tr class="verdict-true"><td>9</td><td>FDIC insurance covers $250,000 per depositor, per bank, per ownership category; on joint accounts each co-owner is insured up to $250,000.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.fdic.gov/resources/deposit-insurance/understanding-deposit-insurance/index.html">FDIC Understanding Deposit Insurance</a>; <a href="https://247wallst.com/personal-finance/savings-accounts/2026/07/05/how-fdic-insurance-works-and-how-to-protect-more-than-250000/">24/7 Wall St. linked explainer (fetched, not evidence)</a>; <a href="https://247wallst.com/personal-finance/2026/08/02/your-bank-insures-250000-a-married-couple-can-insure-1-million-at-the-same-bank-without-opening-an-account-anywhere-else/">24/7 Wall St. linked couple piece (fetched, not evidence)</a></td></tr><tr class="verdict-true"><td>11</td><td>SIPC protection is capped at $500,000, including $250,000 in cash, per customer.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.sipc.org/for-investors/what-sipc-protects">SIPC what SIPC protects</a>; <a href="https://247wallst.com/personal-finance/2026/11/01/at-67-hell-move-400000-from-his-bank-to-a-brokerage-for-a-better-yield-the-insurance-there-isnt-the-fdic-and-it-protects-against-something-different/">24/7 Wall St. linked brokerage piece (fetched, not evidence)</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; Six FDIC-insured banks failed between Nov. 14, 2025 and Nov. 14, 2026, according to the FDIC's list of failed banks.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC list: Metropolitan Capital (1/30/26), Community B&amp;T West GA (5/1/26), Kentland (7/10/26), Small Business Bank (7/17/26), Tioga-Franklin (8/21/26), Nano Banc (9/25/26); none between 6/27/25 and 1/30/26<ul class="claim-sources"><li><a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; Nano Banc was larger than the other five failures combined, which together held $712,100,000 in assets.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>305,716+261,185+72,947+68,444+3,808 = 712,100 ($K); Nano 736,172<ul class="claim-sources"><li><a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a></li><li><a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; Regulators closed it on Sept. 25, 2026, and Sunwest Bank took over.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC list and press release: closed Sept 25, 2026 by California DFPI; Sunwest Bank of Sandy, Utah assumed deposits<ul class="claim-sources"><li><a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; Assets and deposits in the table: Nano Banc $736,172,000 / $685,846,000; West Georgia $305,716,000 / $296,420,000; Metropolitan Capital $261,185,000 / $212,152,000; Small Business Bank $72,947,000 / $68,773,000; Tioga-Franklin $68,444,000 / $66,571,000; Kentland $3,808,000 / $3,656,000, with the closing dates and acquirers shown.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC API QBFASSET/QBFDEP match for Metropolitan, West Georgia, Kentland, Small Business Bank; Nano $736M/$686M and Tioga about $68M/$67M per FDIC (via press release and Banking Dive); dates and acquirers match FDIC list. Exact Nano and Tioga dollar digits not seen in a primary table.<ul class="claim-sources"><li><a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a></li><li><a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC failed bank list</a></li><li><a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; Estimated costs to the insurance fund: Nano Banc $114,000,000; West Georgia $97,284,000; Metropolitan $19,647,000; Small Business Bank $5,671,000; Tioga-Franklin $5,500,000; Kentland $1,194,000.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC API COST 97,284 / 19,647 / 5,671 / 1,194 ($K); FDIC releases $114M (Nano) and $5.5M (Tioga)<ul class="claim-sources"><li><a href="https://api.fdic.gov/banks/failures?filters=FAILDATE%3A%5B2025-11-14%20TO%202026-11-14%5D&amp;fields=NAME%2CCITY%2CSTATE%2CFAILDATE%2CQBFASSET%2CQBFDEP%2CCOST&amp;sort_by=FAILDATE&amp;limit=50">FDIC API failures</a></li><li><a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></li><li><a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></li></ul></dd>
+<dt>Why</dt><dd>Nano and Tioga figures are FDIC preliminary estimates, as published.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-false"><summary>#6 &middot; <strong>mostly false</strong> &mdash; Community Bank and Trust - West Georgia carries the largest published insurance fund cost estimate at $97 million, despite ranking second by size.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>$114M (Nano) vs $97.284M (West Georgia)<ul class="claim-sources"><li><a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></li></ul></dd>
+<dt>Rests on</dt><dd>#1</dd>
+<dt>What that evidence found</dt><dd>The FDIC announced $114M for Nano Banc on Sept. 25, 2026; the article's own table shows it</dd>
+<dt>Evidence support</dt><dd>contradicted — the evidence's own finding runs against the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim says West Georgia's $97.3M is the largest published figure; the FDIC release says Nano Banc's is $114M, which is $16.7M higher. West Georgia leads only relative to assets (about 32% vs 15.5%).</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#7 &middot; <strong>true</strong> &mdash; The pending cost estimates for Nano Banc and Tioga-Franklin are the next figures to look for on the FDIC's list.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC (Nano) and Banking Dive citing FDIC (Tioga): estimates expected to change over time<ul class="claim-sources"><li><a href="https://www.bankingdive.com/news/tioga-franklin-philadelphia-fifth-bank-failure-2026-second-federal/828591/">Banking Dive on Tioga-Franklin</a></li><li><a href="https://content.govdelivery.com/accounts/USFDIC/bulletins/42c8901">FDIC Nano Banc press release</a></li></ul></dd>
+<dt>Why</dt><dd>Both are preliminary and the FDIC says they will change as retained assets are sold; the tension with the article's own table is graded in the preceding claim.</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#8 &middot; <strong>true</strong> &mdash; The credit card delinquency rate across commercial banks fell to 2.85% in the second quarter of 2026, down from 3.08% in late 2024.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Warehouse says</dt><dd>DRCCLACBS 2026-04-01 = 2.85; 2024-10-01 = 3.08; series fell every quarter since 2024Q2-Q3 peak <code>econ.fred_indicators</code></dd>
+<dt>Independent evidence</dt><dd>Same series, Federal Reserve via FRED<ul class="claim-sources"><li><a href="https://fred.stlouisfed.org/series/DRCCLACBS">FRED DRCCLACBS</a></li><li><a href="https://247wallst.com/investing/2026/09/29/retirement-nightmare-serious-credit-card-delinquencies-for-seniors-hit-15-year-high/">24/7 Wall St. linked piece on card delinquencies (fetched, not evidence)</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT &quot;date&quot;,&quot;value&quot; FROM econ.fred_indicators WHERE series='DRCCLACBS' AND &quot;date&quot;&gt;='2024-01-01' ORDER BY &quot;date&quot;</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#9 &middot; <strong>true</strong> &mdash; FDIC insurance covers $250,000 per depositor, per bank, per ownership category; on joint accounts each co-owner is insured up to $250,000.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC: $250,000 per depositor, per insured bank, per ownership category; joint interest separately insured<ul class="claim-sources"><li><a href="https://www.fdic.gov/resources/deposit-insurance/understanding-deposit-insurance/index.html">FDIC Understanding Deposit Insurance</a></li><li><a href="https://247wallst.com/personal-finance/savings-accounts/2026/07/05/how-fdic-insurance-works-and-how-to-protect-more-than-250000/">24/7 Wall St. linked explainer (fetched, not evidence)</a></li><li><a href="https://247wallst.com/personal-finance/2026/08/02/your-bank-insures-250000-a-married-couple-can-insure-1-million-at-the-same-bank-without-opening-an-account-anywhere-else/">24/7 Wall St. linked couple piece (fetched, not evidence)</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#10 &middot; <strong>true</strong> &mdash; Trust accounts are insured up to $250,000 per beneficiary, for up to five beneficiaries.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC trust guide: $250,000 per eligible beneficiary, max $1,250,000 if five or more beneficiaries<ul class="claim-sources"><li><a href="https://www.fdic.gov/system/files/2024-05/trust-accounts.pdf">FDIC trust accounts guide</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#11 &middot; <strong>true</strong> &mdash; SIPC protection is capped at $500,000, including $250,000 in cash, per customer.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>SIPC: limit $500,000 including $250,000 for cash<ul class="claim-sources"><li><a href="https://www.sipc.org/for-investors/what-sipc-protects">SIPC what SIPC protects</a></li><li><a href="https://247wallst.com/personal-finance/2026/11/01/at-67-hell-move-400000-from-his-bank-to-a-brokerage-for-a-better-yield-the-insurance-there-isnt-the-fdic-and-it-protects-against-something-different/">24/7 Wall St. linked brokerage piece (fetched, not evidence)</a></li></ul></dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#12 &middot; <strong>true</strong> &mdash; All six failures on this list had an acquirer, from Sunwest Bank in California to Kentland Bank in Indiana.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FDIC list shows an acquiring institution for all six<ul class="claim-sources"><li><a href="https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/index.html">FDIC Failed Bank List</a></li></ul></dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What is misleading even though facts check out</h2>
+<ul><li><strong>Largest-estimate framing.</strong> The Quick Read and body say West Georgia has the largest published estimate, yet the FDIC announced $114M for Nano on Sept. 25, and the closing section calls Nano's and Tioga's estimates &quot;pending&quot; though both were announced at closing. Defensible: West Georgia has the largest cost relative to assets (about 32% vs 15.5% for Nano).</li><li><strong>Better framing omitted.</strong> Cost relative to assets: West Georgia ~31.8% and Kentland ~31.4%, Nano ~15.5%, others about 8% (chart). Nano still has the largest dollar cost.</li><li><strong>Mixed vintages.</strong> Nano's state regulator put assets near $690M at closing and Sunwest assumed about $605M of deposits rather than $686M; ranking is unaffected.</li><li>The count of six is robust to the window: the FDIC list shows no failures between June 27, 2025 and Jan. 30, 2026.</li></ul>
+</section>
+<section>
+<h2>Sources</h2>
+<p>FDIC list and API read directly; Nano Banc FDIC press release read; Tioga-Franklin figures via Banking Dive quoting the FDIC (the FDIC release itself was not fetched); trust rule read in the FDIC trust-accounts guide.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Call-report date for the four older failures</strong>: FDIC API returned asset/deposit figures matching the article but not the as-of date; not confirmed.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 10 rows — 4440 ms</summary><pre><code>SELECT &quot;date&quot;,&quot;value&quot; FROM econ.fred_indicators WHERE series='DRCCLACBS' AND &quot;date&quot;&gt;='2024-01-01' ORDER BY &quot;date&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="footnote">Not independently confirmed: call-report as-of dates for the four older failures. The FRED page timed out; the same series was read from the warehouse. The article's linked 247wallst pages were fetched (the email-protection link returned 404) and are the outlet's own earlier pieces, not evidence.</p>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
