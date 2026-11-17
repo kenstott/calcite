@@ -71,6 +71,8 @@ public class NsfFederalRdByStateTransformer extends EiaBulkXlsxTransformer {
       "Other agencies"
   };
 
+  private static final String[] FOOTNOTED_LABELS = {"Other areas", "Offices abroad", "Undistributed"};
+
   private static final Map<String, String> STATE_NAME_TO_FIPS = buildStateFipsMap();
 
   @Override
@@ -122,7 +124,7 @@ public class NsfFederalRdByStateTransformer extends EiaBulkXlsxTransformer {
       if (stateLocation == null || stateLocation.trim().isEmpty()) {
         continue;
       }
-      stateLocation = stateLocation.trim();
+      stateLocation = stripFootnoteLetter(stateLocation.trim());
       String stateFips = STATE_NAME_TO_FIPS.get(stateLocation);
 
       for (int i = 0; i < AGENCY_LABELS.length; i++) {
@@ -204,6 +206,20 @@ public class NsfFederalRdByStateTransformer extends EiaBulkXlsxTransformer {
       }
     }
     return maxYear;
+  }
+
+  /**
+   * NCSES appends a footnote letter to the non-state labels and the letter differs by
+   * edition ("Other areasa" in FY2019-20, "Other areasb" from FY2021). Strips it so the
+   * label is identical across fiscal years.
+   */
+  private static String stripFootnoteLetter(String label) {
+    for (String base : FOOTNOTED_LABELS) {
+      if (label.length() == base.length() + 1 && label.startsWith(base)) {
+        return base;
+      }
+    }
+    return label;
   }
 
   private static Map<String, String> buildStateFipsMap() {

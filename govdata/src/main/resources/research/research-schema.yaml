@@ -298,19 +298,34 @@ partitionedTables:
       institutions. "Undistributed" carries a value for only DOD and the grand
       total; every other agency column is NA there and is not emitted as a row.
 
-      Only the publication's latest fiscal year is available at this state x
-      agency grain — like nsf_federal_rd_obligations, each past edition only
-      ever published its own latest FY in this table, so there is no bulk
-      historical backfill of state x agency detail; history accumulates one
-      year per edition going forward. NCSES's own Table 97 (state x year,
-      FYs 2016-24) covers the historical trend at state grain but carries only
-      the all-agency total, no agency split — considered and rejected as a
-      separate table here since it would add a year dimension with no agency
-      detail to join against this table's agency rows.
+      Fiscal years 2019-2024, one per NCSES annual edition: each edition
+      publishes only its own latest fiscal year at this state x agency grain
+      (there is no multi-year state x agency table), so the history is
+      assembled by reading the same table from each archived edition —
+      FY2024 nsf26316, FY2023 nsf25328, FY2022 nsf24321, FY2021 nsf24309 (all
+      Table 60), FY2020 nsf22323 and FY2019 nsf21329 (both Table 91, same
+      layout but no "Other agencies" column, so those two years carry eleven
+      agencies instead of twelve and have no "Other agencies" rows). Editions
+      before the FY2019-20 volume publish this table as HTML on
+      ncsesdata.nsf.gov rather than XLSX and are not carried. NCSES appends a
+      footnote letter to the non-state labels and it differs by edition ("Other areasa" vs "Other
+      areasb"); the transformer strips it so state_location is stable across
+      years. NCSES's own Table 97 (state x year, all-agency total only) is
+      not carried: it has no agency split to join against this table's
+      agency rows.
 
     dimensions:
       type:
         - nsf_federal_rd_by_state
+      # One NCSES edition per value (each edition = one fiscal year at this grain);
+      # urlRules below routes every non-current vintage to its own edition's file.
+      vintage:
+        - current
+        - fy2023
+        - fy2022
+        - fy2021
+        - fy2020
+        - fy2019
 
     columns:
       - name: year
@@ -336,7 +351,7 @@ partitionedTables:
 
     source:
       type: http
-      # Same NCSES edition (nsf26316, FY2024) nsf_federal_rd_obligations already reads;
+      # Current vintage: the NCSES edition (nsf26316, FY2024) nsf_federal_rd_obligations already reads;
       # the publication id must be bumped by hand per edition (D-277), matching that
       # table's own note. Verified live 2026-09-27: Table 60 layout (title format, 12
       # fixed agency columns after Total) matches NsfFederalRdByStateTransformer's
@@ -347,6 +362,24 @@ partitionedTables:
         format: TEXT   # NsfFederalRdByStateTransformer re-downloads the XLSX and emits JSON rows
       rawCache:
         enabled: true
+      urlRules:
+        # Archived editions, each verified live 2026-11-17 (title row "... by state or
+        # location and agency: FY <year>"). FY2020/FY2019 publish the table as Table 91.
+        - url: "https://ncses.nsf.gov/pubs/nsf25328/assets/data-tables/tables/nsf25328-tab060.xlsx"
+          variableMatch:
+            vintage: fy2023
+        - url: "https://ncses.nsf.gov/pubs/nsf24321/assets/data-tables/tables/nsf24321-tab060.xlsx"
+          variableMatch:
+            vintage: fy2022
+        - url: "https://ncses.nsf.gov/pubs/nsf24309/assets/data-tables/tables/nsf24309-tab060.xlsx"
+          variableMatch:
+            vintage: fy2021
+        - url: "https://ncses.nsf.gov/pubs/nsf22323/assets/data-tables/tables/nsf22323-tab091.xlsx"
+          variableMatch:
+            vintage: fy2020
+        - url: "https://ncses.nsf.gov/pubs/nsf21329/assets/data-tables/tables/nsf21329-tab091.xlsx"
+          variableMatch:
+            vintage: fy2019
     hooks:
       responseTransformer: "org.apache.calcite.adapter.govdata.research.NsfFederalRdByStateTransformer"
 
