@@ -28,6 +28,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("unit")
 class RetaMonthUnpivotTransformerTest {
@@ -80,6 +81,7 @@ class RetaMonthUnpivotTransformerTest {
 
   @Test void decodesSignedOverpunchInMonthlyCountFields() {
     Map<String, Object> wide = new LinkedHashMap<String, Object>();
+    wide.put("ori", "NJ00701");
     wide.put("agency_name", "NEWARK N");
     wide.put("dec_actual_motor_vehicle_theft_other", "0000N");
     wide.put("dec_actual_motor_vehicle_theft_car", "00043");
@@ -98,6 +100,26 @@ class RetaMonthUnpivotTransformerTest {
     assertEquals("-00009", rows.get(3).get("cleared_18_theft_total"));
     assertEquals("P", rows.get(4).get("card_actual_pt"));
     assertEquals("NEWARK N", rows.get(11).get("agency_name"));
+  }
+
+  @Test void dropsRecordWhoseOriCarriesNonAsciiCharacters() {
+    Map<String, Object> wide = new LinkedHashMap<String, Object>();
+    wide.put("ori", "\u00e2\u0080\u008bTX17");
+    wide.put("state", "42");
+    wide.put("jan_unfounded_murder", "PP000");
+
+    List<Map<String, Object>> rows =
+        new RetaMonthUnpivotTransformer().transform(wide, contextForYear("2026"));
+
+    assertTrue(rows.isEmpty(), "a record with an unrecoverable ORI is dropped");
+  }
+
+  @Test void dropsRecordWithMissingOri() {
+    Map<String, Object> wide = new LinkedHashMap<String, Object>();
+    wide.put("state", "42");
+
+    assertTrue(new RetaMonthUnpivotTransformer().transform(wide, contextForYear("2026"))
+        .isEmpty());
   }
 
   private static int asInt(Object o) {

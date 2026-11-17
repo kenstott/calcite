@@ -19,11 +19,15 @@ package org.apache.calcite.adapter.govdata.crime;
 import org.apache.calcite.adapter.file.etl.RowContext;
 import org.apache.calcite.adapter.file.etl.RowTransformer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Unpivots one wide FBI Return A master-file record (one row per agency-year, with all
@@ -44,8 +48,20 @@ import java.util.Map;
  * negative adjustments as a signed overpunch: the last digit is replaced by a letter
  * ({@code J}=-1 … {@code R}=-9, {@code }}=-0), so {@code 0000N} is -5. Those fields are
  * decoded to a plain signed integer string here so they load as longs.
+ *
+ * <p>A record whose agency identifier (ORI) is not seven letters/digits is dropped with a
+ * WARN naming the state code and the escaped ORI field. The upstream file occasionally carries
+ * a record with an embedded non-ASCII character (a zero-width space) in the ORI field; the
+ * agency identifier is unrecoverable from such a record and, decoded as single-byte text, every
+ * later field in it is displaced, so none of its values can be attributed to an agency.
  */
 public class RetaMonthUnpivotTransformer implements RowTransformer {
+
+  private static final Logger LOGGER =
+      LoggerFactory.getLogger(RetaMonthUnpivotTransformer.class);
+
+  /** A valid ORI as laid out in the master file: two-letter state code plus five characters. */
+  private static final Pattern VALID_ORI = Pattern.compile("[A-Z0-9]{7}");
 
   private static final String[] MONTHS = {
       "jan", "feb", "mar", "apr", "may", "jun",
@@ -72,6 +88,13 @@ public class RetaMonthUnpivotTransformer implements RowTransformer {
 
   @Override public List<Map<String, Object>> transform(Map<String, Object> row,
       RowContext context) {
+    Object ori = row.get("ori");
+    if (ori == null || !VALID_ORI.matcher(ori.toString()).matches()) {
+      LOGGER.warn("Dropping RETA record with invalid ORI (state={}, ori={}, year={}): "
+          + "agency identifier is unrecoverable and the record's fields are not attributable",
+          row.get("state"), escape(ori), context.getDimensionValues().get("year"));
+      return new ArrayList<Map<String, Object>>();
+    }
     // One target map per month, plus a shared header map for fields common to all months.
     Map<String, Object> header = new LinkedHashMap<String, Object>();
     List<Map<String, Object>> monthRows = new ArrayList<Map<String, Object>>(MONTHS.length);
@@ -107,6 +130,21 @@ public class RetaMonthUnpivotTransformer implements RowTransformer {
       out.add(result);
     }
     return out;
+  }
+
+  private static String escape(Object value) {
+    if (value == null) {
+      return "null";
+    }
+    StringBuilder sb = new StringBuilder();
+    for (char c : value.toString().toCharArray()) {
+      if (c >= 0x20 && c < 0x7f) {
+        sb.append(c);
+      } else {
+        sb.append(String.format("\\u%04x", (int) c));
+      }
+    }
+    return sb.toString();
   }
 
   /**
