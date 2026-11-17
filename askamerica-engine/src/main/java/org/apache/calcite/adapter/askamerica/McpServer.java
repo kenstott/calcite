@@ -4885,8 +4885,10 @@ public class McpServer {
                             args.path("source_url").asText(null), args.path("unclaimed")));
                         addIfPresent(gateProblems, enforceScoreClaimAgreement(claims));
                         addIfPresent(gateProblems, enforceValidationChart(boardSvg, claims));
-                        addIfPresent(gateProblems, ClaimScoring.enforce(claims));
-                        addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle));
+                        String claimsProblem = ClaimScoring.enforce(claims);
+                        addIfPresent(gateProblems, claimsProblem);
+                        addIfPresent(gateProblems, ClaimScoring.headlineProblem(rTitle,
+                            claimsProblem == null ? ClaimScoring.headlineClause(claims) : null));
                         if (gateProblems.isEmpty()) {
                             // The page is what gets published, so a rating it states is held
                             // to the claim scores here, not only in deliver_report. Checked
