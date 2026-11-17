@@ -78,6 +78,28 @@ class RetaMonthUnpivotTransformerTest {
     assertFalse(jan.containsKey("jan_actual_murder"));
   }
 
+  @Test void decodesSignedOverpunchInMonthlyCountFields() {
+    Map<String, Object> wide = new LinkedHashMap<String, Object>();
+    wide.put("agency_name", "NEWARK N");
+    wide.put("dec_actual_motor_vehicle_theft_other", "0000N");
+    wide.put("dec_actual_motor_vehicle_theft_car", "00043");
+    wide.put("feb_unfounded_murder", "0000J");
+    wide.put("mar_total_cleared_murder", "0001}");
+    wide.put("apr_cleared_18_theft_total", "0000R");
+    wide.put("may_card_actual_pt", "P");
+
+    List<Map<String, Object>> rows =
+        new RetaMonthUnpivotTransformer().transform(wide, contextForYear("2025"));
+
+    assertEquals("-00005", rows.get(11).get("actual_motor_vehicle_theft_other"));
+    assertEquals("00043", rows.get(11).get("actual_motor_vehicle_theft_car"));
+    assertEquals("-00001", rows.get(1).get("unfounded_murder"));
+    assertEquals("-00010", rows.get(2).get("total_cleared_murder"));
+    assertEquals("-00009", rows.get(3).get("cleared_18_theft_total"));
+    assertEquals("P", rows.get(4).get("card_actual_pt"));
+    assertEquals("NEWARK N", rows.get(11).get("agency_name"));
+  }
+
   private static int asInt(Object o) {
     return o instanceof Number ? ((Number) o).intValue() : Integer.parseInt(String.valueOf(o));
   }
