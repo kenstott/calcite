@@ -1535,7 +1535,10 @@ partitionedTables:
       url: "https://cde.ucr.cjis.gov/LATEST/s3/signedurl?key=master_files/reta/reta-{year}.zip"
       method: GET
       urlResolver: {}
-      extractPattern: "*RETA*MASTER*.txt"
+      # Each year's zip holds exactly one master file, but its name differs by year
+      # (RETA10.DAT, RETURNA2013.TXT, RETA-COMB.txt, 2017_RETA_NATIONAL_MASTER_FILE.txt,
+      # reta-2021.txt), so the entry is selected by being the archive's only member.
+      extractPattern: "*"
       response:
         format: fixed_width
       fixedWidth:
