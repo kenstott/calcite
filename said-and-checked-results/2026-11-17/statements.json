@@ -180,7 +180,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Elections and Parties"
     },
     {
       "id": 2,
@@ -209,7 +210,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 3,
@@ -251,7 +253,8 @@
           "url": "https://rollcall.com/2026/08/07/what-to-know-about-the-minnesota-senate-election/"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Elections and Parties"
     },
     {
       "id": 4,
@@ -280,7 +283,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 5,
@@ -309,7 +313,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Elections and Parties"
     },
     {
       "id": 6,
@@ -338,7 +343,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 7,
@@ -367,7 +373,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 8,
@@ -396,7 +403,8 @@
       "result": "unsupported",
       "finding": "No official or independent account of 18 broken White House windows was found; the only sources for the figure are reports of this remark. The search covered AskAmerica's catalog (no table on White House building condition), the reporting story and news coverage; no White House, National Park Service or Secret Service record of window damage was found or read.",
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 9,
@@ -425,7 +433,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 10,
@@ -459,7 +468,8 @@
           "url": "https://www.baltimoresun.com/2026/11/16/campaign-to-reinstate-nvidia-ceo-jensen-huang/"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Defense and National Security"
     },
     {
       "id": 11,
@@ -488,7 +498,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Defense and National Security"
     },
     {
       "id": 12,
@@ -526,7 +537,8 @@
           "url": "https://www.federalregister.gov/public-inspection/2026-00789/revision-to-license-review-policy-for-advanced-computing-commodities"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 13,
@@ -564,7 +576,8 @@
           "url": "https://bis.gov/press-release/department-commerce-revises-license-review-policy-semiconductors-exported-china"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 14,
@@ -593,7 +606,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 15,
@@ -627,7 +641,8 @@
           "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 16,
@@ -656,7 +671,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 17,
@@ -690,7 +706,8 @@
           "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 18,
@@ -724,7 +741,8 @@
           "url": "https://www.gao.gov/products/gao-24-107001"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 19,
@@ -758,7 +776,8 @@
           "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 20,
@@ -787,7 +806,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 21,
@@ -823,7 +843,8 @@
           "url": "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.htm"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 22,
@@ -857,7 +878,8 @@
           "url": "https://www.faa.gov/newsroom/brand-new-air-traffic-control-system-bnatcs-fact-sheet"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 23,
@@ -886,7 +908,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 24,
@@ -930,7 +953,8 @@
           "url": "https://www.cnn.com/2026/11/15/politics/congress-additional-funding-request-faa-duffy"
         }
       ],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 25,
@@ -959,7 +983,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Transportation and Infrastructure"
     },
     {
       "id": 26,
@@ -988,7 +1013,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 27,
@@ -1017,7 +1043,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 28,
@@ -1046,7 +1073,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 29,
@@ -1075,7 +1103,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 30,
@@ -1104,7 +1133,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "AI and Technology"
     },
     {
       "id": 31,
@@ -1133,7 +1163,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 32,
@@ -1173,7 +1204,8 @@
           "url": "https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/"
         }
       ],
-      "check_run": "q207/askamerica/2026-11-17"
+      "check_run": "q207/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 33,
@@ -1207,7 +1239,8 @@
           "url": "https://taxpolicycenter.org/sites/default/files/statistics/pdf/fed_receipt_sum_3.pdf"
         }
       ],
-      "check_run": "q207/askamerica/2026-11-17"
+      "check_run": "q207/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 34,
@@ -1249,7 +1282,8 @@
           "url": "https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/"
         }
       ],
-      "check_run": "q207/askamerica/2026-11-17"
+      "check_run": "q207/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 35,
@@ -1283,7 +1317,8 @@
           "url": "https://www.frbsf.org/wp-content/uploads/sites/4/el2022-07.pdf"
         }
       ],
-      "check_run": "q208/askamerica/2026-11-17"
+      "check_run": "q208/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 36,
@@ -1317,7 +1352,8 @@
           "url": "https://www.bostonfed.org/-/media/Documents/Workingpapers/PDF/2021/cpp20211223.pdf"
         }
       ],
-      "check_run": "q208/askamerica/2026-11-17"
+      "check_run": "q208/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 37,
@@ -1357,7 +1393,8 @@
           "url": "https://www.americanactionforum.org/insight/cbo-fy-2026-budget-deficit-totaled-2-trillion/"
         }
       ],
-      "check_run": "q207/askamerica/2026-11-17"
+      "check_run": "q207/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 38,
@@ -1393,7 +1430,8 @@
           "sql": "SELECT record_date, classification_desc, line_code_nbr, current_fytd_rcpt_outly_amt FROM econ.mts_outlays_by_function WHERE record_fiscal_year = 2026 AND record_date = DATE '2026-09-30' AND (classification_desc ILIKE '%Defense%' OR classification_desc ILIKE '%Medicare%' OR classification_desc ILIKE '%Net Interest%' OR line_code_nbr = '340') ORDER BY line_code_nbr"
         }
       ],
-      "check_run": "q208/askamerica/2026-11-17"
+      "check_run": "q208/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 39,
@@ -1427,7 +1465,8 @@
           "url": "https://www.dvidshub.net/news/printable/515187"
         }
       ],
-      "check_run": "q208/askamerica/2026-11-17"
+      "check_run": "q208/askamerica/2026-11-17",
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 40,
@@ -1456,7 +1495,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Congress and Government Spending"
     },
     {
       "id": 41,
@@ -1494,7 +1534,8 @@
           "url": "https://news.ballotpedia.org/2026/10/06/president-trump-has-appointed-56-federal-judges-through-october-1-of-his-second-year-of-his-second-term/"
         }
       ],
-      "check_run": "q209/askamerica/2026-11-17"
+      "check_run": "q209/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 42,
@@ -1528,7 +1569,8 @@
           "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00262.htm"
         }
       ],
-      "check_run": "q209/askamerica/2026-11-17"
+      "check_run": "q209/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 43,
@@ -1557,7 +1599,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 44,
@@ -1591,7 +1634,8 @@
           "url": "https://www.republicanleader.senate.gov/newsroom/research/republicans-will-once-again-overcome-democrats-nominations-blockade"
         }
       ],
-      "check_run": "q209/askamerica/2026-11-17"
+      "check_run": "q209/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 45,
@@ -1625,7 +1669,8 @@
           "url": "https://news.ballotpedia.org/?p=40929"
         }
       ],
-      "check_run": "q209/askamerica/2026-11-17"
+      "check_run": "q209/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 46,
@@ -1667,7 +1712,8 @@
           "sql": "SELECT congress, COUNT(*) total, SUM(CASE WHEN latest_action_text ILIKE 'Confirmed%' THEN 1 ELSE 0 END) confirmed, SUM(CASE WHEN latest_action_text ILIKE 'Returned%' THEN 1 ELSE 0 END) returned, SUM(CASE WHEN latest_action_text ILIKE '%withdrawal%' THEN 1 ELSE 0 END) withdrawn, SUM(CASE WHEN latest_action_text ILIKE 'Confirmed%' THEN 0 WHEN latest_action_text ILIKE 'Returned%' THEN 0 WHEN latest_action_text ILIKE '%withdrawal%' THEN 0 ELSE 1 END) pending FROM officials.nominations WHERE organization='The Judiciary' AND congress BETWEEN 111 AND 119 GROUP BY congress ORDER BY congress"
         }
       ],
-      "check_run": "q210/askamerica/2026-11-17"
+      "check_run": "q210/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 47,
@@ -1703,7 +1749,8 @@
           "url": "https://www.republicanleader.senate.gov/newsroom/research/senate-republicans-clear-the-nominations-backlog"
         }
       ],
-      "check_run": "q210/askamerica/2026-11-17"
+      "check_run": "q210/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 48,
@@ -1737,7 +1784,8 @@
           "url": "https://www.republicanleader.senate.gov/newsroom/research/senate-republicans-clear-the-nominations-backlog"
         }
       ],
-      "check_run": "q210/askamerica/2026-11-17"
+      "check_run": "q210/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 49,
@@ -1771,7 +1819,8 @@
           "url": "https://www.republicanleader.senate.gov/newsroom/research/senate-republicans-clear-the-nominations-backlog"
         }
       ],
-      "check_run": "q210/askamerica/2026-11-17"
+      "check_run": "q210/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 50,
@@ -1807,7 +1856,8 @@
           "sql": "SELECT is_civilian, organization, COUNT(*) n, MIN(latest_action_date) d0, MAX(latest_action_date) d1 FROM officials.nominations WHERE congress=119 AND latest_action_text ILIKE 'Confirmed by the Senate by Voice Vote%' GROUP BY is_civilian, organization ORDER BY n DESC FETCH FIRST 20 ROWS ONLY"
         }
       ],
-      "check_run": "q211/askamerica/2026-11-17"
+      "check_run": "q211/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 51,
@@ -1845,7 +1895,8 @@
           "url": "https://www.everycrsreport.com/reports/RL30562.html"
         }
       ],
-      "check_run": "q211/askamerica/2026-11-17"
+      "check_run": "q211/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 52,
@@ -1879,7 +1930,8 @@
           "url": "https://aljazeera.com/news/2026/11/4/democratic-party-flips-us-senate-in-2026-midterm-elections"
         }
       ],
-      "check_run": "q211/askamerica/2026-11-17"
+      "check_run": "q211/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 53,
@@ -1913,7 +1965,8 @@
           "url": "https://www.judiciary.senate.gov/about/ranking"
         }
       ],
-      "check_run": "q212/askamerica/2026-11-17"
+      "check_run": "q212/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 54,
@@ -1951,7 +2004,8 @@
           "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-18-2026"
         }
       ],
-      "check_run": "q212/askamerica/2026-11-17"
+      "check_run": "q212/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 55,
@@ -1985,7 +2039,8 @@
           "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-18-2026"
         }
       ],
-      "check_run": "q212/askamerica/2026-11-17"
+      "check_run": "q212/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 56,
@@ -2014,7 +2069,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 57,
@@ -2048,7 +2104,8 @@
           "url": "https://www.judiciary.senate.gov/committee-activity/hearings/nominations-11-10-2026"
         }
       ],
-      "check_run": "q212/askamerica/2026-11-17"
+      "check_run": "q212/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 58,
@@ -2082,7 +2139,8 @@
           "url": "https://www.judiciary.senate.gov/press/dem/releases/durbin-calls-out-trump-judicial-nominees-for-their-inexperience-in-the-courtroom"
         }
       ],
-      "check_run": "q213/askamerica/2026-11-17"
+      "check_run": "q213/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 59,
@@ -2120,7 +2178,8 @@
           "url": "https://www.judiciary.senate.gov/press/dem/releases/durbin-calls-out-trump-judicial-nominees-for-their-inexperience-in-the-courtroom"
         }
       ],
-      "check_run": "q213/askamerica/2026-11-17"
+      "check_run": "q213/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 60,
@@ -2158,7 +2217,8 @@
           "url": "https://www.wkyt.com/2026/11/10/federal-judge-nominee-receives-3-misconduct-charges-kentucky-judicial-commission/"
         }
       ],
-      "check_run": "q213/askamerica/2026-11-17"
+      "check_run": "q213/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 61,
@@ -2196,7 +2256,8 @@
           "url": "https://nominationnotes.substack.com/p/kentucky-judicial-nominee-was-publicly"
         }
       ],
-      "check_run": "q213/askamerica/2026-11-17"
+      "check_run": "q213/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 62,
@@ -2234,7 +2295,8 @@
           "url": "https://www.lex18.com/news/covering-kentucky/kentucky-judge-denies-misconduct-allegations-stemming-from-attorneys-courtroom-video"
         }
       ],
-      "check_run": "q214/askamerica/2026-11-17"
+      "check_run": "q214/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 63,
@@ -2272,7 +2334,8 @@
           "url": "https://www.ibtimes.co.uk/trump-considers-defeated-texas-justice-james-sullivan-federal-judgeship-1830609"
         }
       ],
-      "check_run": "q214/askamerica/2026-11-17"
+      "check_run": "q214/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 64,
@@ -2316,7 +2379,8 @@
           "url": "https://www.factcheck.org/2019/11/trumps-exaggerated-judicial-boasts/"
         }
       ],
-      "check_run": "q214/askamerica/2026-11-17"
+      "check_run": "q214/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 65,
@@ -2350,7 +2414,8 @@
           "url": "https://www.judiciary.senate.gov/press/rep/releases/grassley-opens-executive-business-meeting-on-four-district-court-nominees"
         }
       ],
-      "check_run": "q214/askamerica/2026-11-17"
+      "check_run": "q214/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 66,
@@ -2394,7 +2459,8 @@
           "url": "https://www.durbin.senate.gov/newsroom/press-releases/republicans-continue-to-block-durbins-attempt-to-confirm-us-attorney-nominations-on-the-senate-floor"
         }
       ],
-      "check_run": "q215/askamerica/2026-11-17"
+      "check_run": "q215/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 67,
@@ -2446,7 +2512,8 @@
           "url": "https://www.durbin.senate.gov/newsroom/press-releases/senate-confirms-two-us-attorney-nominees-key-breakthrough-of-sen-vances-justice-department-hold"
         }
       ],
-      "check_run": "q215/askamerica/2026-11-17"
+      "check_run": "q215/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 68,
@@ -2484,7 +2551,8 @@
           "url": "https://www.durbin.senate.gov/newsroom/press-releases/junior-senator-from-ohio-continues-to-block-durbins-attempt-to-confirm-us-attorney-nominations-on-the-senate-floor-12-14-23"
         }
       ],
-      "check_run": "q215/askamerica/2026-11-17"
+      "check_run": "q215/askamerica/2026-11-17",
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 69,
@@ -2513,7 +2581,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Courts and Nominations"
     },
     {
       "id": 70,
@@ -2542,7 +2611,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 71,
@@ -2576,7 +2646,8 @@
           "url": "https://www.criticalthreats.org/analysis/russian-offensive-campaign-assessment-december-31-2025"
         }
       ],
-      "check_run": "q216/askamerica/2026-11-17"
+      "check_run": "q216/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 72,
@@ -2614,7 +2685,8 @@
           "url": "https://www.ilpoliticoweb.it/en/ukraine-front-line-russia-territorial-gains-2026-isw/"
         }
       ],
-      "check_run": "q216/askamerica/2026-11-17"
+      "check_run": "q216/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 73,
@@ -2652,7 +2724,8 @@
           "url": "https://www.criticalthreats.org/analysis/russian-offensive-campaign-assessment-november-1-2026"
         }
       ],
-      "check_run": "q216/askamerica/2026-11-17"
+      "check_run": "q216/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 74,
@@ -2686,7 +2759,8 @@
           "url": "https://mod.gov.ua/en/news/russian-casualties-in-october-2026-54-400-neutralized"
         }
       ],
-      "check_run": "q217/askamerica/2026-11-17"
+      "check_run": "q217/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 75,
@@ -2724,7 +2798,8 @@
           "url": "https://kyivindependent.com/russia-records-highest-monthly-losses-of-2026/"
         }
       ],
-      "check_run": "q217/askamerica/2026-11-17"
+      "check_run": "q217/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 76,
@@ -2762,7 +2837,8 @@
           "url": "https://kyivindependent.com/russia-suffers-record-troop-losses-in-october-its-worst-month-since-full-scale-invasion-ukraine-says/"
         }
       ],
-      "check_run": "q217/askamerica/2026-11-17"
+      "check_run": "q217/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 77,
@@ -2800,7 +2876,8 @@
           "url": "https://janiskluge.substack.com/p/federal-budget-data-shows-71216-new"
         }
       ],
-      "check_run": "q217/askamerica/2026-11-17"
+      "check_run": "q217/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 78,
@@ -2838,7 +2915,8 @@
           "url": "https://www.pravda.com.ua/eng/news/2026/07/09/8043293/"
         }
       ],
-      "check_run": "q218/askamerica/2026-11-17"
+      "check_run": "q218/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 79,
@@ -2872,7 +2950,8 @@
           "url": "https://kyivindependent.com/kyiv-supports-energy-sector-ceasefire-expects-military-aid-to-continue-zelensky-says/"
         }
       ],
-      "check_run": "q218/askamerica/2026-11-17"
+      "check_run": "q218/askamerica/2026-11-17",
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 80,
@@ -2901,7 +2980,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 81,
@@ -2930,7 +3010,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 82,
@@ -2959,7 +3040,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "War and Foreign Affairs"
     },
     {
       "id": 83,
@@ -2993,7 +3075,8 @@
           "url": "https://www.pgjonline.com/news/2026/october/at-least-17-data-center-campuses-proposed-on-us-public-lands"
         }
       ],
-      "check_run": "q219/askamerica/2026-11-17"
+      "check_run": "q219/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 84,
@@ -3027,7 +3110,8 @@
           "url": "https://www.heinrich.senate.gov/imo/media/doc/substitute_amendment_to_bipartisan_american_affordability_and_jobs_act.pdf"
         }
       ],
-      "check_run": "q219/askamerica/2026-11-17"
+      "check_run": "q219/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 85,
@@ -3061,7 +3145,8 @@
           "url": "https://www.heinrich.senate.gov/imo/media/doc/substitute_amendment_to_bipartisan_american_affordability_and_jobs_act.pdf"
         }
       ],
-      "check_run": "q219/askamerica/2026-11-17"
+      "check_run": "q219/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 86,
@@ -3099,7 +3184,8 @@
           "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1192/vote_119_2_00264.xml"
         }
       ],
-      "check_run": "q219/askamerica/2026-11-17"
+      "check_run": "q219/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 87,
@@ -3133,7 +3219,8 @@
           "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
         }
       ],
-      "check_run": "q220/askamerica/2026-11-17"
+      "check_run": "q220/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 88,
@@ -3173,7 +3260,8 @@
           "url": "https://www.brookings.edu/articles/financing-the-ai-buildout/"
         }
       ],
-      "check_run": "q220/askamerica/2026-11-17"
+      "check_run": "q220/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 89,
@@ -3207,7 +3295,8 @@
           "url": "https://globalenergymonitor.org/research/us-gas-power-proposals-tied-data-centers-nearly-double-six-months"
         }
       ],
-      "check_run": "q220/askamerica/2026-11-17"
+      "check_run": "q220/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 90,
@@ -3241,7 +3330,8 @@
           "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
         }
       ],
-      "check_run": "q220/askamerica/2026-11-17"
+      "check_run": "q220/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 91,
@@ -3275,7 +3365,8 @@
           "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
         }
       ],
-      "check_run": "q221/askamerica/2026-11-17"
+      "check_run": "q221/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 92,
@@ -3309,7 +3400,8 @@
           "url": "https://rhg.com/wp-content/uploads/2026/11/Estimating-the-Energy-System-and-Emissions-Impacts-of-BAAJA.pdf"
         }
       ],
-      "check_run": "q221/askamerica/2026-11-17"
+      "check_run": "q221/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 93,
@@ -3355,7 +3447,8 @@
           "url": "https://www.powermag.com/solar-adds-43-gw-in-2025-fifth-straight-year-as-top-new-generation-source/"
         }
       ],
-      "check_run": "q221/askamerica/2026-11-17"
+      "check_run": "q221/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 94,
@@ -3389,7 +3482,8 @@
           "url": "https://electrek.co/2026/05/04/trump-just-blocked-165-us-wind-projects-heres-whats-behind-it/"
         }
       ],
-      "check_run": "q221/askamerica/2026-11-17"
+      "check_run": "q221/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 111,
@@ -3427,7 +3521,8 @@
           "url": "https://dredgewire.com/five-fast-facts-about-the-impacts-of-the-federal-offshore-wind-buyouts/"
         }
       ],
-      "check_run": "q222/askamerica/2026-11-17"
+      "check_run": "q222/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 95,
@@ -3465,7 +3560,8 @@
           "url": "https://www.willkie.com/publications/2026/09/dc-circuit-limits-does-section-202c-emergency-authority-to-keep-coal-generator-operational"
         }
       ],
-      "check_run": "q222/askamerica/2026-11-17"
+      "check_run": "q222/askamerica/2026-11-17",
+      "broad_topic": "Energy"
     },
     {
       "id": 96,
@@ -3494,7 +3590,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Energy"
     },
     {
       "id": 97,
@@ -3523,7 +3620,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Energy"
     },
     {
       "id": 98,
@@ -3557,7 +3655,8 @@
           "url": "https://www.agri-pulse.com/articles/25480-thune-seeks-pathway-for-farm-bill-amid-lame-duck-time-squeeze"
         }
       ],
-      "check_run": "q223/askamerica/2026-11-17"
+      "check_run": "q223/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 99,
@@ -3597,7 +3696,8 @@
           "url": "https://www.eia.gov/dnav/pet/hist/LeafHandler.ashx?n=PET&s=emd_epd2d_pte_nus_dpg&f=W"
         }
       ],
-      "check_run": "q223/askamerica/2026-11-17"
+      "check_run": "q223/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 100,
@@ -3631,7 +3731,8 @@
           "url": "https://www.fox8live.com/2026/10/21/trump-announces-8b-plan-provide-relief-farmers/"
         }
       ],
-      "check_run": "q223/askamerica/2026-11-17"
+      "check_run": "q223/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 101,
@@ -3669,7 +3770,8 @@
           "url": "https://yougov.com/en-us/articles/55935-how-voters-divided-over-the-iran-war-transgender-athletes-and-other-issues"
         }
       ],
-      "check_run": "q223/askamerica/2026-11-17"
+      "check_run": "q223/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 102,
@@ -3715,7 +3817,8 @@
           "url": "https://www.ers.usda.gov/topics/farm-economy/farm-sector-income-finances/farm-sector-income-forecast"
         }
       ],
-      "check_run": "q224/askamerica/2026-11-17"
+      "check_run": "q224/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 103,
@@ -3751,7 +3854,8 @@
           "sql": "SELECT \"date\", value FROM econ.fred_indicators WHERE series='PAYEMS' AND \"date\" IN (DATE '2021-08-01', DATE '2021-09-01', DATE '2021-10-01', DATE '2025-08-01', DATE '2025-09-01') ORDER BY \"date\""
         }
       ],
-      "check_run": "q224/askamerica/2026-11-17"
+      "check_run": "q224/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 104,
@@ -3795,7 +3899,8 @@
           "url": "https://www.senate.gov/legislative/LIS/roll_call_votes/vote1191/vote_119_1_00372.xml"
         }
       ],
-      "check_run": "q224/askamerica/2026-11-17"
+      "check_run": "q224/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 105,
@@ -3829,7 +3934,8 @@
           "url": "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.htm"
         }
       ],
-      "check_run": "q224/askamerica/2026-11-17"
+      "check_run": "q224/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 106,
@@ -3858,7 +3964,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Agriculture"
     },
     {
       "id": 107,
@@ -3896,7 +4003,8 @@
           "url": "https://www.valleynewslive.com/2026/09/17/senate-agriculture-committee-advances-farm-bill-amid-partisan-dispute/"
         }
       ],
-      "check_run": "q225/askamerica/2026-11-17"
+      "check_run": "q225/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 108,
@@ -3934,7 +4042,8 @@
           "url": "https://www.agriculture.senate.gov/newsroom/dem/press/release/klobuchar-statement-on-farm-bill-vote"
         }
       ],
-      "check_run": "q225/askamerica/2026-11-17"
+      "check_run": "q225/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 109,
@@ -3968,7 +4077,8 @@
           "url": "https://www.agri-pulse.com/articles/24870-oversubscription-in-eqip-csp-increased-in-fiscal-2025-analysis-finds"
         }
       ],
-      "check_run": "q225/askamerica/2026-11-17"
+      "check_run": "q225/askamerica/2026-11-17",
+      "broad_topic": "Agriculture"
     },
     {
       "id": 110,
@@ -3997,7 +4107,8 @@
       "result": null,
       "finding": null,
       "evidence": [],
-      "check_run": null
+      "check_run": null,
+      "broad_topic": "Agriculture"
     }
   ]
 }
