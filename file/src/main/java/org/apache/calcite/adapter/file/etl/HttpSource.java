@@ -1485,8 +1485,9 @@ public class HttpSource implements DataSource {
           if (retries <= rateLimit.getMaxRetries()) {
             long backoff;
             if (e instanceof RetryableHttpException
-                && ((RetryableHttpException) e).retryAfterMs >= 0L) {
-              // Server told us exactly how long to wait (503/429 Retry-After) — honor it (capped).
+                && ((RetryableHttpException) e).retryAfterMs > 0L) {
+              // Server told us how long to wait (503/429 Retry-After) — honor it (capped). A
+              // zero hint is not a wait, so the configured exponential backoff applies.
               backoff = ((RetryableHttpException) e).retryAfterMs;
             } else {
               backoff = rateLimit.getRetryBackoffMs() * (1L << (retries - 1));
