@@ -257,6 +257,7 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.5     # CYBER_NVD_API_KEY present → NVD allows 50 req/30s (~1.67/s); 1.5 leaves margin. Without a key NVD caps at 5/30s (0.167) and will 429 (retries/backoff absorb it).
         maxRetries: 3
+        retryBackoffMs: 15000
       rawCache:
         enabled: false
 
@@ -375,6 +376,7 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.5     # CYBER_NVD_API_KEY present → NVD allows 50 req/30s (~1.67/s); 1.5 leaves margin. Without a key NVD caps at 5/30s (0.167) and will 429 (retries/backoff absorb it).
         maxRetries: 3
+        retryBackoffMs: 15000
       rawCache:
         enabled: false
 
@@ -528,6 +530,7 @@ partitionedTables:
       rateLimit:
         requestsPerSecond: 1.5
         maxRetries: 3
+        retryBackoffMs: 15000
       rawCache:
         enabled: false
 
