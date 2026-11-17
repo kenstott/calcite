@@ -6566,8 +6566,8 @@ partitionedTables:
       maxYear: 2026
       distinctYears: 60
       contiguous: true
-      rowCount: 170514
-      checkedAt: "2026-11-17T01:02:08Z"
+      rowCount: 171167
+      checkedAt: "2026-11-17T14:36:32Z"
     partitions:
       style: hive
       columnDefinitions:
