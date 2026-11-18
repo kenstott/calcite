@@ -61,9 +61,15 @@ if $FORCE_DOWNLOAD; then
   log_info "$WORKER_ID --force-download: deleting raw EDGAR cache for ${#ACCESSIONS[@]} accession(s)"
   for acc in "${ACCESSIONS[@]}"; do
     filer_cik="${acc:0:10}"
-    cache_path="$(echo "${GOVDATA_CACHE_DIR}/sec/${filer_cik}/${acc}/" | sed 's|^s3://|r2:|')"
+    cache_path="$(raw_cache_rclone_path "$GOVDATA_CACHE_DIR" "sec/${filer_cik}/${acc}/")"
     log_info "  Deleting: $cache_path"
-    rclone purge "$cache_path" 2>/dev/null || true
+    rc=0
+    rclone purge "$cache_path" || rc=$?
+    # rclone exit 3 = directory not found: nothing cached for this accession.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then
+      log_error "$WORKER_ID cache delete failed (exit $rc): $cache_path"
+      exit "$rc"
+    fi
   done
 fi
 
