@@ -67,18 +67,11 @@ public class NvdVulnCwesResponseTransformer implements ResponseTransformer {
         Integer pubYear = null;
         Integer pubMonth = null;
         Integer pubQuarter = null;
-        String[] cveParts = cveId.split("-");
-        if (cveParts.length >= 2) {
-          try {
-            pubYear = Integer.parseInt(cveParts[1]);
-          } catch (NumberFormatException ignored) {
-            // non-standard CVE id
-          }
-        }
         // Extract month and quarter from published timestamp (ISO 8601: YYYY-MM-DDTHH:MM:SSZ)
         String published = cve.path("published").asText(null);
         if (published != null && published.length() >= 7) {
           try {
+            pubYear = Integer.parseInt(published.substring(0, 4));
             pubMonth = Integer.parseInt(published.substring(5, 7));
             if (pubMonth >= 1 && pubMonth <= 12) {
               pubQuarter = (pubMonth - 1) / 3 + 1;

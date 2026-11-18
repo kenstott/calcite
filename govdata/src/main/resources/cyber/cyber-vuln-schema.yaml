@@ -317,7 +317,8 @@ partitionedTables:
       rowCount: 381796
       checkedAt: "2026-11-18T01:18:18Z"
     # Same NvdPublishedWindowDimensionResolver windowing as vulnerabilities; rows route to
-    # [type,year,quarter] via pub_year/pub_month (CWE rows lack published → year from cve_id).
+    # [type,year,quarter] via pub_year/pub_month, both taken from the parent CVE's published date
+    # so a window run only ever rewrites the partitions its own fetch window covers.
     # DQ sample cap (GOVDATA_DQ mode): same rationale as vulnerabilities — sample, don't full-crawl.
     dqRowLimit: 5000
     partitions:
@@ -345,16 +346,15 @@ partitionedTables:
         type: string
         nullable: false
         comment: CWE identifier (e.g., CWE-79)
-      # Computed partition-routing columns extracted from cve_id year (CVE-YYYY-NNN).
-      # NVD CWE rows do not carry a published date; approximate year from CVE year segment.
+      # Computed partition-routing columns taken from the parent CVE's published date.
       - name: pub_year
         type: integer
         nullable: true
-        comment: Year from CVE-YYYY-NNN (emitted by transformer; drives year partition routing)
+        comment: Publication year of the parent CVE (emitted by transformer; drives year partition routing)
       - name: pub_month
         type: integer
         nullable: true
-        comment: Month placeholder 1 (emitted by transformer; CVE-year-only routing → Q1)
+        comment: Publication month 1-12 of the parent CVE (emitted by transformer; drives quarter routing)
 
     source:
       type: http
@@ -504,11 +504,11 @@ partitionedTables:
       - name: pub_year
         type: integer
         nullable: true
-        comment: Year from CVE-YYYY-NNN (drives year partition routing)
+        comment: Publication year of the parent CVE (drives year partition routing)
       - name: pub_month
         type: integer
         nullable: true
-        comment: Month placeholder 1 (CVE-year-only routing → Q1)
+        comment: Publication month 1-12 of the parent CVE (drives quarter routing)
 
     source:
       type: http
