@@ -4314,10 +4314,27 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "AskAmerica's bill data show 23 Congressional Review Act resolutions against Biden-era rules enacted in the 119th Congress, plus three more that passed the Senate but were not enacted (S.J.Res. 3, 7 and 55). That is 26 Senate passage votes on 25 distinct rules, since two resolutions target the same IRS rule.",
+   "evidence": [
+    {
+     "label": "law.bills (119th Congress joint resolutions that became law)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bills-table",
+     "askamerica": true,
+     "sql": "SELECT bill_type, bill_number, latest_action_text, substr(title,1,160) t FROM law.bills WHERE congress=119 AND latest_action_text ILIKE 'Became Public Law No: 119-%' AND bill_type IN ('hjres','sjres') ORDER BY latest_action_date, bill_number"
+    },
+    {
+     "label": "law.bill_actions (Senate passage of S.J.Res. 3, 7, 12, 55, 89, 91)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+     "askamerica": true,
+     "sql": "SELECT bill_type, bill_number, action_date, text FROM law.bill_actions WHERE congress=119 AND bill_type='sjres' AND bill_number IN (3,89,91,12,7,55) AND (text ILIKE '%Senate by Yea-Nay%' OR text ILIKE '%Passed Senate%' OR text ILIKE 'Passed/agreed to in Senate%') ORDER BY bill_number, action_date"
+    },
+    {
+     "label": "The Regulatory Review, the Congressional Review Act in 2025",
+     "url": "https://www.theregreview.org/2026/02/03/jones-revesz-the-weaponization-of-the-congressional-review-act-in-2025/"
+    }
+   ],
+   "check_run": "q236/askamerica/2026-11-18"
   },
   {
    "id": 109,
@@ -4346,10 +4363,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "AskAmerica's bill data show H.R. 6644, the 21st Century ROAD to Housing Act, passed the Senate 89-10 on March 12, 2026, and became Public Law 119-101 after the Senate concurred 85-5 on June 22. The Congressional Research Service describes provisions streamlining environmental review for housing and removing the permanent-chassis requirement for manufactured homes.",
+   "evidence": [
+    {
+     "label": "law.bill_actions (H.R. 6644, 119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_actions-table",
+     "askamerica": true,
+     "sql": "SELECT action_seq, action_date, text FROM law.bill_actions WHERE congress=119 AND bill_type='hr' AND bill_number=6644 ORDER BY action_seq"
+    },
+    {
+     "label": "CRS R49354 on P.L. 119-101",
+     "url": "https://www.everycrsreport.com/files/2026-09-17_R49354_13fde0334818bc2ca5aa3b87282f93989216501b.html"
+    }
+   ],
+   "check_run": "q236/askamerica/2026-11-18"
   },
   {
    "id": 110,
@@ -4412,10 +4440,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Potomac Interceptor collapsed Jan. 19, 2026. DC Water's report estimates about 243 million gallons overflowed (as reported by Water & Wastes Digest); DC Water's own page says 'more than 200 million', and Maryland officials have suggested up to about 300 million.",
+   "evidence": [
+    {
+     "label": "DC Water, Potomac Interceptor collapse",
+     "url": "https://dcwater.com/Potomac-interceptor-collapse"
+    },
+    {
+     "label": "Water & Wastes Digest, DC Water report on the collapse",
+     "url": "https://www.wwdmag.com/collection-systems/news/55356504/dc-water-details-environmental-impacts-from-potomac-interceptor-collapse"
+    }
+   ],
+   "check_run": "q236/askamerica/2026-11-18"
   },
   {
    "id": 112,
@@ -4446,10 +4483,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "DC Water says it asked the National Park Service in 2018 for a categorical exclusion to rehabilitate the pipe, NPS required an Environmental Assessment in 2021, and the assessment was not finished when the pipe collapsed (as reported by WJLA from the Washington Post). NPS says it received DC Water's proposal only in December 2025, and DC Water says its inspections showed no imminent failure, so the cause of the delay is disputed.",
+   "evidence": [
+    {
+     "label": "WJLA, Potomac Interceptor repairs could have started earlier",
+     "url": "https://wjla.com/news/local/potomac-interceptor-repairs-could-have-started-before-sewage-spill-according-to-report"
+    },
+    {
+     "label": "Department of the Interior testimony on the Potomac Interceptor",
+     "url": "https://www.doi.gov/ocl/potomac-interceptor-event"
+    }
+   ],
+   "check_run": "q236/askamerica/2026-11-18"
   },
   {
    "id": 113,
@@ -4478,10 +4524,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Council on Environmental Quality's 2020 report puts the mean time from notice of intent to record of decision at 4.5 years for 1,276 environmental impact statements completed 2010-2018 (median 3.5 years).",
+   "evidence": [
+    {
+     "label": "CEQ, EIS timeline report (June 12, 2020)",
+     "url": "https://nepa.gov/sites/default/files/documents/CEQ_EIS_Timeline_Report_2020-6-12.pdf"
+    }
+   ],
+   "check_run": "q237/askamerica/2026-11-18"
   },
   {
    "id": 114,
@@ -4510,10 +4561,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Studies differ by method. The Breakthrough Institute reports an average of 4.2 years from permit to the end of appellate challenges, and other studies give medians of roughly 1.5 to 2 years for court cases. 'Almost 2 years' fits a median reading, not the appellate average.",
+   "evidence": [
+    {
+     "label": "Breakthrough Institute, Understanding NEPA litigation",
+     "url": "https://thebreakthrough.org/issues/energy/understanding-nepa-litigation"
+    }
+   ],
+   "check_run": "q237/askamerica/2026-11-18"
   },
   {
    "id": 115,
@@ -4542,10 +4598,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "A Council of Economic Advisers paper of Oct. 28, 2026 on the Bipartisan American Affordability and Jobs Act estimates that its two-year environmental review deadline would cut average household electric bills by $178 to $251 a year and other expenses by $125 to $176 a year. These are modeled estimates.",
+   "evidence": [
+    {
+     "label": "White House CEA, The economic benefits of permitting reform",
+     "url": "https://www.whitehouse.gov/research/2026/10/the-economic-benefits-of-permitting-reform/"
+    }
+   ],
+   "check_run": "q237/askamerica/2026-11-18"
   },
   {
    "id": 116,
@@ -4574,10 +4635,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "Sec. 1203 of the committee text changes Clean Water Act NPDES permit terms from 'five years' to '10 years', and Sec. 1204(b) does the same for Section 404 general permits. The floor version was not checked against this text.",
+   "evidence": [
+    {
+     "label": "Senate EPW, Bipartisan American Affordability and Jobs Act text",
+     "url": "https://www.epw.senate.gov/public/_cache/files/5/c/5c5f5935-b224-48e7-abea-e60c30e7a4cf/7935BF3C85967B6F56F6F4858FD3221B7E0AEB02D04BE391CAFBD1B884CE3DC5.bipartisan-american-affordability-and-jobs-act-text.pdf"
+    }
+   ],
+   "check_run": "q237/askamerica/2026-11-18"
   },
   {
    "id": 117,
@@ -4606,10 +4672,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "S. 5653 as introduced (Sept. 30, 2026) adds Federal Power Act section 228. It requires data-center loads of 20 megawatts or more to bear the full incremental cost of serving them, covering construction and operation of generation, storage, transmission and distribution, with none of it recovered from other customers. AskAmerica's bill data list the introduced text as the only version.",
+   "evidence": [
+    {
+     "label": "law.bill_text_versions (S. 5653 text versions, 119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_text_versions-table",
+     "askamerica": true,
+     "sql": "SELECT version_type, version_date, format_type, url FROM law.bill_text_versions WHERE congress=119 AND bill_type='s' AND bill_number=5653"
+    },
+    {
+     "label": "S. 5653, introduced text",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119s5653is/xml/BILLS-119s5653is.xml"
+    }
+   ],
+   "check_run": "q238/askamerica/2026-11-18"
   },
   {
    "id": 118,
