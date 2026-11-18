@@ -1566,6 +1566,137 @@ partitionedTables:
         snapshotRetentionDays: 7
 
   # ---------------------------------------------------------------------------
+  # PRESIDENTIAL_STATE_RETURNS — statewide presidential returns, MIT Election Lab 1976-2024
+  # ---------------------------------------------------------------------------
+  - name: presidential_state_returns
+    dataset_type: snapshot
+    freshness:
+      type: hash
+    pattern: "type=presidential_state_returns/*.parquet"
+    partitions: *type_partition
+    comment: >
+      U.S. presidential general-election popular vote by state and candidate for every election
+      from 1976 to 2024 (13 elections, 50 states plus DC, 4,822 rows), from the MIT Election Data +
+      Science Lab "U.S. President 1976-2024" (CC0; Harvard Dataverse doi:10.7910/DVN/42MVDX, file
+      1976-2024-president.csv, found through the Dataverse API at each fetch so a new release is
+      picked up; no guestbook). Use this table for history (who won each state in 1980, 2016 or
+      2020, how many votes a candidate got); officials.presidential_election_results is the FEC
+      workbook for 2024 only and electoral_college_votes carries elector allocation. General
+      elections only: no primary or caucus results are in this table. One row per candidate per
+      party line per state: year, state, the candidate as 'LAST, FIRST' in upper case, the party
+      label as published and a normalised D / R / OTHER field, votes and the published state
+      total. Fusion tickets (New York 1976-2020, Connecticut, Oregon and others): a candidate on
+      several party lines has a row per line, so a candidate's state vote is the SUM over rows;
+      the view presidential_state_winners does that. Quirks kept as published: write-ins lumped in
+      rows with candidate null (write_in_aggregate) or named 'WRITE-IN'; the three Maryland 2020
+      rows the Lab left with writein blank carry writein null (two named write-ins and one
+      unnamed aggregate, candidate_kind unlabeled for the unnamed row); total_votes is the
+      state's published total and is NOT always the sum of the rows (2024 District of Columbia
+      and New York differ by a few thousand votes in the Lab's file). 2024 rows (version_date
+      2025-11-20) are later additions to the 1976-2020 file (version_date 2021-01-13) and the Lab
+      leaves party_simplified blank on some of them, so party_major is null there when the label
+      is also blank. Nebraska and Maine report statewide totals (congressional-district electors
+      are not split out). Joins: state_fips to geo.state_ref.state_fips; state_name to
+      officials.members.state_name and electoral_college_votes. The candidate-level join to
+      FEC data is name matching and is not attempted. Source:
+      https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/42MVDX.
+
+    dimensions:
+      type:
+        - presidential_state_returns
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: 'Presidential election year (1976, 1980, ..., 2024); PK component'
+      - name: state_fips
+        type: string
+        nullable: false
+        comment: '2-digit state FIPS code (FK to geo.state_ref.state_fips); 11 is the District of Columbia; PK component'
+      - name: state_name
+        type: string
+        nullable: false
+        comment: 'State name in title case (join key to officials.members.state_name and geo.state_ref.state_name)'
+      - name: state_postal
+        type: string
+        nullable: false
+        comment: '2-letter postal abbreviation'
+      - name: line_no
+        type: integer
+        nullable: false
+        comment: 'Position of the row within its (year, state) election in the published file, 1-based; makes the key unique where a candidate appears on several party lines; PK component'
+      - name: candidate
+        type: string
+        nullable: true
+        comment: "Candidate name as published, upper case 'LAST, FIRST'; null for the write-in aggregate rows"
+      - name: candidate_kind
+        type: string
+        nullable: false
+        comment: "'candidate' a named candidate, 'write_in_aggregate' write-ins lumped together (candidate null or WRITE-IN), 'residual' a vote bucket, 'unlabeled' the one 2020 Maryland row with neither a candidate nor a writein flag"
+      - name: party_published
+        type: string
+        nullable: true
+        comment: 'party_detailed as published, upper case (DEMOCRAT, REPUBLICAN, LIBERTARIAN, GREEN, DEMOCRATIC-FARMER-LABOR, ...); null on write-in rows'
+      - name: party_major
+        type: string
+        nullable: true
+        comment: "D or R when party_published is a listed Democratic or Republican label (which overrides the Lab's party_simplified where it is wrong), D or R from party_simplified when there is no label, OTHER for any other label; null when neither a label nor party_simplified is published. An unlisted label the Lab simplified to DEMOCRAT or REPUBLICAN fails the fetch"
+      - name: writein
+        type: boolean
+        nullable: true
+        comment: 'True for write-in votes; null on three 2020 Maryland rows the Lab left blank'
+      - name: candidate_votes
+        type: long
+        nullable: false
+        comment: 'Votes this candidate received on this party line'
+      - name: total_votes
+        type: long
+        nullable: false
+        comment: 'Total votes cast for President in the state as published by the Lab (not always the sum of candidate_votes, see table comment)'
+      - name: uncontested
+        type: boolean
+        nullable: false
+        comment: 'True when candidate_votes = 1 and total_votes = 1, the Lab marker for an unopposed race (never true in this file)'
+      - name: version_date
+        type: string
+        nullable: false
+        comment: 'Date the Lab finalised the row (ISO date): 2021-01-13 for 1976 to 2020, 2025-11-20 for 2024'
+      - name: source_release
+        type: string
+        nullable: false
+        comment: 'Dataverse dataset, version number and release date the row was read from'
+
+    source:
+      type: http
+      # Placeholder URL: PresidentialStateReturnsProvider reads the Dataverse dataset API, finds the
+      # state-level file and downloads it through rawCache itself.
+      url: "https://dataverse.harvard.edu/api/datasets/:persistentId?persistentId=doi:10.7910/DVN/42MVDX"
+      method: GET
+      response:
+        format: json  # ignored: PresidentialStateReturnsProvider returns rows directly
+      rawCache:
+        enabled: true
+
+    hooks:
+      dataProvider: "org.apache.calcite.adapter.govdata.officials.PresidentialStateReturnsProvider"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=presidential_state_returns/"
+      partition:
+        columns: [type]
+      iceberg:
+        <<: *compaction_defaults
+        catalogType: hadoop
+        warehousePath: "${GOVDATA_PARQUET_DIR}/officials"
+        tableName: presidential_state_returns
+        overwritePartitions: true
+        runMaintenance: true
+        snapshotRetentionDays: 7
+
+  # ---------------------------------------------------------------------------
   # GOVERNOR_ELECTION_RESULTS — statewide governor returns, Cha and Kuriwaki 2006-2024
   # ---------------------------------------------------------------------------
   - name: governor_election_results
@@ -2213,6 +2344,62 @@ views:
           cross_endorsed_candidates,
           round_rank = MAX(round_rank) OVER (PARTITION BY year, state_fips, district) AS is_decisive
         FROM round_agg
+
+  - name: presidential_state_winners
+    comment: >
+      One row per presidential election and state (year, state) built from
+      presidential_state_returns: the leading candidate and the leader's party, the leader's and
+      runner-up's votes, the Democratic and Republican candidates' votes and the two-party
+      margin (D - R) / (D + R) (positive favours the Democratic candidate). A candidate's party
+      lines are summed (New York fusion tickets) and the party group follows the larger of the
+      candidate's D and R lines. Only rows with candidate_kind 'candidate' count; write-ins are
+      excluded, so candidate_votes can be below total_votes. State winners, not Electoral College
+      outcomes: Maine and Nebraska split electors by district and faithless electors are not
+      reflected (see electoral_college_votes).
+    sql: >
+        WITH cand AS (
+          SELECT
+            year, state_fips, state_name, state_postal, candidate,
+            SUM(candidate_votes) AS votes,
+            SUM(CASE WHEN party_major = 'D' THEN candidate_votes ELSE 0 END) AS d_line_votes,
+            SUM(CASE WHEN party_major = 'R' THEN candidate_votes ELSE 0 END) AS r_line_votes,
+            SUM(CASE WHEN party_major = 'D' THEN 1 ELSE 0 END) AS d_lines,
+            SUM(CASE WHEN party_major = 'R' THEN 1 ELSE 0 END) AS r_lines,
+            SUM(CASE WHEN party_major IS NOT NULL THEN 1 ELSE 0 END) AS known_lines,
+            MAX(total_votes) AS total_votes
+          FROM presidential_state_returns
+          WHERE candidate_kind = 'candidate'
+          GROUP BY year, state_fips, state_name, state_postal, candidate
+        ),
+        ranked AS (
+          SELECT cand.*,
+            CASE WHEN d_line_votes > r_line_votes THEN 'D'
+                 WHEN r_line_votes > d_line_votes THEN 'R'
+                 WHEN d_lines > 0 AND r_lines = 0 THEN 'D'
+                 WHEN r_lines > 0 AND d_lines = 0 THEN 'R'
+                 WHEN known_lines > 0 THEN 'OTHER' END AS party_group,
+            RANK() OVER (PARTITION BY year, state_fips ORDER BY votes DESC) AS rnk
+          FROM cand
+        )
+        SELECT
+          year, state_fips, state_name, state_postal,
+          COUNT(*) AS candidates,
+          MAX(total_votes) AS total_votes,
+          SUM(votes) AS candidate_votes,
+          MAX(CASE WHEN rnk = 1 THEN candidate END) AS leader_candidate,
+          MAX(CASE WHEN rnk = 1 THEN party_group END) AS leader_party_major,
+          MAX(CASE WHEN rnk = 1 THEN votes END) AS leader_votes,
+          MAX(CASE WHEN rnk = 2 THEN votes END) AS runner_up_votes,
+          SUM(CASE WHEN rnk = 1 THEN 1 ELSE 0 END) > 1 AS tied,
+          SUM(CASE WHEN party_group = 'D' THEN votes ELSE 0 END) AS d_votes,
+          SUM(CASE WHEN party_group = 'R' THEN votes ELSE 0 END) AS r_votes,
+          CASE WHEN SUM(CASE WHEN party_group IN ('D', 'R') THEN votes ELSE 0 END) > 0
+               THEN 1.0 * (SUM(CASE WHEN party_group = 'D' THEN votes ELSE 0 END)
+                           - SUM(CASE WHEN party_group = 'R' THEN votes ELSE 0 END))
+                    / SUM(CASE WHEN party_group IN ('D', 'R') THEN votes ELSE 0 END) END
+            AS two_party_margin
+        FROM ranked
+        GROUP BY year, state_fips, state_name, state_postal
 
   - name: senate_race_results
     comment: >

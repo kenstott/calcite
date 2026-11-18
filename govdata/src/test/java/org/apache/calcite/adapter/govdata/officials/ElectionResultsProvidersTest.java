@@ -131,7 +131,7 @@ class ElectionResultsProvidersTest {
         + "1.5,2.0,False,20210114,DEMOCRAT\n"));
     assertThrows(IOException.class, () -> senate(
         "2020,GEORGIA,GA,13,58.0,44,US SENATE,statewide,gen,False,X,DEMOCRAT,False,total,"
-        + "1.0,2.0,False,2021-01-14,DEMOCRAT\n"));
+        + "1.0,2.0,False,2021.01.14,DEMOCRAT\n"));
     assertThrows(IOException.class, () -> senate(
         "2020,GEORGIA,GA,99,58.0,44,US SENATE,statewide,gen,False,X,DEMOCRAT,False,total,"
         + "1.0,2.0,False,20210114,DEMOCRAT\n"));
