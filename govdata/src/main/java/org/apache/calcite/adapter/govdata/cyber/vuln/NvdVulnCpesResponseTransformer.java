@@ -21,6 +21,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Transforms NVD CVE 2.0 API responses into the vulnerability_cpes junction table:
  * one row per (cve_id, cpe_criteria) pair from configurations[].nodes[].cpeMatch[],
@@ -90,6 +93,8 @@ public class NvdVulnCpesResponseTransformer implements ResponseTransformer {
           }
         }
 
+        // The same cpeMatch can recur across nodes/configurations of one CVE.
+        Set<String> seen = new HashSet<String>();
         JsonNode configurations = cve.path("configurations");
         if (!configurations.isArray()) {
           continue;
@@ -148,6 +153,10 @@ public class NvdVulnCpesResponseTransformer implements ResponseTransformer {
                 row.put("version_end_excluding", versionEndExc);
               } else {
                 row.putNull("version_end_excluding");
+              }
+
+              if (!seen.add(row.toString())) {
+                continue;
               }
 
               if (pubYear != null) {

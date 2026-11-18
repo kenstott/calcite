@@ -22,7 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Transforms NVD CVE 2.0 API responses into the vulnerability_cwes junction table:
@@ -120,10 +122,11 @@ public class NvdVulnCwesResponseTransformer implements ResponseTransformer {
   }
 
   private List<String> extractCweIds(JsonNode cve) {
-    List<String> ids = new ArrayList<String>();
+    // NVD repeats a CWE once per assigning source; a (cve_id, cwe_id) pair is one fact.
+    Set<String> ids = new LinkedHashSet<String>();
     JsonNode weaknesses = cve.path("weaknesses");
     if (!weaknesses.isArray()) {
-      return ids;
+      return new ArrayList<String>(ids);
     }
     for (JsonNode w : weaknesses) {
       JsonNode descs = w.path("description");
@@ -137,6 +140,6 @@ public class NvdVulnCwesResponseTransformer implements ResponseTransformer {
         }
       }
     }
-    return ids;
+    return new ArrayList<String>(ids);
   }
 }
