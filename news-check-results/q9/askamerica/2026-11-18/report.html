@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Benzinga article's claims about Social Security's record FY2026 trust fund deficit, reserves and depletion dates are mostly accurate.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The Benzinga article's claims about Social Security's record FY2026 trust fund deficit, reserves and depletion dates are mostly accurate.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://www.benzinga.com/news/financing/26/11/63279024/social-security-deteriorating-rapidly-says-market-commentator-as-fund-deficit-hit-record-221-billion-in-fiscal-year-2026">https://www.benzinga.com/news/financing/26/11/63279024/social-security-deteriorating-rapidly-says-market-commentator-as-fund-deficit-hit-record-221-billion-in-fiscal-year-2026</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 471" width="880" height="471" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="471" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">OASI trust fund, calendar years ($B)</text>
+  <rect class="panel-edge" x="20" y="64" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="64" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">OASI reserves, year-end (CRS; 2026 projected)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="77" y1="246" x2="390" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="69" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="77" y1="214.33" x2="390" y2="214.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="69" y="218.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">500</text>
+      <line class="grid" x1="77" y1="182.67" x2="390" y2="182.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="69" y="186.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,000</text>
+      <line class="grid" x1="77" y1="151" x2="390" y2="151" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="69" y="155" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">1,500</text>
+      <line class="grid" x1="77" y1="119.33" x2="390" y2="119.33" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="69" y="123.33" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,000</text>
+      <line class="grid" x1="77" y1="87.67" x2="390" y2="87.67" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="69" y="91.67" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">2,500</text>
+      <line class="grid" x1="77" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-6" class="tick" x="69" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">3,000</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="77" y1="56" x2="77" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="77" y1="246" x2="390" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="151" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 151)">$B</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2024" class="tick" x="129.17" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p1-xtick-2025" class="tick" x="233.50" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+      <text id="p1-xtick-2026-proj" class="tick" x="337.83" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026 proj</text>
+    </g>
+    <g id="p1-series-reserves-b" class="series">
+      <g class="hover">
+        <title>2024 — Reserves $B: 2,538.3</title>
+        <rect id="p1-mark-reserves-b-2024" class="bar" x="95.78" y="85.24" width="65.77" height="160.76" fill="#2563eb"/>
+        <rect class="hit" x="95.78" y="56" width="65.77" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2025 — Reserves $B: 2,338.3</title>
+        <rect id="p1-mark-reserves-b-2025" class="bar" x="200.11" y="97.91" width="65.77" height="148.09" fill="#2563eb"/>
+        <rect class="hit" x="200.11" y="56" width="65.77" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2026 proj — Reserves $B: 2,094.9</title>
+        <rect id="p1-mark-reserves-b-2026-proj" class="bar" x="304.45" y="113.32" width="65.77" height="132.68" fill="#2563eb"/>
+        <rect class="hit" x="304.45" y="56" width="65.77" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <rect class="panel-edge" x="448" y="64" width="412" height="300" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="448" y="64" width="412" height="300" viewBox="0 0 412 300" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="300" class="chart-bg" fill="#ffffff"/>
+    <text id="p2-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="15" style="font-size:15px" font-weight="600" text-anchor="middle">OASI annual balance (CRS)</text>
+    <g id="p2-gridlines">
+      <line class="grid" x1="73" y1="246" x2="390" y2="246" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-0" class="tick" x="65" y="250" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-250</text>
+      <line class="grid" x1="73" y1="208" x2="390" y2="208" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-1" class="tick" x="65" y="212" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-200</text>
+      <line class="grid" x1="73" y1="170" x2="390" y2="170" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-2" class="tick" x="65" y="174" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-150</text>
+      <line class="grid" x1="73" y1="132" x2="390" y2="132" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-3" class="tick" x="65" y="136" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-100</text>
+      <line class="grid" x1="73" y1="94" x2="390" y2="94" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-4" class="tick" x="65" y="98" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">-50</text>
+      <line class="grid" x1="73" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p2-ytick-5" class="tick" x="65" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+    </g>
+    <g id="p2-axes">
+      <line class="axis" x1="73" y1="56" x2="73" y2="246" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="73" y1="246" x2="390" y2="246" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p2-y-axis-title" class="axis-title" x="14" y="151" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 151)">$B</text>
+    <g id="p2-x-axis-labels">
+      <text id="p2-xtick-2024" class="tick" x="125.83" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+      <text id="p2-xtick-2025" class="tick" x="231.50" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2025</text>
+      <text id="p2-xtick-2026-proj" class="tick" x="337.17" y="264" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2026 proj</text>
+    </g>
+    <g id="p2-series-annual-balance" class="series">
+      <g class="hover">
+        <title>2024 — Annual balance: -103.2</title>
+        <rect id="p2-mark-annual-balance-2024" class="bar" x="92.02" y="56" width="66.63" height="78.43" fill="#2563eb"/>
+        <rect class="hit" x="92.02" y="56" width="66.63" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2025 — Annual balance: -200</title>
+        <rect id="p2-mark-annual-balance-2025" class="bar" x="197.69" y="56" width="66.63" height="152" fill="#2563eb"/>
+        <rect class="hit" x="197.69" y="56" width="66.63" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+      <g class="hover">
+        <title>2026 proj — Annual balance: -243.3</title>
+        <rect id="p2-mark-annual-balance-2026-proj" class="bar" x="303.35" y="56" width="66.63" height="184.91" fill="#2563eb"/>
+        <rect class="hit" x="303.35" y="56" width="66.63" height="190" fill="#000" fill-opacity="0"/>
+      </g>
+    </g>
+    <g id="p2-annotations"><!-- panel annotations --></g>
+  </svg>
+  <text class="footnote" x="20" y="390" fill="#6b7280">Calendar-year CRS figures, not fiscal-year. Diagnostics flagged max_trust_fund_ratio_pct and actuarial_balance_pct_payroll in</text>
+  <text class="footnote" x="20" y="404" fill="#6b7280">econ.social_security_trustees_projections as out_of_domain, so they were not used; only depletion_year and payable_benefits_pct_at_depletion were</text>
+  <text class="footnote" x="20" y="418" fill="#6b7280">used.</text>
+  <g id="brand">
+  <svg x="20" y="430" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="445" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:59367/a/f00204438fb0230ee0736686dbe6d758.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Rating: 1 Pinocchio. The $221 billion deficit and $2.18 trillion reserves are consistent with CRS and SSA OASI data (calendar-year deficits of $200B in 2025 and $243B projected for 2026; OASI reserves $2.02T at end-2007 and $2.20T at end-2008), and the Trustees and AARP figures match. Treasury and SSA fiscal-year tables blocked access, so the FY2026 figures are consistent but not directly confirmed. The framing uses an OASI-only figure to describe all of Social Security and relays an X post as breaking news.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — mostly honest (capped by central claim #7; 83 before the cap)</strong> &middot; <strong>Bias +100/100 — too few errors to characterize</strong></p><p>3 claims graded, 0 not gradable, 1 fell short. In this article only. <strong>Citejacking:</strong> #7 leans on cited evidence that does not carry it.</p></div>
+<p><strong>2</strong> true &middot; <strong>1</strong> mostly true &middot; <strong>3</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-mostly-true"><td>7</td><td>Social Security Trust Fund deficit hit record $221 billion (headline framing: the fund, i.e. Social Security as a whole, is 'deteriorating rapidly').</td><td><strong>mostly true</strong> &middot; central claim</td><td>#1 — overreach<br>Checked against: <a href="https://www.crfb.org/papers/analysis-2026-social-security-trustees-report">CRFB</a></td></tr>
+<tr class="verdict-true"><td>5</td><td>wages subject to Social Security payroll taxes declined from 41% of U.S. gross domestic product in 1983 to 34% in 2025.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.plansponsor.com/?p=204797">PlanSponsor summary of AARP report</a>; <a href="https://www.aarp.org/pri/topics/work-finances-retirement/social-security/social-security-trust-fund-shifting-income-patterns/">AARP PPI page</a></td></tr>
+<tr class="verdict-true"><td>6</td><td>maintaining the 1983 share could have generated an additional $10.8 trillion in payroll-tax revenue and interest between 1984 and 2034, potentially extending the combined trust funds' projected life to 2059.</td><td><strong>true</strong></td><td>Checked against: <a href="https://newsweek.com/social-security-projection-2059-running-out-congress-12706898">Newsweek on AARP 2059 projection</a>; <a href="https://www.planadviser.com/?p=124811">PlanAdviser</a></td></tr>
+</tbody></table>
+<h3>Claims by The Kobeissi Letter — what they assert, as the piece reports it</h3>
+<div class="claim-score"><p><strong>Honesty 100/100 — too few checkable claims to characterize</strong> &middot; <strong>Bias no errors to lean either way</strong></p><p>2 claims graded, 0 not gradable, 0 fell short. In this article only.</p></div>
+<p><strong>2</strong> true &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th><th>Evidence Cited</th></tr></thead><tbody>
+<tr class="verdict-true"><td>1</td><td>The US Social Security Trust Fund's deficit jumped +$39 billion YoY in Fiscal Year 2026, to a record -$221 billion.</td><td><strong>true</strong> &middot; central claim</td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R49500.html">CRS R49500</a></td></tr>
+<tr class="verdict-true"><td>2</td><td>trust fund reserves fell to $2.18 trillion, their lowest level since 2007.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.everycrsreport.com/reports/R49500.html">CRS R49500</a></td></tr>
+</tbody></table>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>2</strong> true &middot; <strong>2</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>3</td><td>the Social Security Board of Trustees' report published in June ... projected that the retirement and survivor trust fund would exhaust its reserves in 2032, after which incoming revenue would cover only about 78% of scheduled benefits.</td><td><strong>true</strong></td></tr>
+<tr class="verdict-true"><td>4</td><td>The report said the combined retirement and disability trust funds are projected to run out of reserves in 2034, after which they could cover approximately 83% of scheduled benefits.</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; The US Social Security Trust Fund's deficit jumped +$39 billion YoY in Fiscal Year 2026, to a record -$221 billion.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by The Kobeissi Letter — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>CRS: OASI annual balance -200.0B (2025), -243.3B (2026 proj.)<ul class="claim-sources"><li><a href="https://www.everycrsreport.com/reports/R49500.html">CRS R49500</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Consistent with CRS OASI deficits (-$200B in 2025, -$243B projected 2026); fiscal-year basis estimate not independently confirmed.</dd>
+<dt>Warehouse searched for</dt><dd>Social Security trust fund OASDI assets income cost</dd>
+<dt>Web searches run</dt><dd>Kobeissi Letter Social Security trust fund deficit record $221 billion fiscal year 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; trust fund reserves fell to $2.18 trillion, their lowest level since 2007.</summary>
+<dl>
+<dt>Graded for</dt><dd>Claims by The Kobeissi Letter — what they assert, as the piece reports it</dd>
+<dt>Independent evidence</dt><dd>SSA historical OASI assets 2007: 2,023.6B; 2008: 2,202.9B; CRS 2025: 2,338.3B<ul class="claim-sources"><li><a href="https://www.everycrsreport.com/reports/R49500.html">CRS R49500</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>OASI year-end reserves were $2.02T in 2007 and $2.20T in 2008, so $2.18T is the lowest since about 2007-08.</dd>
+<dt>Web searches run</dt><dd>OASI trust fund end of year assets 2007 2008</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#3 &middot; <strong>true</strong> &mdash; the Social Security Board of Trustees' report published in June ... projected that the retirement and survivor trust fund would exhaust its reserves in 2032, after which incoming revenue would cover only about 78% of scheduled benefits.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>OASI depletion_year 2032, payable_benefits_pct_at_depletion 78 (2026 report) <code>econ.social_security_trustees_projections</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.crfb.org/papers/analysis-2026-social-security-trustees-report">CRFB analysis of 2026 Trustees report</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT * FROM econ.social_security_trustees_projections WHERE report_year=2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; The report said the combined retirement and disability trust funds are projected to run out of reserves in 2034, after which they could cover approximately 83% of scheduled benefits.</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>OASDI depletion_year 2034, payable 83 (2026 report) <code>econ.social_security_trustees_projections</code></dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.crfb.org/papers/analysis-2026-social-security-trustees-report">CRFB analysis of 2026 Trustees report</a></li></ul></dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT * FROM econ.social_security_trustees_projections WHERE report_year=2026</code></pre></details>
+</details>
+<details class="claim-detail verdict-true"><summary>#5 &middot; <strong>true</strong> &mdash; wages subject to Social Security payroll taxes declined from 41% of U.S. gross domestic product in 1983 to 34% in 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>41% to 34% of GDP per AARP PPI report, Nov 2026<ul class="claim-sources"><li><a href="https://www.plansponsor.com/?p=204797">PlanSponsor summary of AARP report</a></li><li><a href="https://www.aarp.org/pri/topics/work-finances-retirement/social-security/social-security-trust-fund-shifting-income-patterns/">AARP PPI page</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Matches AARP's published figures as reported by PlanAdviser/PlanSponsor and a web summary (AARP page itself returned 403); one source dates the 41% to 1984.</dd>
+<dt>Warehouse searched for</dt><dd>Social Security payroll taxable wages share of GDP</dd>
+<dt>Web searches run</dt><dd>AARP Public Policy Institute 2026 wages subject to payroll tax 41% of GDP 1983 34% 2025</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#6 &middot; <strong>true</strong> &mdash; maintaining the 1983 share could have generated an additional $10.8 trillion in payroll-tax revenue and interest between 1984 and 2034, potentially extending the combined trust funds' projected life to 2059.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>$10.8T additional revenue 1984-2034; full benefits to 2059 (AARP via secondary coverage)<ul class="claim-sources"><li><a href="https://newsweek.com/social-security-projection-2059-running-out-congress-12706898">Newsweek on AARP 2059 projection</a></li><li><a href="https://www.planadviser.com/?p=124811">PlanAdviser</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>Matches AARP report as summarized by Newsweek and PlanAdviser; the primary release returned 403.</dd>
+<dt>Web searches run</dt><dd>AARP $10.8 trillion 2059 Social Security</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#7 &middot; <strong>mostly true</strong> &mdash; Social Security Trust Fund deficit hit record $221 billion (headline framing: the fund, i.e. Social Security as a whole, is 'deteriorating rapidly').</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>CRFB: combined cash deficit 2026 $270B; OASI depletion 2032 unchanged<ul class="claim-sources"><li><a href="https://www.crfb.org/papers/analysis-2026-social-security-trustees-report">CRFB</a></li></ul></dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Rests on</dt><dd>#1</dd>
+<dt>What that evidence found</dt><dd>The figure describes the OASI fund annual shortfall; the 2026 Trustees report left depletion dates unchanged at 2032 (OASI) and 2034 (OASDI), and reserves are still about $2.2T.</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The headline says the Social Security fund hit a record deficit; the evidence is that the figure is one fund's (OASI) annual shortfall, a drawdown of reserves, while the combined program cash deficit per CRFB is $270B for 2026 and depletion dates are unchanged.</dd>
+<dt>Warehouse searched for</dt><dd>Social Security trust fund OASDI assets income cost</dd>
+<dt>Web searches run</dt><dd>Social Security trust fund 2026 trustees report depletion</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>Data caveat</h2>
+<p>Diagnostics flagged broken_field on max_trust_fund_ratio_pct (e.g. 777) and actuarial_balance_pct_payroll (e.g. -3.82) in econ.social_security_trustees_projections as out of domain. Those columns were not used; only depletion_year (OASI 2032, OASDI 2034) and payable_benefits_pct_at_depletion (78, 83) were.</p>
+</section>
+<section>
+<h2>Not verified</h2>
+<p>The +585% since FY2022, $83B cost rise, $44B income rise and $640B drop from the 2017 peak were not checked against a primary fiscal-year source.</p>
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Verify FY2026 OASI deficit, reserves, income, cost against a primary source</strong>: SSA and Treasury pages returned 403/404. Only CRS calendar-year OASI figures and SSA historical OASI 2007-08 values (via search snippet) were read; FY2026 figures are consistent but not confirmed. Also not checked: the +585% since FY2022 and 2017 peak claims.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 6 rows — 1076 ms</summary><pre><code>SELECT * FROM econ.social_security_trustees_projections WHERE report_year&gt;=2025 ORDER BY report_year, fund</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>

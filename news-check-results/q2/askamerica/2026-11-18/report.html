@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The New American article's claims about Census foreign-born population data, net migration and border crossings are somewhat biased and mostly accurate; 1 claim could not be confirmed.</title>
+<style>
+:root{--ink:#1f2328;--muted:#6b7280;--rule:#e5e7eb;--bg:#fff;--link:#1a3a8a}
+@media(prefers-color-scheme:dark){:root{--ink:#e6e8eb;--muted:#9aa4b2;--rule:#2c3038;--bg:#16181d;--link:#8ab4f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:2.5rem 1.5rem 4rem}
+h1{font-size:1.9rem;line-height:1.25;margin:0 0 .4rem;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:2.2rem 0 .6rem;letter-spacing:-.005em}
+h3{font-size:1rem;margin:1.4rem 0 .4rem}
+.subtitle{color:var(--muted);margin:0 0 1.6rem;font-size:.95rem}
+.under-review{margin:0 0 1.6rem;padding:.7rem 1rem;border:1px solid var(--rule);border-left:4px solid var(--link);border-radius:6px;overflow-wrap:anywhere}
+.under-review span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.under-review a{font-weight:600}
+.board{margin:0 0 2rem;padding:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--bg)}
+.board svg{display:block;width:100%;height:auto}
+p{margin:0 0 .9rem}
+table{border-collapse:collapse;width:100%;margin:.8rem 0 1.2rem;font-size:.92rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.82rem;text-transform:uppercase;letter-spacing:.04em}
+@media screen{
+th{position:sticky;top:0;z-index:1;background:var(--bg);box-shadow:inset 0 -1px 0 var(--rule)}
+tbody tr:hover{background:color-mix(in srgb,var(--rule) 30%,transparent)}
+pre{overflow-x:auto}
+}
+details{border:1px solid var(--rule);border-radius:8px;margin:.9rem 0}
+summary{cursor:pointer;padding:.5rem .7rem;font-size:.82rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+summary:hover{color:var(--link)}
+summary:focus-visible{outline:2px solid var(--link);outline-offset:-2px}
+details[open] summary{border-bottom:1px solid var(--rule)}
+details > *:not(summary){margin:.7rem}
+.claim-detail dl{display:grid;grid-template-columns:11rem 1fr;gap:.45rem 1rem;align-items:baseline}
+.claim-detail dt{color:var(--muted);font-size:.8rem;font-weight:600;letter-spacing:.02em}
+.claim-detail dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.claim-detail dd ul{margin:0;padding-left:1.1rem}
+@media(max-width:600px){.claim-detail dl{grid-template-columns:1fr;gap:.1rem}.claim-detail dd{margin:0 0 .5rem}}
+pre{padding:.7rem;border-radius:6px;font:.82rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 45%,transparent)}
+pre code{background:none;padding:0;font-size:inherit}
+tbody.srt:not(.s0){display:none}
+.srtbox{position:absolute;left:-9999px;width:1px;height:1px}
+th .srth{display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit}
+th .srth:hover{color:var(--link)}
+th .srth:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.srtcue{font-size:.85em;opacity:.28;line-height:1}
+.srtreset{display:none;margin:-.6rem 0 1.2rem;font-size:.75rem;cursor:pointer;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.srtreset:hover{color:var(--link)}
+.fltbox{position:absolute;left:-9999px;width:1px;height:1px}
+.filterbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:0 0 1.4rem;padding:.6rem .75rem;border:1px solid var(--rule);border-radius:8px}
+.fltlead{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:.15rem}
+.fltlabel{display:inline-flex;flex-direction:column;cursor:pointer;font-size:.8rem;line-height:1.3;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--rule) 55%,transparent);color:var(--ink)}
+.fltlabel:hover{color:var(--link)}
+.fltbox:focus-visible + * .fltlabel,.fltlabel:focus-within{outline:2px solid var(--link);outline-offset:2px}
+.fltnote{font-size:.68rem;color:var(--muted)}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:2px;cursor:help}
+.printhint{position:fixed;right:1rem;bottom:1rem;padding:.35rem .6rem;border:1px solid var(--rule);border-radius:999px;background:var(--bg);font-size:.72rem;color:var(--muted);letter-spacing:.03em;opacity:.35;transition:opacity .15s}
+.printhint:hover{opacity:1}
+.printhint kbd{font:inherit;font-weight:600;color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.printhint{transition:none}}
+@media print{
+details{border:0;margin:.6rem 0}
+details > *:not(summary){display:block;margin:.4rem 0}
+details[open] summary{border-bottom:0}
+summary{padding:0;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{overflow:visible;white-space:pre-wrap;word-break:break-word;border:1px solid var(--rule)}
+thead{display:table-header-group}
+tr{break-inside:avoid}
+.printhint{display:none}
+.filterbar{display:none}
+.srtcue{display:none}
+.srtreset{display:none}
+}
+code{font:.88em ui-monospace,SFMono-Regular,Menlo,monospace;background:color-mix(in srgb,var(--rule) 55%,transparent);padding:.1em .35em;border-radius:4px}
+blockquote{margin:1rem 0;padding:.2rem 0 .2rem 1rem;border-left:3px solid var(--rule);color:var(--muted)}
+a{color:var(--link)}
+.sources ol{padding-left:1.2rem;font-size:.92rem}
+.sources li{margin:.3rem 0}
+.note{color:var(--muted)}
+.sqltoggle{display:inline-block;margin-left:.4rem}
+.sqltoggle summary{display:inline;cursor:pointer;font-size:.82rem;color:var(--link)}
+.sqltoggle summary:hover{text-decoration:underline}
+.sqltoggle[open] summary{margin-bottom:.4rem}
+.sqltoggle pre{margin:.3rem 0 0;padding:.6rem .8rem;overflow-x:auto;background:color-mix(in srgb,var(--rule) 40%,transparent);border-radius:6px;font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+.sqltoggle pre code{background:none;padding:0}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+.footnote{font-style:italic}
+.brand{display:flex;align-items:center;gap:.45rem;margin:.8rem 0 0}
+.brand strong{color:var(--ink)}
+.byline{margin-left:auto}
+.mark{flex:none;display:block}
+figcaption{display:flex;justify-content:flex-end;padding:.4rem .6rem;border-top:1px solid var(--rule)}
+.dl{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;text-decoration:none;color:var(--muted);letter-spacing:.03em}
+.dl:hover{color:var(--link)}
+@media screen{
+#s2-t1-s1:checked ~ table tbody.s0{display:none}
+#s2-t1-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"]{color:var(--link)}
+#s2-t1-s1:checked ~ table label[for="s2-t1-s1"] .srtcue{opacity:1}
+#s2-t1-s1:checked ~ .srtreset{display:inline-block}
+#s2-t1-s2:checked ~ table tbody.s0{display:none}
+#s2-t1-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"]{color:var(--link)}
+#s2-t1-s2:checked ~ table label[for="s2-t1-s2"] .srtcue{opacity:1}
+#s2-t1-s2:checked ~ .srtreset{display:inline-block}
+#s2-t1-s3:checked ~ table tbody.s0{display:none}
+#s2-t1-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"]{color:var(--link)}
+#s2-t1-s3:checked ~ table label[for="s2-t1-s3"] .srtcue{opacity:1}
+#s2-t1-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s1:checked ~ table tbody.s0{display:none}
+#s2-t2-s1:checked ~ table tbody.s1{display:table-row-group}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"]{color:var(--link)}
+#s2-t2-s1:checked ~ table label[for="s2-t2-s1"] .srtcue{opacity:1}
+#s2-t2-s1:checked ~ .srtreset{display:inline-block}
+#s2-t2-s2:checked ~ table tbody.s0{display:none}
+#s2-t2-s2:checked ~ table tbody.s2{display:table-row-group}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"]{color:var(--link)}
+#s2-t2-s2:checked ~ table label[for="s2-t2-s2"] .srtcue{opacity:1}
+#s2-t2-s2:checked ~ .srtreset{display:inline-block}
+#s2-t2-s3:checked ~ table tbody.s0{display:none}
+#s2-t2-s3:checked ~ table tbody.s3{display:table-row-group}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"]{color:var(--link)}
+#s2-t2-s3:checked ~ table label[for="s2-t2-s3"] .srtcue{opacity:1}
+#s2-t2-s3:checked ~ .srtreset{display:inline-block}
+#s2-t2-s4:checked ~ table tbody.s0{display:none}
+#s2-t2-s4:checked ~ table tbody.s4{display:table-row-group}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"]{color:var(--link)}
+#s2-t2-s4:checked ~ table label[for="s2-t2-s4"] .srtcue{opacity:1}
+#s2-t2-s4:checked ~ .srtreset{display:inline-block}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>The New American article's claims about Census foreign-born population data, net migration and border crossings are somewhat biased and mostly accurate; 1 claim could not be confirmed.</h1>
+<p class="under-review"><span>Article under review</span><a href="https://thenewamerican.com/us/immigration/census-bureau-u-s-foreign-born-population-stagnated-or-declined-in-2025-26/">https://thenewamerican.com/us/immigration/census-bureau-u-s-foreign-born-population-stagnated-or-declined-in-2025-26/</a></p>
+</header>
+<figure class="board">
+<!--
+  Dashboard from AskAmerica compose_dashboard. Self-contained: no
+  external assets, no scripts. Drop it into an artifact or an HTML
+  page as-is.
+
+  Each panel is a nested <svg> with its own viewBox, so a panel's
+  internal coordinates are exactly what its own data produced. Panel
+  ids are namespaced p1-, p2-, ... so the per-chart editing contract
+  still works: p2-mark-california, p3-series-nominal, and so on.
+
+  Safe to edit: panel captions (<text class="caption">), the
+  dashboard title/subtitle/footnote, any panel's fills, and the
+  per-panel <g id="pN-annotations"> groups, which paint last.
+  Do NOT move a panel's internal geometry, and do NOT change one
+  panel's axis domain: panels sharing a scale_group were given one
+  domain deliberately so they can be compared.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 570" width="880" height="570" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .dash-title { font-size: 20px; font-weight: 650 }
+    .dash-subtitle { font-size: 13px }
+    .caption { font-size: 11px }
+    .footnote { font-size: 11px; font-style: italic }
+    .brand-mark { font-size: 11px; font-weight: 600; letter-spacing: 0.02em }
+    .byline { font-size: 11px }
+    .stat-label { font-size: 12px }
+    .stat-value { font-size: 30px; font-weight: 650 }
+    .stat-delta { font-size: 13px; font-weight: 600 }
+    .title { font-size: 15px; font-weight: 600 }
+    .axis-title { font-size: 12px }
+    .tick { font-size: 11px }
+    .value-label { font-size: 11px; font-weight: 600 }
+    .callout { font-size: 11px; font-style: italic }
+    @media (prefers-color-scheme: dark) {
+      .dash-bg, .chart-bg { fill: #16181d }
+      .panel-edge { stroke: #2c3038 }
+      .dash-title, .dash-subtitle, .caption, .footnote, .stat-label,
+      .stat-value, .title, .axis-title, .tick, .value-label,
+      .callout, .legend-label, .byline { fill: #e6e8eb }
+      .brand-mark { fill: #9aa4b2 }
+      .axis { stroke: #6b7280 }
+      .grid { stroke: #2c3038 }
+    }
+  </style>
+  <rect class="dash-bg" x="0" y="0" width="880" height="570" fill="#ffffff"/>
+  <text class="dash-title" x="20" y="42" fill="#1f2328" style="font-size:20px">Foreign-born population: warehouse ACS 5-year vs article's CIS figures</text>
+  <text class="dash-subtitle" x="20" y="66" fill="#6b7280" style="font-size:13px">census.acs_nativity (ACS 5-year, millions) 2019-2024; 5-year product cannot test 2025-26</text>
+  <rect class="panel-edge" x="20" y="82" width="412" height="436" fill="none" stroke="#e5e7eb" rx="6"/>
+  <svg x="20" y="82" width="412" height="436" viewBox="0 0 412 436" preserveAspectRatio="xMidYMid meet">
+    <rect x="0" y="0" width="412" height="436" class="chart-bg" fill="#ffffff"/>
+    <text id="p1-chart-title" class="title" x="206" y="26" fill="#1f2328" font-size="14" style="font-size:14px" font-weight="600" text-anchor="middle">ACS 5-year foreign-born population (millions)</text>
+    <g id="p1-gridlines">
+      <line class="grid" x1="60" y1="382" x2="390" y2="382" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-0" class="tick" x="52" y="386" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">0</text>
+      <line class="grid" x1="60" y1="316.80" x2="390" y2="316.80" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-1" class="tick" x="52" y="320.80" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">10</text>
+      <line class="grid" x1="60" y1="251.60" x2="390" y2="251.60" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-2" class="tick" x="52" y="255.60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">20</text>
+      <line class="grid" x1="60" y1="186.40" x2="390" y2="186.40" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-3" class="tick" x="52" y="190.40" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">30</text>
+      <line class="grid" x1="60" y1="121.20" x2="390" y2="121.20" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-4" class="tick" x="52" y="125.20" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">40</text>
+      <line class="grid" x1="60" y1="56" x2="390" y2="56" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3 3"/>
+      <text id="p1-ytick-5" class="tick" x="52" y="60" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="end">50</text>
+    </g>
+    <g id="p1-axes">
+      <line class="axis" x1="60" y1="56" x2="60" y2="382" stroke="#9ca3af" stroke-width="1"/>
+      <line class="axis" x1="60" y1="382" x2="390" y2="382" stroke="#9ca3af" stroke-width="1"/>
+    </g>
+    <text id="p1-y-axis-title" class="axis-title" x="14" y="219" fill="#1f2328" font-size="12" style="font-size:12px" text-anchor="middle" transform="rotate(-90 14 219)">Millions</text>
+    <g id="p1-x-axis-labels">
+      <text id="p1-xtick-2019" class="tick" x="87.50" y="400" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2019</text>
+      <text id="p1-xtick-2020" class="tick" x="142.50" y="400" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2020</text>
+      <text id="p1-xtick-2021" class="tick" x="197.50" y="400" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2021</text>
+      <text id="p1-xtick-2022" class="tick" x="252.50" y="400" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2022</text>
+      <text id="p1-xtick-2023" class="tick" x="307.50" y="400" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2023</text>
+      <text id="p1-xtick-2024" class="tick" x="362.50" y="400" fill="#1f2328" font-size="11" style="font-size:11px" text-anchor="middle">2024</text>
+    </g>
+    <g id="p1-series-foreign-born-m" class="series">
+      <g class="hover">
+        <title>2019 — Foreign-born (M): 44.01</title>
+        <rect id="p1-mark-foreign-born-m-2019" class="bar" x="69.90" y="95.05" width="34.20" height="286.95" fill="#2563eb"/>
+        <rect class="hit" x="69.90" y="56" width="34.20" height="326" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-foreign-born-m-2019" class="value-label" x="87" y="91.05" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">44.01</text>
+      <g class="hover">
+        <title>2020 — Foreign-born (M): 44.13</title>
+        <rect id="p1-mark-foreign-born-m-2020" class="bar" x="124.90" y="94.27" width="34.20" height="287.73" fill="#2563eb"/>
+        <rect class="hit" x="124.90" y="56" width="34.20" height="326" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-foreign-born-m-2020" class="value-label" x="142" y="90.27" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">44.13</text>
+      <g class="hover">
+        <title>2021 — Foreign-born (M): 44.84</title>
+        <rect id="p1-mark-foreign-born-m-2021" class="bar" x="179.90" y="89.64" width="34.20" height="292.36" fill="#2563eb"/>
+        <rect class="hit" x="179.90" y="56" width="34.20" height="326" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-foreign-born-m-2021" class="value-label" x="197" y="85.64" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">44.84</text>
+      <g class="hover">
+        <title>2022 — Foreign-born (M): 45.28</title>
+        <rect id="p1-mark-foreign-born-m-2022" class="bar" x="234.90" y="86.77" width="34.20" height="295.23" fill="#2563eb"/>
+        <rect class="hit" x="234.90" y="56" width="34.20" height="326" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-foreign-born-m-2022" class="value-label" x="252" y="82.77" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">45.28</text>
+      <g class="hover">
+        <title>2023 — Foreign-born (M): 46.11</title>
+        <rect id="p1-mark-foreign-born-m-2023" class="bar" x="289.90" y="81.36" width="34.20" height="300.64" fill="#2563eb"/>
+        <rect class="hit" x="289.90" y="56" width="34.20" height="326" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-foreign-born-m-2023" class="value-label" x="307" y="77.36" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">46.11</text>
+      <g class="hover">
+        <title>2024 — Foreign-born (M): 47.35</title>
+        <rect id="p1-mark-foreign-born-m-2024" class="bar" x="344.90" y="73.28" width="34.20" height="308.72" fill="#2563eb"/>
+        <rect class="hit" x="344.90" y="56" width="34.20" height="326" fill="#000" fill-opacity="0"/>
+      </g>
+      <text id="p1-value-foreign-born-m-2024" class="value-label" x="362" y="69.28" fill="#1f2328" font-size="11" style="font-size:11px" font-weight="600" text-anchor="middle">47.35</text>
+    </g>
+    <g id="p1-annotations"><!-- panel annotations --></g>
+  </svg>
+  <g id="p2-stat">
+  <rect class="panel-edge" x="448" y="246" width="412" height="108" fill="none" stroke="#e5e7eb" rx="6"/>
+  <text class="stat-label" x="464" y="282" fill="#6b7280">Article: ACS 1-yr growth mid-24 to mid-25</text>
+  <text class="stat-value" x="464" y="312" fill="#1f2328">+174,000</text>
+  <text class="stat-delta" x="464" y="332" fill="#dc2626">vs +2.4M prior year (CIS, search summary)</text>
+  </g>
+  <g id="brand">
+  <svg x="20" y="529" width="18" height="18" viewBox="0 0 100 100" role="img" aria-label="AskAmerica">
+    <defs><clipPath id="brand-tile"><rect width="100" height="100" rx="22"/></clipPath></defs>
+    <g clip-path="url(#brand-tile)">
+      <polygon fill="#1a3a8a" points="0,0 100,0 0,100"/>
+      <polygon fill="#d5322f" points="100,0 100,100 0,100"/>
+    </g>
+    <path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+    <polygon fill="#ffffff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/>
+  </svg>
+    <text class="brand-mark" x="45" y="544" fill="#374151">AskAmerica · askamerica.ai</text>
+  </g>
+  <g id="annotations"><!-- dashboard-level callouts here --></g>
+</svg><figcaption><a class="dl" href="http://127.0.0.1:61510/a/d2928b0d9e05b419e47477ca24f2237e.svg" download="askamerica-dashboard.svg" title="Download this chart as SVG"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1v8M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5h11V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> SVG</a></figcaption>
+</figure>
+<section>
+<h2>Summary</h2>
+<p>Grade: 1 Pinocchio. Checkable figures match their sources (Census ACS release date, Brookings range, ACS 174,000 growth via search summaries of CIS), but the piece relays one advocacy think tank and omits documented caveats on the CPS declines, and presents a policy cause as settled though the ACS window ends mid-2025. The 790,000 and 590,000 CPS 2026 figures could not be verified (CIS blocked fetches). Warehouse ACS 5-year data (2019-2024) show continued growth to 47.35M and cannot test 2025-26. The 18 other linked pages were opened: most supported only background policy actions; CIS, AP and The Hill pages returned 403.</p>
+</section>
+<section>
+<h2>Claim-by-claim verdicts</h2>
+<input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s0" checked><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s1"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s2"><input type="radio" name="s2-t1" class="srtbox" id="s2-t1-s3"><table class="verdict-key"><thead><tr><th><label class="srth" for="s2-t1-s1">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s2">Means<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t1-s3">Credit<span class="srtcue" aria-hidden="true">↓</span></label></th></tr><tbody class="srt s0"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody><tbody class="srt s1"><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr></tbody><tbody class="srt s2"><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr></tbody><tbody class="srt s3"><tr><td>True</td><td>Matches the evidence</td><td>1</td></tr><tr><td>Mostly true</td><td>Right in substance, loose in detail</td><td>0.75</td></tr><tr><td>Partially false</td><td>Part holds, part does not</td><td>0.5</td></tr><tr><td>Mostly false</td><td>The main point does not hold</td><td>0.25</td></tr><tr><td>False</td><td>Contradicted by the evidence</td><td>0</td></tr><tr><td>Unsupported</td><td>Stated as fact; no evidence offered and none found</td><td>not scored</td></tr><tr><td>Not checkable here</td><td>An opinion or personal attack no evidence can test</td><td>not scored</td></tr><tr><td>Stale vintage</td><td>Cites a release this corpus has not loaded; a freshness gap, not a falsehood</td><td>not scored</td></tr></tbody></table><label class="srtreset" for="s2-t1-s0">reset order</label>
+<h3>Author's Claims — what the author asserts in their own voice</h3>
+<div class="claim-score"><p><strong>Honesty 75/100 — mostly honest (capped by central claim #6; 81 before the cap)</strong> &middot; <strong>Bias +33/100 — somewhat biased</strong></p><p>5 claims graded, 0 not gradable, 3 fell short. In this article only. <strong>Citejacking:</strong> #6 leans on cited evidence that does not carry it.</p></div>
+<p><strong>2</strong> true &middot; <strong>2</strong> mostly true &middot; <strong>1</strong> unsupported &middot; <strong>5</strong> assertions checked</p>
+<input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s0" checked><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s1"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s2"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s3"><input type="radio" name="s2-t2" class="srtbox" id="s2-t2-s4"><table><thead><tr><th><label class="srth" for="s2-t2-s1">#<span class="srtcue" aria-hidden="true">↓</span></label></th><th><label class="srth" for="s2-t2-s2">Assertion (verbatim)<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s3">Verdict<span class="srtcue" aria-hidden="true">↑</span></label></th><th><label class="srth" for="s2-t2-s4">Evidence Cited<span class="srtcue" aria-hidden="true">↑</span></label></th></tr><tbody class="srt s0"><tr class="verdict-mostly-true"><td>6</td><td>Trump's immigration policies appear to be having their intended effect.</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>#2, #3 — overreach<br>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>Data from the 2026 CPS ASEC, which has already been released and reflects the population in March 2026, shows a decline of about 790,000 in the foreign-born population from March 2025 to March 2026. The monthly CPS from the summer shows a decline of about 590,000 in 2026 compared to 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a>; <a href="https://www.census.gov/data/datasets/time-series/demo/cps/cps-asec.html">Census CPS ASEC</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>illegal border crossings have fallen to the lowest level since fiscal 1967, according to U.S. Customs and Border Protection data.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.pewresearch.org/short-reads/2026/02/02/migrant-encounters-at-the-us-mexico-border-are-at-their-lowest-level-in-more-than-50-years/markdown">Pew</a></td></tr><tr class="verdict-true"><td>1</td><td>On October 29, the Census Bureau released its latest data for its American Community Survey (ACS).</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.census.gov/newsroom/press-releases/2026/dates-announced-for-2025-acs-1-year-estimates.html">Census release dates</a>; <a href="https://www.census.gov/programs-surveys/acs.html">Census ACS page</a></td></tr><tr class="verdict-true"><td>4</td><td>the United States experienced negative net migration in 2025 — the first time in more than 50 years — according to a Brookings Institution study.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.brookings.edu/articles/macroeconomic-implications-of-immigration-flows-in-2025-and-2026-january-2026-update/">Brookings</a></td></tr></tbody><tbody class="srt s1"><tr class="verdict-mostly-true"><td>6</td><td>Trump's immigration policies appear to be having their intended effect.</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>#2, #3 — overreach<br>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>illegal border crossings have fallen to the lowest level since fiscal 1967, according to U.S. Customs and Border Protection data.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.pewresearch.org/short-reads/2026/02/02/migrant-encounters-at-the-us-mexico-border-are-at-their-lowest-level-in-more-than-50-years/markdown">Pew</a></td></tr><tr class="verdict-true"><td>4</td><td>the United States experienced negative net migration in 2025 — the first time in more than 50 years — according to a Brookings Institution study.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.brookings.edu/articles/macroeconomic-implications-of-immigration-flows-in-2025-and-2026-january-2026-update/">Brookings</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>Data from the 2026 CPS ASEC, which has already been released and reflects the population in March 2026, shows a decline of about 790,000 in the foreign-born population from March 2025 to March 2026. The monthly CPS from the summer shows a decline of about 590,000 in 2026 compared to 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a>; <a href="https://www.census.gov/data/datasets/time-series/demo/cps/cps-asec.html">Census CPS ASEC</a></td></tr><tr class="verdict-true"><td>1</td><td>On October 29, the Census Bureau released its latest data for its American Community Survey (ACS).</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.census.gov/newsroom/press-releases/2026/dates-announced-for-2025-acs-1-year-estimates.html">Census release dates</a>; <a href="https://www.census.gov/programs-surveys/acs.html">Census ACS page</a></td></tr></tbody><tbody class="srt s2"><tr class="verdict-unsupported"><td>3</td><td>Data from the 2026 CPS ASEC, which has already been released and reflects the population in March 2026, shows a decline of about 790,000 in the foreign-born population from March 2025 to March 2026. The monthly CPS from the summer shows a decline of about 590,000 in 2026 compared to 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a>; <a href="https://www.census.gov/data/datasets/time-series/demo/cps/cps-asec.html">Census CPS ASEC</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>illegal border crossings have fallen to the lowest level since fiscal 1967, according to U.S. Customs and Border Protection data.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.pewresearch.org/short-reads/2026/02/02/migrant-encounters-at-the-us-mexico-border-are-at-their-lowest-level-in-more-than-50-years/markdown">Pew</a></td></tr><tr class="verdict-true"><td>1</td><td>On October 29, the Census Bureau released its latest data for its American Community Survey (ACS).</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.census.gov/newsroom/press-releases/2026/dates-announced-for-2025-acs-1-year-estimates.html">Census release dates</a>; <a href="https://www.census.gov/programs-surveys/acs.html">Census ACS page</a></td></tr><tr class="verdict-true"><td>4</td><td>the United States experienced negative net migration in 2025 — the first time in more than 50 years — according to a Brookings Institution study.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.brookings.edu/articles/macroeconomic-implications-of-immigration-flows-in-2025-and-2026-january-2026-update/">Brookings</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Trump's immigration policies appear to be having their intended effect.</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>#2, #3 — overreach<br>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></td></tr></tbody><tbody class="srt s3"><tr class="verdict-mostly-true"><td>5</td><td>illegal border crossings have fallen to the lowest level since fiscal 1967, according to U.S. Customs and Border Protection data.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.pewresearch.org/short-reads/2026/02/02/migrant-encounters-at-the-us-mexico-border-are-at-their-lowest-level-in-more-than-50-years/markdown">Pew</a></td></tr><tr class="verdict-mostly-true"><td>6</td><td>Trump's immigration policies appear to be having their intended effect.</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>#2, #3 — overreach<br>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></td></tr><tr class="verdict-true"><td>1</td><td>On October 29, the Census Bureau released its latest data for its American Community Survey (ACS).</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.census.gov/newsroom/press-releases/2026/dates-announced-for-2025-acs-1-year-estimates.html">Census release dates</a>; <a href="https://www.census.gov/programs-surveys/acs.html">Census ACS page</a></td></tr><tr class="verdict-true"><td>4</td><td>the United States experienced negative net migration in 2025 — the first time in more than 50 years — according to a Brookings Institution study.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.brookings.edu/articles/macroeconomic-implications-of-immigration-flows-in-2025-and-2026-january-2026-update/">Brookings</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>Data from the 2026 CPS ASEC, which has already been released and reflects the population in March 2026, shows a decline of about 790,000 in the foreign-born population from March 2025 to March 2026. The monthly CPS from the summer shows a decline of about 590,000 in 2026 compared to 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a>; <a href="https://www.census.gov/data/datasets/time-series/demo/cps/cps-asec.html">Census CPS ASEC</a></td></tr></tbody><tbody class="srt s4"><tr class="verdict-mostly-true"><td>6</td><td>Trump's immigration policies appear to be having their intended effect.</td><td><strong>mostly true</strong> &middot; causal claim &middot; central claim</td><td>#2, #3 — overreach<br>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></td></tr><tr class="verdict-true"><td>4</td><td>the United States experienced negative net migration in 2025 — the first time in more than 50 years — according to a Brookings Institution study.</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.brookings.edu/articles/macroeconomic-implications-of-immigration-flows-in-2025-and-2026-january-2026-update/">Brookings</a></td></tr><tr class="verdict-true"><td>1</td><td>On October 29, the Census Bureau released its latest data for its American Community Survey (ACS).</td><td><strong>true</strong></td><td>Checked against: <a href="https://www.census.gov/newsroom/press-releases/2026/dates-announced-for-2025-acs-1-year-estimates.html">Census release dates</a>; <a href="https://www.census.gov/programs-surveys/acs.html">Census ACS page</a></td></tr><tr class="verdict-mostly-true"><td>5</td><td>illegal border crossings have fallen to the lowest level since fiscal 1967, according to U.S. Customs and Border Protection data.</td><td><strong>mostly true</strong></td><td>Checked against: <a href="https://www.pewresearch.org/short-reads/2026/02/02/migrant-encounters-at-the-us-mexico-border-are-at-their-lowest-level-in-more-than-50-years/markdown">Pew</a></td></tr><tr class="verdict-unsupported"><td>3</td><td>Data from the 2026 CPS ASEC, which has already been released and reflects the population in March 2026, shows a decline of about 790,000 in the foreign-born population from March 2025 to March 2026. The monthly CPS from the summer shows a decline of about 590,000 in 2026 compared to 2025.</td><td><strong>unsupported</strong></td><td>Checked against: <a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a>; <a href="https://www.census.gov/data/datasets/time-series/demo/cps/cps-asec.html">Census CPS ASEC</a></td></tr></tbody></table><label class="srtreset" for="s2-t2-s0">reset order</label>
+<h3>Source Audit — did the piece represent the sources it cites accurately (not scored)</h3>
+<p class="note">Not scored. Relaying a source accurately earns no credit; these rows only show whether the piece's citations say what the piece says they do.</p>
+<p><strong>1</strong> true &middot; <strong>1</strong> assertions checked</p>
+<table><thead><tr><th>#</th><th>Assertion (verbatim)</th><th>Verdict</th></tr></thead><tbody>
+<tr class="verdict-true"><td>2</td><td>the ACS data show 'a big slowdown in growth of the foreign-born population through mid-2025, with an increase of just 174,000 from mid-2024 to mid-2025, compared to growth of 2.4 million from 2023 to 2024.'</td><td><strong>true</strong></td></tr>
+</tbody></table>
+<p class="note">Honesty is the share of a party's checkable claims that held up, each counted at the credit shown in the verdict key above; a claim resting on cited evidence narrower than the claim counts for at most half, and one resting on evidence that contradicts it counts for nothing. Honesty cannot exceed the credit of the party's central claim by more than 25 points. Bias is the net share of a party's error that favours their own case (+100 every error helps it, 0 no lean, negative errors cut against it). Both describe this article only, are not characterized below 3 claims or errors, and do not measure what the piece left out.</p>
+<h3>Claim detail</h3>
+<details class="claim-detail verdict-true"><summary>#1 &middot; <strong>true</strong> &mdash; On October 29, the Census Bureau released its latest data for its American Community Survey (ACS).</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Census announced the 2025 ACS 1-year release for Oct 29, 2026; census.gov ACS page says it is now available<ul class="claim-sources"><li><a href="https://www.census.gov/newsroom/press-releases/2026/dates-announced-for-2025-acs-1-year-estimates.html">Census release dates</a></li><li><a href="https://www.census.gov/programs-surveys/acs.html">Census ACS page</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>foreign-born population ACS</dd>
+<dt>Web searches run</dt><dd>Census Bureau 2025 American Community Survey 1-year release date October 2026</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#2 &middot; <strong>true</strong> &mdash; the ACS data show 'a big slowdown in growth of the foreign-born population through mid-2025, with an increase of just 174,000 from mid-2024 to mid-2025, compared to growth of 2.4 million from 2023 to 2024.'</summary>
+<dl>
+<dt>Graded for</dt><dd>Source Audit — did the piece represent the sources it cites accurately (not scored)</dd>
+<dt>Warehouse says</dt><dd>ACS 5-yr foreign-born 2023 46.11M, 2024 47.35M (+1.24M; different product, not comparable) <code>census.acs_nativity</code></dd>
+<dt>Independent evidence</dt><dd>CIS via search: 174,000 growth mid-2024 to mid-2025 vs 2.4M prior (50.4M vs 50.2M)<ul class="claim-sources"><li><a href="https://cis.org/Camarota/New-American-Community-Survey-Shows-Slowdown-ForeignBorn-Growth-through-Mid2025">CIS Camarota (403 on fetch)</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>foreign-born population ACS</dd>
+</dl>
+<details class="sqltoggle"><summary>Show SQL</summary><pre><code>SELECT year, SUM(foreign_born) FROM census.acs_nativity WHERE year&gt;=2019 AND county IS NULL OR county='' GROUP BY year</code></pre></details>
+</details>
+<details class="claim-detail verdict-unsupported"><summary>#3 &middot; <strong>unsupported</strong> &mdash; Data from the 2026 CPS ASEC, which has already been released and reflects the population in March 2026, shows a decline of about 790,000 in the foreign-born population from March 2025 to March 2026. The monthly CPS from the summer shows a decline of about 590,000 in 2026 compared to 2025.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd><ul class="claim-sources"><li><a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></li><li><a href="https://www.census.gov/data/datasets/time-series/demo/cps/cps-asec.html">Census CPS ASEC</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Why</dt><dd>CIS page blocked (403); Census CPS pages confirm the 2026 ASEC exists but carry no nativity figures; no outside source for the 790,000 or 590,000 numbers was found. Only the 2025 CPS decline (2.2M Jan-Jul 2025) was verified.</dd>
+<dt>Warehouse searched for</dt><dd>foreign-born population CPS</dd>
+<dt>Web searches run</dt><dd>Camarota American Community Survey slowdown foreign-born growth mid-2025 174,000</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-true"><summary>#4 &middot; <strong>true</strong> &mdash; the United States experienced negative net migration in 2025 — the first time in more than 50 years — according to a Brookings Institution study.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>Brookings: net migration between -295,000 and -10,000 in 2025, first negative in at least half a century (read directly)<ul class="claim-sources"><li><a href="https://www.brookings.edu/articles/macroeconomic-implications-of-immigration-flows-in-2025-and-2026-january-2026-update/">Brookings</a></li></ul></dd>
+<dt>Warehouse searched for</dt><dd>net migration</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#5 &middot; <strong>mostly true</strong> &mdash; illegal border crossings have fallen to the lowest level since fiscal 1967, according to U.S. Customs and Border Protection data.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>FY2026 southern border arrests ~98,701 per Washington Examiner citing internal CBP data<ul class="claim-sources"><li><a href="https://www.pewresearch.org/short-reads/2026/02/02/migrant-encounters-at-the-us-mexico-border-are-at-their-lowest-level-in-more-than-50-years/markdown">Pew</a></li></ul></dd>
+<dt>Errs</dt><dd>neutral</dd>
+<dt>Inaccuracy</dt><dd>The claim says lowest since fiscal 1967; sources differ on the benchmark (nationwide 94,778 vs southwest ~74,000) and Pew's published record said FY2025 was lowest since 1970; the FY2026 total rests on leaked internal figures, not a CBP release.</dd>
+<dt>Web searches run</dt><dd>border crossings fiscal 2026 lowest since 1967 CBP</dd>
+</dl>
+</details>
+<details class="claim-detail verdict-mostly-true"><summary>#6 &middot; <strong>mostly true</strong> &mdash; Trump's immigration policies appear to be having their intended effect.</summary>
+<dl>
+<dt>Graded for</dt><dd>Author's Claims — what the author asserts in their own voice</dd>
+<dt>Independent evidence</dt><dd>USA Today: Kolko and Gelatt caveats on CPS<ul class="claim-sources"><li><a href="https://www.yahoo.com/news/articles/data-show-uss-immigrant-population-100427120.html">USA Today via Yahoo</a></li></ul></dd>
+<dt>Asserts</dt><dd>a cause — graded on the evidence for the cause alone</dd>
+<dt>Central claim</dt><dd>the assertion this party's case depends on; it caps their honesty score</dd>
+<dt>Rests on</dt><dd>#2, #3</dd>
+<dt>What that evidence found</dt><dd>ACS 1-year growth slowed to 174,000 through mid-2025; CPS shows larger declines but Kolko and Gelatt flag small sample, volatility and possible nonresponse; Camarota says the ACS window may say little about Trump policies.</dd>
+<dt>Evidence support</dt><dd>overreach — the evidence is narrower than the claim</dd>
+<dt>Errs</dt><dd>toward their own case</dd>
+<dt>Inaccuracy</dt><dd>The claim treats the foreign-born stagnation or decline in 2025-26 as evidence of policy effect; the ACS covers only to mid-2025, the 2026 CPS figures could not be verified, and CPS reliability caveats are omitted.</dd>
+<dt>Warehouse searched for</dt><dd>foreign-born population ACS</dd>
+</dl>
+</details>
+
+</section>
+<section>
+<h2>What This Report Does Not Answer</h2>
+<ul><li><strong>Primary-source verification of CIS-quoted figures</strong>: cis.org returned HTTP 403 on both fetch tools; 174,000 and 2.4M confirmed only via search-result summary; 790,000 and 590,000 not verified anywhere.</li></ul>
+</section>
+<section>
+<h2>Every query behind this report</h2>
+<p>1 warehouse call ran in this session, in order. Each is reproducible against the same snapshot.</p>
+<details class="sqltoggle"><summary>query — 6 rows — 708 ms</summary><pre><code>SELECT &quot;year&quot;, SUM(foreign_born) AS fb FROM census.acs_nativity WHERE &quot;year&quot; &gt;= 2019 AND county IS NULL OR county='' GROUP BY &quot;year&quot; ORDER BY &quot;year&quot;</code></pre></details>
+
+</section>
+<footer>
+<p class="brand"><svg class="mark" width="20" height="20" viewBox="0 0 100 100" role="img" aria-label="AskAmerica"><defs><clipPath id="rp-tile"><rect width="100" height="100" rx="22"/></clipPath></defs><g clip-path="url(#rp-tile)"><polygon fill="#1a3a8a" points="0,0 100,0 0,100"/><polygon fill="#d5322f" points="100,0 100,100 0,100"/></g><path d="M33 34 A17 17 0 1 1 61 46 C55 52 50 55 50 63" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round"/><polygon fill="#fff" points="50,68 52.82,76.12 61.4,76.29 54.57,81.48 57.05,89.71 50,84.8 42.95,89.71 45.43,81.48 38.6,76.29 47.18,76.12"/></svg><strong>AskAmerica</strong> · <a href="https://askamerica.ai">askamerica.ai</a></p>
+</footer>
+</main>
+<aside class="printhint" aria-hidden="true">Print · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd></aside>
+</body>
+</html>
