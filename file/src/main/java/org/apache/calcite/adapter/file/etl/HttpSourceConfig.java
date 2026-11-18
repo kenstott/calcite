@@ -1496,18 +1496,24 @@ public class HttpSourceConfig {
     private final int[] skipOn;
     private final int maxRetries;
     private final long retryBackoffMs;
+    private final long readTimeoutMs;
 
     private RateLimitConfig(int requestsPerSecond, int[] retryOn, int[] skipOn, int maxRetries,
-        long retryBackoffMs) {
+        long retryBackoffMs, long readTimeoutMs) {
       this.requestsPerSecond = requestsPerSecond;
       this.retryOn = retryOn;
       this.skipOn = skipOn;
       this.maxRetries = maxRetries;
       this.retryBackoffMs = retryBackoffMs;
+      this.readTimeoutMs = readTimeoutMs;
     }
 
+    /** Default wait for response headers, milliseconds. */
+    public static final long DEFAULT_READ_TIMEOUT_MS = 120000;
+
     public static RateLimitConfig defaults() {
-      return new RateLimitConfig(10, new int[]{429, 503}, new int[0], 3, 1000);
+      return new RateLimitConfig(10, new int[]{429, 503}, new int[0], 3, 1000,
+          DEFAULT_READ_TIMEOUT_MS);
     }
 
     public int getRequestsPerSecond() {
@@ -1529,6 +1535,11 @@ public class HttpSourceConfig {
 
     public long getRetryBackoffMs() {
       return retryBackoffMs;
+    }
+
+    /** Milliseconds to wait for response headers on a data request (default 120000). */
+    public long getReadTimeoutMs() {
+      return readTimeoutMs;
     }
 
     @SuppressWarnings("unchecked")
@@ -1575,7 +1586,13 @@ public class HttpSourceConfig {
         backoff = ((Number) backoffObj).longValue();
       }
 
-      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff);
+      long readTimeout = DEFAULT_READ_TIMEOUT_MS;
+      Object readTimeoutObj = map.get("readTimeoutMs");
+      if (readTimeoutObj instanceof Number) {
+        readTimeout = ((Number) readTimeoutObj).longValue();
+      }
+
+      return new RateLimitConfig(rps, retryOn, skipOn, maxRetries, backoff, readTimeout);
     }
   }
 
