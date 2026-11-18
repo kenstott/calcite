@@ -6318,6 +6318,106 @@ partitionedTables:
         compactionMinFiles: 3
         overwritePartitions: true
 
+  # --- FEDERAL OUTLAYS BY AGENCY ---
+  - name: federal_outlays_by_agency
+    pattern: "type=federal_outlays_by_agency/*.parquet"
+    partitions:
+      style: hive
+      columnDefinitions:
+        - *partition_type
+    freshness:
+      type: last_modified
+    comment: >
+      OMB Historical Table 4.1 ("Outlays by Agency") — federal outlays by department or other
+      unit (including Department of Education, Department of Defense--Military
+      Programs, Health and Human Services, Veterans Affairs, Treasury, Social Security
+      Administration on- and off-budget, NASA, EPA and the rest), FY1962-2031 (recent years are
+      OMB's own actuals; later years are the President's Budget estimates, see is_estimate).
+      Use this to total what one agency has spent over a span of years (sum outlays_millions
+      for agency = 'Department of Education' over years 1980-2025) — the by-function sibling
+      federal_outlays_by_function groups by purpose (education, defense, Medicare) and mixes
+      agencies, and fiscal.usaspending_* starts in 2007. One row per (year, agency).
+      line_type separates 'agency' rows from the 'total' row ("Total outlays") and from the two
+      'component' rows (Undistributed Offsetting Receipts split into on- and off-budget, already
+      included in the agency row above them): sum line_type = 'agency' to reconcile to 'total'.
+      OMB restates Department of Education back to FY1962 on a successor-agency basis (the
+      department itself was created in 1979-80), so pre-1980 figures are the programs it later
+      absorbed. A null outlays_millions is OMB's own "..........", not zero. The 1976 transition quarter ("TQ") column
+      is not a fiscal year and is not ingested. Values are current-dollar millions, not
+      inflation-adjusted. Source: OMB Historical Tables page (whitehouse.gov/omb/historical-tables/);
+      the download URL embeds the current budget cycle and changes annually — re-derive it from
+      that landing page's own hist04z1 link if this URL ever 404s, same caveat as
+      federal_outlays_by_function.
+
+    dimensions:
+      type:
+        - federal_outlays_by_agency
+
+    columns:
+      - name: year
+        type: integer
+        nullable: false
+        comment: Federal fiscal year
+      - name: is_estimate
+        type: boolean
+        nullable: false
+        comment: >
+          True for years beyond the budget cycle's own actuals (OMB's "estimate" columns — the
+          President's Budget projection, not a measured outlay)
+      - name: agency
+        type: string
+        nullable: false
+        comment: >
+          OMB's own department or other unit label (e.g. "Department of Education",
+          "Department of Defense--Military Programs", "Social Security Administration
+          (Off-Budget)"), or "Total outlays"
+      - name: line_type
+        type: string
+        nullable: false
+        comment: >
+          'agency' (a department or unit), 'component' (on-/off-budget part of Undistributed
+          Offsetting Receipts — do not add to agency rows) or 'total' (OMB's Total outlays)
+      - name: outlays_millions
+        type: double
+        nullable: true
+        comment: >
+          Outlays in current-dollar millions; null where OMB's own cell is a placeholder
+          ("..........", e.g. an agency that did not yet exist), not coerced to zero
+
+    source:
+      type: http
+      url: "https://www.whitehouse.gov/wp-content/uploads/2026/04/hist04z1_fy2027.xlsx"
+      method: GET
+      headers:
+        User-Agent: "calcite-govdata (+mailto:kennethstott@gmail.com)"
+      response:
+        format: TEXT   # FederalOutlaysByAgencyTransformer re-downloads the XLSX and emits JSON rows
+      rateLimit:
+        requestsPerSecond: 1.0
+        maxRetries: 3
+      rawCache:
+        enabled: true
+
+    hooks:
+      responseTransformer: "org.apache.calcite.adapter.govdata.econ.FederalOutlaysByAgencyTransformer"
+
+    materialize:
+      format: iceberg
+      output:
+        pattern: "type=federal_outlays_by_agency/"
+      partition:
+        columns: [type]
+      iceberg:
+        warehousePath: "${GOVDATA_PARQUET_DIR}/econ"
+        tableName: federal_outlays_by_agency
+        runMaintenance: true
+        snapshotRetentionDays: 7
+        catalogType: hadoop
+        runCompaction: true
+        compactionTargetFileSizeBytes: 67108864
+        compactionMinFiles: 3
+        overwritePartitions: true
+
   # --- CES REVISION VINTAGES (BLS CES vintage-data product, new 6 Sep 2026) ---
   - name: ces_revision_vintages
     timeColumn: reference_year  # observation time; this table has no column named 'year'
@@ -11856,6 +11956,11 @@ constraints:
     primaryKey:
       - year
       - function_code
+
+  federal_outlays_by_agency:
+    primaryKey:
+      - year
+      - agency
 
   world_indicators:
     primaryKey:

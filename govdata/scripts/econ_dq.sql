@@ -2184,6 +2184,74 @@ FROM (SELECT COUNT(*) AS n FROM (
   WHERE y >= 2009 AND y < (SELECT MAX(substr(time_period, 1, 4)::INT) FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true))
     AND c < 0.7 * (SELECT MEDIAN(c2) FROM (SELECT COUNT(*) AS c2 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/fdi_activities', allow_moved_paths := true) GROUP BY substr(time_period, 1, 4))));
 
+-- ============================================================================
+-- federal_outlays_by_agency (OMB Historical Table 4.1)
+-- ============================================================================
+
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'existence',
+  CASE WHEN n > 0 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '1',
+  CASE WHEN n > 0 THEN 'table is readable' ELSE 'table returned 0 rows — may not yet be ingested' END
+FROM (SELECT COUNT(*) AS n FROM (SELECT 1 FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true) LIMIT 1));
+
+-- 36 lines (33 agency + 2 component + 1 total) x FY1962-2031 (70 years, TQ excluded) = 2520
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'row_count',
+  CASE WHEN n >= 2400 THEN 'pass' ELSE 'fail' END,
+  CAST(n AS VARCHAR), '2400',
+  CASE WHEN n >= 2400 THEN 'row count meets minimum' ELSE 'row count below minimum — ingestion may be incomplete or failed' END
+FROM (SELECT COUNT(*) AS n FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true));
+
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'all_null_cols', 'fail',
+  column_name, '< 100% null', 'column is entirely NULL — likely a schema or ingestion bug'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true))
+WHERE null_percentage = 100.0
+  AND column_name NOT IN ('type');
+
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'all_same_value', 'warn',
+  column_name, '> 1 distinct value', 'column has only 1 distinct value across all rows — may be a constant or ingestion issue'
+FROM (SUMMARIZE SELECT * FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true))
+WHERE approx_unique <= 1 AND null_percentage < 100.0
+  AND column_name NOT IN ('type');
+
+-- PK (year, agency) must be unique
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'pk_duplication',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'duplicate (year, agency) keys'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT year, agency FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true)
+  GROUP BY year, agency HAVING COUNT(*) > 1));
+
+-- Department of Education: OMB restates it back to FY1962 (successor-agency basis), and the
+-- FY1979-2025 sum exceeds $3 trillion (the checked claim: "over $3 trillion since 1979")
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'expected_values',
+  CASE WHEN first_year = 1962 AND total_m > 3000000 THEN 'pass' ELSE 'fail' END,
+  CAST(first_year AS VARCHAR) || ' / ' || CAST(total_m AS VARCHAR), 'first year 1962, sum 1979-2025 > 3,000,000',
+  'Department of Education first non-null year and cumulative outlays (millions)'
+FROM (SELECT MIN(CASE WHEN outlays_millions IS NOT NULL THEN year END) AS first_year,
+             SUM(CASE WHEN year BETWEEN 1979 AND 2025 THEN outlays_millions END) AS total_m
+      FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true)
+      WHERE agency = 'Department of Education' AND NOT is_estimate);
+
+-- agency rows must reconcile to Total outlays within rounding for each actual year
+INSERT INTO dq_results
+SELECT 'econ', 'federal_outlays_by_agency', 'total_reconciles',
+  CASE WHEN bad = 0 THEN 'pass' ELSE 'fail' END,
+  CAST(bad AS VARCHAR), '0',
+  'years where sum of agency rows differs from Total outlays by more than 50 (millions)'
+FROM (SELECT COUNT(*) AS bad FROM (
+  SELECT year,
+         SUM(CASE WHEN line_type = 'agency' THEN outlays_millions END) AS s,
+         MAX(CASE WHEN line_type = 'total' THEN outlays_millions END) AS t
+  FROM iceberg_scan('s3://${GOVDATA_DQ_BUCKET}/econ/federal_outlays_by_agency', allow_moved_paths := true)
+  GROUP BY year) WHERE ABS(s - t) > 50);
+
 SELECT * FROM dq_results ORDER BY tbl, test;
 
 -- Per-table summary
