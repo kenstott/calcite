@@ -309,10 +309,69 @@ public class IcebergMaterializationWriterTest {
     assertEquals(100.0, (Double) byId.get(2).get("amount"), 0.0001);
   }
 
-  @Test public void testMissingExpectedColumnStillTriggersDropAndRecreate() throws Exception {
-    // Preserves the original, legitimate drift case this mechanism exists for: a declared
-    // column the current config expects is genuinely absent from the table (e.g. the first run
-    // after a real column was added). This must still purge and rebuild.
+  @Test public void testPureColumnAdditionEvolvesInPlaceAndKeepsRows() throws Exception {
+    // A declared column the table lacks, with every existing column unchanged, is a pure
+    // addition: the table is evolved in place and the rows already in it are kept
+    // (kenstott/govdata-ops#1322 — a purge here erased a table's history to add a column).
+    File warehouseDir = new File(tempDir, "warehouse_pure_addition");
+    warehouseDir.mkdirs();
+
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
+    MaterializeConfig configV1 =
+        buildIcebergConfig(warehouseDir, "pure_addition_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("year", "INTEGER"),
+            createColumnConfig("name", "VARCHAR")),
+        Collections.singletonList("year"));
+    writer.initialize(configV1);
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("id", 1);
+    row.put("year", 2024);
+    row.put("name", "first");
+    writer.writeBatch(Collections.singletonList(row).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+    writer.close();
+
+    // Second writer's config expects a column ("extra") the existing table does not have.
+    writer = new IcebergMaterializationWriter(storageProvider, warehouseDir.getAbsolutePath(), null, tempDir);
+    MaterializeConfig configV2 =
+        buildIcebergConfig(warehouseDir, "pure_addition_table", Arrays.asList(
+            createColumnConfig("id", "INTEGER"),
+            createColumnConfig("year", "INTEGER"),
+            createColumnConfig("name", "VARCHAR"),
+            createColumnConfig("extra", "VARCHAR")),
+        Collections.singletonList("year"));
+    writer.initialize(configV2);
+    Map<String, Object> row2 = new HashMap<String, Object>();
+    row2.put("id", 2);
+    row2.put("year", 2025);
+    row2.put("name", "second");
+    row2.put("extra", "x");
+    writer.writeBatch(Collections.singletonList(row2).iterator(), Collections.<String, String>emptyMap());
+    writer.commit();
+
+    org.apache.iceberg.Table reloaded =
+        new org.apache.iceberg.hadoop.HadoopTables(new org.apache.hadoop.conf.Configuration())
+            .load(writer.getTableLocation());
+    Set<String> columnNames = new HashSet<String>();
+    for (org.apache.iceberg.types.Types.NestedField f : reloaded.schema().columns()) {
+      columnNames.add(f.name());
+    }
+    assertEquals(4, columnNames.size(), "table evolved with the newly-expected column");
+    assertTrue(columnNames.contains("extra"), "missing expected column must be added");
+    int rowCount = 0;
+    try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
+             org.apache.iceberg.data.IcebergGenerics.read(reloaded).build()) {
+      for (org.apache.iceberg.data.Record ignored : records) {
+        rowCount++;
+      }
+    }
+    assertEquals(2, rowCount, "a pure column addition must keep the rows already committed");
+  }
+
+  @Test public void testNonAdditiveSchemaChangeStillTriggersDropAndRecreate() throws Exception {
+    // A change that is not a pure addition (here "name" is replaced by "extra") cannot be told
+    // from data loss by the schema alone, so it keeps the drop-and-recreate behaviour.
     File warehouseDir = new File(tempDir, "warehouse_drift_missing");
     warehouseDir.mkdirs();
 
@@ -335,13 +394,11 @@ public class IcebergMaterializationWriterTest {
     MaterializeConfig configV2 =
         buildIcebergConfig(warehouseDir, "drift_missing_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
-            createColumnConfig("name", "VARCHAR"),
             createColumnConfig("extra", "VARCHAR")),
         Collections.<String>emptyList());
     writer.initialize(configV2);
     Map<String, Object> row2 = new HashMap<String, Object>();
     row2.put("id", 2);
-    row2.put("name", "second");
     row2.put("extra", "x");
     writer.writeBatch(Collections.singletonList(row2).iterator(), Collections.<String, String>emptyMap());
     writer.commit();
@@ -353,7 +410,7 @@ public class IcebergMaterializationWriterTest {
     for (org.apache.iceberg.types.Types.NestedField f : reloaded.schema().columns()) {
       columnNames.add(f.name());
     }
-    assertEquals(3, columnNames.size(), "table rebuilt with the newly-expected column");
+    assertEquals(2, columnNames.size(), "table rebuilt with the newly-expected columns");
     assertTrue(columnNames.contains("extra"), "missing expected column must trigger a rebuild");
     int rowCount = 0;
     try (org.apache.iceberg.io.CloseableIterable<org.apache.iceberg.data.Record> records =
@@ -368,8 +425,9 @@ public class IcebergMaterializationWriterTest {
   }
 
   @Test public void testDriftWithNoBatchLeavesExistingTableUntouched() throws Exception {
-    // A run whose every batch fails never reaches a flush. The drift drop-and-recreate purges
-    // physically, so it must not happen until a batch has rows to commit.
+    // A run whose every batch fails never reaches a flush. A non-additive drift (name replaced
+    // by extra) drops and recreates the table with a physical purge, so it must not happen until
+    // a batch has rows to commit.
     File warehouseDir = new File(tempDir, "warehouse_drift_deferred");
     warehouseDir.mkdirs();
 
@@ -391,7 +449,6 @@ public class IcebergMaterializationWriterTest {
     MaterializeConfig configV2 =
         buildIcebergConfig(warehouseDir, "drift_deferred_table", Arrays.asList(
             createColumnConfig("id", "INTEGER"),
-            createColumnConfig("name", "VARCHAR"),
             createColumnConfig("extra", "VARCHAR")),
         Collections.<String>emptyList());
     writer.initialize(configV2);
