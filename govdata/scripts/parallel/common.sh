@@ -134,7 +134,7 @@ export PATH
 # tmpfs that scratch is RAM: it competes with -Xmx for the pool budget and, once
 # full, surfaces as "No space left on device" mid-write. Point it at ext4 instead.
 # TMPDIR covers native/child processes, -Djava.io.tmpdir the JVM itself.
-GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
+export GOVDATA_TMPDIR="${GOVDATA_TMPDIR:-/var/tmp/govdata}"
 mkdir -p "$GOVDATA_TMPDIR"
 export TMPDIR="$GOVDATA_TMPDIR" TMP="$GOVDATA_TMPDIR" TEMP="$GOVDATA_TMPDIR"
 GOVDATA_JAVA_OPTS="$GOVDATA_JAVA_OPTS -Djava.io.tmpdir=$GOVDATA_TMPDIR"

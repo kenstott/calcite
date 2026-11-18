@@ -208,6 +208,10 @@ export ETL_HEAP_MAX="${HEAP_GB}g"
 # it was built, and its misses are final (SEC_BULK_SUBMISSIONS_AUTHORITATIVE). A failed refresh
 # stops the run.
 SUBMISSIONS_BULK_DIR="${SEC_SUBMISSIONS_BULK_DIR:-/var/tmp/govdata/bulk-submissions}"
+# fetch-submissions-bulk.sh resolves the SEC User-Agent through the jar and needs GOVDATA_JAR in its
+# environment (GOVDATA_TMPDIR is exported by common.sh); resolve it here exactly as the workers do.
+GOVDATA_JAR="$(resolve_classpath)" || exit 1
+export GOVDATA_JAR
 "$SCRIPT_DIR/../fetch-submissions-bulk.sh" "$SUBMISSIONS_BULK_DIR" \
   || { echo "fix-sec: submissions.zip in $SUBMISSIONS_BULK_DIR could not be refreshed; refusing to run against a possibly stale copy or fall back to per-CIK requests" >&2; exit 1; }
 export SEC_BULK_SUBMISSIONS_ZIP="$SUBMISSIONS_BULK_DIR/submissions.zip"
