@@ -3964,10 +3964,21 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The introduced text of H.R. 9785 (July 20, 2026) has three feasibility studies, each with an explicit $10,000,000 authorization of appropriations (secs. 103(d), 203(d) and 303(c)), $30 million in all; AskAmerica's bill data list that version and its text link. The amended version on the floor replaced those authorizations with a $10 million federal-share cap per study.",
+   "evidence": [
+    {
+     "label": "law.bill_text_versions (H.R. 9785 text versions, 119th Congress)",
+     "url": "https://askamerica.ai/catalog/schemas/law/#bill_text_versions-table",
+     "askamerica": true,
+     "sql": "SELECT version_type, version_date, format_type, url FROM law.bill_text_versions WHERE congress=119 AND bill_type='hr' AND bill_number=9785"
+    },
+    {
+     "label": "H.R. 9785, introduced text",
+     "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr9785ih/xml/BILLS-119hr9785ih.xml"
+    }
+   ],
+   "check_run": "q231/askamerica/2026-11-18"
   },
   {
    "id": 100,
@@ -4067,10 +4078,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "Pre-trip reports from AFP and from ANI (citing the White House) said Trump was due in Manila on the evening of Nov. 17, 'near the summit's conclusion', with a Nov. 18 Marcos visit and then Shenzhen, so the departure for China matches. No report found gives his actual landing time or when the summit closed, so '30 minutes' was neither confirmed nor ruled out.",
+   "evidence": [
+    {
+     "label": "AFP via The Star, Nov. 15, 2026",
+     "url": "https://www.thestar.com.my/aseanplus/aseanplus-news/2026/11/15/039trump-coming039-trade-war-in-focus-at-asean-summit-ahead-of-the-highly-anticipated-us-president039s-arrival"
+    },
+    {
+     "label": "ANI via Times of Oman, Nov. 16, 2026",
+     "url": "https://timesofoman.com/article/179213-balancing-allies-adversaries-inside-trumps-back-to-back-summits-with-quad-xi-and-putin"
+    }
+   ],
+   "check_run": "q232/askamerica/2026-11-18"
   },
   {
    "id": 103,
@@ -4133,10 +4153,15 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The Washington Post, reviewing budget records and contracts, reported at least $927 million in planned White House grounds construction, 'covered primarily by taxpayers', including $500 million transferred from Secret Service and White House Military Office funds, with about $305 million privately donated. The figures are as reported by the Post; the administration has not disclosed totals.",
+   "evidence": [
+    {
+     "label": "Washington Post via Anchorage Daily News, Aug. 12, 2026",
+     "url": "https://www.adn.com/nation-world/2026/08/12/trump-administration-set-to-spend-at-least-900m-on-white-house-projects-covered-mostly-by-taxpayers/"
+    }
+   ],
+   "check_run": "q233/askamerica/2026-11-18"
   },
   {
    "id": 105,
@@ -4197,10 +4222,29 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "supported",
+   "finding": "The FAA's Q&A reports about 12,462 flights cancelled on Friday, Nov. 13. Reported counts add about 4,000 or more on Saturday (FlightAware, via Fox Weather) and just over 1,300 on Sunday (Cirium, via AP), roughly 17,000 or more for the three days. AskAmerica's advisory data show the nationwide ground stop issued and lifted on Nov. 13. The weekend total is a sum of daily reports, not a published official figure.",
+   "evidence": [
+    {
+     "label": "transport.faa_atcscc_advisories (Nov. 13-15, 2026 nationwide advisories)",
+     "url": "https://askamerica.ai/catalog/schemas/transport/#faa_atcscc_advisories-table",
+     "askamerica": true,
+     "sql": "SELECT advisory_date, advisory_number, facility, subject, sent_time_utc FROM transport.faa_atcscc_advisories WHERE advisory_date BETWEEN '2026-11-13' AND '2026-11-15' AND subject ILIKE '%NATIONWIDE%' ORDER BY sent_time_utc"
+    },
+    {
+     "label": "FAA, Nationwide Ground Stop Q&A",
+     "url": "https://www.faa.gov/newsroom/nationwide-ground-stop-questions-and-answers"
+    },
+    {
+     "label": "Fox Weather, flights cancelled after the ground stop",
+     "url": "https://www.foxweather.com/weather-news/flights-canceled-delayed-us-ground-stop-november-2026"
+    },
+    {
+     "label": "AP via Cleveland19, air travel recovers",
+     "url": "https://www.cleveland19.com/2026/11/15/what-know-us-air-travel-continues-recover-fridays-nationwide-ground-stop/"
+    }
+   ],
+   "check_run": "q234/askamerica/2026-11-18"
   },
   {
    "id": 107,
@@ -4229,10 +4273,19 @@
    "counter_documents": [],
    "self_contradictions": [],
    "also_said": [],
-   "result": "not_checked",
-   "finding": null,
-   "evidence": [],
-   "check_run": null
+   "result": "unsettled",
+   "finding": "The espionage claim rests on a New York Times report, carried by AP, that U.S. officials concluded the woman involved was a Chinese spy. Nvidia's board says it has no reason to believe secrets were compromised, Singapore authorities found insufficient evidence of a crime, and the FBI and board inquiries are open. No official finding of infiltration or of administration non-disclosure was found.",
+   "evidence": [
+    {
+     "label": "AP via Anchorage Daily News, Nvidia CEO resigns",
+     "url": "https://www.adn.com/nation-world/2026/11/12/nvidia-ceo-jensen-huang-resigns-after-his-affair-raises-national-security-concerns/"
+    },
+    {
+     "label": "Fox Business, Nvidia CEO resigns amid investigation",
+     "url": "https://www.foxbusiness.com/business-leaders/nvidia-ceo-jensen-huang-resigns-amid-investigation-relationship-alleged-chinese-spy"
+    }
+   ],
+   "check_run": "q235/askamerica/2026-11-18"
   },
   {
    "id": 108,
